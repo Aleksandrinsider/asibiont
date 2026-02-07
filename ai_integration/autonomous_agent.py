@@ -253,9 +253,23 @@ class HybridAutonomousAgent:
                 return await self._plan_with_required_tool(user_message, user_id, 'delegate_task')
         
         # ПРОФИЛЬ
-        if any(kw in message_lower for kw in ['обнови профиль', 'измени профиль', 'мой профиль', 'мои данные']):
+        if any(kw in message_lower for kw in ['обнови профиль', 'измени профиль']):
             if any(kw2 in message_lower for kw2 in ['город', 'интерес', 'цел', 'навык', 'компани', 'должность']):
                 return await self._plan_with_required_tool(user_message, user_id, 'update_profile')
+        
+        if any(kw in message_lower for kw in ['покажи профиль', 'мой профиль', 'что в профиле']):
+            if 'обнов' not in message_lower and 'измен' not in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'show_profile')
+        
+        # ДЕТАЛИ ЗАДАЧИ
+        if any(kw in message_lower for kw in ['детали задач', 'покажи задач', 'подробности задач']):
+            if any(kw2 in message_lower for kw2 in ['какая', 'что', 'про']):
+                return await self._plan_with_required_tool(user_message, user_id, 'get_task_details')
+        
+        # УДАЛИТЬ ВСЕ
+        if any(kw in message_lower for kw in ['удали все', 'очисти все', 'сотри все']):
+            if 'задач' in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'delete_all_tasks')
         
         # Всё остальное - свободный AI с полным набором tools
         return await self._plan_general_chat(user_message, user_id)
@@ -328,7 +342,13 @@ class HybridAutonomousAgent:
             
             'delegate_task': f"""Делегировать: "{user_message}". Вызови delegate_task""",
             
-            'update_profile': f"""Обновить профиль: "{user_message}". Вызови update_profile с соответствующими параметрами"""
+            'update_profile': f"""Обновить профиль: "{user_message}". Вызови update_profile с соответствующими параметрами""",
+            
+            'show_profile': """Показать профиль. Вызови show_profile.""",
+            
+            'get_task_details': f"""Детали задачи: "{user_message}". Вызови get_task_details с task_title""",
+            
+            'delete_all_tasks': """Удалить все задачи. Вызови delete_all_tasks."""
         }
         
         system_prompt = tool_instructions.get(tool_name, f"Вызови {tool_name}")
