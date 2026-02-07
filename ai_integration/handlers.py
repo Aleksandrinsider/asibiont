@@ -656,8 +656,15 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
 
     # Если задача не найдена через контекст, используем обычный поиск
     if task is None:
+        # ПРИОРИТЕТ: Если task_title не указан, но у пользователя есть current_task_id - используем его!  
+        if (not task_title or not task_title.strip()) and user.current_task_id:
+            logger.info(f"[COMPLETE_TASK] Using user's current_task_id: {user.current_task_id}")
+            task = session.query(Task).filter_by(id=user.current_task_id).first()
+            if task:
+                logger.info(f"[COMPLETE_TASK] Found current task: '{task.title}' (ID: {task.id})")
+        
         # Если task_title не указан, завершаем последнюю активную задачу
-        if not task_title or not task_title.strip():
+        elif not task_title or not task_title.strip():
             logger.info("[COMPLETE_TASK] No task_title provided, completing the most recent active task")
             
             # Найти последнюю активную задачу пользователя
@@ -674,14 +681,28 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     session.close()
                 return "Нет активных задач для завершения"
         else:
-            task = find_task_flexible(
-                session=session,
-                user=user,
-                task_id=task_id_int,
-                task_title=task_title,
-                include_completed=True,  # Include to check status
-                include_delegated=True
-            )
+            # Если task_title указан, но нет task_id - проверяем current_task первым!
+            if user.current_task_id:
+                current_task = session.query(Task).filter_by(id=user.current_task_id).first()
+                if current_task:
+                    # Проверяем, подходит ли current_task под описание
+                    title_lower = task_title.lower()
+                    current_title_lower = current_task.title.lower()
+                    # Простая проверка на релевантность
+                    if any(word in current_title_lower for word in title_lower.split() if len(word) > 3):
+                        task = current_task
+                        logger.info(f"[COMPLETE_TASK] Matched current_task '{current_task.title}' with search '{task_title}'")
+            
+            # Если не подошла current_task, ищем через find_task_flexible
+            if task is None:
+                task = find_task_flexible(
+                    session=session,
+                    user=user,
+                    task_id=task_id_int,
+                    task_title=task_title,
+                    include_completed=True,  # Include to check status
+                    include_delegated=True
+                )
     
     if not task:
         if close_session:
