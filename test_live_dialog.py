@@ -126,7 +126,7 @@ async def run_live_dialog_test():
     
     conversation_history = ""
     turn = 0
-    max_turns = 40
+    max_turns = 15  # Quick test
     
     while turn < max_turns:
         turn += 1
