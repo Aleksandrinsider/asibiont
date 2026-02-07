@@ -32,207 +32,133 @@
             box-sizing: border-box;
         }
         html, body {
-            min-height: 100%;
+            height: 100%;
             background: #FFFFFF;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
             overflow-x: hidden;
         }
         body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
+            display: block;
+            padding: 40px 15px;
+            overflow-y: auto;
         }
         .auth-container {
             width: 100%;
-            max-width: 1200px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 60px;
-            align-items: center;
+            max-width: min(900px, calc(100vw - 30px));
+            margin: 40px auto 0 auto;
         }
-        
-        /* Левая колонка */
-        .left-column {
-            display: flex;
-            flex-direction: column;
-            gap: 32px;
-            padding: 40px;
+        .auth-card {
+            padding: 24px;
+            background: transparent;
         }
-        .logo-section {
-            display: flex;
-            justify-content: center;
-        }
-        .logo-section img {
-            width: 240px;
-            height: 240px;
-            max-width: 100%;
-        }
-        .description-section {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+        .mobile-logo {
+            display: block;
+            width: 160px;
+            height: 160px;
+            margin: 0 auto 24px;
         }
         h1 {
-            margin: 0;
-            font-size: 32px;
-            font-weight: 700;
-            color: #1F2328;
-            line-height: 1.2;
+            margin: 0 0 16px 0;
+            font-size: 24px;
+            font-weight: 600;
+            color: #374151;
+            text-align: center;
         }
         .subtitle {
-            margin: 0;
-            color: #57606A;
-            font-size: 16px;
-            line-height: 1.6;
+            margin: 0 0 50px 0;
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.5;
+            text-align: center;
         }
         #telegram-login-container {
             display: flex;
-            justify-content: flex-start;
-            margin-top: 24px;
-        }
-        
-        /* Правая колонка */
-        .right-column {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-            padding: 40px;
-            background: #F6F8FA;
-            border-radius: 12px;
-            border: 1px solid #D0D7DE;
-        }
-        .features-header {
-            font-size: 24px;
-            font-weight: 600;
-            color: #1F2328;
-            margin-bottom: 8px;
+            justify-content: center;
+            margin: 24px 0;
+            padding: 24px 0;
         }
         .features-grid {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
             gap: 16px;
+            margin: 24px 0 0 0;
         }
         .feature-card {
-            display: flex;
-            gap: 16px;
-            align-items: flex-start;
-            padding: 20px;
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            padding: 24px;
             background: white;
-            border: 1px solid #D0D7DE;
-            border-radius: 8px;
+            text-align: center;
             transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
         }
         .feature-card:hover {
             border-color: #1F2328;
-            box-shadow: 0 3px 12px rgba(0,0,0,0.08);
         }
         .feature-icon {
-            width: 40px;
-            height: 40px;
+            width: 48px;
+            height: 48px;
             flex-shrink: 0;
-            opacity: 0.85;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .feature-icon img {
             width: 100%;
             height: 100%;
         }
+        @media (max-width: 768px) {
+            .feature-icon {
+                width: 36px;
+                height: 36px;
+            }
+        }
         .feature-description {
             font-size: 14px;
-            color: #57606A;
+            color: #374151;
             line-height: 1.5;
-            text-align: left;
-        }
-        .cta-section {
-            margin-top: 16px;
-            padding-top: 24px;
-            border-top: 1px solid #D0D7DE;
             text-align: center;
         }
-        .cta-text {
-            margin: 0 0 16px 0;
-            color: #1F2328;
-            font-size: 16px;
-            font-weight: 600;
-        }
-        .cta-button {
-            display: inline-block;
-            padding: 12px 24px;
-            background: #1F2328;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        .cta-button:hover {
-            background: #2F353D;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        /* Footer */
-        .footer {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            color: #8B949E;
-            font-size: 12px;
-        }
-        
-        /* Mobile styles */
-        @media (max-width: 968px) {
+        /* Mobile styles for index page */
+        @media (max-width: 768px) {
             body {
-                padding: 20px 16px;
-            }
-            .auth-container {
-                grid-template-columns: 1fr;
-                gap: 32px;
-                max-width: 600px;
-            }
-            .left-column, .right-column {
-                padding: 24px;
-            }
-            .logo-section img {
-                width: 180px;
-                height: 180px;
-            }
-            h1 {
-                font-size: 26px;
-                text-align: center;
-            }
-            .subtitle {
-                font-size: 15px;
-                text-align: center;
-            }
-            #telegram-login-container {
-                justify-content: center;
-            }
-            .features-header {
-                font-size: 20px;
-                text-align: center;
-            }
-            .footer {
-                position: static;
-                text-align: center;
-                margin-top: 40px;
+                display: block;
+                align-items: unset;
+                justify-content: unset;
+                padding: 40px 12px;
             }
         }
-        @media (max-width: 480px) {
-            .logo-section img {
-                width: 140px;
-                height: 140px;
+        @media (max-width: 768px) {
+            .auth-container {
+                margin-top: 40px;
+                max-width: calc(100vw - 24px);
             }
-            h1 {
-                font-size: 22px;
+        }
+        @media (max-width: 768px) {
+            .mobile-logo {
+                width: 120px;
+                height: 120px;
             }
+        }
+        @media (max-width: 768px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+        @media (max-width: 768px) {
             .feature-card {
                 padding: 16px;
             }
-            .feature-icon {
-                width: 32px;
-                height: 32px;
+        }
+        @media (max-width: 400px) {
+            img[alt="ASI Biont"] {
+                width: 150px !important;
+                height: 150px !important;
             }
         }
     </style>
@@ -273,96 +199,72 @@
         }
     </script>
     <div class="auth-container">
-        <!-- Левая колонка: Лого и описание -->
-        <div class="left-column">
-            <div class="logo-section">
-                <img src="/static/asibiont.svg" alt="ASI Biont">
-            </div>
-            <div class="description-section">
-                <h1>ASI Biont — проактивный AI-помощник</h1>
-                <p class="subtitle">Искусственный интеллект, который расширяет ваши возможности, управляет делами, связывает с людьми для бизнеса, досуга, увлечений и знакомств. Не ждет — действует, чтобы вы достигали большего!</p>
-            </div>
-            <div id="telegram-login-container">
-                <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-login="{{ bot_username }}" 
-                    data-size="large" 
-                    data-auth-url="https://asibiont.ru/tg_auth" 
-                    data-request-access="write">
-                </script>
-            </div>
+        <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 300px; height: 300px; display: block; margin: 0 auto 20px; max-width: 100%;">
+        <div id="telegram-login-container">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                data-telegram-login="{{ bot_username }}" 
+                data-size="large" 
+                data-auth-url="https://asibiont.ru/tg_auth" 
+                data-request-access="write">
+            </script>
         </div>
+        <div class="auth-card">
+            <h1>ASI Biont — проактивный AI-помощник</h1>
+            <p class="subtitle">Искусственный интеллект, который расширяет ваши возможности, управляет делами, связывает с людьми для бизнеса, досуга, увлечений и знакомств. Не ждет — действует, чтобы вы достигали большего!</p>
 
-        <!-- Правая колонка: Преимущества и тарифы -->
-        <div class="right-column">
-            <div class="features-header">Ключевые возможности</div>
             <div class="features-grid">
+                <!-- Ряд 1 -->
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="/static/svg/alarm-clock-svgrepo-com.svg" alt="Проактивный координатор">
                     </div>
-                    <div class="feature-description">
-                        <strong>Проактивное управление</strong><br>
-                        Не ждет команд — сам предлагает! «@ivan идет на пробежку в 19:00, @maria ищет партнера для стартапа». Конкретные люди, точное время, реальные действия.
-                    </div>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <img src="/static/svg/avatar-svgrepo-com.svg" alt="Умный нетворкинг">
-                    </div>
-                    <div class="feature-description">
-                        <strong>Умный нетворкинг</strong><br>
-                        Создает синергию между людьми. «У @sergey та же цель 'запустить стартап' — можете объединиться». Находит партнеров автоматически.
-                    </div>
+                    <div class="feature-description">Не ждет команд — сам предлагает! «@ivan идет на пробежку в 19:00, @maria ищет партнера для стартапа». Конкретные люди, точное время, реальные действия.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="/static/svg/office-svgrepo-com.svg" alt="Организация мероприятий">
                     </div>
-                    <div class="feature-description">
-                        <strong>Организация встреч</strong><br>
-                        «Завтра в 15:00 созвон с @alex и @denis для обсуждения AI-проекта. Присоединяйся?» — реальные мероприятия для вашего роста.
+                    <div class="feature-description">Находит точки вашего роста. «Завтра в 15:00 созвон с @alex и @denis для обсуждения AI-проекта. Присоединяйся?» — реальные мероприятия, а не абстрактные советы.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <img src="/static/svg/avatar-svgrepo-com.svg" alt="Умный нетворкинг">
                     </div>
+                    <div class="feature-description">Создает синергию между людьми. «У @sergey та же цель 'запустить стартап' — можете объединиться». Находит партнеров автоматически при создании любой задачи.</div>
+                </div>
+
+                <!-- Ряд 2 -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <img src="/static/svg/globe-svgrepo-com.svg" alt="Контекст на 360°">
+                    </div>
+                    <div class="feature-description">Учитывает всё: время суток, погоду, новости, ваши цели, задачи других людей. Утром предложит энергичные активности, вечером — отдых и общение.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="/static/svg/reagent-bottle-svgrepo-com.svg" alt="Групповые решения">
                     </div>
-                    <div class="feature-description">
-                        <strong>Командная работа</strong><br>
-                        «5 человек работают над похожими задачами — организовать мозговой штурм?» Формирует команды и делегирует задачи экспертам.
-                    </div>
+                    <div class="feature-description">«5 человек работают над похожими задачами — организовать мозговой штурм?» Формирует команды, делегирует задачи экспертам, создает коллаборации.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="/static/svg/globe-svgrepo-com.svg" alt="Контекст на 360°">
+                        <img src="/static/svg/computer-svgrepo-com.svg" alt="Премиум: Расширенные возможности">
                     </div>
-                    <div class="feature-description">
-                        <strong>Полный контекст</strong><br>
-                        Учитывает всё: время суток, погоду, новости, ваши цели. Утром предложит энергичные активности, вечером — отдых и общение.
-                    </div>
+                    <div class="feature-description">Чат-бот в Telegram для быстрого управления задачами и общения. Веб-дашборд для визуализации прогресса, аналитики и управления командой. Полный контроль где угодно.</div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <img src="/static/svg/computer-svgrepo-com.svg" alt="Премиум возможности">
-                    </div>
-                    <div class="feature-description">
-                        <strong>Premium-функции</strong><br>
-                        Чат-бот в Telegram для быстрого управления. Веб-дашборд для визуализации прогресса и аналитики. Полный контроль где угодно.
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Call to Action -->
-            <div class="cta-section">
-                <p class="cta-text">Готовы к проактивному AI-помощнику?</p>
-                <a href="/subscription-tiers" class="cta-button">Выбрать тариф</a>
             </div>
         </div>
-    </div>
 
-    <!-- Footer -->
-    <div class="footer">
-        2026 ASI Biont
+        <!-- Call to Action -->
+        <div style="text-align: center; margin: 24px 0; padding: 24px 16px;">
+            <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">Готовы к проактивному AI-помощнику?</p>
+            <a href="/subscription-tiers" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Выбрать тариф</a>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; margin-top: 32px; padding-top: 24px; color: #6C727F; font-size: 13px;">
+            2026 ASI Biont
+        </div>
     </div>
 </body>
 </html>
