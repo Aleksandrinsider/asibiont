@@ -189,35 +189,16 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - МИНИМАЛЬНЫЕ ПРАВИЛА + AI С TOOLS
+        ШАГ 1: ПОЛНОСТЬЮ ГИБРИДНОЕ ПЛАНИРОВАНИЕ - 100% AI С TOOLS
         
-        Стратегия: ТОЛЬКО критические команды через правила, остальное через AI
+        Стратегия: AI с инструментами решает ВСЁ самостоятельно
+        - Более гибкое понимание естественного языка
+        - Учитывает контекст (current_task_id, местоимения)
+        - Меньше ложных срабатываний жестких правил
         """
-
-        message_lower = user_message.lower()
-
-        # ТОЛЬКО КРИТИЧЕСКИЕ КОМАНДЫ с жесткими правилами
-        # Остальное (edit_task, delete_task и т.д.) - через AI с TOOLS
-        command_patterns = {
-            'list_tasks': ['покажи задач', 'список задач', 'мои задач'],
-            'complete_task': ['готово', 'сделал', 'завершил', 'выполнил', 'закончил'],
-            'add_task': ['создай задач', 'добавь задач', 'напомни'],
-        }
-
-        # Проверяем только критические команды
-        for intent, keywords in command_patterns.items():
-            if any(keyword in message_lower for keyword in keywords):
-                if intent == 'list_tasks' and ('задач' in message_lower or 'дел' in message_lower):
-                    return self._create_command_plan(intent, user_message)
-                elif intent == 'complete_task':
-                    return self._create_command_plan(intent, user_message)
-                elif intent == 'add_task' and ('задач' in message_lower or 'дел' in message_lower):
-                    # Проверяем, не перенос ли это (тогда не создаем новую)
-                    if not any(word in message_lower for word in ['перенес', 'отлож', 'подвин']):
-                        return self._create_command_plan(intent, user_message)
-
-        # ВСЁ ОСТАЛЬНОЕ ЧЕРЕЗ AI С TOOLS - гибридный подход!
-        # AI сам решит когда вызывать edit_task, delete_task, reschedule_task и т.д.
+        
+        # ВСЁ через AI с TOOLS - полный гибридный подход!
+        # AI сам решит когда вызывать list_tasks, complete_task, add_task, edit_task и т.д.
         return await self._plan_general_chat(user_message, user_id)
 
     def _create_command_plan(self, intent, user_message):
