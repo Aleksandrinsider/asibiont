@@ -1458,6 +1458,10 @@
                     setTimeout(() => {
                         updateHeaderTime();
                     }, 1000);
+                    // Обновляем задачи с новым timezone
+                    setTimeout(async () => {
+                        await updateTasks();
+                    }, 1500);
                     // Синхронизировать счетчик через API
                     setTimeout(async () => {
                         try {
