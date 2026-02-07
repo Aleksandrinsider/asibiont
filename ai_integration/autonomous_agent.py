@@ -237,7 +237,7 @@ class HybridAutonomousAgent:
             if not any(w in message_lower for w in ['перенес', 'отлож', 'подвин', 'измени']):
                 time_indicators = ['завтра', 'сегодня', 'через', 'в ', ':', 'утра', 'вечера', 'дня', 'ночи', 'понедельник', 'вторник', 'среду', 'четверг', 'пятниц', 'суббот', 'воскресень']
                 has_time = any(indicator in message_lower for indicator in time_indicators)
-                 if has_time:
+                if has_time:
                     return await self._plan_with_required_tool(user_message, user_id, 'add_task')
                 else:
                     # НЕТ ВРЕМЕНИ - оставляем AI с полным набором tools
