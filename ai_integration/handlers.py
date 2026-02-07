@@ -23,7 +23,6 @@ CITY_TIMEZONE_MAP = {
     'санкт-петербург': 'Europe/Moscow',
     'петербург': 'Europe/Moscow',
     'спб': 'Europe/Moscow',
-    'пермь': 'Europe/Moscow',
     'нижний новгород': 'Europe/Moscow',
     'нижний': 'Europe/Moscow',
     'казань': 'Europe/Moscow',
@@ -51,6 +50,7 @@ CITY_TIMEZONE_MAP = {
     'москва': 'Europe/Moscow',
     
     # Россия - Уральский регион (YEKT, UTC+5)
+    'пермь': 'Asia/Yekaterinburg',
     'екатеринбург': 'Asia/Yekaterinburg',
     'челябинск': 'Asia/Yekaterinburg',
     'тюмень': 'Asia/Yekaterinburg',
