@@ -12,6 +12,7 @@ from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 from .prompts import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
+from .tools import TOOLS  # Импорт списка инструментов
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +158,6 @@ class HybridAutonomousAgent:
 
     async def call_ai(self, messages, use_tools=False, **kwargs):
         """Универсальный вызов AI API с опциональными tools"""
-        from .tools import TOOLS
         
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
@@ -178,27 +178,188 @@ class HybridAutonomousAgent:
             data["tools"] = TOOLS
             data["tool_choice"] = "auto"  # DeepSeek сам решает
             logger.info(f"[HYBRID] Calling AI with {len(TOOLS)} tools available")
+            logger.debug(f"[HYBRID] Tools list: {[t['function']['name'] for t in TOOLS[:5]]}...")  # Первые 5
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=data) as response:
                 if response.status == 200:
-                    return await response.json()
+                    result = await response.json()
+                    # Логируем, вызвал ли AI какие-то tools
+                    if use_tools:
+                        message = result.get('choices', [{}])[0].get('message', {})
+                        tool_calls = message.get('tool_calls', [])
+                        if tool_calls:
+                            logger.info(f"[HYBRID] AI returned {len(tool_calls)} tool calls")
+                        else:
+                            logger.warning(f"[HYBRID] AI did NOT call any tools despite having {len(TOOLS)} available")
+                            logger.warning(f"[HYBRID] AI response content: {message.get('content', '')[:200]}")
+                    return result
                 else:
                     error_text = await response.text()
                     raise Exception(f"AI call failed: {response.status} {error_text}")
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: ПОЛНОСТЬЮ ГИБРИДНОЕ ПЛАНИРОВАНИЕ - 100% AI С TOOLS
+        ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - Детектирование + принудительный tool_choice
         
-        Стратегия: AI с инструментами решает ВСЁ самостоятельно
-        - Более гибкое понимание естественного языка
-        - Учитывает контекст (current_task_id, местоимения)
-        - Меньше ложных срабатываний жестких правил
+        Применяем успешный подход ко всем критичным командам:
+        - Правила детектируют intent
+        - AI с tool_choice гарантирует вызов нужного инструмента
+        - Остальное - полная свобода AI
         """
         
-        # ВСЁ через AI с TOOLS - полный гибридный подход!
-        # AI сам решит когда вызывать list_tasks, complete_task, add_task, edit_task и т.д.
+        message_lower = user_message.lower()
+        
+        # Детектируем критичные команды
+        if any(kw in message_lower for kw in ['покажи задач', 'список', 'мои задач']):
+            if 'задач' in message_lower or 'дел' in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'list_tasks')
+        
+        if any(kw in message_lower for kw in ['готово', 'сделал', 'завершил', 'выполнил', 'закончил', 'проверил']):
+            return await self._plan_with_required_tool(user_message, user_id, 'complete_task')
+        
+        if any(kw in message_lower for kw in ['создай', 'добавь', 'напомни', 'поставь напоминание']):
+            if not any(w in message_lower for w in ['перенес', 'отлож', 'подвин', 'измени']):
+                # Проверяем наличие времени в сообщении
+                time_indicators = ['завтра', 'сегодня', 'через', 'в ', ':', 'утра', 'вечера', 'дня', 'ночи', 'понедельник', 'вторник', 'среду', 'четверг', 'пятниц', 'суббот', 'воскресень']
+                has_time = any(indicator in message_lower for indicator in time_indicators)
+                
+                if has_time:
+                    return await self._plan_with_required_tool(user_message, user_id, 'add_task')
+                else:
+                    # Нет времени - пропускаем через обычный AI который спросит время
+                    return await self._plan_general_chat(user_message, user_id)
+        
+        if any(kw in message_lower for kw in ['удали', 'сотри', 'убери задач']):
+            return await self._plan_with_required_tool(user_message, user_id, 'delete_task')
+        
+        if any(kw in message_lower for kw in ['перенес', 'отлож', 'подвин']):
+            if 'задач' in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'reschedule_task')
+        
+        if any(kw in message_lower for kw in ['измени', 'переименуй', 'отредактируй']):
+            if 'задач' in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'edit_task')
+        
+        # Всё остальное - свободный AI с полным набором tools
+        return await self._plan_general_chat(user_message, user_id)
+    
+    async def _plan_with_required_tool(self, user_message, user_id, tool_name):
+        """
+        Планирование с принудительным вызовом конкретного инструмента
+        AI обязан вызвать указанный tool, но сам извлекает параметры
+        """
+        
+        # Получаем базовый промпт
+        session = Session()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return {
+                    "intent": "general_chat",
+                    "actions": [],
+                    "response_strategy": "natural_response"
+                }
+
+            # Собираем контекст (время, задачи, профиль)
+            base_now = datetime.now(pytz.UTC)
+            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                user_now = base_now.astimezone(user_tz)
+            except:
+                user_now = base_now
+            
+            # Текущая задача если есть
+            current_task_info = None
+            if user.current_task_id:
+                try:
+                    task = session.query(Task).filter_by(id=user.current_task_id).first()
+                    if task:
+                        current_task_info = {
+                            'id': task.id,
+                            'title': task.title,
+                            'status': task.status
+                        }
+                except Exception as e:
+                    logger.error(f"Error loading current task: {e}")
+        finally:
+            session.close()
+        
+        # Формируем промпт под конкретный инструмент
+        tool_instructions = {
+            'add_task': f"""Пользователь просит создать задачу: "{user_message}"
+
+ОБЯЗАТЕЛЬНО вызови add_task с параметрами:
+- title: краткое название задачи (что нужно сделать)
+- reminder_time: КРИТИЧНО! Извлеки время:
+  * "завтра в 10" → "завтра 10:00"
+  * "через час" → "через 1 час"
+  * Если время НЕ указано → null
+
+Сейчас: {user_now.strftime('%H:%M, %d.%m.%Y')}""",
+            
+            'complete_task': f"""Пользователь подтверждает завершение: "{user_message}"
+
+{f"ТЕКУЩАЯ ЗАДАЧА: {current_task_info['title']} (ID: {current_task_info['id']})" if current_task_info else ""}
+
+ОБЯЗАТЕЛЬНО вызови complete_task""",
+            
+            'list_tasks': """Показать задачи. Вызови list_tasks.""",
+            
+            'delete_task': f"""Удалить задачу: "{user_message}". Вызови delete_task с task_title=""",
+            
+            'reschedule_task': f"""Перенести задачу: "{user_message}". Вызови reschedule_task с new_time=""",
+            
+            'edit_task': f"""Изменить задачу: "{user_message}". Вызови edit_task"""
+        }
+        
+        system_prompt = tool_instructions.get(tool_name, f"Вызови {tool_name}")
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        # Вызываем AI с tool_choice для конкретного инструмента
+        try:
+            response = await self.call_ai(
+                messages,
+                use_tools=True,
+                tool_choice={"type": "function", "function": {"name": tool_name}}
+            )
+            
+            message = response['choices'][0]['message']
+            tool_calls = message.get('tool_calls', [])
+            
+            if tool_calls:
+                actions = []
+                for tool_call in tool_calls:
+                    function = tool_call.get('function', {})
+                    try:
+                        arguments = json.loads(function.get('arguments', '{}'))
+                    except:
+                        arguments = {}
+                    
+                    actions.append({
+                        "tool": function.get('name', ''),
+                        "params": arguments,
+                        "reason": f"Required tool: {tool_name}"
+                    })
+                    logger.info(f"[HYBRID REQUIRED] AI called {function.get('name')} with params {arguments}")
+                
+                return {
+                    "intent": tool_name,
+                    "actions": actions,
+                    "response_strategy": "execute_action"
+                }
+        except Exception as e:
+            logger.error(f"[HYBRID REQUIRED] Failed to call with tool_choice: {e}")
+            # Fallback на обычное планирование
+            return await self._plan_general_chat(user_message, user_id)
+        
+        # Если AI не вызвал инструмент - fallback
+        logger.warning(f"[HYBRID REQUIRED] AI did not call required tool {tool_name}")
         return await self._plan_general_chat(user_message, user_id)
 
     def _create_command_plan(self, intent, user_message):
@@ -354,8 +515,8 @@ class HybridAutonomousAgent:
 1. Вызови list_tasks ОДИН раз
 2. ПОДОЖДИ результат list_tasks  
 3. В СЛЕДУЮЩЕМ вызове AI (с результатами):
-   - Если в результатах есть просроченные задачи → ОБЯЗАТЕЛЬНО вызови reschedule_task(task_id=X, new_time="завтра в 10:00")
-   - Если есть задачи с ключевыми словами "пробежка", "встреча", "тренировка", "спорт" → вызови find_relevant_contacts_for_task(task_title="название")
+   - Если в результатах есть просроченные задачи → предложи помощь с переносом
+   - Если есть задачи с ключевыми словами "пробежка", "встреча", "тренировка", "спорт" → вызови find_relevant_contacts_for_task(task_description="название")
    - НЕ останавливайся на просмотре - ДЕЙСТВУЙ ПРОАКТИВНО
 
 ⚠️ ВАЖНО: Система позволяет множественные вызовы tool calls - используй это!
