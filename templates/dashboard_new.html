@@ -308,140 +308,12 @@
                 }
             });
             
-            // Если фильтр elite, загружаем Premium контакты
-            if (filterType === 'elite') {
-                await loadEliteContacts();
-            } else if (filterType === 'blocked') {
-                // Если фильтр заблокированные, обновляем список контактов
+            // Если фильтр заблокированные, обновляем список контактов
+            if (filterType === 'blocked') {
                 updatePeople();
             } else {
                 // Перерендерим контакты с новым фильтром
                 await applyContactFilter();
-            }
-        }
-
-        async function loadEliteContacts() {
-            const peopleList = document.getElementById('people-list');
-            if (!peopleList) return;
-
-            try {
-                // Загружаем избранные контакты для проверки
-                const favoriteContacts = cachedFavorites || await getFavoriteContactsFromServer();
-                
-                const response = await fetch('/api/elite_partners', {
-                    credentials: 'include'
-                });
-                
-                if (!await checkAuth(response)) return;
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const elitePartners = data.partners || [];
-                    
-                    // Очищаем список и рендерим Premium контакты
-                    let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
-                    
-                    if (elitePartners.length === 0) {
-                        html += '<li style="text-align: center; padding: 20px; color: #6C727F;">Premium пользователей пока нет</li>';
-                    } else {
-                        elitePartners.forEach(partner => {
-                            if (!partner.contact_info) return; // Skip partners without contact_info
-                            
-                            const telegramUrl = 'https://t.me/' + partner.contact_info;
-                            const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                            
-                            html += '<li class="task-item contact-elite" data-username="' + contactInfoEscaped + '" data-type="elite" data-tier="premium" style="display: flex; margin-bottom: 8px; align-items: center;">';
-                            
-                            // Аватар
-                            if (partner.photo_url) {
-                                const imgId = 'img-elite-' + (partner.telegram_id || partner.contact_info);
-                                const fallbackHtml = '<div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
-                                html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
-                                html += fallbackHtml.replace('display: flex', 'display: none');
-                                html += '</div>';
-                            } else {
-                                html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
-                            }
-                            
-                            html += '<div style="flex: 1;">';
-                            
-                            // Имя пользователя с Premium цветом
-                            html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</span></div>';
-                            
-                            // Город
-                            if (partner.city) {
-                                html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
-                            }
-                            
-                            // Общие интересы/навыки/цели/задачи
-                            html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
-                            
-                            const hasCommon = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
-                            
-                            if (partner.common_interests) {
-                                html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
-                            }
-                            if (partner.common_skills) {
-                                html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + partner.common_skills + '</span>';
-                            }
-                            if (partner.common_goals) {
-                                html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + partner.common_goals + '</span>';
-                            }
-                            if (partner.common_tasks) {
-                                html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
-                            }
-                            
-                            // Если нет общего, показываем сообщение
-                            if (!hasCommon) {
-                                html += '<span class="task-meta" style="color: #6C727F;">Общего пока не найдено</span>';
-                            }
-                            
-                            html += '</div>';
-                            
-                            // Рекомендация
-                            if (partner.average_rating > 0) {
-                                const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
-                                html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
-                            }
-                            
-                            html += '</div>'; // flex: 1
-                            
-                            // Кнопки действий для элитных контактов (как в рекомендуемых)
-                            html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
-                            const isFavoriteElite = favoriteContacts.includes(partner.contact_info);
-                            const starSvgElite = isFavoriteElite 
-                                ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
-                                : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
-                            const heartColorElite = isFavoriteElite ? 'color: #068487;' : '';
-                            const favoriteTitleElite = isFavoriteElite ? 'Удалить из избранного' : 'Добавить в избранное';
-                            html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColorElite + '" title="' + favoriteTitleElite + '">' + starSvgElite + '</button>';
-                            
-                            // Кнопка отправки сообщения вместо делегирования
-                            const messageTitleElite = 'Отправить сообщение';
-                            html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="' + messageTitleElite + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg></button>';
-                            
-                            html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
-                            
-                            // Block button
-                            html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="delete-btn" title="Заблокировать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
-                            
-                            html += '</div>';
-                            
-                            html += '</li>';
-                        });
-                    }
-                    
-                    html += '</ul>';
-                    peopleList.innerHTML = html;
-                    
-                    // Применяем пагинацию к элитным контактам
-                    renderContacts();
-                } else {
-                    console.error('Failed to load elite contacts:', response.status);
-                }
-            } catch (error) {
-                console.error('Error loading elite contacts:', error);
             }
         }
 
@@ -689,7 +561,6 @@
                             <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
                                 <option value="favorite">Избранное</option>
                                 <option value="recommended" selected>Рекомендуемые</option>
-                                <option value="elite"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %}>Премиум{% if subscription_tier not in ['PREMIUM'] %} (недоступно){% endif %}</option>
                                 <option value="delegating_to_me">Поручают мне</option>
                                 <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
                                 <option value="blocked">Заблокировано</option>
