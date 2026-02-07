@@ -446,6 +446,9 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         profile = None
         user = None
         subscription_tier = None
+        weather_info = None
+        news_info = None
+        partner_recommendations = ""  # Для хранения рекомендаций партнеров
         months = [
             'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
             'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
@@ -508,6 +511,27 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                         user_memory += f"\n\n📰 АКТУАЛЬНЫЕ НОВОСТИ:\n{news_info}"
                 except Exception as e:
                     logger.warning(f"[PROACTIVE] Could not load weather/news: {e}")
+
+                # Получаем рекомендации партнеров/Premium инсайты
+                try:
+                    from .premium_simple import get_premium_recommendations_for_prompt, get_partner_recommendations_for_prompt
+                    
+                    if subscription_tier == 'PREMIUM':
+                        # Для Premium показываем automation insights
+                        premium_context = get_premium_recommendations_for_prompt(user_id, db_session)
+                        if premium_context and premium_context.strip():
+                            partner_recommendations = premium_context  # Сохраняем для fallback
+                            user_memory += f"\n\n🔥 PREMIUM АВТОМАТИЗАЦИЯ:\n{premium_context}"
+                            logger.info(f"[PROACTIVE] Added Premium automation context for user {user_id}")
+                    else:
+                        # Для обычных пользователей показываем партнеров
+                        partner_context = get_partner_recommendations_for_prompt(user_id, db_session)
+                        if partner_context and partner_context.strip():
+                            partner_recommendations = partner_context  # Сохраняем для fallback
+                            user_memory += f"\n\n👥 РЕКОМЕНДАЦИИ ПАРТНЕРОВ:\n{partner_context}"
+                            logger.info(f"[PROACTIVE] Added partner recommendations context for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"[PROACTIVE] Could not load partner recommendations: {e}")
 
                 # Получаем профиль
                 profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -678,32 +702,37 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             "general": [
                 """ПРОАКТИВНОЕ СООБЩЕНИЕ: Общий контакт - время для продуктивности!
 
-ИСПОЛЬЗУЙ РЕАЛЬНЫЕ ДАННЫЕ (погода, новости, интересы, навыки, цели):
-- Если есть погода - упомяни погоду и как она влияет на планы
-- Если есть новости - свяжи с интересами/целями пользователя  
-- Предложи КОНКРЕТНОЕ действие (не "поработать над навыками", а КОНКРЕТНУЮ задачу)
+ИСПОЛЬЗУЙ ВСЕ РЕАЛЬНЫЕ ДАННЫЕ (погода, новости, рекомендации партнеров, интересы, навыки, цели):
+- Если есть РЕКОМЕНДАЦИИ ПАРТНЕРОВ - упомяни релевантного партнера естественно
+- Если есть PREMIUM АВТОМАТИЗАЦИЯ - упомяни инсайт или найденного партнера
+- Если есть погода - свяжи с планами
+- Если есть новости - свяжи с интересами/целями
+- Предложи КОНКРЕТНОЕ действие или знакомство
 - Добавь вопрос для вовлечения
 
 Формат: 2-3 предложения. НЕ ВЫДУМЫВАЙ информацию!""",
                 
-                """ПРОАКТИВНОЕ СООБЩЕНИЕ: Персонализированный совет.
+                """ПРОАКТИВНОЕ СООБЩЕНИЕ: Персонализированный совет с нетворкингом.
 
 ИСПОЛЬЗУЙ КОНТЕКСТ:
-- Погода → идеи задач с учетом погоды
-- Новости → связь с интересами/целями
+- Рекомендации партнеров → предложи конкретное знакомство/коллаборацию
+- Погода → идеи задач или встреч с учетом погоды
+- Новости → связь с интересами/целями/навыками
 - Навыки → конкретное предложение их применить
-- Город → локальные возможности
+- Город → локальные возможности встреч
 
-Создай 2-3 предложения с КОНКРЕТНЫМ предложением. Закончи вопросом.""",
+Создай 2-3 предложения с КОНКРЕТНЫМ предложением (задача ИЛИ знакомство). Закончи вопросом.""",
                 
                 """ПРОАКТИВНОЕ СООБЩЕНИЕ: Мотивирующий толчок к действию.
 
 ИНТЕГРИРУЙ ВСЁ:
+- Рекомендации партнеров (если есть) → предложи знакомство/встречу/коллаборацию
+- Premium insights (если есть) → упомяни найденную возможность
 - Текущая ситуация (погода/новости)
 - Профиль пользователя (интересы/цели/навыки)
-- Конкретное предложение (не общие слова!)
+- Конкретное предложение (задача ИЛИ нетворкинг!)
 
-Напиши 2-3 предложения с РЕАЛЬНЫМ, actionable предложением. Добавь вопрос."""
+Напиши 2-3 предложения с РЕАЛЬНЫМ, actionable предложением (конкретная задача или знакомство с партнером). Добавь вопрос."""
             ]
         }
 
@@ -804,30 +833,45 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                     return content
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
-                    # Улучшенные fallback сообщения с погодой/новостями
+                    # Улучшенные fallback сообщения с погодой/новостями/партнерами
                     fallback_base = ""
                     if weather_info:
                         fallback_base += f"🌤 {weather_info.split(':')[1].split(',')[0].strip()} сегодня. "
                     
+                    # Добавляем упоминание партнеров, если есть
+                    partner_mention = ""
+                    if partner_recommendations:
+                        # Извлекаем первого партнера из рекомендаций
+                        if "@" in partner_recommendations:
+                            partner_match = partner_recommendations.split("@")[1].split()[0] if len(partner_recommendations.split("@")) > 1 else None
+                            if partner_match:
+                                partner_mention = f" Кстати, @{partner_match} может быть интересен для твоих целей. "
+                    
                     fallback_messages = {
-                        "no_tasks": f"{fallback_base}Отличное время для планирования! Может, создадим задачу связанную с твоими интересами или целями? Что сейчас актуально?",
-                        "few_tasks": f"{fallback_base}У тебя {task_count} активных задач - хороший темп! Может, добавим что-то еще или сфокусируемся на качестве выполнения?",
-                        "many_tasks": f"У тебя {task_count} задач. {fallback_base}Может, стоит делегировать часть или пересмотреть приоритеты? Помочь разобраться?",
-                        "overdue_tasks": f"{overdue_count} просроченных задач требуют внимания. Не переживай! Давай вместе составим план восстановления? С чего начнем?",
-                        "general": f"{fallback_base}Вижу в твоем профиле интересные цели. Может, обсудим конкретные шаги к их достижению? Или есть что-то актуальное прямо сейчас?"
+                        "no_tasks": f"{fallback_base}Отличное время для планирования!{partner_mention}Может, создадим задачу или обсудим знакомства? Что актуально?",
+                        "few_tasks": f"{fallback_base}У тебя {task_count} активных задач - хороший темп!{partner_mention}Может, добавим что-то еще или сфокусируемся на качестве?",
+                        "many_tasks": f"У тебя {task_count} задач. {fallback_base}{partner_mention}Может, стоит делегировать часть или пересмотреть приоритеты?",
+                        "overdue_tasks": f"{overdue_count} просроченных задач требуют внимания. Не переживай!{partner_mention}Давай составим план восстановления?",
+                        "general": f"{fallback_base}Вижу интересные возможности.{partner_mention}Может, обсудим конкретные шаги или полезные знакомства?"
                     }
                     return fallback_messages.get(context, fallback_messages["general"])
 
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Улучшенные fallback сообщения для исключений
+        # Улучшенные fallback сообщения для исключений с упоминанием партнеров
+        partner_mention = ""
+        if partner_recommendations and "@" in partner_recommendations:
+            partner_match = partner_recommendations.split("@")[1].split()[0] if len(partner_recommendations.split("@")) > 1 else None
+            if partner_match:
+                partner_mention = f" Вижу, что @{partner_match} может быть интересен. "
+        
         fallback_messages = {
-            "no_tasks": "Добрый день! Чистый список задач - отличная возможность запланировать что-то важное. Может, обсудим твои цели и создадим конкретные шаги?",
-            "few_tasks": f"Добрый день! {task_count} задач в работе - продуктивный темп! Как продвигается выполнение? Нужна помощь с организацией?",
-            "many_tasks": f"Добрый день! Вижу {task_count} задач - впечатляющая нагрузка! Может, делегируем часть или оптимизируем список? С чего начнем?",
-            "overdue_tasks": f"Добрый день! {overdue_count} просроченных задач ждут внимания. Без паники! Давай составим план действий? Начнем с самого важного?",
-            "general": "Добрый день! Готов помочь с планированием продуктивного дня. Может, обсудим твои текущие цели и создадим конкретные задачи? Что сейчас в приоритете?"
+            "no_tasks": f"Добрый день! Чистый список задач - отличная возможность.{partner_mention}Может, обсудим цели и создадим конкретные шаги?",
+            "few_tasks": f"Добрый день! {task_count} задач в работе - продуктивный темп!{partner_mention}Как продвигается выполнение?",
+            "many_tasks": f"Добрый день! Вижу {task_count} задач - впечатляющая нагрузка!{partner_mention}Может, делегируем часть или оптимизируем?",
+            "overdue_tasks": f"Добрый день! {overdue_count} просроченных задач ждут внимания.{partner_mention}Без паники! Давай составим план?",
+            "general": f"Добрый день! Готов помочь с планированием.{partner_mention}Может, обсудим цели и создадим задачи? Что в приоритете?"
         }
         return fallback_messages.get(context, fallback_messages["general"])
 
