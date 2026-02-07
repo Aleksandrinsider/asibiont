@@ -824,7 +824,6 @@
                                 <option value="assigned-to-me">Поручили мне</option>
                                 <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
                                 <option value="overdue">Просрочено</option>
-                                <option value="background"{% if subscription_tier != 'PREMIUM' %} disabled{% endif %}>Автоматические{% if subscription_tier != 'PREMIUM' %} (PREMIUM){% endif %}</option>
                                 <option value="completed">Выполнено</option>
                             </select>
                         </div>
