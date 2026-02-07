@@ -1,4 +1,4 @@
-﻿from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, PostView, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, PostView, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -50,7 +50,7 @@ def normalize_city(city):
         'москва': 'moscow',
         'санкт-петербург': 'saint petersburg',
         'петербург': 'saint petersburg',
-        'СЃРїР±': 'saint petersburg',
+        'спб': 'saint petersburg',
         'екатеринбург': 'yekaterinburg',
         'новосибирск': 'novosibirsk',
         'казань': 'kazan'
@@ -68,7 +68,7 @@ try:
     # Test database connection
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
-    logger.info("вњ… Database connection successful")
+    logger.info("✅ Database connection successful")
 
     # Clear database if requested
     if os.getenv('CLEAR_DB') == '1':
@@ -82,7 +82,7 @@ try:
     # Initialize database tables
     init_db()
 except Exception as e:
-    logger.error(f"вќЊ Database connection failed: {e}")
+    logger.error(f"❌ Database connection failed: {e}")
     logger.error("Application may not work correctly without database connection")
     # Don't exit, let the app start anyway for webhook setup
     if not LOCAL:
@@ -93,9 +93,9 @@ except Exception as e:
 try:
     logger.info("Creating database tables...")
     Base.metadata.create_all(engine)
-    logger.info("вњ… Database tables created or already exist")
+    logger.info("✅ Database tables created or already exist")
 except Exception as e:
-    logger.error(f"вќЊ Failed to create database tables: {e}")
+    logger.error(f"❌ Failed to create database tables: {e}")
     if not LOCAL:
         raise  # Fail hard in production
     else:
@@ -546,9 +546,9 @@ try:
         session.close()
         raise
 
-    logger.info("вњ… Database migrations completed")
+    logger.info("✅ Database migrations completed")
 except Exception as e:
-    logger.error(f"вќЊ Database migrations failed: {e}")
+    logger.error(f"❌ Database migrations failed: {e}")
     if not LOCAL:
         raise  # Fail hard in production
     else:
@@ -609,9 +609,9 @@ try:
     test_session = Session()
     test_session.execute(text('SELECT 1'))
     test_session.close()
-    logger.info("вњ… Database connection successful")
+    logger.info("✅ Database connection successful")
 except Exception as e:
-    logger.error(f"вќЊ CRITICAL: Cannot connect to database: {e}", exc_info=True)
+    logger.error(f"❌ CRITICAL: Cannot connect to database: {e}", exc_info=True)
     logger.error(f"DATABASE_URL: {DATABASE_URL[:50]}..." if DATABASE_URL else "DATABASE_URL not set")
     # Don't exit, let Railway restart the app
 
@@ -629,30 +629,30 @@ try:
 
             test_users_data = [
                 # LIGHT tier users
-                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'РњРѕСЃРєвР°', 'username': 'test1'},
-                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'РЎР°наєС‚-РџРµС‚РµСЂР±СѓСЂРі', 'username': 'test2'},
-                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Р•РєР°С‚РµСЂРёна±СѓСЂРі', 'username': 'test3'},
-                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'РќРѕвРѕСЃРёР±РёСЂСЃРє', 'username': 'test4'},
-                {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Test User 5', 'city': 'РљР°Р·Р°РЅСЊ', 'username': 'test5'},
-                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'РќРёР¶наёР№ РќРѕвРіРѕСЂРѕРґ', 'username': 'test6'},
-                {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Test User 7', 'city': 'Р§РµР»СЏР±РёРЅСЃРє', 'username': 'test7'},
-                {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Test User 8', 'city': 'РћРјСЃРє', 'username': 'test8'},
+                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'Москва', 'username': 'test1'},
+                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'Санкт-Петербург', 'username': 'test2'},
+                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Екатеринбург', 'username': 'test3'},
+                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'Новосибирск', 'username': 'test4'},
+                {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Test User 5', 'city': 'Казань', 'username': 'test5'},
+                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'Нижний Новгород', 'username': 'test6'},
+                {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Test User 7', 'city': 'Челябинск', 'username': 'test7'},
+                {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Test User 8', 'city': 'Омск', 'username': 'test8'},
 
                 # STANDARD tier users
-                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Р РѕСЃС‚Рѕв-на°-Р”РѕРЅСѓ', 'username': 'test9'},
-                {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Test User 10', 'city': 'РЈС„Р°', 'username': 'test10'},
-                {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Test User 11', 'city': 'Р’РѕР»РіРѕРіСЂР°Рґ', 'username': 'test11'},
-                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'РљСЂР°СЃнаѕСЏСЂСЃРє', 'username': 'test12'},
-                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Р’РѕСЂРѕнаµР¶', 'username': 'test13'},
-                {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Test User 14', 'city': 'РџРµСЂРјСЊ', 'username': 'test14'},
+                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Ростов-на-Дону', 'username': 'test9'},
+                {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Test User 10', 'city': 'Уфа', 'username': 'test10'},
+                {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Test User 11', 'city': 'Волгоград', 'username': 'test11'},
+                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'Красноярск', 'username': 'test12'},
+                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Воронеж', 'username': 'test13'},
+                {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Test User 14', 'city': 'Пермь', 'username': 'test14'},
 
                 # PREMIUM tier users
-                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'РљСЂР°СЃнаѕРґР°СЂ', 'username': 'test15'},
-                {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Test User 16', 'city': 'РўСЋРјРµРЅСЊ', 'username': 'test16'},
-                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Р‘Р°СЂна°СѓР»', 'username': 'test17'},
-                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'РР¶РµвСЃРє', 'username': 'test18'},
-                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Р’Р»Р°РґРёвРѕСЃС‚РѕРє', 'username': 'test19'},
-                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'РЇСЂРѕСЃР»Р°вР»СЊ', 'username': 'test20'},
+                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'Краснодар', 'username': 'test15'},
+                {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Test User 16', 'city': 'Тюмень', 'username': 'test16'},
+                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Барнаул', 'username': 'test17'},
+                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'Ижевск', 'username': 'test18'},
+                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Владивосток', 'username': 'test19'},
+                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'Ярославль', 'username': 'test20'},
             ]
 
             now = datetime.now()
@@ -664,10 +664,10 @@ try:
                 existing_user = session_db.query(User).filter(User.telegram_id == user_data['telegram_id']).first()
                 if existing_user:
                     logger.info(f"Test user {user_data['telegram_id']} already exists, updating profile interests")
-                    # Update existing profile interests to 'СЃРїРѕСЂС‚'
+                    # Update existing profile interests to 'спорт'
                     existing_profile = session_db.query(UserProfile).filter_by(user_id=existing_user.id).first()
                     if existing_profile:
-                        existing_profile.interests = 'СЃРїРѕСЂС‚'
+                        existing_profile.interests = 'спорт'
                         updated_count += 1
                         logger.info(f"Updated interests for test user {user_data['telegram_id']}")
                     continue
@@ -687,7 +687,7 @@ try:
                 # Create profile with sport interests
                 profile = UserProfile(
                     user_id=user.id,
-                    interests='СЃРїРѕСЂС‚',  # All users have 'sport' interest
+                    interests='спорт',  # All users have 'sport' interest
                     city=user_data['city'],  # Use city from user data
                     contact_info=f'user{user_data["telegram_id"]}@test.com'
                 )
@@ -719,8 +719,8 @@ try:
                     # Task from user 1002 delegated to user 1001
                     task1 = Task(
                         user_id=user_1002.id,
-                        title="РџРѕРґРіРѕС‚РѕвРёС‚СЊ РїСЂРµР·РµРЅС‚Р°С†РёСЋ РґР»СЏ РєР»РёРµРЅС‚Р°",
-                        description="РЎРѕР·РґР°С‚СЊ РїСЂРµР·РµРЅС‚Р°С†РёСЋ Рѕ на°С€РёС… СѓСЃР»СѓРіР°С…",
+                        title="Подготовить презентацию для клиента",
+                        description="Создать презентацию о наших услугах",
                         status="pending",
                         created_at=now,
                         delegated_to_username=user_1001.username,
@@ -733,8 +733,8 @@ try:
                     # Task from user 1003 delegated to user 1001
                     task2 = Task(
                         user_id=user_1003.id,
-                        title="РџСЂРѕвРµСЂРёС‚СЊ РєРѕРґ на° РѕС€РёР±РєРё",
-                        description="Р РµвСЊСЋ РєРѕРґР° РґР»СЏ наѕвРѕРіРѕ РјРѕРґСѓР»СЏ",
+                        title="Проверить код на ошибки",
+                        description="Ревью кода для нового модуля",
                         status="pending",
                         created_at=now,
                         delegated_to_username=user_1001.username,
@@ -747,8 +747,8 @@ try:
                 if user_1001 and user_1002:
                     task3 = Task(
                         user_id=user_1001.id,
-                        title="РћСЂРіР°наёР·РѕвР°С‚СЊ вСЃС‚СЂРµС‡Сѓ СЃ РєРѕРјР°наґРѕР№",
-                        description="Р—Р°РїР»Р°наёСЂРѕвР°С‚СЊ РµР¶РµнаµРґРµР»СЊРЅСѓСЋ вСЃС‚СЂРµС‡Сѓ",
+                        title="Организовать встречу с командой",
+                        description="Запланировать еженедельную встречу",
                         status="pending",
                         created_at=now,
                         delegated_to_username=user_1002.username,
@@ -818,9 +818,9 @@ def get_context_from_db(user_id, limit=10):
             
             # If it's a standalone AI message (reminder), add it as system context
             elif msg.message_type == 'ai':
-                # Add reminder as a synthetic user→ai pair for context continuity
+                # Add reminder as a synthetic userai pair for context continuity
                 context.append({
-                    'user': '[Напоминание о задаче]',
+                    'user': '[  ]',
                     'agent': msg.content
                 })
                 i += 1
@@ -865,50 +865,50 @@ def save_context_to_db(user_id, user_message, ai_message):
 
 
 async def get_timezone_from_ip(ip_address):
-    """РћРїСЂРµРґРµР»СЏРµС‚ timezone РїРѕ IP Р°РґСЂРµСЃСѓ С‡РµСЂРµР· ipapi.co"""
-    # РњР°РїРїРёнаі Р°наіР»РёР№СЃРєРёС… на°Р·вР°наёР№ РіРѕСЂРѕРґРѕв на° СЂСѓСЃСЃРєРёРµ
+    """Определяет timezone по IP адресу через ipapi.co"""
+    # Маппи алийских зай городо  русские
     city_mapping = {
-        'Moscow': 'РњРѕСЃРєвР°',
-        'Saint Petersburg': 'РЎР°наєС‚-РџРµС‚РµСЂР±СѓСЂРі',
-        'Kazan': 'РљР°Р·Р°РЅСЊ',
-        'Novosibirsk': 'РќРѕвРѕСЃРёР±РёСЂСЃРє',
-        'Yekaterinburg': 'Р•РєР°С‚РµСЂРёна±СѓСЂРі',
-        'Nizhny Novgorod': 'РќРёР¶наёР№ РќРѕвРіРѕСЂРѕРґ',
-        'Chelyabinsk': 'Р§РµР»СЏР±РёРЅСЃРє',
-        'Omsk': 'РћРјСЃРє',
-        'Samara': 'РЎР°РјР°СЂР°',
-        'Rostov-on-Don': 'Р РѕСЃС‚Рѕв-на°-Р”РѕРЅСѓ',
-        'Ufa': 'РЈС„Р°',
-        'Krasnoyarsk': 'РљСЂР°СЃнаѕСЏСЂСЃРє',
-        'Voronezh': 'Р’РѕСЂРѕнаµР¶',
-        'Perm': 'РџРµСЂРјСЊ',
-        'Volgograd': 'Р’РѕР»РіРѕРіСЂР°Рґ',
-        'Krasnodar': 'РљСЂР°СЃнаѕРґР°СЂ',
-        'Saratov': 'РЎР°СЂР°С‚Рѕв',
-        'Tyumen': 'РўСЋРјРµРЅСЊ',
-        'Tolyatti': 'РўРѕР»СЊСЏС‚С‚Рё',
-        'Izhevsk': 'РР¶РµвСЃРє',
-        'Barnaul': 'Р‘Р°СЂна°СѓР»',
-        'Ulyanovsk': 'РЈР»СЊСЏнаѕвСЃРє',
-        'Irkutsk': 'РСЂРєСѓС‚СЃРє',
-        'Khabarovsk': 'РҐР°Р±Р°СЂРѕвСЃРє',
-        'Vladivostok': 'Р’Р»Р°РґРёвРѕСЃС‚РѕРє',
-        'Yaroslavl': 'РЇСЂРѕСЃР»Р°вР»СЊ',
-        'Vladimir': 'Р’Р»Р°РґРёРјРёСЂ',
-        'Ivanovo': 'РвР°наѕвРѕ',
-        'Bryansk': 'Р‘СЂСЏРЅСЃРє',
-        'Smolensk': 'РЎРјРѕР»РµРЅСЃРє',
-        'Kaluga': 'РљР°Р»СѓРіР°',
-        'Tula': 'РўСѓР»Р°',
-        'Ryazan': 'Р СЏР·Р°РЅСЊ',
-        'Moscow Oblast': 'РњРѕСЃРєРѕвСЃРєР°СЏ РѕР±Р»Р°СЃС‚СЊ',
-        'Leningrad Oblast': 'Р›РµнаёнаіСЂР°РґСЃРєР°СЏ РѕР±Р»Р°СЃС‚СЊ'
+        'Moscow': 'Москва',
+        'Saint Petersburg': 'Санкт-Петербург',
+        'Kazan': 'Казань',
+        'Novosibirsk': 'Новосибирск',
+        'Yekaterinburg': 'Екатеринбург',
+        'Nizhny Novgorod': 'Нижний Новгород',
+        'Chelyabinsk': 'Челябинск',
+        'Omsk': 'Омск',
+        'Samara': 'Самара',
+        'Rostov-on-Don': 'Ростов-на-Дону',
+        'Ufa': 'Уфа',
+        'Krasnoyarsk': 'Красноярск',
+        'Voronezh': 'Воронеж',
+        'Perm': 'Пермь',
+        'Volgograd': 'Волгоград',
+        'Krasnodar': 'Краснодар',
+        'Saratov': 'Саратов',
+        'Tyumen': 'Тюмень',
+        'Tolyatti': 'Тольятти',
+        'Izhevsk': 'Ижевск',
+        'Barnaul': 'Барнаул',
+        'Ulyanovsk': 'Ульяск',
+        'Irkutsk': 'ркутск',
+        'Khabarovsk': 'Хабароск',
+        'Vladivostok': 'Владивосток',
+        'Yaroslavl': 'Ярослаль',
+        'Vladimir': 'Владимир',
+        'Ivanovo': 'ао',
+        'Bryansk': 'Брянск',
+        'Smolensk': 'Смоленск',
+        'Kaluga': 'Калуга',
+        'Tula': 'Тула',
+        'Ryazan': 'Рязань',
+        'Moscow Oblast': 'Москоская область',
+        'Leningrad Oblast': 'Лерадская область'
     }
 
     try:
-        # РРінаѕСЂРёСЂСѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ IP
+        # грируем локальные IP
         if ip_address.startswith(('127.', '192.168.', '10.', '172.')):
-            return 'Europe/Moscow', 'РњРѕСЃРєвР°'  # РџРѕ СѓРјРѕР»С‡Р°наёСЋ РґР»СЏ Р»РѕРєР°Р»СЊРЅС‹С…
+            return 'Europe/Moscow', 'Москва'  # По умолчанию для локальных
 
         async with aiohttp.ClientSession() as session:
             async with session.get(f'https://ipapi.co/{ip_address}/json/', timeout=aiohttp.ClientTimeout(total=3)) as response:
@@ -917,7 +917,7 @@ async def get_timezone_from_ip(ip_address):
                     timezone = data.get('timezone')
                     city = data.get('city')
 
-                    # РџСЂРµРѕР±СЂР°Р·СѓРµРј Р°наіР»РёР№СЃРєРѕРµ на°Р·вР°наёРµ РіРѕСЂРѕРґР° в СЂСѓСЃСЃРєРѕРµ, РµСЃР»Рё РµСЃС‚СЊ в РјР°РїРїРёнаіРµ
+                    # Преобразуем алийское зае города  русское, если есть  маппие
                     if city and city in city_mapping:
                         city = city_mapping[city]
 
@@ -929,7 +929,7 @@ async def get_timezone_from_ip(ip_address):
 
 
 async def get_user_avatar_url(bot, user_id, force_refresh=False):
-    """РџРѕР»СѓС‡Р°РµС‚ URL Р°вР°С‚Р°СЂР° РїРѕР»СЊР·РѕвР°С‚РµР»СЏ РёР· Telegram РёР»Рё Р‘Р”
+    """Получает URL аватара пользователя из Telegram или БД
     
     Args:
         bot: Telegram bot instance
@@ -942,12 +942,12 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
             
-            # Р•СЃР»Рё наµ С‚СЂРµР±СѓРµС‚СЃСЏ РїСЂРёРЅСѓРґРёС‚РµР»СЊнаѕРµ РѕР±наѕвР»РµнаёРµ Рё РµСЃС‚СЊ РєСЌС€РёСЂРѕвР°наЅС‹Р№ Р°вР°С‚Р°СЂ, вРѕР·вСЂР°С‰Р°РµРј РµРіРѕ
+            # Если  требуется принудителье облее и есть кэшироаый аатар, озращаем его
             if not force_refresh and user and user.photo_url:
                 logger.debug(f"Returning cached avatar for user {user_id}")
                 return user.photo_url
             
-            # Р—Р°РіСЂСѓР¶Р°РµРј СЃвРµР¶РёР№ Р°вР°С‚Р°СЂ РёР· Telegram
+            # Загружаем сежий аатар из Telegram
             if bot:
                 try:
                     photos = await bot.get_user_profile_photos(user_id, limit=1)
@@ -955,7 +955,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                         file = await bot.get_file(photos.photos[0][-1].file_id)
                         avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                         
-                        # РЎРѕС…СЂР°РЅСЏРµРј в Р‘Р” РґР»СЏ РєСЌС€РёСЂРѕвР°наёСЏ
+                        # Сохраняем  БД для кэшироая
                         if user:
                             user.photo_url = avatar_url
                             db.commit()
@@ -975,7 +975,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
 
 
 def check_telegram_authentication(data):
-    # РџСЂРѕвРµСЂРєР° Р°вС‚РѕСЂРёР·Р°С†РёРё РѕС‚ Telegram
+    # Проерка аторизации от Telegram
     token = TELEGRAM_TOKEN
     if token.startswith('bot'):
         token = token[3:]  # Remove 'bot' prefix
@@ -991,7 +991,7 @@ async def health_handler(request):
 
 
 async def login_handler(request):
-    """РЎС‚СЂР°наёС†Р° Р°вС‚РѕСЂРёР·Р°С†РёРё"""
+    """Страца аторизации"""
     session = await get_session(request)
     user_id = session.get('user_id')
 
@@ -1001,7 +1001,7 @@ async def login_handler(request):
         session.pop('history_cleared_timestamp', None)
         user_id = None
 
-    # Р•СЃР»Рё РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СѓР¶Рµ Р·Р°Р»РѕРіРёнаµРЅ, СЂРµРґРёСЂРµРєС‚РёРј на° dashboard
+    # Если пользователь уже залогинен, редиректим в dashboard
     if user_id:
         try:
             user_id = int(user_id)
@@ -1009,11 +1009,11 @@ async def login_handler(request):
         except (ValueError, TypeError):
             pass
 
-    # РџРѕРєР°Р·С‹вР°РµРј СЃС‚СЂР°наёС†Сѓ Р°вС‚РѕСЂРёР·Р°С†РёРё
+    # Показыаем страцу аторизации
     bot_user = TELEGRAM_BOT_USERNAME.replace(
         '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'asibiont_bot')
     
-    # Р¤РѕСЂРјРёСЂСѓРµРј auth_url РґР»СЏ вРёРґР¶РµС‚Р° Telegram
+    # Формируем auth_url для иджета Telegram
     base_url = str(request.url.origin())
     auth_url = f"{base_url}/tg_auth"
     
@@ -1061,7 +1061,7 @@ async def auth_handler(request):
                 if not user:
                     logger.info(f"Creating new user with telegram_id: {user_id}")
 
-                    # РћРїСЂРµРґРµР»СЏРµРј timezone РїРѕ IP
+                    # Определяем timezone по IP
                     ip_address = request.headers.get('X-Forwarded-For', request.remote).split(',')[0].strip()
                     timezone, city = await get_timezone_from_ip(ip_address)
                     logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
@@ -1094,7 +1094,7 @@ async def auth_handler(request):
                     session_db.add(user)
                     session_db.commit()
 
-                    # РЎРѕР·РґР°РµРј РїСЂРѕС„РёР»СЊ СЃ РіРѕСЂРѕРґРѕРј, РµСЃР»Рё РѕРїСЂРµРґРµР»РёР»Рё
+                    # Создаем профиль с городом, если определили
                     if city:
                         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
                         if not profile:
@@ -1125,7 +1125,7 @@ async def auth_handler(request):
                 logger.error(f"Database error in auth_handler: {e}", exc_info=True)
                 if session_db:
                     session_db.rollback()
-                return web.Response(text='РћС€РёР±РєР° РїРѕРґРєР»СЋС‡РµнаёСЏ Рє Р±Р°Р·Рµ РґР°наЅС‹С…. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.', status=500)
+                return web.Response(text='Ошибка подключения к базе данных. Попробуйте позже.', status=500)
             finally:
                 if session_db:
                     session_db.close()
@@ -1170,7 +1170,7 @@ async def dashboard_handler(request):
         if not logged_in:
             return web.HTTPFound('/')
 
-        # РџРѕР»СѓС‡РёС‚СЊ Р·Р°РґР°С‡Рё РїРѕР»СЊР·РѕвР°С‚РµР»СЏ
+        # Получить задачи пользователя
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -1180,21 +1180,21 @@ async def dashboard_handler(request):
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
             
-            # РџСЂРѕвРµСЂРёС‚СЊ РїРѕРґРїРёСЃРєСѓ
+            # Проерить подписку
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
 
-            # РџСЂРѕвРµСЂРёС‚СЊ Рё РѕР±наѕвРёС‚СЊ СЃС‚Р°С‚СѓСЃ РёСЃС‚РµРєС€РёС… РїРѕРґРїРёСЃРѕРє
+            # Проерить и обить статус истекших подписок
             if subscription and subscription.status == 'active' and subscription.end_date:
                 now = datetime.now(pytz.UTC)
                 if subscription.end_date.tzinfo is None:
                     subscription.end_date = subscription.end_date.replace(tzinfo=pytz.UTC)
                 if subscription.end_date < now:
                     subscription.status = 'expired'
-                    # user.subscription_tier = SubscriptionTier.LIGHT  # РЎР±СЂРѕСЃРёС‚СЊ С‚Р°СЂРёС„ на° Р±СЂРѕна·Сѓ РїСЂРё РёСЃС‚РµС‡РµнаёРё - СѓР±СЂР°наѕ РїРѕ РїСЂРѕСЃСЊР±Рµ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ
+                    # user.subscription_tier = SubscriptionTier.LIGHT  # Сбросить тариф в бронзу при истечении - убрано по просьбе пользователя
                     session_db.commit()
                     logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
 
-            # РЎРёРЅС…СЂРѕнаёР·РёСЂРѕвР°С‚СЊ С‚Р°СЂРёС„ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ СЃ Р°РєС‚РёвнаѕР№ РїРѕРґРїРёСЃРєРѕР№
+            # Синхронизировать тариф пользователя с активной подпиской
             if subscription and subscription.status == 'active' and subscription.tier:
                 sub_tier = subscription.tier.value if hasattr(subscription.tier, 'value') else str(subscription.tier).upper()
                 user_tier = user.subscription_tier.value if user.subscription_tier else None
@@ -1213,7 +1213,7 @@ async def dashboard_handler(request):
             logger.info(
                 f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}, tier: {subscription.tier if subscription else None}, user_tier: {user.subscription_tier.value if user.subscription_tier else None}")
 
-            # Р’ FREE_ACCESS_MODE наµ С‚СЂРµР±СѓРµС‚СЃСЏ Р°РєС‚Рёвна°СЏ РїРѕРґРїРёСЃРєР°
+            # В FREE_ACCESS_MODE  требуется актия подписка
             from config import FREE_ACCESS_MODE
             if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
                 logger.info("No active subscription, redirecting to subscription_tiers")
@@ -1230,13 +1230,13 @@ async def dashboard_handler(request):
                 logger.info(f"Task {task.id}: {task.title} (user_id: {task.user_id})")
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
 
-            # РџСЂРѕвРµСЂСЏРµРј timestamp РѕС‡РёСЃС‚РєРё РёСЃС‚РѕСЂРёРё РёР· Р‘Р”
+            # Проеряем timestamp очистки истории из БД
             history_cleared_timestamp = None
             if user.history_cleared_at:
                 history_cleared_timestamp = user.history_cleared_at.timestamp()
                 logger.info(f"History cleared timestamp from DB: {history_cleared_timestamp}")
 
-            # Р‘РµСЂРµРј РїРѕСЃР»РµРґнаёРµ 50 СЃРѕРѕР±С‰РµнаёР№, наѕ С„РёР»СЊС‚СЂСѓРµРј РїРѕ timestamp РѕС‡РёСЃС‚РєРё
+            # Берем последе 50 сообщей,  фильтруем по timestamp очистки
             if user:
                 all_interactions = list(
                     reversed(
@@ -1244,14 +1244,14 @@ async def dashboard_handler(request):
                             user_id=user.id).order_by(
                             Interaction.id.desc()).limit(50).all()))
                 if history_cleared_timestamp:
-                    # Р¤РёР»СЊС‚СЂСѓРµРј С‚РѕР»СЊРєРѕ СЃРѕРѕР±С‰РµнаёСЏ РїРѕСЃР»Рµ РѕС‡РёСЃС‚РєРё
+                    # Фильтруем только сообщения после очистки
                     filtered_interactions = []
                     for i in all_interactions:
                         try:
-                            # Р•СЃР»Рё created_at naive (Р±РµР· tzinfo), СЃС‡РёС‚Р°РµРј РµРіРѕ UTC Рё РїСЂРѕСЃС‚Рѕ Р±РµСЂРµРј timestamp
-                            # Р•СЃР»Рё СЃ tzinfo, РёСЃРїРѕР»СЊР·СѓРµРј РµРіРѕ timestamp
+                            # Если created_at naive (без tzinfo), считаем его UTC и просто берем timestamp
+                            # Если с tzinfo, используем его timestamp
                             if i.created_at.tzinfo is None:
-                                # Naive datetime - РёРЅС‚РµСЂРїСЂРµС‚РёСЂСѓРµРј РєР°Рє UTC на°РїСЂСЏРјСѓСЋ С‡РµСЂРµР· replace
+                                # Naive datetime - интерпретируем как UTC прямую через replace
                                 interaction_ts = i.created_at.replace(tzinfo=dt_timezone.utc).timestamp()
                             else:
                                 interaction_ts = i.created_at.timestamp()
@@ -1263,7 +1263,7 @@ async def dashboard_handler(request):
                                 filtered_interactions.append(i)
                         except Exception as e:
                             logger.error(f"Error processing interaction {i.id} timestamp: {e}")
-                            # Р’ СЃР»СѓС‡Р°Рµ РѕС€РёР±РєРё РќР• вРєР»СЋС‡Р°РµРј СЃРѕРѕР±С‰РµнаёРµ (Р±РµР·РѕРїР°СЃнаµРµ СЃРєСЂС‹С‚СЊ)
+                            # В случае ошибки НЕ включаем сообщение (безопаснее скрыть)
 
                     interactions = filtered_interactions
                     logger.info(
@@ -1280,12 +1280,12 @@ async def dashboard_handler(request):
             user_subscription_tier = user.subscription_tier if user and user.subscription_tier else SubscriptionTier.LIGHT
             display_tier = user_subscription_tier.value if user_subscription_tier else 'LIGHT'
 
-            # РџРѕР»СѓС‡РёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹ РїРѕ РґРµР»РµРіРёСЂРѕвР°наёСЋ
-            delegating_to_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё
-            delegating_by_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
+            # Получить контакты по делегироаю
+            delegating_to_me = []  # Люди, которые делегироали м задачи
+            delegating_by_me = []  # Люди, которым я делегироал задачи
 
             try:
-                # РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РёР·Р±СЂР°наЅС‹С… РєРѕРЅС‚Р°РєС‚Рѕв
+                # Получить список избраых контакто
                 favorite_contacts = []
                 if profile and profile.favorite_contacts:
                     try:
@@ -1294,7 +1294,7 @@ async def dashboard_handler(request):
                     except json.JSONDecodeError:
                         favorite_contacts = []
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё (СЏ РїРѕР»СѓС‡Р°СЋ Р·Р°РґР°С‡Рё РѕС‚ наёС…)
+                # Люди, которые делегироали м задачи (я получаю задачи от х)
                 delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_to_username.ilike(user.username.replace('@', '')),
                     Task.delegation_status.in_(['pending', 'accepted']),
@@ -1315,38 +1315,38 @@ async def dashboard_handler(request):
                                 'id': delegator.id,
                                 'username': delegator.username,
                                 'first_name': delegator.first_name,
-                                'reason': f'РґРµР»РµРіРёСЂРѕвР°Р» {task_count} Р·Р°РґР°С‡',
+                                'reason': f'делегироал {task_count} задач',
                                 'tasks': task_titles,
                                 'task_count': task_count
                             })
 
-                # Р”РѕР±Р°вРёС‚СЊ РёР·Р±СЂР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹, Сѓ РєРѕС‚РѕСЂС‹С… вСЃРµ Р·Р°РґР°С‡Рё РѕС‚РєР»РѕнаµРЅС‹, наѕ РєРѕРЅС‚Р°РєС‚ в РёР·Р±СЂР°наЅРѕРј
+                # Добаить избраые контакты, у которых се задачи отклоны,  контакт  избраом
                 for favorite_username in favorite_contacts:
                     favorite_user = session_db.query(User).filter(
                         User.username.ilike(favorite_username)
                     ).first()
                     
                     if favorite_user and favorite_user.id != user.id and favorite_user.id not in delegator_ids:
-                        # РџСЂРѕвРµСЂРёС‚СЊ, Р±С‹Р»Рё Р»Рё Сѓ СЌС‚РѕРіРѕ РєРѕРЅС‚Р°РєС‚Р° Р·Р°РґР°С‡Рё (вРєР»СЋС‡Р°СЏ РѕС‚РєР»РѕнаµнаЅС‹Рµ)
+                        # Проерить, были ли у этого контакта задачи (ключая отклоые)
                         all_tasks_from_favorite = session_db.query(Task).filter(
                             Task.user_id == favorite_user.id,
                             Task.delegated_to_username.ilike(user.username.replace('@', ''))
                         ).all()
                         
                         if all_tasks_from_favorite:
-                            # Р•СЃС‚СЊ РёСЃС‚РѕСЂРёСЏ РґРµР»РµРіРёСЂРѕвР°наёСЏ - РґРѕР±Р°вР»СЏРµРј в СЃРїРёСЃРѕРє
+                            # Есть история делегирования - добавляем в список
                             rejected_count = sum(1 for t in all_tasks_from_favorite if t.status == 'rejected')
                             if rejected_count > 0:
                                 delegating_to_me.append({
                                     'id': favorite_user.id,
                                     'username': favorite_user.username,
                                     'first_name': favorite_user.first_name,
-                                    'reason': 'в РёР·Р±СЂР°наЅРѕРј',
+                                    'reason': ' избраом',
                                     'tasks': [],
                                     'task_count': 0
                                 })
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
+                # Люди, которым я делегироал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
@@ -1372,16 +1372,16 @@ async def dashboard_handler(request):
                                 'id': delegatee.id,
                                 'username': delegatee.username,
                                 'first_name': delegatee.first_name,
-                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕвР°Р» {task_count} Р·Р°РґР°С‡',
+                                'reason': f'я делегироал {task_count} задач',
                                 'tasks': task_titles,
                                 'task_count': task_count
                             })
 
-                # Р”РѕР±Р°вР»СЏРµРј СЂРµРєРѕРјРµнаґРѕвР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ РґР»СЏ вСЃРµС… РїРѕР»СЊР·РѕвР°С‚РµР»РµР№
-                # РџРѕР»СѓС‡Р°РµРј вСЃРµ СЂРµРєРѕРјРµнаґРѕвР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹
+                # Добавляем рекомендованные контакты для всех пользователей
+                # Получаем се рекомеоаые контакты
                 all_partners = get_partners_list(user.id, session_db)
                 
-                # Р”РѕР±Р°вР»СЏРµРј РєРѕРЅС‚Р°РєС‚С‹, РєРѕС‚РѕСЂС‹Рµ РµС‰Рµ наµ в СЃРїРёСЃРєР°С… РґРµР»РµРіРёСЂРѕвР°наёСЏ
+                # Добавляем контакты, которые еще не в списках делегирования
                 existing_contact_ids = set()
                 for contact in delegating_to_me + delegating_by_me:
                     existing_contact_ids.add(contact['id'])
@@ -1389,20 +1389,20 @@ async def dashboard_handler(request):
                 for partner in all_partners:
                     partner_user = session_db.query(User).filter_by(id=partner.user_id).first()
                     if partner_user and partner_user.id not in existing_contact_ids and partner_user.id != user.id:
-                        # РћРїСЂРµРґРµР»СЏРµРј РїСЂРёС‡РёРЅСѓ СЂРµРєРѕРјРµнаґР°С†РёРё
+                        # Определяем причину рекомеации
                         reason_parts = []
                         if hasattr(partner, 'common_interests') and partner.common_interests:
-                            reason_parts.append(f"РѕР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹: {partner.common_interests}")
+                            reason_parts.append(f"общие интересы: {partner.common_interests}")
                         if hasattr(partner, 'common_skills') and partner.common_skills:
-                            reason_parts.append(f"РѕР±С‰РёРµ на°вС‹РєРё: {partner.common_skills}")
+                            reason_parts.append(f"общие ыки: {partner.common_skills}")
                         if hasattr(partner, 'common_goals') and partner.common_goals:
-                            reason_parts.append(f"РѕР±С‰РёРµ С†РµР»Рё: {partner.common_goals}")
+                            reason_parts.append(f"общие цели: {partner.common_goals}")
                         if hasattr(partner, 'task_relevance') and partner.task_relevance:
                             reason_parts.append(partner.task_relevance)
                         
-                        reason = ', '.join(reason_parts) if reason_parts else 'СЂРµРєРѕРјРµнаґРѕвР°РЅ СЃРёСЃС‚РµРјРѕР№'
+                        reason = ', '.join(reason_parts) if reason_parts else 'рекомеоан системой'
                         
-                        # Р”РѕР±Р°вР»СЏРµРј в delegating_to_me РєР°Рє СЂРµРєРѕРјРµнаґРѕвР°наЅС‹Р№ РєРѕРЅС‚Р°РєС‚
+                        # Добавляем в delegating_to_me как рекомендованный контакт
                         delegating_to_me.append({
                             'id': partner_user.id,
                             'username': partner_user.username,
@@ -1425,7 +1425,7 @@ async def dashboard_handler(request):
                 delegating_to_me = []
                 delegating_by_me = []
 
-            # РџРѕР»СѓС‡РёС‚СЊ Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹
+            # Получить заблокироаые контакты
             blocked_contacts = []
             try:
                 if profile and profile.blocked_contacts:
@@ -1438,7 +1438,7 @@ async def dashboard_handler(request):
                                 'username': blocked_user.username,
                                 'first_name': blocked_user.first_name,
                                 'photo_url': blocked_user.photo_url,
-                                'reason': 'Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹Р№ РєРѕРЅС‚Р°РєС‚'
+                                'reason': 'заблокироаый контакт'
                             })
             except Exception as e:
                 logger.error(f"Error getting blocked contacts: {e}")
@@ -1480,7 +1480,7 @@ async def dashboard_handler(request):
             user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
             user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
 
-            # РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚Рѕв, СЃ РєРѕС‚РѕСЂС‹РјРё СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ
+            # Получаем список контакто, с которыми уже общались
             contacted_usernames = set()
             for interaction in interactions:
                 mentions = re.findall(r'@(\w+)', interaction.content)
@@ -1491,7 +1491,7 @@ async def dashboard_handler(request):
                 if p.interests:
                     partner_interests = set(i.strip().lower() for i in p.interests.split(',') if i.strip())
                     common = user_interests & partner_interests
-                    # Also check for partial matches (e.g., "СЃРїРѕСЂС‚" matches "СЃРїРѕСЂС‚, С„СѓС‚Р±РѕР»")
+                    # Also check for partial matches (e.g., "спорт" matches "спорт, футбол")
                     if not common:
                         for ui in user_interests:
                             for pi in partner_interests:
@@ -1522,16 +1522,16 @@ async def dashboard_handler(request):
                 if p.contact_info:
                     username = p.contact_info.replace('@', '')
                     if username in contacted_usernames:
-                        reasons.append('СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ')
+                        reasons.append('уже общались')
                 if p.common_skills:
-                    reasons.append('РѕР±С‰РёРµ на°вС‹РєРё')
+                    reasons.append('общие ыки')
                 if p.common_interests:
-                    reasons.append('РѕР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹')
+                    reasons.append('общие интересы')
                 if p.common_goals:
-                    reasons.append('РѕР±С‰РёРµ С†РµР»Рё')
+                    reasons.append('общие цели')
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
-                    reasons.append('РёР· вР°С€РµРіРѕ РіРѕСЂРѕРґР°')
-                p.recommendation_reason = ', '.join(reasons) if reasons else 'РїРѕРґС…РѕРґСЏС‰РёР№ РєРѕРЅС‚Р°РєС‚'
+                    reasons.append('из ашего города')
+                p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
         # Add photo_url to partners
         if partners:
@@ -1559,18 +1559,18 @@ async def dashboard_handler(request):
         current_time = user_now.strftime('%H:%M')
 
         months = [
-            'СЏнаІР°СЂСЏ',
-            'С„РµвСЂР°Р»СЏ',
-            'РјР°СЂС‚Р°',
-            'Р°РїСЂРµР»СЏ',
-            'РјР°СЏ',
-            'РёСЋРЅСЏ',
-            'РёСЋР»СЏ',
-            'Р°вРіСѓСЃС‚Р°',
-            'СЃРµРЅС‚СЏР±СЂСЏ',
-            'РѕРєС‚СЏР±СЂСЏ',
-            'наѕСЏР±СЂСЏ',
-            'РґРµРєР°Р±СЂСЏ']
+            'яаря',
+            'фераля',
+            'марта',
+            'апреля',
+            'мая',
+            'июня',
+            'июля',
+            'агуста',
+            'сентября',
+            'октября',
+            'ября',
+            'декабря']
         current_date = user_now.strftime('%d.%m.%Y')
 
         for task in tasks:
@@ -1587,11 +1587,11 @@ async def dashboard_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task.overdue_text = f"на {days} дн."
+                        task.overdue_text = f" {days} ."
                     elif hours > 0:
-                        task.overdue_text = f"на {hours} ч."
+                        task.overdue_text = f" {hours} ."
                     elif minutes > 0:
-                        task.overdue_text = f"на {minutes} мин."
+                        task.overdue_text = f" {minutes} ."
                     else:
                         task.overdue_text = ""
                 else:
@@ -1627,12 +1627,12 @@ async def dashboard_handler(request):
                             user_tz if user.timezone else pytz.UTC) > user_now and task.status == 'pending':
                         reminder_time_local = task.reminder_time.astimezone(
                             user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
-                        upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
+                        upcoming_reminders.append(f"{task.title}  {reminder_time_local}")
 
-        # Преобразуем задачи в словари для JSON сериализации
+        #      JSON 
         tasks_dict = []
         for task in tasks:
-            # РџРѕРґРіРѕС‚РѕвРёРј reminder_time в ISO С„РѕСЂРјР°С‚Рµ РґР»СЏ JavaScript
+            # Подготоим reminder_time  ISO формате для JavaScript
             reminder_time_iso = None
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
@@ -1645,7 +1645,7 @@ async def dashboard_handler(request):
                 'title': task.title,
                 'description': decrypt_data(task.description) if task.description else '',
                 'status': task.status,
-                'reminder_time': reminder_time_iso,  # Для группировки в JS
+                'reminder_time': reminder_time_iso,  #    JS
                 'reminder_time_local': getattr(task, 'reminder_time_local', None),
                 'overdue': getattr(task, 'overdue', False),
                 'overdue_text': getattr(task, 'overdue_text', None),
@@ -1756,9 +1756,9 @@ async def chat_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             logger.info(f"User found: {user is not None}")
 
-            # РљР РРўРР§РќРћ: РЎРѕС…СЂР°РЅСЏРµРј СЃРѕРѕР±С‰РµнаёРµ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ Р”Рћ вС‹Р·РѕвР° AI
-            # Р­С‚Рѕ РіР°СЂР°РЅС‚РёСЂСѓРµС‚, С‡С‚Рѕ СЃРѕРѕР±С‰РµнаёРµ РїРѕСЏвРёС‚СЃСЏ в РёСЃС‚РѕСЂРёРё РґР°Р¶Рµ РµСЃР»Рё AI СѓРїР°РґРµС‚
-            # Р РїСЂРµРґРѕС‚вСЂР°С‰Р°РµС‚ race condition СЃ РґСѓР±Р»РёРєР°С‚Р°РјРё
+            # КРИТИЧНО: Сохраняем сообщение пользователя ДО вызова AI
+            # Это гарантирует, что сообщение появится в истории даже если AI упадет
+            #  предотращает race condition с дубликатами
             save_context_to_db(user_id, message, None)
             logger.info("User message saved to DB BEFORE AI call")
 
@@ -1770,7 +1770,7 @@ async def chat_handler(request):
                 logger.info("AI response: %s...", response[:100])
             except Exception as e:
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
-                response = f"РћС€РёР±РєР°: {str(e)}"
+                response = f"Ошибка: {str(e)}"
 
             # Save agent response to Interaction table
             if user:
@@ -1870,17 +1870,17 @@ async def api_send_message_handler(request):
                     logger.info(f"[API_SEND_MESSAGE] No tool calls to execute")
                 if response is None or response == '':
                     logger.error("[API_SEND_MESSAGE] AI response is empty!")
-                    response = "РР·вРёнаёС‚Рµ, РїСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ вР°С€РµРіРѕ Р·Р°РїСЂРѕСЃР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·."
+                    response = "зите, произошла ошибка при обработке ашего запроса. Попробуйте еще раз."
             except Exception as e:
                 logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
                 return web.json_response({'error': 'AI service error'}, status=500)
 
             # Check if response contains tier restriction error
-            if "Р”РµР»РµРіРёСЂРѕвР°наёРµ Р·Р°РґР°С‡ РґРѕСЃС‚СѓРїнаѕ С‚РѕР»СЊРєРѕ на° С‚Р°СЂРёС„Р°С…" in response:
+            if "Делегироае задач доступ только  тарифах" in response:
                 logger.info(f"[API_SEND_MESSAGE] Tier restriction detected for user {user_id}")
                 return web.json_response({
                     'error': 'tier_restriction',
-                    'message': 'рџҐ‰ Р”РµР»РµРіРёСЂРѕвР°наёРµ Р·Р°РґР°С‡ РґРѕСЃС‚СѓРїнаѕ С‚РѕР»СЊРєРѕ на° С‚Р°СЂРёС„Р°С… РЎС‚Р°наґР°СЂС‚ Рё РџСЂРµРјРёСѓРј',
+                    'message': '🥉 Делегироае задач доступ только  тарифах Стаарт и Премиум',
                     'tier': 'LIGHT',
                     'upgrade_url': '/subscription_tiers'
                 }, status=403)
@@ -1911,7 +1911,7 @@ async def clear_history_handler(request):
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
-    # РћР±наѕвР»СЏРµРј history_cleared_at в Р‘Р”
+    # Обляем history_cleared_at  БД
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -1990,7 +1990,7 @@ async def clear_single_task_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
 
-        # РС‰РµРј Р·Р°РґР°С‡Сѓ Р»РёР±Рѕ СЃСЂРµРґРё СЃвРѕРёС…, Р»РёР±Рѕ СЃСЂРµРґРё РґРµР»РµРіРёСЂРѕвР°наЅС‹С… Рјнаµ
+        # щем задачу либо среди соих, либо среди делегироаых м
         query_conditions = [Task.id == task_id, Task.user_id == user.id]
         if user.username:
             query_conditions.append(Task.delegated_to_username.ilike(user.username))
@@ -2013,7 +2013,7 @@ async def clear_single_task_handler(request):
 
 
 async def complete_task_handler(request):
-    """Р—Р°вРµСЂС€Р°РµС‚ Р·Р°РґР°С‡Сѓ РїРѕ ID"""
+    """Заершает задачу по ID"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2031,7 +2031,7 @@ async def complete_task_handler(request):
         result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"[COMPLETE_TASK_HANDLER] Task {task_id} completed by user {user_id}: {result}")
         
-        # РџСЂРѕвРµСЂСЏРµРј СЃС‚Р°С‚СѓСЃ Р·Р°РґР°С‡Рё РїРѕСЃР»Рµ Р·Р°вРµСЂС€РµнаёСЏ
+        # Проеряем статус задачи после заершея
         from models import Task
         db_session = Session()
         try:
@@ -2043,27 +2043,27 @@ async def complete_task_handler(request):
         finally:
             db_session.close()
         
-        # РћС‚РїСЂР°вР»СЏРµРј СѓвРµРґРѕРјР»РµнаёРµ в Telegram С‡РµСЂРµР· AI РѕР±СЂР°Р±РѕС‚РєСѓ, РєР°Рє Р±СѓРґС‚Рѕ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ на°РїРёСЃР°Р» Рѕ вС‹РїРѕР»наµнаёРё
+        # Отправляем уведомление в Telegram через AI обработку, как будто пользователь писал о выполнении
         try:
             if 'bot' in request.app:
                 from models import Session as DBSession, User
                 from ai_integration.chat import chat_with_ai
                 db_session = DBSession()
                 try:
-                    # РќР°С…РѕРґРёРј РїРѕР»СЊР·РѕвР°С‚РµР»СЏ РїРѕ user_id (СЌС‚Рѕ telegram_id)
+                    # Находим пользователя по user_id (это telegram_id)
                     user = db_session.query(User).filter_by(telegram_id=user_id).first()
                     if user:
                         from models import Task
                         task = db_session.query(Task).filter_by(id=task_id, user_id=user.id).first()
                         if task:
-                            # РћС‚РїСЂР°вР»СЏРµРј СЃРѕРѕР±С‰РµнаёРµ С‡РµСЂРµР· AI, РєР°Рє Р±СѓРґС‚Рѕ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ на°РїРёСЃР°Р» Рѕ вС‹РїРѕР»наµнаёРё
-                            ai_message = f"СЏ вС‹РїРѕР»наёР» Р·Р°РґР°С‡Сѓ '{task.title}'"
+                            # Отправляем сообщение через AI, как будто пользователь писал о выполнении
+                            ai_message = f"я выполнил задачу '{task.title}'"
                             try:
                                 ai_result = await chat_with_ai(ai_message, user_id=user_id)
                                 ai_response = ai_result['response']
                                 await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
                                 
-                                # РЎРѕС…СЂР°РЅСЏРµРј вР·Р°РёРјРѕРґРµР№СЃС‚вРёРµ в Р±Р°Р·Сѓ РґР°наЅС‹С… РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµнаёСЏ в вРµР±-РїР°наµР»Рё
+                                # Сохраняем взаимодействие в базу данных для отображения в веб-панели
                                 interaction = Interaction(
                                     user_id=user.id,
                                     message_type='ai',
@@ -2075,12 +2075,12 @@ async def complete_task_handler(request):
                                 
                                 logger.info(f"Sent AI-processed task completion notification to Telegram user {user_id}")
                             except Exception as ai_error:
-                                # Fallback на° РїСЂРѕСЃС‚РѕРµ СѓвРµРґРѕРјР»РµнаёРµ, РµСЃР»Рё AI наµ СЃСЂР°Р±РѕС‚Р°Р»
+                                # Fallback на простое уведомление, если AI не сработал
                                 logger.warning(f"AI processing failed, using fallback: {ai_error}")
-                                notification_text = f"вњ… Р—Р°РґР°С‡Р° вС‹РїРѕР»наµна°: {task.title}"
+                                notification_text = f"✅ Задача выполнена: {task.title}"
                                 await request.app['bot'].send_message(chat_id=user_id, text=notification_text)
                                 
-                                # РЎРѕС…СЂР°РЅСЏРµРј fallback вР·Р°РёРјРѕРґРµР№СЃС‚вРёРµ в Р±Р°Р·Сѓ РґР°наЅС‹С…
+                                # Сохраняем fallback взаимодействие в базу данных
                                 interaction = Interaction(
                                     user_id=user.id,
                                     message_type='ai',
@@ -2103,7 +2103,7 @@ async def complete_task_handler(request):
 
 
 async def restore_task_handler(request):
-    """Р’РѕСЃСЃС‚Р°на°вР»РёвР°РµС‚ Р·Р°РґР°С‡Сѓ в СЂР°Р±РѕС‚Сѓ"""
+    """Воссталиает задачу  работу"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2125,7 +2125,7 @@ async def restore_task_handler(request):
 
 
 async def skip_task_handler(request):
-    """РџСЂРѕРїСѓСЃРєР°РµС‚ Р·Р°РґР°С‡Сѓ"""
+    """Пропускает задачу"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2147,7 +2147,7 @@ async def skip_task_handler(request):
 
 
 async def delete_task_handler(request):
-    """РЈРґР°Р»СЏРµС‚ Р·Р°РґР°С‡Сѓ"""
+    """Удаляет задачу"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2160,26 +2160,26 @@ async def delete_task_handler(request):
 
     from ai_integration.handlers import delete_task
     try:
-        # РџРµСЂРµРґР°С‘Рј confirmed=True, РїРѕСЃРєРѕР»СЊРєСѓ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СѓР¶Рµ РїРѕРґС‚вРµСЂРґРёР» СѓРґР°Р»РµнаёРµ в UI
+        # Передаём confirmed=True, поскольку пользователь уже подтвердил удаление в UI
         result = await delete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} deleted by user {user_id}: {result}")
         
-        # Р•СЃР»Рё СЂРµР·СѓР»СЊС‚Р°С‚ СЃРѕРґРµСЂР¶РёС‚ С„Р»Р°Рі, РѕР±СЂР°Р±РѕС‚Р°РµРј С‡РµСЂРµР· AI Рё РѕС‚РїСЂР°вРёРј в Telegram
+        # Если результат содержит флаг, обработаем через AI и отпраим  Telegram
         if result.startswith('TASK_COMPLETED_ASK_RESULT:') or result.startswith('TASK_UPDATED:') or result.startswith('TASK_DELETED_ASK_REASON:'):
             try:
                 from ai_integration.chat import chat_with_ai
                 from models import Session as DBSession, User
                 db_session = DBSession()
                 try:
-                    # РћР±СЂР°Р±РѕС‚РєР° С‡РµСЂРµР· AI РґР»СЏ РіРµнаµСЂР°С†РёРё РµСЃС‚РµСЃС‚вРµнаЅРѕРіРѕ РѕС‚вРµС‚Р°
+                    # Обработка через AI для генерации естественного ответа
                     ai_result = await chat_with_ai(result, user_id=user_id, db_session=db_session)
                     ai_response = ai_result['response']
                     
-                    # РћС‚РїСЂР°вР»СЏРµРј AI РѕС‚вРµС‚ в Telegram РµСЃР»Рё Р±РѕС‚ РґРѕСЃС‚СѓРїРµРЅ
+                    # Отправляем AI ответ в Telegram если бот доступен
                     if 'bot' in request.app and ai_response:
                         await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
                         
-                        # РЎРѕС…СЂР°РЅСЏРµРј вР·Р°РёРјРѕРґРµР№СЃС‚вРёРµ в Р±Р°Р·Сѓ РґР°наЅС‹С… РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµнаёСЏ в вРµР±-РїР°наµР»Рё
+                        # Сохраняем взаимодействие в базу данных для отображения в веб-панели
                         user = db_session.query(User).filter_by(telegram_id=user_id).first()
                         if user:
                             interaction = Interaction(
@@ -2204,7 +2204,7 @@ async def delete_task_handler(request):
 
 
 async def cancel_delegation_handler(request):
-    """РћС‚РјРµРЅСЏРµС‚ РґРµР»РµРіРёСЂРѕвР°наёРµ Р·Р°РґР°С‡Рё"""
+    """Отменяет делегироае задачи"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2226,7 +2226,7 @@ async def cancel_delegation_handler(request):
 
 
 async def reschedule_task_handler(request):
-    """РџРµСЂРµнаѕСЃРёС‚ Р·Р°РґР°С‡Сѓ на° наѕвРѕРµ вСЂРµРјСЏ"""
+    """Пересит задачу  ое ремя"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2429,7 +2429,7 @@ async def yookassa_webhook(request):
             subscription.tier = tier_enum
             user.subscription_tier = tier_enum
 
-            # Р•СЃР»Рё РїРѕРґРїРёСЃРєР° РµС‰Рµ Р°РєС‚Рёвна°, РїСЂРѕРґР»РµвР°РµРј РѕС‚ end_date, Рёна°С‡Рµ РѕС‚ С‚РµРєСѓС‰РµР№ РґР°С‚С‹
+            # Если подписка еще акти, продлеаем от end_date, иче от текущей даты
             now = datetime.now(pytz.UTC)
             if subscription.end_date and subscription.end_date > now:
                 subscription.end_date = subscription.end_date + timedelta(days=30)
@@ -2438,7 +2438,7 @@ async def yookassa_webhook(request):
 
             session.commit()
 
-            # Р›РѕРіРёСЂСѓРµРј РїР»Р°С‚РµР¶ в payment_history РґР»СЏ Р·Р°С‰РёС‚С‹ РѕС‚ РїРѕС‚РµСЂРё РґР°наЅС‹С…
+            # Логируем платеж в payment_history для защиты от потери данных
             try:
                 payment_history = PaymentHistory(
                     user_id=user.id,
@@ -2458,15 +2458,15 @@ async def yookassa_webhook(request):
                 )
                 session.add(payment_history)
                 session.commit()
-                logger.info(f"рџ’ѕ Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}, promo_code={promo_code}")
+                logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}, promo_code={promo_code}")
             except Exception as e:
-                logger.error(f"вќЊ Failed to log payment to history: {e}")
-                # РќРµ РїР°РґР°РµРј, РїР»Р°С‚РµР¶ СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅ
+                logger.error(f"❌ Failed to log payment to history: {e}")
+                # Не падаем, платеж уже обработан
 
             from payments import get_tier_name, TIER_PRICES
             tier_name = get_tier_name(tier)
-            promo_msg = f" СЃ РїСЂРѕРјРѕРєРѕРґРѕРј {promo_code}" if promo_code else ""
-            await bot.send_message(int(user_id), f"РџРѕРґРїРёСЃРєР° {tier_name} Р°РєС‚РёвРёСЂРѕвР°на°{promo_msg}! РўРµРїРµСЂСЊ Сѓ вР°СЃ РґРѕСЃС‚СѓРї РєРѕ вСЃРµРј РїСЂРµРјРёСѓРј-С„СѓнаєС†РёСЏРј.")
+            promo_msg = f" с промокодом {promo_code}" if promo_code else ""
+            await bot.send_message(int(user_id), f"Подписка {tier_name} актиироа{promo_msg}! Теперь у ас доступ ко сем премиум-фуциям.")
 
             # Handle referral commission (20% of payment amount)
             if user.referrer_id:
@@ -2484,7 +2484,7 @@ async def yookassa_webhook(request):
                         try:
                             await bot.send_message(
                                 int(referrer.telegram_id), 
-                                f"рџ’° Р’Р°С€ СЂРµС„РµСЂР°Р» РѕРїР»Р°С‚РёР» РїРѕРґРїРёСЃРєСѓ! Р’С‹ РїРѕР»СѓС‡РёР»Рё {commission_amount} СЂСѓР±Р»РµР№ РєРѕРјРёСЃСЃРёРё. РўРµРєСѓС‰РёР№ Р±Р°Р»Р°РЅСЃ: {referrer.referral_balance} СЂСѓР±Р»РµР№."
+                                f"💰 Ваш реферал оплатил подписку! Вы получили {commission_amount} рублей комиссии. Текущий баланс: {referrer.referral_balance} рублей."
                             )
                         except Exception as e:
                             logger.error(f"Failed to notify referrer {referrer.telegram_id} about commission: {e}")
@@ -2519,17 +2519,17 @@ async def get_user_id_from_request(request):
 
 async def api_partners_handler(request):
     def pluralize_task(count):
-        """РЎРєР»РѕнаµнаёРµ СЃР»РѕвР° 'Р·Р°РґР°С‡Р°' РїРѕ С‡РёСЃР»Сѓ"""
+        """Склое слоа 'задача' по числу"""
         last_digit = count % 10
         last_two_digits = count % 100
 
         if 11 <= last_two_digits <= 19:
-            return 'Р·Р°РґР°С‡'
+            return 'задач'
         if last_digit == 1:
-            return 'Р·Р°РґР°С‡Сѓ'
+            return 'задачу'
         if 2 <= last_digit <= 4:
-            return 'Р·Р°РґР°С‡Рё'
-        return 'Р·Р°РґР°С‡'
+            return 'задачи'
+        return 'задач'
 
     try:
         user_id = await get_user_id_from_request(request)
@@ -2547,7 +2547,7 @@ async def api_partners_handler(request):
                 return web.json_response({'error': 'User not found'}, status=404)
             
             try:
-                partners = get_partners_list(user_id=user.id)  # РџРµСЂРµРґР°РµРј user.id (Р±Р°Р·РѕвС‹Р№ ID), Р° наµ telegram_id
+                partners = get_partners_list(user_id=user.id)  # Передаем user.id (базоый ID), а  telegram_id
                 logger.info(f"Got {len(partners)} partners from get_partners_list")
             except Exception as e:
                 logger.error(f"Error getting partners: {e}")
@@ -2594,12 +2594,12 @@ async def api_partners_handler(request):
                 user_id=user.id).order_by(
                 Interaction.created_at).all() if user else []
 
-            # РџРѕР»СѓС‡РёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹ РїРѕ РґРµР»РµРіРёСЂРѕвР°наёСЋ
-            delegating_to_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё
-            delegating_by_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
+            # Получить контакты по делегироаю
+            delegating_to_me = []  # Люди, которые делегироали м задачи
+            delegating_by_me = []  # Люди, которым я делегироал задачи
 
             try:
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё (СЏ РїРѕР»СѓС‡Р°СЋ Р·Р°РґР°С‡Рё РѕС‚ наёС…)
+                # Люди, которые делегироали м задачи (я получаю задачи от х)
                 username_clean = user.username.replace('@', '') if user.username else ''
                 delegated_tasks = session_db.query(Task).filter(
                     or_(
@@ -2628,10 +2628,10 @@ async def api_partners_handler(request):
                                 'city': delegator_profile.city if delegator_profile else None,
                                 'company': delegator_profile.company if delegator_profile else None,
                                 'task_count': len(task_titles),
-                                'reason': f'РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}'
+                                'reason': f'делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
+                # Люди, которым я делегироал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
@@ -2662,7 +2662,7 @@ async def api_partners_handler(request):
                                 'city': delegatee_profile.city if delegatee_profile else None,
                                 'company': delegatee_profile.company if delegatee_profile else None,
                                 'task_count': len(task_titles),
-                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}'
+                                'reason': f'я делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
 
             except Exception as e:
@@ -2692,7 +2692,7 @@ async def api_partners_handler(request):
             user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
             user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
 
-            # РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚Рѕв, СЃ РєРѕС‚РѕСЂС‹РјРё СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ
+            # Получаем список контакто, с которыми уже общались
             contacted_usernames = set()
             for interaction in interactions:
                 mentions = re.findall(r'@(\w+)', interaction.content)
@@ -2703,7 +2703,7 @@ async def api_partners_handler(request):
                 if p.interests:
                     partner_interests = set(i.strip().lower() for i in p.interests.split(',') if i.strip())
                     common = user_interests & partner_interests
-                    # Also check for partial matches (e.g., "СЃРїРѕСЂС‚" matches "СЃРїРѕСЂС‚, С„СѓС‚Р±РѕР»")
+                    # Also check for partial matches (e.g., "спорт" matches "спорт, футбол")
                     if not common:
                         for ui in user_interests:
                             for pi in partner_interests:
@@ -2734,18 +2734,18 @@ async def api_partners_handler(request):
                 if p.contact_info:
                     username = p.contact_info.replace('@', '')
                     if username in contacted_usernames:
-                        reasons.append('СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ')
+                        reasons.append('уже общались')
                 if p.common_skills:
-                    reasons.append('РѕР±С‰РёРµ на°вС‹РєРё')
+                    reasons.append('общие ыки')
                 if p.common_interests:
-                    reasons.append('РѕР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹')
+                    reasons.append('общие интересы')
                 if p.common_goals:
-                    reasons.append('РѕР±С‰РёРµ С†РµР»Рё')
+                    reasons.append('общие цели')
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
-                    reasons.append('РёР· вР°С€РµРіРѕ РіРѕСЂРѕРґР°')
-                p.recommendation_reason = ', '.join(reasons) if reasons else 'РїРѕРґС…РѕРґСЏС‰РёР№ РєРѕРЅС‚Р°РєС‚'
+                    reasons.append('из ашего города')
+                p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
-        # Calculate common_tasks for regular partners - СѓР»СѓС‡С€РµнаЅР°СЏ Р»РѕРіРёРєР° СЃ С‡Р°СЃС‚РёС‡РЅС‹Рј СЃРѕвРїР°РґРµнаёРµРј
+        # Calculate common_tasks for regular partners - улучшенная логика с частичным совпадением
         for p in partners:
             if profile and p:
                 # Get user's tasks
@@ -2765,19 +2765,19 @@ async def api_partners_handler(request):
                             if task.title:
                                 partner_task_titles.add(task.title.lower().strip())
 
-                        # РўРѕС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ Р·Р°РґР°С‡
+                        # Точное совпадение задач
                         common_task_titles = user_task_titles & partner_task_titles
                         
-                        # Р§Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕвР° СЃРѕвРїР°РґР°СЋС‚
+                        # Частичное совпадение - если хотя бы 2 слова совпадают
                         if not common_task_titles:
                             partial_matches = set()
                             for user_task in user_task_titles:
                                 user_words = set(user_task.split())
-                                if len(user_words) < 2:  # РџСЂРѕРїСѓСЃРєР°РµРј СЃР»РёС€РєРѕРј РєРѕСЂРѕС‚РєРёРµ
+                                if len(user_words) < 2:  # Пропускаем слишком короткие
                                     continue
                                 for partner_task in partner_task_titles:
                                     partner_words = set(partner_task.split())
-                                    # Р•СЃР»Рё СЃРѕвРїР°РґР°РµС‚ >= 2 СЃР»Рѕв
+                                    # Если сопадает >= 2 сло
                                     common_words = user_words & partner_words
                                     if len(common_words) >= 2:
                                         partial_matches.add(user_task)
@@ -2797,7 +2797,7 @@ async def api_partners_handler(request):
             try:
                 if not hasattr(p, 'user_id') or p.user_id is None:
                     continue  # Skip partners without user_id
-                # РџРѕР»СѓС‡Р°РµРј telegram_id РїРѕР»СЊР·РѕвР°С‚РµР»СЏ РёР· Р±Р°Р·С‹
+                # Получаем telegram_id пользователя из базы
                 partner_user = session_db.query(User).filter_by(
                     id=p.user_id).first() if hasattr(
                     p, 'user_id') and p.user_id is not None else None
@@ -2827,21 +2827,21 @@ async def api_partners_handler(request):
                 logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
 
                 # Determine if user can access this contact
-                # LIGHT вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
-                # STANDARD вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
-                # PREMIUM вРёРґРёС‚ вСЃРµ РєРѕРЅС‚Р°РєС‚С‹ (LIGHT, STANDARD, PREMIUM)
+                # LIGHT идит LIGHT и STANDARD контакты
+                # STANDARD идит LIGHT и STANDARD контакты
+                # PREMIUM идит се контакты (LIGHT, STANDARD, PREMIUM)
                 can_access = False
 
                 if user_tier_str.lower() == 'light':
-                    # LIGHT вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                    # LIGHT идит LIGHT и STANDARD контакты
                     can_access = (partner_tier_str.lower() in ['light', 'standard'])
                     logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
                 elif user_tier_str.lower() == 'standard':
-                    # STANDARD вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                    # STANDARD идит LIGHT и STANDARD контакты
                     can_access = (partner_tier_str.lower() in ['light', 'standard'])
                     logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
                 elif user_tier_str.lower() == 'premium':
-                    # PREMIUM вРёРґРёС‚ вСЃРµС…
+                    # PREMIUM идит сех
                     can_access = True
                     logger.info(f"User {user_tier_str} can access all partners")
 
@@ -2882,7 +2882,7 @@ async def api_partners_handler(request):
                             'recommendation_reason': getattr(
                                 p,
                                 'recommendation_reason',
-                                'РїРѕРґС…РѕРґСЏС‰РёР№ РєРѕРЅС‚Р°РєС‚'),
+                                'подходящий контакт'),
                             'average_rating': partner_profile.average_rating if partner_profile else 0,
                             'rating_count': partner_profile.rating_count if partner_profile else 0,
                             'type': 'recommended'})
@@ -2897,7 +2897,7 @@ async def api_partners_handler(request):
                 logger.warning(f"Skipping delegating_to_me contact without username: user_id={contact.get('id')}")
                 continue
                 
-            # РџРѕР»СѓС‡РёС‚СЊ РїСЂРѕС„РёР»СЊ РґРµР»РµРіР°С‚РѕСЂР° РґР»СЏ СЂР°СЃС‡РµС‚Р° РѕР±С‰РёС… РёРЅС‚РµСЂРµСЃРѕв/на°вС‹РєРѕв/С†РµР»РµР№
+            # Получить профиль делегатора для расчета общих интересо/ыко/целей
             delegator_profile = session_db.query(UserProfile).filter_by(
                 user_id=contact['id']).first() if 'id' in contact else None
 
@@ -2950,10 +2950,10 @@ async def api_partners_handler(request):
                         if task.title:
                             delegator_task_titles.add(task.title.lower().strip())
 
-                    # РўРѕС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ Р·Р°РґР°С‡
+                    # Точное совпадение задач
                     common_task_titles = user_task_titles & delegator_task_titles
                     
-                    # Р§Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕвР° СЃРѕвРїР°РґР°СЋС‚
+                    # Частичное совпадение - если хотя бы 2 слова совпадают
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
@@ -2987,8 +2987,8 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
 
-            # Для контактов "Делегирует мне" НЕ применяем фильтр по тарифу
-            # Делегированные задачи должны всегда отображаться независимо от тарифа делегатора
+            #   " "     
+            #         
             delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.LIGHT
             
             # Ensure tier is proper enum value
@@ -3002,8 +3002,8 @@ async def api_partners_handler(request):
             partners_data.append({
                 'contact_info': contact['username'],
                 'telegram_id': delegator.telegram_id if delegator else None,
-                'can_access': True,  # Р’СЃРµРіРґР° РґРѕСЃС‚СѓРїРµРЅ
-                'required_tier': None,  # РќРµС‚ РѕРіСЂР°наёС‡РµнаёР№
+                'can_access': True,  # Всегда доступен
+                'required_tier': None,  # Нет ограчей
                 'subscription_tier': delegator_tier.value if delegator_tier else 'light',
                 'photo_url': photo_url,
                 'first_name': contact['first_name'],
@@ -3028,7 +3028,7 @@ async def api_partners_handler(request):
                 logger.warning(f"Skipping delegation contact without username: user_id={contact.get('id')}")
                 continue
             
-            # РџРѕР»СѓС‡РёС‚СЊ РїСЂРѕС„РёР»СЊ РґРµР»РµРіР°С‚Р° РґР»СЏ СЂР°СЃС‡РµС‚Р° РѕР±С‰РёС… РёРЅС‚РµСЂРµСЃРѕв/на°вС‹РєРѕв/С†РµР»РµР№
+            # Получить профиль делегата для расчета общих интересо/ыко/целей
             delegatee_profile = session_db.query(UserProfile).filter_by(
                 user_id=contact['id']).first() if 'id' in contact else None
             delegatee = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
@@ -3082,10 +3082,10 @@ async def api_partners_handler(request):
                         if task.title:
                             delegatee_task_titles.add(task.title.lower().strip())
 
-                    # РўРѕС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ Р·Р°РґР°С‡
+                    # Точное совпадение задач
                     common_task_titles = user_task_titles & delegatee_task_titles
                     
-                    # Р§Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕвР° СЃРѕвРїР°РґР°СЋС‚
+                    # Частичное совпадение - если хотя бы 2 слова совпадают
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
@@ -3133,11 +3133,11 @@ async def api_partners_handler(request):
             can_access = False
 
             if user_tier_str.lower() == 'light':
-                # LIGHT вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                # LIGHT идит LIGHT и STANDARD контакты
                 can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
             elif user_tier_str.lower() == 'standard':
-                # STANDARD вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                # STANDARD идит LIGHT и STANDARD контакты
                 can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
             elif user_tier_str.lower() == 'premium':
@@ -3170,9 +3170,7 @@ async def api_partners_handler(request):
                     'type': 'delegating_by_me'
                 })
 
-        # РЎРѕСЂС‚РёСЂСѓРµРј partners_data: СЃна°С‡Р°Р»Р° РїРѕ РіРѕСЂРѕРґСѓ (СЃРѕвРїР°РґРµнаёРµ СЃ РїРѕР»СЊР·РѕвР°С‚РµР»РµРј), РїРѕС‚РѕРј РїРѕ СЂРµР№С‚РёнаіСѓ
-
-        # РЎРѕСЂС‚РёСЂСѓРµРј partners_data: СЃна°С‡Р°Р»Р° РїРѕ РіРѕСЂРѕРґСѓ (СЃРѕвРїР°РґРµнаёРµ СЃ РїРѕР»СЊР·РѕвР°С‚РµР»РµРј), РїРѕС‚РѕРј РїРѕ СЂРµР№С‚РёнаіСѓ
+        # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
         user_city = profile.city.lower() if profile and profile.city else None
 
         normalized_user_city = normalize_city(user_city)
@@ -3181,24 +3179,24 @@ async def api_partners_handler(request):
             partner_city = normalize_city(partner.get('city', ''))
             same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
             
-            # Premium-РїСЂРёРѕСЂРёС‚РµС‚ (PREMIUM=3, STANDARD=2, LIGHT=1)
+            # Premium-приоритет (PREMIUM=3, STANDARD=2, LIGHT=1)
             tier = partner.get('subscription_tier', 'light').upper()
             tier_priority = -{'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(tier, 1)
 
             rating = partner.get('average_rating', 0) or 0
-            # Р“СЂСѓРїРїС‹ СЂРµР№С‚РёнаіР°:
-            # 1. Р’С‹СЃРѕРєРёР№ СЂРµР№С‚Рёнаі (>= 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
-            # 2. РќРµС‚ СЂРµР№С‚РёнаіР° (0): наµР№С‚СЂР°Р»СЊнаѕ, вС‹С€Рµ РїР»РѕС…РёС…
-            # 3. РќРёР·РєРёР№ СЂРµР№С‚Рёнаі (< 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
+            # Группы рейтиа:
+            # 1. Высокий рейти (>= 5): сортируем по убыаю
+            # 2. Нет рейтиа (0): йтраль, ыше плохих
+            # 3. Низкий рейти (< 5): сортируем по убыаю
             if rating >= 5:
-                rating_group = 0  # Р›СѓС‡С€Р°СЏ РіСЂСѓРїРїР°
-                rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
+                rating_group = 0  # Лучшая группа
+                rating_value = -rating  # Внутри группы по убыаю
             elif rating == 0:
-                rating_group = 1  # РЎСЂРµРґРЅСЏСЏ РіСЂСѓРїРїР° (наµС‚ РґР°наЅС‹С…)
+                rating_group = 1  # Средняя группа (нет данных)
                 rating_value = 0
             else:  # rating < 5
-                rating_group = 2  # РҐСѓРґС€Р°СЏ РіСЂСѓРїРїР°
-                rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
+                rating_group = 2  # Худшая группа
+                rating_value = -rating  # Внутри группы по убыаю
 
             return (same_city, rating_group, rating_value)
 
@@ -3208,14 +3206,14 @@ async def api_partners_handler(request):
                 favorite_data = json.loads(profile.favorite_contacts)
                 for item in favorite_data:
                     favorite_username = None
-                    # РћРїСЂРµРґРµР»РёС‚СЊ username РїРѕ ID РёР»Рё РёСЃРїРѕР»СЊР·РѕвР°С‚СЊ на°РїСЂСЏРјСѓСЋ
+                    # Определить username по ID или использовать прямую
                     if isinstance(item, int):
-                        # Р­С‚Рѕ user_id
+                        # Это user_id
                         fav_user = session_db.query(User).filter_by(id=item).first()
                         if fav_user:
                             favorite_username = fav_user.username
                     elif isinstance(item, str):
-                        # Р­С‚Рѕ username
+                        # Это username
                         favorite_username = item
                     
                     if not favorite_username:
@@ -3245,7 +3243,7 @@ async def api_partners_handler(request):
 
                             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
 
-                            # РР·Р±СЂР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ вСЃРµРіРґР° РґРѕСЃС‚СѓРїРЅС‹ наµР·Р°вРёСЃРёРјРѕ РѕС‚ С‚Р°СЂРёС„Р°
+                            # збраые контакты сегда доступны заисимо от тарифа
                             can_access = True
                             required_tier = None
 
@@ -3279,7 +3277,7 @@ async def api_partners_handler(request):
                                 'common_tasks': None,
                                 'average_rating': favorite_profile.average_rating if favorite_profile else 0,
                                 'rating_count': favorite_profile.rating_count if favorite_profile else 0,
-                                'reason': 'РёР·Р±СЂР°наЅС‹Р№ РєРѕРЅС‚Р°РєС‚',
+                                'reason': 'избраый контакт',
                                 'task_count': 0,
                                 'type': 'favorite'
                             })
@@ -3310,35 +3308,35 @@ async def api_partners_handler(request):
 
         # Filter partners_data but save blocked contacts info
         filtered_partners_data = []
-        blocked_partners_data = []  # РЎРѕС…СЂР°РЅСЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹С…
+        blocked_partners_data = []  # Сохраняем информацию о заблокироаых
         for partner in partners_data:
             partner_username = (partner.get('contact_info') or '').replace('@', '')
             if partner_username in blocked_by_me or partner_username in blocked_me:
-                blocked_partners_data.append(partner)  # РЎРѕС…СЂР°РЅСЏРµРј Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹Рµ
+                blocked_partners_data.append(partner)  # Сохраняем заблокироаые
                 continue  # Skip blocked contacts from main list
             filtered_partners_data.append(partner)
 
         partners_data = filtered_partners_data
         partners_data.sort(key=sort_key)
 
-        # Р”РѕР±Р°вРёС‚СЊ С„Р»Р°Рі is_favorite РґР»СЏ вСЃРµС… РєРѕРЅС‚Р°РєС‚Рѕв
+        # Добаить флаг is_favorite для сех контакто
         favorite_usernames = set()
         if profile and profile.favorite_contacts:
             try:
                 favorite_data = json.loads(profile.favorite_contacts)
                 for item in favorite_data:
                     if isinstance(item, int):
-                        # Р­С‚Рѕ user_id
+                        # Это user_id
                         fav_user = session_db.query(User).filter_by(id=item).first()
                         if fav_user and fav_user.username:
                             favorite_usernames.add(fav_user.username.replace('@', '').lower())
                     elif isinstance(item, str):
-                        # Р­С‚Рѕ username
+                        # Это username
                         favorite_usernames.add(item.replace('@', '').lower())
             except json.JSONDecodeError:
                 pass
 
-        # РЈСЃС‚Р°наѕвРёС‚СЊ С„Р»Р°Рі is_favorite РґР»СЏ вСЃРµС… РєРѕРЅС‚Р°РєС‚Рѕв
+        # Устаить флаг is_favorite для сех контакто
         for partner in partners_data:
             contact_info = partner.get('contact_info')
             if contact_info is None:
@@ -3349,13 +3347,13 @@ async def api_partners_handler(request):
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({
             'partners': partners_data,
-            'blocked_partners_info': blocked_partners_data  # Р”РѕР±Р°вР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹С…
+            'blocked_partners_info': blocked_partners_data  # Добавляем информацию о заблокированных
         })
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
         return web.json_response({'partners': []}, status=200)
     finally:
-        # РќР° СЃР»СѓС‡Р°Р№ СЂР°наЅРёС… РѕС€РёР±РѕРє Р·Р°РєСЂС‹вР°РµРј СЃРµСЃСЃРёСЋ, РµСЃР»Рё Рѕна° РµС‰Рµ РѕС‚РєСЂС‹С‚Р°
+        # На случай раих ошибок закрыаем сессию, если о еще открыта
         try:
             if 'session_db' in locals():
                 session_db.close()
@@ -3366,17 +3364,17 @@ async def api_partners_handler(request):
 async def api_elite_partners_handler(request):
     """Get ALL Premium partners for Premium users (Premium status filter)"""
     def pluralize_task(count):
-        """РЎРєР»РѕнаµнаёРµ СЃР»РѕвР° 'Р·Р°РґР°С‡Р°' РїРѕ С‡РёСЃР»Сѓ"""
+        """Склое слоа 'задача' по числу"""
         last_digit = count % 10
         last_two_digits = count % 100
 
         if 11 <= last_two_digits <= 19:
-            return 'Р·Р°РґР°С‡'
+            return 'задач'
         if last_digit == 1:
-            return 'Р·Р°РґР°С‡Сѓ'
+            return 'задачу'
         if 2 <= last_digit <= 4:
-            return 'Р·Р°РґР°С‡Рё'
-        return 'Р·Р°РґР°С‡'
+            return 'задачи'
+        return 'задач'
 
     try:
         user_id = await get_user_id_from_request(request)
@@ -3543,7 +3541,7 @@ async def api_elite_partners_handler(request):
             delegating_by_me = []
             
             try:
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Р·Р°РґР°С‡Рё Рјнаµ (accepted delegation)
+                # Люди, которые делегироали задачи м (accepted delegation)
                 delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_to_username.isnot(None),
                     Task.delegation_status == 'accepted',
@@ -3611,11 +3609,11 @@ async def api_elite_partners_handler(request):
                                     'average_rating': delegator_profile.average_rating if delegator_profile else 0,
                                     'rating_count': delegator_profile.rating_count if delegator_profile else 0,
                                     'task_count': len(task_titles),
-                                    'reason': f'РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}',
+                                    'reason': f'делегироал {len(task_titles)} {pluralize_task(len(task_titles))}',
                                     'type': 'delegation'
                                 })
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
+                # Люди, которым я делегироал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
@@ -3685,7 +3683,7 @@ async def api_elite_partners_handler(request):
                                 'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
                                 'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
                                 'task_count': len(task_titles),
-                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}',
+                                'reason': f'я делегироал {len(task_titles)} {pluralize_task(len(task_titles))}',
                                 'type': 'delegation'
                             })
 
@@ -3762,19 +3760,19 @@ async def api_elite_partners_handler(request):
                 same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
 
                 rating = partner.get('average_rating', 0) or 0
-                # Р“СЂСѓРїРїС‹ СЂРµР№С‚РёнаіР°:
-                # 1. Р’С‹СЃРѕРєРёР№ СЂРµР№С‚Рёнаі (>= 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
-                # 2. РќРµС‚ СЂРµР№С‚РёнаіР° (0): наµР№С‚СЂР°Р»СЊнаѕ, вС‹С€Рµ РїР»РѕС…РёС…
-                # 3. РќРёР·РєРёР№ СЂРµР№С‚Рёнаі (< 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
+                # Группы рейтиа:
+                # 1. Высокий рейти (>= 5): сортируем по убыаю
+                # 2. Нет рейтиа (0): йтраль, ыше плохих
+                # 3. Низкий рейти (< 5): сортируем по убыаю
                 if rating >= 5:
-                    rating_group = 0  # Р›СѓС‡С€Р°СЏ РіСЂСѓРїРїР°
-                    rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
+                    rating_group = 0  # Лучшая группа
+                    rating_value = -rating  # Внутри группы по убыаю
                 elif rating == 0:
-                    rating_group = 1  # РЎСЂРµРґРЅСЏСЏ РіСЂСѓРїРїР° (наµС‚ РґР°наЅС‹С…)
+                    rating_group = 1  # Средняя группа (нет данных)
                     rating_value = 0
                 else:  # rating < 5
-                    rating_group = 2  # РҐСѓРґС€Р°СЏ РіСЂСѓРїРїР°
-                    rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
+                    rating_group = 2  # Худшая группа
+                    rating_value = -rating  # Внутри группы по убыаю
 
                 return (same_city, rating_group, rating_value)
 
@@ -4036,7 +4034,7 @@ async def api_blocked_contacts_handler(request):
                                 if tasks_deleted > 0:
                                     # Notify blocked user via bot (don't await to avoid blocking)
                                     try:
-                                        message = f"@{user.username} наµ РіРѕС‚Рѕв РїСЂРёнаёРјР°С‚СЊ Р·Р°РґР°С‡Рё РѕС‚ вР°СЃ. Р’Р°С€Рё РґРµР»РµРіРёСЂРѕвР°наЅС‹Рµ Р·Р°РґР°С‡Рё Р±С‹Р»Рё РѕС‚РєР»РѕнаµРЅС‹."
+                                        message = f"@{user.username}  гото примать задачи от ас. Ваши делегироаые задачи были отклоны."
                                         # Schedule notification asynchronously to avoid blocking
                                         asyncio.create_task(bot.send_message(blocked_user.telegram_id, message))
                                     except Exception as e:
@@ -4130,7 +4128,7 @@ async def rate_user_handler(request):
                     session_db.commit()
 
             # Don't save to Interaction - show notification instead
-            success_message = f'РћС†РµнаєР° {rating}/10 РґР»СЏ @{rated_username} СЃРѕС…СЂР°наµна°'
+            success_message = f'Оцеа {rating}/10 для @{rated_username} сохра'
 
             return web.json_response({
                 'success': True,
@@ -4198,8 +4196,8 @@ async def hide_contact_handler(request):
 
             session_db.commit()
 
-            # РЎРѕС…СЂР°наёС‚СЊ СЃРѕРѕР±С‰РµнаёРµ в РёСЃС‚РѕСЂРёСЋ вР·Р°РёРјРѕРґРµР№СЃС‚вРёР№
-            success_message = f'@{username} СЃРєСЂС‹С‚ на° {days} РґнаµР№'
+            # Сохранить сообщение в историю взаимодействий
+            success_message = f'@{username} скрыт  {days} дй'
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
@@ -4440,7 +4438,7 @@ async def api_accept_delegated_task_handler(request):
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
-                content=f'Р—Р°РґР°С‡Р° "{task.title}" РїСЂРёРЅСЏС‚Р° Рё вР·СЏС‚Р° в СЂР°Р±РѕС‚Сѓ'
+                content=f'Задача "{task.title}" принята и зята  работу'
             )
             session_db.add(interaction)
 
@@ -4448,7 +4446,7 @@ async def api_accept_delegated_task_handler(request):
 
             return web.json_response({
                 'success': True,
-                'message': f'Р—Р°РґР°С‡Р° "{task.title}" РїСЂРёРЅСЏС‚Р°'
+                'message': f'Задача "{task.title}" принята'
             })
 
         finally:
@@ -4502,7 +4500,7 @@ async def api_reject_delegated_task_handler(request):
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
-                content=f'Р—Р°РґР°С‡Р° "{task.title}" РѕС‚РєР»Рѕнаµна°'
+                content=f'Задача "{task.title}" откло'
             )
             session_db.add(interaction)
 
@@ -4510,7 +4508,7 @@ async def api_reject_delegated_task_handler(request):
 
             return web.json_response({
                 'success': True,
-                'message': f'Р—Р°РґР°С‡Р° "{task.title}" РѕС‚РєР»Рѕнаµна°'
+                'message': f'Задача "{task.title}" откло'
             })
 
         finally:
@@ -4555,7 +4553,7 @@ async def api_update_profile_handler(request):
 
             return web.json_response({
                 'success': True,
-                'message': 'РџСЂРѕС„РёР»СЊ РѕР±наѕвР»РµРЅ'
+                'message': 'Профиль облен'
             })
 
         finally:
@@ -4592,14 +4590,14 @@ async def get_feed_handler(request):
                     import json
                     favorite_data = json.loads(user_profile.favorite_contacts)
                     logger.info(f"Feed: favorite_data from profile: {favorite_data}")
-                    # favorite_contacts РјРѕР¶РµС‚ СЃРѕРґРµСЂР¶Р°С‚СЊ РєР°Рє ID, С‚Р°Рє Рё usernames
+                    # favorite_contacts может содержать как ID, так и usernames
                     for item in favorite_data:
                         if isinstance(item, int):
-                            # Р­С‚Рѕ user_id
+                            # Это user_id
                             favorite_user_ids.append(item)
                             logger.info(f"Feed: Added favorite user_id: {item}")
                         elif isinstance(item, str):
-                            # Р­С‚Рѕ username - на°Р№С‚Рё user_id
+                            # Это username - йти user_id
                             username_clean = item.replace('@', '')
                             fav_user = session_db.query(User).filter(
                                 or_(
@@ -4727,12 +4725,12 @@ async def get_feed_handler(request):
                     logger.error(f"Error processing post {post.id}: {post_error}")
                     continue
 
-            # РџСЂРѕвРµСЂРёС‚СЊ, РµСЃС‚СЊ Р»Рё наµРїСЂРѕС‡РёС‚Р°наЅС‹Рµ РїРѕСЃС‚С‹
+            # Проерить, есть ли прочитаые посты
             has_unread_posts = False
             if posts:
-                # РџРѕР»СѓС‡РёС‚СЊ ID вСЃРµС… РїРѕСЃС‚Рѕв
+                # Получить ID сех посто
                 post_ids = [p.id for p in posts]
-                # РџСЂРѕвРµСЂРёС‚СЊ, СЃРєРѕР»СЊРєРѕ РёР· наёС… РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СѓР¶Рµ вРёРґРµР»
+                # Проверить, сколько из них пользователь уже видел
                 viewed_count = session_db.query(PostView).filter(
                     PostView.user_id == user.id,
                     PostView.post_id.in_(post_ids)
@@ -4775,13 +4773,13 @@ async def mark_posts_viewed_handler(request):
             if not user:
                 return web.json_response({'error': 'User not found'}, status=404)
 
-            # РћС‚РјРµС‚РёС‚СЊ РїРѕСЃС‚С‹ РєР°Рє РїСЂРѕСЃРјРѕС‚СЂРµнаЅС‹Рµ (РёСЃРїРѕР»СЊР·СѓРµРј on_conflict_do_nothing РґР»СЏ РёР·Р±РµР¶Р°наёСЏ РґСѓР±Р»РёРєР°С‚Рѕв)
+            # Отметить посты как просмотреые (используем on_conflict_do_nothing для избежая дубликато)
             for post_id in post_ids:
                 try:
-                    # РџСЂРѕвРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚вСѓРµС‚ Р»Рё РїРѕСЃС‚
+                    # Проеряем, сущестует ли пост
                     post = session_db.query(Post).filter_by(id=post_id).first()
                     if post:
-                        # РЎРѕР·РґР°РµРј Р·Р°РїРёСЃСЊ Рѕ РїСЂРѕСЃРјРѕС‚СЂРµ (РµСЃР»Рё наµ СЃСѓС‰РµСЃС‚вСѓРµС‚)
+                        # Создаем запись о просмотре (если  сущестует)
                         existing_view = session_db.query(PostView).filter_by(
                             user_id=user.id, 
                             post_id=post_id
@@ -5202,7 +5200,7 @@ async def api_reminders_handler(request):
                 task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
             if task.reminder_time.astimezone(user_tz) > user_now and task.status == 'pending':
                 reminder_time_local = task.reminder_time.astimezone(user_tz).strftime("%H:%M")
-                upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
+                upcoming_reminders.append(f"{task.title}  {reminder_time_local}")
 
     return web.json_response({'reminders': upcoming_reminders[:5]})
 
@@ -5227,7 +5225,7 @@ async def on_startup(app):
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware set up")
     
-    # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј users.subscription_tier СЃ subscriptions.tier РїСЂРё СЃС‚Р°СЂС‚Рµ
+    # Синхрозируем users.subscription_tier с subscriptions.tier при старте
     try:
         from datetime import datetime
         import pytz
@@ -5240,7 +5238,7 @@ async def on_startup(app):
             if not user:
                 continue
             
-            # РџСЂРѕвРµСЂСЏРµРј, наµ РёСЃС‚РµРєР»Р° Р»Рё РїРѕРґРїРёСЃРєР°
+            # Проеряем,  истекла ли подписка
             now = datetime.now(pytz.UTC)
             if sub.end_date and sub.end_date.tzinfo is None:
                 sub.end_date = sub.end_date.replace(tzinfo=pytz.UTC)
@@ -5248,7 +5246,7 @@ async def on_startup(app):
             if sub.end_date and sub.end_date < now:
                 continue
             
-            # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј С‚Р°СЂРёС„С‹
+            # Синхрозируем тарифы
             user_tier_str = str(user.subscription_tier).split('.')[-1] if user.subscription_tier else None
             sub_tier_str = str(sub.tier).split('.')[-1] if sub.tier else None
             
@@ -5259,9 +5257,9 @@ async def on_startup(app):
         
         if synced_count > 0:
             session_db.commit()
-            logger.info(f"вњ… Synced {synced_count} user tiers with subscriptions on startup")
+            logger.info(f"✅ Synced {synced_count} user tiers with subscriptions on startup")
         
-        # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј users.average_rating СЃ user_profiles.average_rating
+        # Синхрозируем users.average_rating с user_profiles.average_rating
         all_profiles = session_db.query(UserProfile).all()
         rating_synced_count = 0
         
@@ -5270,7 +5268,7 @@ async def on_startup(app):
             if not user:
                 continue
             
-            # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј СЂРµР№С‚Рёнаі
+            # Синхрозируем рейти
             if user.average_rating != profile.average_rating or user.rating_count != profile.rating_count:
                 logger.info(f"Syncing rating for @{user.username}: users.{user.average_rating} -> profile.{profile.average_rating}")
                 user.average_rating = profile.average_rating
@@ -5279,20 +5277,20 @@ async def on_startup(app):
         
         if rating_synced_count > 0:
             session_db.commit()
-            logger.info(f"вњ… Synced {rating_synced_count} user ratings with profiles on startup")
+            logger.info(f"✅ Synced {rating_synced_count} user ratings with profiles on startup")
         
         session_db.close()
     except Exception as e:
-        logger.error(f"вќЊ Error syncing subscription tiers on startup: {e}")
+        logger.error(f"❌ Error syncing subscription tiers on startup: {e}")
 
     # Set webhook for production mode
     if bot and not LOCAL:
         webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.ru/webhook')
         try:
             await bot.set_webhook(webhook_url)
-            logger.info(f"вњ… Webhook set to: {webhook_url}")
+            logger.info(f"✅ Webhook set to: {webhook_url}")
         except Exception as e:
-            logger.error(f"вќЊ Failed to set webhook: {e}")
+            logger.error(f"❌ Failed to set webhook: {e}")
 
 
 async def on_shutdown(app):
@@ -5301,9 +5299,9 @@ async def on_shutdown(app):
     if bot and not LOCAL:
         try:
             await bot.delete_webhook()
-            logger.info("вњ… Webhook deleted on shutdown")
+            logger.info("✅ Webhook deleted on shutdown")
         except Exception as e:
-            logger.error(f"вќЊ Failed to delete webhook: {e}")
+            logger.error(f"❌ Failed to delete webhook: {e}")
 
 
 async def api_tasks_handler(request):
@@ -5361,7 +5359,7 @@ async def api_tasks_handler(request):
 
                 # Remove existing delegation markers from title to avoid duplication
                 import re
-                title = re.sub(r' - [Р”Рґ]РµР»РµРіРёСЂРѕвР°на° (РѕС‚|на°) @\w+$', '', title)
+                title = re.sub(r' - [Дд]елегироа (от|) @\w+$', '', title)
 
                 # Check if task is delegated TO me or BY me
                 if user.username and (task.delegated_to_username.lower() == user.username.lower(
@@ -5369,10 +5367,10 @@ async def api_tasks_handler(request):
                     # Task delegated TO me
                     creator = session_db.query(User).filter_by(id=task.delegated_by).first()
                     if creator:
-                        title = f"{title} - Р”РµР»РµРіРёСЂРѕвР°на° РѕС‚ @{creator.username}"
+                        title = f"{title} - Делегироа от @{creator.username}"
                 elif task.user_id == user.id:
                     # Task delegated BY me to someone else
-                    title = f"{title} - Р”РµР»РµРіРёСЂРѕвР°на° на° @{delegated_username}"
+                    title = f"{title} - Делегироа  @{delegated_username}"
 
             task_data = {
                 'id': task.id,
@@ -5386,15 +5384,15 @@ async def api_tasks_handler(request):
                 'is_delegated': task.delegated_to_username is not None,
                 'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
                 'delegated_to': task.delegated_to_username,
-                'delegated_to_username': task.delegated_to_username,  # Р”СѓР±Р»РёСЂСѓРµРј РґР»СЏ СѓРґРѕР±СЃС‚вР°
-                'delegated_by': None,  # Р‘СѓРґРµС‚ СѓСЃС‚Р°наѕвР»Рµнаѕ наёР¶Рµ
-                'delegated_by_username': None,  # Username С‚РѕРіРѕ РєС‚Рѕ РїРѕСЂСѓС‡РёР»
-                'delegated_by_me': task.delegated_by == user.id  # True РµСЃР»Рё СЏ РґРµР»РµРіРёСЂРѕвР°Р» СЌС‚Сѓ Р·Р°РґР°С‡Сѓ
+                'delegated_to_username': task.delegated_to_username,  # Дублируем для удобста
+                'delegated_by': None,  # Будет устале же
+                'delegated_by_username': None,  # Username того кто поручил
+                'delegated_by_me': task.delegated_by == user.id  # True если я делегироал эту задачу
             }
             
-            # РћРїСЂРµРґРµР»СЏРµРј delegated_by Рё delegated_by_username
+            # Определяем delegated_by и delegated_by_username
             if task.delegated_by and task.delegated_by != user.id:
-                # Р—Р°РґР°С‡Р° Р±С‹Р»Р° РґРµР»РµРіРёСЂРѕвР°на° Рјнаµ РєРµРј-С‚Рѕ
+                # Задача была делегироа м кем-то
                 delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
                 if delegator and delegator.username:
                     task_data['delegated_by'] = delegator.username
@@ -5405,7 +5403,7 @@ async def api_tasks_handler(request):
                 local_reminder = task.reminder_time.astimezone(user_tz)
                 task_data['reminder_time'] = local_reminder.isoformat()
                 task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
-                # РџСЂРѕСЃСЂРѕС‡РєР° РґР»СЏ наµР·Р°вРµСЂС€РµнаЅС‹С… Р·Р°РґР°С‡ (pending РёР»Рё in_progress)
+                # Просрочка для заершеых задач (pending или in_progress)
                 task_data['overdue'] = local_reminder < user_now and task.status in ['pending', 'in_progress']
                 if task_data['overdue']:
                     delta = user_now - local_reminder
@@ -5414,11 +5412,11 @@ async def api_tasks_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task_data['overdue_text'] = f'на {days} дн.'
+                        task_data['overdue_text'] = f' {days} .'
                     elif hours > 0:
-                        task_data['overdue_text'] = f'на {hours} ч.'
+                        task_data['overdue_text'] = f' {hours} .'
                     else:
-                        task_data['overdue_text'] = f'на {minutes} мин.'
+                        task_data['overdue_text'] = f' {minutes} .'
             tasks_data.append(task_data)
 
         return web.json_response({'tasks': tasks_data})
@@ -5430,7 +5428,7 @@ async def api_tasks_handler(request):
 
 
 async def api_delegations_handler(request):
-    """API РґР»СЏ РїРѕР»СѓС‡РµнаёСЏ РґРµР»РµРіРёСЂРѕвР°наЅС‹С… Р·Р°РґР°С‡"""
+    """API для получения делегированных задач"""
     session = await get_session(request)
     user_id = session.get('user_id')
     logger.info(f"API delegations handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
@@ -5498,7 +5496,7 @@ async def api_delegations_handler(request):
 
 
 async def api_interactions_handler(request):
-    """API РґР»СЏ РїРѕР»СѓС‡РµнаёСЏ РёСЃС‚РѕСЂРёРё С‡Р°С‚Р°"""
+    """API для получения истории чата"""
     session = await get_session(request)
     user_id = session.get('user_id')
     logger.info(f"API interactions handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
@@ -5569,7 +5567,7 @@ async def api_interactions_handler(request):
 
 
 async def api_search_contacts_handler(request):
-    """API РґР»СЏ РїРѕРёСЃРєР° РєРѕРЅС‚Р°РєС‚Рѕв РїРѕ username"""
+    """API для поиска контакто по username"""
     try:
         session_obj = await get_session(request)
         user_id = session_obj.get('user_id')
@@ -5582,20 +5580,20 @@ async def api_search_contacts_handler(request):
 
         session_db = Session()
         try:
-            # РџРѕРёСЃРє РїРѕР»СЊР·РѕвР°С‚РµР»РµР№ РїРѕ username (С‡Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ)
+            # Поиск пользователей по username (частичное совпадение)
             users = session_db.query(User).filter(
                 User.username.ilike(f'%{query}%')
             ).limit(20).all()
 
             contacts_data = []
             for user in users:
-                # РџСЂРѕРїСѓСЃРєР°РµРј С‚РµРєСѓС‰РµРіРѕ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ
+                # Пропускаем текущего пользователя
                 if user.telegram_id == user_id:
                     continue
 
                 profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
 
-                # РћР±наѕвР»СЏРµРј Р°вР°С‚Р°СЂ РµСЃР»Рё РЅСѓР¶наѕ
+                # Обляем аатар если нуж
                 photo_url = user.photo_url
                 if user.telegram_id and 'bot' in request.app:
                     try:
@@ -5629,7 +5627,7 @@ async def api_search_contacts_handler(request):
 
 
 async def update_timezone_handler(request):
-    """РћР±наѕвР»СЏРµС‚ timezone РїРѕР»СЊР·РѕвР°С‚РµР»СЏ С‡РµСЂРµР· вРµР±-РїР°наµР»СЊ"""
+    """Обновляет timezone пользователя через веб-панель"""
     try:
         session = await get_session(request)
         user_id = session.get('user_id')
@@ -5642,7 +5640,7 @@ async def update_timezone_handler(request):
         if not timezone:
             return web.json_response({'status': 'error', 'message': 'Timezone required'}, status=400)
 
-        # РџСЂРѕвРµСЂРєР° вР°Р»РёРґнаѕСЃС‚Рё timezone
+        # Проерка алидсти timezone
         try:
             pytz.timezone(timezone)
         except BaseException:
@@ -5665,7 +5663,7 @@ async def update_timezone_handler(request):
 
 
 async def api_profile_handler(request):
-    """API РґР»СЏ РїРѕР»СѓС‡РµнаёСЏ Рё РѕР±наѕвР»РµнаёСЏ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ"""
+    """API для получения и обновления профиля пользователя"""
     try:
         session = await get_session(request)
         user_id = session.get('user_id') if session else None
@@ -5696,7 +5694,7 @@ async def api_profile_handler(request):
                     profile = UserProfile(user_id=user.id)
                     session_db.add(profile)
 
-                # Update profile fields (РїСѓСЃС‚С‹Рµ СЃС‚СЂРѕРєРё СѓРґР°Р»СЏСЋС‚ РґР°наЅС‹Рµ)
+                # Update profile fields (пустые строки удаляют данные)
                 if 'city' in data:
                     profile.city = data['city'].strip() if data['city'] and data['city'].strip() else None
                 if 'birthdate' in data:
@@ -5726,7 +5724,7 @@ async def api_profile_handler(request):
             logger.error(f"Error updating profile: {e}", exc_info=True)
             return web.json_response({'error': str(e)}, status=500)
 
-    # Get fresh data from database (СѓР±СЂР°Р»Рё РєРµС€РёСЂРѕвР°наёРµ РґР»СЏ РјРінаѕвРµнаЅРѕРіРѕ РѕР±наѕвР»РµнаёСЏ)
+    # Get fresh data from database (убрали кеширование для мгновенного обновления)
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -5766,8 +5764,8 @@ async def api_profile_handler(request):
         user_now = base_now.astimezone(user_tz)
 
         months = [
-            'СЏнаІР°СЂСЏ', 'С„РµвСЂР°Р»СЏ', 'РјР°СЂС‚Р°', 'Р°РїСЂРµР»СЏ', 'РјР°СЏ', 'РёСЋРЅСЏ',
-            'РёСЋР»СЏ', 'Р°вРіСѓСЃС‚Р°', 'СЃРµРЅС‚СЏР±СЂСЏ', 'РѕРєС‚СЏР±СЂСЏ', 'наѕСЏР±СЂСЏ', 'РґРµРєР°Р±СЂСЏ'
+            'яаря', 'фераля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'агуста', 'сентября', 'октября', 'ября', 'декабря'
         ]
         current_time = user_now.strftime('%H:%M')
         current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
@@ -5808,62 +5806,62 @@ async def api_profile_handler(request):
 
 
 async def extend_subscription_handler(request):
-    """РџРµСЂРµна°РїСЂР°вР»РµнаёРµ на° СЃС‚СЂР°наёС†Сѓ вС‹Р±РѕСЂР° С‚Р°СЂРёС„Р°"""
+    """Перепралее  страцу ыбора тарифа"""
     return web.HTTPFound('/subscription_tiers')
 
 
 @aiohttp_jinja2.template('subscription_tiers.html')
 async def subscription_tiers_handler(request):
-    """РЎС‚СЂР°наёС†Р° вС‹Р±РѕСЂР° С‚Р°СЂРёС„Р° РїРѕРґРїРёСЃРєРё"""
+    """Страца ыбора тарифа подписки"""
     return {}
 
 
 async def apply_promo_code_handler(request):
-    """РџСЂРёРјРµРЅСЏРµС‚ РїСЂРѕРјРѕРєРѕРґ Рё Р°РєС‚РёвРёСЂСѓРµС‚ РїРѕРґРїРёСЃРєСѓ"""
+    """Применяет промокод и актиирует подписку"""
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
 
     if not user_id:
-        return web.json_response({'success': False, 'message': 'РќРµ Р°вС‚РѕСЂРёР·РѕвР°РЅ'}, status=401)
+        return web.json_response({'success': False, 'message': 'Не аторизоан'}, status=401)
 
     data = await request.post()
     promo_code = data.get('promo_code', '').strip().upper()
 
     if not promo_code:
-        return web.json_response({'success': False, 'message': 'Р’вРµРґРёС‚Рµ РїСЂРѕРјРѕРєРѕРґ'})
+        return web.json_response({'success': False, 'message': 'Ведите промокод'})
 
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return web.json_response({'success': False, 'message': 'РџРѕР»СЊР·РѕвР°С‚РµР»СЊ наµ на°Р№РґРµРЅ'})
+            return web.json_response({'success': False, 'message': 'Пользователь не найден'})
 
-        # РџСЂРѕвРµСЂСЏРµРј РїСЂРѕРјРѕРєРѕРґ
+        # Проеряем промокод
         promo = session.query(PromoCode).filter_by(code=promo_code).first()
         if not promo:
-            return web.json_response({'success': False, 'message': 'РќРµвРµСЂРЅС‹Р№ РїСЂРѕРјРѕРєРѕРґ'})
+            return web.json_response({'success': False, 'message': 'Неерный промокод'})
 
-        # РџСЂРѕвРµСЂСЏРµРј СЃСЂРѕРє РґРµР№СЃС‚вРёСЏ - РїСЂРёвРѕРґРёРј РѕР±Рµ РґР°С‚С‹ Рє РѕРґнаѕРјСѓ С„РѕСЂРјР°С‚Сѓ
+        # Проеряем срок дейстия - приодим обе даты к одму формату
         now = datetime.now(dt_timezone.utc)
         expires_at = promo.expires_at.replace(tzinfo=dt_timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
         if expires_at < now:
-            return web.json_response({'success': False, 'message': 'РЎСЂРѕРє РґРµР№СЃС‚вРёСЏ РїСЂРѕРјРѕРєРѕРґР° РёСЃС‚РµРє'})
+            return web.json_response({'success': False, 'message': 'Срок дейстия промокода истек'})
 
-        # РџСЂРѕвРµСЂСЏРµРј Р»РёРјРёС‚ РёСЃРїРѕР»СЊР·РѕвР°наёР№
+        # Проверяем лимит использований
         if promo.max_uses is not None and promo.used_count >= promo.max_uses:
-            return web.json_response({'success': False, 'message': 'РџСЂРѕРјРѕРєРѕРґ РґРѕСЃС‚РёРі Р»РёРјРёС‚Р° РёСЃРїРѕР»СЊР·РѕвР°наёР№'})
+            return web.json_response({'success': False, 'message': 'Промокод достиг лимита использований'})
 
-        # РџСЂРѕвРµСЂСЏРµРј, РёСЃРїРѕР»СЊР·РѕвР°Р» Р»Рё СѓР¶Рµ СЌС‚РѕС‚ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СЌС‚РѕС‚ РїСЂРѕРјРѕРєРѕРґ
+        # Проверяем, использовал ли уже этот пользователь этот промокод
         import json
         used_by_users = json.loads(promo.used_by_users or '[]')
         if user.id in used_by_users:
-            return web.json_response({'success': False, 'message': 'Р’С‹ СѓР¶Рµ РёСЃРїРѕР»СЊР·РѕвР°Р»Рё СЌС‚РѕС‚ РїСЂРѕРјРѕРєРѕРґ'})
+            return web.json_response({'success': False, 'message': 'Вы уже использовали этот промокод'})
 
-        # РђРєС‚РёвРёСЂСѓРµРј РїРѕРґРїРёСЃРєСѓ
+        # Актиируем подписку
         start_date = now
         end_date = start_date + timedelta(days=promo.duration_days)
 
-        # РС‰РµРј СЃСѓС‰РµСЃС‚вСѓСЋС‰СѓСЋ РїРѕРґРїРёСЃРєСѓ РёР»Рё СЃРѕР·РґР°РµРј наѕвСѓСЋ
+        # щем сущестующую подписку или создаем ую
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
         if not subscription:
             subscription = Subscription(
@@ -5885,48 +5883,48 @@ async def apply_promo_code_handler(request):
             subscription.end_date = end_date
             logger.info(f"Updated existing subscription for user {user.id}: tier {old_tier} -> {promo.tier}")
 
-        # РћР±наѕвР»СЏРµРј user.subscription_tier РґР»СЏ СЃРёРЅС…СЂРѕнаёР·Р°С†РёРё
+        # Обляем user.subscription_tier для синхрозации
         user.subscription_tier = promo.tier
 
-        # РћР±наѕвР»СЏРµРј СЃС‡РµС‚С‡РёРє РёСЃРїРѕР»СЊР·РѕвР°наёР№
+        # Обновляем счетчик использований
         promo.used_count += 1
         if promo.max_uses is None or promo.used_count >= promo.max_uses:
             promo.is_used = True
 
-        # Р”РѕР±Р°вР»СЏРµРј РїРѕР»СЊР·РѕвР°С‚РµР»СЏ в СЃРїРёСЃРѕРє РёСЃРїРѕР»СЊР·РѕвР°вС€РёС…
+        # Добавляем пользователя в список использовавших
         import json
         used_by_users = json.loads(promo.used_by_users or '[]')
         if user.id not in used_by_users:
             used_by_users.append(user.id)
         promo.used_by_users = json.dumps(used_by_users)
 
-        # РЈСЃС‚Р°СЂРµвС€РёРµ РїРѕР»СЏ РґР»СЏ СЃРѕвРјРµСЃС‚РёРјРѕСЃС‚Рё
+        # Устарешие поля для соместимости
         promo.used_by_user_id = user.id
         promo.used_at = now
 
         session.commit()
         logger.info(f"Promo code {promo_code} activated for user {user.id}, subscription created/updated with tier {subscription.tier}")
 
-        # РЎРѕС…СЂР°РЅСЏРµРј Р·на°С‡РµнаёСЏ РґРѕ Р·Р°РєСЂС‹С‚РёСЏ СЃРµСЃСЃРёРё
+        # Сохраняем зчея до закрытия сессии
         tier_name = promo.tier.value if hasattr(promo.tier, 'value') else str(promo.tier)
         duration = promo.duration_days
         end_date_str = end_date.strftime("%d.%m.%Y")
 
         return web.json_response({
             'success': True,
-            'message': f'РџСЂРѕРјРѕРєРѕРґ Р°РєС‚РёвРёСЂРѕвР°РЅ! РџРѕРґРїРёСЃРєР° {tier_name} на° {duration} РґнаµР№ РґРѕ {end_date_str}'
+            'message': f'Промокод актиироан! Подписка {tier_name}  {duration} дй до {end_date_str}'
         })
 
     except Exception as e:
         logger.error(f"Error applying promo code: {e}", exc_info=True)
         session.rollback()
-        return web.json_response({'success': False, 'message': f'РћС€РёР±РєР° Р°РєС‚РёвР°С†РёРё РїСЂРѕРјРѕРєРѕРґР°: {str(e)}'}, status=500)
+        return web.json_response({'success': False, 'message': f'Ошибка актиации промокода: {str(e)}'}, status=500)
     finally:
         session.close()
 
 
 async def create_payment_handler(request):
-    """РЎРѕР·РґР°РµС‚ РїР»Р°С‚РµР¶ РґР»СЏ вС‹Р±СЂР°наЅРѕРіРѕ С‚Р°СЂРёС„Р°"""
+    """Создает платеж для ыбраого тарифа"""
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
 
@@ -5953,7 +5951,7 @@ async def create_payment_handler(request):
 
         payment_url = create_payment(
             amount=str(amount),
-            description=f"РџРѕРґРїРёСЃРєР° ASI Biont - {tier_name} на° 30 РґнаµР№",
+            description=f"Подписка ASI Biont - {tier_name}  30 дй",
             user_id=user_id,
             tier=tier
         )
@@ -5962,7 +5960,7 @@ async def create_payment_handler(request):
         return web.HTTPFound(payment_url)
     except Exception as e:
         logger.error(f"Error creating payment: {e}")
-        return web.Response(text=f'РћС€РёР±РєР° СЃРѕР·РґР°наёСЏ РїР»Р°С‚РµР¶Р°: {str(e)}', status=500)
+        return web.Response(text=f'Ошибка создая платежа: {str(e)}', status=500)
 
 
 async def clear_database_handler(request):
@@ -6002,21 +6000,21 @@ async def add_test_users_handler(request):
         
         session = Session()
         
-        # Р”Р°наЅС‹Рµ РїРѕР»СЊР·РѕвР°С‚РµР»РµР№
+        # Данные пользователей
         sport_users = [
-            {'username': 'sport_alex', 'telegram_id': 1000001, 'interests': 'С„СѓС‚Р±РѕР», Р±Р°СЃРєРµС‚Р±РѕР», вРѕР»РµР№Р±РѕР»', 'tier': SubscriptionTier.LIGHT},
-            {'username': 'sport_maria', 'telegram_id': 1000002, 'interests': 'Р±РµРі, Р№РѕРіР°, РїРёР»Р°С‚РµСЃ', 'tier': SubscriptionTier.STANDARD},
-            {'username': 'sport_ivan', 'telegram_id': 1000003, 'interests': 'С‚РµнаЅРёСЃ, РїР»Р°вР°наёРµ, вРµР»РѕСЃРїРѕСЂС‚', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'sport_olga', 'telegram_id': 1000004, 'interests': 'С„РёС‚наµСЃ, РєСЂРѕСЃСЃС„РёС‚, Р±РѕРґРёР±РёР»РґРёнаі', 'tier': SubscriptionTier.LIGHT},
-            {'username': 'sport_dmitry', 'telegram_id': 1000005, 'interests': 'С…РѕРєРєРµР№, Р±РёР°С‚Р»РѕРЅ, Р»С‹Р¶Рё', 'tier': SubscriptionTier.STANDARD},
+            {'username': 'sport_alex', 'telegram_id': 1000001, 'interests': 'футбол, баскетбол, олейбол', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'sport_maria', 'telegram_id': 1000002, 'interests': 'бег, йога, пилатес', 'tier': SubscriptionTier.STANDARD},
+            {'username': 'sport_ivan', 'telegram_id': 1000003, 'interests': 'теис, плаае, елоспорт', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'sport_olga', 'telegram_id': 1000004, 'interests': 'фитс, кроссфит, бодибилди', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'sport_dmitry', 'telegram_id': 1000005, 'interests': 'хоккей, биатлон, лыжи', 'tier': SubscriptionTier.STANDARD},
         ]
         
         business_users = [
-            {'username': 'biz_anna', 'telegram_id': 2000001, 'interests': 'СЃС‚Р°СЂС‚Р°РїС‹, РјР°СЂРєРµС‚Рёнаі, РїСЂРѕРґР°Р¶Рё', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'biz_sergey', 'telegram_id': 2000002, 'interests': 'РёнаІРµСЃС‚РёС†РёРё, С„Рёна°РЅСЃС‹, РєСЂРёРїС‚РѕвР°Р»СЋС‚Р°', 'tier': SubscriptionTier.LIGHT},
-            {'username': 'biz_elena', 'telegram_id': 2000003, 'interests': 'СѓРїСЂР°вР»РµнаёРµ РїСЂРѕРµРєС‚Р°РјРё, agile, scrum', 'tier': SubscriptionTier.STANDARD},
-            {'username': 'biz_maxim', 'telegram_id': 2000004, 'interests': 'e-commerce, Рѕна»Р°Р№РЅ-С‚РѕСЂРіРѕвР»СЏ, Р»РѕРіРёСЃС‚РёРєР°', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'biz_victoria', 'telegram_id': 2000005, 'interests': 'HR, СЂРµРєСЂСѓС‚Рёнаі, РѕР±СѓС‡РµнаёРµ РїРµСЂСЃРѕна°Р»Р°', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'biz_anna', 'telegram_id': 2000001, 'interests': 'стартапы, маркети, продажи', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'biz_sergey', 'telegram_id': 2000002, 'interests': 'иестиции, финсы, криптоалюта', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'biz_elena', 'telegram_id': 2000003, 'interests': 'упралее проектами, agile, scrum', 'tier': SubscriptionTier.STANDARD},
+            {'username': 'biz_maxim', 'telegram_id': 2000004, 'interests': 'e-commerce, оайн-торголя, логистика', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'biz_victoria', 'telegram_id': 2000005, 'interests': 'HR, рекрути, обучее персола', 'tier': SubscriptionTier.LIGHT},
         ]
         
         all_users = sport_users + business_users
@@ -6027,13 +6025,13 @@ async def add_test_users_handler(request):
             existing_user = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
             
             if existing_user:
-                # РџСЂРѕвРµСЂСЏРµРј РµСЃС‚СЊ Р»Рё subscription
+                # Проеряем есть ли subscription
                 existing_sub = session.query(Subscription).filter_by(user_id=existing_user.id).first()
                 if existing_sub:
                     skipped.append(user_data['username'])
                     continue
                 else:
-                    # User РµСЃС‚СЊ, наѕ subscription наµС‚ - РґРѕР±Р°вР»СЏРµРј С‚РѕР»СЊРєРѕ subscription
+                    # User есть,  subscription т - добаляем только subscription
                     end_date = datetime.now(dt_timezone.utc) + timedelta(days=365)
                     subscription = Subscription(
                         user_id=existing_user.id,
@@ -6189,7 +6187,7 @@ reminder_service = ReminderService(bot=bot if not LOCAL else None)
 reminder_service_module.REMINDER_SERVICE = reminder_service  # Set global variable for use in handlers
 logger.info("ReminderService initialized and set as global REMINDER_SERVICE")
 
-# Предварительная загрузка кэша погоды и новостей
+#      
 try:
     from ai_integration.utils import preload_common_data
     logger.info("Starting preload of weather/news cache...")
@@ -6226,9 +6224,9 @@ async def ensure_database_schema(app):
                     ADD COLUMN pending_delegator_report BIGINT
                 """))
                 conn.commit()
-            logger.info("вњ… Successfully added pending_delegator_report column")
+            logger.info("✅ Successfully added pending_delegator_report column")
         else:
-            logger.info("вњ… pending_delegator_report column already exists")
+            logger.info("✅ pending_delegator_report column already exists")
             
         # Check if goal_id column exists
         if 'goal_id' not in columns:
@@ -6239,9 +6237,9 @@ async def ensure_database_schema(app):
                     ADD COLUMN goal_id INTEGER REFERENCES goals(id)
                 """))
                 conn.commit()
-            logger.info("вњ… Successfully added goal_id column")
+            logger.info("✅ Successfully added goal_id column")
         else:
-            logger.info("вњ… goal_id column already exists")
+            logger.info("✅ goal_id column already exists")
             
     except Exception as e:
         logger.error(f"Error during database schema check: {e}")
@@ -6259,9 +6257,9 @@ async def start_reminder_service(app):
         logger.info(f"Job: {job.id} at {job.next_run_time}")
 
 
-# Premium scheduler больше не нужен — инсайты собираются real-time
+# Premium scheduler       real-time
 # async def start_premium_scheduler(app):
-#     """Запускает Premium scheduler для фоновых задач"""
+#     """ Premium scheduler   """
 #     logger.info("Starting Premium Scheduler...")
 #     try:
 #         from ai_integration.premium_scheduler import start_premium_scheduler
@@ -6273,7 +6271,7 @@ async def start_reminder_service(app):
 
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
-# app.on_startup.append(start_premium_scheduler)  # Закомментирован — real-time подход
+# app.on_startup.append(start_premium_scheduler)  #   real-time 
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
