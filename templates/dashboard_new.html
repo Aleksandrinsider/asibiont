@@ -1324,16 +1324,18 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    // Обновить профиль и время сразу
-                    await updateProfile();
-                    // Принудительно обновляем время в шапке через небольшую задержку
-                    setTimeout(() => {
-                        updateHeaderTime();
-                    }, 1000);
-                    // Обновляем задачи с новым timezone
+                    // Обновляем профиль и задачи с задержкой, чтобы AI успел обработать timezone
                     setTimeout(async () => {
+                        await updateProfile();
+                        updateHeaderTime();
                         await updateTasks();
-                    }, 1500);
+                    }, 2000);
+                    // Повторное обновление через 5 секунд на случай, если AI еще не успел
+                    setTimeout(async () => {
+                        await updateProfile();
+                        updateHeaderTime();
+                        await updateTasks();
+                    }, 5000);
                     // Синхронизировать счетчик через API
                     setTimeout(async () => {
                         try {
@@ -5538,12 +5540,6 @@
                         updateHeaderTime();
                         // Reload tasks with new timezone
                         updateTasks();
-                    }
-                    
-                    // Update time display in header
-                    const headerTimeDisplay = document.getElementById('header-time-display');
-                    if (headerTimeDisplay && data.current_time && data.current_date) {
-                        headerTimeDisplay.textContent = `${data.current_time} · ${data.current_date}`;
                     }
                     
                     // Check if profile data actually changed
