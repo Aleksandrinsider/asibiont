@@ -116,8 +116,9 @@
     }
     </script>
     <script>
-        // User timezone from server
-        const USER_TIMEZONE = '{{ user_timezone }}';
+        // User timezone from server (can be updated dynamically)
+        let USER_TIMEZONE = '{{ user_timezone }}';
+        window.USER_TIMEZONE = USER_TIMEZONE;
 
         // Mobile device detection and CSSPeeper fix
         function isMobileDevice() {
@@ -1610,8 +1611,8 @@
 
                         const postTime = new Date(post.created_at);
                         // Convert to user timezone
-                        const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: USER_TIMEZONE });
-                        const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: USER_TIMEZONE });
+                        const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+                        const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
 
                         const telegramUsername = post.author.username || '';
                         const usernameClean = telegramUsername.replace('@', '');
@@ -1932,8 +1933,8 @@
                 `;
 
                 const postTime = new Date(post.created_at);
-                const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: USER_TIMEZONE });
-                const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: USER_TIMEZONE });
+                const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+                const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
 
                 const telegramUsername = post.author.username || '';
                 const usernameClean = telegramUsername.replace('@', '');
@@ -2979,8 +2980,8 @@
 
             const postTime = new Date(post.created_at);
             // Convert to user timezone
-            const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: USER_TIMEZONE });
-            const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: USER_TIMEZONE });
+            const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+            const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
 
             const telegramUsername = post.author.username || '';
             const usernameClean = telegramUsername.replace('@', '');
@@ -4673,7 +4674,7 @@
                 const now = new Date();
                 // Используем правильную конвертацию в user timezone
                 const formatter = new Intl.DateTimeFormat('ru-RU', {
-                    timeZone: USER_TIMEZONE,
+                    timeZone: window.USER_TIMEZONE,
                     hour: '2-digit',
                     minute: '2-digit',
                     hour12: false
@@ -4681,7 +4682,7 @@
                 const timeString = formatter.format(now);
                 
                 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
-                    timeZone: USER_TIMEZONE,
+                    timeZone: window.USER_TIMEZONE,
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric'
@@ -5656,6 +5657,17 @@
                         first_name: data.first_name,
                         username: data.profile?.username
                     };
+                    
+                    // Update timezone if changed
+                    const oldTimezone = window.USER_TIMEZONE;
+                    if (data.timezone && data.timezone !== oldTimezone) {
+                        window.USER_TIMEZONE = data.timezone;
+                        console.log('Timezone updated from', oldTimezone, 'to:', data.timezone);
+                        // Force update header time with new timezone
+                        updateHeaderTime();
+                        // Reload tasks with new timezone
+                        updateTasks();
+                    }
                     
                     // Update time display in header
                     const headerTimeDisplay = document.getElementById('header-time-display');

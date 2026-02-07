@@ -5794,7 +5794,8 @@ async def api_profile_handler(request):
             'user_avatar_url': user_avatar_url,
             'first_name': user.first_name,
             'telegram_id': user.telegram_id,
-            'referral_balance': user.referral_balance
+            'referral_balance': user.referral_balance,
+            'timezone': user.timezone or 'UTC'
         }
 
         return web.json_response(response_data)
