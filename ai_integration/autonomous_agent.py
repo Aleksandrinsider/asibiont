@@ -202,16 +202,13 @@ class HybridAutonomousAgent:
         """
         ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - Детектирование + принудительный tool_choice
         
-        Применяем успешный подход ко всем критичным командам:
-        - Правила детектируют intent
-        - AI с tool_choice гарантирует вызов нужного инструмента
-        - Остальное - полная свобода AI
+        Применяем гибридный подход ко ВСЕМ командам для гарантии выполнения
         """
         
         message_lower = user_message.lower()
         
-        # Детектируем критичные команды
-        if any(kw in message_lower for kw in ['покажи задач', 'список', 'мои задач']):
+        # ЗАДАЧИ
+        if any(kw in message_lower for kw in ['покажи задач', 'список', 'мои задач', 'что у меня']):
             if 'задач' in message_lower or 'дел' in message_lower:
                 return await self._plan_with_required_tool(user_message, user_id, 'list_tasks')
         
@@ -220,14 +217,11 @@ class HybridAutonomousAgent:
         
         if any(kw in message_lower for kw in ['создай', 'добавь', 'напомни', 'поставь напоминание']):
             if not any(w in message_lower for w in ['перенес', 'отлож', 'подвин', 'измени']):
-                # Проверяем наличие времени в сообщении
                 time_indicators = ['завтра', 'сегодня', 'через', 'в ', ':', 'утра', 'вечера', 'дня', 'ночи', 'понедельник', 'вторник', 'среду', 'четверг', 'пятниц', 'суббот', 'воскресень']
                 has_time = any(indicator in message_lower for indicator in time_indicators)
-                
                 if has_time:
                     return await self._plan_with_required_tool(user_message, user_id, 'add_task')
                 else:
-                    # Нет времени - пропускаем через обычный AI который спросит время
                     return await self._plan_general_chat(user_message, user_id)
         
         if any(kw in message_lower for kw in ['удали', 'сотри', 'убери задач']):
@@ -240,6 +234,28 @@ class HybridAutonomousAgent:
         if any(kw in message_lower for kw in ['измени', 'переименуй', 'отредактируй']):
             if 'задач' in message_lower:
                 return await self._plan_with_required_tool(user_message, user_id, 'edit_task')
+        
+        # АНАЛИЗ
+        if any(kw in message_lower for kw in ['анализ', 'что делать', 'приоритет']):
+            if 'задач' in message_lower or 'дел' in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'analyze_tasks')
+        
+        # ПАРТНЕРЫ И КОНТАКТЫ
+        if any(kw in message_lower for kw in ['найди партнер', 'ищу единомышленник', 'кто занимается', 'с кем можно']):
+            return await self._plan_with_required_tool(user_message, user_id, 'find_partners')
+        
+        if any(kw in message_lower for kw in ['кто может помочь', 'кто поможет', 'найди кто']):
+            return await self._plan_with_required_tool(user_message, user_id, 'find_relevant_contacts_for_task')
+        
+        # ДЕЛЕГИРОВАНИЕ
+        if any(kw in message_lower for kw in ['делегируй', 'передай', 'поручи']):
+            if 'задач' in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'delegate_task')
+        
+        # ПРОФИЛЬ
+        if any(kw in message_lower for kw in ['обнови профиль', 'измени профиль', 'мой профиль', 'мои данные']):
+            if any(kw2 in message_lower for kw2 in ['город', 'интерес', 'цел', 'навык', 'компани', 'должность']):
+                return await self._plan_with_required_tool(user_message, user_id, 'update_profile')
         
         # Всё остальное - свободный AI с полным набором tools
         return await self._plan_general_chat(user_message, user_id)
@@ -288,30 +304,31 @@ class HybridAutonomousAgent:
         
         # Формируем промпт под конкретный инструмент
         tool_instructions = {
-            'add_task': f"""Пользователь просит создать задачу: "{user_message}"
-
-ОБЯЗАТЕЛЬНО вызови add_task с параметрами:
-- title: краткое название задачи (что нужно сделать)
-- reminder_time: КРИТИЧНО! Извлеки время:
-  * "завтра в 10" → "завтра 10:00"
-  * "через час" → "через 1 час"
-  * Если время НЕ указано → null
-
+            'add_task': f"""Создать задачу: "{user_message}"
+Вызови add_task с title и reminder_time (извлеки время: "завтра в 10" → "завтра 10:00", null если нет)
 Сейчас: {user_now.strftime('%H:%M, %d.%m.%Y')}""",
             
-            'complete_task': f"""Пользователь подтверждает завершение: "{user_message}"
-
+            'complete_task': f"""Завершить: "{user_message}"
 {f"ТЕКУЩАЯ ЗАДАЧА: {current_task_info['title']} (ID: {current_task_info['id']})" if current_task_info else ""}
-
-ОБЯЗАТЕЛЬНО вызови complete_task""",
+Вызови complete_task""",
             
             'list_tasks': """Показать задачи. Вызови list_tasks.""",
             
-            'delete_task': f"""Удалить задачу: "{user_message}". Вызови delete_task с task_title=""",
+            'delete_task': f"""Удалить задачу: "{user_message}". Вызови delete_task""",
             
-            'reschedule_task': f"""Перенести задачу: "{user_message}". Вызови reschedule_task с new_time=""",
+            'reschedule_task': f"""Перенести: "{user_message}". Вызови reschedule_task""",
             
-            'edit_task': f"""Изменить задачу: "{user_message}". Вызови edit_task"""
+            'edit_task': f"""Изменить: "{user_message}". Вызови edit_task""",
+            
+            'analyze_tasks': """Проанализировать задачи. Вызови analyze_tasks.""",
+            
+            'find_partners': f"""Найти партнеров: "{user_message}". Вызови find_partners.""",
+            
+            'find_relevant_contacts_for_task': f"""Найти контакты для: "{user_message}". Вызови find_relevant_contacts_for_task с task_description""",
+            
+            'delegate_task': f"""Делегировать: "{user_message}". Вызови delegate_task""",
+            
+            'update_profile': f"""Обновить профиль: "{user_message}". Вызови update_profile с соответствующими параметрами"""
         }
         
         system_prompt = tool_instructions.get(tool_name, f"Вызови {tool_name}")
