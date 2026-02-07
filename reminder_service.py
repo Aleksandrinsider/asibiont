@@ -912,7 +912,7 @@ class ReminderService:
             db.close()
 
     async def _reschedule_proactive_check(self, user_id: int, has_tasks: bool, task_count: int = 0, urgent: bool = False):
-        """Перепланирование следующей проактивной проверки с привязкой к последнему сообщению пользователя
+        """Перепланирование следующей проактивной проверки с адаптивным интервалом
         
         Args:
             user_id: ID пользователя
@@ -920,6 +920,8 @@ class ReminderService:
             task_count: Количество активных задач
             urgent: Задачи в urgent состоянии (осталось <1/3 времени до дедлайна)
         """
+        import random
+        
         db = Session()
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
@@ -929,6 +931,22 @@ class ReminderService:
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
             job_id = f"proactive_{user.telegram_id}"
             
+            # Адаптивный интервал на основе загруженности
+            if task_count == 0:
+                base_hours = 4  # Мало задач - чаще сообщения для мотивации
+            elif task_count <= 3:
+                base_hours = 5  # Немного задач
+            elif task_count <= 7:
+                base_hours = 6  # Оптимальное количество
+            elif task_count <= 12:
+                base_hours = 8  # Много задач - реже
+            else:
+                base_hours = 10  # Очень много - не отвлекаем
+            
+            # Добавляем случайность ±30-60 минут для разнообразия
+            random_offset_minutes = random.randint(-60, 60)
+            hours_with_variance = base_hours + (random_offset_minutes / 60.0)
+            
             # Получить время последнего сообщения пользователя
             last_user_message = db.query(Interaction).filter(
                 Interaction.user_id == user.id,
@@ -936,16 +954,16 @@ class ReminderService:
             ).order_by(Interaction.created_at.desc()).first()
             
             if last_user_message:
-                # Привязываемся к последнему сообщению пользователя + 6 часов
-                next_check_time = last_user_message.created_at.replace(tzinfo=pytz.UTC) + timedelta(hours=6)
+                # Привязываемся к последнему сообщению + адаптивный интервал
+                next_check_time = last_user_message.created_at.replace(tzinfo=pytz.UTC) + timedelta(hours=hours_with_variance)
             else:
-                # Если нет сообщений, используем текущее время + 6 часов
-                next_check_time = datetime.now(pytz.UTC) + timedelta(hours=6)
+                # Если нет сообщений, используем текущее время + интервал
+                next_check_time = datetime.now(pytz.UTC) + timedelta(hours=hours_with_variance)
             
             # Убедимся, что время в будущем
             now_utc = datetime.now(pytz.UTC)
             if next_check_time <= now_utc:
-                next_check_time = now_utc + timedelta(hours=6)
+                next_check_time = now_utc + timedelta(hours=hours_with_variance)
             
             # Конвертируем в локальное время пользователя для планирования
             next_check_local = next_check_time.astimezone(user_tz)
@@ -971,7 +989,7 @@ class ReminderService:
                 replace_existing=True,
                 max_instances=1
             )
-            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} at {next_check_local} (6 hours after last user message, adjusted for daytime 10-22)")
+            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} at {next_check_local} ({base_hours}h base + {random_offset_minutes}m random, {task_count} tasks, adjusted for daytime 10-22)")
         finally:
             db.close()
 

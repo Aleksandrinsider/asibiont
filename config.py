@@ -90,8 +90,15 @@ DEFAULT_TASK_REMINDER_HOURS = int(os.getenv("DEFAULT_TASK_REMINDER_HOURS", 1))
 PROACTIVE_NO_SEND_START_HOUR = int(os.getenv("PROACTIVE_NO_SEND_START_HOUR", 22))  # Start hour for no-send period (22:00)
 PROACTIVE_SEND_START_HOUR = int(os.getenv("PROACTIVE_SEND_START_HOUR", 10))  # Start hour for send period (10:00)
 PROACTIVE_NO_SEND_END_HOUR = int(os.getenv("PROACTIVE_NO_SEND_END_HOUR", 10))    # End hour for no-send period (10:00)
-PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES", 360))  # Каждые 6 часов если есть задачи (было 180)
-PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES", 360))  # Каждые 6 часов если нет задач (только днем)
+
+# Адаптивные интервалы на основе загруженности:
+# 0 задач: 4 часа (чаще, чтобы мотивировать планировать)
+# 1-3 задачи: 5 часов
+# 4-7 задач: 6 часов
+# 8-12 задач: 8 часов
+# 13+ задач: 10 часов (реже, человек занят)
+PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES", 360))  # Базовый интервал (deprecated, used as fallback)
+PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES", 240))  # 4 часа если нет задач
 
 # Subscription descriptions
 PREMIUM_DESCRIPTION = """
