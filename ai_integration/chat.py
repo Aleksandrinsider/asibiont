@@ -31,8 +31,7 @@ from .handlers import (  # noqa: F401
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, smart_update_profile, show_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks,
-    analyze_goal_progress
+    update_profile, smart_update_profile, show_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks
 )
 from .autonomous_agent import chat_with_ai as autonomous_chat_with_ai
 
