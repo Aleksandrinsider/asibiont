@@ -54,7 +54,6 @@ CITY_TIMEZONE_MAP = {
     'екатеринбург': 'Asia/Yekaterinburg',
     'челябинск': 'Asia/Yekaterinburg',
     'тюмень': 'Asia/Yekaterinburg',
-    'пермь': 'Asia/Yekaterinburg',  # Пермь на границе, но обычно MSK
     'магнитогорск': 'Asia/Yekaterinburg',
     'нижний тагил': 'Asia/Yekaterinburg',
     'каменск-уральский': 'Asia/Yekaterinburg',
