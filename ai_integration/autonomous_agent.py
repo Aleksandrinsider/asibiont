@@ -219,57 +219,57 @@ class HybridAutonomousAgent:
         # ЗАДАЧИ
         if any(kw in message_lower for kw in ['покажи задач', 'список', 'мои задач', 'что у меня']):
             if 'задач' in message_lower or 'дел' in message_lower:
-                print("[PLAN_STRATEGY] -> list_tasks")
                 return await self._plan_with_required_tool(user_message, user_id, 'list_tasks')
         
-        if any(kw in message_lower for kw in ['готово', 'сделал', 'завершил', 'выполнил', 'закончил', 'проверил']):
-            print("[PLAN_STRATEGY] -> complete_task")
+        if any(kw in message_lower for kw in ['готово', 'сделал', 'завершил', 'выполнил', 'закончил', 'проверил', 'закончу', 'завершу']):
             return await self._plan_with_required_tool(user_message, user_id, 'complete_task')
         
-        if any(kw in message_lower for kw in ['создай', 'добавь', 'напомни', 'поставь напоминание']):
+        # КОСВЕННЫЕ упоминания будущих действий → add_task
+        indirect_future = any(kw in message_lower for kw in ['завтра', 'послезавтра', 'на следующ', 'в понедельник', 'во вторник', 'в среду', 'в четверг', 'в пятниц', 'в суббот', 'в воскресень'])
+        indirect_intent = any(kw in message_lower for kw in ['сделаю', 'буду', 'планирую', 'займусь', 'начну', 'отправлю', 'структурирую', 'проанализирую'])
+        
+        if indirect_future and indirect_intent:
+            # Пользователь косвенно упомянул будущую задачу
+            return await self._plan_with_required_tool(user_message, user_id, 'add_task')
+        
+        # ЯВНЫЕ команды создания
+        if any(kw in message_lower for kw in ['создай', 'добавь', 'напомни', 'поставь напоминание', 'давай создадим', 'давай поставим']):
             if not any(w in message_lower for w in ['перенес', 'отлож', 'подвин', 'измени']):
                 time_indicators = ['завтра', 'сегодня', 'через', 'в ', ':', 'утра', 'вечера', 'дня', 'ночи', 'понедельник', 'вторник', 'среду', 'четверг', 'пятниц', 'суббот', 'воскресень']
                 has_time = any(indicator in message_lower for indicator in time_indicators)
-                if has_time:
-                    print("[PLAN_STRATEGY] -> add_task (has_time=True)")
+                 if has_time:
                     return await self._plan_with_required_tool(user_message, user_id, 'add_task')
                 else:
-                    print("[PLAN_STRATEGY] -> general_chat (no time detected)")
+                    # НЕТ ВРЕМЕНИ - оставляем AI с полным набором tools
+                    # AI сам уточнит время перед созданием задачи
                     return await self._plan_general_chat(user_message, user_id)
         
         if any(kw in message_lower for kw in ['удали', 'сотри', 'убери задач']):
-            print("[PLAN_STRATEGY] -> delete_task")
             return await self._plan_with_required_tool(user_message, user_id, 'delete_task')
         
-        if any(kw in message_lower for kw in ['перенес', 'отлож', 'подвин']):
+        if any(kw in message_lower for kw in ['перенес', 'отлож', 'подвин', 'поставим задачу']):
             if 'задач' in message_lower:
-                print("[PLAN_STRATEGY] -> reschedule_task")
                 return await self._plan_with_required_tool(user_message, user_id, 'reschedule_task')
         
         if any(kw in message_lower for kw in ['измени', 'переименуй', 'отредактируй']):
             if 'задач' in message_lower:
-                print("[PLAN_STRATEGY] -> edit_task")
                 return await self._plan_with_required_tool(user_message, user_id, 'edit_task')
         
         # АНАЛИЗ
-        if any(kw in message_lower for kw in ['анализ', 'что делать', 'приоритет']):
-            if 'задач' in message_lower or 'дел' in message_lower:
-                print("[PLAN_STRATEGY] -> analyze_tasks")
+        if any(kw in message_lower for kw in ['анализ', 'что делать', 'приоритет', 'разбивай', 'структурируем', 'распредели']):
+            if 'задач' in message_lower or 'дел' in message_lower or 'проект' in message_lower:
                 return await self._plan_with_required_tool(user_message, user_id, 'analyze_tasks')
         
         # ПАРТНЕРЫ И КОНТАКТЫ
-        if any(kw in message_lower for kw in ['найди партнер', 'ищу единомышленник', 'кто занимается', 'с кем можно']):
-            print("[PLAN_STRATEGY] -> find_partners")
+        if any(kw in message_lower for kw in ['найди партнер', 'ищу единомышленник', 'кто занимается', 'с кем можно', 'поиск эксперт', 'подходящих эксперт', 'получить ревью']):
             return await self._plan_with_required_tool(user_message, user_id, 'find_partners')
         
         if any(kw in message_lower for kw in ['кто может помочь', 'кто поможет', 'найди кто']):
-            print("[PLAN_STRATEGY] -> find_relevant_contacts_for_task")
             return await self._plan_with_required_tool(user_message, user_id, 'find_relevant_contacts_for_task')
         
         # ДЕЛЕГИРОВАНИЕ
         if any(kw in message_lower for kw in ['делегируй', 'передай', 'поручи']):
             if 'задач' in message_lower:
-                print("[PLAN_STRATEGY] -> delegate_task")
                 return await self._plan_with_required_tool(user_message, user_id, 'delegate_task')
         
         # ДЕТАЛИ ЗАДАЧИ
