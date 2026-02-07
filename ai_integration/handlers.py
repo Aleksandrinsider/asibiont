@@ -4922,5 +4922,73 @@ async def analyze_tasks(user_id, session=None):
             session.close()
 
 
-
-
+async def get_local_events(user_id, categories=None, days_ahead=7, price_range='all', limit=5, session=None):
+    """
+    Получает актуальные мероприятия в городе пользователя через Kudago API
+    
+    Args:
+        user_id: Telegram ID пользователя
+        categories: Список категорий ['митапы', 'концерты'] или None (все)
+        days_ahead: На сколько дней вперёд искать (default: 7)
+        price_range: 'free', 'paid' или 'all' (default: 'all')
+        limit: Максимум событий (default: 5)
+    
+    Returns:
+        str: Отформатированный список мероприятий для чата
+    """
+    
+    close_session = False
+    
+    try:
+        if session is None:
+            session = Session()
+            close_session = True
+        
+        # Получаем город пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Не могу определить твой город. Добавь город в профиле командой: /profile"
+        
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        city = profile.city if profile and profile.city else None
+        
+        if not city:
+            return "Добавь город в профиле чтобы я мог показывать актуальные мероприятия. Используй: /profile"
+        
+        # Импортируем сервис
+        from events_service import get_city_events, format_events_for_chat
+        
+        # Определяем временной период
+        date_from = datetime.now()
+        date_to = date_from + timedelta(days=days_ahead)
+        
+        # Нормализуем price_range
+        price_filter = None if price_range == 'all' else price_range
+        
+        # Получаем события
+        logger.info(f"[GET_EVENTS] Getting events for user {user_id} in {city}, categories={categories}, days={days_ahead}")
+        
+        events_data = await get_city_events(
+            city=city,
+            categories=categories,
+            date_from=date_from,
+            date_to=date_to,
+            price_range=price_filter,
+            limit=limit
+        )
+        
+        # Форматируем для чата
+        result = format_events_for_chat(events_data)
+        
+        logger.info(f"[GET_EVENTS] Returned {events_data.get('count', 0)} events")
+        return result
+        
+    except ImportError as e:
+        logger.error(f"[GET_EVENTS] events_service not found: {e}")
+        return "Сервис событий временно недоступен. Попробуй позже."
+    except Exception as e:
+        logger.error(f"[GET_EVENTS] Error: {e}", exc_info=True)
+        return f"Ошибка получения мероприятий: {str(e)}"
+    finally:
+        if close_session and session:
+            session.close()
