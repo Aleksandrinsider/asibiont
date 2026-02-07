@@ -58,6 +58,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             if not user:
                 logger.error(f"[CHAT_WITH_AI] User not found: {user_id}")
                 return {'response': "Пользователь не найден", 'tool_calls': []}
+            
+            # Проверяем, не сообщает ли пользователь свое местное время
+            import re
+            time_pattern = r"(?:мое\s+)?(?:местное\s+)?врем[яы][\s:]+(\d{1,2}):(\d{2})"
+            time_match = re.search(time_pattern, message.lower())
+            if time_match:
+                try:
+                    new_tz = determine_timezone_from_time(message, user_id)
+                    if new_tz and new_tz != user.timezone:
+                        old_tz = user.timezone or 'UTC'
+                        user.timezone = new_tz
+                        session.commit()
+                        logger.info(f"[TIMEZONE] Updated user {user_id} timezone from {old_tz} to {new_tz}")
+                except Exception as e:
+                    logger.error(f"[TIMEZONE] Error updating timezone: {e}")
 
             # Получаем профиль пользователя
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()

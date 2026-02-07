@@ -1324,18 +1324,12 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    // Обновляем профиль и задачи с задержкой, чтобы AI успел обработать timezone
+                    // Обновляем профиль, время и задачи сразу после ответа AI
                     setTimeout(async () => {
                         await updateProfile();
                         updateHeaderTime();
                         await updateTasks();
-                    }, 2000);
-                    // Повторное обновление через 5 секунд на случай, если AI еще не успел
-                    setTimeout(async () => {
-                        await updateProfile();
-                        updateHeaderTime();
-                        await updateTasks();
-                    }, 5000);
+                    }, 500);
                     // Синхронизировать счетчик через API
                     setTimeout(async () => {
                         try {
@@ -1347,7 +1341,7 @@
                         } catch (e) {
                             lastMessageCount += 2;
                         }
-                    }, 500);
+                    }, 300);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                     lastMessageCount += 1;
