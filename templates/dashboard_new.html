@@ -1368,7 +1368,16 @@
                 if (!await checkAuth(response)) return;
                 
                 if (response.ok) {
-                    showNotification('Часовой пояс обновлен', 'success');
+                    const tzNames = {
+                        'Europe/Moscow': 'МСК (UTC+3)',
+                        'Asia/Yekaterinburg': 'Екатеринбург (UTC+5)',
+                        'Asia/Novosibirsk': 'Новосибирск (UTC+7)',
+                        'Asia/Vladivostok': 'Владивосток (UTC+10)',
+                        'America/New_York': 'Нью-Йорк (UTC-5)',
+                        'Europe/London': 'Лондон (UTC+0)'
+                    };
+                    const tzName = tzNames[newTimezone] || newTimezone;
+                    showNotification(`Часовой пояс: ${tzName}`, 'success');
                     // Обновляем глобальную переменную
                     window.USER_TIMEZONE = newTimezone;
                     // Обновляем время и задачи
