@@ -323,6 +323,21 @@ class HybridAutonomousAgent:
                 except Exception as e:
                     logger.error(f"Error decrypting memory: {e}")
 
+            # Получаем информацию о текущей задаче если есть
+            current_task_info = None
+            if user.current_task_id:
+                try:
+                    task = session.query(Task).filter_by(id=user.current_task_id).first()
+                    if task:
+                        current_task_info = {
+                            'id': task.id,
+                            'title': task.title,
+                            'status': task.status
+                        }
+                        logger.info(f"[AGENT] Current task in planning: '{task.title}' (ID: {task.id})")
+                except Exception as e:
+                    logger.error(f"Error loading current task: {e}")
+
             base_prompt = get_extended_system_prompt(
                 user_now=user_now,
                 current_time_str=current_time_str,
@@ -335,23 +350,59 @@ class HybridAutonomousAgent:
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
                 message_type=None,
                 weather_info=weather_info,
-                news_info=news_info
+                news_info=news_info,
+                current_task_info=current_task_info
             )
         finally:
             session.close()
 
-        system_prompt = f"{base_prompt}\n\n" + """Ты ведешь естественный разговор. Можешь предлагать идеи, задавать вопросы, давать советы.
+        system_prompt = f"{base_prompt}\n\n" + """Ты ведешь естественный разговор с доступом к инструментам.
 
-Если пользователь хочет пообщаться - отвечай естественно и полезно."""
+⚠️ КРИТИЧНО ПРИ ПОДТВЕРЖДЕНИИ ВЫПОЛНЕНИЯ:
+- Если пользователь подтверждает выполнение задачи ("сделал", "готово", "проверил", "я уже...", "выполнил", и т.д.)
+- И если в контексте есть ТЕКУЩАЯ ЗАДАЧА В ФОКУСЕ
+- ОБЯЗАТЕЛЬНО вызови complete_task с task_id из контекста
+- НЕ спрашивай уточнений - СРАЗУ закрывай задачу
+
+Можешь использовать любые доступные инструменты когда это нужно."""
 
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Сообщение: {user_message}"}
         ]
 
-        response = await self.call_ai(messages)
-        content = response['choices'][0]['message']['content']
-
+        # ГИБРИДНЫЙ ПОДХОД: AI с tools - сам решает когда нужно вызвать инструменты
+        response = await self.call_ai(messages, use_tools=True)
+        
+        message = response['choices'][0]['message']
+        content = message.get('content', '')
+        tool_calls = message.get('tool_calls', [])
+        
+        # Если AI вызвал инструменты - создаем план с действиями
+        if tool_calls:
+            actions = []
+            for tool_call in tool_calls:
+                function = tool_call.get('function', {})
+                tool_name = function.get('name', '')
+                try:
+                    arguments = json.loads(function.get('arguments', '{}'))
+                except:
+                    arguments = {}
+                
+                actions.append({
+                    "tool": tool_name,
+                    "params": arguments,
+                    "reason": f"AI решил вызвать {tool_name}"
+                })
+                logger.info(f"[AGENT] AI called tool: {tool_name} with params {arguments}")
+            
+            return {
+                "intent": "ai_tool_call",
+                "actions": actions,
+                "response_strategy": "execute_action"
+            }
+        
+        # Если инструменты не вызваны - просто общение
         return {
             "intent": "general_chat",
             "actions": [],
@@ -525,6 +576,21 @@ class HybridAutonomousAgent:
                 except Exception as e:
                     logger.error(f"Error decrypting memory: {e}")
 
+            # Получаем информацию о текущей задаче если есть
+            current_task_info = None
+            if user and user.current_task_id:
+                try:
+                    task = session.query(Task).filter_by(id=user.current_task_id).first()
+                    if task:
+                        current_task_info = {
+                            'id': task.id,
+                            'title': task.title,
+                            'status': task.status
+                        }
+                        logger.info(f"[AGENT] Current task in focus: '{task.title}' (ID: {task.id})")
+                except Exception as e:
+                    logger.error(f"Error loading current task: {e}")
+
             # Получаем базовый промпт
             base_prompt = get_extended_system_prompt(
                 user_now=user_now,
@@ -539,7 +605,8 @@ class HybridAutonomousAgent:
                 message_type=None,
                 weather_info=weather_info,
                 news_info=news_info,
-                profile_data=profile_data
+                profile_data=profile_data,
+                current_task_info=current_task_info
             )
         finally:
             session.close()
