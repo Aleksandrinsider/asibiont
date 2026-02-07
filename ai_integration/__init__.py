@@ -3,7 +3,8 @@ AI Integration модуль - разделенный на компоненты.
 """
 
 from .tools import TOOLS
-from .chat import chat_with_ai, generate_reminder, generate_result_check, generate_proactive_message, generate_daily_report, generate_overdue_reminder
+from .autonomous_agent import chat_with_ai
+from .chat import generate_reminder, generate_result_check, generate_proactive_message, generate_daily_report, generate_overdue_reminder
 from .memory import update_user_memory, encrypt_data, decrypt_data
 from .handlers import (
     add_task, list_tasks, complete_task, reschedule_task,

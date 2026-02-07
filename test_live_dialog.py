@@ -13,6 +13,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_integration.chat import chat_with_ai
 from models import Session, User, UserProfile, Base, engine, Task
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from reminder_service import ReminderService
+import reminder_service as reminder_service_module
 
 # DeepSeek API для генерации сообщений пользователя
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
@@ -95,6 +97,11 @@ async def run_live_dialog_test():
     # Настройка
     user_id = 111222333
     Base.metadata.create_all(engine)
+    
+    # Инициализация reminder service
+    reminder_svc = ReminderService(bot=None)  # No bot for test
+    reminder_service_module.REMINDER_SERVICE = reminder_svc
+    
     session = Session()
     
     # Очистка предыдущего тестового пользователя
