@@ -346,6 +346,15 @@ try:
             else:
                 logger.info("Migration: parent_task_id column already exists")
 
+            # Migration for followup_reminder_sent column
+            if 'followup_reminder_sent' not in task_columns:
+                logger.info("Adding followup_reminder_sent column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN followup_reminder_sent BOOLEAN DEFAULT FALSE'))
+                session.commit()
+                logger.info("Migration: followup_reminder_sent column added successfully")
+            else:
+                logger.info("Migration: followup_reminder_sent column already exists")
+
         # Migration for posts table
         if not inspector.has_table('posts'):
             logger.info("Creating posts table")
