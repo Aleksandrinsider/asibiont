@@ -207,12 +207,23 @@ class HybridAutonomousAgent:
         
         message_lower = user_message.lower()
         
+        # ПРОФИЛЬ (проверяем ПЕРВЫМ чтобы "добавь в профиль" не попало в add_task)
+        if any(kw in message_lower for kw in ['обнов', 'измени', 'добавь']) and 'профиль' in message_lower:
+            if any(kw2 in message_lower for kw2 in ['город', 'интерес', 'цел', 'навык', 'компани', 'должность', 'москв', 'питер', 'из ']):
+                return await self._plan_with_required_tool(user_message, user_id, 'update_profile')
+        
+        if any(kw in message_lower for kw in ['покажи профиль', 'мой профиль', 'что в профиле']):
+            if 'обнов' not in message_lower and 'измен' not in message_lower:
+                return await self._plan_with_required_tool(user_message, user_id, 'show_profile')
+        
         # ЗАДАЧИ
         if any(kw in message_lower for kw in ['покажи задач', 'список', 'мои задач', 'что у меня']):
             if 'задач' in message_lower or 'дел' in message_lower:
+                print("[PLAN_STRATEGY] -> list_tasks")
                 return await self._plan_with_required_tool(user_message, user_id, 'list_tasks')
         
         if any(kw in message_lower for kw in ['готово', 'сделал', 'завершил', 'выполнил', 'закончил', 'проверил']):
+            print("[PLAN_STRATEGY] -> complete_task")
             return await self._plan_with_required_tool(user_message, user_id, 'complete_task')
         
         if any(kw in message_lower for kw in ['создай', 'добавь', 'напомни', 'поставь напоминание']):
@@ -220,46 +231,46 @@ class HybridAutonomousAgent:
                 time_indicators = ['завтра', 'сегодня', 'через', 'в ', ':', 'утра', 'вечера', 'дня', 'ночи', 'понедельник', 'вторник', 'среду', 'четверг', 'пятниц', 'суббот', 'воскресень']
                 has_time = any(indicator in message_lower for indicator in time_indicators)
                 if has_time:
+                    print("[PLAN_STRATEGY] -> add_task (has_time=True)")
                     return await self._plan_with_required_tool(user_message, user_id, 'add_task')
                 else:
+                    print("[PLAN_STRATEGY] -> general_chat (no time detected)")
                     return await self._plan_general_chat(user_message, user_id)
         
         if any(kw in message_lower for kw in ['удали', 'сотри', 'убери задач']):
+            print("[PLAN_STRATEGY] -> delete_task")
             return await self._plan_with_required_tool(user_message, user_id, 'delete_task')
         
         if any(kw in message_lower for kw in ['перенес', 'отлож', 'подвин']):
             if 'задач' in message_lower:
+                print("[PLAN_STRATEGY] -> reschedule_task")
                 return await self._plan_with_required_tool(user_message, user_id, 'reschedule_task')
         
         if any(kw in message_lower for kw in ['измени', 'переименуй', 'отредактируй']):
             if 'задач' in message_lower:
+                print("[PLAN_STRATEGY] -> edit_task")
                 return await self._plan_with_required_tool(user_message, user_id, 'edit_task')
         
         # АНАЛИЗ
         if any(kw in message_lower for kw in ['анализ', 'что делать', 'приоритет']):
             if 'задач' in message_lower or 'дел' in message_lower:
+                print("[PLAN_STRATEGY] -> analyze_tasks")
                 return await self._plan_with_required_tool(user_message, user_id, 'analyze_tasks')
         
         # ПАРТНЕРЫ И КОНТАКТЫ
         if any(kw in message_lower for kw in ['найди партнер', 'ищу единомышленник', 'кто занимается', 'с кем можно']):
+            print("[PLAN_STRATEGY] -> find_partners")
             return await self._plan_with_required_tool(user_message, user_id, 'find_partners')
         
         if any(kw in message_lower for kw in ['кто может помочь', 'кто поможет', 'найди кто']):
+            print("[PLAN_STRATEGY] -> find_relevant_contacts_for_task")
             return await self._plan_with_required_tool(user_message, user_id, 'find_relevant_contacts_for_task')
         
         # ДЕЛЕГИРОВАНИЕ
         if any(kw in message_lower for kw in ['делегируй', 'передай', 'поручи']):
             if 'задач' in message_lower:
+                print("[PLAN_STRATEGY] -> delegate_task")
                 return await self._plan_with_required_tool(user_message, user_id, 'delegate_task')
-        
-        # ПРОФИЛЬ
-        if any(kw in message_lower for kw in ['обнови профиль', 'измени профиль']):
-            if any(kw2 in message_lower for kw2 in ['город', 'интерес', 'цел', 'навык', 'компани', 'должность']):
-                return await self._plan_with_required_tool(user_message, user_id, 'update_profile')
-        
-        if any(kw in message_lower for kw in ['покажи профиль', 'мой профиль', 'что в профиле']):
-            if 'обнов' not in message_lower and 'измен' not in message_lower:
-                return await self._plan_with_required_tool(user_message, user_id, 'show_profile')
         
         # ДЕТАЛИ ЗАДАЧИ
         if any(kw in message_lower for kw in ['детали задач', 'покажи задач', 'подробности задач']):
@@ -342,7 +353,14 @@ class HybridAutonomousAgent:
             
             'delegate_task': f"""Делегировать: "{user_message}". Вызови delegate_task""",
             
-            'update_profile': f"""Обновить профиль: "{user_message}". Вызови update_profile с соответствующими параметрами""",
+            'update_profile': f"""Обновить профиль: "{user_message}"
+Извлеки параметры:
+- city: если упомянут город (Москва → 'Москва', Питер → 'Санкт-Петербург')
+- interests: список интересов (Python, AI, бег → 'Python, AI, бег')
+- skills: список навыков если упомянуты
+- company: название компании если упомянута
+- position: должность если упомянута
+Вызови update_profile со всеми извлечёнными параметрами (string или None)""",
             
             'show_profile': """Показать профиль. Вызови show_profile.""",
             
@@ -383,6 +401,7 @@ class HybridAutonomousAgent:
                         "params": arguments,
                         "reason": f"Required tool: {tool_name}"
                     })
+                    print(f"[HYBRID_TOOL] AI called {function.get('name')} with params: {arguments}")
                     logger.info(f"[HYBRID REQUIRED] AI called {function.get('name')} with params {arguments}")
                 
                 return {

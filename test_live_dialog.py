@@ -119,8 +119,8 @@ async def run_live_dialog_test():
     session.commit()
     
     print("="*80)
-    print("🎭 ТЕСТ ЖИВОГО ДИАЛОГА")
-    print("DeepSeek играет роль пользователя Алексея")
+    print("[TEST] ZHIVOY DIALOG")
+    print("DeepSeek igraet rol polzovatelya Alekseya")
     print("="*80)
     print()
     
@@ -132,22 +132,22 @@ async def run_live_dialog_test():
         turn += 1
         
         # Генерируем сообщение пользователя
-        print(f"\n{'─'*80}")
-        print(f"[ХОД {turn}/{max_turns}]")
-        print(f"{'─'*80}\n")
+        print(f"\n{'-'*80}")
+        print(f"[HOD {turn}/{max_turns}]")
+        print(f"{'-'*80}\n")
         
-        print("🤔 Генерирую сообщение пользователя...")
+        print("[*] Generiruyu soobschenie polzovatelya...")
         user_message = await generate_user_message(conversation_history, turn)
         
         if not user_message:
-            print("❌ Не удалось сгенерировать сообщение")
+            print("[X] Ne udalos sgenerirovat soobschenie")
             break
         
-        print(f"\n👤 ПОЛЬЗОВАТЕЛЬ (Алексей):")
+        print(f"\n[USER] POLZOVATEL (Aleksey):")
         print(f"   {user_message}")
         
         # Отправляем агенту
-        print(f"\n⏳ Агент обрабатывает...")
+        print(f"\n[...] Agent obrabatyvaet...")
         try:
             response = await chat_with_ai(user_message, user_id=user_id, db_session=session)
             agent_response = response.get('response', 'Нет ответа')
@@ -156,7 +156,7 @@ async def run_live_dialog_test():
             clean_response = agent_response.replace('✅', '').replace('🎯', '').replace('📋', '')
             clean_response = ' '.join(clean_response.split())  # Убираем лишние пробелы
             
-            print(f"\n🤖 АГЕНТ (ASI Biont):")
+            print(f"\n[BOT] AGENT (ASI Biont):")
             # Выводим ответ с переносом строк для читаемости
             lines = clean_response.split('\n')
             for line in lines[:5]:  # Первые 5 строк
@@ -170,7 +170,7 @@ async def run_live_dialog_test():
             conversation_history += f"\nПользователь: {user_message}\nАссистент: {clean_response[:200]}\n"
             
         except Exception as e:
-            print(f"\n❌ ОШИБКА: {e}")
+            print(f"\n[X] OSHIBKA: {e}")
             break
         
         # Небольшая пауза между ходами
@@ -178,22 +178,27 @@ async def run_live_dialog_test():
     
     # Финальный анализ
     print("\n" + "="*80)
-    print("📊 АНАЛИЗ ДИАЛОГА")
+    print("[REPORT] ANALIZ DIALOGA")
     print("="*80)
     
-    # Проверяем созданные задачи
-    tasks = session.query(Task).filter_by(user_id=user.id).all()
-    print(f"\n✅ Задачи созданы: {len(tasks)}")
-    for i, task in enumerate(tasks, 1):
-        status_icon = "✓" if task.status == 'completed' else "○"
-        print(f"   {status_icon} {i}. {task.title} ({task.status})")
-    
-    # Проверяем профиль
-    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-    print(f"\n👤 Профиль обновлен:")
-    print(f"   Город: {profile.city or '(не указан)'}")
-    print(f"   Интересы: {profile.interests or '(не указаны)'}")
-    print(f"   Навыки: {profile.skills or '(не указаны)'}")
+    # Создаем НОВУЮ сессию для чтения финальных данных
+    final_session = Session()
+    try:
+        # Проверяем созданные задачи
+        tasks = final_session.query(Task).filter_by(user_id=user.id).all()
+        print(f"\n[+] Zadachi sozdany: {len(tasks)}")
+        for i, task in enumerate(tasks, 1):
+            status_icon = "+" if task.status == 'completed' else "o"
+            print(f"   [{status_icon}] {i}. {task.title} ({task.status})")
+        
+        # Проверяем профиль
+        profile = final_session.query(UserProfile).filter_by(user_id=user.id).first()
+        print(f"\n[PROFILE] Profil obnovlen:")
+        print(f"   Gorod: {profile.city or '(ne ukazan)'}")
+        print(f"   Interesy: {profile.interests or '(ne ukazany)'}")
+        print(f"   Navyki: {profile.skills or '(ne ukazany)'}")
+    finally:
+        final_session.close()
     
     # Очистка
     try:
@@ -208,7 +213,7 @@ async def run_live_dialog_test():
         session.close()
     
     print("\n" + "="*80)
-    print("✅ ТЕСТ ЗАВЕРШЕН")
+    print("[+] TEST ZAVERSHEN")
     print("="*80)
 
 if __name__ == '__main__':
