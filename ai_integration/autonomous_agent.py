@@ -536,6 +536,11 @@ class HybridAutonomousAgent:
                 except Exception as e:
                     logger.error(f"Error loading current task: {e}")
 
+            # Генерируем проактивный контекст (профиль, интересы, партнеры, задачи)
+            from .prompts import generate_proactive_context
+            proactive_context = generate_proactive_context(user_id, session)
+            logger.info(f"[AGENT PLANNING] Generated proactive context length: {len(proactive_context)}")
+
             base_prompt = get_extended_system_prompt(
                 user_now=user_now,
                 current_time_str=current_time_str,
@@ -549,6 +554,7 @@ class HybridAutonomousAgent:
                 message_type=None,
                 weather_info=weather_info,
                 news_info=news_info,
+                proactive_context=proactive_context,
                 current_task_info=current_task_info
             )
         finally:
