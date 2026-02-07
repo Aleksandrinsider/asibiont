@@ -348,6 +348,19 @@ class HybridAutonomousAgent:
 - НЕ спрашивай "какую задачу?" - используй ТЕКУЩУЮ ЗАДАЧУ из контекста выше
 - ВЫЗОВИ complete_task БЕЗ ПАРАМЕТРОВ - система автоматически закроет current_task
 
+⚡ ПРОАКТИВНОЕ ПОВЕДЕНИЕ ПРИ ПРОСМОТРЕ ЗАДАЧ:
+
+КРИТИЧНО! ЕСЛИ пользователь просит показать задачи ("покажи задачи", "мои задачи", "список"):
+1. Вызови list_tasks ОДИН раз
+2. ПОДОЖДИ результат list_tasks  
+3. В СЛЕДУЮЩЕМ вызове AI (с результатами):
+   - Если в результатах есть просроченные задачи → ОБЯЗАТЕЛЬНО вызови reschedule_task(task_id=X, new_time="завтра в 10:00")
+   - Если есть задачи с ключевыми словами "пробежка", "встреча", "тренировка", "спорт" → вызови find_relevant_contacts_for_task(task_title="название")
+   - НЕ останавливайся на просмотре - ДЕЙСТВУЙ ПРОАКТИВНО
+
+⚠️ ВАЖНО: Система позволяет множественные вызовы tool calls - используй это!
+Не спрашивай разрешения - ДЕЙСТВУЙ СРАЗУ, а в ответе объясни что сделал.
+
 Можешь использовать любые доступные инструменты когда это нужно."""
 
         messages = [
@@ -397,6 +410,7 @@ class HybridAutonomousAgent:
     async def execute_actions(self, actions, user_id):
         """
         ШАГ 2: Выполнить запланированные действия через готовые handlers
+        ПРОАКТИВНОСТЬ: Автоматический анализ результатов list_tasks
         """
         # Импортируем handlers
         from . import handlers
@@ -455,6 +469,35 @@ class HybridAutonomousAgent:
                     "result": result,
                     "reason": reason
                 })
+                
+                # ⚡ ПРОАКТИВНЫЙ АНАЛИЗ after list_tasks
+                if tool_name == 'list_tasks' and result and isinstance(result, str):
+                    logger.info(f"[PROACTIVE] Analyzing list_tasks result for proactive actions")
+                    proactive_actions = []
+                    
+                    # Проверка на социальные активности (автоматически ищем партнеров)
+                    social_keywords = ['пробежка', 'встреча', 'тренировка', 'спорт', 'кофе']
+                    for keyword in social_keywords:
+                        if keyword.lower() in result.lower():
+                            logger.info(f"[PROACTIVE] Found social activity with keyword '{keyword}', searching partners")
+                            # Извлекаем название задачи с этим ключевым словом
+                            import re
+                            pattern = rf"'([^']*{keyword}[^']*?)'(?:\s+в\s+\d+:\d+|[\s\.])"
+                            match = re.search(pattern, result, re.IGNORECASE)
+                            if match:
+                                social_title = match.group(1)
+                                proactive_actions.append({
+                                    'tool': 'find_relevant_contacts_for_task',
+                                    'params': {'task_description': social_title},  # Исправлено: task_description вместо task_title
+                                    'reason': f'Проактивно ищу партнеров для "{social_title}"'
+                                })
+                                break  # Только один поиск партнеров за раз
+                    
+                    # Выполняем проактивные действия
+                    if proactive_actions:
+                        logger.info(f"[PROACTIVE] Executing {len(proactive_actions)} proactive actions")
+                        proactive_results = await self.execute_actions(proactive_actions, user_id)
+                        results.extend(proactive_results)
                 
             except Exception as e:
                 logger.error(f"[AGENT] Error executing {tool_name}: {e}")
@@ -601,25 +644,19 @@ class HybridAutonomousAgent:
 
 РЕЖИМ: ФОРМИРОВАНИЕ ОТВЕТА
 
-ЗАПРОС: {user_message}
+ЗАПРОС ПОЛЬЗОВАТЕЛЯ: {user_message}
 
-ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ:
+ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ И РЕЗУЛЬТАТЫ:
 {results_text}
 
-ЗАДАЧА: Сформируй естественный дружелюбный ответ.
+ЗАДАЧА: 
+1. Проанализируй результаты
+2. Сформируй естественный конкретный ответ с объяснением что сделано
+3. Если есть просроченные задачи - упомяни их и предложи помощь
+4. Если нашлись партнеры - расскажи о них
+5. Будь проактивным в предложениях, но не навязчивым
 
-ПРАВИЛА:
-- Говори естественно, от первого лица
-- Будь конкретным, когда это важно
-- Эмодзи используй, когда они добавляют эмоций
-- Форматирование выбирай под ситуацию - иногда списки, иногда повествование
-- Заканчивай так, чтобы продолжить разговор
-- Не показывай личные данные, если не запрошены
-- Не выдумывай информацию
-- Используй данные профиля для персонализации, когда уместно
-- Будь гибким в стиле общения
-
-Верни ТОЛЬКО текст ответа.
+Верни ТОЛЬКО текст ответа пользователю (БЕЗ вызовов функций).
 """
 
         messages = [
@@ -627,8 +664,8 @@ class HybridAutonomousAgent:
             {"role": "user", "content": user_message}
         ]
 
-        # КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: используем tools для автоматического вызова
-        response = await self.call_ai(messages, use_tools=True, temperature=0.7)
+        # Генерируем ответ БЕЗ инструментов (они уже выполнены)
+        response = await self.call_ai(messages, use_tools=False, temperature=0.7)
         
         message = response['choices'][0]['message']
         tool_calls = message.get('tool_calls', [])
