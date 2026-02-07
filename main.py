@@ -786,20 +786,37 @@ def get_context_from_db(user_id, limit=10):
         if cleared_at:
             query = query.filter(Interaction.created_at > cleared_at)
         
-        interactions = query.order_by(Interaction.created_at.desc()).limit(limit * 2).all()
+        interactions = query.order_by(Interaction.created_at.desc()).limit(limit * 3).all()
         interactions.reverse()  # Oldest first
         
-        # Convert to context format
+        # Convert to context format, handling reminders (standalone 'ai' messages)
         context = []
-        for i in range(0, len(interactions), 2):
-            if i + 1 < len(interactions):
-                user_msg = interactions[i]
-                ai_msg = interactions[i + 1]
-                if user_msg.message_type == 'user' and ai_msg.message_type == 'ai':
+        i = 0
+        while i < len(interactions):
+            msg = interactions[i]
+            
+            # If it's a user message, expect AI response next
+            if msg.message_type == 'user':
+                if i + 1 < len(interactions) and interactions[i + 1].message_type == 'ai':
                     context.append({
-                        'user': user_msg.content,
-                        'agent': ai_msg.content
+                        'user': msg.content,
+                        'agent': interactions[i + 1].content
                     })
+                    i += 2
+                else:
+                    # User message without AI response - skip
+                    i += 1
+            
+            # If it's a standalone AI message (reminder), add it as system context
+            elif msg.message_type == 'ai':
+                # Add reminder as a synthetic user→ai pair for context continuity
+                context.append({
+                    'user': '[Напоминание о задаче]',
+                    'agent': msg.content
+                })
+                i += 1
+            else:
+                i += 1
         
         return context[-limit:] if len(context) > limit else context
     finally:

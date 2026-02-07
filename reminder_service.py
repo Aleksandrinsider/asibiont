@@ -55,6 +55,46 @@ async def _send_reminder_job(task_id: int):
     else:
         logger.error("REMINDER_SERVICE not initialized; cannot send reminder")
 
+async def _send_followup_reminder_job(task_id: int):
+    """Повторное напоминание через 15 минут если задача не выполнена"""
+    db = Session()
+    try:
+        task = db.query(Task).filter_by(id=task_id).first()
+        if not task:
+            logger.warning(f"_send_followup_reminder_job: task {task_id} not found")
+            return
+        
+        # Проверяем статус задачи - отправляем только для невыполненных
+        if task.status in ['completed', 'deleted']:
+            logger.info(f"_send_followup_reminder_job: task {task_id} status {task.status}, skipping")
+            return
+            
+        # Проверяем, не было ли уже отправлено повторное напоминание
+        if task.followup_reminder_sent:
+            logger.info(f"_send_followup_reminder_job: followup already sent for task {task_id}")
+            return
+            
+        if not task.user:
+            logger.warning(f"_send_followup_reminder_job: user not found for task {task_id}")
+            return
+        if not hasattr(task.user, 'telegram_id') or task.user.telegram_id is None:
+            logger.warning(f"_send_followup_reminder_job: telegram_id is None for task {task_id}")
+            return
+        user_id = task.user.telegram_id
+        task_title = task.title or "Без названия"
+        
+        # Помечаем, что повторное напоминание отправлено
+        task.followup_reminder_sent = True
+        db.commit()
+        
+    finally:
+        db.close()
+
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.send_followup_reminder(user_id, task_title, task_id)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot send followup reminder")
+
 async def _send_result_check_job(task_id: int):
     db = Session()
     try:
@@ -232,6 +272,33 @@ class ReminderService:
             replace_existing=True
         )
         logger.info(f"Reminder scheduled for {reminder_time} (in {(reminder_time - datetime.now(pytz.UTC)).total_seconds() / 60:.1f} minutes)")
+        
+        # Планируем повторное напоминание через 15 минут
+        followup_time = reminder_time + timedelta(minutes=15)
+        self.schedule_followup_reminder(task_id, followup_time, user_id, task_title)
+    
+    def schedule_followup_reminder(self, task_id: int, followup_time: datetime, user_id: int, task_title: str):
+        """Планирует повторное напоминание через 15 минут после основного"""
+        logger = logging.getLogger(__name__)
+        
+        # Конвертируем naive datetime в aware с UTC
+        if followup_time.tzinfo is None:
+            followup_time = pytz.UTC.localize(followup_time)
+        
+        logger.info(f"Scheduling followup reminder for task {task_id}, time: {followup_time}")
+        
+        if not self.scheduler.running:
+            return
+        
+        trigger = DateTrigger(run_date=followup_time, timezone=pytz.UTC)
+        self.scheduler.add_job(
+            _send_followup_reminder_job,
+            trigger=trigger,
+            args=[task_id],
+            id=f"followup_{task_id}",
+            replace_existing=True
+        )
+        logger.info(f"Followup reminder scheduled for {followup_time}")
 
     def schedule_result_check(self, task_id: int, result_check_time: datetime, user_id: int, task_title: str):
         # Конвертируем naive datetime в aware с UTC
@@ -324,6 +391,45 @@ class ReminderService:
                 db.close()
         else:
             logger.warning(f"Task {task_id} NOT marked as result_check_sent due to delivery failure")
+
+    async def send_followup_reminder(self, user_id: int, task_title: str, task_id: int):
+        """Отправка повторного напоминания (эскалация)"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"=== FOLLOWUP REMINDER for task {task_id}, user {user_id} ===")
+        from subscription_service import check_subscription
+        
+        if not check_subscription(user_id):
+            logger.info(f"Subscription check failed for user {user_id}, skipping followup")
+            return
+        
+        try:
+            # Генерируем текст с эскалацией (более настойчивый тон)
+            reminder_text = await self.generate_reminder(user_id, task_title, task_id, escalation_level=2)
+            logger.info(f"Followup reminder text: {reminder_text[:100]}...")
+            
+            # Сохраняем в историю
+            db = Session()
+            try:
+                user = db.query(User).filter_by(telegram_id=user_id).first()
+                if user:
+                    task = db.query(Task).filter_by(id=task_id).first()
+                    if task:
+                        user.current_task_id = task_id
+                    interaction = Interaction(
+                        user_id=user.id,
+                        message_type="ai",
+                        content=reminder_text
+                    )
+                    db.add(interaction)
+                    db.commit()
+            finally:
+                db.close()
+            
+            if self.bot:
+                await self.bot.send_message(user_id, reminder_text)
+                logger.info(f"✅ Followup reminder sent to user {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to send followup reminder: {e}", exc_info=True)
 
     async def send_reminder(self, user_id: int, task_title: str, task_id: int):
         import traceback

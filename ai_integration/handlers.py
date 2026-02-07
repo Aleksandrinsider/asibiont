@@ -757,6 +757,12 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
                     logger.info(f"[COMPLETE_TASK] Cancelled reminder job for task {task.id}")
                 
+                # Отменяем повторное напоминание
+                followup_job_id = f"followup_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(followup_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(followup_job_id)
+                    logger.info(f"[COMPLETE_TASK] Cancelled followup reminder job for task {task.id}")
+                
                 # Отменяем проверку результата
                 result_check_job_id = f"result_check_{task.id}"
                 if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
@@ -928,6 +934,12 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
                 if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
                     REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
                     logger.info(f"[SKIP_TASK] Cancelled reminder job for task {task.id}")
+                
+                # Отменяем повторное напоминание
+                followup_job_id = f"followup_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(followup_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(followup_job_id)
+                    logger.info(f"[SKIP_TASK] Cancelled followup reminder job for task {task.id}")
                 
                 # Отменяем проверку результата
                 result_check_job_id = f"result_check_{task.id}"
@@ -1146,6 +1158,13 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
 
             # Convert to UTC for storage (local_dt already has timezone from parser)
             task.reminder_time = local_dt.astimezone(pytz.UTC)
+            
+            # КРИТИЧНО: Сбрасываем флаги отправки при переносе задачи
+            task.reminder_sent = False
+            task.followup_reminder_sent = False
+            task.result_check_sent = False
+            logger.info(f"[RESCHEDULE_TASK] Reset all reminder flags for task {task.id}")
+            
             session.commit()
             logger.info(f"[RESCHEDULE_TASK] ✅ Task {task.id} updated, new time (UTC): {task.reminder_time}, local: {local_dt}")
 
@@ -1159,13 +1178,19 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
                         REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
                         logger.info(f"[RESCHEDULE_TASK] Cancelled old reminder job for task {task.id}")
                     
+                    # Отменяем повторное напоминание
+                    followup_job_id = f"followup_{task.id}"
+                    if REMINDER_SERVICE.scheduler.get_job(followup_job_id):
+                        REMINDER_SERVICE.scheduler.remove_job(followup_job_id)
+                        logger.info(f"[RESCHEDULE_TASK] Cancelled old followup reminder job for task {task.id}")
+                    
                     # Отменяем проверку результата
                     result_check_job_id = f"result_check_{task.id}"
                     if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
                         REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
                         logger.info(f"[RESCHEDULE_TASK] Cancelled old result check job for task {task.id}")
                     
-                    # Создаем новое напоминание
+                    # Создаем новое напоминание (оно само создаст и followup)
                     REMINDER_SERVICE.schedule_reminder(
                         task_id=task.id,
                         reminder_time=task.reminder_time,

@@ -166,7 +166,7 @@ def generate_proactive_context(user_id, session):
         traceback.print_exc()
         return ""
 
-def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None):
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None):
     """Get optimized system prompt for AI agent"""
 
     # Subscription info
@@ -208,6 +208,24 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         if profile_parts:
             profile_context = "\nПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:\n" + "\n".join(profile_parts)
 
+    # Current task context - HIGH PRIORITY
+    current_task_section = ""
+    if current_task_info:
+        current_task_section = f"""
+
+{'='*60}
+🎯 ТЕКУЩАЯ ЗАДАЧА В ФОКУСЕ (ПРИОРИТЕТ!):
+Пользователь обсуждает задачу: "{current_task_info['title']}"
+ID задачи: {current_task_info['id']}
+Статус: {current_task_info['status']}
+
+⚠️ ВАЖНО:
+- Если пользователь говорит о выполнении/завершении - используй complete_task с ЭТИМ ID
+- Местоимения "её", "его", "это", "эту" - относятся к ЭТОЙ задаче
+- Для подтверждений ("сделал", "готово", "проверил") - СРАЗУ вызывай complete_task
+{'='*60}
+"""
+
     # Добавляем проактивный контекст если есть
     proactive_section = ""
     if proactive_context:
@@ -222,7 +240,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
 СЕЙЧАС: {current_time_str}, {current_date_str}
 НИКОГДА НЕ ГАЛЛЮЦИНИРУЙ ВРЕМЯ - ИСПОЛЬЗУЙ ТОЛЬКО УКАЗАННОЕ ВЫШЕ!
-Пользователь: {user_username}{tier_info}{weather_context}{news_context}{profile_context}
+Пользователь: {user_username}{tier_info}{weather_context}{news_context}{profile_context}{current_task_section}
 
 {news_instructions}{proactive_section}{memory_section}
 

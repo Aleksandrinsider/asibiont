@@ -59,6 +59,7 @@ class Task(Base):
     status = Column(String(50), default='pending', index=True)  # Индекс для фильтрации по статусу
     reminder_time = Column(DateTime, index=True)  # Индекс для поиска по времени напоминания
     reminder_sent = Column(Boolean, default=False)
+    followup_reminder_sent = Column(Boolean, default=False)  # Повторное напоминание через 15 минут
     result_check_sent = Column(Boolean, default=False)
     estimated_duration = Column(Integer)  # in minutes
     delegated_by = Column(Integer, ForeignKey('users.id'))  # User who delegated the task

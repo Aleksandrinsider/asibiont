@@ -114,6 +114,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 except Exception as e:
                     logger.error(f"Error decrypting user memory: {e}")
 
+            # Получаем информацию о текущей задаче если есть
+            current_task_info = None
+            if user.current_task_id:
+                try:
+                    task = session.query(Task).filter_by(id=user.current_task_id).first()
+                    if task:
+                        current_task_info = {
+                            'id': task.id,
+                            'title': task.title,
+                            'status': task.status
+                        }
+                        logger.info(f"[CONTEXT] Current task in focus: '{task.title}' (ID: {task.id})")
+                except Exception as e:
+                    logger.error(f"Error loading current task: {e}")
+
             # Получаем системный промпт с проактивным контекстом
             system_prompt = get_extended_system_prompt(
                 user_now=user_now,
@@ -128,7 +143,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 message_type=message_type,
                 weather_info=weather_info,
                 news_info=news_info,
-                proactive_context=proactive_context
+                proactive_context=proactive_context,
+                current_task_info=current_task_info
             )
 
             # Используем улучшенный гибридный автономный агент (трёхэтапный подход)
@@ -167,8 +183,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'tool_calls': []
         }
 
-async def generate_reminder(user_id, task_title, task_id=None):
-    """Генерирует текст напоминания о задаче с полным контекстом"""
+async def generate_reminder(user_id, task_title, task_id=None, escalation_level=1):
+    """Генерирует текст напоминания о задаче с полным контекстом
+    
+    Args:
+        user_id: ID пользователя
+        task_title: Название задачи
+        task_id: ID задачи (опционально)
+        escalation_level: Уровень эскалации (1=мягко, 2=настойчиво, 3=критично)
+    """
     try:
         # Получить полную информацию о задаче и пользователе
         db_session = Session()
@@ -259,6 +282,24 @@ async def generate_reminder(user_id, task_title, task_id=None):
         
         user_username = user.username if user and user.username else "пользователь"
         mentions_str = ""
+        
+        # Анализ времени суток для контекстного тона
+        hour = user_now.hour
+        time_context = ""
+        if 0 <= hour < 6:
+            time_context = "Ранее утро (0-6): тон очень мягкий, деликатный"
+        elif 6 <= hour < 9:
+            time_context = "Утро (6-9): бодрый, мотивирующий тон"
+        elif 9 <= hour < 12:
+            time_context = "До обеда (9-12): рабочий, продуктивный тон"
+        elif 12 <= hour < 14:
+            time_context = "Обед (12-14): легкий, ненавязчивый тон"
+        elif 14 <= hour < 18:
+            time_context = "После обеда (14-18): активный, деловой тон"
+        elif 18 <= hour < 22:
+            time_context = "Вечер (18-22): умеренный, спокойный тон"
+        else:
+            time_context = "Позднее время (22-0): очень мягкий, расслабленный тон"
 
         base_prompt = get_extended_system_prompt(
             user_now,
@@ -274,16 +315,71 @@ async def generate_reminder(user_id, task_title, task_id=None):
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        user_prompt = f"""Сгенерируй персонализированное напоминание о задаче: '{task_title}'.
+        # Настройка тона в зависимости от уровня эскалации
+        escalation_prompts = {
+            1: """Сгенерируй ДРУЖЕЛЮБНОЕ и МЯГКОЕ напоминание о задаче: '{task_title}'.
+
+ВРЕМЯ СУТОК: {time_context}
+
+ТОН: Легкий, не навязчивый, поддерживающий (адаптируй под время суток)
+СТИЛЬ: Как напоминание от друга, мотивирующее
 
 ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (1-2 абзаца максимум).
-- Начни с приветствия и напоминания о задаче
+- Начни с дружеского приветствия с учётом времени суток
+- Напомни о задаче деликатно
 - Добавь мотивацию и практические советы
-- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ВОПРОСОМ О СТАТУСЕ ЗАДАЧИ: "Задача выполнена?" или "Как продвигается выполнение?" или подобным
+- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ВОПРОСОМ: "Задача выполнена?" или "Как продвигается?"
 - НЕ пиши промежуточные мысли или "сейчас посмотрю задачи"
 
-КОНТЕКСТ ЗАДАЧИ:{task_context if task_context else 'Нет дополнительного контекста'}
-КОНТЕКСТ ПРОФИЛЯ:{profile_context if profile_context else 'Нет информации о профиле'}"""
+КОНТЕКСТ ЗАДАЧИ:{context_tasks}
+КОНТЕКСТ ПРОФИЛЯ:{context_profile}""",
+            
+            2: """Сгенерируй НАСТОЙЧИВОЕ повторное напоминание о задаче: '{task_title}'.
+
+⚠️ ЭТО ПОВТОРНОЕ НАПОМИНАНИЕ - прошло 15 минут с первого
+
+ВРЕМЯ СУТОК: {time_context}
+
+ТОН: Более настойчивый, но всё ещё дружелюбный и мотивирующий (адаптируй под время суток)
+СТИЛЬ: Акцент на важности задачи и последствиях откладывания
+
+ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (2-3 абзаца).
+- УКАЖИ что это повторное напоминание
+- Подчеркни важность задачи
+- Спроси что мешает начать или предложи разбить на части
+- Дай конкретный совет как приступить
+- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ВОПРОСОМ О СТАТУСЕ
+
+КОНТЕКСТ ЗАДАЧИ:{context_tasks}
+КОНТЕКСТ ПРОФИЛЯ:{context_profile}""",
+            
+            3: """Сгенерируй КРИТИЧНОЕ напоминание о задаче: '{task_title}'.
+
+🚨 КРИТИЧЕСКОЕ НАПОМИНАНИЕ - задача требует срочного внимания
+
+ВРЕМЯ СУТОК: {time_context}
+
+ТОН: Срочный, серьёзный, но конструктивный (несмотря на время суток)
+СТИЛЬ: Акцент на последствиях и необходимости действовать сейчас
+
+ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (2-3 абзаца).
+- ЯВНО укажи критичность ситуации
+- Объясни возможные последствия откладывания
+- Предложи экстренный план действий (первый минимальный шаг)
+- Спроси нужна ли помощь/делегирование/перенос
+- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ТРЕБОВАНИЕМ ОТВЕТА
+
+КОНТЕКСТ ЗАДАЧИ:{context_tasks}
+КОНТЕКСТ ПРОФИЛЯ:{context_profile}"""
+        }
+        
+        prompt_template = escalation_prompts.get(escalation_level, escalation_prompts[1])
+        user_prompt = prompt_template.format(
+            task_title=task_title,
+            time_context=time_context,
+            context_tasks=task_context if task_context else 'Нет дополнительного контекста',
+            context_profile=profile_context if profile_context else 'Нет информации о профиле'
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
