@@ -1302,54 +1302,84 @@
             
             closeTimeModal();
             
-            // Отправляем сообщение в чат с введенным временем
-            const message = `мое местное время: ${timeValue}`;
+            // Парсим введенное время
+            const timeMatch = timeValue.match(/(\d{1,2}):(\d{2})/);
+            if (!timeMatch) {
+                showNotification('Неверный формат времени', 'error');
+                return;
+            }
             
-            // Add user message
-            addMessage(message, 'user');
-            lastMessageCount += 1;
-            showTypingIndicator();
+            const userHour = parseInt(timeMatch[1]);
+            const userMinute = parseInt(timeMatch[2]);
+            
+            // Получаем текущее UTC время
+            const now = new Date();
+            const utcHour = now.getUTCHours();
+            
+            // Вычисляем разницу
+            let hourDiff = userHour - utcHour;
+            
+            // Обрабатываем переход через сутки
+            if (hourDiff > 12) hourDiff -= 24;
+            else if (hourDiff < -12) hourDiff += 24;
+            
+            // Карта часовых поясов
+            const timezoneMap = {
+                '-12': 'Pacific/Kwajalein',
+                '-11': 'Pacific/Midway',
+                '-10': 'Pacific/Honolulu',
+                '-9': 'America/Anchorage',
+                '-8': 'America/Los_Angeles',
+                '-7': 'America/Denver',
+                '-6': 'America/Chicago',
+                '-5': 'America/New_York',
+                '-4': 'America/Halifax',
+                '-3': 'America/Sao_Paulo',
+                '-2': 'Atlantic/South_Georgia',
+                '-1': 'Atlantic/Azores',
+                '0': 'Europe/London',
+                '1': 'Europe/Paris',
+                '2': 'Europe/Kiev',
+                '3': 'Europe/Moscow',
+                '4': 'Asia/Dubai',
+                '5': 'Asia/Yekaterinburg',
+                '6': 'Asia/Dhaka',
+                '7': 'Asia/Bangkok',
+                '8': 'Asia/Shanghai',
+                '9': 'Asia/Tokyo',
+                '10': 'Australia/Sydney',
+                '11': 'Pacific/Noumea',
+                '12': 'Pacific/Auckland'
+            };
+            
+            const newTimezone = timezoneMap[hourDiff.toString()] || 'UTC';
             
             try {
-                const formData = new FormData();
-                formData.append('message', message);
-                
-                const response = await fetch('/chat', {
+                // Обновляем timezone напрямую
+                const response = await fetch('/update_timezone', {
                     method: 'POST',
-                    body: formData,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ timezone: newTimezone }),
                     credentials: 'include'
                 });
-                hideTypingIndicator();
+                
                 if (!await checkAuth(response)) return;
-                const data = await response.json();
+                
                 if (response.ok) {
-                    addMessage(data.response, 'ai');
-                    // Обновляем профиль, время и задачи сразу после ответа AI
-                    setTimeout(async () => {
-                        await updateProfile();
-                        updateHeaderTime();
-                        await updateTasks();
-                    }, 500);
-                    // Синхронизировать счетчик через API
-                    setTimeout(async () => {
-                        try {
-                            const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
-                            if (syncResponse.ok) {
-                                const syncData = await syncResponse.json();
-                                lastMessageCount = syncData.interactions ? syncData.interactions.length : lastMessageCount;
-                            }
-                        } catch (e) {
-                            lastMessageCount += 2;
-                        }
-                    }, 300);
+                    showNotification('Часовой пояс обновлен', 'success');
+                    // Обновляем глобальную переменную
+                    window.USER_TIMEZONE = newTimezone;
+                    // Обновляем время и задачи
+                    updateHeaderTime();
+                    await updateTasks();
                 } else {
-                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
-                    lastMessageCount += 1;
+                    showNotification('Ошибка при обновлении часового пояса', 'error');
                 }
             } catch (error) {
-                hideTypingIndicator();
-                addMessage('Ошибка: ' + error.message, 'ai');
-                lastMessageCount += 1;
+                console.error('Error updating timezone:', error);
+                showNotification('Ошибка: ' + error.message, 'error');
             }
         }
 
