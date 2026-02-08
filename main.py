@@ -1662,7 +1662,7 @@ async def dashboard_handler(request):
         # Try to update avatar from Telegram API if bot is available
         if 'bot' in request.app and user:
             try:
-                updated_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+                updated_avatar_url = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
                 if updated_avatar_url and updated_avatar_url != user.photo_url:
                     user.photo_url = updated_avatar_url
                     session_db.commit()
@@ -2982,7 +2982,7 @@ async def api_partners_handler(request):
             photo_url = delegator.photo_url if delegator and delegator.photo_url else None
             if delegator and delegator.telegram_id and 'bot' in request.app:
                 try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id)
+                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id, force_refresh=True)
                     if updated_avatar and updated_avatar != delegator.photo_url:
                         delegator.photo_url = updated_avatar
                         session_db.commit()
@@ -3111,7 +3111,7 @@ async def api_partners_handler(request):
             photo_url = delegatee.photo_url if delegatee and delegatee.photo_url else None
             if delegatee and delegatee.telegram_id and 'bot' in request.app:
                 try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id)
+                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id, force_refresh=True)
                     if updated_avatar and updated_avatar != delegatee.photo_url:
                         delegatee.photo_url = updated_avatar
                         session_db.commit()
@@ -3254,7 +3254,7 @@ async def api_partners_handler(request):
                             photo_url = favorite_user.photo_url if favorite_user.photo_url else None
                             if favorite_user.telegram_id and 'bot' in request.app:
                                 try:
-                                    updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id)
+                                    updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id, force_refresh=True)
                                     if updated_avatar and updated_avatar != favorite_user.photo_url:
                                         favorite_user.photo_url = updated_avatar
                                         session_db.commit()
@@ -3456,7 +3456,7 @@ async def api_elite_partners_handler(request):
                 photo_url = premium_user.photo_url if premium_user.photo_url else None
                 if premium_user.telegram_id and 'bot' in request.app:
                     try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], premium_user.telegram_id)
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], premium_user.telegram_id, force_refresh=True)
                         if updated_avatar and updated_avatar != premium_user.photo_url:
                             premium_user.photo_url = updated_avatar
                             session_db.commit()
@@ -3583,7 +3583,7 @@ async def api_elite_partners_handler(request):
                                 photo_url = delegator.photo_url if delegator.photo_url else None
                                 if delegator.telegram_id and 'bot' in request.app:
                                     try:
-                                        updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id)
+                                        updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id, force_refresh=True)
                                         if updated_avatar and updated_avatar != delegator.photo_url:
                                             delegator.photo_url = updated_avatar
                                             session_db.commit()
@@ -3657,7 +3657,7 @@ async def api_elite_partners_handler(request):
                             photo_url = delegatee.photo_url if delegatee.photo_url else None
                             if delegatee.telegram_id and 'bot' in request.app:
                                 try:
-                                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id)
+                                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id, force_refresh=True)
                                     if updated_avatar and updated_avatar != delegatee.photo_url:
                                         delegatee.photo_url = updated_avatar
                                         session_db.commit()
@@ -3813,7 +3813,7 @@ async def api_contact_profile_handler(request):
             # Update avatar from Telegram if available
             if contact_user.telegram_id and 'bot' in request.app:
                 try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], contact_user.telegram_id)
+                    updated_avatar = await get_user_avatar_url(request.app['bot'], contact_user.telegram_id, force_refresh=True)
                     if updated_avatar and updated_avatar != contact_user.photo_url:
                         contact_user.photo_url = updated_avatar
                         session_db.commit()
@@ -4668,7 +4668,7 @@ async def get_feed_handler(request):
                 photo_url = u.photo_url
                 if u.telegram_id and 'bot' in request.app:
                     try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id)
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id, force_refresh=True)
                         if updated_avatar and updated_avatar != u.photo_url:
                             u.photo_url = updated_avatar
                             session_db.commit()
@@ -4973,7 +4973,7 @@ async def get_comments_handler(request):
             for u in users_data:
                 if u.telegram_id and 'bot' in request.app:
                     try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id)
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id, force_refresh=True)
                         if updated_avatar and updated_avatar != u.photo_url:
                             u.photo_url = updated_avatar
                             session_db.commit()
@@ -5155,7 +5155,7 @@ async def api_avatar_handler(request):
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
             return web.Response(status=404, text='Avatar service unavailable')
 
-        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id)
+        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
 
         if avatar_url:
             # Redirect to the avatar URL
@@ -5603,7 +5603,7 @@ async def api_search_contacts_handler(request):
                 photo_url = user.photo_url
                 if user.telegram_id and 'bot' in request.app:
                     try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], user.telegram_id)
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], user.telegram_id, force_refresh=True)
                         if updated_avatar and updated_avatar != user.photo_url:
                             user.photo_url = updated_avatar
                             session_db.commit()
