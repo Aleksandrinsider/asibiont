@@ -5177,3 +5177,138 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
     finally:
         if close_session:
             session.close()
+
+
+# ============================================================================
+# MARKETING & GROWTH AUTOMATION
+# ============================================================================
+
+async def generate_marketing_content(product_name, target_audience, platform, goal="привлечение", user_id=None, session=None):
+    """
+    AI генерация маркетингового контента для привлечения клиентов
+    """
+    from .marketing_agent import generate_marketing_content as gen_content
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        result = await gen_content(
+            product_name=product_name,
+            target_audience=target_audience,
+            platform=platform,
+            goal=goal,
+            user_id=user_id,
+            session=session
+        )
+        
+        return result.get('message', 'Контент создан')
+        
+    except Exception as e:
+        logger.error(f"[MARKETING] Error in handler: {e}", exc_info=True)
+        return f"Ошибка генерации контента: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def create_content_calendar(goal, niche, duration_days=7, user_id=None, session=None):
+    """
+    AI создание контент-календаря на N дней
+    """
+    from .marketing_agent import create_content_calendar as create_calendar
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        result = await create_calendar(
+            goal=goal,
+            duration_days=duration_days,
+            niche=niche,
+            user_id=user_id,
+            session=session
+        )
+        
+        return result.get('message', 'Календарь создан')
+        
+    except Exception as e:
+        logger.error(f"[CALENDAR] Error in handler: {e}", exc_info=True)
+        return f"Ошибка создания календаря: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def suggest_growth_hacks(niche, current_users=0, goal_users=100, user_id=None, session=None):
+    """
+    AI генерация growth hacks для привлечения пользователей
+    """
+    from .marketing_agent import suggest_growth_hacks as gen_hacks
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        result = await gen_hacks(
+            niche=niche,
+            current_users=current_users,
+            goal_users=goal_users,
+            user_id=user_id,
+            session=session
+        )
+        
+        return result.get('message', 'Стратегии созданы')
+        
+    except Exception as e:
+        logger.error(f"[GROWTH] Error in handler: {e}", exc_info=True)
+        return f"Ошибка генерации стратегий: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def research_topic(query: str, depth: str, user_id: int, session):
+    """
+    🔍 ВЕБ-ПОИСК И АНАЛИЗ темы через Serper API + DeepSeek AI
+    
+    Этапы:
+    1. Веб-поиск через Serper (5-15 источников)
+    2. AI-анализ найденной информации
+    3. Создание задач для топ-3 рекомендаций
+    
+    Args:
+        query: Тема для исследования
+        depth: quick/balanced/deep (5/10/15 источников)
+        user_id: ID пользователя
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        logger.info(f"[RESEARCH] Starting for user {user_id}: query='{query}', depth={depth}")
+        
+        result = await marketing_agent.research_topic(
+            query=query,
+            depth=depth,
+            user_id=user_id,
+            session=session
+        )
+        
+        return result.get('message', 'Исследование завершено')
+        
+    except Exception as e:
+        logger.error(f"[RESEARCH] Error in handler: {e}", exc_info=True)
+        return f"Ошибка исследования: {str(e)}"
+    finally:
+        if close_session:
+            session.close()

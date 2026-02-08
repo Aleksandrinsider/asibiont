@@ -37,6 +37,11 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 if not DEEPSEEK_API_KEY:
     raise ValueError("DEEPSEEK_API_KEY is required")
 
+# Web Search API (Serper)
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+if not SERPER_API_KEY and not LOCAL:
+    logger.warning("SERPER_API_KEY not set - web search features will be limited")
+
 # AI Optimization Settings
 AI_CACHE_ENABLED = os.getenv("AI_CACHE_ENABLED", "False").lower() in ("true", "1", "yes")
 AI_MAX_TOKENS_RESPONSE = int(os.getenv("AI_MAX_TOKENS_RESPONSE", "1000"))

@@ -295,6 +295,7 @@ python auto_post_service.py
 |------------|----------|-------------|
 | `TELEGRAM_TOKEN` | Токен Telegram Bot API | Да (прод) |
 | `DEEPSEEK_API_KEY` | Ключ API DeepSeek | Да |
+| `SERPER_API_KEY` | Ключ API Serper (веб-поиск для маркетинга) | Нет (для research_topic) |
 | `DATABASE_URL` | Строка подключения PostgreSQL | Да (прод) |
 | `SESSION_SECRET` | Ключ шифрования сессий | Да |
 | `YOOKASSA_SHOP_ID` | ID магазина YooKassa | Да (прод) |
