@@ -89,7 +89,7 @@ async def test_tier_awareness():
             "user_id": standard_user_id,
             "tier": "STANDARD",
             "message": "много задач, хочу делегировать",
-            "expected": "должен упомянуть что делегирование на PREMIUM"
+            "expected": "должен предложить delegate_task (доступно на STANDARD)"
         },
         {
             "user_id": premium_user_id,
@@ -150,9 +150,9 @@ async def test_tier_awareness():
                 checks.append(('Предложение маркетинга', has_marketing))
             
             if scenario['tier'] == 'STANDARD' and 'делегировать' in scenario['message']:
-                # STANDARD не должен получить делегирование, но упоминание Premium
-                has_premium_mention = 'premium' in response_text or 'тариф' in response_text
-                checks.append(('Упоминание Premium для делегирования', has_premium_mention))
+                # STANDARD должен получить предложение делегирования (доступно с STANDARD)
+                has_delegate = 'делегир' in response_text or 'передать' in response_text or 'поручить' in response_text
+                checks.append(('Предложение делегирования', has_delegate))
             
             if scenario['tier'] == 'PREMIUM' and 'автоматизировать' in scenario['message']:
                 # PREMIUM должен получить предложение автономного маркетинга
