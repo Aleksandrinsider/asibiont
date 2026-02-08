@@ -641,10 +641,21 @@ async def publish_to_telegram(content, user_id=None, session=None):
         }
     
     if not user.telegram_channel:
+        from config import TELEGRAM_BOT_USERNAME
+        bot_username = TELEGRAM_BOT_USERNAME.replace('@', '')
         return {
             "success": False,
             "error": "Telegram channel not configured",
-            "message": "❌ Telegram канал не настроен в профиле. Укажите ID или @username канала в настройках."
+            "message": f"""❌ Telegram канал не настроен.
+
+📋 Как настроить:
+1. Откройте веб-приложение (Dashboard)
+2. Нажмите на свой аватар → Профиль
+3. Укажите ID или @username вашего канала
+4. Добавьте бота @{bot_username} в канал как администратора
+5. Сохраните изменения
+
+После этого можно публиковать посты командой 'опубликуй в канал'"""
         }
     
     # Формируем текст поста
@@ -708,10 +719,32 @@ async def publish_to_telegram(content, user_id=None, session=None):
                     logger.error(f"[PUBLISH] Telegram API error: {error_desc}")
                     
                     # Подсказки для частых ошибок
+                    from config import TELEGRAM_BOT_USERNAME
+                    bot_username = TELEGRAM_BOT_USERNAME.replace('@', '')
+                    
                     if 'bot is not a member' in error_desc or 'chat not found' in error_desc:
-                        error_desc = "Бот не является админом канала. Добавьте бота в канал и сделайте его администратором."
+                        error_desc = f"""Бот не добавлен в канал или не является администратором.
+
+📋 Инструкция:
+1. Откройте свой Telegram канал ({channel})
+2. Нажмите на название канала → Администраторы
+3. Нажмите 'Добавить администратора'
+4. Найдите @{bot_username}
+5. Дайте права: 'Публикация сообщений'
+6. Сохраните
+
+После этого попробуйте снова: 'опубликуй в канал'"""
                     elif 'chat_id' in error_desc:
-                        error_desc = "Неверный ID канала. Используйте формат @channel или -1001234567890"
+                        error_desc = f"""Неверный формат ID канала.
+
+✅ Правильные форматы:
+- Публичный канал: @your_channel
+- Приватный канал: -1001234567890
+
+💡 Как узнать ID приватного канала:
+1. Перешлите любое сообщение из канала боту @userinfobot
+2. Он покажет ID в формате -100...
+3. Укажите этот ID в профиле Dashboard"""
                     
                     return {
                         "success": False,
