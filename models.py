@@ -301,6 +301,40 @@ class PostView(Base):
     )
 
 
+class ActivityAlert(Base):
+    """Premium: Alerts for activities of other users"""
+    __tablename__ = 'activity_alerts'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    activity_type = Column(String(100), nullable=False)  # 'пробежка', 'митап по AI', etc.
+    keywords = Column(Text, nullable=False)  # JSON array of keywords
+    location = Column(String(100))  # City filter
+    frequency = Column(String(20), default='any')  # 'any', 'regular', 'one_time'
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    last_triggered_at = Column(DateTime)  # Last time alert was triggered
+
+    user = relationship("User", backref="activity_alerts")
+
+
+class ContactAlert(Base):
+    """Premium: Alerts for new users with specific skills/interests"""
+    __tablename__ = 'contact_alerts'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    skill = Column(String(100))  # Skill to search for
+    interest = Column(String(100))  # Interest to search for
+    city = Column(String(100))  # City filter
+    position = Column(String(100))  # Position/role filter
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    last_triggered_at = Column(DateTime)  # Last time alert was triggered
+
+    user = relationship("User", backref="contact_alerts")
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

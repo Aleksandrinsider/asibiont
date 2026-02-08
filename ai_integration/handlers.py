@@ -4992,3 +4992,188 @@ async def get_local_events(user_id, categories=None, days_ahead=7, price_range='
     finally:
         if close_session and session:
             session.close()
+
+
+def set_activity_alert(activity_type=None, keywords=None, location=None, frequency='any', enabled=True, user_id=None, session=None):
+    """🌟 PREMIUM: Set up automatic activity alerts from other users
+    
+    Monitors tasks created by other users and automatically adds information to your next conversation.
+    When someone creates a matching task (e.g., running, meetup), AI will naturally mention it in dialogue.
+    
+    Args:
+        activity_type: Type of activity to monitor (e.g., 'пробежка', 'митап по AI')
+        keywords: List of keywords to search for in tasks
+        location: Optional city filter
+        frequency: 'any', 'regular', or 'one_time'
+        enabled: Enable (True) or disable (False) the alert
+        user_id: Telegram ID of the user
+        session: Database session
+    
+    Returns:
+        Success message
+    """
+    from models import Session, User, ActivityAlert, SubscriptionTier
+    import json
+    
+    logger.info(f"[SET_ACTIVITY_ALERT] user_id={user_id}, type={activity_type}, keywords={keywords}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        # Check premium status
+        if user.subscription_tier == SubscriptionTier.LIGHT:
+            return "⭐ Автоматические уведомления об активностях доступны только Premium пользователям. Оформи подписку Premium, чтобы автоматически узнавать когда кто-то планирует интересные активности!"
+        
+        if not activity_type or not keywords:
+            return "Укажи тип активности и ключевые слова для поиска. Например: 'скажи когда кто-то пойдет на пробежку'"
+        
+        # Convert keywords to JSON
+        if isinstance(keywords, str):
+            keywords_list = [k.strip() for k in keywords.split(',')]
+        else:
+            keywords_list = keywords
+        keywords_json = json.dumps(keywords_list, ensure_ascii=False)
+        
+        # Check if alert already exists
+        existing_alert = session.query(ActivityAlert).filter_by(
+            user_id=user.id,
+            activity_type=activity_type
+        ).first()
+        
+        if existing_alert:
+            # Update existing
+            existing_alert.keywords = keywords_json
+            existing_alert.location = location
+            existing_alert.frequency = frequency
+            existing_alert.enabled = enabled
+            session.commit()
+            
+            if enabled:
+                return f"✅ Обновил уведомление об активности '{activity_type}'. Теперь буду автоматически сообщать когда кто-то планирует такую активность!"
+            else:
+                return f"Уведомление об активности '{activity_type}' отключено."
+        else:
+            # Create new
+            alert = ActivityAlert(
+                user_id=user.id,
+                activity_type=activity_type,
+                keywords=keywords_json,
+                location=location,
+                frequency=frequency,
+                enabled=enabled
+            )
+            session.add(alert)
+            session.commit()
+            
+            keywords_str = ', '.join(keywords_list)
+            location_str = f" в {location}" if location else ""
+            return f"✅ Настроил автоматическое уведомление! Буду следить за активностями '{activity_type}'{location_str}. Когда кто-то создаст задачу по ключевым словам ({keywords_str}), я естественно упомяну это в нашем следующем диалоге. Никаких навязчивых уведомлений!"
+        
+    except Exception as e:
+        logger.error(f"[SET_ACTIVITY_ALERT] Error: {e}", exc_info=True)
+        return f"Ошибка настройки уведомления: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def set_contact_alert(skill=None, interest=None, city=None, position=None, enabled=True, user_id=None, session=None):
+    """🌟 PREMIUM: Set up automatic alerts for new users with specific skills/interests
+    
+    Monitors new user registrations and profile updates, automatically adds information to your next conversation.
+    When someone with matching skills/interests joins, AI will naturally mention them in dialogue.
+    
+    Args:
+        skill: Skill to search for (e.g., 'продажи', 'Python')
+        interest: Interest to search for (e.g., 'стартапы', 'ИИ')
+        city: Optional city filter
+        position: Optional position/role filter
+        enabled: Enable (True) or disable (False) the alert
+        user_id: Telegram ID of the user
+        session: Database session
+    
+    Returns:
+        Success message
+    """
+    from models import Session, User, ContactAlert, SubscriptionTier
+    
+    logger.info(f"[SET_CONTACT_ALERT] user_id={user_id}, skill={skill}, interest={interest}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        # Check premium status
+        if user.subscription_tier == SubscriptionTier.LIGHT:
+            return "⭐ Автоматические уведомления о новых пользователях доступны только Premium пользователям. Оформи подписку Premium, чтобы автоматически узнавать о появлении нужных специалистов!"
+        
+        if not skill and not interest:
+            return "Укажи навык или интерес для поиска. Например: 'скажи когда появится специалист по продажам' или 'предупреди о программистах на Python'"
+        
+        # Check if alert already exists
+        existing_alert = session.query(ContactAlert).filter_by(
+            user_id=user.id,
+            skill=skill,
+            interest=interest
+        ).first()
+        
+        if existing_alert:
+            # Update existing
+            existing_alert.city = city
+            existing_alert.position = position
+            existing_alert.enabled = enabled
+            session.commit()
+            
+            if enabled:
+                filter_str = skill or interest
+                return f"✅ Обновил уведомление о '{filter_str}'. Буду автоматически сообщать когда зарегистрируются подходящие специалисты!"
+            else:
+                filter_str = skill or interest
+                return f"Уведомление о '{filter_str}' отключено."
+        else:
+            # Create new
+            alert = ContactAlert(
+                user_id=user.id,
+                skill=skill,
+                interest=interest,
+                city=city,
+                position=position,
+                enabled=enabled
+            )
+            session.add(alert)
+            session.commit()
+            
+            filter_parts = []
+            if skill:
+                filter_parts.append(f"навык '{skill}'")
+            if interest:
+                filter_parts.append(f"интерес '{interest}'")
+            if city:
+                filter_parts.append(f"город {city}")
+            if position:
+                filter_parts.append(f"должность '{position}'")
+            
+            filter_str = ', '.join(filter_parts)
+            return f"✅ Настроил автоматическое уведомление! Буду следить за новыми пользователями ({filter_str}). Когда кто-то подходящий зарегистрируется или обновит профиль, я естественно упомяну это в нашем следующем диалоге. Никаких навязчивых уведомлений!"
+        
+    except Exception as e:
+        logger.error(f"[SET_CONTACT_ALERT] Error: {e}", exc_info=True)
+        return f"Ошибка настройки уведомления: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
