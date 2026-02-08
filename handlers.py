@@ -3,6 +3,7 @@ import asyncio
 import os
 import tempfile
 import json
+import traceback
 from datetime import datetime, timedelta, timezone
 from aiogram import Router
 from aiogram.filters import Command
@@ -167,19 +168,27 @@ async def start_handler(message: Message):
 @router.message(Command("subscription"))
 async def subscription_handler(message: Message):
     """Handle subscription command - show tariffs and payment links"""
+    logger.info(f"TELEGRAM: subscription_handler called by user {message.from_user.id} ({message.from_user.username})")
+    
     user_id = message.from_user.id
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
+        logger.info(f"TELEGRAM: Creating new user for {user_id}")
         user = User(telegram_id=user_id, username=message.from_user.username)
         session.add(user)
         session.commit()
+    else:
+        logger.info(f"TELEGRAM: Found existing user {user_id}")
     
     # Check for promo code in message
     promo_code = None
     text_parts = message.text.split()
     if len(text_parts) > 1:
         promo_code = text_parts[1].upper()
+        logger.info(f"TELEGRAM: Promo code detected: {promo_code}")
+    else:
+        logger.info(f"TELEGRAM: No promo code in message")
     
     # Handle promo code activation if 100% discount
     if promo_code:
@@ -266,14 +275,26 @@ PREMIUM — 27000₽/месяц
 
 Выберите тариф для оплаты через ЮКАССА:"""
     
+    logger.info(f"TELEGRAM: Sending tariffs description to user {user_id}")
     await message.bot.send_message(message.chat.id, tiers_description)
+    logger.info(f"TELEGRAM: Tariffs description sent, starting payment creation process...")
     
     # Создать платежи для всех тарифов
+    logger.info(f"TELEGRAM: Starting payment creation for user {user_id}, promo_code: {promo_code}")
     try:
+        logger.info("TELEGRAM: Creating LIGHT payment...")
         light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', promo_code)
-        standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', promo_code)
-        premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', promo_code)
+        logger.info(f"TELEGRAM: LIGHT payment created: {light_url[:60]}...")
         
+        logger.info("TELEGRAM: Creating STANDARD payment...")
+        standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', promo_code)
+        logger.info(f"TELEGRAM: STANDARD payment created: {standard_url[:60]}...")
+        
+        logger.info("TELEGRAM: Creating PREMIUM payment...")
+        premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', promo_code)
+        logger.info(f"TELEGRAM: PREMIUM payment created: {premium_url[:60]}...")
+        
+        logger.info("TELEGRAM: All payments created successfully, sending message...")
         payment_message = f"""LIGHT (3000₽/мес):
 {light_url}
 
@@ -284,12 +305,16 @@ PREMIUM (27000₽/мес):
 {premium_url}"""
         
         await message.bot.send_message(message.chat.id, payment_message)
+        logger.info("TELEGRAM: Payment message sent successfully")
     except ValueError as e:
+        logger.error(f"TELEGRAM: ValueError during payment creation: {e}")
         await message.bot.send_message(message.chat.id, f"Ошибка с промокодом: {str(e)}")
     except Exception as e:
-        logger.error(f"Error creating payments: {e}")
+        logger.error(f"TELEGRAM: Exception during payment creation: {type(e).__name__}: {e}")
+        logger.error(f"TELEGRAM: Full traceback: {traceback.format_exc()}")
         await message.bot.send_message(message.chat.id, "Ошибка при создании платежей. Попробуйте позже.")
     
+    logger.info(f"TELEGRAM: subscription_handler completed for user {user_id}")
     session.close()
 
 
