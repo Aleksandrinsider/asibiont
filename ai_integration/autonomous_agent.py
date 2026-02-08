@@ -156,7 +156,7 @@ class HybridAutonomousAgent:
         
         return ""
 
-    async def call_ai(self, messages, use_tools=False, **kwargs):
+    async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, **kwargs):
         """Универсальный вызов AI API с опциональными tools"""
         
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -380,10 +380,19 @@ class HybridAutonomousAgent:
 
 Можешь использовать любые доступные инструменты когда это нужно."""
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Сообщение: {user_message}"}
-        ]
+        # Загружаем историю диалога
+        from .conversation_history import get_conversation_history
+        history = get_conversation_history(user_id, session, limit=6)  # Last 3 exchanges
+        
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Добавляем историю
+        if history:
+            messages.extend(history)
+            logger.info(f"[AGENT] Added {len(history)} messages from history")
+        
+        # Добавляем текущее сообщение
+        messages.append({"role": "user", "content": user_message})
 
         # ГИБРИДНЫЙ ПОДХОД: AI с tools - сам решает когда нужно вызвать инструменты
         response = await self.call_ai(messages, use_tools=True)
@@ -836,6 +845,12 @@ class HybridAutonomousAgent:
         """
         
         try:
+            # Сохраняем сообщение пользователя в историю
+            logger.info(f"[AGENT] About to save user message to history")
+            from .conversation_history import save_message_to_history
+            save_message_to_history(user_id, "user", user_message)
+            logger.info(f"[AGENT] User message saved to history")
+            
             # ШАГ 1: Планирование
             logger.info(f"[AGENT] Step 1: Planning strategy for '{user_message[:50]}...'")
             plan = await self.plan_strategy(user_message, user_id, context)
@@ -887,6 +902,12 @@ class HybridAutonomousAgent:
             # Обучаемся на успешных паттернах
             if entry['success'] and actions:
                 self._learn_from_success(user_message, plan, user_id)
+            
+            # Сохраняем ответ ассистента в историю
+            logger.info(f"[AGENT] About to save assistant response to history")
+            from .conversation_history import save_message_to_history
+            save_message_to_history(user_id, "assistant", response)
+            logger.info(f"[AGENT] Assistant response saved to history")
             
             # Ограничиваем размер истории
             if len(self.execution_history) > 50:  # Больше истории для обучения
