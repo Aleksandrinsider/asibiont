@@ -113,14 +113,43 @@ async def run_live_dialog_test():
         session.delete(user)
         session.commit()
     
-    # Создаем пользователя
+    # Создаем пользователя с данными в профиле
     user = User(telegram_id=user_id, username='alexey_test', first_name='Алексей', timezone='Europe/Moscow')
     session.add(user)
     session.commit()
     session.refresh(user)
     
-    profile = UserProfile(user_id=user.id, interests='', goals='', city='')
+    # Создаем профиль с конкретными данными для теста
+    profile = UserProfile(
+        user_id=user.id, 
+        interests='ИИ, стартапы, бизнес', 
+        goals='Привлечь 100 пользователей в ASI Biont, запустить реферальную программу',
+        city='Пермь',
+        company='ASI Biont',
+        position='Основатель'
+    )
     session.add(profile)
+    session.commit()
+    
+    # Добавляем несколько задач для теста проактивного контекста
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    
+    task1 = Task(
+        user_id=user.id,
+        title='Написать пост на Habr про AI-агентов',
+        description='Поделиться опытом создания гибридного агента',
+        reminder_time=now + timedelta(hours=3),
+        status='pending'
+    )
+    task2 = Task(
+        user_id=user.id,
+        title='Созвон с потенциальным партнером',
+        description='Обсудить интеграцию сервисов',
+        reminder_time=now + timedelta(days=1, hours=10),
+        status='pending'
+    )
+    session.add_all([task1, task2])
     session.commit()
     
     print("="*80)
