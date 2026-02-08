@@ -5418,7 +5418,15 @@ async def publish_to_telegram(content: str, user_id: int, session):
             session=session
         )
         
-        return result.get('message', 'Пост опубликован')
+        # Проверяем результат публикации
+        if isinstance(result, dict):
+            if result.get('success'):
+                return result.get('message', '✅ Пост успешно опубликован')
+            else:
+                # Публикация не удалась - возвращаем детальное сообщение об ошибке
+                return result.get('message', '❌ Не удалось опубликовать пост')
+        else:
+            return str(result)
         
     except Exception as e:
         logger.error(f"[PUBLISH] Error in handler: {e}", exc_info=True)

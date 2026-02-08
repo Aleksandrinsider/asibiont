@@ -213,6 +213,8 @@ Telegram канал: {user.telegram_channel}"""
         Returns:
             bool: True если успешно опубликовано
         """
+        from models import Session
+        session = Session()
         
         try:
             user_id = marketing_profile['user_id']
@@ -225,7 +227,7 @@ Telegram канал: {user.telegram_channel}"""
                 platform='telegram',
                 goal=f"пост на тему: {topic}",
                 user_id=user_id,
-                session=None
+                session=session
             )
             
             if not content or 'text' not in content:
@@ -240,7 +242,7 @@ Telegram канал: {user.telegram_channel}"""
             result = await publish_to_telegram(
                 content=post_text,
                 user_id=user_id,
-                session=None
+                session=session
             )
             
             if result and result.get('success'):
@@ -253,6 +255,8 @@ Telegram канал: {user.telegram_channel}"""
         except Exception as e:
             logger.error(f"[AUTO_MARKETING] Error generating/publishing post: {e}")
             return False
+        finally:
+            session.close()
     
     async def run_autonomous_marketing_cycle(self, premium_user_id: int) -> Dict:
         """
