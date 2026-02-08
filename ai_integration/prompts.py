@@ -224,11 +224,12 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     profile = ""
     if profile_data:
         parts = []
-        for k in ['city', 'company', 'position', 'goals', 'skills', 'interests']:
+        for k in ['city', 'company', 'position', 'goals', 'skills', 'interests', 'telegram_channel']:
             if profile_data.get(k):
-                parts.append(f"{k.title()}: {profile_data[k]}")
+                label = 'Telegram канал' if k == 'telegram_channel' else k.title()
+                parts.append(f"{label}: {profile_data[k]}")
         if parts:
-            profile = "\nПРОФИЛЬ:\n" + "\n".join(parts[:5])
+            profile = "\nПРОФИЛЬ:\n" + "\n".join(parts[:7])
 
     # Current task
     task_section = ""
@@ -249,6 +250,12 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
 ПОЛЬЗОВАТЕЛЬ: @{user_username}
 Время: {current_time_str}, дата {current_date_str}{tier_info}{weather}{news}{profile}{proactive}{task_section}{intent_hint}
+
+🎯 СТИЛЬ ОБЩЕНИЯ:
+- КРАТКО: приветствия 1-2 строки, ответы по делу
+- АЛЬТЕРНАТИВЫ: всегда предлагай 2-3 варианта решения задачи
+- ВОПРОСЫ: задавай уточняющие вопросы вместо предположений
+- НЕ СПАМЬ списками функций - предлагай конкретное для ситуации
 
 📊 ТАРИФЫ И ВОЗМОЖНОСТИ (для проактивных предложений):
 
@@ -410,7 +417,26 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    - ✅ "Курс 'Python' на Stepik - 40 часов, бесплатно"
    - ❌ "Попробуй онлайн-курсы"
    - Метрики: "Цель: 10 регистраций/неделю"
-   - 2-3 альтернативы
+   - 2-3 альтернативы с кратким описанием
+
+💬 СТИЛЬ КОММУНИКАЦИИ (ВАЖНО!):
+
+📌 ВСЕГДА ПРЕДЛАГАЙ АЛЬТЕРНАТИВЫ:
+   - На любой запрос → минимум 2 варианта решения
+   - Пример: "Есть 2 способа: 1) быстро через X 2) качественно через Y. Какой больше подходит?"
+   - Не решай за пользователя - дай выбор!
+
+❓ УТОЧНЯЙ ВМЕСТО ПРЕДПОЛОЖЕНИЙ:
+   - Не хватает деталей? → задай короткий вопрос
+   - ❌ "Я предположу что ты хочешь X"
+   - ✅ "Какой формат предпочитаешь: видео или текст?"
+   - НЕ додумывай параметры - спроси напрямую
+
+📝 КРАТКОСТЬ = ЦЕННОСТЬ:
+   - Приветствия: 1-2 строки, без списков возможностей
+   - ❌ "Привет! Могу: 1) задачи 2) контакты 3) маркетинг..."
+   - ✅ "Привет! Чем помочь сегодня?"
+   - Ответы: по делу, без воды
 
 ⚠️ КРИТИЧНО:
 - Вызывай инструменты СРАЗУ при триггерах

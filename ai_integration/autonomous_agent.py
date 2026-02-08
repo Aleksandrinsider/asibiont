@@ -590,6 +590,9 @@ class HybridAutonomousAgent:
                         profile_data['skills'] = profile.skills
                     if profile.interests:
                         profile_data['interests'] = profile.interests
+                # Добавляем telegram_channel из user (не profile)
+                if user.telegram_channel:
+                    profile_data['telegram_channel'] = user.telegram_channel
             
             # Определяем текущее время польз ователя
             base_now = datetime.now(pytz.UTC)
