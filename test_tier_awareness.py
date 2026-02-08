@@ -57,7 +57,7 @@ async def test_tier_awareness():
     """Основной тест проверки понимания тарифов"""
     
     print("="*70)
-    print("🧪 ТЕСТ: ПОНИМАНИЕ ТАРИФОВ И ФУНКЦИЙ")
+    print("ТЕСТ: ПОНИМАНИЕ ТАРИФОВ И ФУНКЦИЙ")
     print("="*70)
     
     # Создаем тестовых пользователей
@@ -109,7 +109,7 @@ async def test_tier_awareness():
     
     for i, scenario in enumerate(test_scenarios, 1):
         print(f"\n{'='*70}")
-        print(f"📝 СЦЕНАРИЙ {i}/{len(test_scenarios)}: {scenario['tier']}")
+        print(f"SCENARIO {i}/{len(test_scenarios)}: {scenario['tier']}")
         print(f"{'='*70}")
         print(f"Пользователь: {scenario['message']}")
         print(f"Ожидается: {scenario['expected']}")
@@ -127,12 +127,11 @@ async def test_tier_awareness():
                 db_session=session
             )
             
-            print(response['response'][:500])  # Первые 500 символов
+            # Не выводим полный ответ из-за проблем с кодировкой Windows
+            response_text = response['response'].lower()
+            print(f"Response length: {len(response['response'])} chars")
             
             # Простая проверка: есть ли упоминания нужных терминов
-            response_text = response['response'].lower()
-            
-            # Проверяем разные условия
             checks = []
             
             if scenario['tier'] == 'LIGHT' and 'продвигать' in scenario['message']:
@@ -160,9 +159,9 @@ async def test_tier_awareness():
                 has_auto = any(word in response_text for word in ['автомат', 'автопилот', 'сам', 'расписан'])
                 checks.append(('Предложение автономного маркетинга', has_auto))
             
-            if scenario['tier'] == 'PREMIUM' and 'делегировать' in scenario['message']:
+            if scenario['tier'] == 'PREMIUM' and ('делегировать' in scenario['message'] or 'много задач' in scenario['message']):
                 # PREMIUM должен получить предложение делегирования
-                has_delegate = 'делегир' in response_text or 'передать' in response_text or 'партнёр' in response_text
+                has_delegate = 'делегир' in response_text or 'передать' in response_text or 'поручить' in response_text
                 checks.append(('Предложение делегирования', has_delegate))
             
             # Выводим результаты проверок
@@ -170,45 +169,43 @@ async def test_tier_awareness():
             print("Проверки:")
             all_passed = True
             for check_name, check_result in checks:
-                status = "✅" if check_result else "❌"
+                status = "[OK]" if check_result else "[FAIL]"
                 print(f"{status} {check_name}: {check_result}")
                 if not check_result:
                     all_passed = False
             
             if all_passed and checks:
-                print("\n✅ Сценарий ПРОЙДЕН")
+                print("\n[OK] Scenario PASSED")
                 results['passed'] += 1
             else:
-                print("\n⚠️ Сценарий НЕ ПРОЙДЕН или требует ручной проверки")
+                print("\n[WARNING] Scenario NOT PASSED or needs manual check")
                 results['failed'] += 1
             
             session.close()
             
         except Exception as e:
-            print(f"\n❌ ОШИБКА: {e}")
+            print(f"\n[ERROR]: {str(e)[:100]}")
             results['failed'] += 1
-            import traceback
-            traceback.print_exc()
     
     # Итоги
     print("\n" + "="*70)
-    print("📊 ИТОГОВЫЕ РЕЗУЛЬТАТЫ")
+    print("ИТОГОВЫЕ РЕЗУЛЬТАТЫ")
     print("="*70)
-    print(f"✅ Пройдено: {results['passed']}/{results['total']}")
-    print(f"❌ Не пройдено: {results['failed']}/{results['total']}")
-    print(f"📈 Процент успеха: {(results['passed']/results['total']*100):.1f}%")
+    print(f"OK: {results['passed']}/{results['total']}")
+    print(f"FAIL: {results['failed']}/{results['total']}")
+    print(f"SUCCESS: {(results['passed']/results['total']*100):.1f}%")
     
     if results['passed'] == results['total']:
-        print("\n🎉 ВСЕ ТЕСТЫ ПРОЙДЕНЫ! Агент понимает тарифы.")
+        print("\nVSE TESTY PASSED! Agent understands tiers.")
     else:
-        print("\n⚠️ Некоторые тесты не прошли. Проверьте промпты.")
+        print("\nSome tests failed. Check prompts.")
 
 
 async def test_prompt_structure():
     """Тест структуры промпта: есть ли карта тарифов"""
     
     print("\n" + "="*70)
-    print("🔍 ПРОВЕРКА СТРУКТУРЫ ПРОМПТА")
+    print("CHECK: PROMPT STRUCTURE")
     print("="*70)
     
     now = datetime.now(pytz.timezone('Europe/Moscow'))
@@ -225,7 +222,7 @@ async def test_prompt_structure():
             subscription_tier=tier
         )
         
-        print(f"\n📋 Промпт для {tier}:")
+        print(f"\nPROMPT for {tier}:")
         
         # Проверяем наличие ключевых элементов
         checks = {
@@ -239,14 +236,14 @@ async def test_prompt_structure():
         }
         
         for check_name, result in checks.items():
-            status = "✅" if result else "❌"
+            status = "[OK]" if result else "[FAIL]"
             print(f"  {status} {check_name}")
         
         all_passed = all(checks.values())
         if all_passed:
-            print(f"  ✅ Промпт для {tier} корректен")
+            print(f"  OK: Prompt for {tier} correct")
         else:
-            print(f"  ⚠️ Проблемы в промпте для {tier}")
+            print(f"  WARNING: Issues in prompt for {tier}")
 
 
 if __name__ == "__main__":
