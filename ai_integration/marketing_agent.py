@@ -340,7 +340,8 @@ async def publish_to_telegram(content, user_id=None, session=None):
             "message": "❌ Не указан пользователь для публикации"
         }
     
-    user = session.query(User).filter_by(id=user_id).first()
+    # user_id это telegram_id
+    user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         return {
             "success": False,

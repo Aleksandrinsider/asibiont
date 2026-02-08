@@ -12,6 +12,7 @@ from .memory import encrypt_data, decrypt_data, LongTermMemory
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
+from . import marketing_agent
 
 logger = logging.getLogger(__name__)
 
@@ -5186,6 +5187,7 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
 async def generate_marketing_content(product_name, target_audience, platform, goal="привлечение", user_id=None, session=None):
     """
     AI генерация маркетингового контента для привлечения клиентов
+    Требует: STANDARD или PREMIUM подписку
     """
     from .marketing_agent import generate_marketing_content as gen_content
     
@@ -5195,6 +5197,11 @@ async def generate_marketing_content(product_name, target_audience, platform, go
         close_session = True
     
     try:
+        # Проверка subscription tier (STANDARD или PREMIUM)
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
+            return "⭐ Генерация маркетингового контента доступна с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        
         result = await gen_content(
             product_name=product_name,
             target_audience=target_audience,
@@ -5217,6 +5224,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
 async def research_topic(query: str, depth: str, user_id: int, session):
     """
     🔍 ВЕБ-ПОИСК И АНАЛИЗ темы через Serper API + DeepSeek AI
+    Требует: STANDARD или PREMIUM подписку
     
     Этапы:
     1. Веб-поиск через Serper (5-15 источников)
@@ -5235,6 +5243,11 @@ async def research_topic(query: str, depth: str, user_id: int, session):
         close_session = True
     
     try:
+        # Проверка subscription tier (STANDARD или PREMIUM)
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
+            return "🔍 Веб-исследование тем доступно с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        
         logger.info(f"[RESEARCH] Starting for user {user_id}: query='{query}', depth={depth}")
         
         result = await marketing_agent.research_topic(
@@ -5257,6 +5270,7 @@ async def research_topic(query: str, depth: str, user_id: int, session):
 async def publish_to_telegram(content: str, user_id: int, session):
     """
     📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
+    Требует: STANDARD или PREMIUM подписку
     
     Требования:
     - Пользователь должен указать telegram_channel в профиле
@@ -5273,6 +5287,11 @@ async def publish_to_telegram(content: str, user_id: int, session):
         close_session = True
     
     try:
+        # Проверка subscription tier (STANDARD или PREMIUM)
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
+            return "📢 Публикация в Telegram канал доступна с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        
         logger.info(f"[PUBLISH] Starting for user {user_id}")
         
         # Если content это JSON строка от generate_marketing_content, парсим
