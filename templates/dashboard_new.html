@@ -901,6 +901,11 @@
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Цели</label>
                         <textarea id="quick-goals" placeholder="Чего вы хотите достичь?" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; min-height: 60px; font-family: inherit; resize: vertical;"></textarea>
                     </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Telegram канал 📢</label>
+                        <input type="text" id="quick-telegram-channel" placeholder="@your_channel или -1001234567890" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                        <small style="font-size: 11px; color: #6B7280; margin-top: 4px; display: block;">Для автопубликации постов. Бот должен быть админом канала</small>
+                    </div>
                 </form>
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn">Пропустить</button>
@@ -4066,6 +4071,7 @@
                 const interestsField = document.getElementById('quick-interests');
                 const skillsField = document.getElementById('quick-skills');
                 const goalsField = document.getElementById('quick-goals');
+                const telegramChannelField = document.getElementById('quick-telegram-channel');
                 
                 // Получаем текущие данные из профиля
                 {% if profile %}
@@ -4078,6 +4084,9 @@
                 if (interestsField) interestsField.value = '{{ profile.interests or "" }}';
                 if (skillsField) skillsField.value = '{{ profile.skills or "" }}';
                 if (goalsField) goalsField.value = '{{ profile.goals or "" }}';
+                {% endif %}
+                {% if telegram_channel %}
+                if (telegramChannelField) telegramChannelField.value = '{{ telegram_channel or "" }}';
                 {% endif %}
                 
                 modal.style.display = 'flex';
@@ -4121,6 +4130,7 @@
             const interests = document.getElementById('quick-interests').value.trim();
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
+            const telegramChannel = document.getElementById('quick-telegram-channel').value.trim();
 
             // Проверяем обязательные поля
             if (!city) {
@@ -4151,6 +4161,7 @@
                 profileData.goals = goals;
                 profileData.company = company;
                 profileData.position = position;
+                profileData.telegram_channel = telegramChannel;
                 
                 if (birthdate) {
                     profileData.birthdate = birthdate;

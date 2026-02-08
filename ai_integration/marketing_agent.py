@@ -605,3 +605,124 @@ async def research_topic(query, depth="balanced", user_id=None, session=None):
             "error": str(e),
             "message": f"❌ Ошибка: {str(e)[:100]}"
         }
+
+
+async def publish_to_telegram(content, user_id=None, session=None):
+    """
+    Публикация контента в Telegram канал пользователя
+    
+    Args:
+        content: Текст для публикации (может быть словарь с title, text, hashtags или просто строка)
+        user_id: ID пользователя
+        session: DB сессия
+    
+    Returns:
+        dict с результатом публикации
+    """
+    from models import User
+    from config import TELEGRAM_TOKEN
+    
+    logger.info(f"[PUBLISH] Publishing to Telegram for user {user_id}")
+    
+    # Получаем telegram_channel из профиля пользователя
+    if not session or not user_id:
+        return {
+            "success": False,
+            "error": "Требуется user_id и session",
+            "message": "❌ Не указан пользователь для публикации"
+        }
+    
+    user = session.query(User).filter_by(id=user_id).first()
+    if not user:
+        return {
+            "success": False,
+            "error": "User not found",
+            "message": "❌ Пользователь не найден"
+        }
+    
+    if not user.telegram_channel:
+        return {
+            "success": False,
+            "error": "Telegram channel not configured",
+            "message": "❌ Telegram канал не настроен в профиле. Укажите ID или @username канала в настройках."
+        }
+    
+    # Формируем текст поста
+    if isinstance(content, dict):
+        # Если передан structured content от generate_marketing_content
+        post_text = ""
+        if content.get('title'):
+            post_text += f"*{content['title']}*\n\n"
+        if content.get('text'):
+            post_text += content['text'] + "\n\n"
+        if content.get('hashtags'):
+            post_text += " ".join(content['hashtags']) + "\n\n"
+        if content.get('cta'):
+            post_text += f"👉 {content['cta']}"
+    else:
+        # Если передана простая строка
+        post_text = content
+    
+    # Отправляем через Telegram Bot API
+    try:
+        channel = user.telegram_channel
+        # Убедимся что ID канала начинается с @  если это username
+        if not channel.startswith('-') and not channel.startswith('@'):
+            channel = f"@{channel}"
+        
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
+                json={
+                    'chat_id': channel,
+                    'text': post_text,
+                    'parse_mode': 'Markdown'
+                }
+            ) as response:
+                result = await response.json()
+                
+                if result.get('ok'):
+                    logger.info(f"[PUBLISH] Successfully published to {channel}")
+                    
+                    # Создаем задачу-отчет об успешной публикации
+                    if user_id and session:
+                        from models import Task
+                        report_task = Task(
+                            user_id=user_id,
+                            title=f"✅ Пост опубликован в {channel}",
+                            description=f"Контент:\n{post_text[:200]}...",
+                            status='completed',
+                            actual_completion_time=datetime.now(timezone.utc)
+                        )
+                        session.add(report_task)
+                        session.commit()
+                    
+                    return {
+                        "success": True,
+                        "channel": channel,
+                        "message_id": result['result']['message_id'],
+                        "message": f"✅ Пост успешно опубликован в {channel}!"
+                    }
+                else:
+                    error_desc = result.get('description', 'Unknown error')
+                    logger.error(f"[PUBLISH] Telegram API error: {error_desc}")
+                    
+                    # Подсказки для частых ошибок
+                    if 'bot is not a member' in error_desc or 'chat not found' in error_desc:
+                        error_desc = "Бот не является админом канала. Добавьте бота в канал и сделайте его администратором."
+                    elif 'chat_id' in error_desc:
+                        error_desc = "Неверный ID канала. Используйте формат @channel или -1001234567890"
+                    
+                    return {
+                        "success": False,
+                        "error": error_desc,
+                        "message": f"❌ Не удалось опубликовать: {error_desc}"
+                    }
+                    
+    except Exception as e:
+        logger.error(f"[PUBLISH] Error publishing to Telegram: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"❌ Ошибка публикации: {str(e)[:100]}"
+        }

@@ -550,4 +550,21 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_to_telegram",
+            "description": "📢 ПУБЛИКАЦИЯ В TELEGRAM: Публикует пост в Telegram канал пользователя. Требуется настроенный telegram_channel в профиле. Используй ПОСЛЕ generate_marketing_content или когда пользователь просит 'опубликуй пост', 'запости это'. Бот должен быть админом канала.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Текст для публикации. Может быть простая строка или структурированный контент из generate_marketing_content. Поддерживает Markdown."
+                    }
+                },
+                "required": ["content"]
+            }
+        }
+    },
 ]

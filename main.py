@@ -1683,6 +1683,7 @@ async def dashboard_handler(request):
             'tasks': tasks_dict,
             'user': user,
             'profile': profile,
+            'telegram_channel': user.telegram_channel if user else None,
             'interactions': interactions,
             'partners': partners,
             'delegating_to_me': delegating_to_me,
@@ -5720,6 +5721,10 @@ async def api_profile_handler(request):
                 if 'bio' in data:
                     profile.bio = data['bio'].strip() if data['bio'] and data['bio'].strip() else None
 
+                # Update user fields (telegram_channel хранится в User, не в UserProfile)
+                if 'telegram_channel' in data:
+                    user.telegram_channel = data['telegram_channel'].strip() if data['telegram_channel'] and data['telegram_channel'].strip() else None
+
                 session_db.commit()
                 logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")
                 
@@ -5741,6 +5746,7 @@ async def api_profile_handler(request):
 
         profile_data = {
             'username': user.username,
+            'telegram_channel': user.telegram_channel,
             'city': profile.city if profile else None,
             'birthdate': profile.birthdate if profile else None,
             'zodiac_sign': profile.zodiac_sign if profile else None,

@@ -44,6 +44,7 @@ class User(Base):
     current_task_id = Column(Integer, ForeignKey('tasks.id'))  # Currently discussed task
     referral_balance = Column(Integer, default=0)  # Referral earnings in kopecks
     referrer_id = Column(Integer, ForeignKey('users.id'))  # User who referred this user
+    telegram_channel = Column(String(255))  # Telegram channel username or ID for auto-posting (e.g., @my_channel or -1001234567890)
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 

@@ -5312,3 +5312,47 @@ async def research_topic(query: str, depth: str, user_id: int, session):
     finally:
         if close_session:
             session.close()
+
+
+async def publish_to_telegram(content: str, user_id: int, session):
+    """
+    📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
+    
+    Требования:
+    - Пользователь должен указать telegram_channel в профиле
+    - Бот должен быть админом канала
+    
+    Args:
+        content: Текст для публикации (Markdown)
+        user_id: ID пользователя
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        logger.info(f"[PUBLISH] Starting for user {user_id}")
+        
+        # Если content это JSON строка от generate_marketing_content, парсим
+        try:
+            import json
+            content_data = json.loads(content)
+        except:
+            content_data = content
+        
+        result = await marketing_agent.publish_to_telegram(
+            content=content_data,
+            user_id=user_id,
+            session=session
+        )
+        
+        return result.get('message', 'Пост опубликован')
+        
+    except Exception as e:
+        logger.error(f"[PUBLISH] Error in handler: {e}", exc_info=True)
+        return f"Ошибка публикации: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
