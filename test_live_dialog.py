@@ -20,46 +20,38 @@ import reminder_service as reminder_service_module
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 
 async def generate_user_message(conversation_history, turn_number):
-    """Генерирует сообщение от имени пользователя через DeepSeek"""
+    """Генерирует сообщение от имени пользователя через DeepSeek (реальные условия)"""
     
-    # Персона пользователя
-    user_persona = f"""Ты - пользователь Telegram, тестируешь AI-ассистента для задач.
+    # Персона пользователя - обычный человек в мессенджере
+    user_persona = f"""Ты - обычный пользователь Telegram, общаешься с AI-ассистентом.
 
-Правила:
-- Пиши КРАТКО: 5-15 слов (как в реальном мессенджере)
-- Разговорный стиль: "ок", "понял", "давай", "а если"
-- Естественно реагируй: благодари, уточняй, соглашайся
-- НЕ повторяй одинаковые вопросы
-- НЕ пиши длинные детали
+Веди себя естественно:
+- Пиши коротко: 5-15 слов
+- Разговорный стиль
+- Реагируй на ответы естественно
+- Можешь повторять вопросы, забывать контекст - как в реальной жизни
 
-Сценарий диалога (ход {turn_number}/12):
-1. Приветствие
-2. Упомяни проблему с проектом
-3-4. Реагируй на предложения агента
-5-6. Попроси создать задачу (с конкретным временем)
-7-9. Обсуди задачи или профиль
-10-12. Завершай диалог"""
+Ход {turn_number}/10"""
     
-    # Инструкция по ходам
-    context_instruction = ""
+    # Минимальные подсказки по ходам (не ограничения!)
     if turn_number == 1:
-        context_instruction = "Напиши: 'привет'"
+        hint = "Начни с приветствия"
     elif turn_number == 2:
-        context_instruction = "Упомяни проблему: 'не получается привлечь пользователей в ASI Biont'"
+        hint = "Упомяни проблему с проектом"
     elif turn_number in [5, 6]:
-        context_instruction = "Попроси создать задачу С ВРЕМЕНЕМ, например: 'создай задачу позвонить клиенту завтра в 14:00'"
-    elif turn_number >= 11:
-        context_instruction = "Завершай: 'спасибо, попробую' или 'ок, понял'"
+        hint = "Можешь попросить создать задачу с временем"
+    elif turn_number >= 9:
+        hint = "Можешь завершать диалог"
     else:
-        context_instruction = "Реагируй КРАТКО (5-15 слов) на ответ. НЕ повторяй уже заданные вопросы."
+        hint = "Реагируй естественно на ответ ассистента"
     
     messages = [
         {"role": "system", "content": user_persona},
-        {"role": "user", "content": f"Последние 3 сообщения:\n{conversation_history[-1000:]}\n\n{context_instruction}\n\nТвое сообщение (5-15 слов):"}
+        {"role": "user", "content": f"Последние сообщения:\n{conversation_history[-800:]}\n\n{hint}\n\nТвое сообщение:"}
     ]
     
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:  # Сократили с 30 до 20 сек
+        async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(
                 DEEPSEEK_URL,
                 headers={
@@ -70,14 +62,13 @@ async def generate_user_message(conversation_history, turn_number):
                     "model": DEEPSEEK_MODEL,
                     "messages": messages,
                     "temperature": 0.9,
-                    "max_tokens": 50  # Сокращаем для коротких сообщений
+                    "max_tokens": 50
                 }
             )
             
             if response.status_code == 200:
                 result = response.json()
                 user_msg = result['choices'][0]['message']['content'].strip()
-                # Убираем возможные префиксы
                 user_msg = user_msg.replace("Алексей:", "").replace("Пользователь:", "").strip()
                 return user_msg
             else:
@@ -151,23 +142,23 @@ async def run_live_dialog_test():
     
     print("="*80)
     print("[ТЕСТ ЖИВОГО ДИАЛОГА]")
-    print("DeepSeek играет роль пользователя Алексея")
+    print("DeepSeek играет роль обычного пользователя - реальные условия")
     print("="*80)
     print()
     
     conversation_history = ""
     turn = 0
-    max_turns = 12  # Оптимизированный тест
-    tools_used = 0  # Счетчик использования инструментов
+    max_turns = 10
+    tools_used = 0
     
     while turn < max_turns:
         turn += 1
         
-        # Генерируем сообщение пользователя
         print(f"\n{'-'*80}")
         print(f"[ХОД {turn}/{max_turns}]")
         print(f"{'-'*80}\n")
         
+        # Генерируем сообщение пользователя
         user_message = await generate_user_message(conversation_history, turn)
         
         if not user_message:
@@ -192,7 +183,7 @@ async def run_live_dialog_test():
             print(f"[BOT] {short_response}")
             
             # Обновляем историю
-            conversation_history += f"\nПользователь: {user_message}\nАссистент: {clean_response[:300]}\n"
+            conversation_history += f"\nПользователь: {user_message}\nАссистент: {clean_response[:200]}\n"
             
         except KeyboardInterrupt:
             print("\n[!] Прервано пользователем")
@@ -210,7 +201,7 @@ async def run_live_dialog_test():
     print("="*80)
     
     print(f"\nСтатистика:")
-    print(f"   Ходов диалога: {turn}")
+    print(f"   Ходов диалога: {turn}/{max_turns}")
     print(f"   Инструментов использовано: {tools_used}")
     
     # НОВАЯ сессия для чтения финальных данных
