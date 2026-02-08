@@ -5267,6 +5267,52 @@ async def research_topic(query: str, depth: str, user_id: int, session):
             session.close()
 
 
+async def set_content_strategy(strategy: str, user_id: int, session):
+    """
+    🎯 СОХРАНИТЬ СТРАТЕГИЮ КОНТЕНТА для автоматического маркетинга
+    Требует: STANDARD или PREMIUM подписку
+    
+    Args:
+        strategy: Описание стратегии контента от пользователя
+        user_id: ID пользователя
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        # Проверка subscription tier (STANDARD или PREMIUM)
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
+            return "🎯 Настройка стратегии контента доступна с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        
+        logger.info(f"[CONTENT_STRATEGY] Saving for user {user_id}")
+        
+        # Получаем или создаем профиль
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=user.id)
+            session.add(profile)
+        
+        # Сохраняем стратегию
+        profile.content_strategy = strategy
+        session.commit()
+        
+        logger.info(f"[CONTENT_STRATEGY] ✅ Saved: {strategy[:100]}...")
+        
+        return f"✅ Стратегия контента сохранена!\n\n{strategy}\n\nТеперь автоматический маркетинг будет генерировать посты на основе твоей стратегии. Для запуска автопостинга настрой telegram_channel и включи Premium функции."
+        
+    except Exception as e:
+        logger.error(f"[CONTENT_STRATEGY] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"Ошибка сохранения стратегии: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 async def publish_to_telegram(content: str, user_id: int, session):
     """
     📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя

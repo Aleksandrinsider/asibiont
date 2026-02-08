@@ -127,6 +127,7 @@ class UserProfile(Base):
     blocked_contacts = Column(Text)  # JSON array of blocked contact usernames
     interaction_count = Column(Integer, default=0)  # Total interactions with AI
     pending_premium_recommendations = Column(Text)  # JSON array of Premium recommendations to mention in dialogue
+    content_strategy = Column(Text)  # User's content strategy: what they want to post about, target audience, goals
 
     user = relationship("User", backref="profile")
 

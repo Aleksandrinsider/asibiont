@@ -237,6 +237,15 @@ try:
             else:
                 logger.info("Migration: pending_premium_recommendations column already exists")
 
+            # Migration for content_strategy column
+            if 'content_strategy' not in columns:
+                logger.info("Adding content_strategy column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN content_strategy TEXT'))
+                session.commit()
+                logger.info("Migration: content_strategy column added successfully")
+            else:
+                logger.info("Migration: content_strategy column already exists")
+
         # Migration for users table columns
         if inspector.has_table('users'):
             user_columns = [col['name'] for col in inspector.get_columns('users')]

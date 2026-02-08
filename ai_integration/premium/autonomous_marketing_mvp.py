@@ -69,8 +69,38 @@ class AutonomousMarketingAgentMVP(HybridAutonomousAgent):
             
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
             
-            # Используем AI для анализа профиля и извлечения маркетинговой информации
-            system_prompt = """Ты агент для автоматизации маркетинга.
+            # Если у пользователя есть content_strategy - используем её
+            if profile and profile.content_strategy:
+                logger.info(f"[AUTO_MARKETING] Using user's content strategy")
+                
+                # Используем AI для структурирования стратегии пользователя
+                system_prompt = """Ты агент для автоматизации маркетинга.
+
+Пользователь описал что хочет видеть в постах. Структурируй это в маркетинговый профиль.
+
+Верни JSON:
+{
+  "product_name": "название продукта/услуги",
+  "target_audience": "целевая аудитория",
+  "platform": "telegram",
+  "niche_keywords": ["5-10 ключевых слов"],
+  "content_tone": "деловой|дружелюбный|экспертный",
+  "posting_frequency": "1|2|3",
+  "has_enough_data": true
+}"""
+                
+                user_context = f"""Стратегия контента от пользователя:
+{profile.content_strategy}
+
+Дополнительная информация:
+Имя: {user.username or 'не указано'}
+О себе: {profile.bio if profile.bio else 'не указано'}
+Telegram канал: {user.telegram_channel}"""
+            
+            else:
+                # Fallback: анализируем профиль автоматически
+                logger.info(f"[AUTO_MARKETING] No content strategy, analyzing profile")
+                system_prompt = """Ты агент для автоматизации маркетинга.
 
 Проанализируй информацию о пользователе и извлеки маркетинговый профиль.
 
@@ -87,7 +117,7 @@ class AutonomousMarketingAgentMVP(HybridAutonomousAgent):
 
 Если данных недостаточно для маркетинга - верни {"has_enough_data": false}."""
 
-            user_context = f"""Информация о пользователе:
+                user_context = f"""Информация о пользователе:
 Имя: {user.username or 'не указано'}
 Цели: {profile.goals if profile else 'не указаны'}
 Интересы: {profile.interests if profile else 'не указаны'}
