@@ -259,6 +259,15 @@ try:
             else:
                 logger.info("Migration: referrer_id column already exists")
 
+            # Migration for telegram_channel column
+            if 'telegram_channel' not in user_columns:
+                logger.info("Adding telegram_channel column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN telegram_channel VARCHAR(255)'))
+                session.commit()
+                logger.info("Migration: telegram_channel column added successfully")
+            else:
+                logger.info("Migration: telegram_channel column already exists")
+
         # Migration for tasks table
         if not inspector.has_table('tasks'):
             logger.info("Creating tasks table")
