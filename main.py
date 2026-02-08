@@ -246,6 +246,24 @@ try:
             else:
                 logger.info("Migration: content_strategy column already exists")
 
+            # Migration for auto_marketing_enabled column
+            if 'auto_marketing_enabled' not in columns:
+                logger.info("Adding auto_marketing_enabled column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN auto_marketing_enabled BOOLEAN DEFAULT TRUE'))
+                session.commit()
+                logger.info("Migration: auto_marketing_enabled column added successfully")
+            else:
+                logger.info("Migration: auto_marketing_enabled column already exists")
+
+            # Migration for auto_delegation_enabled column
+            if 'auto_delegation_enabled' not in columns:
+                logger.info("Adding auto_delegation_enabled column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN auto_delegation_enabled BOOLEAN DEFAULT TRUE'))
+                session.commit()
+                logger.info("Migration: auto_delegation_enabled column added successfully")
+            else:
+                logger.info("Migration: auto_delegation_enabled column already exists")
+
         # Migration for users table columns
         if inspector.has_table('users'):
             user_columns = [col['name'] for col in inspector.get_columns('users')]

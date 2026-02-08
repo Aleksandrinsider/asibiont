@@ -531,4 +531,26 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "toggle_autonomous_feature",
+            "description": "⚙️ УПРАВЛЕНИЕ АВТОНОМНЫМИ ФУНКЦИЯМИ (PREMIUM): Включает/выключает автоматические Premium функции. Используй когда пользователь говорит: 'отключи автопостинг', 'больше не пости автоматически', 'выключи автоделегирование', 'включи обратно автоматику'. Доступно только для PREMIUM.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "feature": {
+                        "type": "string",
+                        "description": "Какую функцию управлять: 'marketing' (автопостинг), 'delegation' (автоделегирование), 'all' (все автономные функции)",
+                        "enum": ["marketing", "delegation", "all"]
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "true = включить, false = выключить. Определяй из запроса пользователя: 'отключи' → false, 'включи' → true"
+                    }
+                },
+                "required": ["feature", "enabled"]
+            }
+        }
+    },
 ]

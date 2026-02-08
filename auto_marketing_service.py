@@ -85,6 +85,21 @@ class AutoMarketingService:
         try:
             logger.info(f"[AUTO_MARKETING_SERVICE] Starting marketing cycle for user {user_id}")
             
+            # Проверяем включён ли автомаркетинг у пользователя
+            session = Session()
+            try:
+                user = session.query(User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    logger.warning(f"[AUTO_MARKETING_SERVICE] User {user_id} not found")
+                    return {'status': 'error', 'reason': 'user_not_found'}
+                
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile and not profile.auto_marketing_enabled:
+                    logger.info(f"[AUTO_MARKETING_SERVICE] Auto-marketing disabled for user {user_id}")
+                    return {'status': 'skipped', 'reason': 'auto_marketing_disabled'}
+            finally:
+                session.close()
+            
             # Запускаем автономный маркетинг
             report = await self.agent.run_autonomous_marketing_cycle(user_id)
             

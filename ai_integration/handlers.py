@@ -5313,6 +5313,71 @@ async def set_content_strategy(strategy: str, user_id: int, session):
             session.close()
 
 
+async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, session):
+    """
+    ⚙️ УПРАВЛЕНИЕ АВТОНОМНЫМИ ФУНКЦИЯМИ
+    Требует: PREMIUM подписку
+    
+    Args:
+        feature: 'marketing', 'delegation', или 'all'
+        enabled: True = включить, False = выключить
+        user_id: ID пользователя
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        # Проверка subscription tier (только PREMIUM)
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user or not user.subscription_tier or user.subscription_tier.value != 'PREMIUM':
+            return "⚙️ Управление автономными функциями доступно только на тарифе PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        
+        logger.info(f"[AUTONOMOUS_TOGGLE] User {user_id}: {feature} = {enabled}")
+        
+        # Получаем или создаем профиль
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=user.id)
+            session.add(profile)
+        
+        # Обновляем флаги
+        status_parts = []
+        
+        if feature == 'marketing' or feature == 'all':
+            profile.auto_marketing_enabled = enabled
+            status_emoji = "✅" if enabled else "⛔"
+            action = "включён" if enabled else "выключен"
+            status_parts.append(f"{status_emoji} Автопостинг: {action}")
+        
+        if feature == 'delegation' or feature == 'all':
+            profile.auto_delegation_enabled = enabled
+            status_emoji = "✅" if enabled else "⛔"
+            action = "включено" if enabled else "выключено"
+            status_parts.append(f"{status_emoji} Автоделегирование: {action}")
+        
+        session.commit()
+        
+        response = "⚙️ Настройки автономных функций обновлены!\n\n" + "\n".join(status_parts)
+        
+        if not enabled:
+            response += "\n\n💡 Ты всегда можешь включить обратно используя эту же команду."
+        
+        logger.info(f"[AUTONOMOUS_TOGGLE] ✅ Updated for user {user_id}")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"[AUTONOMOUS_TOGGLE] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"Ошибка обновления настроек: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 async def publish_to_telegram(content: str, user_id: int, session):
     """
     📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя

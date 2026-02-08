@@ -128,6 +128,8 @@ class UserProfile(Base):
     interaction_count = Column(Integer, default=0)  # Total interactions with AI
     pending_premium_recommendations = Column(Text)  # JSON array of Premium recommendations to mention in dialogue
     content_strategy = Column(Text)  # User's content strategy: what they want to post about, target audience, goals
+    auto_marketing_enabled = Column(Boolean, default=True)  # Enable/disable autonomous marketing (Premium)
+    auto_delegation_enabled = Column(Boolean, default=True)  # Enable/disable autonomous delegation (Premium)
 
     user = relationship("User", backref="profile")
 
