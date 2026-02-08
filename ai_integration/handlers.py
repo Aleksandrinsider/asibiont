@@ -4421,11 +4421,11 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
                         updates.append(f"интерес '{interests}' уже есть")
         
         if skills is not None:
-            # Валидация
-            if len(skills.strip()) < 2 or len(skills.strip()) > 100:
+            # Валидация (исключаем вредоносный контент, но разрешаем JavaScript)
+            if len(skills.strip()) < 2 or len(skills.strip()) > 200:
                 logger.warning(f"Invalid skills length: {len(skills)}")
-            elif any(char in skills.lower() for char in ['<', '>', 'script', 'http']):
-                logger.warning(f"Invalid skills content: {skills}")
+            elif any(pattern in skills.lower() for pattern in ['<script', 'http://', 'https://', 'onclick', 'onerror']):
+                logger.warning(f"Invalid skills content (suspicious): {skills}")
             else:
                 if replace_mode:
                     profile.skills = skills
