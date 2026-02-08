@@ -386,7 +386,7 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             {"role": "user", "content": user_prompt},
         ]
 
-        data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.8, "max_tokens": 300}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.8, "max_tokens": 200}  # Уменьшено с 300
         
         logger.info(f"[REMINDER] Generating AI reminder for task_id={task_id}, user={user_id}")
         
