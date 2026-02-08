@@ -5214,66 +5214,6 @@ async def generate_marketing_content(product_name, target_audience, platform, go
             session.close()
 
 
-async def create_content_calendar(goal, niche, duration_days=7, user_id=None, session=None):
-    """
-    AI создание контент-календаря на N дней
-    """
-    from .marketing_agent import create_content_calendar as create_calendar
-    
-    close_session = False
-    if session is None:
-        session = Session()
-        close_session = True
-    
-    try:
-        result = await create_calendar(
-            goal=goal,
-            duration_days=duration_days,
-            niche=niche,
-            user_id=user_id,
-            session=session
-        )
-        
-        return result.get('message', 'Календарь создан')
-        
-    except Exception as e:
-        logger.error(f"[CALENDAR] Error in handler: {e}", exc_info=True)
-        return f"Ошибка создания календаря: {str(e)}"
-    finally:
-        if close_session:
-            session.close()
-
-
-async def suggest_growth_hacks(niche, current_users=0, goal_users=100, user_id=None, session=None):
-    """
-    AI генерация growth hacks для привлечения пользователей
-    """
-    from .marketing_agent import suggest_growth_hacks as gen_hacks
-    
-    close_session = False
-    if session is None:
-        session = Session()
-        close_session = True
-    
-    try:
-        result = await gen_hacks(
-            niche=niche,
-            current_users=current_users,
-            goal_users=goal_users,
-            user_id=user_id,
-            session=session
-        )
-        
-        return result.get('message', 'Стратегии созданы')
-        
-    except Exception as e:
-        logger.error(f"[GROWTH] Error in handler: {e}", exc_info=True)
-        return f"Ошибка генерации стратегий: {str(e)}"
-    finally:
-        if close_session:
-            session.close()
-
-
 async def research_topic(query: str, depth: str, user_id: int, session):
     """
     🔍 ВЕБ-ПОИСК И АНАЛИЗ темы через Serper API + DeepSeek AI
