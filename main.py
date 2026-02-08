@@ -1587,13 +1587,16 @@ async def dashboard_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task.overdue_text = f" {days} ."
+                        day_word = "день" if days == 1 else "дня" if days < 5 else "дней"
+                        task.overdue_text = f"{days} {day_word}"
                     elif hours > 0:
-                        task.overdue_text = f" {hours} ."
+                        hour_word = "час" if hours == 1 else "часа" if hours < 5 else "часов"
+                        task.overdue_text = f"{hours} {hour_word}"
                     elif minutes > 0:
-                        task.overdue_text = f" {minutes} ."
+                        min_word = "минуту" if minutes == 1 else "минуты" if minutes < 5 else "минут"
+                        task.overdue_text = f"{minutes} {min_word}"
                     else:
-                        task.overdue_text = ""
+                        task.overdue_text = "только что"
                 else:
                     task.overdue_text = None
             else:
@@ -5412,11 +5415,14 @@ async def api_tasks_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task_data['overdue_text'] = f' {days} .'
+                        day_word = "день" if days == 1 else "дня" if days < 5 else "дней"
+                        task_data['overdue_text'] = f'{days} {day_word}'
                     elif hours > 0:
-                        task_data['overdue_text'] = f' {hours} .'
+                        hour_word = "час" if hours == 1 else "часа" if hours < 5 else "часов"
+                        task_data['overdue_text'] = f'{hours} {hour_word}'
                     else:
-                        task_data['overdue_text'] = f' {minutes} .'
+                        min_word = "минуту" if minutes == 1 else "минуты" if minutes < 5 else "минут"
+                        task_data['overdue_text'] = f'{minutes} {min_word}'
             tasks_data.append(task_data)
 
         return web.json_response({'tasks': tasks_data})
