@@ -12,6 +12,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 router = Router()
 from ai_integration import chat_with_ai
 from models import Session, User, Subscription, Task
+from payments import create_payment
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder
@@ -537,10 +538,9 @@ PREMIUM — 27000₽/месяц
     await message.bot.send_message(message.chat.id, tiers_description)
     
     # Создать платежи для всех тарифов
-    from payments import create_payment
-    light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id)
-    standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id)
-    premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id)
+    light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', None)
+    standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', None)
+    premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', None)
     
     payment_message = """LIGHT (3000₽/мес):
 {light_url}
