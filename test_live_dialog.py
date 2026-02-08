@@ -20,49 +20,46 @@ import reminder_service as reminder_service_module
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 
 async def generate_user_message(conversation_history, turn_number):
-    """Генерирует сообщение от имени пользователя через DeepSeek БЕЗ заготовок"""
+    """Генерирует сообщение от имени пользователя через DeepSeek"""
     
-    # Персона пользователя для естественного поведения
-    user_persona = f"""Ты - обычный пользователь Telegram, тестируешь AI-ассистента для задач.
+    # Персона пользователя
+    user_persona = f"""Ты - пользователь Telegram, тестируешь AI-ассистента для задач.
 
-Твое поведение:
-- Пиши ОЧЕНЬ коротко: 5-15 слов (как в реальном мессенджере)
-- Используй разговорный стиль: "ок", "понял", "давай", "а если", "нет времени"
-- Реагируй на ответы естественно: благодари, уточняй, соглашайся
-- Иногда задавай один уточняющий вопрос
-- НЕ пиши длинные подробности - веди себя как в чате
+Правила:
+- Пиши КРАТКО: 5-15 слов (как в реальном мессенджере)
+- Разговорный стиль: "ок", "понял", "давай", "а если"
+- Естественно реагируй: благодари, уточняй, соглашайся
+- НЕ повторяй одинаковые вопросы
+- НЕ пиши длинные детали
 
-Примеры ХОРОШИХ сообщений:
-- "привет"
-- "создай задачу на завтра"
-- "ок, а во сколько лучше?"
-- "понял, давай так"
-- "нет новых пользователей"
-- "а что с партнерами?"
-
-Примеры ПЛОХИХ (слишком длинные):
-- "я пытаюсь привлечь новых пользователей в Агент но у меня не получается я размещаю..."
-
-Сейчас ход {turn_number}/30."""
+Сценарий диалога (ход {turn_number}/12):
+1. Приветствие
+2. Упомяни проблему с проектом
+3-4. Реагируй на предложения агента
+5-6. Попроси создать задачу (с конкретным временем)
+7-9. Обсуди задачи или профиль
+10-12. Завершай диалог"""
     
-    # Формируем промпт на основе истории диалога
+    # Инструкция по ходам
     context_instruction = ""
     if turn_number == 1:
-        context_instruction = "Начало диалога. Напиши: 'привет'"
+        context_instruction = "Напиши: 'привет'"
     elif turn_number == 2:
-        context_instruction = "Реагируй на приветствие ассистента КРАТКО (5-10 слов). Можешь спросить про задачи или упомянуть проблему."
-    elif turn_number >= 28:
-        context_instruction = "Диалог близится к концу. Можешь завершать: 'понял, спасибо' или 'ок, попробую'"
+        context_instruction = "Упомяни проблему: 'не получается привлечь пользователей в ASI Biont'"
+    elif turn_number in [5, 6]:
+        context_instruction = "Попроси создать задачу С ВРЕМЕНЕМ, например: 'создай задачу позвонить клиенту завтра в 14:00'"
+    elif turn_number >= 11:
+        context_instruction = "Завершай: 'спасибо, попробую' или 'ок, понял'"
     else:
-        context_instruction = "Реагируй на ответ ассистента ОЧЕНЬ КРАТКО (5-15 слов). Или задай короткий уточняющий вопрос."
+        context_instruction = "Реагируй КРАТКО (5-15 слов) на ответ. НЕ повторяй уже заданные вопросы."
     
     messages = [
         {"role": "system", "content": user_persona},
-        {"role": "user", "content": f"Последние сообщения:\n{conversation_history[-500:]}\n\n{context_instruction}\n\nТвое сообщение (5-15 слов):"}
+        {"role": "user", "content": f"Последние 3 сообщения:\n{conversation_history[-1000:]}\n\n{context_instruction}\n\nТвое сообщение (5-15 слов):"}
     ]
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:  # Сократили с 30 до 20 сек
             response = await client.post(
                 DEEPSEEK_URL,
                 headers={
@@ -153,102 +150,120 @@ async def run_live_dialog_test():
     session.commit()
     
     print("="*80)
-    print("[TEST] ZHIVOY DIALOG")
-    print("DeepSeek igraet rol polzovatelya Alekseya")
+    print("[ТЕСТ ЖИВОГО ДИАЛОГА]")
+    print("DeepSeek играет роль пользователя Алексея")
     print("="*80)
     print()
     
     conversation_history = ""
     turn = 0
-    max_turns = 30  # Extended test
+    max_turns = 12  # Оптимизированный тест
+    tools_used = 0  # Счетчик использования инструментов
     
     while turn < max_turns:
         turn += 1
         
         # Генерируем сообщение пользователя
         print(f"\n{'-'*80}")
-        print(f"[HOD {turn}/{max_turns}]")
+        print(f"[ХОД {turn}/{max_turns}]")
         print(f"{'-'*80}\n")
         
-        print("[*] Generiruyu soobschenie polzovatelya...")
         user_message = await generate_user_message(conversation_history, turn)
         
         if not user_message:
-            print("[X] Ne udalos sgenerirovat soobschenie")
+            print("[X] Не удалось сгенерировать сообщение")
             break
         
-        print(f"\n[USER] POLZOVATEL (Aleksey):")
-        print(f"   {user_message}")
+        print(f"[USER] {user_message}")
         
         # Отправляем агенту
-        print(f"\n[...] Agent obrabatyvaet...")
         try:
             response = await chat_with_ai(user_message, user_id=user_id, db_session=session)
             agent_response = response.get('response', 'Нет ответа')
             
-            # Убираем технические символы для чистого вывода
-            clean_response = agent_response.replace('✅', '').replace('🎯', '').replace('📋', '')
-            clean_response = ' '.join(clean_response.split())  # Убираем лишние пробелы
+            # Подсчет использования инструментов
+            if response.get('tools_used'):
+                tools_used += len(response['tools_used'])
             
-            print(f"\n[BOT] AGENT (ASI Biont):")
-            # Выводим ответ с переносом строк для читаемости
-            lines = clean_response.split('\n')
-            for line in lines[:5]:  # Первые 5 строк
-                if line.strip():
-                    print(f"   {line.strip()[:120]}")
+            # Компактный вывод ответа (первые 150 символов)
+            clean_response = agent_response.replace('✅', '').replace('🎯', '').replace('📋', '').strip()
+            short_response = clean_response[:150] + ('...' if len(clean_response) > 150 else '')
             
-            if len(lines) > 5:
-                print(f"   ... (еще {len(lines) - 5} строк)")
+            print(f"[BOT] {short_response}")
             
             # Обновляем историю
-            conversation_history += f"\nПользователь: {user_message}\nАссистент: {clean_response[:200]}\n"
+            conversation_history += f"\nПользователь: {user_message}\nАссистент: {clean_response[:300]}\n"
             
+        except KeyboardInterrupt:
+            print("\n[!] Прервано пользователем")
+            break
         except Exception as e:
-            print(f"\n[X] OSHIBKA: {e}")
+            print(f"[X] ОШИБКА: {e}")
             break
         
-        # Небольшая пауза между ходами
-        await asyncio.sleep(1)
+        # Пауза между ходами
+        await asyncio.sleep(0.5)
     
     # Финальный анализ
     print("\n" + "="*80)
-    print("[REPORT] ANALIZ DIALOGA")
+    print("[ОТЧЕТ]")
     print("="*80)
     
-    # Создаем НОВУЮ сессию для чтения финальных данных
+    print(f"\nСтатистика:")
+    print(f"   Ходов диалога: {turn}")
+    print(f"   Инструментов использовано: {tools_used}")
+    
+    # НОВАЯ сессия для чтения финальных данных
     final_session = Session()
     try:
-        # Проверяем созданные задачи
+        # Проверяем задачи
         tasks = final_session.query(Task).filter_by(user_id=user.id).all()
-        print(f"\n[+] Zadachi sozdany: {len(tasks)}")
-        for i, task in enumerate(tasks, 1):
-            status_icon = "+" if task.status == 'completed' else "o"
-            print(f"   [{status_icon}] {i}. {task.title} ({task.status})")
+        print(f"\n[+] Создано задач: {len(tasks)}")
+        for i, task in enumerate(tasks[:5], 1):  # Показываем первые 5
+            status = "+" if task.status == 'completed' else "o"
+            time_str = task.reminder_time.strftime("%d.%m %H:%M") if task.reminder_time else "без времени"
+            print(f"   [{status}] {task.title[:50]} ({time_str})")
+        
+        if len(tasks) > 5:
+            print(f"   ... и ещё {len(tasks) - 5} задач")
         
         # Проверяем профиль
         profile = final_session.query(UserProfile).filter_by(user_id=user.id).first()
-        print(f"\n[PROFILE] Profil obnovlen:")
-        print(f"   Gorod: {profile.city or '(ne ukazan)'}")
-        print(f"   Interesy: {profile.interests or '(ne ukazany)'}")
-        print(f"   Navyki: {profile.skills or '(ne ukazany)'}")
+        if profile:
+            print(f"\n[PROFILE] Профиль обновлён:")
+            if profile.city:
+                print(f"   Город: {profile.city}")
+            if profile.interests:
+                print(f"   Интересы: {profile.interests[:80]}")
+            if profile.skills:
+                print(f"   Навыки: {profile.skills[:80]}")
+            if profile.company:
+                print(f"   Компания: {profile.company}")
     finally:
         final_session.close()
     
     # Очистка
     try:
         session.query(Task).filter_by(user_id=user.id).delete()
-        session.delete(profile)
+        if profile:
+            session.delete(profile)
         session.commit()
         session.delete(user)
         session.commit()
-    except:
-        pass
+    except Exception as e:
+        print(f"\n[!] Ошибка очистки: {e}")
+        session.rollback()
     finally:
         session.close()
     
     print("\n" + "="*80)
-    print("[+] TEST ZAVERSHEN")
+    print("[OK] ТЕСТ ЗАВЕРШЁН")
     print("="*80)
 
 if __name__ == '__main__':
-    asyncio.run(run_live_dialog_test())
+    try:
+        asyncio.run(run_live_dialog_test())
+    except KeyboardInterrupt:
+        print("\n\n[!] Тест прерван пользователем")
+    except Exception as e:
+        print(f"\n\n[X] Ошибка теста: {e}")
