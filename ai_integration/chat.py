@@ -31,8 +31,7 @@ from .handlers import (  # noqa: F401
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, smart_update_profile, show_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks,
-    get_local_events
+    update_profile, smart_update_profile, show_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks
 )
 from .autonomous_agent import chat_with_ai as autonomous_chat_with_ai
 
@@ -1410,14 +1409,6 @@ async def call_ai_with_tools(user_message, system_prompt, user_id, context=None)
                                     result = update_profile(user_id=user_id, **function_args)
                                 elif function_name == 'analyze_tasks':
                                     result = await analyze_tasks(user_id=user_id)
-                                elif function_name == 'get_local_events':
-                                    result = await get_local_events(
-                                        user_id=user_id,
-                                        categories=function_args.get('categories'),
-                                        days_ahead=function_args.get('days_ahead', 7),
-                                        price_range=function_args.get('price_range', 'all'),
-                                        limit=function_args.get('limit', 5)
-                                    )
                                 else:
                                     result = f"Функция {function_name} не поддерживается"
 

@@ -134,9 +134,6 @@ NEWSAPI_API_KEY = os.getenv("NEWSAPI_API_KEY")
 if not NEWSAPI_API_KEY:
     logger.warning("NEWSAPI_API_KEY not set - news integration will not work")
 
-# Kudago Events API (public API, no key needed)
-KUDAGO_API_URL = os.getenv("KUDAGO_API_URL", "https://kudago.com/public-api/v1.4")
-
 # Redis Configuration
 REDIS_ENABLED = os.getenv("REDIS_ENABLED", "True").lower() in ("true", "1", "yes") and not LOCAL
 
