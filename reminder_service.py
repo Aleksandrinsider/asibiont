@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import logging
 import json
+import asyncio
+from collections import defaultdict
 from config import DATABASE_URL, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_MINUTES
 from ai_integration import check_delegation_deadlines, generate_proactive_message
 
@@ -15,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 # Singleton reference used by jobstore-safe wrapper functions
 REMINDER_SERVICE = None
+
+# Global locks dictionary to prevent duplicate proactive messages
+# Key: user_id, Value: asyncio.Lock
+_proactive_locks = defaultdict(asyncio.Lock)
 
 async def _send_reminder_job(task_id: int):
     db = Session()
@@ -641,88 +647,90 @@ class ReminderService:
         if not check_subscription(user_id):
             return
         
-        db = Session()
-        try:
-            user = db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                return
-            
-            # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
-            last_interaction = db.query(Interaction).filter(
-                Interaction.user_id == user.id
-            ).order_by(Interaction.created_at.desc()).first()
-            
-            if last_interaction:
-                time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
-                if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
+        # MUTEX: Проверить, не отправляется ли уже проактивное сообщение этому пользователю
+        lock = _proactive_locks[user_id]
+        if lock.locked():
+            logger.info(f"[MUTEX] Checkpoint message already being sent (or proactive in progress) to user {user_id}, skipping duplicate")
+            return
+        
+        async with lock:
+            db = Session()
+            try:
+                user = db.query(User).filter(User.telegram_id == user_id).first()
+                if not user:
                     return
             
-            # Проверить режим "не беспокоить"
-            if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
-                return
+                # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
+                last_interaction = db.query(Interaction).filter(
+                    Interaction.user_id == user.id
+                ).order_by(Interaction.created_at.desc()).first()
+                
+                if last_interaction:
+                    time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
+                    if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
+                        return
+                
+                # Проверить режим "не беспокоить"
+                if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
+                    return
+                
+                # Получить активные задачи
+                # Основные задачи пользователя
+                user_tasks = db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['pending', 'in_progress'])
+                )
+                
+                # Задачи, делегированные пользователем другим
+                delegated_by_user = db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.isnot(None),
+                    Task.status.in_(['pending', 'in_progress'])
+                )
             
-            # Получить активные задачи
-            # Основные задачи пользователя
-            user_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status.in_(['pending', 'in_progress'])
-            )
-            
-            # Задачи, делегированные пользователем другим
-            delegated_by_user = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.delegated_to_username.isnot(None),
-                Task.status.in_(['pending', 'in_progress'])
-            )
-            
-            # Задачи, делегированные пользователю
-            delegated_to_user = db.query(Task).filter(
-                Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
-                Task.delegation_status == 'accepted',
-                Task.status.in_(['pending', 'in_progress'])
-            )
-            
-            all_active_tasks = user_tasks.union(delegated_by_user).union(delegated_to_user).order_by(Task.reminder_time).all()
-            
-            # Добавить просроченные задачи (только основные и делегированные пользователю)
-            now_utc = datetime.now(pytz.UTC)
-            overdue_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status == 'pending',
-                Task.reminder_time < now_utc
-            ).union(
-                db.query(Task).filter(
+                # Задачи, делегированные пользователю
+                delegated_to_user = db.query(Task).filter(
                     Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                     Task.delegation_status == 'accepted',
+                    Task.status.in_(['pending', 'in_progress'])
+                )
+                
+                all_active_tasks = user_tasks.union(delegated_by_user).union(delegated_to_user).order_by(Task.reminder_time).all()
+                
+                # Добавить просроченные задачи (только основные и делегированные пользователю)
+                now_utc = datetime.now(pytz.UTC)
+                overdue_tasks = db.query(Task).filter(
+                    Task.user_id == user.id,
                     Task.status == 'pending',
                     Task.reminder_time < now_utc
-                )
-            ).order_by(Task.reminder_time).all()
-            
-            all_tasks = all_active_tasks + overdue_tasks
-            
-            # Определить параметры для генерации сообщения
-            task_count = len(all_active_tasks)
-            overdue_count = len(overdue_tasks)
-            context = checkpoint_type
-            
-            # Отправить чекпоинт-сообщение
-            try:
+                ).union(
+                    db.query(Task).filter(
+                        Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                        Task.delegation_status == 'accepted',
+                        Task.status == 'pending',
+                        Task.reminder_time < now_utc
+                    )
+                ).order_by(Task.reminder_time).all()
+                
+                all_tasks = all_active_tasks + overdue_tasks
+                
+                # Определить параметры для генерации сообщения
+                task_count = len(all_active_tasks)
+                overdue_count = len(overdue_tasks)
+                context = checkpoint_type
+                
+                # Отправить чекпоинт-сообщение
                 proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_tasks)
                 
                 # Сохранить в таблицу Interaction
-                try:
-                    interaction = Interaction(
-                        user_id=user.id,
-                        message_type="ai",
-                        content=proactive_text
-                    )
-                    db.add(interaction)
-                    db.commit()
-                    logger.info(f"Saved checkpoint message to interaction history for user {user_id}")
-                except Exception as e:
-                    logger.error(f"Failed to save checkpoint message to interactions: {e}")
-                    db.rollback()
+                interaction = Interaction(
+                    user_id=user.id,
+                    message_type="ai",
+                    content=proactive_text
+                )
+                db.add(interaction)
+                db.commit()
+                logger.info(f"Saved checkpoint message to interaction history for user {user_id}")
                 
                 if self.bot:
                     await self.bot.send_message(
@@ -734,8 +742,9 @@ class ReminderService:
                     logger.info(f"[CHECKPOINT] To user {user_id}: {proactive_text}")
             except Exception as e:
                 logging.error(f"Failed to send checkpoint message to user {user_id}: {e}")
-        finally:
-            db.close()
+                db.rollback()
+            finally:
+                db.close()
 
     async def check_and_send_proactive(self, user_id: int):
         """Проверка и отправка проактивного сообщения, если нет задач на ближайший час"""
@@ -1164,125 +1173,127 @@ class ReminderService:
         if not check_subscription(user_id):
             return
         
-        db = Session()
-        try:
-            user = db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                return
-            
-            # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
-            last_interaction = db.query(Interaction).filter(
-                Interaction.user_id == user.id
-            ).order_by(Interaction.created_at.desc()).first()
-            
-            if last_interaction:
-                time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
-                if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
-                    # Недавно общались, пропустить проактивное сообщение
+        # MUTEX: Проверить, не отправляется ли уже проактивное сообщение этому пользователю
+        lock = _proactive_locks[user_id]
+        if lock.locked():
+            logger.info(f"[MUTEX] Proactive message already being sent to user {user_id}, skipping duplicate")
+            return
+        
+        async with lock:
+            db = Session()
+            try:
+                user = db.query(User).filter(User.telegram_id == user_id).first()
+                if not user:
                     return
             
-            # Проверить режим "не беспокоить"
-            if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
-                # Пользователь в режиме "не беспокоить", пропустить
-                return
-            
-            # Получить текущее время в UTC
-            now_utc = datetime.now(pytz.UTC)
-            
-            # Проверить задачи на ближайшие 60 минут (в UTC)
-            next_60_min_utc = now_utc + timedelta(minutes=PROACTIVE_CHECK_AHEAD_MINUTES)
-            
-            # Получить все pending задачи с reminder_time
-            pending_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status == 'pending',
-                Task.reminder_time.isnot(None)
-            ).all()
-            
-            # Проверить, есть ли задачи с reminder_time в ближайшие 60 минут
-            tasks_in_60_min = 0
-            for task in pending_tasks:
-                # Сделать reminder_time aware с UTC, если он naive
-                reminder_time = task.reminder_time
-                if reminder_time.tzinfo is None:
-                    reminder_time = pytz.UTC.localize(reminder_time)
+                # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
+                last_interaction = db.query(Interaction).filter(
+                    Interaction.user_id == user.id
+                ).order_by(Interaction.created_at.desc()).first()
                 
-                if now_utc <= reminder_time < next_60_min_utc:
-                    tasks_in_60_min += 1
-            
-            # Также проверить активные задачи с estimated_duration (пользователь может быть занят)
-            active_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status.in_(['pending', 'in_progress']),
-                Task.estimated_duration.isnot(None)
-            ).all()
-            
-            busy_time = 0
-            for task in active_tasks:
-                # Если задача создана недавно (последние 30 минут), учитывать её время
-                if task.created_at and (now_utc - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() < 1800:  # 30 мин
-                    busy_time += task.estimated_duration or 0
-            
-            # Если пользователь занят (больше 10 минут в ближайшие 60 мин), не отправлять
-            if tasks_in_60_min > 0 or busy_time > 10:
-                return
-            
-            # Получить все активные задачи для передачи в AI
-            # Основные задачи пользователя
-            user_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status.in_(['pending', 'in_progress'])
-            )
-            
-            # Задачи, делегированные пользователем другим
-            delegated_by_user = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.delegated_to_username.isnot(None),
-                Task.status.in_(['pending', 'in_progress'])
-            )
-            
-            # Задачи, делегированные пользователю
-            delegated_to_user = db.query(Task).filter(
-                Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
-                Task.delegation_status == 'accepted',
-                Task.status.in_(['pending', 'in_progress'])
-            )
-            
-            all_active_tasks = user_tasks.union(delegated_by_user).union(delegated_to_user).order_by(Task.reminder_time).all()
-            
-            # Добавить просроченные задачи (только основные и делегированные пользователю)
-            overdue_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status == 'pending',
-                Task.reminder_time < now_utc
-            ).union(
-                db.query(Task).filter(
+                if last_interaction:
+                    time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
+                    if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
+                        # Недавно общались, пропустить проактивное сообщение
+                        return
+                
+                # Проверить режим "не беспокоить"
+                if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
+                    # Пользователь в режиме "не беспокоить", пропустить
+                    return
+                
+                # Получить текущее время в UTC
+                now_utc = datetime.now(pytz.UTC)
+                
+                # Проверить задачи на ближайшие 60 минут (в UTC)
+                next_60_min_utc = now_utc + timedelta(minutes=PROACTIVE_CHECK_AHEAD_MINUTES)
+                
+                # Получить все pending задачи с reminder_time
+                pending_tasks = db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status == 'pending',
+                    Task.reminder_time.isnot(None)
+                ).all()
+                
+                # Проверить, есть ли задачи с reminder_time в ближайшие 60 минут
+                tasks_in_60_min = 0
+                for task in pending_tasks:
+                    # Сделать reminder_time aware с UTC, если он naive
+                    reminder_time = task.reminder_time
+                    if reminder_time.tzinfo is None:
+                        reminder_time = pytz.UTC.localize(reminder_time)
+                    
+                    if now_utc <= reminder_time < next_60_min_utc:
+                        tasks_in_60_min += 1
+                
+                # Также проверить активные задачи с estimated_duration (пользователь может быть занят)
+                active_tasks = db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['pending', 'in_progress']),
+                    Task.estimated_duration.isnot(None)
+                ).all()
+                
+                busy_time = 0
+                for task in active_tasks:
+                    # Если задача создана недавно (последние 30 минут), учитывать её время
+                    if task.created_at and (now_utc - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() < 1800:  # 30 мин
+                        busy_time += task.estimated_duration or 0
+                
+                # Если пользователь занят (больше 10 минут в ближайшие 60 мин), не отправлять
+                if tasks_in_60_min > 0 or busy_time > 10:
+                    return
+                
+                # Получить все активные задачи для передачи в AI
+                # Основные задачи пользователя
+                user_tasks = db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['pending', 'in_progress'])
+                )
+                
+                # Задачи, делегированные пользователем другим
+                delegated_by_user = db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.isnot(None),
+                    Task.status.in_(['pending', 'in_progress'])
+                )
+                
+                # Задачи, делегированные пользователю
+                delegated_to_user = db.query(Task).filter(
                     Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                     Task.delegation_status == 'accepted',
+                    Task.status.in_(['pending', 'in_progress'])
+                )
+                
+                all_active_tasks = user_tasks.union(delegated_by_user).union(delegated_to_user).order_by(Task.reminder_time).all()
+                
+                # Добавить просроченные задачи (только основные и делегированные пользователю)
+                overdue_tasks = db.query(Task).filter(
+                    Task.user_id == user.id,
                     Task.status == 'pending',
                     Task.reminder_time < now_utc
-                )
-            ).order_by(Task.reminder_time).all()
-            
-            all_tasks = all_active_tasks + overdue_tasks
-            
-            # Отправить проактивное сообщение с номером для разнообразия
-            try:
+                ).union(
+                    db.query(Task).filter(
+                        Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                        Task.delegation_status == 'accepted',
+                        Task.status == 'pending',
+                        Task.reminder_time < now_utc
+                    )
+                ).order_by(Task.reminder_time).all()
+                
+                all_tasks = all_active_tasks + overdue_tasks
+                
+                # Отправить проактивное сообщение с номером для разнообразия
                 proactive_text = await self.generate_proactive_message(user_id, "general", task_count, overdue_count, all_tasks)
                 
                 # Сохранить проактивное сообщение в таблицу Interaction
-                try:
-                    interaction = Interaction(
-                        user_id=user.id,
-                        message_type="ai",  # Изменено с "proactive" на "ai" для правильного форматирования
-                        content=proactive_text
-                    )
-                    db.add(interaction)
-                    db.commit()
-                    logger.info(f"Saved proactive message to interaction history for user {user_id}")
-                except Exception as e:
-                    logger.error(f"Failed to save proactive message to interactions: {e}")
-                    db.rollback()
+                interaction = Interaction(
+                    user_id=user.id,
+                    message_type="ai",  # Изменено с "proactive" на "ai" для правильного форматирования
+                    content=proactive_text
+                )
+                db.add(interaction)
+                db.commit()
+                logger.info(f"Saved proactive message to interaction history for user {user_id}")
                 
                 if self.bot:
                     await self.bot.send_message(
@@ -1293,8 +1304,9 @@ class ReminderService:
                     logger.info(f"[PROACTIVE] To user {user_id}: {proactive_text}")
             except Exception as e:
                 logging.error(f"Failed to send proactive message to user {user_id}: {e}")
-        finally:
-            db.close()
+                db.rollback()
+            finally:
+                db.close()
 
     async def check_and_send_overdue_reminder(self, user_id: int):
         """Проверка и отправка напоминания о просроченных задачах"""
