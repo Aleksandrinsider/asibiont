@@ -381,8 +381,8 @@ async def test_research_post(user_id):
             print(f"✅ Пост о исследовании сгенерирован ({len(content)} символов)")
             print(f"📝 Содержание:\n{content}")
             
-            # Создаем пост в БД
-            result = await create_auto_post(user.telegram_id, content, session, notify=False)
+            # Создаем пост в БД (с типом 'research')
+            result = await create_auto_post(user.telegram_id, content, session, notify=False, post_type='research')
             
             if result:
                 # Проверяем, что есть 2 поста (один из прошлого теста + этот)

@@ -242,8 +242,17 @@ async def generate_research_post(user_id, query, analysis, session):
         return None
 
 
-async def create_auto_post(user_id, content, session, notify=True):
-    """Create a post in the database and optionally notify user"""
+async def create_auto_post(user_id, content, session, notify=True, post_type='progress'):
+    """
+    Create a post in the database and optionally notify user
+    
+    Args:
+        user_id: Telegram user ID
+        content: Post content
+        session: DB session
+        notify: Whether to send Telegram notification
+        post_type: 'progress' for daily updates or 'research' for market research
+    """
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
@@ -276,7 +285,11 @@ async def create_auto_post(user_id, content, session, notify=True):
                 import aiohttp
                 
                 if TELEGRAM_TOKEN:
-                    notification_text = f"📝 Ежедневный автопост опубликован!\n\n{content}\n\n💡 Вы можете удалить пост в панели управления"
+                    # Разные тексты уведомлений в зависимости от типа поста
+                    if post_type == 'research':
+                        notification_text = f"🔍 Ваше исследование опубликовано в ленту!\n\nТеперь ваши контакты увидят ваши находки:\n\n{content[:200]}{'...' if len(content) > 200 else ''}\n\n💡 Посмотреть в ленте: /dashboard"
+                    else:
+                        notification_text = f"📝 Ежедневный автопост опубликован!\n\n{content}\n\n💡 Вы можете удалить пост в панели управления"
                     
                     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
                     data = {

@@ -5270,8 +5270,8 @@ async def research_topic(query: str, depth: str, user_id: int, session):
                 )
                 
                 if post_content:
-                    await create_auto_post(user_id, post_content, session, notify=False)
-                    logger.info(f"[RESEARCH] Auto-post created for user {user_id}")
+                    await create_auto_post(user_id, post_content, session, notify=True, post_type='research')
+                    logger.info(f"[RESEARCH] Auto-post created and user notified: {user_id}")
             except Exception as post_error:
                 logger.warning(f"[RESEARCH] Could not create auto-post: {post_error}")
                 # Не прерываем основной flow, продолжаем нормально
