@@ -41,12 +41,12 @@ async def generate_progress_post(user_id, session):
             Task.created_at >= today_start
         ).all()
         
-        completed_tasks = [t for t in tasks_today if t.status == 'completed']
+        completed_tasks = [t for t in tasks_today if t.status == 'completed' or t.status == 'done']
         pending_tasks = [t for t in tasks_today if t.status in ['pending', 'in_progress']]
-        overdue_tasks = [t for t in tasks_today if t.overdue and t.status != 'completed']
+        overdue_tasks = [t for t in tasks_today if t.status == 'overdue']
         
         # Build context for AI
-        user_name = profile.first_name if profile.first_name else (user.username or 'Пользователь')
+        user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
         user_city = profile.city or 'не указан'
         user_interests = profile.interests or 'не указаны'
         user_skills = profile.skills or 'не указаны'
@@ -139,6 +139,107 @@ def generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks):
         return f"Сегодня в работе {len(pending_tasks)} задач. Шаг за шагом продвигаюсь вперед."
     else:
         return "Сегодня планирую задачи на завтра. Главное - не терять фокус."
+
+
+async def generate_research_post(user_id, query, analysis, session):
+    """
+    Generate post from research results
+    
+    Args:
+        user_id: Telegram user ID
+        query: Research query/topic
+        analysis: Dict with research results (key_insights, opportunities, trends, etc.)
+        session: DB session
+    
+    Returns:
+        str: Natural post about research findings or None
+    """
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return None
+        
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            return None
+        
+        # Extract key data
+        insights = analysis.get('key_insights', [])
+        opportunities = analysis.get('opportunities', [])
+        trends = analysis.get('trends', [])
+        summary = analysis.get('summary', '')
+        
+        # Build AI prompt
+        user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
+        
+        context = f"""Создай живой, естественный пост от лица пользователя {user_name}, который только что провел исследование рынка/темы.
+
+Тема исследования: {query}
+
+Результаты исследования:
+"""
+        
+        if summary:
+            context += f"\nОбщее резюме: {summary}\n"
+        
+        if insights:
+            context += f"\nКлючевые инсайты:\n"
+            for insight in insights[:3]:
+                context += f"- {insight}\n"
+        
+        if opportunities:
+            context += f"\nВозможности:\n"
+            for opp in opportunities[:2]:
+                context += f"- {opp}\n"
+        
+        if trends:
+            context += f"\nТренды:\n"
+            for trend in trends[:2]:
+                context += f"- {trend}\n"
+        
+        context += """
+Требования к посту:
+1. Пиши от первого лица: "Изучал тему...", "Обнаружил интересное...", "Оказывается..."
+2. Упомяни 1-2 самых интересных находки, но естественно
+3. Покажи своё отношение - удивление, энтузиазм, или скептицизм
+4. Добавь личный контекст: зачем изучал, что планируешь с этим делать
+5. Максимум 3-4 предложения
+6. БЕЗ эмодзи, БЕЗ хештегов, БЕЗ призывов к действию
+7. Стиль - естественный разговорный, как будто делишься находкой с друзьями
+
+Примеры хороших постов:
+"Сегодня копался в теме AI для малого бизнеса. Оказывается, 67% стартапов уже используют чат-ботов, но большинство просто отвечают на FAQ, не углубляясь. Думаю, можно сделать что-то умнее - интегрировать с CRM и автоматизировать продажи. Надо протестировать идею на паре клиентах."
+
+"Решил изучить рынок доставки здорового питания в Москве. Интересно, что средний чек вырос с 800₽ до 1200₽ за год, но при этом конкуренция сумасшедшая - больше 50 игроков. Возможно, имеет смысл фокусироваться на узкой нише типа кето-диет или спортпита."
+
+Создай пост:"""
+        
+        # Generate with AI
+        response = await chat_with_ai(context, user_id=user_id, db_session=session)
+        
+        if response:
+            # Handle both dict and string responses
+            if isinstance(response, dict):
+                post_content = response.get('response', '') or response.get('message', '') or str(response)
+            else:
+                post_content = str(response)
+            
+            # Clean up response
+            post_content = post_content.strip()
+            
+            # Remove quotes if AI wrapped it
+            if post_content.startswith('"') and post_content.endswith('"'):
+                post_content = post_content[1:-1]
+            
+            logger.info(f"[RESEARCH POST] Generated post for {user_id}: {post_content[:100]}...")
+            return post_content
+        else:
+            logger.warning(f"[RESEARCH POST] AI returned empty response for {user_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"[RESEARCH POST] Error generating post for {user_id}: {e}")
+        return None
 
 
 async def create_auto_post(user_id, content, session, notify=True):

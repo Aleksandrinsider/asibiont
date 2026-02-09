@@ -5257,6 +5257,25 @@ async def research_topic(query: str, depth: str, user_id: int, session):
             session=session
         )
         
+        # Create auto-post from research results (для разнообразия ленты новостей)
+        if result.get('success') and result.get('analysis'):
+            try:
+                from auto_post_service import generate_research_post, create_auto_post
+                
+                post_content = await generate_research_post(
+                    user_id=user_id,
+                    query=query,
+                    analysis=result['analysis'],
+                    session=session
+                )
+                
+                if post_content:
+                    await create_auto_post(user_id, post_content, session, notify=False)
+                    logger.info(f"[RESEARCH] Auto-post created for user {user_id}")
+            except Exception as post_error:
+                logger.warning(f"[RESEARCH] Could not create auto-post: {post_error}")
+                # Не прерываем основной flow, продолжаем нормально
+        
         return result.get('message', 'Исследование завершено')
         
     except Exception as e:
