@@ -263,16 +263,19 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
 📊 ТАРИФЫ И ВОЗМОЖНОСТИ (для проактивных предложений):
 
-🔵 LIGHT (3000₽/мес) - БАЗОВЫЙ:
+🔵 LIGHT (3000₽/мес) - БАЗОВЫЙ + УМНЫЙ ПОИСК:
 ✅ add_task, complete_task, list_tasks, reschedule_task, delete_task
 ✅ update_profile, show_profile
 ✅ find_partners, find_relevant_contacts_for_task
 ✅ add_goal, list_goals
-❌ НЕТ: делегирования, маркетинга, алертов
+✅ quick_topic_search - быстрый поиск информации (топ-3 результата)
+✅ check_topic_relevance - проверка актуальности темы
+❌ НЕТ: делегирования, маркетинга (с AI анализом), алертов
 
 🟡 STANDARD (9000₽/мес) - LIGHT + МАРКЕТИНГ + ДЕЛЕГИРОВАНИЕ:
 ✅ Всё из LIGHT
 ✅ research_topic - веб-поиск и анализ (Google)
+✅ get_news_trends - новости и тренды по интересам
 ✅ generate_marketing_content - генерация постов с AI
 ✅ publish_to_telegram - публикация в канал
 ✅ delegate_task - делегирование задач партнёрам
@@ -352,6 +355,13 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
      → Публикует пост СРАЗУ в Telegram канал пользователя
      → Используй ПОСЛЕ generate_marketing_content если пользователь хочет
      → Триггеры: "опубликуй", "запости", "выложи в канал"
+     → Доступно: STANDARD (2700₽) и PREMIUM (27000₽)
+   
+   - get_news_trends(topic, period="week", focus="trends")
+     → Новости и тренды по теме через NewsAPI + AI анализ
+     → period: "today", "week", "month"
+     → focus: "news" (список новостей), "trends" (анализ трендов), "opportunities" (бизнес-возможности)
+     → Триггеры: "какие новости по", "последние тренды", "что происходит с", "анализ рынка"
      → Доступно: STANDARD (2700₽) и PREMIUM (27000₽)
    
    АВТОНОМНЫЙ МАРКЕТИНГ (PREMIUM ONLY):

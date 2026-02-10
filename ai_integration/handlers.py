@@ -5381,3 +5381,409 @@ async def publish_to_telegram(content: str, user_id: int, session):
     finally:
         if close_session:
             session.close()
+
+
+async def quick_topic_search(topic: str, user_id: int = None, session=None):
+    """
+    🔍 БЫСТРЫЙ ПОИСК ПО ТЕМЕ (LIGHT+)
+    Простой поиск без AI анализа - топ-3 результата с ссылками
+    
+    Args:
+        topic: Тема для поиска
+        user_id: ID пользователя  
+        session: DB сессия
+    
+    Returns:
+        Список топ-3 результатов с ссылками
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        logger.info(f"[QUICK_SEARCH] Starting for user {user_id}: topic='{topic}'")
+        
+        # Поиск через SERPER API
+        from config import SERPER_API_KEY
+        import aiohttp
+        
+        if not SERPER_API_KEY:
+            return "❌ Поиск временно недоступен"
+        
+        try:
+            async with aiohttp.ClientSession() as http_session:
+                async with http_session.post(
+                    'https://google.serper.dev/search',
+                    headers={
+                        'X-API-KEY': SERPER_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        "q": topic,
+                        "num": 3,
+                        "gl": "ru",
+                        "hl": "ru"
+                    }
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        results = []
+                        for item in data.get('organic', [])[:3]:
+                            title = item.get('title', '')
+                            snippet = item.get('snippet', '')
+                            link = item.get('link', '')
+                            
+                            if title and link:
+                                results.append({
+                                    'title': title, 
+                                    'snippet': snippet[:150] + '...' if len(snippet) > 150 else snippet,
+                                    'link': link
+                                })
+                        
+                        if results:
+                            result_text = f"🔍 **Быстрый поиск**: {topic}\n\n"
+                            
+                            for i, result in enumerate(results, 1):
+                                result_text += f"{i}. **{result['title']}**\n"
+                                if result['snippet']:
+                                    result_text += f"   {result['snippet']}\n"
+                                result_text += f"   🔗 [Читать далее]({result['link']})\n\n"
+                            
+                            result_text += "💡 **Подсказка**: Для более детального анализа и трендов используйте STANDARD тариф с функцией research_topic."
+                            return result_text
+                        else:
+                            return f"🔍 По запросу '{topic}' не найдено результатов"
+                    else:
+                        logger.warning(f"[QUICK_SEARCH] Serper API error: {response.status}")
+                        return "❌ Ошибка поиска. Попробуйте позже"
+        
+        except Exception as e:
+            logger.error(f"[QUICK_SEARCH] Serper error: {e}")
+            return "❌ Ошибка выполнения поиска"
+        
+    except Exception as e:
+        logger.error(f"Error in quick_topic_search: {e}")
+        return f"❌ Ошибка поиска по теме: {topic}"
+    finally:
+        if close_session:
+            session.close()
+
+async def check_topic_relevance(topic: str, user_id: int = None, session=None):
+    """
+    📊 ПРОВЕРКА АКТУАЛЬНОСТИ ТЕМЫ (LIGHT+)
+    Быстрая проверка есть ли свежая информация по теме
+    
+    Args:
+        topic: Тема для проверки
+        user_id: ID пользователя
+        session: DB сессия
+    
+    Returns:
+        Краткая информация об актуальности темы
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        logger.info(f"[RELEVANCE_CHECK] Starting for user {user_id}: topic='{topic}'")
+        
+        # Поиск через SERPER API  
+        from config import SERPER_API_KEY
+        import aiohttp
+        
+        if not SERPER_API_KEY:
+            return "❌ Проверка временно недоступна"
+        
+        try:
+            async with aiohttp.ClientSession() as http_session:
+                async with http_session.post(
+                    'https://google.serper.dev/search',
+                    headers={
+                        'X-API-KEY': SERPER_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        "q": f"{topic} 2025 2026",  # Ищем свежую информацию
+                        "num": 5,
+                        "gl": "ru",
+                        "hl": "ru"
+                    }
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        total_results = len(data.get('organic', []))
+                        fresh_count = 0
+                        
+                        # Считаем "свежие" результаты
+                        for item in data.get('organic', []):
+                            title_snippet = (item.get('title', '') + ' ' + item.get('snippet', '')).lower()
+                            if any(year in title_snippet for year in ['2025', '2026', 'новый', 'последний', 'свежий']):
+                                fresh_count += 1
+                        
+                        if total_results == 0:
+                            return f"📊 **Проверка актуальности**: {topic}\n\n❌ Информация по теме не найдена"
+                        
+                        freshness_score = (fresh_count / total_results) * 100 if total_results > 0 else 0
+                        
+                        result = f"📊 **Проверка актуальности**: {topic}\n\n"
+                        
+                        if freshness_score >= 60:
+                            result += "🔥 **ВЫСОКАЯ актуальность** - много свежих материалов\n"
+                        elif freshness_score >= 30:
+                            result += "📈 **СРЕДНЯЯ актуальность** - есть новая информация\n"
+                        else:
+                            result += "📉 **НИЗКАЯ актуальность** - в основном устаревшие данные\n"
+                        
+                        result += f"Найдено источников: {total_results}\n"
+                        result += f"Свежих материалов: {fresh_count}\n\n"
+                        result += "💡 **Рекомендация**: Для детального анализа трендов используйте STANDARD тариф."
+                        
+                        return result
+                    else:
+                        logger.warning(f"[RELEVANCE_CHECK] Serper API error: {response.status}")
+                        return "❌ Ошибка проверки. Попробуйте позже"
+        
+        except Exception as e:
+            logger.error(f"[RELEVANCE_CHECK] Serper error: {e}")
+            return "❌ Ошибка выполнения проверки"
+        
+    except Exception as e:
+        logger.error(f"Error in check_topic_relevance: {e}")
+        return f"❌ Ошибка проверки темы: {topic}"
+    finally:
+        if close_session:
+            session.close()
+
+async def get_news_trends(topic: str, period: str = "week", focus: str = "trends", user_id: int = None, session=None):
+    """
+    📰 ПОЛУЧЕНИЕ НОВОСТЕЙ И АНАЛИЗ ТРЕНДОВ
+    Требует: STANDARD или PREMIUM подписку
+    
+    Использует NewsAPI для поиска новостей + AI для анализа трендов
+    
+    Args:
+        topic: Тема для поиска новостей
+        period: Период (today/week/month)
+        focus: Фокус (news/trends/opportunities)
+        user_id: ID пользователя
+        session: DB сессия
+    
+    Returns:
+        Анализ новостей и трендов
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        # Проверка subscription tier (STANDARD или PREMIUM)
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
+            return "📰 Новости и тренды доступны с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        
+        logger.info(f"[NEWS_TRENDS] Starting for user {user_id}: topic='{topic}', period={period}, focus={focus}")
+        
+        # Определяем временной период
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        
+        if period == "today":
+            from_date = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+            sort_by = 'publishedAt'
+        elif period == "month":
+            from_date = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+            sort_by = 'popularity'
+        else:  # week
+            from_date = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+            sort_by = 'publishedAt'
+        
+        # Поиск новостей через NewsAPI
+        from config import NEWSAPI_API_KEY
+        import aiohttp
+        
+        if not NEWSAPI_API_KEY:
+            return "❌ Не настроен NewsAPI. Обратитесь к администратору."
+        
+        news_articles = []
+        
+        try:
+            async with aiohttp.ClientSession() as http_session:
+                # Поиск новостей по теме
+                api_url = f"https://newsapi.org/v2/everything"
+                
+                # Динамически определяем язык и дополнительные термины
+                if any(char in 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя' for char in topic.lower()):
+                    # Русская тема
+                    params = {
+                        'q': f"{topic}",
+                        'language': 'ru',
+                        'from': from_date,
+                        'sortBy': sort_by,
+                        'pageSize': 15,
+                        'apiKey': NEWSAPI_API_KEY
+                    }
+                else:
+                    # Английская тема  
+                    params = {
+                        'q': topic,
+                        'language': 'en',
+                        'from': from_date,
+                        'sortBy': sort_by,
+                        'pageSize': 15,
+                        'apiKey': NEWSAPI_API_KEY
+                    }
+                
+                async with http_session.get(api_url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('status') == 'ok' and data.get('articles'):
+                            for article in data['articles'][:15]:
+                                title = article.get('title') or ''
+                                description = article.get('description') or ''
+                                url = article.get('url') or ''
+                                published = article.get('publishedAt') or ''
+                                source = article.get('source', {}).get('name') or ''
+                                
+                                # Безопасная обработка
+                                title = title.strip() if title else ''
+                                description = description.strip() if description else ''
+                                
+                                if title and title != '[Removed]' and description:
+                                    news_articles.append({
+                                        'title': title,
+                                        'description': description,
+                                        'url': url,
+                                        'published': published,
+                                        'source': source
+                                    })
+                            
+                            logger.info(f"[NEWS_TRENDS] Found {len(news_articles)} articles")
+                    else:
+                        logger.warning(f"[NEWS_TRENDS] NewsAPI error: {response.status}")
+                        return f"❌ Ошибка получения новостей: {response.status}"
+        
+        except Exception as e:
+            logger.error(f"[NEWS_TRENDS] NewsAPI error: {e}")
+            return f"❌ Ошибка поиска новостей: {str(e)}"
+        
+        if not news_articles:
+            return f"🔍 По запросу '{topic}' не найдено свежих новостей за {period}."
+        
+        # AI-анализ новостей
+        if focus == "news":
+            # Просто список новостей
+            result_lines = [f"📰 **Новости по теме**: {topic}"]
+            
+            for i, article in enumerate(news_articles[:5], 1):
+                result_lines.append(f"\n{i}. **{article['title']}**")
+                if article['description']:
+                    result_lines.append(f"   {article['description'][:150]}...")
+                if article['source']:
+                    result_lines.append(f"   ➡️ {article['source']}")
+            
+            return "\n".join(result_lines)
+        
+        else:
+            # AI-анализ трендов и возможностей
+            articles_text = "\n\n".join([
+                f"**{article['title']}**\n{article['description']}"
+                for article in news_articles[:10]
+            ])
+            
+            focus_prompts = {
+                "trends": f"""Проанализируй новости по теме: "{topic}" и выдели ключевые тренды.
+
+НОВОСТИ:
+{articles_text}
+
+Создай анализ в формате:
+🔥 **Главные тренды**:
+• Тренд 1 (краткое объяснение)
+• Тренд 2
+• Тренд 3
+
+📈 **О чём говорят**:
+Краткое резюме (3-4 предложения)
+
+📋 **Ключевые события**:
+• Событие 1
+• Событие 2""",
+                
+                "opportunities": f"""Проанализируй новости по теме: "{topic}" и найди бизнес-возможности.
+
+НОВОСТИ:
+{articles_text}
+
+Создай анализ в формате:
+🚀 **Бизнес-возможности**:
+• Возможность 1 (кратко почему)
+• Возможность 2
+• Возможность 3
+
+📋 **На что обратить внимание**:
+Краткое резюме (3-4 предложения)
+
+🔍 **Рекомендации**:
+• Конкретное действие 1
+• Конкретное действие 2"""
+            }
+            
+            prompt = focus_prompts.get(focus, focus_prompts["trends"])
+            
+            # Отправляем запрос к DeepSeek AI
+            from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+            
+            try:
+                async with aiohttp.ClientSession() as http_session:
+                    async with http_session.post(
+                        'https://api.deepseek.com/chat/completions',
+                        headers={
+                            'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                            'Content-Type': 'application/json'
+                        },
+                        json={
+                            "model": DEEPSEEK_MODEL,
+                            "messages": [
+                                {
+                                    "role": "user",
+                                    "content": prompt
+                                }
+                            ],
+                            "temperature": 0.7,
+                            "max_tokens": 1500
+                        }
+                    ) as ai_response:
+                        if ai_response.status == 200:
+                            ai_data = await ai_response.json()
+                            ai_analysis = ai_data['choices'][0]['message']['content']
+                            
+                            return f"📰 **Анализ новостей**: {topic}\n\n{ai_analysis}"
+                        else:
+                            logger.error(f"[NEWS_TRENDS] DeepSeek error: {ai_response.status}")
+                            return f"❌ Ошибка анализа: {ai_response.status}"
+            
+            except Exception as e:
+                logger.error(f"[NEWS_TRENDS] AI analysis error: {e}")
+                return f"❌ Ошибка AI анализа: {str(e)}"
+    
+    except Exception as e:
+        logger.error(f"[NEWS_TRENDS] Error: {e}", exc_info=True)
+        return f"❌ Ошибка получения новостей: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
