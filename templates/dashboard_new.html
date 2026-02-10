@@ -1020,19 +1020,14 @@
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
-            // Парсинг @username в ссылки на профили контактов и убираем Markdown форматирование
+            // Парсинг @username в ссылки на профили контактов (без обработки markdown)
             let processedText = text;
             
-            // КРИТИЧНО: AI не должен использовать форматирование - убираем его полностью
-            // Убираем жирный шрифт **текст**
-            processedText = processedText.replace(/\*\*(.+?)\*\*/g, '$1');
-            // Убираем курсив *текст*
-            processedText = processedText.replace(/\*(.+?)\*/g, '$1');
-            // Убираем нумерацию и списки в начале строки
-            processedText = processedText.replace(/^\d+\.\s+/gm, '');
-            processedText = processedText.replace(/^[-•]\s+/gm, '');
-            // Убираем все новые строки и заменяем на пробелы для единого формата
-            processedText = processedText.replace(/\n+/g, ' ').trim();
+            // Без форматирования - оставляем текст как его генерирует агент
+            // Только сохраняем переносы строк как <br>
+            processedText = processedText.replace(/\n/g, '<br>');
+            // Убираем лишние пробелы в начале и конце
+            processedText = processedText.trim();
             
             // Проверка на дубликаты: проверяем последние 5 сообщений по тексту и отправителю
             const existingMessages = Array.from(messages.querySelectorAll('.message'));
