@@ -12,7 +12,7 @@ from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 from .prompts import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
-from .tools import TOOLS  # Импорт списка инструментов
+from .tools import get_available_tools
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ class HybridAutonomousAgent:
         
         return ""
 
-    async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, **kwargs):
+    async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, subscription_tier=None, **kwargs):
         """Универсальный вызов AI API с опциональными tools"""
         
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -175,10 +175,11 @@ class HybridAutonomousAgent:
         
         # Добавляем tools если нужно (HYBRID APPROACH)
         if use_tools:
-            data["tools"] = TOOLS
+            available_tools = get_available_tools(subscription_tier)
+            data["tools"] = available_tools
             data["tool_choice"] = "auto"  # DeepSeek сам решает
-            logger.info(f"[HYBRID] Calling AI with {len(TOOLS)} tools available")
-            logger.debug(f"[HYBRID] Tools list: {[t['function']['name'] for t in TOOLS[:5]]}...")  # Первые 5
+            logger.info(f"[HYBRID] Calling AI with {len(available_tools)} tools available for tier {subscription_tier}")
+            logger.debug(f"[HYBRID] Tools list: {[t['function']['name'] for t in available_tools[:5]]}...")  # Первые 5
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=data) as response:
@@ -191,7 +192,7 @@ class HybridAutonomousAgent:
                         if tool_calls:
                             logger.info(f"[HYBRID] AI returned {len(tool_calls)} tool calls")
                         else:
-                            logger.warning(f"[HYBRID] AI did NOT call any tools despite having {len(TOOLS)} available")
+                            logger.warning(f"[HYBRID] AI did NOT call any tools despite having {len(available_tools)} available")
                             logger.warning(f"[HYBRID] AI response content: {message.get('content', '')[:200]}")
                     return result
                 else:
@@ -395,7 +396,7 @@ class HybridAutonomousAgent:
         messages.append({"role": "user", "content": user_message})
 
         # ГИБРИДНЫЙ ПОДХОД: AI с tools - сам решает когда нужно вызвать инструменты
-        response = await self.call_ai(messages, use_tools=True)
+        response = await self.call_ai(messages, use_tools=True, subscription_tier=user.subscription_tier)
         
         message = response['choices'][0]['message']
         content = message.get('content', '')

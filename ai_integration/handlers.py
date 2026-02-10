@@ -1420,29 +1420,43 @@ def check_subscription_status(user_id=None):
 
 
 
-def accept_delegated_task(task_id, user_id=None):
-    """Accept a delegated task"""
+def accept_delegated_task(task_id=None, task_title=None, user_id=None):
+    """Accept a delegated task - supports both task_id and task_title"""
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Ошибка: Пользователь не найден."
 
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            return f"Некорректный ID задачи: {task_id}"
+        # Find task by ID or title
+        if task_id:
+            try:
+                task_id_int = int(task_id)
+            except (ValueError, TypeError):
+                return f"Некорректный ID задачи: {task_id}"
 
-        # Find task delegated to ME
-        task = (
-            session.query(Task)
-            .filter(
-                Task.id == task_id_int,
+            # Find task delegated to ME
+            task = (
+                session.query(Task)
+                .filter(
+                    Task.id == task_id_int,
+                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                    Task.delegation_status == "pending",
+                )
+                .first()
+            )
+        elif task_title:
+            # Search by words in title (including delegated tasks)
+            words = task_title.lower().split()
+            conditions = [Task.title.ilike(f"%{word}%") for word in words]
+            task = session.query(Task).filter(
                 Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                 Task.delegation_status == "pending",
-            )
-            .first()
-        )
+                or_(*conditions)
+            ).first()
+        else:
+            return "Не указан ни task_id, ни task_title."
+
         if not task:
             return "Задача не найдена или уже обработана."
 
@@ -1493,7 +1507,7 @@ def accept_delegated_task(task_id, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
-def reject_delegated_task(task_id=None, task_title=None, user_id=None):
+def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=None):
     """Reject a delegated task"""
     session = Session()
     try:
@@ -3614,38 +3628,17 @@ def check_delegation_deadlines():
         session.close()
 
 
-def update_user_memory(info=None, user_id=None, session=None):
-    """Обновить память пользователя"""
-    try:
-        if not session:
-            session = Session()
-            should_close = True
-        else:
-            should_close = False
-
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if should_close:
-                session.close()
-            return "Пользователь не найден"
-
-        # Зашифровать и сохранить информацию
-        encrypted_info = encrypt_data(info)
-        user.memory = encrypted_info
-        session.commit()
-
-        if should_close:
-            session.close()
-
-        return "Память пользователя обновлена"
-
-    except Exception as e:
-        logger.error(f"Error updating user memory for user {user_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        session.rollback()
-        if should_close and 'session' in locals():
-            session.close()
+async def update_user_memory(memory_type='general', content=None, info=None, user_id=None, session=None):
+    """Async обертка для update_user_memory_async"""
+    # Прямой вызов async версии
+    return await update_user_memory_async(
+        memory_type=memory_type,
+        content=content,
+        info=info,
+        user_id=user_id,
+        session=session,
+        close_session=(session is None)
+    )
 def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
     """Delete a task by ID or title"""
     from models import User  # Явный импорт для избежания конфликтов области видимости

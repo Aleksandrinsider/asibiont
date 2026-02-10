@@ -1,5 +1,57 @@
 # Enhanced TOOLS with clear, specific descriptions to prevent AI hallucinations
 
+# Premium functions available only on higher tiers
+PREMIUM_FUNCTIONS = {
+    'set_contact_alert',
+    'set_activity_alert', 
+    'research_topic',
+    'generate_marketing_content',
+    'publish_to_telegram',
+    'delegate_task',
+    'set_content_strategy',
+    'toggle_autonomous_feature'
+}
+
+STANDARD_FUNCTIONS = PREMIUM_FUNCTIONS - {
+    'set_contact_alert',
+    'set_activity_alert',
+    'set_content_strategy',
+    'toggle_autonomous_feature'
+}
+
+def get_available_tools(subscription_tier):
+    """
+    Filter tools based on user's subscription tier
+    
+    Args:
+        subscription_tier: User's subscription tier (LIGHT, STANDARD, PREMIUM) - can be enum, string, or value
+        
+    Returns:
+        List of available tools for the tier
+    """
+    # Handle different input types
+    if hasattr(subscription_tier, 'value'):
+        tier_value = subscription_tier.value
+    elif isinstance(subscription_tier, str):
+        # Handle both 'PREMIUM' and 'SubscriptionTier.PREMIUM'
+        if subscription_tier.startswith('SubscriptionTier.'):
+            tier_value = subscription_tier.split('.', 1)[1]
+        else:
+            tier_value = subscription_tier
+    else:
+        tier_value = str(subscription_tier).upper()
+    
+    if tier_value == 'PREMIUM':
+        # All tools available
+        return TOOLS
+    elif tier_value == 'STANDARD':
+        # Filter out PREMIUM-only functions
+        premium_only = {'set_contact_alert', 'set_activity_alert', 'set_content_strategy', 'toggle_autonomous_feature'}
+        return [tool for tool in TOOLS if tool['function']['name'] not in premium_only]
+    else:  # LIGHT
+        # Filter out all premium functions
+        return [tool for tool in TOOLS if tool['function']['name'] not in PREMIUM_FUNCTIONS]
+
 TOOLS = [
     {
         "type": "function",
@@ -41,7 +93,7 @@ TOOLS = [
                     },
                     "reminder_time": {
                         "type": "string",
-                        "description": "⚠️ КРИТИЧЕСКИ ВАЖНО! Время напоминания ОБЯЗАТЕЛЬНО для всех задач. ЕСЛИ пользователь НЕ УКАЗАЛ время ('завтра в 9:00', 'через 2 часа', 'послезавтра в 14:30') - ты ДОЛЖЕН сначала СПРОСИТЬ 'На какое время назначить?', а только потом вызывать add_task(). ЗАПРЕЩЕНО создавать задачу с дефолтным временем или угадывать время самостоятельно. Форматы: 'завтра в 9:00', 'через 2 часа', 'послезавтра в 14:30', '15:00', 'YYYY-MM-DD HH:MM'.",
+                        "description": "⚠️ КРИТИЧЕСКИ ВАЖНО! Время напоминания ОБЯЗАТЕЛЬНО для всех задач. ЕСЛИ в запросе пользователя ЕСТЬ указание времени (примеры: 'завтра в 9:00', 'через 2 часа', 'послезавтра в 14:30', '15:00') - СРАЗУ используй его в add_task(). ЕСЛИ времени НЕТ ('создай задачу проверить почту' без времени) - сначала СПРОСИ 'На какое время назначить?', а затем вызови add_task(). Поддерживаемые форматы: 'завтра в 9:00', 'через 2 часа', 'послезавтра в 14:30', '15:00', 'YYYY-MM-DD HH:MM'.",
                     },
                     "is_recurring": {
                         "type": "boolean",
@@ -66,7 +118,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "complete_task",
-            "description": "⚠️ ЗАВЕРШИТЬ ЗАДАЧУ. ОБЯЗАТЕЛЬНО вызывай при подтверждении выполнения! Ключевые слова: 'сделал', 'выполнил', 'закончил', 'завершил', 'готово', 'сделано', 'проверил'. 🎯 ЕСЛИ в системном промпте есть 'ТЕКУЩАЯ ЗАДАЧА В ФОКУСЕ' - вызывай complete_task БЕЗ ПАРАМЕТРОВ или с пустым task_title, система автоматически закроет текущую задачу. Примеры: 'готово' → complete_task({}), 'проверил' → complete_task({}), 'я завершил встречу' → complete_task({'task_title': 'встречу'}). ВАЖНО: короткие фразы ('готово', 'сделал') = вызывай БЕЗ параметров!",
+            "description": "⚠️ ОТМЕТИТЬ ВЫПОЛНЕНИЕ ЗАДАЧИ (ЗАКРЫТЬ ЗАДАЧУ). Ключевые фразы: 'сделал задачу', 'выполнил задачу', 'закончил задачу', 'завершил задачу', 'закрыть задачу', 'отметить выполнение'. Примеры: 'сделал задачу тест' → complete_task({'task_title': 'тест'}), 'выполнил презентацию' → complete_task({'task_title': 'презентацию'}). ВАЖНО: ВОЗМОЖНЫ КОРОТКИЕ ФРАЗЫ БЕЗ слова 'задачу': 'готово', 'сделал', 'проверил' → complete_task({}).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -137,7 +189,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delete_task",
-            "description": "УДАЛИТЬ ЗАДАЧУ. Вызывай ТОЛЬКО когда пользователь хочет удалить задачу. Ключевые слова: 'удали', 'убери', 'сотри', 'больше не нужна'. НЕ вызывай для завершения задач (используй complete_task). Примеры: 'удали задачу про встречу' → delete_task, 'убери напоминание о покупках' → delete_task",
+            "description": "⚠️ УДАЛИТЬ ЗАДАЧУ [ОБЯЗАТЕЛЬНО ВЫЗОВИ ФУНКЦИЮ!]. Вызывай СРАЗУ когда пользователь хочет удалить задачу. Ключевые слова: 'удали', 'убери', 'сотри', 'больше не нужна'. НЕ ПРОСТО ГОВОРИ 'удалил' - ОБЯЗАТЕЛЬНО ВЫЗОВИ delete_task()! НЕ вызывай для завершения задач (используй complete_task). Примеры: 'удали задачу про встречу' → delete_task('встречу'), 'убери напоминание о покупках' → delete_task('покупках')",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -326,16 +378,20 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "accept_delegated_task",
-            "description": "Принять делегированную задачу",
+            "description": "⚠️ ПРИНЯТЬ ДЕЛЕГИРОВАННУЮ ЗАДАЧУ [ОБЯЗАТЕЛЬНО ВЫЗОВИ!]. Ключевые слова: 'принимаю', 'согласен выполнить', 'беру задачу', 'принять делегирование', 'принять тест'. Можешь использовать task_title напрямую (проще) или task_id. НЕ ПРОСТО ГОВОРИ 'принял' - ОБЯЗАТЕЛЬНО ВЫЗОВИ accept_delegated_task()!",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_id": {
                         "type": "integer",
-                        "description": "ID задачи для принятия",
+                        "description": "ID задачи для принятия (опционально если есть task_title)",
+                    },
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название или часть названия задачи (опционально если есть task_id). Примеры: 'тест', 'встреча', 'отчет'",
                     },
                 },
-                "required": ["task_id"],
+                "required": [],
             },
         },
     },
@@ -343,20 +399,24 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "reject_delegated_task",
-            "description": "Отклонить делегированную задачу",
+            "description": "⚠️ ОТКЛОНИТЬ ДЕЛЕГИРОВАННУЮ ЗАДАЧУ [ОБЯЗАТЕЛЬНО ВЫЗОВИ!]. Ключевые слова: 'отклоняю', 'не буду делать', 'отказываюсь', 'отклонить делегирование', 'отклонить тест'. Можешь использовать task_title напрямую (проще) или task_id. НЕ ПРОСТО ГОВОРИ 'отклонил' - ОБЯЗАТЕЛЬНО ВЫЗОВИ reject_delegated_task()!",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_id": {
                         "type": "integer",
-                        "description": "ID задачи для отклонения",
+                        "description": "ID задачи для отклонения (опционально если есть task_title)",
+                    },
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название или часть названия задачи (опционально если есть task_id). Примеры: 'тест', 'встреча', 'отчет'",
                     },
                     "reason": {
                         "type": "string",
                         "description": "Причина отказа",
                     },
                 },
-                "required": ["task_id"],
+                "required": [],
             },
         },
     },
@@ -412,7 +472,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "set_contact_alert",
-            "description": "🌟 PREMIUM: Настроить автоматическое уведомление о новых пользователях с нужными навыками/интересами. Система будет мониторить регистрации и обновления профилей, и АВТОМАТИЧЕСКИ добавит информацию в твой следующий диалог через AI (проактивный контекст). Примеры: 'скажи когда появится специалист по продажам' → AI упомянет в следующем сообщении 'Кстати, зарегистрировался @user456 с опытом в продажах B2B, может быть интересен для твоих задач'. 'Предупреди о программистах на Python из Москвы' → AI сообщит 'Появился новый разработчик Python @dev789 из Москвы'. Информация приходит ЕСТЕСТВЕННО в разговоре, НЕ как push-уведомление.",
+            "description": "⚠️ МОНИТОРИНГ КОНТАКТОВ ПО НАВЫКАМ/ИНТЕРЕСАМ [ДОСТУПНО - ВЫЗЫВАЙ!]: Настроить автоматическое уведомление о новых пользователях с нужными навыками/интересами. Ключевые слова: 'мониторь @user', 'отслеживай контакт', 'следи за пользователем', 'скажи когда появится Python разработчик'. ЕСЛИ пользователь говорит 'мониторь @user' или подобное - ОБЯЗАТЕЛЬНО ВЫЗОВИ set_contact_alert()! Система будет мониторить регистрации и обновления профилей, и АВТОМАТИЧЕСКИ добавит информацию в твой следующий диалог через AI. Примеры: 'скажи когда появится специалист по продажам' → set_contact_alert(skill='продажи'), 'мониторь @test_user' → set_contact_alert(skill='test_user'). [ПРЕМИУМ функция, но ДОСТУПНА в твоем списке - значит ВЫЗЫВАЙ].",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -446,7 +506,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "generate_marketing_content",
-            "description": "🚀 AI МАРКЕТИНГ (STANDARD+): Автоматическая генерация профессионального маркетингового контента для привлечения клиентов. AI создаст цепляющий заголовок, текст поста, хэштеги и призыв к действию. Используй когда пользователь хочет: написать пост для соцсетей, создать рекламу, привлечь клиентов, продвинуть продукт. Примеры: 'напиши пост про мой бот для Telegram', 'создай рекламу для Instagram', 'как привлечь клиентов для стартапа'. Доступно с STANDARD или PREMIUM.",
+            "description": "🚀 AI МАРКЕТИНГ (STANDARD+): Автоматическая генерация профессионального маркетингового контента для привлечения клиентов. AI создаст цепляющий заголовок, текст поста, хэштеги и призыв к действию. ⚠️ НЕ СПРАШИВАЙ ДЕТАЛИ - ГЕНЕРИРУЙ СРАЗУ с тем что есть! Используй разумные defaults: если аудитория не указана → 'предприниматели 25-40', если платформа не указана → 'telegram'. Используй когда пользователь хочет: написать пост для соцсетей, создать рекламу, привлечь клиентов, продвинуть продукт. Примеры: 'напиши пост про AI' → generate_marketing_content(product_name='AI инструменты', target_audience='предприниматели 25-40', platform='telegram'), 'создай рекламу для Instagram' → generate_marketing_content(..., platform='instagram'). Доступно с STANDARD или PREMIUM.",
             "parameters": {
                 "type": "object",
                 "properties": {
