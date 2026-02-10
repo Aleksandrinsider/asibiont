@@ -1,6 +1,7 @@
 """
-Тест живого диалога: DeepSeek играет роль пользователя
-Проверяем естественность общения и учет контекста
+Тест полезности агента: DeepSeek играет роль предпринимателя
+Проверяем как агент помогает решать реальные бизнес-задачи
+Сценарий: Нужно привлечь клиентов для ИИ агента
 """
 import asyncio
 import sys
@@ -11,7 +12,7 @@ from datetime import datetime, timedelta
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_integration.chat import chat_with_ai
-from models import Session, User, UserProfile, Base, engine, Task
+from models import Session, User, UserProfile, Base, engine, Task, Subscription, SubscriptionTier
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from reminder_service import ReminderService
 import reminder_service as reminder_service_module
@@ -22,28 +23,37 @@ DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 async def generate_user_message(conversation_history, turn_number):
     """Генерирует сообщение от имени пользователя через DeepSeek (реальные условия)"""
     
-    # Персона пользователя - обычный человек в мессенджере
-    user_persona = f"""Ты - обычный пользователь Telegram, общаешься с AI-ассистентом.
+    # Персона пользователя - предприниматель с проблемой привлечения клиентов
+    user_persona = f"""Ты - предприниматель, который создал ИИ-агента для бизнеса.
 
-Веди себя естественно:
-- Пиши коротко: 5-15 слов
-- Разговорный стиль
-- Реагируй на ответы естественно
-- Можешь повторять вопросы, забывать контекст - как в реальной жизни
+ПРОБЛЕМА: Нужно привлечь первых клиентов для тестирования агента.
 
-Ход {turn_number}/10"""
+Твой характер:
+- Деловой, но не слишком формальный  
+- Конкретные вопросы о маркетинге, продвижении, поиске клиентов
+- Можешь поделиться деталями проекта
+- Ищешь практические решения
+- Иногда сомневаешься в своих идеях
+
+Ход {turn_number}/15 диалога"""
     
-    # Минимальные подсказки по ходам (не ограничения!)
+    # Направляем диалог по сценарию
     if turn_number == 1:
-        hint = "Начни с приветствия"
+        hint = "Поприветствуйся и кратко опиши проблему с привлечением клиентов"
     elif turn_number == 2:
-        hint = "Упомяни проблему с проектом"
-    elif turn_number in [5, 6]:
-        hint = "Можешь попросить создать задачу с временем"
-    elif turn_number >= 9:
-        hint = "Можешь завершать диалог"
+        hint = "Расскажи чуть больше про своего ИИ-агента"
+    elif turn_number == 3:
+        hint = "Спроси конкретный совет по привлечению клиентов"
+    elif turn_number in [4, 5]:
+        hint = "Реагируй на совет агента, можешь задать уточняющие вопросы"
+    elif turn_number in [6, 7]:
+        hint = "Попроси помочь с конкретными действиями (например, написать пост, найти партнеров)"
+    elif turn_number in [8, 9, 10]:
+        hint = "Обсуждай предложения агента, можешь согласиться на создание задач"
+    elif turn_number >= 11:
+        hint = "Подводи итоги, спрашивай что дальше делать"
     else:
-        hint = "Реагируй естественно на ответ ассистента"
+        hint = "Продолжай обсуждение по теме привлечения клиентов"
     
     messages = [
         {"role": "system", "content": user_persona},
@@ -78,7 +88,7 @@ async def generate_user_message(conversation_history, turn_number):
         return None
 
 async def run_live_dialog_test():
-    """Запускает симуляцию живого диалога"""
+    """Запускает тест полезности агента на реальной бизнес-задаче"""
     
     # Настройка
     user_id = 111222333
@@ -97,59 +107,65 @@ async def run_live_dialog_test():
         if profile:
             session.delete(profile)
         session.query(Task).filter_by(user_id=user.id).delete()
+        session.query(Subscription).filter_by(user_id=user.id).delete()
         session.commit()
         session.delete(user)
         session.commit()
     
-    # Создаем пользователя с данными в профиле
-    user = User(telegram_id=user_id, username='alexey_test', first_name='Алексей', timezone='Europe/Moscow')
+    # Создаем пользователя - предпринимателя с ИИ-агентом (STANDARD тариф для research_topic)
+    user = User(
+        telegram_id=user_id, 
+        username='ai_founder', 
+        first_name='Максим', 
+        timezone='Europe/Moscow',
+        subscription_tier=SubscriptionTier.STANDARD
+    )
     session.add(user)
     session.commit()
     session.refresh(user)
     
-    # Создаем профиль с конкретными данными для теста
+    # Добавляем активную подписку STANDARD
+    from datetime import datetime, timezone, timedelta
+    subscription = Subscription(
+        user_id=user.id,
+        telegram_id=user_id,  # Обязательное поле
+        telegram_username=user.username,
+        username=user.username,
+        plan='STANDARD',
+        tier=SubscriptionTier.STANDARD,  # Правильное поле для тарифа
+        status='active',
+        start_date=datetime.now(timezone.utc),
+        end_date=datetime.now(timezone.utc) + timedelta(days=30)
+    )
+    session.add(subscription)
+    session.commit()
+    
+    # Профиль предпринимателя с ИИ-проектом
     profile = UserProfile(
         user_id=user.id, 
-        interests='ИИ, стартапы, бизнес', 
-        goals='Привлечь 100 пользователей в ASI Biont, запустить реферальную программу',
-        city='Пермь',
-        company='ASI Biont',
-        position='Основатель'
+        interests='ИИ, стартапы, маркетинг, привлечение клиентов', 
+        goals='Привлечь первых 50 клиентов для тестирования ИИ-агента, запустить beta-версию',
+        city='Москва',
+        company='AI Solutions',
+        position='CEO & Founder',
+        skills='продуктовая разработка, Python, управление проектами',
+        bio='Создаю ИИ-агента для автоматизации бизнес-процессов. Ищу первых клиентов для тестирования.'
     )
     session.add(profile)
     session.commit()
     
-    # Добавляем несколько задач для теста проактивного контекста
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
-    
-    task1 = Task(
-        user_id=user.id,
-        title='Написать пост на Habr про AI-агентов',
-        description='Поделиться опытом создания гибридного агента',
-        reminder_time=now + timedelta(hours=3),
-        status='pending'
-    )
-    task2 = Task(
-        user_id=user.id,
-        title='Созвон с потенциальным партнером',
-        description='Обсудить интеграцию сервисов',
-        reminder_time=now + timedelta(days=1, hours=10),
-        status='pending'
-    )
-    session.add_all([task1, task2])
-    session.commit()
-    
     print("="*80)
-    print("[ТЕСТ ЖИВОГО ДИАЛОГА]")
-    print("DeepSeek играет роль обычного пользователя - реальные условия")
+    print("[ТЕСТ ПОЛЕЗНОСТИ АГЕНТА]")
+    print("Сценарий: Предприниматель ищет способы привлечь клиентов для ИИ-агента")
+    print("Цель: Проверить насколько агент полезен в решении реальных бизнес-задач")
     print("="*80)
     print()
     
     conversation_history = ""
     turn = 0
-    max_turns = 10
+    max_turns = 15  # Увеличил для полного раскрытия возможностей
     tools_used = 0
+    useful_actions = []  # Отслеживаем полезные действия
     
     while turn < max_turns:
         turn += 1
@@ -172,18 +188,20 @@ async def run_live_dialog_test():
             response = await chat_with_ai(user_message, user_id=user_id, db_session=session)
             agent_response = response.get('response', 'Нет ответа')
             
-            # Подсчет использования инструментов
-            if response.get('tools_used'):
-                tools_used += len(response['tools_used'])
+            # Анализируем полезность ответа
+            used_tools = response.get('tools_used', [])
+            if used_tools:
+                tools_used += len(used_tools)
+                useful_actions.extend(used_tools)
             
-            # Компактный вывод ответа (первые 150 символов)
-            clean_response = agent_response.replace('✅', '').replace('🎯', '').replace('📋', '').strip()
-            short_response = clean_response[:150] + ('...' if len(clean_response) > 150 else '')
+            # Показываем полный ответ (агент может быть подробным если полезен)
+            print(f"[BOT] {agent_response}")
             
-            print(f"[BOT] {short_response}")
+            if used_tools:
+                print(f"[TOOLS] Использованы: {', '.join(used_tools)}")
             
             # Обновляем историю
-            conversation_history += f"\nПользователь: {user_message}\nАссистент: {clean_response[:200]}\n"
+            conversation_history += f"\nПользователь: {user_message}\nАссистент: {agent_response[:300]}\n"
             
         except KeyboardInterrupt:
             print("\n[!] Прервано пользователем")
@@ -193,49 +211,124 @@ async def run_live_dialog_test():
             break
         
         # Пауза между ходами
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1.0)
     
-    # Финальный анализ
+    # Расширенный анализ полезности
     print("\n" + "="*80)
-    print("[ОТЧЕТ]")
+    print("[АНАЛИЗ ПОЛЕЗНОСТИ АГЕНТА]")
     print("="*80)
     
-    print(f"\nСтатистика:")
+    print(f"\n🎯 ДИАЛОГ:")
     print(f"   Ходов диалога: {turn}/{max_turns}")
     print(f"   Инструментов использовано: {tools_used}")
+    
+    # Анализ полезности действий
+    if useful_actions:
+        print(f"\n🛠️  ПОЛЕЗНЫЕ ДЕЙСТВИЯ:")
+        action_counts = {}
+        for action in useful_actions:
+            action_counts[action] = action_counts.get(action, 0) + 1
+        
+        for action, count in action_counts.items():
+            print(f"   • {action}: {count}x")
+        
+        # Оценка по категориям
+        marketing_tools = ['generate_marketing_content', 'publish_to_telegram', 'research_topic']
+        task_tools = ['add_task', 'list_tasks', 'complete_task'] 
+        contact_tools = ['find_partners', 'find_relevant_contacts_for_task']
+        
+        marketing_used = sum(1 for tool in useful_actions if tool in marketing_tools)
+        task_used = sum(1 for tool in useful_actions if tool in task_tools)
+        contact_used = sum(1 for tool in useful_actions if tool in contact_tools)
+        
+        print(f"\n📊 ПОЛЕЗНОСТЬ ПО КАТЕГОРИЯМ:")
+        print(f"   📈 Маркетинг: {marketing_used} действий")
+        print(f"   📋 Управление задачами: {task_used} действий") 
+        print(f"   👥 Нетворкинг: {contact_used} действий")
     
     # НОВАЯ сессия для чтения финальных данных
     final_session = Session()
     try:
-        # Проверяем задачи
+        # Проверяем созданные задачи
         tasks = final_session.query(Task).filter_by(user_id=user.id).all()
-        print(f"\n[+] Создано задач: {len(tasks)}")
-        for i, task in enumerate(tasks[:5], 1):  # Показываем первые 5
-            status = "+" if task.status == 'completed' else "o"
+        print(f"\n📋 РЕЗУЛЬТАТ - СОЗДАННЫЕ ЗАДАЧИ: {len(tasks)}")
+        
+        business_tasks = 0
+        marketing_tasks = 0
+        
+        for task in tasks:
+            task_title_lower = task.title.lower()
             time_str = task.reminder_time.strftime("%d.%m %H:%M") if task.reminder_time else "без времени"
-            print(f"   [{status}] {task.title[:50]} ({time_str})")
+            
+            # Категоризируем задачи
+            if any(word in task_title_lower for word in ['клиент', 'маркетинг', 'пост', 'реклам', 'продвиж']):
+                marketing_tasks += 1
+                category = "📈"
+            else:
+                business_tasks += 1
+                category = "💼"
+                
+            print(f"   {category} {task.title} ({time_str})")
         
-        if len(tasks) > 5:
-            print(f"   ... и ещё {len(tasks) - 5} задач")
+        print(f"\n📈 Маркетинг/клиенты: {marketing_tasks} задач")
+        print(f"💼 Общий бизнес: {business_tasks} задач")
         
-        # Проверяем профиль
+        # Проверяем обновления профиля
         profile = final_session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile:
-            print(f"\n[PROFILE] Профиль обновлён:")
-            if profile.city:
-                print(f"   Город: {profile.city}")
-            if profile.interests:
-                print(f"   Интересы: {profile.interests[:80]}")
-            if profile.skills:
-                print(f"   Навыки: {profile.skills[:80]}")
-            if profile.company:
-                print(f"   Компания: {profile.company}")
+            print(f"\n👤 ПРОФИЛЬ ОБНОВЛЁН:")
+            changes = []
+            if profile.skills and 'маркетинг' in profile.skills.lower():
+                changes.append("навыки маркетинга")
+            if profile.goals and len(profile.goals) > 100:
+                changes.append("расширены цели")
+            if profile.bio and 'клиент' in profile.bio.lower():
+                changes.append("обновлено описание")
+            
+            if changes:
+                print(f"   ✅ {', '.join(changes)}")
+            else:
+                print(f"   📝 Базовая информация сохранена")
+                
+        # ИТОГОВАЯ ОЦЕНКА ПОЛЕЗНОСТИ 
+        total_score = 0
+        
+        # За использование инструментов (до 40 баллов)
+        tool_score = min(tools_used * 4, 40)
+        total_score += tool_score
+        
+        # За создание бизнес-задач (до 30 баллов) 
+        task_score = min(len(tasks) * 6, 30)
+        total_score += task_score
+        
+        # За маркетинговые действия (до 30 баллов)
+        marketing_score = min((marketing_used + marketing_tasks) * 5, 30)
+        total_score += marketing_score
+        
+        print(f"\n🏆 ИТОГОВАЯ ОЦЕНКА ПОЛЕЗНОСТИ:")
+        print(f"   🛠️  Инструменты: {tool_score}/40")
+        print(f"   📋 Задачи: {task_score}/30") 
+        print(f"   📈 Маркетинг: {marketing_score}/30")
+        print(f"   🎯 ОБЩИЙ БАЛЛ: {total_score}/100")
+        
+        if total_score >= 80:
+            rating = "🚀 ОТЛИЧНО - Агент очень полезен"
+        elif total_score >= 60:
+            rating = "✅ ХОРОШО - Агент полезен"
+        elif total_score >= 40:
+            rating = "⚠️ СРЕДНЕ - Есть потенциал"
+        else:
+            rating = "❌ ПЛОХО - Агент не помогает"
+            
+        print(f"   {rating}")
+            
     finally:
         final_session.close()
     
     # Очистка
     try:
         session.query(Task).filter_by(user_id=user.id).delete()
+        session.query(Subscription).filter_by(user_id=user.id).delete()
         if profile:
             session.delete(profile)
         session.commit()
@@ -248,13 +341,13 @@ async def run_live_dialog_test():
         session.close()
     
     print("\n" + "="*80)
-    print("[OK] ТЕСТ ЗАВЕРШЁН")
+    print("[ТЕСТ ЗАВЕРШЁН] - Оценка готова")
     print("="*80)
 
 if __name__ == '__main__':
     try:
         asyncio.run(run_live_dialog_test())
     except KeyboardInterrupt:
-        print("\n\n[!] Тест прерван пользователем")
+        print("\n\n[!] Тест полезности прерван пользователем")
     except Exception as e:
-        print(f"\n\n[X] Ошибка теста: {e}")
+        print(f"\n\n[X] Ошибка теста полезности: {e}")

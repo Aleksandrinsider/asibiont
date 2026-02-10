@@ -433,13 +433,20 @@ class HybridAutonomousAgent:
             "ai_response": content
         }
 
-    async def execute_actions(self, actions, user_id):
+    async def execute_actions(self, actions, user_id, session=None):
         """
         ШАГ 2: Выполнить запланированные действия через готовые handlers
         ПРОАКТИВНОСТЬ: Автоматический анализ результатов list_tasks
         """
         # Импортируем handlers
         from . import handlers
+        
+        # Если session не передан, создаем его
+        if session is None:
+            session = Session()
+            close_session = True
+        else:
+            close_session = False
         
         results = []
         
@@ -464,6 +471,12 @@ class HybridAutonomousAgent:
                 
                 # Добавляем user_id к параметрам
                 params['user_id'] = user_id
+                
+                # Добавляем session для функций, которые его требуют
+                import inspect
+                sig = inspect.signature(handler_func)
+                if 'session' in sig.parameters:
+                    params['session'] = session
                 
                 # Исправляем известные проблемы с параметрами
                 if tool_name == 'find_relevant_contacts_for_task':
@@ -542,6 +555,10 @@ class HybridAutonomousAgent:
                     "error": str(e),
                     "reason": reason
                 })
+        
+        # Закрываем session если создали его здесь
+        if close_session:
+            session.close()
         
         return results
 
@@ -839,7 +856,7 @@ class HybridAutonomousAgent:
         # Fallback - последнее слово
         return words[-1] if words else "unknown"
 
-    async def process_request(self, user_message, user_id, context=None):
+    async def process_request(self, user_message, user_id, context=None, session=None):
         """
         Основной процесс обработки запроса:
         1. Планирование стратегии
@@ -864,7 +881,7 @@ class HybridAutonomousAgent:
             execution_results = []
             if actions:
                 logger.info(f"[AGENT] Step 2: Executing {len(actions)} actions")
-                execution_results = await self.execute_actions(actions, user_id)
+                execution_results = await self.execute_actions(actions, user_id, session)
             else:
                 logger.info(f"[AGENT] No actions to execute, direct response")
             
@@ -981,11 +998,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         agent = get_autonomous_agent()
 
         # Обрабатываем запрос через улучшенного агента
-        response_text = await agent.process_request(message, user_id, context)
+        response_text = await agent.process_request(message, user_id, context, db_session)
 
         # Возвращаем в формате, ожидаемом остальным кодом
         # Для тестирования возвращаем tool_calls из execution_results
         tool_calls = []
+        tools_used = []  # For test tracking
         try:
             # Извлекаем информацию о вызванных инструментах из execution_history
             if agent.execution_history:
@@ -994,7 +1012,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 if last_execution.get('results'):
                     for result in last_execution['results']:
                         tool_name = result.get('tool', '')
-                        if tool_name:  # Если инструмент был вызван
+                        if tool_name and result.get('success'):  # Только успешные
+                            tools_used.append(tool_name)
                             tool_calls.append({
                                 'function': {
                                     'name': tool_name,
@@ -1006,7 +1025,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         return {
             'response': response_text,
-            'tool_calls': tool_calls
+            'tool_calls': tool_calls,
+            'tools_used': tools_used  # Add for test tracking
         }
 
     except Exception as e:
