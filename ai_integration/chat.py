@@ -139,7 +139,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 user_memory=decrypted_memory,
                 context=context,
                 intent=None,
-                subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
+                subscription_tier=getattr(user, 'subscription_tier', 'LIGHT'),
                 message_type=message_type,
                 weather_info=weather_info,
                 news_info=news_info,
