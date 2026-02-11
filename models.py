@@ -356,14 +356,14 @@ except ImportError:
 connect_args = {}
 if db_url and db_url.startswith('postgresql'):
     connect_args = {
-        "connect_timeout": 10,
-        "options": "-c statement_timeout=10000"  # 10 seconds
+        "connect_timeout": 30,  # Increase timeout for Railway
+        "options": "-c statement_timeout=30000",  # 30 seconds
     }
 
 engine = create_engine(
     db_url,
-    pool_size=50,
-    max_overflow=50,
+    pool_size=5,          # Reduced for Railway limits
+    max_overflow=5,       # Reduced overflow
     pool_timeout=30,
     pool_recycle=3600,
     pool_pre_ping=True,
