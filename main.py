@@ -62,12 +62,6 @@ def normalize_city(city):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Log database URL being used (hide password)
-db_url_safe = DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else DATABASE_URL
-logger.info(f"[STARTUP] Using database: {db_url_safe}")
-logger.info(f"[STARTUP] Internal URL check: {'railway.internal' in DATABASE_URL}")
-logger.info(f"[STARTUP] PUBLIC_URL available: {bool(os.getenv('DATABASE_PUBLIC_URL'))}")
-
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 

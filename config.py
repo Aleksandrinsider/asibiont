@@ -30,21 +30,14 @@ else:
     DATABASE_URL = os.getenv("DATABASE_URL")
     DATABASE_PUBLIC_URL = os.getenv("DATABASE_PUBLIC_URL")
     
-    logger.info(f"[DB] DATABASE_URL present: {bool(DATABASE_URL)}, contains railway.internal: {bool(DATABASE_URL and 'railway.internal' in DATABASE_URL)}")
-    logger.info(f"[DB] DATABASE_PUBLIC_URL present: {bool(DATABASE_PUBLIC_URL)}")
-    
     # Use public URL if internal URL contains railway.internal (unreachable)
     if DATABASE_URL and "railway.internal" in DATABASE_URL and DATABASE_PUBLIC_URL:
-        logger.warning(f"[DB] Switching from railway.internal to public URL")
         DATABASE_URL = DATABASE_PUBLIC_URL
     elif not DATABASE_URL:
-        logger.info(f"[DB] No DATABASE_URL, using DATABASE_PUBLIC_URL")
         DATABASE_URL = DATABASE_PUBLIC_URL
     
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL or DATABASE_PUBLIC_URL is required in production mode")
-    
-    logger.info(f"[DB] Using database connection (host hidden for security)")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
