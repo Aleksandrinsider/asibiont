@@ -646,25 +646,23 @@ async def process_text_message(user_id, text, message, state):
         logger.info(f"Empty message from user {user_id}, ignoring")
         return
 
-    # Duplicate protection - используем message_id для предотвращения дублей
+    # Duplicate protection - глобальный кеш с threading.Lock
+    global message_cache, message_cache_lock
     message_cache_key = f"msg_{user_id}_{message_id}"
-    import time
-    current_time = time.time()
+    current_time = time_module.time()
     
-    # Простой кэш в памяти (храним последние 100 сообщений)
-    if not hasattr(process_text_message, 'message_cache'):
-        process_text_message.message_cache = {}
-    
-    # Очистка старых записей (старше 60 секунд)
-    process_text_message.message_cache = {k: v for k, v in process_text_message.message_cache.items() if current_time - v < 60}
-    
-    # Проверяем, было ли уже обработано это сообщение
-    if message_cache_key in process_text_message.message_cache:
-        logger.info(f"Duplicate message detected: {message_id}, skipping")
-        return
-    
-    # Отмечаем сообщение как обработанное
-    process_text_message.message_cache[message_cache_key] = current_time
+    with message_cache_lock:
+        # Очистка старых записей (старше 60 секунд)
+        message_cache = {k: v for k, v in message_cache.items() if current_time - v < 60}
+        
+        # Проверяем, было ли уже обработано это сообщение
+        if message_cache_key in message_cache:
+            logger.info(f"[DEDUP] Duplicate message detected: msg_id={message_id}, user={user_id}, skipping")
+            return
+        
+        # Отмечаем сообщение как обработанное
+        message_cache[message_cache_key] = current_time
+        logger.info(f"[DEDUP] Message registered: msg_id={message_id}, user={user_id}, cache_size={len(message_cache)}")
 
     try:
         session = Session()

@@ -213,9 +213,18 @@ def generate_proactive_context(user_id, session):
 def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None):
     """Compact system prompt with Premium features"""
 
-    # Subscription
+    # Subscription with EXPLICIT available functions
     tier_value = subscription_tier.value if hasattr(subscription_tier, 'value') else str(subscription_tier)
-    tier_info = f"\nПодписка: {tier_value}" if subscription_tier else ""
+    
+    # КРИТИЧНО: явно указываем что доступно на этом тарифе
+    if tier_value == 'LIGHT':
+        tier_info = "\n🔵 ТВОЙ ТАРИФ: LIGHT\n❌ research_topic, generate_marketing_content, publish_to_telegram, delegate_task - НЕ ДОСТУПНЫ\n✅ Доступны: задачи, поиск партнеров, quick_topic_search, профиль"
+    elif tier_value == 'STANDARD':
+        tier_info = "\n🟡 ТВОЙ ТАРИФ: STANDARD\n✅ research_topic, generate_marketing_content, publish_to_telegram, delegate_task - ДОСТУПНЫ\n❌ Алерты и автономность - только на PREMIUM"
+    elif tier_value == 'PREMIUM':
+        tier_info = "\n🟢 ТВОЙ ТАРИФ: PREMIUM\n✅ ВСЕ ФУНКЦИИ ДОСТУПНЫ (research, marketing, delegation, alerts, autonomous)"
+    else:
+        tier_info = f"\nПодписка: {tier_value}" if subscription_tier else ""
 
     # Context data
     weather = f"\nПогода: {weather_info}" if weather_info else ""
@@ -256,18 +265,20 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 Говори как обычный человек - без списков, нумераций и формальщины.
 Представь что общаешься с другом по мессенджеру - коротко, по делу, просто.
 
-❌ ЗАПРЕЩЕНО:
-- Нумерованные списки (1. 2. 3.)
-- Структуры типа "**Вариант А**: описание"  
+❌ КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ПОД УГРОЗОЙ ОШИБКИ:
+- Нумерованные списки (1. 2. 3.) - НИКОГДА не используй цифры для перечисления
+- Структуры "могу: 1) X 2) Y 3) Z" - это ГРУБАЯ ОШИБКА
+- "Начать с анализа или сразу писать пост?" - НЕ предлагай выбор, выбери сам лучший вариант и ДЕЛАЙ
+- "**Вариант А**: описание" - форматирование вариантов ЗАПРЕЩЕНО
 - "Отлично!", "Понимаю", "Круто!" - пустая вежливость
-- "Какой вариант больше подходит?" - не спрашивай, действуй
-- Несколько вариантов на выбор - выбери лучший сам
+- "У тебя STANDARD тариф, так что могу: 1) X 2) Y" - ЭТО ХУДШИЙ ПРИМЕР, НИКОГДА ТАК
 
-✅ КАК НАДО:
+✅ КАК НАДО (БЕЗ СПИСКОВ!):
 - "Лучше начать с поиска партнеров, уже нашел несколько" вместо "1. Поиск партнеров 2. Анализ рынка"
-- "Создать задачу на завтра?" вместо "Есть два варианта: создать задачу или..."  
-- ДЕЙСТВУЙ сразу, не предлагай выбор
-- Говори как живой человек, не как инструкция
+- "Окей, изучу тренды по AI агентам и сразу напишу пост для твоего канала" вместо "Могу: 1) анализ 2) пост 3) публикация"
+- "Создать задачу на завтра?" вместо "Есть два варианта: создать задачу или..."
+- ДЕЙСТВУЙ сразу: "Щас найду партнеров по маркетингу" вместо "Хочешь найду партнеров?"
+- Говори как живой человек: "Давай с маркетинга - изучу рынок и накидаю идеи для постов"
 
 🔥 КОНКРЕТНЫЕ ДЕЙСТВИЯ:
 - ДЛИННЫЕ РЕЗУЛЬТАТЫ (исследования, анализы): 
