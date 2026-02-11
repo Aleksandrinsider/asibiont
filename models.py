@@ -383,15 +383,3 @@ def init_db():
 
 Session = sessionmaker(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def is_db_available():
-    """Check if database is available for operations."""
-    if os.getenv('DB_DEGRADED') == '1':
-        return False
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return True
-    except Exception:
-        return False
