@@ -1212,15 +1212,6 @@
                     // НЕ синхронизируем вручную - updateChat() каждые 3 сек подгрузит сообщения
                     // Это предотвращает race condition и дублирование
                     // updateChat() уже работает в фоне через setInterval
-                                    });
-                                    
-                                    lastMessageCount = syncData.interactions.length;
-                                }
-                            }
-                        } catch (e) {
-                            console.error('Sync error:', e);
-                        }
-                    }, 1000);
                     
                     // Обновить список задач, профиль и контакты после отправки сообщения
                     setTimeout(async () => {
