@@ -352,22 +352,27 @@ try:
 except ImportError:
     pass  # psycopg2 not available, perhaps using SQLite
 
-# Increase connection pool size to handle more concurrent requests
+# Connection pool configuration optimized for Railway
 connect_args = {}
 if db_url and db_url.startswith('postgresql'):
     connect_args = {
-        "connect_timeout": 10,  # 10 seconds timeout for PostgreSQL
-        "options": "-c statement_timeout=10000"  # 10 seconds statement timeout
+        "connect_timeout": 10,  # 10 seconds connection timeout
+        "keepalives": 1,  # Enable TCP keepalive
+        "keepalives_idle": 30,  # Start keepalive after 30s of idle
+        "keepalives_interval": 10,  # Send keepalive every 10s
+        "keepalives_count": 5,  # Try 5 times before giving up
+        "options": "-c statement_timeout=30000"  # 30 seconds statement timeout
     }
 
 engine = create_engine(
     db_url,
-    pool_size=50,           # Increased from 20
-    max_overflow=50,        # Increased from 30
-    pool_timeout=60,        # Increased from default 30
-    pool_recycle=3600,      # Recycle connections after 1 hour
-    pool_pre_ping=True,     # Check connections before using
-    connect_args=connect_args
+    pool_size=10,           # Reduced for Railway limits (typically 20 connections max)
+    max_overflow=10,        # Reduced overflow
+    pool_timeout=30,        # 30 seconds timeout for getting connection from pool
+    pool_recycle=1800,      # Recycle connections after 30 minutes (Railway may drop idle)
+    pool_pre_ping=True,     # Always check connections before using (critical for Railway)
+    connect_args=connect_args,
+    echo=False  # Disable SQL logging in production
 )
 
 def init_db():

@@ -26,10 +26,17 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    # Priority: DATABASE_URL > DATABASE_PUBLIC_URL (use private network URL)
-    DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL")
+    # Priority: DATABASE_PRIVATE_URL > DATABASE_URL > DATABASE_PUBLIC_URL
+    # Use PRIVATE URL for Railway internal network (faster, more reliable)
+    DATABASE_URL = (
+        os.getenv("DATABASE_PRIVATE_URL") or 
+        os.getenv("DATABASE_URL") or 
+        os.getenv("DATABASE_PUBLIC_URL")
+    )
     if not DATABASE_URL:
-        raise ValueError("DATABASE_URL or DATABASE_PUBLIC_URL is required in production mode")
+        raise ValueError("DATABASE_PRIVATE_URL, DATABASE_URL or DATABASE_PUBLIC_URL is required in production mode")
+    
+    logger.info(f"[DB] Using database connection (host hidden for security)")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
