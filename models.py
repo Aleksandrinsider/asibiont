@@ -1,7 +1,8 @@
 import datetime
 import logging
 import enum
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger
+import os
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
@@ -384,9 +385,13 @@ Session = sessionmaker(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def get_db():
-    db = SessionLocal()
+def is_db_available():
+    """Check if database is available for operations."""
+    if os.getenv('DB_DEGRADED') == '1':
+        return False
     try:
-        yield db
-    finally:
-        db.close()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False

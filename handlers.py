@@ -11,7 +11,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 
 router = Router()
 from ai_integration import chat_with_ai
-from models import Session, User, Subscription, Task
+from models import Session, User, Subscription, Task, is_db_available
 from payments import create_payment
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
@@ -134,6 +134,15 @@ logger = logging.getLogger(__name__)
 @router.message(Command("start"))
 async def start_handler(message: Message):
     user_id = message.from_user.id
+
+    # Check database availability
+    if not is_db_available():
+        await message.bot.send_message(
+            message.chat.id,
+            "🤖 Бот временно работает в ограниченном режиме из-за проблем с подключением к базе данных.\n\n"
+            "Основные функции могут быть недоступны. Попробуйте позже."
+        )
+        return
 
     # Extract referral code if present
     referrer_id = None
