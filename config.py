@@ -26,8 +26,17 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    # Railway has issues with internal postgres.railway.internal, use public URL
-    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
+    # Railway internal network (postgres.railway.internal) is unreliable, prefer public URL
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    DATABASE_PUBLIC_URL = os.getenv("DATABASE_PUBLIC_URL")
+    
+    # Use public URL if internal URL contains railway.internal (unreachable)
+    if DATABASE_URL and "railway.internal" in DATABASE_URL and DATABASE_PUBLIC_URL:
+        logger.warning(f"[DB] DATABASE_URL contains railway.internal (unreachable), using DATABASE_PUBLIC_URL instead")
+        DATABASE_URL = DATABASE_PUBLIC_URL
+    elif not DATABASE_URL:
+        DATABASE_URL = DATABASE_PUBLIC_URL
+    
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL or DATABASE_PUBLIC_URL is required in production mode")
     
