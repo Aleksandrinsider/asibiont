@@ -1209,23 +1209,10 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
-                    // Add user message
-                    if (message) {
-                        addMessage(message, 'user');
-                    }
-                    if (file) {
-                        addMessage(`?? ${file.name}`, 'user');
-                    }
+                    // НЕ добавляем сообщения сразу - ждем синхронизации с БД
+                    // Это предотвращает дублирование
                     
-                    addMessage(data.response, 'ai');
-                    
-                    // Сразу помечаем сообщения как отображенные (используем временный ID)
-                    // чтобы избежать дублирования при синхронизации
-                    const tempId = Date.now(); // временный ID пока не получим настоящий
-                    displayedMessageIds.add(`temp-user-${tempId}`);
-                    displayedMessageIds.add(`temp-ai-${tempId}`);
-                    
-                    // Синхронизируем с БД через 1 секунду и загружаем новые сообщения
+                    // Синхронизируем с БД сразу после отправки
                     setTimeout(async () => {
                         try {
                             const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
