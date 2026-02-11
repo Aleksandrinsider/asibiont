@@ -119,17 +119,6 @@ else:
         else:
             raise
 
-try:
-    logger.info("Creating database tables...")
-    Base.metadata.create_all(engine)
-    logger.info("✅ Database tables created or already exist")
-except Exception as e:
-    logger.error(f"❌ Failed to create database tables: {e}")
-    if not LOCAL:
-        raise  # Fail hard in production
-    else:
-        logger.warning("Continuing with local mode despite table creation issues")
-
 logger.info("Running database migrations...")
 try:
     try:
