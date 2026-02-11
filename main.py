@@ -62,6 +62,8 @@ def normalize_city(city):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+db_available = True  # Track database availability
+
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 
@@ -85,12 +87,9 @@ for attempt in range(max_retries):
         else:
             logger.error(f"❌ Database connection failed after {max_retries} attempts: {e}")
             logger.error("Application may not work correctly without database connection")
-            # Don't exit, let the app start anyway for webhook setup
-            if not LOCAL:
-                raise  # Fail hard in production
-            else:
-                logger.warning("Continuing with local mode despite database connection issues")
-                break
+            # Don't exit in production, try to start anyway (graceful degradation)
+            logger.warning("Attempting to start application with limited functionality...")
+            db_available = False
 
     # Clear database if requested
     if os.getenv('CLEAR_DB') == '1':
@@ -112,14 +111,17 @@ except Exception as e:
     else:
         logger.warning("Continuing with local mode despite database connection issues")
 
-try:
-    logger.info("Creating database tables...")
-    Base.metadata.create_all(engine)
-    logger.info("✅ Database tables created or already exist")
-except Exception as e:
-    logger.error(f"❌ Failed to create database tables: {e}")
-    if not LOCAL:
-        raise  # Fail hard in production
+if db_available:
+    try:
+        logger.info("Creating database tables...")
+        Base.metadata.create_all(engine)
+        logger.info("✅ Database tables created or already exist")
+    except Exception as e:
+        logger.error(f"❌ Failed to create database tables: {e}")
+        if not LOCAL:
+            raise  # Fail hard in production
+else:
+    logger.warning("Skipping database table creation due to connection issues")
     else:
         logger.warning("Continuing with local mode despite table creation issues")
 
