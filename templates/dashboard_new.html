@@ -1209,25 +1209,9 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
-                    // НЕ добавляем сообщения сразу - ждем синхронизации с БД
-                    // Это предотвращает дублирование
-                    
-                    // Синхронизируем с БД сразу после отправки
-                    setTimeout(async () => {
-                        try {
-                            const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
-                            if (syncResponse.ok) {
-                                const syncData = await syncResponse.json();
-                                if (syncData.interactions) {
-                                    // Находим новые сообщения (которых нет в displayedMessageIds)
-                                    const newInteractions = syncData.interactions.filter(interaction => 
-                                        !displayedMessageIds.has(interaction.id)
-                                    );
-                                    
-                                    // Добавляем только новые сообщения в чат
-                                    newInteractions.forEach(interaction => {
-                                        addMessage(interaction.content, interaction.message_type, interaction.created_at);
-                                        displayedMessageIds.add(interaction.id);
+                    // НЕ синхронизируем вручную - updateChat() каждые 3 сек подгрузит сообщения
+                    // Это предотвращает race condition и дублирование
+                    // updateChat() уже работает в фоне через setInterval
                                     });
                                     
                                     lastMessageCount = syncData.interactions.length;
@@ -5772,10 +5756,10 @@
                         const currentMessageCount = data.interactions.length;
                         
                         if (lastMessageCount === 0) {
-                            // Первая загрузка - очищаем и показываем все сообщения
+                            // Первая загрузка - показываем все сообщения (displayedMessageIds НЕ очищаем!)
                             const chatMessages = document.getElementById('chat-messages');
                             chatMessages.innerHTML = '';
-                            displayedMessageIds.clear();
+                            // displayedMessageIds.clear(); - НЕ ОЧИЩАЕМ! Предотвращает дубли
                             
                             // Если нет сообщений, показываем заглушку
                             if (data.interactions.length === 0) {
