@@ -7,7 +7,6 @@ from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 import os
-import time
 from sqlalchemy import text, or_, and_, inspect
 import re
 import jinja2
@@ -17,6 +16,7 @@ import aiohttp
 import asyncio
 import logging
 import pytz
+import time
 
 # Import handlers
 from handlers import router as handlers_router
@@ -62,14 +62,13 @@ def normalize_city(city):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-db_available = True  # Track database availability
-
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 
-# Retry database connection with exponential backoff
+# Retry logic for database connection
 max_retries = 5
-retry_delay = 2  # seconds
+retry_delay = 1  # Start with 1 second
+db_connected = False
 
 for attempt in range(max_retries):
     try:
@@ -77,7 +76,8 @@ for attempt in range(max_retries):
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         logger.info("✅ Database connection successful")
-        break  # Success, exit retry loop
+        db_connected = True
+        break
     except Exception as e:
         if attempt < max_retries - 1:
             logger.warning(f"Database connection attempt {attempt + 1}/{max_retries} failed: {e}")
@@ -87,41 +87,46 @@ for attempt in range(max_retries):
         else:
             logger.error(f"❌ Database connection failed after {max_retries} attempts: {e}")
             logger.error("Application may not work correctly without database connection")
-            # Don't exit in production, try to start anyway (graceful degradation)
-            logger.warning("Attempting to start application with limited functionality...")
-            db_available = False
+            db_connected = False
 
-    # Clear database if requested
-    if os.getenv('CLEAR_DB') == '1':
-        logger.warning("CLEAR_DB=1 detected, clearing all database data...")
-        try:
-            Base.metadata.drop_all(engine)
-            logger.warning("All tables dropped successfully")
-        except Exception as e:
-            logger.error(f"Error dropping tables: {e}")
+if not db_connected:
+    # Graceful degradation - continue without database in production
+    if not LOCAL:
+        logger.warning("Continuing with limited functionality due to database issues")
+        # Set a global flag for graceful degradation
+        os.environ['DB_DEGRADED'] = '1'
+    else:
+        logger.error("Database connection required in local mode")
+        raise
+else:
+    try:
+        # Clear database if requested
+        if os.getenv('CLEAR_DB') == '1':
+            logger.warning("CLEAR_DB=1 detected, clearing all database data...")
+            try:
+                Base.metadata.drop_all(engine)
+                logger.warning("All tables dropped successfully")
+            except Exception as e:
+                logger.error(f"Error dropping tables: {e}")
 
-    # Initialize database tables
-    init_db()
+        # Initialize database tables
+        init_db()
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+        if not LOCAL:
+            logger.warning("Continuing with limited functionality due to database issues")
+            os.environ['DB_DEGRADED'] = '1'
+        else:
+            raise
+
+try:
+    logger.info("Creating database tables...")
+    Base.metadata.create_all(engine)
+    logger.info("✅ Database tables created or already exist")
 except Exception as e:
-    logger.error(f"❌ Database connection failed: {e}")
-    logger.error("Application may not work correctly without database connection")
-    # Don't exit, let the app start anyway for webhook setup
+    logger.error(f"❌ Failed to create database tables: {e}")
     if not LOCAL:
         raise  # Fail hard in production
-    else:
-        logger.warning("Continuing with local mode despite database connection issues")
-
-if db_available:
-    try:
-        logger.info("Creating database tables...")
-        Base.metadata.create_all(engine)
-        logger.info("✅ Database tables created or already exist")
-    except Exception as e:
-        logger.error(f"❌ Failed to create database tables: {e}")
-        if not LOCAL:
-            raise  # Fail hard in production
-else:
-    logger.warning("Skipping database table creation due to connection issues")
     else:
         logger.warning("Continuing with local mode despite table creation issues")
 
