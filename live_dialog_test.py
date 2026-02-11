@@ -15,42 +15,64 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_integration.autonomous_agent import chat_with_ai
 
 class LiveDialogTester:
-    """Тестер живого диалога с агентом"""
+    """Тестер живого диалога с агентом для разных тарифов"""
 
-    def __init__(self):
+    def __init__(self, tier="LIGHT"):
+        self.tier = tier
         self.conversation_history = []
-        self.user_id = 77777  # Используем существующего пользователя LIGHT
+        # Разные пользователи для разных тарифов
+        self.user_ids = {
+            "LIGHT": 77777,
+            "STANDARD": 88888,
+            "PREMIUM": 99999
+        }
+        self.user_id = self.user_ids.get(tier, 77777)
         self.step = 0
 
-    async def generate_user_message(self, context=""):
+    async def generate_user_message(self, context="", tier="LIGHT"):
         """Генерирует естественное сообщение пользователя через DeepSeek"""
         try:
             import aiohttp
             from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
-            system_prompt = f"""Ты - обычный пользователь телеграм-бота для управления задачами.
-Пиши естественные, разговорные сообщения как реальный человек.
-Не используй шаблоны или заготовки.
+            tier_descriptions = {
+                "LIGHT": "базовый тариф с ограниченными функциями",
+                "STANDARD": "бизнес-тариф с маркетингом и делегированием",
+                "PREMIUM": "премиум-тариф со всеми функциями"
+            }
+
+            system_prompt = f"""Ты - разработчик AI агента, который хочет продвинуть свой продукт на рынке и привлечь больше пользователей.
+
+ТВОЙ ПРОФИЛЬ:
+- Разработчик AI систем и автономных агентов
+- Интересуешься: AI, программирование, стартапы, бизнес
+- Город: Москва
+- Работа: разработка AI решений
+- Текущий тариф: {tier} ({tier_descriptions[tier]})
+
+ТВОИ ЦЕЛИ:
+- Продвинуть AI агента на рынке
+- Привлечь больше пользователей
+- Улучшить продукт
+- Найти партнеров для развития
+- Создать контент для продвижения
 
 КОНТЕКСТ ДИАЛОГА:
 {context}
 
-ПРАВИЛА:
-- Пиши короткие, естественные сообщения (1-3 предложения)
-- Используй разговорный стиль: "привет", "спасибо", "ок", "ясно"
-- Задавай вопросы, когда интересно
-- Проси помощи, когда нужно
-- Реагируй на предложения агента
-- Не повторяйся, будь разнообразным
+СТИЛЬ ОБЩЕНИЯ:
+- Профессиональный, но дружелюбный
+- Фокус на бизнес и развитие продукта
+- Интересуешься маркетингом, партнерами, аналитикой
+- Задаешь конкретные вопросы
+- Просишь помощи в реальных задачах продвижения
 
-ПРИМЕРЫ СООБЩЕНИЙ:
-"Привет, что умеешь?"
-"Создай задачу сходить в магазин завтра в 10"
-"Что у меня по задачам?"
-"Найди партнеров для бизнеса"
-"Спасибо, пока"
+ПРИМЕРЫ СООБЩЕНИЙ ДЛЯ {tier.upper()}:
+LIGHT: "Привет! Хочу найти партнеров для продвижения моего AI агента"
+STANDARD: "Нужно создать пост в Telegram о преимуществах моего AI решения"
+PREMIUM: "Проанализируй рынок AI агентов и найди возможности для роста"
 
-Сгенерируй ОДНО сообщение пользователя для продолжения диалога:"""
+Сгенерируй ОДНО реалистичное сообщение пользователя для продолжения диалога:"""
 
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -85,14 +107,15 @@ class LiveDialogTester:
             return "Привет"
 
     async def run_dialog_test(self):
-        """Запуск теста диалога из 20 шагов"""
+        """Запуск теста диалога из 15 шагов для конкретного тарифа"""
 
-        print("🎭 ЖИВОЙ ТЕСТ ДИАЛОГА АГЕНТА")
-        print("=" * 50)
-        print("Цель: Проверить качества агента высокого уровня")
-        print("Шаги: 20 сообщений в реальном времени")
-        print("Пользователь: Генерируется DeepSeek (натуральные сообщения)")
-        print("=" * 50)
+        print(f"🎭 ТЕСТ РАЗРАБОТЧИКА AI АГЕНТА - Тариф {self.tier.upper()}")
+        print("=" * 60)
+        print("Сценарий: Разработчик хочет продвинуть AI агента на рынке")
+        print(f"Тариф: {self.tier.upper()}")
+        print("Шаги: 15 сообщений в реальном времени")
+        print("Пользователь: AI разработчик (генерируется DeepSeek)")
+        print("=" * 60)
 
         # Качества для проверки
         qualities = {
@@ -109,63 +132,59 @@ class LiveDialogTester:
         for quality, desc in qualities.items():
             print(f"  {quality}: {desc}")
 
-        print(f"\n👤 ПОЛЬЗОВАТЕЛЬ: ID {self.user_id} (LIGHT тариф)")
+        print(f"\n👤 ПОЛЬЗОВАТЕЛЬ: ID {self.user_id} ({self.tier.upper()} тариф)")
         print("🤖 АГЕНТ: ASI Biont с умным поведением")
-        # Начало диалога
-        context = "Начало разговора. Пользователь только что написал первое сообщение."
 
-        for step in range(1, 21):
-            print(f"\n{'='*50}")
-            print(f"ШАГ {step}/20 - {datetime.now().strftime('%H:%M:%S')}")
-            print('='*50)
+        # Основной цикл диалога (15 шагов)
+        for step in range(15):
+            self.step = step + 1
+            print(f"\n==================================================")
+            print(f"ШАГ {self.step}/15 - {datetime.now().strftime('%H:%M:%S')}")
+            print("=" * 50)
 
-            # Генерируем сообщение пользователя
-            user_message = await self.generate_user_message(context)
-            print(f"👤 ПОЛЬЗОВАТЕЛЬ: {user_message}")
-
-            # Получаем ответ агента
             try:
-                agent_response = await chat_with_ai(user_message, user_id=self.user_id)
-                response_text = agent_response['response']
-                tool_calls = agent_response.get('tool_calls', [])
-                tools_used = agent_response.get('tools_used', [])
+                # Генерируем сообщение пользователя
+                context = ""
+                if self.conversation_history:
+                    # Передаем последние 3 сообщения для контекста
+                    recent_msgs = self.conversation_history[-3:]
+                    context = "\n".join([
+                        f"Пользователь: {msg['user']}\nАгент: {msg['agent'][:200]}..."
+                        for msg in recent_msgs
+                    ])
 
-                print(f"🤖 АГЕНТ: {response_text[:200]}{'...' if len(response_text) > 200 else ''}")
+                user_message = await self.generate_user_message(context, self.tier)
+                print(f"👤 РАЗРАБОТЧИК: {user_message}")
 
-                if tool_calls:
-                    print(f"🔧 ВЫЗВАННЫЕ ИНСТРУМЕНТЫ: {len(tool_calls)}")
-                    for i, tc in enumerate(tool_calls[:3]):  # Показываем первые 3
-                        tool_name = tc.get('function', {}).get('name', 'unknown')
-                        print(f"   {i+1}. {tool_name}")
-                    if len(tool_calls) > 3:
-                        print(f"   ... и еще {len(tool_calls)-3}")
-                else:
-                    print("🔧 ИНСТРУМЕНТЫ: Не вызваны")
+                # Получаем ответ агента
+                from ai_integration.autonomous_agent import chat_with_ai
+                response = await chat_with_ai(user_message, user_id=self.user_id)
+
+                agent_response = response.get('response', 'Ошибка ответа')
+                tools_called = response.get('tool_calls', [])
+
+                print(f"🤖 АГЕНТ: {agent_response[:300]}{'...' if len(agent_response) > 300 else ''}")
+                print(f"🔧 ИНСТРУМЕНТЫ: {'Вызваны' if tools_called else 'Не вызваны'}")
+
+                if tools_called:
+                    tool_names = [tool.get('function', {}).get('name', 'unknown') if isinstance(tool, dict) else str(tool) for tool in tools_called]
+                    print(f"   Список: {', '.join(tool_names)}")
 
                 # Сохраняем в историю
                 self.conversation_history.append({
-                    'step': step,
+                    'step': self.step,
                     'user': user_message,
-                    'agent': response_text,
-                    'tools': [tc.get('function', {}).get('name') for tc in tool_calls],
+                    'agent': agent_response,
+                    'tools': tools_called,
                     'timestamp': datetime.now().isoformat()
                 })
-
-                # Обновляем контекст для следующего сообщения
-                context = f"Последние сообщения:\n"
-                for msg in self.conversation_history[-3:]:  # Последние 3
-                    context += f"Пользователь: {msg['user'][:100]}...\n"
-                    context += f"Агент: {msg['agent'][:100]}...\n"
-                    if msg['tools']:
-                        context += f"Инструменты: {', '.join(msg['tools'])}\n"
-                    context += "\n"
 
             except Exception as e:
                 print(f"❌ ОШИБКА: {e}")
                 break
 
             # Небольшая пауза между шагами
-            await asyncio.sleep(1)
+            await asyncio.sleep(1.5)
 
         # Анализ результатов
         print(f"\n{'='*50}")
@@ -179,42 +198,70 @@ class LiveDialogTester:
         print(f"   Всего шагов: {len(self.conversation_history)}")
         print(f"   Вызовов инструментов: {total_tools_called}")
         print(f"   Шагов с инструментами: {steps_with_tools}")
-        print(f"   Среднее инструментов на шаг: {total_tools_called/len(self.conversation_history):.1f}")
-        # Анализ по качествам
-        print(f"\n🎯 ОЦЕНКА КАЧЕСТВ:")
+        print(f"   Среднее инструментов на шаг: {total_tools_called/len(self.conversation_history):.1f}" if self.conversation_history else "   Среднее инструментов на шаг: 0.0")
+        # Анализ по качествам для AI разработчика
+        print(f"\n🎯 ОЦЕНКА КАЧЕСТВ ДЛЯ AI РАЗРАБОТЧИКА:")
 
-        # Контекстность - проверяем упоминания времени/погоды/профиля
-        context_mentions = sum(1 for msg in self.conversation_history
-                              if any(word in msg['agent'].lower()
-                                    for word in ['ночь', 'день', 'утро', 'вечер', 'погода', 'профиль', 'интерес']))
-        print(f"   🎯 КОНТЕКСТНОСТЬ: {context_mentions}/{len(self.conversation_history)} упоминаний контекста")
+        # Бизнес-фокус - упоминания маркетинга, партнеров, роста
+        business_focus = sum(1 for msg in self.conversation_history
+                            if any(word in msg['agent'].lower()
+                                  for word in ['маркетинг', 'партнер', 'продвижени', 'рост', 'бизнес', 'клиент']))
+        print(f"   💼 БИЗНЕС-ФОКУС: {business_focus}/{len(self.conversation_history)} бизнес-ориентированных ответов")
 
-        # Исполнение - проверяем реальные вызовы инструментов
+        # Техническая экспертиза - упоминания AI, разработки, технологий
+        tech_expertise = sum(1 for msg in self.conversation_history
+                            if any(word in msg['agent'].lower()
+                                  for word in ['ai', 'разработк', 'технолог', 'алгоритм', 'код']))
+        print(f"   🤖 ТЕХНИЧЕСКАЯ ЭКСПЕРТИЗА: {tech_expertise}/{len(self.conversation_history)} технических ответов")
+
+        # Проактивность - предложения действий, инициатива
+        proactivity = sum(1 for msg in self.conversation_history
+                         if any(word in msg['agent'].lower()
+                               for word in ['предлагаю', 'создадим', 'найдем', 'проанализируем', 'давай']))
+        print(f"   🚀 ПРОАКТИВНОСТЬ: {proactivity}/{len(self.conversation_history)} проактивных предложений")
+
+        # Исполнение - реальные вызовы инструментов
         execution_score = steps_with_tools
         print(f"   ⚡ ИСПОЛНЕНИЕ: {execution_score}/{len(self.conversation_history)} шагов с реальными действиями")
 
-        # Естественность - проверяем отсутствие формальных фраз
-        formal_phrases = ['могу помочь', 'предлагаю', 'давай', 'посмотрим']
-        unnatural_count = sum(1 for msg in self.conversation_history
-                             if any(phrase in msg['agent'].lower() for phrase in formal_phrases))
-        natural_score = len(self.conversation_history) - unnatural_count
-        print(f"   💬 ЕСТЕСТВЕННОСТЬ: {natural_score}/{len(self.conversation_history)} естественных ответов")
+        # Кастомизация под тариф
+        tier_specific_features = {
+            "LIGHT": ["задачи", "партнеры", "профиль"],
+            "STANDARD": ["маркетинг", "пост", "делегирован"],
+            "PREMIUM": ["анализ", "алерты", "автономн"]
+        }
 
-        # Эффективность - проверяем конкретные предложения
-        concrete_suggestions = sum(1 for msg in self.conversation_history
-                                 if any(word in msg['agent'].lower()
-                                       for word in ['создай', 'найди', 'посмотри', 'рекомендую', 'предлагаю']))
-        print(f"   💡 ЭФФЕКТИВНОСТЬ: {concrete_suggestions}/{len(self.conversation_history)} конкретных предложений")
+        tier_usage = sum(1 for msg in self.conversation_history
+                        if any(word in msg['agent'].lower()
+                              for word in tier_specific_features.get(self.tier, [])))
+        print(f"   🎯 ИСПОЛЬЗОВАНИЕ ФУНКЦИЙ {self.tier.upper()}: {tier_usage}/{len(self.conversation_history)} использований функций тарифа")
 
-        print(f"\n💾 ДИАЛОГ СОХРАНЕН В: conversation_log.json")
-
-        # Сохраняем лог
-        with open('conversation_log.json', 'w', encoding='utf-8') as f:
-            json.dump(self.conversation_history, f, ensure_ascii=False, indent=2)
+        # Итоговая оценка
+        total_score = (business_focus + tech_expertise + proactivity + execution_score + tier_usage) / 5
+        print(f"\n🏆 ИТОГОВАЯ ОЦЕНКА ДЛЯ {self.tier.upper()}: {total_score:.1f}/15 (макс. 15)")
 
 async def main():
-    tester = LiveDialogTester()
-    await tester.run_dialog_test()
+    """Запуск тестов для всех тарифов"""
+    tiers = ["LIGHT", "STANDARD", "PREMIUM"]
+
+    for tier in tiers:
+        print(f"\n{'='*80}")
+        print(f"🚀 НАЧИНАЕМ ТЕСТ ДЛЯ ТАРИФА {tier.upper()}")
+        print('='*80)
+
+        tester = LiveDialogTester(tier=tier)
+        await tester.run_dialog_test()
+
+        print(f"\n💾 ДИАЛОГ СОХРАНЕН В: conversation_log_{tier.lower()}.json")
+
+        # Сохраняем лог для каждого тарифа
+        with open(f'conversation_log_{tier.lower()}.json', 'w', encoding='utf-8') as f:
+            json.dump(tester.conversation_history, f, ensure_ascii=False, indent=2)
+
+        # Пауза между тарифами
+        if tier != tiers[-1]:
+            print(f"\n⏳ ПЕРЕХОД К СЛЕДУЮЩЕМУ ТАРИФУ ЧЕРЕЗ 3 СЕКУНДЫ...")
+            await asyncio.sleep(3)
 
 if __name__ == "__main__":
     asyncio.run(main())

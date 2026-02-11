@@ -131,35 +131,57 @@ def get_premium_alerts_context(user_id, session):
     return hints
 
 def generate_proactive_context(user_id, session):
-    """Compact context: time, tasks, interests, goals, premium alerts"""
+    """УМНЫЙ ПРОАКТИВНЫЙ КОНТЕКСТ: время, задачи, интересы, погода, паттерны поведения"""
     from models import User, UserProfile, Task
-    
+
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return ""
-        
+
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        
+
         # User time
         base_now = datetime.now(pytz.UTC)
         user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
         user_now = base_now.astimezone(user_tz)
-        
+
         hints = []
-        
-        # Time of day
+
+        # АНАЛИЗ ВРЕМЕНИ СУТОК С КОНТЕКСТОМ
         hour = user_now.hour
-        hints.append(f"⏰ {user_now.strftime('%H:%M')}")
-        
-        # Tasks
+        if 6 <= hour < 12:
+            time_context = "🌅 Утро - время планирования и энергичных активностей"
+        elif 12 <= hour < 18:
+            time_context = "🌞 День - продуктивное время для работы и встреч"
+        elif 18 <= hour < 23:
+            time_context = "🌆 Вечер - время отдыха, анализа дня, социальных активностей"
+        else:
+            time_context = "🌙 Ночь - время отдыха и подготовки ко сну"
+
+        hints.append(time_context)
+
+        # ПОГОДА (если доступна)
+        weather_hint = ""
+        if profile and profile.city:
+            try:
+                from .utils import get_weather_info
+                weather = get_weather_info(profile.city)
+                if weather:
+                    weather_hint = f"🌤️ {weather}"
+                    hints.append(weather_hint)
+            except:
+                pass
+
+        # АНАЛИЗ ЗАДАЧ С ПАТТЕРНАМИ
         tasks = session.query(Task).filter(
             Task.user_id == user.id,
             Task.status.in_(['pending', 'active', 'in_progress'])
-        ).order_by(Task.reminder_time.asc()).limit(5).all()
-        
+        ).order_by(Task.reminder_time.asc()).limit(10).all()
+
         if tasks:
-            overdue, today = [], []
+            overdue, today, upcoming = [], [], []
+
             for t in tasks:
                 if t.reminder_time:
                     try:
@@ -168,43 +190,88 @@ def generate_proactive_context(user_id, session):
                             overdue.append(t.title)
                         elif dt.date() == user_now.date():
                             today.append(f"{t.title} ({dt.strftime('%H:%M')})")
+                        elif dt.date() == (user_now.date() + timedelta(days=1)):
+                            upcoming.append(t.title)
                     except:
                         pass
-            
+
             if overdue:
-                hints.append(f"⚠️ Просрочено: {', '.join(overdue[:2])}")
+                hints.append(f"⚠️ ПРОСРОЧЕНО: {', '.join(overdue[:3])}")
             if today:
-                hints.append(f"📅 Сегодня: {', '.join(today[:2])}")
-        
-        # Profile data
+                hints.append(f"📅 СЕГОДНЯ: {', '.join(today[:3])}")
+            if upcoming:
+                hints.append(f"🔮 ЗАВТРА: {', '.join(upcoming[:2])}")
+
+            # АНАЛИЗ ПАТТЕРНОВ ПРОДУКТИВНОСТИ
+            total_tasks = len(tasks)
+            if total_tasks > 5:
+                hints.append(f"📊 Много задач ({total_tasks}) - фокус на приоритетах")
+            elif total_tasks == 0:
+                hints.append("✅ Нет активных задач - время для новых инициатив")
+
+        # ПРОФИЛЬ И ИНТЕРЕСЫ С КОНТЕКСТОМ
         if profile:
             if profile.interests:
-                hints.append(f"💡 {profile.interests.split(',')[0].strip()}")
+                interests = [i.strip() for i in profile.interests.split(',')[:3]]
+                hints.append(f"💡 ИНТЕРЕСЫ: {', '.join(interests)}")
+
             if profile.goals:
-                hints.append(f"🎯 {profile.goals.split(',')[0].strip()}")
+                goals = [g.strip() for g in profile.goals.split(',')[:2]]
+                hints.append(f"🎯 ЦЕЛИ: {', '.join(goals)}")
+
+            if profile.skills:
+                skills = [s.strip() for s in profile.skills.split(',')[:2]]
+                hints.append(f"🛠️ НАВЫКИ: {', '.join(skills)}")
+
             if profile.company:
-                hints.append(f"🏢 {profile.company}")
-        
-        # Partners (if available)
+                hints.append(f"🏢 РАБОТА: {profile.company}")
+
+            if profile.position:
+                hints.append(f"👔 ДОЛЖНОСТЬ: {profile.position}")
+
+        # ПАРТНЕРЫ ПО ИНТЕРЕСАМ
         if profile and profile.interests:
             try:
                 from .handlers import get_partners_list
                 partners = get_partners_list(user.id, session)
-                if partners[:1]:
-                    hints.append(f"🤝 Партнеры доступны")
+                if partners:
+                    # Найдем общие интересы
+                    common_interests = set()
+                    for p in partners[:3]:
+                        if p.interests:
+                            partner_interests = set(i.strip().lower() for i in p.interests.split(','))
+                            user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                            common = user_interests & partner_interests
+                            common_interests.update(common)
+
+                    if common_interests:
+                        hints.append(f"🤝 ПАРТНЕРЫ: общие интересы в {', '.join(list(common_interests)[:2])}")
+                    else:
+                        hints.append(f"🤝 ДОСТУПНО {len(partners)} партнеров")
             except:
                 pass
-        
-        # Premium alerts (proactive notifications)
+
+        # PREMIUM АЛЕРТЫ
         alert_hints = get_premium_alerts_context(user_id, session)
         if alert_hints:
             hints.extend(alert_hints)
-        
+
+        # КОНТЕКСТНЫЕ РЕКОМЕНДАЦИИ
+        if not tasks and profile and profile.interests:
+            # Если нет задач, но есть интересы - предложим идеи
+            interest = profile.interests.split(',')[0].strip().lower()
+            if 'ai' in interest or 'программи' in interest:
+                hints.append("💡 ИДЕЯ: изучить новые фреймворки или найти единомышленников")
+            elif 'бизнес' in interest or 'стартап' in interest:
+                hints.append("💡 ИДЕЯ: проанализировать рынок или найти инвесторов")
+            elif 'спорт' in interest:
+                hints.append("💡 ИДЕЯ: найти партнеров для тренировок или соревнований")
+
         if hints:
-            return "\n\nКОНТЕКСТ:\n" + "\n".join(hints)
-        
+            return "\n\nУМНЫЙ КОНТЕКСТ:\n" + "\n".join(hints)
+
         return ""
-        
+
     except Exception as e:
         logger.error(f"[PROACTIVE] Error: {e}")
         return ""
@@ -467,15 +534,59 @@ PREMIUM: + автономность, алерты
 ✅ "Проанализировал рынок - тренд: автономные агенты. Создал задачу 'изучить tool calling'"
 ✅ "Твои задачи: 2 сегодня, 1 просрочена. Перенес срочную на завтра 10:00"
 
+⚡ УМНЫЕ АВТОМАТИЧЕСКИЕ ТРИГГЕРЫ - ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ ИНСТРУМЕНТЫ!
+
+1. "ПРИВЕТ" / "ЗДРАВСТВУЙ" → НЕМЕДЛЕННО list_tasks()!
+   - ВСЕГДА вызывай list_tasks() при любом приветствии
+   - ЕСЛИ ночь (22:00-6:00) → после list_tasks() скажи про отдых
+   - ЕСЛИ утро → после list_tasks() предложи план на день
+   - ЕСЛИ есть задачи → покажи их статус
+   - ЕСЛИ задач нет → проанализируй профиль и дай 1-2 идеи
+
+2. "ЧТО НОВОГО?" / "ЧТО ПОСОВЕТУЕШЬ?" → ОБЯЗАТЕЛЬНО get_news_trends()!
+   - Анализируй профиль: если "AI" → get_news_trends(topic="AI")
+   - Если "бизнес" → get_news_trends(topic="стартапы")
+   - Если "программирование" → get_news_trends(topic="разработка ПО")
+
+3. УПОМИНАНИЕ ИНТЕРЕСОВ → КОМБИНИРОВАННЫЕ ДЕЙСТВИЯ:
+   - "интересуюсь Python" → quick_topic_search("Python 2026") + find_partners("Python разработка")
+   - "хочу стартап" → get_news_trends(topic="стартапы") + find_partners("предприниматели")
+   - "ищу работу" → quick_topic_search("вакансии [профессия]") + find_partners("HR")
+
+4. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
+   - "создать задачу [тема]" → add_task() + find_relevant_contacts_for_task()
+   - "что у меня по задачам" → list_tasks() + анализ паттернов
+   - "сделал задачу" → complete_task() + предложение следующего шага
+
+5. КОНТЕКСТНЫЕ СИТУАЦИИ:
+   - Плохая погода → indoor активности (курсы, чтение, разработка)
+   - Хорошая погода → outdoor (прогулки, спорт, мероприятия)
+   - Вечер → подведение итогов, планирование завтра
+   - Утро → энергичные активности, планирование дня
+
+КРИТИЧНО: ВСЕГДА ВЫЗЫВАЙ ИНСТРУМЕНТЫ ПРИ СООТВЕТСТВУЮЩИХ ТРИГГЕРАХ!
+- "привет" → list_tasks()
+- "что нового" → get_news_trends()
+- "задачи" → list_tasks()
+- "создать" → add_task()
+- "сделал" → complete_task()
+
+ПРАВИЛА УМНОГО ПОВЕДЕНИЯ:
+✅ ДУМАЙ ПЕРЕД ДЕЙСТВИЕМ - анализируй контекст
+✅ ИСПОЛЬЗУЙ КОМБИНАЦИИ - несколько инструментов для комплексных ответов
+✅ БУДЬ КОНКРЕТЕН - 1-2 предложения вместо длинных списков
+✅ УЧИТЫВАЙ ПРОФИЛЬ - персонализируй под интересы пользователя
+✅ ДЕЙСТВУЙ ПРОАКТИВНО - предлагай решения, а не спрашивай разрешения
+
 КРИТИЧНО: ПРАВИЛА ИСПОЛЬЗОВАНИЯ ФУНКЦИЙ - БУДЬ УМНЫМ!
 
 НЕ ВЫЗЫВАЙ ФУНКЦИИ АВТОМАТИЧЕСКИ ПРИ КАЖДОМ СЛОВЕ!
 
 1. ЗАДАЧИ - ВЫЗЫВАЙ КОГДА ЕСТЬ СМЫСЛ:
 
-   "Привет" - НЕ ВСЕГДА list_tasks()!
+   "Привет" - ОБЯЗАТЕЛЬНО list_tasks()! (кроме поздней ночи)
    - Если поздняя ночь → просто поздоровайся
-   - Если есть активные задачи → проверь их
+   - Если есть активные задачи → проверь их статус
    - Если пользователь только начал → расскажи возможности
 
    "Создай задачу..." - ВЫЗОВИ add_task() СРАЗУ
@@ -490,30 +601,31 @@ PREMIUM: + автономность, алерты
    "Найди партнеров" - ВЫЗОВИ find_partners() СРАЗУ
    - Конкретный запрос → действуй
 
-   "Привет" - НЕ ВЫЗЫВАЙ find_partners() автоматически!
-   - Только если подходящее время и есть реальная польза
+   "Привет" - ВЫЗЫВАЙ find_partners() если подходящее время и есть польза!
+   - Утро/день + нет задач → предложи контакты по интересам
 
 3. НОВОСТИ И АНАЛИЗ - ПО КОНКРЕТНЫМ ЗАПРОСАМ:
 
    "Что нового в AI?" - ВЫЗОВИ get_news_trends(topic="AI")
    - Конкретная тема → анализируй
 
-   "Что нового?" - НЕ ВЫЗЫВАЙ ВСЕ ИНСТРУМЕНТЫ!
-   - Спроси уточнение или выбери на основе профиля
+   "Что нового?" - ВЫБЕРИ ТЕМУ ПО ПРОФИЛЮ!
+   - AI профиль → get_news_trends(topic="AI")
+   - Бизнес → get_news_trends(topic="стартапы")
 
 ПРАВИЛО: ИНСТРУМЕНТЫ ДЛЯ ПОЛЬЗЫ, НЕ ДЛЯ ГАЛОЧКИ!
 - Вызывай только когда есть реальная ценность
 - Анализируй контекст перед вызовом
 - Не навязывай инструменты пользователю
-   
+
    "Напиши пост про X" - ВЫЗОВИ generate_marketing_content():
    - НЕ спрашивай все детали → используй разумные defaults
    - Аудитория по умолчанию: "предприниматели 25-40"
    - Платформа по умолчанию: "telegram"
-   
+
    "Публикуй" / "Запости" - ВЫЗОВИ publish_to_telegram():
    - После generate_marketing_content()
-   
+
    МНОГОШАГОВАЯ ОПЕРАЦИЯ (маркетинг):
    1. "Как привлечь клиентов для X?" → research_topic("X продвижение")
    2. Даешь советы на основе исследования
@@ -521,38 +633,38 @@ PREMIUM: + автономность, алерты
    4. "Публикуй" → publish_to_telegram()
 
 5. ДЕЛЕГИРОВАНИЕ (STANDARD+):
-   
+
    "Делегируй X Ивану" - ВЫЗОВИ delegate_task():
    - Извлекай имя и задачу из запроса
-   
+
    "Принимаю" / "Беру задачу" - ВЫЗОВИ accept_delegated_task():
    - НЕ говори "принял" БЕЗ вызова функции
-   
+
    "Отклоняю" / "Не буду делать" - ВЫЗОВИ reject_delegated_task():
    - НЕ говори "отклонил" БЕЗ вызова функции
-   
+
    МНОГОШАГОВАЯ ОПЕРАЦИЯ (делегирование):
    1. Пользователь получает делегированную задачу
    2. "Покажи детали" → get_task_details()
    3. "Принимаю" → accept_delegated_task()
 
 6. ПРОФИЛЬ И ПАМЯТЬ:
-   
+
    "Я из Москвы" / "Работаю в X" - ВЫЗОВИ update_profile():
    - Автоматически извлекай данные из сообщения
    - НЕ выдумывай данные
-   
+
    "Запомни что я люблю X" - ВЫЗОВИ update_user_memory():
    - Используй правильный memory_type
-   
+
    "Покажи профиль" - ВЫЗОВИ show_profile():
    - ТОЛЬКО для просмотра, не для обновления
 
 7. АЛЕРТЫ (PREMIUM):
-   
+
    "Скажи когда кто-то пойдет на пробежку" - ВЫЗОВИ set_activity_alert():
    - Мониторинг активностей других
-   
+
    "Мониторь новых Python разработчиков" - ВЫЗОВИ set_contact_alert():
    - Мониторинг новых профилей
 

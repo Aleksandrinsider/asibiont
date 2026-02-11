@@ -179,6 +179,7 @@ class HybridAutonomousAgent:
             data["tools"] = available_tools
             data["tool_choice"] = "auto"  # DeepSeek сам решает
             logger.info(f"[HYBRID] Calling AI with {len(available_tools)} tools available for tier {subscription_tier}")
+            logger.info(f"[HYBRID] First 3 tools: {[t['function']['name'] for t in available_tools[:3]]}")
             logger.debug(f"[HYBRID] Tools list: {[t['function']['name'] for t in available_tools[:5]]}...")  # Первые 5
 
         async with aiohttp.ClientSession() as session:
@@ -191,9 +192,12 @@ class HybridAutonomousAgent:
                         tool_calls = message.get('tool_calls', [])
                         if tool_calls:
                             logger.info(f"[HYBRID] AI returned {len(tool_calls)} tool calls")
+                            for i, tc in enumerate(tool_calls):
+                                logger.info(f"[HYBRID] Tool call {i+1}: {tc.get('function', {}).get('name', 'unknown')}")
                         else:
                             logger.warning(f"[HYBRID] AI did NOT call any tools despite having {len(available_tools)} available")
-                            logger.warning(f"[HYBRID] AI response content: {message.get('content', '')[:200]}")
+                            logger.warning(f"[HYBRID] AI response content: {message.get('content', '')[:300]}")
+                            logger.warning(f"[HYBRID] User message was: {messages[-1]['content'] if messages else 'unknown'}")
                     return result
                 else:
                     error_text = await response.text()
@@ -368,44 +372,49 @@ class HybridAutonomousAgent:
 - НЕ спрашивай "какую задачу?" - используй ТЕКУЩУЮ ЗАДАЧУ из контекста выше
 - ВЫЗОВИ complete_task БЕЗ ПАРАМЕТРОВ - система автоматически закроет current_task
 
-⚡ УМНЫЕ ТРИГГЕРЫ - АНАЛИЗИРУЙ КОНТЕКСТ ПЕРЕД ДЕЙСТВИЕМ:
+⚡ УМНЫЕ АВТОМАТИЧЕСКИЕ ТРИГГЕРЫ - ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ ИНСТРУМЕНТЫ!
 
-1. "ПРИВЕТ" - НЕ ВСЕГДА ВЫЗЫВАЙ ИНСТРУМЕНТЫ!
-   - ЕСЛИ 3 часа ночи → просто поздоровайся, не предлагай активностей
-   - ЕСЛИ есть активные задачи → проверь их статус через list_tasks()
-   - ЕСЛИ пользователь только начал → кратко расскажи возможности
-   - ТОЛЬКО если подходящее время И есть смысл → find_partners() или get_news_trends()
+1. "ПРИВЕТ" / "ЗДРАВСТВУЙ" → НЕМЕДЛЕННО list_tasks()!
+   - ВСЕГДА вызывай list_tasks() при любом приветствии
+   - ЕСЛИ ночь (22:00-6:00) → после list_tasks() скажи про отдых
+   - ЕСЛИ утро → после list_tasks() предложи план на день
+   - ЕСЛИ есть задачи → покажи их статус
+   - ЕСЛИ задач нет → проанализируй профиль и дай 1-2 идеи
 
-2. "ЧТО НОВОГО?" - КОНКРЕТНЫЕ ЗАПРОСЫ:
-   - "Что нового в AI?" → get_news_trends(topic="AI")
-   - "Что нового?" → проанализируй профиль и выбери релевантную тему
-   - НЕ вызывай все инструменты сразу!
+2. "ЧТО НОВОГО?" / "ЧТО ПОСОВЕТУЕШЬ?" → ОБЯЗАТЕЛЬНО get_news_trends()!
+   - Анализируй профиль: если "AI" → get_news_trends(topic="AI")
+   - Если "бизнес" → get_news_trends(topic="стартапы")
+   - Если "программирование" → get_news_trends(topic="разработка ПО")
 
-3. УПОМИНАНИЕ ИНТЕРЕСОВ - ЦЕЛЕНАПРАВЛЕННО:
-   - "интересуюсь стартапами" → find_partners() для стартапов
-   - "хочу учить Python" → find_partners() для Python + quick_topic_search("курсы Python")
-   - НЕ предлагай все сразу!
+3. УПОМИНАНИЕ ИНТЕРЕСОВ → КОМБИНИРОВАННЫЕ ДЕЙСТВИЯ:
+   - "интересуюсь Python" → quick_topic_search("Python 2026") + find_partners("Python разработка")
+   - "хочу стартап" → get_news_trends(topic="стартапы") + find_partners("предприниматели")
+   - "ищу работу" → quick_topic_search("вакансии [профессия]") + find_partners("HR")
 
-4. "МНЕ СКУЧНО" - УЧИТЫВАЙ ВРЕМЯ И ПОГОДУ:
-   - Ночью → предложи почитать книгу или посмотреть фильм
-   - Днем → find_partners() для мероприятий
-   - Плохая погода → indoor активности
+4. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
+   - "создать задачу [тема]" → add_task() + find_relevant_contacts_for_task()
+   - "что у меня по задачам" → list_tasks() + анализ паттернов
+   - "сделал задачу" → complete_task() + предложение следующего шага
 
-5. ПРОСЬБА ПОКАЗАТЬ ЗАДАЧИ → ОБЯЗАТЕЛЬНО list_tasks()
+5. КОНТЕКСТНЫЕ СИТУАЦИИ:
+   - Плохая погода → indoor активности (курсы, чтение, разработка)
+   - Хорошая погода → outdoor (прогулки, спорт, мероприятия)
+   - Вечер → подведение итогов, планирование завтра
+   - Утро → энергичные активности, планирование дня
+
+КРИТИЧНО: ВСЕГДА ВЫЗЫВАЙ ИНСТРУМЕНТЫ ПРИ СООТВЕТСТВУЮЩИХ ТРИГГЕРАХ!
+- "привет" → list_tasks()
+- "что нового" → get_news_trends()
+- "задачи" → list_tasks()
+- "создать" → add_task()
+- "сделал" → complete_task()
 
 ПРАВИЛА УМНОГО ПОВЕДЕНИЯ:
-
-❌ НЕ ДЕЛАЙ:
-- Не вываливай все возможности сразу
-- Не предлагай 5 разных направлений
-- Не игнорируй время суток и погоду
-- Не навязывай активности в неподходящее время
-
-✅ ДЕЛАЙ:
-- Анализируй контекст (время, погода, задачи, профиль)
-- Предлагай МАКСИМУМ 1-2 конкретных действия
-- Будь естественным и conversational
-- Учитывай, что пользователь может просто поздороваться
+✅ ДУМАЙ ПЕРЕД ДЕЙСТВИЕМ - анализируй контекст
+✅ ИСПОЛЬЗУЙ КОМБИНАЦИИ - несколько инструментов для комплексных ответов
+✅ БУДЬ КОНКРЕТЕН - 1-2 предложения вместо длинных списков
+✅ УЧИТЫВАЙ ПРОФИЛЬ - персонализируй под интересы пользователя
+✅ ДЕЙСТВУЙ ПРОАКТИВНО - предлагай решения, а не спрашивай разрешения
 
 ПРИМЕРЫ УМНОГО ПОВЕДЕНИЯ:
 
