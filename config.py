@@ -30,11 +30,15 @@ else:
     DATABASE_URL = os.getenv("DATABASE_URL")
     DATABASE_PUBLIC_URL = os.getenv("DATABASE_PUBLIC_URL")
     
+    logger.info(f"[DB] DATABASE_URL present: {bool(DATABASE_URL)}, contains railway.internal: {bool(DATABASE_URL and 'railway.internal' in DATABASE_URL)}")
+    logger.info(f"[DB] DATABASE_PUBLIC_URL present: {bool(DATABASE_PUBLIC_URL)}")
+    
     # Use public URL if internal URL contains railway.internal (unreachable)
     if DATABASE_URL and "railway.internal" in DATABASE_URL and DATABASE_PUBLIC_URL:
-        logger.warning(f"[DB] DATABASE_URL contains railway.internal (unreachable), using DATABASE_PUBLIC_URL instead")
+        logger.warning(f"[DB] Switching from railway.internal to public URL")
         DATABASE_URL = DATABASE_PUBLIC_URL
     elif not DATABASE_URL:
+        logger.info(f"[DB] No DATABASE_URL, using DATABASE_PUBLIC_URL")
         DATABASE_URL = DATABASE_PUBLIC_URL
     
     if not DATABASE_URL:
