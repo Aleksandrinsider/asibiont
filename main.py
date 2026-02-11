@@ -7,6 +7,7 @@ from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 import os
+import time
 from sqlalchemy import text, or_, and_, inspect
 import re
 import jinja2
@@ -64,11 +65,32 @@ logger = logging.getLogger(__name__)
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 
-try:
-    # Test database connection
-    with engine.connect() as conn:
-        conn.execute(text("SELECT 1"))
-    logger.info("✅ Database connection successful")
+# Retry database connection with exponential backoff
+max_retries = 5
+retry_delay = 2  # seconds
+
+for attempt in range(max_retries):
+    try:
+        # Test database connection
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("✅ Database connection successful")
+        break  # Success, exit retry loop
+    except Exception as e:
+        if attempt < max_retries - 1:
+            logger.warning(f"Database connection attempt {attempt + 1}/{max_retries} failed: {e}")
+            logger.info(f"Retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+            retry_delay *= 2  # Exponential backoff
+        else:
+            logger.error(f"❌ Database connection failed after {max_retries} attempts: {e}")
+            logger.error("Application may not work correctly without database connection")
+            # Don't exit, let the app start anyway for webhook setup
+            if not LOCAL:
+                raise  # Fail hard in production
+            else:
+                logger.warning("Continuing with local mode despite database connection issues")
+                break
 
     # Clear database if requested
     if os.getenv('CLEAR_DB') == '1':

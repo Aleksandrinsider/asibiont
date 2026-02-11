@@ -30,7 +30,14 @@ else:
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL or DATABASE_PUBLIC_URL is required in production mode")
     
-    logger.info(f"[DB] Using database connection (host hidden for security)")
+    # Log database URL for debugging (hide password)
+    db_url_display = DATABASE_URL
+    if "://" in db_url_display:
+        protocol, rest = db_url_display.split("://", 1)
+        if "@" in rest:
+            credentials, host = rest.split("@", 1)
+            db_url_display = f"{protocol}://***@{host}"
+    logger.info(f"[DB] Using database connection: {db_url_display}")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
