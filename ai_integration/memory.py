@@ -169,43 +169,7 @@ class LongTermMemory:
                 ltm['interests'][topic] = 0
             ltm['interests'][topic] += 1
 
-    def get_personalized_recommendations(self):
-        """Get personalized recommendations based on search history"""
-        from models import Session, User
-        import json
 
-        session = Session()
-        try:
-            user = session.query(User).filter_by(telegram_id=self.user_id).first()
-            if user and user.long_term_memory:
-                ltm = json.loads(decrypt_data(user.long_term_memory))
-                
-                search_history = ltm.get('search_history', [])
-                interests = ltm.get('interests', {})
-                
-                if not search_history:
-                    return []
-                
-                # Find most common topics
-                top_topics = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:3]
-                
-                recommendations = []
-                for topic, count in top_topics:
-                    if count >= 2:  # Only if searched multiple times
-                        recommendations.append(f"Продолжить изучение {topic}")
-                
-                # Recent searches for follow-up
-                recent_searches = search_history[-3:]
-                for search in recent_searches:
-                    query = search['query']
-                    if len(query.split()) > 1:  # More specific queries
-                        recommendations.append(f"Углубить исследование: {query}")
-                
-                return recommendations[:5]  # Max 5 recommendations
-                
-        finally:
-            session.close()
-        return []
 
     def get_cached_search_result(self, query):
         """Get cached search result if available and recent"""

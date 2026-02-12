@@ -163,8 +163,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Отмечаем что Premium рекомендации были показаны (если были в промпте)
             if proactive_context and "ПРЕМИУМ РЕКОМЕНДАЦИИ" in proactive_context:
                 try:
-                    from ai_integration.premium_simple import mark_recommendation_shown
-                    mark_recommendation_shown(user_id, session)
+                    from ai_integration.premium_simple import manage_recommendations
+                    manage_recommendations(user_id, 'mark_shown', session=session)
                     logger.info(f"[PREMIUM] Marked recommendations as shown for user {user_id}")
                 except Exception as e:
                     logger.warning(f"[PREMIUM] Failed to mark recommendations: {e}")
@@ -523,82 +523,7 @@ async def generate_result_check(user_id, task_title):
         return f"Задача '{task_title}' выполнена."
 
 
-def generate_dynamic_fallback_message(context, task_count, overdue_count, user, profile, weather_info, partner_recommendations, tasks_list):
-    """Генерирует динамическое fallback сообщение на основе профиля и поведения пользователя"""
 
-    # Базовые компоненты
-    weather_part = ""
-    if weather_info:
-        weather_part = f"🌤 {weather_info.split(':')[1].split(',')[0].strip()} сегодня. "
-
-    partner_part = ""
-    if partner_recommendations and "@" in partner_recommendations:
-        partner_match = partner_recommendations.split("@")[1].split()[0]
-        if partner_match:
-            partner_part = f" Кстати, @{partner_match} может быть интересен для твоих целей."
-
-    # Анализируем профиль для персонализации
-    goals_mention = ""
-    interests_mention = ""
-    skills_mention = ""
-
-    if profile:
-        if profile.goals:
-            goals = [g.strip() for g in profile.goals.split(',') if g.strip()]
-            if goals:
-                goals_mention = f" Учитывая твои цели ({goals[0]}),"
-
-        if profile.interests:
-            interests = [i.strip() for i in profile.interests.split(',') if i.strip()]
-            if interests:
-                interests_mention = f" {interests[0]} может вдохновить на новые идеи."
-
-        if profile.skills:
-            skills = [s.strip() for s in profile.skills.split(',') if s.strip()]
-            if skills:
-                skills_mention = f" Твои навыки в {skills[0]} могут пригодиться."
-
-    # Анализируем конкретные задачи для контекста
-    task_context = ""
-    if tasks_list and len(tasks_list) > 0:
-        # Берем первую задачу для персонализации
-        first_task = tasks_list[0]
-        if hasattr(first_task, 'title') and first_task.title:
-            task_context = f" Например, задача '{first_task.title[:30]}...'"
-
-    # Генерируем персонализированные сообщения
-    if context == "no_tasks":
-        if goals_mention:
-            message = f"{weather_part}Отличное время для движения к целям!{goals_mention} что можем сделать сегодня?{partner_part}"
-        elif interests_mention:
-            message = f"{weather_part}Чистый список задач - возможность для творчества.{interests_mention} Что вдохновляет тебя?{partner_part}"
-        else:
-            message = f"{weather_part}Вижу свободное время для роста.{skills_mention} Какие проекты заинтересуют?{partner_part}"
-
-    elif context == "few_tasks":
-        if task_context:
-            message = f"{weather_part}Ты в продуктивном темпе с {task_count} задачами!{task_context} Как продвигается?{partner_part}"
-        else:
-            message = f"{weather_part}{task_count} задач в работе - хороший баланс.{goals_mention} Что добавить для развития?{partner_part}"
-
-    elif context == "many_tasks":
-        message = f"{weather_part}У тебя {task_count} задач - впечатляющая нагрузка!{skills_mention} Может, делегируем часть{task_context}?{partner_part}"
-
-    elif context == "overdue_tasks":
-        if task_context:
-            message = f"{weather_part}{overdue_count} задач ждут внимания.{task_context} Давай восстановим контроль вместе.{partner_part}"
-        else:
-            message = f"{weather_part}{overdue_count} просроченных задач - это нормально.{goals_mention} Составим план восстановления?{partner_part}"
-
-    else:  # general
-        if goals_mention:
-            message = f"{weather_part}Вижу возможности для роста.{goals_mention} что тебя мотивирует сегодня?{partner_part}"
-        elif interests_mention:
-            message = f"{weather_part}Интересные возможности вокруг.{interests_mention} Что обсудим?{partner_part}"
-        else:
-            message = f"{weather_part}Готов поддержать твои цели.{skills_mention} Что актуально сегодня?{partner_part}"
-
-    return message
 
 
 async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
@@ -691,18 +616,18 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 
                 # Получаем рекомендации партнеров/Premium инсайты
                 try:
-                    from .premium_simple import get_premium_recommendations_for_prompt, get_partner_recommendations_for_prompt
+                    from .premium_simple import collect_premium_insights, manage_recommendations
                     
                     if subscription_tier == 'PREMIUM':
                         # Для Premium показываем automation insights
-                        premium_context = get_premium_recommendations_for_prompt(user_id, db_session)
+                        premium_context = collect_premium_insights(user_id, mode='prompt', session=db_session)
                         if premium_context and premium_context.strip():
                             partner_recommendations = premium_context  # Сохраняем для fallback
                             user_memory += f"\n\n🔥 PREMIUM АВТОМАТИЗАЦИЯ:\n{premium_context}"
                             logger.info(f"[PROACTIVE] Added Premium automation context for user {user_id}")
                     else:
                         # Для обычных пользователей показываем партнеров
-                        partner_context = get_partner_recommendations_for_prompt(user_id, db_session)
+                        partner_context = manage_recommendations(user_id, 'get', session=db_session)
                         if partner_context and partner_context.strip():
                             partner_recommendations = partner_context  # Сохраняем для fallback
                             user_memory += f"\n\n👥 РЕКОМЕНДАЦИИ ПАРТНЕРОВ:\n{partner_context}"
@@ -1263,9 +1188,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
                     # Динамические fallback сообщения на основе профиля пользователя
-                    return generate_dynamic_fallback_message(
-                        context, task_count, overdue_count, user, profile,
-                        weather_info, partner_recommendations, tasks_list
+                    from .utils import generate_unified_recommendations
+                    return generate_unified_recommendations(
+                        'fallback', task_count=task_count, overdue_count=overdue_count,
+                        profile=profile, weather_info=weather_info,
+                        partner_recommendations=partner_recommendations, tasks_list=tasks_list
                     )
 
     except Exception as e:
@@ -1273,9 +1200,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         logger.error(f"Traceback: {traceback.format_exc()}")
         # Динамические fallback сообщения для исключений
         try:
-            return generate_dynamic_fallback_message(
-                context, task_count, overdue_count, user, profile,
-                weather_info, partner_recommendations, tasks_list
+            from .utils import generate_unified_recommendations
+            return generate_unified_recommendations(
+                'fallback', task_count=task_count, overdue_count=overdue_count,
+                profile=profile, weather_info=weather_info,
+                partner_recommendations=partner_recommendations, tasks_list=tasks_list
             )
         except Exception as fallback_error:
             logger.error(f"Fallback message generation failed: {fallback_error}")

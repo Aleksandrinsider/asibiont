@@ -311,9 +311,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     search_context = ""
     if user_id_param:
         try:
-            from .memory import LongTermMemory
-            ltm = LongTermMemory(user_id_param)
-            recommendations = ltm.get_personalized_recommendations()
+            from .utils import generate_unified_recommendations
+            recommendations = generate_unified_recommendations('personalized', user_id=user_id_param)
             if recommendations:
                 search_context = "\nИСТОРИЯ ПОИСКОВ:\n" + "\n".join(f"• {rec}" for rec in recommendations[:3])
         except Exception as e:

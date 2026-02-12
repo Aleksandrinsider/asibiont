@@ -30,6 +30,99 @@ class DynamicToolDiscovery:
         self.user_preferences = {}  # Предпочтения пользователей
         self.successful_patterns = []  # Успешные паттерны использования
         
+    def filter_tools_by_tier(self, subscription_tier: str) -> Dict[str, Any]:
+        """
+        Фильтрует доступные инструменты на основе тарифа пользователя
+        
+        Args:
+            subscription_tier: Тариф пользователя ('LIGHT', 'STANDARD', 'PREMIUM')
+            
+        Returns:
+            Словарь с доступными инструментами для данного тарифа
+        """
+        if not self.discovered_tools:
+            logger.warning("[TOOL FILTER] No tools discovered yet")
+            return {}
+        
+        # Базовые инструменты доступны всем
+        base_tools = {
+            'LIGHT': [
+                'list_tasks', 'add_task', 'complete_task', 'delete_task', 'edit_task',
+                'find_partners', 'show_profile', 'update_profile', 'smart_update_profile',
+                'get_partners_list', 'quick_topic_search', 'analyze_tasks', 'check_time_conflicts'
+            ],
+            'STANDARD': [
+                # Все LIGHT инструменты плюс
+                'list_tasks', 'add_task', 'complete_task', 'delete_task', 'edit_task',
+                'find_partners', 'show_profile', 'update_profile', 'smart_update_profile',
+                'get_partners_list', 'quick_topic_search', 'analyze_tasks', 'check_time_conflicts',
+                # STANDARD инструменты - фокус на управлении командой
+                'research_topic', 'delegate_task', 'delegate_task_with_session', 'accept_delegated_task',
+                'cancel_delegation', 'check_delegation_deadlines', 'get_delegation_progress',
+                'check_time_conflicts_sync', 'find_nearest_free_slot', 'generate_progress_request',
+                'reschedule_task', 'schedule_delegation_monitoring'
+            ],
+            'PREMIUM': [
+                # Все инструменты доступны
+                # Полный список будет включать все discovered_tools
+            ]
+        }
+        
+        tier_value = subscription_tier.upper() if subscription_tier else 'LIGHT'
+        
+        if tier_value == 'PREMIUM':
+            # PREMIUM имеет доступ ко всем инструментам
+            filtered_tools = self.discovered_tools.copy()
+            logger.info(f"[TOOL FILTER] PREMIUM tier - all {len(filtered_tools)} tools available")
+            return filtered_tools
+        
+        elif tier_value in base_tools:
+            # Фильтруем инструменты для LIGHT/STANDARD
+            allowed_tools = base_tools[tier_value]
+            filtered_tools = {}
+            
+            for tool_name, tool_data in self.discovered_tools.items():
+                if tool_name in allowed_tools:
+                    filtered_tools[tool_name] = tool_data
+            
+            logger.info(f"[TOOL FILTER] {tier_value} tier - {len(filtered_tools)}/{len(self.discovered_tools)} tools available")
+            return filtered_tools
+        
+        else:
+            # Неизвестный тариф - даем базовый набор
+            logger.warning(f"[TOOL FILTER] Unknown tier '{tier_value}', using LIGHT tools")
+            allowed_tools = base_tools['LIGHT']
+            filtered_tools = {}
+            
+            for tool_name, tool_data in self.discovered_tools.items():
+                if tool_name in allowed_tools:
+                    filtered_tools[tool_name] = tool_data
+            
+            return filtered_tools
+    
+    def get_available_tools_for_tier(self, subscription_tier: str) -> List[Dict[str, Any]]:
+        """
+        Возвращает список доступных инструментов для данного тарифа в формате OpenAI
+        
+        Args:
+            subscription_tier: Тариф пользователя
+            
+        Returns:
+            Список инструментов в формате OpenAI tools
+        """
+        filtered_tools = self.filter_tools_by_tier(subscription_tier)
+        
+        # Преобразуем в формат OpenAI
+        openai_tools = []
+        for tool_name, tool_data in filtered_tools.items():
+            openai_tools.append({
+                "type": "function",
+                "function": tool_data["function"]
+            })
+        
+        logger.info(f"[TOOL FILTER] Returning {len(openai_tools)} tools for {subscription_tier} tier")
+        return openai_tools
+    
     def discover_tools_from_module(self, module) -> Dict[str, Any]:
         """
         Автоматически обнаруживает все функции из модуля

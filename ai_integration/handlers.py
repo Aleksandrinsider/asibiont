@@ -9,7 +9,7 @@ from models import Session, Task, User, UserProfile, SubscriptionTier, Subscript
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
-from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
+from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_unified_recommendations
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
 from . import marketing_agent
@@ -487,7 +487,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     # Generate recommendations
     try:
         logger.info(f"[ADD_TASK] Generating recommendations for task '{title}'")
-        recommendations = generate_task_recommendations(title, description, user.telegram_id)
+        recommendations = generate_unified_recommendations('task_creation', title=title, description=description)
         logger.info(f"[ADD_TASK] Generated {len(recommendations) if recommendations else 0} recommendations")
         if recommendations:
             task.recommendations = json.dumps(recommendations, ensure_ascii=False)

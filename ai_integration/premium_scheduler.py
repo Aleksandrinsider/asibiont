@@ -15,7 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 import pytz
 
 from models import Session, User
-from ai_integration.premium_simple import collect_all_premium_insights
+from ai_integration.premium_simple import collect_premium_insights
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ async def morning_insights_job():
         # Собираем инсайты для каждого
         for user in premium_users:
             try:
-                report = await collect_all_premium_insights(user.telegram_id)
+                report = await collect_premium_insights(user.telegram_id, mode='collect')
                 logger.info(f"[PREMIUM_SCHEDULER] Collected {report.get('insights_collected', 0)} insights for user {user.telegram_id}")
             except Exception as e:
                 logger.error(f"[PREMIUM_SCHEDULER] Error collecting insights for {user.telegram_id}: {e}")
@@ -124,7 +124,7 @@ async def evening_insights_job():
         # Собираем инсайты для каждого
         for user in premium_users:
             try:
-                report = await collect_all_premium_insights(user.telegram_id)
+                report = await collect_premium_insights(user.telegram_id, mode='collect')
                 logger.info(f"[PREMIUM_SCHEDULER] Collected {report.get('insights_collected', 0)} insights for user {user.telegram_id}")
             except Exception as e:
                 logger.error(f"[PREMIUM_SCHEDULER] Error collecting insights for {user.telegram_id}: {e}")
@@ -156,7 +156,7 @@ async def weekly_analytics_job():
         for user in premium_users:
             try:
                 # Обычный сбор инсайтов (включает тренды)
-                report = await collect_all_premium_insights(user.telegram_id)
+                report = await collect_premium_insights(user.telegram_id, mode='collect')
                 logger.info(f"[PREMIUM_SCHEDULER] Weekly report for {user.telegram_id}: {report.get('breakdown', {})}")
             except Exception as e:
                 logger.error(f"[PREMIUM_SCHEDULER] Error in weekly analytics for {user.telegram_id}: {e}")
@@ -184,7 +184,7 @@ async def trigger_insights_for_premium_user(premium_user_id: int):
     logger.info(f"[PREMIUM_SCHEDULER] Triggering immediate insights for {premium_user_id}")
     
     try:
-        report = await collect_all_premium_insights(premium_user_id)
+        report = await collect_premium_insights(premium_user_id, mode='collect')
         logger.info(f"[PREMIUM_SCHEDULER] Collected {report.get('insights_collected', 0)} insights")
         return report
     except Exception as e:

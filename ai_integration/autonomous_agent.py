@@ -413,9 +413,11 @@ class HybridAutonomousAgent:
    - "стратегия для [бизнес]" → research_and_plan("[бизнес] бизнес план")
 
 5. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
-   - "создать задачу [тема]" → ПРЕДЛОЖИ пользователю создать задачу, но НЕ ВЫЗЫВАЙ add_task автоматически
+   - "создать задачу [тема]" → ЕСЛИ пользователь ЯВНО просит создать задачу → check_time_conflicts() → add_task()
+   - "удалить задачу" → list_tasks() → delete_task() (показать список, затем удалить)
    - "что у меня по задачам" → list_tasks() + анализ паттернов
    - "сделал задачу" → complete_task() + предложение следующего шага
+   - "напоминание" → ЕСЛИ пользователь просит создать → check_time_conflicts() → add_task()
    - ВАЖНО: Всегда уточняй время у пользователя перед созданием задачи!
 
 6. КОНТЕКСТНЫЕ СИТУАЦИИ:
@@ -496,6 +498,15 @@ class HybridAutonomousAgent:
         if any(keyword in user_message.lower() for keyword in ['привет', 'здравствуй', 'доброе утро', 'добрый день', 'добрый вечер']):
             force_tool_choice = "required"  # Принудительно требуем tool calls для приветствий
             logger.info(f"[HYBRID] Forcing tool usage for greeting: '{user_message}'")
+        elif any(keyword in user_message.lower() for keyword in ['что нового', 'что посоветуешь', 'расскажи новости', 'новости']):
+            force_tool_choice = "required"  # Принудительно требуем tool calls для запросов новостей
+            logger.info(f"[HYBRID] Forcing tool usage for news request: '{user_message}'")
+        elif any(keyword in user_message.lower() for keyword in ['задачи', 'что по задачам', 'мои задачи']):
+            force_tool_choice = "required"  # Принудительно требуем tool calls для запросов задач
+            logger.info(f"[HYBRID] Forcing tool usage for tasks request: '{user_message}'")
+        elif any(keyword in user_message.lower() for keyword in ['партнеры', 'найти людей', 'единомышленники']):
+            force_tool_choice = "required"  # Принудительно требуем tool calls для поиска партнеров
+            logger.info(f"[HYBRID] Forcing tool usage for partners request: '{user_message}'")
         
         response = await self.call_ai(messages, use_tools=True, subscription_tier=user.subscription_tier, tool_choice=force_tool_choice)
         
@@ -877,12 +888,14 @@ class HybridAutonomousAgent:
 ❌ ЗАПРЕЩЕНО: Формальные заголовки и подзаголовки
 ❌ ЗАПРЕЩЕНО: Нумерованные или маркированные списки любого вида
 ❌ ЗАПРЕЩЕНО: "1.", "2.", "-", "*" в начале строк
+❌ ЗАПРЕЩЕНО: Названия функций в ответе (list_tasks(), add_task() и т.д.)
 
 СТИЛЬ ОТВЕТА: ТОЛЬКО РАЗГОВОРНЫЙ ТЕКСТ
 - Пиши как в живом разговоре с другом
 - Используй "слушай", "знаешь", "интересно", "как думаешь"
 - Для вариантов: "можно сделать X или Y, а еще Z"
 - Никаких списков, только плавная речь
+- Максимум 1-2 конкретных предложения с действиями
 
 ПРИМЕРЫ ХОРОШИХ ОТВЕТОВ:
 "Нашел 3 Python-разработчика в твоем городе. Самый релевантный - @dev_master с опытом в AI. Напиши ему: 'Привет, увидел твой профиль, интересно поработать вместе над AI-проектом?'"

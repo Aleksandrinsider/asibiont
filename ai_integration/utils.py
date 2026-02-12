@@ -939,29 +939,153 @@ def _load_news_for_category(category):
         return None
 
 
-def generate_task_recommendations(title, description, user_id):
-    """Generate task recommendations based on title and description"""
-    # Simple stub implementation - can be enhanced later
+def generate_unified_recommendations(context_type, user_id=None, title=None, description=None, task_count=None, overdue_count=None, profile=None, weather_info=None, partner_recommendations=None, tasks_list=None):
+    """
+    Универсальная функция генерации рекомендаций, объединяющая все типы
+
+    Args:
+        context_type: Тип контекста ('task_creation', 'personalized', 'fallback')
+        user_id: Telegram ID пользователя (для personalized)
+        title: Название задачи (для task_creation)
+        description: Описание задачи (для task_creation)
+        task_count: Количество задач (для fallback)
+        overdue_count: Количество просроченных (для fallback)
+        profile: Профиль пользователя (для fallback/personalized)
+        weather_info: Информация о погоде (для fallback)
+        partner_recommendations: Рекомендации партнеров (для fallback)
+        tasks_list: Список задач (для fallback)
+
+    Returns:
+        List[str]: Список рекомендаций
+    """
     recommendations = []
-    
-    # Basic recommendations based on keywords
-    title_lower = (title or "").lower()
-    desc_lower = (description or "").lower()
-    
-    if any(word in title_lower + desc_lower for word in ['встреча', 'митап', 'конференция']):
-        recommendations.append("Подготовьте презентацию или вопросы для обсуждения")
-        recommendations.append("Проверьте время и место за день до события")
-    
-    if any(word in title_lower + desc_lower for word in ['спорт', 'тренировка', 'бег']):
-        recommendations.append("Возьмите с собой воду и полотенце")
-        recommendations.append("Сделайте разминку перед началом")
-    
-    if any(word in title_lower + desc_lower for word in ['работа', 'проект', 'задача']):
-        recommendations.append("Разбейте задачу на маленькие шаги")
-        recommendations.append("Установите таймер для работы без отвлечений")
-    
-    # Return up to 3 recommendations
-    return recommendations[:3] if recommendations else []
+
+    if context_type == 'task_creation':
+        # Базовые рекомендации на основе ключевых слов в задаче
+        title_lower = (title or "").lower()
+        desc_lower = (description or "").lower()
+
+        if any(word in title_lower + desc_lower for word in ['встреча', 'митап', 'конференция']):
+            recommendations.extend([
+                "Подготовьте презентацию или вопросы для обсуждения",
+                "Проверьте время и место за день до события"
+            ])
+
+        if any(word in title_lower + desc_lower for word in ['спорт', 'тренировка', 'бег']):
+            recommendations.extend([
+                "Возьмите с собой воду и полотенце",
+                "Сделайте разминку перед началом"
+            ])
+
+        if any(word in title_lower + desc_lower for word in ['работа', 'проект', 'задача']):
+            recommendations.extend([
+                "Разбейте задачу на маленькие шаги",
+                "Установите таймер для работы без отвлечений"
+            ])
+
+        return recommendations[:3]
+
+    elif context_type == 'personalized':
+        # Рекомендации на основе истории поиска и интересов
+        if not user_id:
+            return []
+
+        from models import Session, User
+        import json
+
+        session = Session()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user and user.long_term_memory:
+                ltm = json.loads(decrypt_data(user.long_term_memory))
+
+                search_history = ltm.get('search_history', [])
+                interests = ltm.get('interests', {})
+
+                if not search_history:
+                    return []
+
+                # Топ тем по частоте поиска
+                top_topics = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:3]
+                for topic, count in top_topics:
+                    if count >= 2:
+                        recommendations.append(f"Продолжить изучение {topic}")
+
+                # Недавние поиски для углубления
+                recent_searches = search_history[-3:]
+                for search in recent_searches:
+                    query = search['query']
+                    if len(query.split()) > 1:
+                        recommendations.append(f"Углубить исследование: {query}")
+
+                return recommendations[:5]
+        finally:
+            session.close()
+
+        return []
+
+    elif context_type == 'fallback':
+        # Персонализированные fallback сообщения
+        if not profile:
+            return ["Чем могу помочь сегодня?"]
+
+        # Компоненты сообщения
+        weather_part = ""
+        if weather_info:
+            weather_part = f"🌤 {weather_info.split(':')[1].split(',')[0].strip()} сегодня. "
+
+        partner_part = ""
+        if partner_recommendations and "@" in partner_recommendations:
+            partner_match = partner_recommendations.split("@")[1].split()[0]
+            if partner_match:
+                partner_part = f" Кстати, @{partner_match} может быть интересен для твоих целей."
+
+        # Анализ профиля
+        goals_mention = ""
+        interests_mention = ""
+        skills_mention = ""
+
+        if profile.goals:
+            goals = [g.strip() for g in profile.goals.split(',') if g.strip()]
+            if goals:
+                goals_mention = f" Учитывая твои цели ({goals[0]}),"
+
+        if profile.interests:
+            interests = [i.strip() for i in profile.interests.split(',') if i.strip()]
+            if interests:
+                interests_mention = f" {interests[0]} может вдохновить на новые идеи."
+
+        if profile.skills:
+            skills = [s.strip() for s in profile.skills.split(',') if s.strip()]
+            if skills:
+                skills_mention = f" Твои навыки в {skills[0]} могут пригодиться."
+
+        # Контекст задач
+        task_context = ""
+        if tasks_list and len(tasks_list) > 0:
+            first_task = tasks_list[0]
+            if hasattr(first_task, 'title') and first_task.title:
+                task_context = f" Например, задача '{first_task.title[:30]}...'"
+
+        # Генерация сообщения
+        context = "no_tasks" if task_count == 0 else "few_tasks"
+
+        if context == "no_tasks":
+            if goals_mention:
+                message = f"{weather_part}Отличное время для движения к целям!{goals_mention} что можем сделать сегодня?{partner_part}"
+            elif interests_mention:
+                message = f"{weather_part}Чистый список задач - возможность для творчества.{interests_mention} Что вдохновляет тебя?{partner_part}"
+            else:
+                message = f"{weather_part}Вижу свободное время для роста.{skills_mention} Какие проекты заинтересуют?{partner_part}"
+        else:
+            message = f"{weather_part}Ты в продуктивном темпе с {task_count} задачами!{task_context} Как продвигается?{partner_part}"
+
+        return [message]
+
+    return []
+
+
+
 
 
 def post_process_tool_calls(tool_calls, user_id):
@@ -974,3 +1098,30 @@ def post_process_response(response, user_id):
     """Post-process response - stub implementation"""
     # This function was removed during cleanup, keeping as stub
     return response
+
+
+def clean_technical_details(content):
+    """
+    Очищает технические детали из ответа AI:
+    - Убирает названия функций
+    - Убирает технические теги
+    - Оставляет только естественный текст
+    """
+    if not content:
+        return content
+    
+    # Убираем названия функций в скобках или кавычках
+    content = re.sub(r'["\']?\w+\(\)[\'"]?', '', content)
+    
+    # Убираем технические паттерны
+    content = re.sub(r'\b\w+\(\)', '', content)
+    
+    # Убираем лишние пробелы и пустые строки
+    content = re.sub(r'\n\s*\n', '\n', content)
+    content = content.strip()
+    
+    # Если после очистки ничего не осталось, возвращаем исходный текст
+    if not content:
+        return "Извините, произошла ошибка при формировании ответа."
+    
+    return content

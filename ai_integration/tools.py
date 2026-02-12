@@ -3,11 +3,8 @@
 # Premium functions available only on higher tiers
 PREMIUM_FUNCTIONS = {
     'set_contact_alert',
-    'set_activity_alert', 
+    'set_activity_alert',
     'research_and_plan',
-    'generate_marketing_content',
-    'publish_to_telegram',
-    'delegate_task',
     'set_content_strategy',
     'toggle_autonomous_feature'
 }
@@ -21,7 +18,7 @@ STANDARD_FUNCTIONS = PREMIUM_FUNCTIONS - {
 
 def get_available_tools(subscription_tier):
     """
-    Filter tools based on user's subscription tier
+    Filter tools based on user's subscription tier using dynamic tool discovery
     
     Args:
         subscription_tier: User's subscription tier (LIGHT, STANDARD, PREMIUM) - can be enum, string, or value
@@ -29,6 +26,8 @@ def get_available_tools(subscription_tier):
     Returns:
         List of available tools for the tier
     """
+    from .dynamic_tools import tool_discovery
+    
     # Handle different input types
     if hasattr(subscription_tier, 'value'):
         tier_value = subscription_tier.value
@@ -41,16 +40,8 @@ def get_available_tools(subscription_tier):
     else:
         tier_value = str(subscription_tier).upper()
     
-    if tier_value == 'PREMIUM':
-        # All tools available
-        return TOOLS
-    elif tier_value == 'STANDARD':
-        # Filter out PREMIUM-only functions
-        premium_only = {'set_contact_alert', 'set_activity_alert', 'set_content_strategy', 'toggle_autonomous_feature'}
-        return [tool for tool in TOOLS if tool['function']['name'] not in premium_only]
-    else:  # LIGHT
-        # Filter out all premium functions
-        return [tool for tool in TOOLS if tool['function']['name'] not in PREMIUM_FUNCTIONS]
+    # Use dynamic tool filtering
+    return tool_discovery.get_available_tools_for_tier(tier_value)
 
 TOOLS = [
     {

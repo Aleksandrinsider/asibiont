@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Живой тест диалога агента - 20 шагов с реальным пользователем
-Тестирование качеств агента высокого уровня
+Живой тест диалога агента - естественное развитие разговора
+Тестирование качеств агента для LIGHT тарифа
 """
 import asyncio
 import sys
@@ -15,167 +15,75 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_integration.autonomous_agent import chat_with_ai
 
 class LiveDialogTester:
-    """Тестер живого диалога с агентом для разных тарифов"""
+    """Тестер естественного диалога с агентом для LIGHT тарифа"""
 
-    def __init__(self, tier="LIGHT"):
-        self.tier = tier
+    def __init__(self):
+        self.tier = "LIGHT"
         self.conversation_history = []
-        # Разные пользователи для разных тарифов
-        self.user_ids = {
-            "LIGHT": 77777,
-            "STANDARD": 88888,
-            "PREMIUM": 99999
-        }
-        self.user_id = self.user_ids.get(tier, 77777)
+        self.user_id = 77777  # LIGHT тариф пользователь
         self.step = 0
 
-    async def generate_user_message(self, context="", tier="LIGHT"):
-        """Генерирует естественное сообщение пользователя через DeepSeek"""
-        try:
-            import aiohttp
-            from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+    async def run_natural_dialog_test(self):
+        """Запуск естественного теста диалога для LIGHT тарифа"""
 
-            tier_descriptions = {
-                "LIGHT": "базовый тариф с ограниченными функциями",
-                "STANDARD": "бизнес-тариф с маркетингом и делегированием",
-                "PREMIUM": "премиум-тариф со всеми функциями"
-            }
-
-            system_prompt = f"""Ты - разработчик AI агента, который хочет продвинуть свой продукт на рынке и привлечь больше пользователей.
-
-ТВОЙ ПРОФИЛЬ:
-- Разработчик AI систем и автономных агентов
-- Интересуешься: AI, программирование, стартапы, бизнес
-- Город: Москва
-- Работа: разработка AI решений
-- Текущий тариф: {tier} ({tier_descriptions[tier]})
-
-ТВОИ ЦЕЛИ:
-- Продвинуть AI агента на рынке
-- Привлечь больше пользователей
-- Улучшить продукт
-- Найти партнеров для развития
-- Создать контент для продвижения
-
-КОНТЕКСТ ДИАЛОГА:
-{context}
-
-СТИЛЬ ОБЩЕНИЯ:
-- Профессиональный, но дружелюбный
-- Фокус на бизнес и развитие продукта
-- Интересуешься маркетингом, партнерами, аналитикой
-- Задаешь конкретные вопросы
-- Просишь помощи в реальных задачах продвижения
-
-ПРИМЕРЫ СООБЩЕНИЙ ДЛЯ {tier.upper()}:
-LIGHT: "Привет! Хочу найти партнеров для продвижения моего AI агента"
-STANDARD: "Нужно создать пост в Telegram о преимуществах моего AI решения"
-PREMIUM: "Проанализируй рынок AI агентов и найди возможности для роста"
-
-Сгенерируй ОДНО реалистичное сообщение пользователя для продолжения диалога:"""
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": "Сгенерируй следующее сообщение пользователя"}
-            ]
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": DEEPSEEK_MODEL,
-                        "messages": messages,
-                        "temperature": 0.8,
-                        "max_tokens": 100
-                    }
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        message = result['choices'][0]['message']['content'].strip()
-                        # Очищаем от кавычек если есть
-                        message = message.strip('"').strip("'")
-                        return message
-                    else:
-                        return "Привет"
-
-        except Exception as e:
-            print(f"Error generating user message: {e}")
-            return "Привет"
-
-    async def run_dialog_test(self):
-        """Запуск теста диалога из 15 шагов для конкретного тарифа"""
-
-        print(f"🎭 ТЕСТ РАЗРАБОТЧИКА AI АГЕНТА - Тариф {self.tier.upper()}")
+        print("🎭 ЕСТЕСТВЕННЫЙ ТЕСТ ДИАЛОГА - Тариф LIGHT")
         print("=" * 60)
-        print("Сценарий: Разработчик хочет продвинуть AI агента на рынке")
-        print(f"Тариф: {self.tier.upper()}")
-        print("Шаги: 15 сообщений в реальном времени")
-        print("Пользователь: AI разработчик (генерируется DeepSeek)")
+        print("Сценарий: Обычный пользователь знакомится с ботом")
+        print("Тариф: LIGHT (базовый)")
+        print("Подход: Полностью естественное развитие диалога")
+        print("Без заготовок - реальные пользовательские сценарии")
         print("=" * 60)
 
-        # Качества для проверки
-        qualities = {
-            "🎯 КОНТЕКСТНОСТЬ": "Учитывает время, погоду, профиль, историю",
-            "🚀 ПРОАКТИВНОСТЬ": "Предлагает полезные действия, но не навязчиво",
-            "⚡ ИСПОЛНЕНИЕ": "Действительно вызывает инструменты и выполняет",
-            "💬 ЕСТЕСТВЕННОСТЬ": "Разговорный стиль, эмпатия",
-            "🔄 АДАПТИВНОСТЬ": "Меняет поведение по ситуации",
-            "🎯 ТОЧНОСТЬ": "Правильно понимает, не выдумывает",
-            "💡 ЭФФЕКТИВНОСТЬ": "Конкретные, actionable предложения"
-        }
+        # Реальные пользовательские сценарии для LIGHT тарифа
+        user_scenarios = [
+            "Привет! Расскажи что умеешь",
+            "Хочу создать задачу на завтра",
+            "Какие у меня задачи?",
+            "Найди мне партнеров по Python",
+            "Покажи мой профиль",
+            "Что посоветуешь сделать сегодня?",
+            "Удалить задачу",
+            "Создать напоминание на вечер",
+            "Как работает подписка?",
+            "Спасибо за помощь!"
+        ]
 
-        print("\n📋 ПРОВЕРЯЕМЫЕ КАЧЕСТВА:")
-        for quality, desc in qualities.items():
-            print(f"  {quality}: {desc}")
+        print("\n📋 СЦЕНАРИИ ТЕСТИРОВАНИЯ:")
+        for i, scenario in enumerate(user_scenarios, 1):
+            print(f"  {i}. {scenario}")
 
-        print(f"\n👤 ПОЛЬЗОВАТЕЛЬ: ID {self.user_id} ({self.tier.upper()} тариф)")
-        print("🤖 АГЕНТ: ASI Biont с умным поведением")
+        print(f"\n👤 ПОЛЬЗОВАТЕЛЬ: ID {self.user_id} (LIGHT тариф)")
+        print("🤖 АГЕНТ: ASI Biont с естественным поведением")
 
-        # Основной цикл диалога (15 шагов)
-        for step in range(15):
-            self.step = step + 1
+        # Естественный диалог
+        for step, user_message in enumerate(user_scenarios, 1):
+            self.step = step
             print(f"\n==================================================")
-            print(f"ШАГ {self.step}/15 - {datetime.now().strftime('%H:%M:%S')}")
+            print(f"ШАГ {self.step}/10 - {datetime.now().strftime('%H:%M:%S')}")
             print("=" * 50)
 
             try:
-                # Генерируем сообщение пользователя
-                context = ""
-                if self.conversation_history:
-                    # Передаем последние 3 сообщения для контекста
-                    recent_msgs = self.conversation_history[-3:]
-                    context = "\n".join([
-                        f"Пользователь: {msg['user']}\nАгент: {msg['agent'][:200]}..."
-                        for msg in recent_msgs
-                    ])
-
-                user_message = await self.generate_user_message(context, self.tier)
-                print(f"👤 РАЗРАБОТЧИК: {user_message}")
+                print(f"👤 ПОЛЬЗОВАТЕЛЬ: {user_message}")
 
                 # Получаем ответ агента
-                from ai_integration.autonomous_agent import chat_with_ai
                 response = await chat_with_ai(user_message, user_id=self.user_id)
 
                 agent_response = response.get('response', 'Ошибка ответа')
                 tools_called = response.get('tool_calls', [])
+                tools_used = response.get('tools_used', [])
 
-                print(f"🤖 АГЕНТ: {agent_response[:300]}{'...' if len(agent_response) > 300 else ''}")
+                print(f"🤖 АГЕНТ: {agent_response}")
                 print(f"🔧 ИНСТРУМЕНТЫ: {'Вызваны' if tools_called else 'Не вызваны'}")
 
-                if tools_called:
-                    tool_names = [tool.get('function', {}).get('name', 'unknown') if isinstance(tool, dict) else str(tool) for tool in tools_called]
-                    print(f"   Список: {', '.join(tool_names)}")
+                if tools_used:
+                    print(f"   Список: {', '.join(tools_used)}")
 
                 # Сохраняем в историю
                 self.conversation_history.append({
                     'step': self.step,
                     'user': user_message,
                     'agent': agent_response,
-                    'tools': tools_called,
+                    'tools': tools_used,
                     'timestamp': datetime.now().isoformat()
                 })
 
@@ -183,8 +91,8 @@ PREMIUM: "Проанализируй рынок AI агентов и найди 
                 print(f"❌ ОШИБКА: {e}")
                 break
 
-            # Небольшая пауза между шагами
-            await asyncio.sleep(1.5)
+            # Пауза между шагами для естественности
+            await asyncio.sleep(2)
 
         # Анализ результатов
         print(f"\n{'='*50}")
@@ -199,69 +107,80 @@ PREMIUM: "Проанализируй рынок AI агентов и найди 
         print(f"   Вызовов инструментов: {total_tools_called}")
         print(f"   Шагов с инструментами: {steps_with_tools}")
         print(f"   Среднее инструментов на шаг: {total_tools_called/len(self.conversation_history):.1f}" if self.conversation_history else "   Среднее инструментов на шаг: 0.0")
-        # Анализ по качествам для AI разработчика
-        print(f"\n🎯 ОЦЕНКА КАЧЕСТВ ДЛЯ AI РАЗРАБОТЧИКА:")
 
-        # Бизнес-фокус - упоминания маркетинга, партнеров, роста
-        business_focus = sum(1 for msg in self.conversation_history
-                            if any(word in msg['agent'].lower()
-                                  for word in ['маркетинг', 'партнер', 'продвижени', 'рост', 'бизнес', 'клиент']))
-        print(f"   💼 БИЗНЕС-ФОКУС: {business_focus}/{len(self.conversation_history)} бизнес-ориентированных ответов")
+        # Анализ качества для LIGHT тарифа
+        print(f"\n🎯 ОЦЕНКА КАЧЕСТВА ДЛЯ LIGHT ТАРИФА:")
 
-        # Техническая экспертиза - упоминания AI, разработки, технологий
-        tech_expertise = sum(1 for msg in self.conversation_history
-                            if any(word in msg['agent'].lower()
-                                  for word in ['ai', 'разработк', 'технолог', 'алгоритм', 'код']))
-        print(f"   🤖 ТЕХНИЧЕСКАЯ ЭКСПЕРТИЗА: {tech_expertise}/{len(self.conversation_history)} технических ответов")
+        # Естественность - отсутствие форматирования
+        natural_responses = sum(1 for msg in self.conversation_history
+                               if '**' not in msg['agent'] and '1.' not in msg['agent'] and '- ' not in msg['agent'])
+        print(f"   💬 ЕСТЕСТВЕННОСТЬ: {natural_responses}/{len(self.conversation_history)} ответов без форматирования")
 
-        # Проактивность - предложения действий, инициатива
-        proactivity = sum(1 for msg in self.conversation_history
-                         if any(word in msg['agent'].lower()
-                               for word in ['предлагаю', 'создадим', 'найдем', 'проанализируем', 'давай']))
-        print(f"   🚀 ПРОАКТИВНОСТЬ: {proactivity}/{len(self.conversation_history)} проактивных предложений")
+        # Функциональность - правильные вызовы инструментов
+        functional_steps = 0
+        for msg in self.conversation_history:
+            user_msg = msg['user'].lower()
+            tools = msg['tools']
 
-        # Исполнение - реальные вызовы инструментов
-        execution_score = steps_with_tools
-        print(f"   ⚡ ИСПОЛНЕНИЕ: {execution_score}/{len(self.conversation_history)} шагов с реальными действиями")
+            # Проверяем соответствие инструментов запросам
+            if 'задач' in user_msg and 'list_tasks' in tools:
+                functional_steps += 1
+            elif 'создать' in user_msg and 'add_task' in tools:
+                functional_steps += 1
+            elif 'партнер' in user_msg and 'find_partners' in tools:
+                functional_steps += 1
+            elif 'профиль' in user_msg and 'show_profile' in tools:
+                functional_steps += 1
+            elif 'удалить' in user_msg and 'delete_task' in tools:
+                functional_steps += 1
 
-        # Кастомизация под тариф
-        tier_specific_features = {
-            "LIGHT": ["задачи", "партнеры", "профиль"],
-            "STANDARD": ["маркетинг", "пост", "делегирован"],
-            "PREMIUM": ["анализ", "алерты", "автономн"]
-        }
+        print(f"   ⚡ ФУНКЦИОНАЛЬНОСТЬ: {functional_steps}/{len(self.conversation_history)} правильных вызовов инструментов")
 
-        tier_usage = sum(1 for msg in self.conversation_history
-                        if any(word in msg['agent'].lower()
-                              for word in tier_specific_features.get(self.tier, [])))
-        print(f"   🎯 ИСПОЛЬЗОВАНИЕ ФУНКЦИЙ {self.tier.upper()}: {tier_usage}/{len(self.conversation_history)} использований функций тарифа")
+        # Проактивность - предложения действий
+        proactive_responses = sum(1 for msg in self.conversation_history
+                                 if any(word in msg['agent'].lower()
+                                       for word in ['предлагаю', 'создадим', 'найдем', 'давай', 'можешь', 'попробуй']))
+        print(f"   🚀 ПРОАКТИВНОСТЬ: {proactive_responses}/{len(self.conversation_history)} проактивных ответов")
+
+        # Контекстность - упоминания профиля, времени, задач
+        contextual_responses = sum(1 for msg in self.conversation_history
+                                  if any(word in msg['agent'].lower()
+                                        for word in ['профиль', 'задач', 'сегодня', 'завтра', 'вечер']))
+        print(f"   🎯 КОНТЕКСТНОСТЬ: {contextual_responses}/{len(self.conversation_history)} контекстных ответов")
 
         # Итоговая оценка
-        total_score = (business_focus + tech_expertise + proactivity + execution_score + tier_usage) / 5
-        print(f"\n🏆 ИТОГОВАЯ ОЦЕНКА ДЛЯ {self.tier.upper()}: {total_score:.1f}/15 (макс. 15)")
+        total_score = natural_responses + functional_steps + proactive_responses + contextual_responses
+        max_score = len(self.conversation_history) * 4
+        print(f"\n🏆 ИТОГОВАЯ ОЦЕНКА: {total_score}/{max_score} (макс. {max_score})")
+
+        # Рекомендации по улучшениям
+        print(f"\n💡 РЕКОМЕНДАЦИИ ПО УЛУЧШЕНИЯМ:")
+
+        if natural_responses < len(self.conversation_history):
+            print("   - Улучшить естественность: убрать форматирование списков")
+        if functional_steps < len(self.conversation_history) * 0.7:
+            print("   - Исправить функциональность: правильные вызовы инструментов")
+        if proactive_responses < len(self.conversation_history) * 0.5:
+            print("   - Добавить проактивности: больше предложений действий")
+        if contextual_responses < len(self.conversation_history) * 0.6:
+            print("   - Улучшить контекстность: учитывать профиль и время")
+
+        return self.conversation_history
 
 async def main():
-    """Запуск тестов для всех тарифов"""
-    tiers = ["LIGHT", "STANDARD", "PREMIUM"]
+    """Запуск естественного теста для LIGHT тарифа"""
 
-    for tier in tiers:
-        print(f"\n{'='*80}")
-        print(f"🚀 НАЧИНАЕМ ТЕСТ ДЛЯ ТАРИФА {tier.upper()}")
-        print('='*80)
+    print("🚀 НАЧИНАЕМ ЕСТЕСТВЕННЫЙ ТЕСТ ДЛЯ LIGHT ТАРИФА")
+    print("=" * 60)
 
-        tester = LiveDialogTester(tier=tier)
-        await tester.run_dialog_test()
+    tester = LiveDialogTester()
+    results = await tester.run_natural_dialog_test()
 
-        print(f"\n💾 ДИАЛОГ СОХРАНЕН В: conversation_log_{tier.lower()}.json")
+    # Сохраняем результаты
+    with open('natural_dialog_test_results.json', 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
 
-        # Сохраняем лог для каждого тарифа
-        with open(f'conversation_log_{tier.lower()}.json', 'w', encoding='utf-8') as f:
-            json.dump(tester.conversation_history, f, ensure_ascii=False, indent=2)
-
-        # Пауза между тарифами
-        if tier != tiers[-1]:
-            print(f"\n⏳ ПЕРЕХОД К СЛЕДУЮЩЕМУ ТАРИФУ ЧЕРЕЗ 3 СЕКУНДЫ...")
-            await asyncio.sleep(3)
+    print(f"\n💾 РЕЗУЛЬТАТЫ СОХРАНЕНЫ В: natural_dialog_test_results.json")
 
 if __name__ == "__main__":
     asyncio.run(main())
