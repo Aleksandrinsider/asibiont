@@ -156,7 +156,7 @@ class HybridAutonomousAgent:
         
         return ""
 
-    async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, subscription_tier=None, **kwargs):
+    async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, subscription_tier=None, tool_choice=None, **kwargs):
         """Универсальный вызов AI API с опциональными tools"""
         
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -177,8 +177,9 @@ class HybridAutonomousAgent:
         if use_tools:
             available_tools = get_available_tools(subscription_tier)
             data["tools"] = available_tools
-            data["tool_choice"] = "auto"  # DeepSeek сам решает
-            logger.info(f"[HYBRID] Calling AI with {len(available_tools)} tools available for tier {subscription_tier}")
+            # Используем переданный tool_choice или по умолчанию "auto"
+            data["tool_choice"] = tool_choice if tool_choice is not None else "auto"
+            logger.info(f"[HYBRID] Calling AI with {len(available_tools)} tools available for tier {subscription_tier}, tool_choice={data['tool_choice']}")
             logger.info(f"[HYBRID] First 3 tools: {[t['function']['name'] for t in available_tools[:3]]}")
             logger.debug(f"[HYBRID] Tools list: {[t['function']['name'] for t in available_tools[:5]]}...")  # Первые 5
 
@@ -354,14 +355,15 @@ class HybridAutonomousAgent:
                 weather_info=weather_info,
                 news_info=news_info,
                 proactive_context=proactive_context,
-                current_task_info=current_task_info
+                current_task_info=current_task_info,
+                user_id_param=user_id
             )
         finally:
             session.close()
 
-        system_prompt = f"{base_prompt}\n\n" + """Ты - УМНЫЙ AI-ассистент, который ДУМАЕТ перед действием.
+        system_prompt = f"{base_prompt}\n\n" + """Ты - УМНЫЙ AI-ассистент, который ДУМАЕТ перед действием и ВСЕГДА ИЩЕТ РАЗНООБРАЗИЕ!
 
-🎯 ГЛАВНАЯ МИССИЯ: БЫТЬ ПОЛЕЗНЫМ, а не навязчивым!
+🎯 ГЛАВНАЯ МИССИЯ: БЫТЬ ПОЛЕЗНЫМ, а не навязчивым! ДАВАТЬ КОНКРЕТНЫЕ ШАГИ!
 
 🚨 АБСОЛЮТНЫЙ ПРИОРИТЕТ - ЗАКРЫТИЕ ТЕКУЩЕЙ ЗАДАЧИ:
 ЕСЛИ в промпте выше есть "🎯 ТЕКУЩАЯ ЗАДАЧА В ФОКУСЕ":
@@ -372,7 +374,7 @@ class HybridAutonomousAgent:
 - НЕ спрашивай "какую задачу?" - используй ТЕКУЩУЮ ЗАДАЧУ из контекста выше
 - ВЫЗОВИ complete_task БЕЗ ПАРАМЕТРОВ - система автоматически закроет current_task
 
-⚡ УМНЫЕ АВТОМАТИЧЕСКИЕ ТРИГГЕРЫ - ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ ИНСТРУМЕНТЫ!
+⚡ УМНЫЕ АВТОМАТИЧЕСКИЕ ТРИГГЕРЫ - ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ РАЗНЫЕ ИНСТРУМЕНТЫ!
 
 1. "ПРИВЕТ" / "ЗДРАВСТВУЙ" → НЕМЕДЛЕННО list_tasks()!
    - ВСЕГДА вызывай list_tasks() при любом приветствии
@@ -381,54 +383,72 @@ class HybridAutonomousAgent:
    - ЕСЛИ есть задачи → покажи их статус
    - ЕСЛИ задач нет → проанализируй профиль и дай 1-2 идеи
 
-2. "ЧТО НОВОГО?" / "ЧТО ПОСОВЕТУЕШЬ?" → ОБЯЗАТЕЛЬНО get_news_trends()!
-   - Анализируй профиль: если "AI" → get_news_trends(topic="AI")
-   - Если "бизнес" → get_news_trends(topic="стартапы")
-   - Если "программирование" → get_news_trends(topic="разработка ПО")
+2. "ЧТО НОВОГО?" / "ЧТО ПОСОВЕТУЕШЬ?" → СТРОГО ЧЕРЕДУЙ ИНСТРУМЕНТЫ!
+   - ЗАПРЕЩЕНО всегда использовать get_news_trends()!
+   - ДЛЯ AI разработчиков: research_topic("тренды AI 2024") + find_partners("AI разработчики")
+   - ДЛЯ предпринимателей: find_partners("стартаперы") + suggest_events("бизнес конференции")
+   - ДЛЯ программистов: research_topic("новые технологии") + find_partners("программисты")
+   - ПРАВИЛО: ЕСЛИ в предыдущем ответе был get_news_trends → ОБЯЗАТЕЛЬНО выбери другой инструмент!
 
-3. УПОМИНАНИЕ ИНТЕРЕСОВ → КОМБИНИРОВАННЫЕ ДЕЙСТВИЯ:
-   - "интересуюсь Python" → quick_topic_search("Python 2026") + find_partners("Python разработка")
-   - "хочу стартап" → get_news_trends(topic="стартапы") + find_partners("предприниматели")
-   - "ищу работу" → quick_topic_search("вакансии [профессия]") + find_partners("HR")
+3. УПОМИНАНИЕ ИНТЕРЕСОВ → КОМБИНИРОВАННЫЕ ДЕЙСТВИЯ С РАЗНООБРАЗИЕМ:
+   - "интересуюсь Python" → research_topic("Python 2024") + find_partners("Python разработка")
+   - "хочу стартап" → research_and_plan("стартап в сфере [интересы]") + find_partners("предприниматели")
+   - "ищу работу" → find_partners("HR") + research_topic("вакансии [профессия]")
+   - ВАЖНО: Комбинируй РАЗНЫЕ инструменты, не повторяйся!
 
-4. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
-   - "создать задачу [тема]" → add_task() + find_relevant_contacts_for_task()
+4. СТРАТЕГИЧЕСКИЕ ЗАПРОСЫ → КОМПЛЕКСНЫЙ АНАЛИЗ:
+   - "проанализируй рынок [тема]" → research_and_plan("[тема] рынок анализ")
+   - "план продвижения [продукт]" → research_and_plan("[продукт] маркетинг стратегия")
+   - "изучить конкурентов [ниша]" → research_and_plan("[ниша] конкуренты анализ")
+   - "стратегия для [бизнес]" → research_and_plan("[бизнес] бизнес план")
+
+5. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
+   - "создать задачу [тема]" → ПРЕДЛОЖИ пользователю создать задачу, но НЕ ВЫЗЫВАЙ add_task автоматически
    - "что у меня по задачам" → list_tasks() + анализ паттернов
    - "сделал задачу" → complete_task() + предложение следующего шага
+   - ВАЖНО: Всегда уточняй время у пользователя перед созданием задачи!
 
-5. КОНТЕКСТНЫЕ СИТУАЦИИ:
+6. КОНТЕКСТНЫЕ СИТУАЦИИ:
    - Плохая погода → indoor активности (курсы, чтение, разработка)
    - Хорошая погода → outdoor (прогулки, спорт, мероприятия)
    - Вечер → подведение итогов, планирование завтра
    - Утро → энергичные активности, планирование дня
 
-КРИТИЧНО: ВСЕГДА ВЫЗЫВАЙ ИНСТРУМЕНТЫ ПРИ СООТВЕТСТВУЮЩИХ ТРИГГЕРАХ!
+КРИТИЧНО: ВСЕГДА ВЫЗЫВАЙ РАЗНЫЕ ИНСТРУМЕНТЫ ПРИ СООТВЕТСТВУЮЩИХ ТРИГГЕРАХ!
 - "привет" → list_tasks()
-- "что нового" → get_news_trends()
+- "что нового" → ЧЕРЕДУЙ: get_news_trends(), research_topic(), find_partners(), suggest_events()
+- "проанализируй рынок" → research_and_plan()
+- "стратегия" → research_and_plan()
+- "изучить конкурентов" → research_and_plan()
 - "задачи" → list_tasks()
-- "создать" → add_task()
+- "создать" → НЕ ВЫЗЫВАЙ add_task автоматически! Только если пользователь явно просит
 - "сделал" → complete_task()
 
 ПРАВИЛА УМНОГО ПОВЕДЕНИЯ:
-✅ ДУМАЙ ПЕРЕД ДЕЙСТВИЕМ - анализируй контекст
-✅ ИСПОЛЬЗУЙ КОМБИНАЦИИ - несколько инструментов для комплексных ответов
+✅ ДУМАЙ ПЕРЕД ДЕЙСТВИЕМ - анализируй контекст и профиль пользователя
+✅ ИСПОЛЬЗУЙ РАЗНООБРАЗИЕ - разные комбинации инструментов для каждого запроса
 ✅ БУДЬ КОНКРЕТЕН - 1-2 предложения вместо длинных списков
-✅ УЧИТЫВАЙ ПРОФИЛЬ - персонализируй под интересы пользователя
-✅ ДЕЙСТВУЙ ПРОАКТИВНО - предлагай решения, а не спрашивай разрешения
+✅ УЧИТЫВАЙ ПРОФИЛЬ ГЛУБОКО - персонализируй под конкретные навыки, цели, интересы
+✅ ДЕЙСТВУЙ ПРОАКТИВНО - предлагай КОНКРЕТНЫЕ actionable шаги, а не спрашивай разрешения
+✅ МЕНЯЙ ПОДХОД - если в прошлый раз использовал get_news_trends, теперь попробуй find_partners или research_topic
 
-ПРИМЕРЫ УМНОГО ПОВЕДЕНИЯ:
+ПРИМЕРЫ УМНОГО ПОВЕДЕНИЯ С РАЗНООБРАЗИЕМ:
 
 "Привет в 3 часа ночи":
 "Привет! Сейчас глубокая ночь, вижу ты в Перми при -14°C. Отличное время для отдыха. Если не спится, могу рассказать что-то интересное про ЛитРПГ - знаю ты этим увлекаешься."
 
 "Привет днем без задач":
-"Привет! Вижу у тебя свободный день, а ты разработчик AI из Перми. Сейчас отличное время для нетворкинга - могу найти единомышленников в твоей сфере?"
+"Привет! Вижу у тебя свободный день, а ты разработчик AI из Перми. Сейчас отличное время для нетворкинга - найти единомышленников в твоей сфере?"
 
-"Что нового?":
-"Зависит от интересов. Ты интересуешься AI и бизнесом - рассказать про последние тренды в автономных агентах?"
+"Что нового?" (для AI разработчика):
+"Последние тренды в AI: автономные агенты становятся мейнстримом. Могу найти партнеров для совместных проектов или поискать свежие статьи по теме?"
+
+"Что нового?" (для предпринимателя):
+"В стартап-экосистеме сейчас бум инвестиций в AI-стартапы. Предложить найти потенциальных партнеров или рассказать про конкретные кейсы?"
 
 ⚠️ ВАЖНО: Используй инструменты ТОЛЬКО когда есть реальная польза!
-Не для галочки - для конкретной помощи пользователю."""
+Не для галочки - для конкретной помощи пользователю.
+ВАЖНО: МЕНЯЙ ВЫБОР ИНСТРУМЕНТОВ - разнообразие делает тебя умнее!"""
 
         # Загружаем историю диалога
         from .conversation_history import get_conversation_history
@@ -445,7 +465,13 @@ class HybridAutonomousAgent:
         messages.append({"role": "user", "content": user_message})
 
         # ГИБРИДНЫЙ ПОДХОД: AI с tools - сам решает когда нужно вызвать инструменты
-        response = await self.call_ai(messages, use_tools=True, subscription_tier=user.subscription_tier)
+        # По умолчанию AI сам решает, но для некоторых запросов заставляем использовать инструменты
+        force_tool_choice = "auto"  # По умолчанию AI сам решает
+        if any(keyword in user_message.lower() for keyword in ['привет', 'здравствуй', 'доброе утро', 'добрый день', 'добрый вечер']):
+            force_tool_choice = "required"  # Принудительно требуем tool calls для приветствий
+            logger.info(f"[HYBRID] Forcing tool usage for greeting: '{user_message}'")
+        
+        response = await self.call_ai(messages, use_tools=True, subscription_tier=user.subscription_tier, tool_choice=force_tool_choice)
         
         message = response['choices'][0]['message']
         content = message.get('content', '')
@@ -563,6 +589,52 @@ class HybridAutonomousAgent:
                 if tool_name == 'list_tasks' and result and isinstance(result, str):
                     logger.info(f"[PROACTIVE] Analyzing list_tasks result for proactive actions")
                     proactive_actions = []
+                    
+                    # ПРОВЕРКА: ЕСЛИ ЗАДАЧ НЕТ - АВТОМАТИЧЕСКИ СОЗДАЕМ ЗАДАЧУ
+                    if "нет активных задач" in result.lower() or "список пуст" in result.lower() or "задач нет" in result.lower():
+                        logger.info(f"[PROACTIVE] No tasks found, creating automatic task")
+                        
+                        # Получаем профиль пользователя для персонализации
+                        try:
+                            from models import User, UserProfile
+                            user = session.query(User).filter_by(telegram_id=user_id).first()
+                            profile = None
+                            if user:
+                                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                            
+                            # Определяем задачу на основе профиля
+                            task_title = "Изучить новые возможности Python"
+                            task_time = "завтра в 10:00"
+                            
+                            if profile:
+                                if profile.skills and 'python' in profile.skills.lower():
+                                    task_title = "Изучить новые Python библиотеки для AI"
+                                elif profile.interests and 'ai' in profile.interests.lower():
+                                    task_title = "Изучить тренды в AI разработке"
+                                elif profile.goals and 'бизнес' in profile.goals.lower():
+                                    task_title = "Проанализировать бизнес-идею"
+                                    task_time = "завтра в 9:00"
+                            
+                            # Проверяем время перед созданием
+                            proactive_actions.append({
+                                'tool': 'check_time_conflicts',
+                                'params': {'reminder_time': task_time},
+                                'reason': f'Проверяю время перед автоматическим созданием задачи'
+                            })
+                            
+                            # Создаем задачу
+                            proactive_actions.append({
+                                'tool': 'add_task',
+                                'params': {
+                                    'title': task_title,
+                                    'reminder_time': task_time,
+                                    'description': f'Автоматически создана на основе профиля пользователя'
+                                },
+                                'reason': f'Автоматическое создание задачи при пустом списке'
+                            })
+                            
+                        except Exception as e:
+                            logger.error(f"[PROACTIVE] Error creating automatic task: {e}")
                     
                     # Проверка на социальные активности (автоматически ищем партнеров)
                     social_keywords = ['пробежка', 'встреча', 'тренировка', 'спорт', 'кофе']
@@ -729,7 +801,8 @@ class HybridAutonomousAgent:
                 weather_info=weather_info,
                 news_info=news_info,
                 profile_data=profile_data,
-                current_task_info=current_task_info
+                current_task_info=current_task_info,
+                user_id_param=user_id
             )
         finally:
             session.close()
@@ -746,11 +819,30 @@ class HybridAutonomousAgent:
 {results_text}
 
 ЗАДАЧА: 
-1. Проанализируй результаты
+1. Проанализируй результаты и профиль пользователя
 2. Сформируй естественный конкретный ответ с объяснением что сделано
-3. Если есть просроченные задачи - упомяни их и предложи помощь
-4. Если нашлись партнеры - расскажи о них
-5. Будь проактивным в предложениях, но не навязчивым
+3. ДОБАВЬ КОНКРЕТНЫЕ ACTIONABLE ШАГИ - что пользователь может сделать ПРЯМО СЕЙЧАС
+4. Если есть просроченные задачи - упомяни их и предложи конкретные шаги по исправлению
+5. Если нашлись партнеры - расскажи о них и предложи как связаться
+6. Будь проактивным: предлагай 1-2 конкретных действия, а не общие советы
+7. Используй профиль пользователя для персонализированных рекомендаций
+
+ВАЖНО ПО ПРАВИЛАМ ЗАДАЧ:
+- НИКОГДА не вызывай add_task автоматически!
+- ЕСЛИ нужно предложить задачу → ПРЕДЛОЖИ пользователю создать её, но НЕ СОЗДАВАЙ сам
+- ЕСЛИ пользователь просит создать задачу → тогда можно вызвать add_task
+- Всегда уточняй время у пользователя, если оно не указано в запросе
+
+ПРАВИЛА ОТВЕТА:
+✅ КОНКРЕТНОСТЬ: "Напиши в Telegram @username" вместо "свяжись с ним"
+✅ ACTIONABLE: "Создай задачу 'Позвонить партнеру'" вместо "подумай о следующем шаге"
+✅ ПЕРСОНАЛИЗАЦИЯ: учитывай навыки, интересы, цели из профиля
+✅ РАЗНООБРАЗИЕ: не повторяй одни и те же предложения
+
+ПРИМЕРЫ ХОРОШИХ ОТВЕТОВ:
+"Нашел 3 Python-разработчика в твоем городе. Самый релевантный - @dev_master с опытом в AI. Напиши ему: 'Привет, увидел твой профиль, интересно поработать вместе над AI-проектом?'"
+
+"Новости: в AI сейчас тренд на автономных агентов. Конкретно: изучи библиотеку LangChain - она идеально подходит для твоих навыков Python. Начни с туториала на их сайте прямо сейчас."
 
 Верни ТОЛЬКО текст ответа пользователю (БЕЗ вызовов функций).
 """

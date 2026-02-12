@@ -13,7 +13,7 @@ from .handlers import (
     find_partners, update_profile, smart_update_profile,
     create_subscription_payment, check_subscription_status,
     cancel_subscription, get_partners_list, check_delegation_deadlines, restore_task, update_user_memory_async, analyze_tasks,
-    analyze_group_opportunities
+    analyze_group_opportunities, research_and_plan
 )
 
 __all__ = [
@@ -50,4 +50,5 @@ __all__ = [
     'restore_task',
     'analyze_tasks',
     'analyze_group_opportunities',
+    'research_and_plan',
 ]

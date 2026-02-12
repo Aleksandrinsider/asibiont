@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 import aiohttp
+from models import Session, User, SubscriptionTier
 
 logger = logging.getLogger(__name__)
 
@@ -119,13 +120,13 @@ async def generate_marketing_content(product_name, target_audience, platform, go
         }
 
 
-async def research_topic(query, depth="balanced", user_id=None, session=None):
+async def research_topic(query, depth="full", user_id=None, session=None):
     """
-    Глубокий анализ темы через веб-поиск + AI
+    УНИВЕРСАЛЬНЫЙ ПОИСК И АНАЛИЗ
+    Автоматически адаптируется под тариф пользователя
     
     Args:
         query: Тема для исследования
-        depth: Глубина анализа ("quick", "balanced", "deep")
         user_id: ID пользователя
     
     Returns:
@@ -133,10 +134,58 @@ async def research_topic(query, depth="balanced", user_id=None, session=None):
     """
     from config import SERPER_API_KEY
     
-    logger.info(f"[RESEARCH] Analyzing '{query}' with depth={depth}")
+    logger.info(f"[RESEARCH] Universal analysis for '{query}'")
     
-    # Определяем количество результатов
-    num_results = {"quick": 5, "balanced": 10, "deep": 15}.get(depth, 10)
+    # Проверяем кэш для похожих запросов
+    if user_id:
+        try:
+            from .memory import LongTermMemory
+            ltm = LongTermMemory(user_id)
+            cached_result = ltm.get_cached_search_result(query)
+            if cached_result:
+                logger.info(f"[RESEARCH] Using cached result for user {user_id}")
+                return {
+                    "success": True,
+                    "cached": True,
+                    "analysis": {
+                        "summary": cached_result['results'],
+                        "key_insights": cached_result['insights']
+                    },
+                    "message": f"🔍 Кэшированный анализ: {query}\n\n{cached_result['results']}\n\n💡 Ранее полученные инсайты:\n" + "\n".join(f"• {insight}" for insight in cached_result['insights'][:3])
+                }
+        except Exception as e:
+            logger.warning(f"[RESEARCH] Cache check failed: {e}")
+    
+    # Определяем параметры на основе тарифа
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        
+        if user and user.subscription_tier == SubscriptionTier.LIGHT:
+            # LIGHT: быстрый анализ
+            num_results = 5
+            analysis_type = "quick"
+            max_tokens = 200
+        elif user and user.subscription_tier == SubscriptionTier.STANDARD:
+            # STANDARD: детальный анализ
+            num_results = 10
+            analysis_type = "detailed" 
+            max_tokens = 400
+        else:
+            # PREMIUM: глубокий анализ
+            num_results = 15
+            analysis_type = "comprehensive"
+            max_tokens = 600
+            
+        logger.info(f"[RESEARCH] Tier: {user.subscription_tier.value if user else 'UNKNOWN'}, results: {num_results}, type: {analysis_type}")
+    
+    finally:
+        if close_session:
+            session.close()
     
     try:
         # Шаг 1: Веб-поиск через Serper
@@ -178,29 +227,68 @@ async def research_topic(query, depth="balanced", user_id=None, session=None):
         
         # Шаг 2: AI анализ результатов
         if search_results:
-            # Формируем контекст для AI
+            # Формируем контекст для AI (адаптируем под тариф)
+            context_length = min(len(search_results), num_results)
             context = "\n\n".join([
                 f"**{r['title']}**\n{r['snippet']}\nИсточник: {r['link']}"
-                for r in search_results[:10]
+                for r in search_results[:context_length]
             ])
             
-            prompt = f"""Проанализируй информацию по теме: "{query}"
+            # Адаптивный промпт на основе типа анализа
+            if analysis_type == "quick":
+                prompt = f"""Дай быстрый анализ темы: "{query}"
+
+ОСНОВНЫЕ ДАННЫЕ:
+{context}
+
+КРАТКИЙ АНАЛИЗ в формате JSON:
+{{
+    "summary": "резюме в 1-2 предложения",
+    "key_facts": ["факт 1", "факт 2", "факт 3"],
+    "actionable_insight": "один главный вывод для действия"
+}}
+
+Фокус: Быстрые, полезные insights."""
+                
+            elif analysis_type == "detailed":
+                prompt = f"""Детальный анализ темы: "{query}"
 
 ДАННЫЕ ИЗ ПОИСКА:
 {context}
 
-Создай детальный анализ в формате JSON:
+АНАЛИЗ в формате JSON:
 {{
-    "summary": "краткое резюме (2-3 предложения)",
+    "summary": "резюме 2-3 предложения",
     "key_insights": ["инсайт 1", "инсайт 2", "инсайт 3"],
-    "opportunities": ["возможность 1", "возможность 2"],
-    "competitors": ["конкурент 1", "конкурент 2"] (если найдены),
     "trends": ["тренд 1", "тренд 2"],
-    "actionable_steps": ["шаг 1", "шаг 2", "шаг 3"],
+    "opportunities": ["возможность 1", "возможность 2"],
+    "actionable_steps": ["шаг 1", "шаг 2"],
     "sources": ["главный источник 1", "главный источник 2"]
 }}
 
-Фокус: ПРАКТИЧЕСКИЕ выводы и КОНКРЕТНЫЕ рекомендации."""
+Фокус: Практические рекомендации и тренды."""
+                
+            else:  # comprehensive
+                prompt = f"""Комплексный анализ темы: "{query}"
+
+ПОЛНЫЕ ДАННЫЕ:
+{context}
+
+ГЛУБОКИЙ АНАЛИЗ в формате JSON:
+{{
+    "summary": "подробное резюме",
+    "key_insights": ["инсайт 1", "инсайт 2", "инсайт 3", "инсайт 4"],
+    "market_analysis": {{
+        "trends": ["тренд 1", "тренд 2", "тренд 3"],
+        "opportunities": ["возможность 1", "возможность 2", "возможность 3"],
+        "competitors": ["конкурент 1", "конкурент 2"],
+        "challenges": ["проблема 1", "проблема 2"]
+    }},
+    "action_plan": ["шаг 1", "шаг 2", "шаг 3", "шаг 4"],
+    "sources": ["главный источник 1", "главный источник 2", "главный источник 3"]
+}}
+
+Фокус: Стратегический анализ и конкретный план действий."""
             
             async with aiohttp.ClientSession() as http_session:
                 async with http_session.post(
@@ -212,11 +300,11 @@ async def research_topic(query, depth="balanced", user_id=None, session=None):
                     json={
                         "model": DEEPSEEK_MODEL,
                         "messages": [
-                            {"role": "system", "content": "Ты эксперт по market research и competitive intelligence."},
+                            {"role": "system", "content": "Ты эксперт-аналитик с практическим опытом в бизнес-анализе и конкурентной разведке."},
                             {"role": "user", "content": prompt}
                         ],
                         "temperature": 0.5,
-                        "max_tokens": 2000
+                        "max_tokens": max_tokens
                     }
                 ) as response:
                     result = await response.json()
@@ -268,9 +356,16 @@ async def research_topic(query, depth="balanced", user_id=None, session=None):
                             "sources": search_results[:5],
                             "message": f"🔍 Анализ:\n\n{content[:500]}..."
                         }
-        else:
-            # Fallback: только AI без веб-поиска
-            prompt = f"""Проанализируй тему: "{query}"
+        
+        return {
+            "success": True,
+            "analysis": analysis,
+            "sources": search_results[:5] if 'search_results' in locals() else [],
+            "message": summary if 'summary' in locals() else f"🔍 Поиск по теме: {query}"
+        }
+        
+        # Fallback: только AI без веб-поиска (если SERPER недоступен)
+        prompt = f"""Проанализируй тему: "{query}"
 
 Создай краткий анализ на основе твоих знаний:
 - Общий обзор
@@ -278,33 +373,50 @@ async def research_topic(query, depth="balanced", user_id=None, session=None):
 - Рекомендации (3 шага)
 
 Формат: структурированный текст."""
-            
-            async with aiohttp.ClientSession() as http_session:
-                async with http_session.post(
-                    'https://api.deepseek.com/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                        'Content-Type': 'application/json'
-                    },
-                    json={
-                        "model": DEEPSEEK_MODEL,
-                        "messages": [
-                            {"role": "system", "content": "Ты эксперт-аналитик."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        "temperature": 0.6,
-                        "max_tokens": 1000
-                    }
-                ) as response:
-                    result = await response.json()
-                    content = result['choices'][0]['message']['content']
-                    
-                    return {
-                        "success": True,
-                        "analysis": {"summary": content},
-                        "sources": [],
-                        "message": f"🔍 Анализ (базовые знания):\n\n{content[:500]}...\n\n⚠️ Для глубокого анализа нужен доступ к веб-поиску"
-                    }
+        
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.post(
+                'https://api.deepseek.com/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    "model": DEEPSEEK_MODEL,
+                    "messages": [
+                        {"role": "system", "content": "Ты эксперт-аналитик."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.6,
+                    "max_tokens": 1000
+                }
+            ) as response:
+                result = await response.json()
+                content = result['choices'][0]['message']['content']
+                
+                analysis = {"summary": content}
+                
+                # Сохраняем данные поиска в долгосрочную память для персонализации
+                if user_id and analysis:
+                    try:
+                        from .memory import LongTermMemory
+                        ltm = LongTermMemory(user_id)
+                        
+                        # Сохраняем краткое резюме результатов
+                        results_summary = analysis.get('summary', '')[:200]
+                        insights = []
+                        
+                        ltm.save_search_query(query, results_summary, insights)
+                        logger.info(f"[RESEARCH] Saved search data for user {user_id}")
+                    except Exception as e:
+                        logger.warning(f"[RESEARCH] Failed to save search data: {e}")
+                
+                return {
+                    "success": True,
+                    "analysis": analysis,
+                    "sources": [],
+                    "message": f"🔍 Анализ (базовые знания):\n\n{content[:500]}...\n\n⚠️ Для глубокого анализа нужен доступ к веб-поиску"
+                }
                     
     except Exception as e:
         logger.error(f"[RESEARCH] Error: {e}")

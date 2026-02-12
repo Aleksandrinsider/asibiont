@@ -16,6 +16,26 @@ from . import marketing_agent
 
 logger = logging.getLogger(__name__)
 
+def get_tier_priority(profile, session=None):
+    """Get tier priority for sorting (PREMIUM=3, STANDARD=2, LIGHT=1)"""
+    if not profile or not hasattr(profile, 'user_id'):
+        return 0
+    
+    if session is None:
+        from models import Session
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        partner_subscription = session.query(Subscription).filter_by(user_id=profile.user_id, status='active').first()
+        partner_tier = partner_subscription.tier.value if partner_subscription and partner_subscription.tier else 'LIGHT'
+        return {'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(partner_tier, 0)
+    finally:
+        if close_session:
+            session.close()
+
 # Расширенная карта часовых поясов для городов
 CITY_TIMEZONE_MAP = {
     # Россия - Европейская часть (MSK, UTC+3)
@@ -118,7 +138,7 @@ CITY_TIMEZONE_MAP = {
 }
 
 
-def check_time_conflicts(user_db_id, parsed_time, session):
+def check_time_conflicts_sync(user_db_id, parsed_time, session):
     """
     Проверяет конфликты по времени для новой задачи
     
@@ -249,6 +269,67 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
         logger.warning(f"Error finding free slot: {e}")
     
     return None
+
+
+async def check_time_conflicts(reminder_time, user_id=None, session=None):
+    """
+    Асинхронная функция для проверки конфликтов времени (для tool calling)
+    
+    Args:
+        reminder_time: Строка с временем в формате 'завтра в 10:00', 'через 2 часа' и т.д.
+        user_id: Telegram ID пользователя
+        session: Сессия БД (опционально)
+    
+    Returns:
+        Строка с результатом проверки
+    """
+    try:
+        if session is None:
+            session = Session()
+            close_session = True
+        else:
+            close_session = False
+            
+        # Получаем пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден"
+            
+        # Парсим время с помощью правильной функции
+        from .utils import parse_time_to_datetime
+        parsed_time_str = parse_time_to_datetime(reminder_time, user_id)
+        
+        if not parsed_time_str:
+            if close_session:
+                session.close()
+            return f"Не удалось распознать время: {reminder_time}"
+            
+        # Конвертируем строку в datetime
+        from datetime import datetime
+        import pytz
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        parsed_time = datetime.strptime(parsed_time_str, "%Y-%m-%d %H:%M")
+        parsed_time = user_tz.localize(parsed_time)
+            
+        # Проверяем конфликты
+        conflicts = check_time_conflicts_sync(user.id, parsed_time, session)
+        
+        if close_session:
+            session.close()
+            
+        if conflicts:
+            conflict_msg, suggested_time = conflicts
+            return f"⚠️ КОНФЛИКТ ВРЕМЕНИ:\n{conflict_msg}\n\n💡 ПРЕДЛАГАЮ: {suggested_time}"
+        else:
+            return "✅ Время свободно, можно создавать задачу"
+            
+    except Exception as e:
+        logger.error(f"Error in async check_time_conflicts: {e}")
+        if session and 'close_session' in locals() and close_session:
+            session.close()
+        return f"Ошибка при проверке времени: {str(e)}"
 
 
 async def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1):
@@ -2465,43 +2546,55 @@ def get_partners_list(user_id=None, session=None):
 
     logger.info(f"[PARTNERS] Total partners found: {len(partners)}")
 
-    # Sort: first users from same city, then others
-    # Within each group: PREMIUM first (priority), then by rating
+# НОВАЯ ЛОГИКА СОРТИРОВКИ: способствовать росту пользователя через всю базу данных
+    # Приоритет: (1) релевантность, (2) город (бонус, но не ограничение), (3) Premium, (4) рейтинг
     user_city = user_profile.city.lower() if user_profile.city else None
-    partners_same_city = []
-    partners_other_city = []
 
-    for partner in partners:
-        partner_city = partner.city.lower() if partner.city else None
-        if user_city and partner_city == user_city:
-            partners_same_city.append(partner)
-        else:
-            partners_other_city.append(partner)
-
-    # Helper function to get subscription tier priority (PREMIUM=3, STANDARD=2, LIGHT=1, None=0)
-    def get_tier_priority(partner_profile):
-        partner_user = session.query(User).filter_by(id=partner_profile.user_id).first()
-        if not partner_user:
-            return 0
-        partner_subscription = session.query(Subscription).filter_by(user_id=partner_user.id, status='active').first()
-        tier = partner_subscription.tier.value if partner_subscription and partner_subscription.tier else 'LIGHT'
-        return {'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(tier, 0)
-    
-    # Базовая сортировка: (1) город, (2) релевантность=0 (заполнится ниже), (3) Premium, (4) рейтинг
     def sort_key(p):
+        relevance_score = 0  # Инициализируем счетчик релевантности
+        
+        # Совпадения навыков дают высокий балл
+        if user_profile.skills and p.skills:
+            user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
+            profile_skills = set(s.strip().lower() for s in p.skills.split(","))
+            skill_matches = len(user_skills & profile_skills)
+            relevance_score += skill_matches * 3  # Каждый совпадающий навык = 3 балла
+
+        # Совпадения интересов дают средний балл
+        if user_profile.interests and p.interests:
+            user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
+            profile_interests = set(i.strip().lower() for i in p.interests.split(","))
+            interest_matches = len(user_interests & profile_interests)
+            relevance_score += interest_matches * 2  # Каждый совпадающий интерес = 2 балла
+
+        # Совпадения целей дают высокий балл
+        if user_profile.goals and p.goals:
+            user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
+            profile_goals = set(g.strip().lower() for g in p.goals.split(","))
+            goal_matches = len(user_goals & profile_goals)
+            relevance_score += goal_matches * 4  # Каждая совпадающая цель = 4 балла
+
+        # Бонус за тот же город (но не блокировка)
+        city_bonus = 0
         partner_city = p.city.lower() if p.city else None
-        same_city = 0 if (user_city and partner_city == user_city) else 1
-        # task_relevance_score будет 0 на этом этапе, заполнится в следующем блоке
-        return (same_city, -getattr(p, 'task_relevance_score', 0), -get_tier_priority(p), -(p.average_rating or 0))
-    
+        if user_city and partner_city == user_city:
+            city_bonus = 1  # Небольшой бонус за локальность
+
+        premium_bonus = get_tier_priority(p, session)
+
+        return (-relevance_score, -city_bonus, -premium_bonus, -(p.average_rating or 0))
+
+    # Сортируем по новой логике
     partners.sort(key=sort_key)
-    sorted_partners = partners
-    
-    # Подсчёт для логирования
-    partners_same_city = [p for p in partners if (p.city.lower() if p.city else None) == user_city] if user_city else []
-    partners_other_city = [p for p in partners if (p.city.lower() if p.city else None) != user_city] if user_city else partners
-    
-    logger.info(f"[PARTNERS] Sorted results: {len(partners_same_city)} from same city, {len(partners_other_city)} from other cities")
+
+    # Логируем результаты для анализа
+    top_partners = partners[:5]  # Показываем топ-5 для логирования
+    for i, p in enumerate(top_partners):
+        partner_user = session.query(User).filter_by(id=p.user_id).first()
+        if partner_user:
+            logger.info(f"[PARTNERS] Top {i+1}: @{partner_user.username} (city: {p.city}, relevance: calculated in sort_key)")
+
+    logger.info(f"[PARTNERS] Total partners after sorting: {len(partners)} (using full database for user growth)")
     
     # Получить текущие задачи пользователя для динамических рекомендаций
     user_tasks = session.query(Task).filter(
@@ -2549,7 +2642,7 @@ def get_partners_list(user_id=None, session=None):
     user_skills = set(s.strip().lower() for s in user_profile.skills.split(',')) if user_profile.skills else set()
     user_goals = set(g.strip().lower() for g in user_profile.goals.split(',')) if user_profile.goals else set()
     
-    for partner in sorted_partners:
+    for partner in partners:
         # Common interests
         if partner.interests:
             partner_interests = set(i.strip().lower() for i in partner.interests.split(','))
@@ -2663,19 +2756,19 @@ def get_partners_list(user_id=None, session=None):
                         logger.info(f"[PARTNERS] @{partner_user.username} has exact same active tasks: {exact_task_matches}")
     
     # Пересортируем ВСЕХ партнеров с учетом релевантности: (1) город, (2) релевантность, (3) Premium, (4) рейтинг
-    sorted_partners.sort(key=lambda p: (
+    partners.sort(key=lambda p: (
         0 if (user_city and (p.city.lower() if p.city else None) == user_city) else 1,  # город
         -p.task_relevance_score,  # релевантность
-        -get_tier_priority(p),  # Premium
+        -get_tier_priority(p, session),  # Premium
         -(p.average_rating or 0)  # рейтинг
     ))
     
     # Подсчитываем партнеров с релевантностью для задач
-    relevant_count = sum(1 for p in sorted_partners if p.task_relevance_score > 0)
-    not_relevant_count = len(sorted_partners) - relevant_count
+    relevant_count = sum(1 for p in partners if p.task_relevance_score > 0)
+    not_relevant_count = len(partners) - relevant_count
     logger.info(f"[PARTNERS] Task-relevant partners: {relevant_count}, other: {not_relevant_count}")
     
-    for partner in sorted_partners[:5]:  # Log top 5
+    for partner in partners[:5]:  # Log top 5
         partner_user = session.query(User).filter_by(id=partner.user_id).first()
         if partner_user:
             logger.info(f"[PARTNERS] Top partner: @{partner_user.username}, task_score={partner.task_relevance_score}, relevance={partner.task_relevance}")
@@ -2706,7 +2799,7 @@ def get_partners_list(user_id=None, session=None):
     if close_session:
         session.close()
 
-    return sorted_partners[:50]  # Увеличено с 20 до 50
+    return partners[:50]  # Увеличено с 20 до 50
 
 
 def analyze_group_opportunities(user_id, session):
@@ -2932,83 +3025,64 @@ def find_partners(user_id=None, session=None):
             session.close()
         return "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, город), и я найду единомышленников!"
 
-    # Разделяем партнеров на избранные и рекомендованные
-    favorite_partners = []
-    recommended_partners = []
-    
-    for p in partners:
+    # НОВАЯ ЛОГИКА: показываем топ релевантных контактов для роста пользователя
+    # Партнеры уже отсортированы по релевантности в get_partners_list
+
+    response = "Нашел интересных людей для твоего роста и развития:\n\n"
+
+    # Показываем топ-5 наиболее релевантных контактов
+    for idx, p in enumerate(partners[:5], 1):
         partner_user = session.query(User).filter_by(id=p.user_id).first()
         if partner_user and partner_user.username:
-            # Проверяем, является ли контакт избранным
-            is_favorite = False
-            if user_profile.favorite_contacts:
-                favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
-                if partner_user.username.replace('@', '').lower() in favorite_usernames:
-                    is_favorite = True
-            
-            if is_favorite:
-                favorite_partners.append(p)
-            else:
-                recommended_partners.append(p)
+            info_parts = []
 
-    # Format response
-    response = ""
-    
-    # Сначала показываем избранные контакты
-    if favorite_partners:
-        response += "Избранные контакты: "
-        for idx, p in enumerate(favorite_partners[:2], 1):  # Максимум 2 избранных
-            partner_user = session.query(User).filter_by(id=p.user_id).first()
-            if partner_user and partner_user.username:
-                info_parts = []
-                if hasattr(p, "current_plans") and p.current_plans:
-                    info_parts.append(f"сейчас: {p.current_plans}")
-                if p.interests:
-                    info_parts.append(f"интересы: {p.interests}")
-                if hasattr(p, "position") and p.position:
-                    info_parts.append(f"{p.position}")
-                if hasattr(p, "company") and p.company:
-                    info_parts.append(f"компания: {p.company}")
-                if p.city:
-                    info_parts.append(f"город: {p.city}")
+            # Добавляем информацию о релевантности
+            relevance_indicators = []
+            if user_profile.skills and p.skills:
+                user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
+                profile_skills = set(s.strip().lower() for s in p.skills.split(","))
+                if user_skills & profile_skills:
+                    relevance_indicators.append("⚡ общие навыки")
 
-                info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
-                response += f"@{partner_user.username} ({info_str})"
-                if idx < len(favorite_partners[:2]):
-                    response += "; "
-                else:
-                    response += ". "
-        
-        if recommended_partners:
-            response += "\n"
-    
-    # Затем показываем рекомендованных
-    if recommended_partners:
-        response += "Рекомендованные контакты: "
-        for idx, p in enumerate(recommended_partners[:3], 1):  # Максимум 3 рекомендованных
-            partner_user = session.query(User).filter_by(id=p.user_id).first()
-            if partner_user and partner_user.username:
-                info_parts = []
-                if hasattr(p, "current_plans") and p.current_plans:
-                    info_parts.append(f"сейчас: {p.current_plans}")
-                if p.interests:
-                    info_parts.append(f"интересы: {p.interests}")
-                if hasattr(p, "position") and p.position:
-                    info_parts.append(f"{p.position}")
-                if hasattr(p, "company") and p.company:
-                    info_parts.append(f"компания: {p.company}")
-                if p.city:
-                    info_parts.append(f"город: {p.city}")
+            if user_profile.interests and p.interests:
+                user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
+                profile_interests = set(i.strip().lower() for i in p.interests.split(","))
+                if user_interests & profile_interests:
+                    relevance_indicators.append("🎯 общие интересы")
 
-                info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
-                response += f"@{partner_user.username} ({info_str})"
-                if idx < len(recommended_partners[:3]):
-                    response += "; "
-                else:
-                    response += "."
-    
-    if not favorite_partners and not recommended_partners:
-        response = "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, город), и я найду единомышленников!"
+            if user_profile.goals and p.goals:
+                user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
+                profile_goals = set(g.strip().lower() for g in p.goals.split(","))
+                if user_goals & profile_goals:
+                    relevance_indicators.append("🚀 общие цели")
+
+            # Основная информация
+            if hasattr(p, "current_plans") and p.current_plans:
+                info_parts.append(f"сейчас: {p.current_plans}")
+            if p.interests:
+                info_parts.append(f"интересы: {p.interests}")
+            if hasattr(p, "position") and p.position:
+                info_parts.append(f"{p.position}")
+            if hasattr(p, "company") and p.company:
+                info_parts.append(f"компания: {p.company}")
+            if p.city:
+                info_parts.append(f"город: {p.city}")
+
+            info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
+
+            # Собираем строку контакта
+            contact_line = f"{idx}. @{partner_user.username}"
+            if relevance_indicators:
+                contact_line += f" {' • '.join(relevance_indicators)}"
+            contact_line += f"\n   {info_str}\n"
+
+            response += contact_line
+
+    if len(partners) > 5:
+        response += f"\n💡 Это топ-5 самых релевантных контактов. Используй всю базу данных для максимального роста!"
+
+    if not partners:
+        response = "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, цели), и я найду единомышленников для твоего развития!"
 
     if close_session:
         session.close()
@@ -3225,25 +3299,31 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     'tier_priority': tier_priority
                 })
     
-    # ПРИОРИТЕТНАЯ СОРТИРОВКА: сначала свой город, потом другие (как в get_partners_list)
-    contacts_same_city = []
-    contacts_other_city = []
-    
-    for contact in relevant_contacts:
+    # НОВАЯ ЛОГИКА СОРТИРОВКИ: способствовать росту через всю базу данных
+    # Город - бонус, но не ограничение для максимального развития
+
+    # Сортируем по релевантности: (1) score, (2) город (бонус), (3) Premium
+    def contact_sort_key(contact):
+        # Основной скор релевантности
+        base_score = contact['score']
+
+        # Бонус за тот же город (для оффлайн активностей)
+        city_bonus = 0
         contact_city = contact['city'].lower().strip() if contact['city'] else None
         if user_city and contact_city and user_city == contact_city:
-            contacts_same_city.append(contact)
-        else:
-            contacts_other_city.append(contact)
-    
-    # Сортируем каждую группу по: (1) релевантность, (2) Premium, (3) рейтинг (город уже разделен)
-    contacts_same_city.sort(key=lambda x: (x['score'], x.get('tier_priority', 0)), reverse=True)
-    contacts_other_city.sort(key=lambda x: (x['score'], x.get('tier_priority', 0)), reverse=True)
-    
-    # Объединяем: СНАЧАЛА свой город, ПОТОМ остальные
-    sorted_contacts = contacts_same_city + contacts_other_city
-    
-    logger.info(f"[FIND_RELEVANT] Sorted: {len(contacts_same_city)} from same city, {len(contacts_other_city)} from other cities")
+            if is_offline_activity:
+                city_bonus = 3  # Бонус для оффлайн активностей
+            else:
+                city_bonus = 1  # Маленький бонус для онлайн
+
+        # Premium приоритет
+        premium_bonus = contact.get('tier_priority', 0)
+
+        return (base_score + city_bonus + premium_bonus, base_score, city_bonus)
+
+    sorted_contacts = sorted(relevant_contacts, key=contact_sort_key, reverse=True)
+
+    logger.info(f"[FIND_RELEVANT] Total relevant contacts found: {len(sorted_contacts)} (using full database for growth)")
     
     if close_session:
         session.close()
@@ -3403,7 +3483,7 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None)
+        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id)
 
         prompt = """Создай персонализированное и мотивирующее уведомление о делегированной задаче.
 
@@ -3461,7 +3541,7 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None)
+        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id)
 
         prompt = """Создай запрос о прогрессе выполнения делегированной задачи.
 
@@ -5448,6 +5528,49 @@ async def quick_topic_search(topic: str, user_id: int = None, session=None):
                                     result_text += f"   {result['snippet']}\n"
                                 result_text += f"   🔗 [Читать далее]({result['link']})\n\n"
                             
+                            # Для LIGHT тарифа добавляем базовый AI анализ
+                            if user and user.subscription_tier == SubscriptionTier.LIGHT:
+                                try:
+                                    # Формируем контекст для AI
+                                    context = "\n\n".join([
+                                        f"**{r['title']}**\n{r['snippet']}"
+                                        for r in results[:3]
+                                    ])
+                                    
+                                    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+                                    import aiohttp
+                                    
+                                    prompt = f"""Кратко проанализируй информацию по теме "{topic}" на основе этих результатов поиска:
+
+{context}
+
+Дай краткий анализ в 2-3 предложения: основные выводы, тренды или ключевые факты. Будь конкретным и полезным."""
+
+                                    async with aiohttp.ClientSession() as http_session:
+                                        async with http_session.post(
+                                            'https://api.deepseek.com/chat/completions',
+                                            headers={
+                                                'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                                                'Content-Type': 'application/json'
+                                            },
+                                            json={
+                                                "model": DEEPSEEK_MODEL,
+                                                "messages": [
+                                                    {"role": "system", "content": "Ты эксперт по быстрому анализу информации."},
+                                                    {"role": "user", "content": prompt}
+                                                ],
+                                                "temperature": 0.5,
+                                                "max_tokens": 150
+                                            }
+                                        ) as response:
+                                            if response.status == 200:
+                                                data = await response.json()
+                                                ai_analysis = data['choices'][0]['message']['content'].strip()
+                                                result_text += f"🤖 **AI анализ**: {ai_analysis}\n\n"
+                                
+                                except Exception as e:
+                                    logger.warning(f"[QUICK_SEARCH] AI analysis failed: {e}")
+                            
                             result_text += "💡 **Подсказка**: Для более детального анализа и трендов используйте STANDARD тариф с функцией research_topic."
                             return result_text
                         else:
@@ -5583,10 +5706,10 @@ async def get_news_trends(topic: str, period: str = "week", focus: str = "trends
         close_session = True
     
     try:
-        # Проверка subscription tier (STANDARD или PREMIUM)
+        # Проверка subscription tier (теперь доступно для всех тарифов)
         user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
-            return "📰 Новости и тренды доступны с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        if not user:
+            return "Пользователь не найден."
         
         logger.info(f"[NEWS_TRENDS] Starting for user {user_id}: topic='{topic}', period={period}, focus={focus}")
         
@@ -5777,6 +5900,246 @@ async def get_news_trends(topic: str, period: str = "week", focus: str = "trends
     except Exception as e:
         logger.error(f"[NEWS_TRENDS] Error: {e}", exc_info=True)
         return f"❌ Ошибка получения новостей: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+async def research_and_plan(query: str, user_id: int = None, session=None):
+    """
+    🔍 КОМПЛЕКСНЫЙ АНАЛИЗ РЫНКА И ПЛАН ДЕЙСТВИЙ (STANDARD+)
+
+    Использует SERPER для глубокого исследования и создает персонализированный план действий
+
+    Args:
+        query: Запрос для исследования (тема, ниша, продукт)
+        user_id: ID пользователя
+        session: DB сессия
+
+    Returns:
+        Детальный анализ рынка + план действий + предлагаемые задачи
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        # Получаем профиль пользователя
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        logger.info(f"[RESEARCH_PLAN] Starting comprehensive research for user {user_id}: '{query}'")
+
+        # ШАГ 1: Многоаспектный поиск через SERPER
+        from config import SERPER_API_KEY, DEEPSEEK_API_KEY
+        import aiohttp
+
+        if not SERPER_API_KEY:
+            return "❌ Поиск временно недоступен"
+
+        search_queries = [
+            f"{query} рынок 2025 2026",  # Рыночные тренды
+            f"{query} конкуренты анализ",  # Конкурентный анализ
+            f"{query} возможности стартапы",  # Возможности
+            f"{query} контакты партнеры",  # Контакты и партнеры
+            f"{query} кейсы успехи"  # Кейсы успеха
+        ]
+
+        all_results = []
+        for search_query in search_queries:
+            try:
+                async with aiohttp.ClientSession() as http_session:
+                    async with http_session.post(
+                        'https://google.serper.dev/search',
+                        headers={
+                            'X-API-KEY': SERPER_API_KEY,
+                            'Content-Type': 'application/json'
+                        },
+                        json={
+                            "q": search_query,
+                            "num": 5,
+                            "gl": "ru",
+                            "hl": "ru"
+                        }
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            results = []
+                            for item in data.get('organic', [])[:5]:
+                                results.append({
+                                    'title': item.get('title', ''),
+                                    'snippet': item.get('snippet', ''),
+                                    'link': item.get('link', ''),
+                                    'query_type': search_query.split()[1] if len(search_query.split()) > 1 else 'general'
+                                })
+                            all_results.extend(results)
+                            logger.info(f"[RESEARCH_PLAN] Found {len(results)} results for '{search_query}'")
+
+            except Exception as e:
+                logger.error(f"[RESEARCH_PLAN] Search error for '{search_query}': {e}")
+
+        if not all_results:
+            return f"❌ Не удалось найти информацию по запросу '{query}'"
+
+        # ШАГ 2: AI анализ всех результатов
+        context = "\n\n".join([
+            f"**{r['title']}**\n{r['snippet']}\nИсточник: {r['link']}\nТип: {r['query_type']}"
+            for r in all_results[:15]  # Ограничиваем для AI
+        ])
+
+        # Персонализация на основе профиля
+        profile_context = ""
+        if profile:
+            skills = profile.skills or ""
+            interests = profile.interests or ""
+            goals = profile.goals or ""
+            profile_context = f"""
+ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
+- Навыки: {skills}
+- Интересы: {interests}
+- Цели: {goals}
+- Город: {profile.city or 'Не указан'}
+"""
+
+        analysis_prompt = f"""Проведи комплексный анализ рынка по теме: "{query}"
+
+{profile_context}
+
+ДАННЫЕ ИЗ ПОИСКА:
+{context}
+
+Создай детальный анализ рынка и персонализированный план действий в формате JSON:
+
+{{
+    "market_summary": "краткий обзор рынка (3-4 предложения)",
+    "key_trends": ["тренд 1", "тренд 2", "тренд 3"],
+    "competitor_analysis": {{
+        "main_competitors": ["компания 1", "компания 2"],
+        "competitive_advantages": ["преимущество 1", "преимущество 2"],
+        "market_gaps": ["пробел 1", "пробел 2"]
+    }},
+    "opportunities": ["возможность 1", "возможность 2", "возможность 3"],
+    "target_audience": "описание целевой аудитории",
+    "actionable_plan": {{
+        "immediate_steps": ["шаг 1 (на этой неделе)", "шаг 2 (на этой неделе)"],
+        "short_term_goals": ["цель 1 (1-2 месяца)", "цель 2 (1-2 месяца)"],
+        "long_term_strategy": ["стратегия 1", "стратегия 2"]
+    }},
+    "recommended_tasks": [
+        {{
+            "title": "конкретная задача",
+            "description": "подробное описание",
+            "suggested_time": "предлагаемое время (например: завтра в 10:00)",
+            "priority": "высокий/средний/низкий"
+        }}
+    ],
+    "contacts_networking": ["контакт 1", "контакт 2", "сообщество 1"],
+    "budget_considerations": "рекомендации по бюджету",
+    "success_metrics": ["метрика 1", "метрика 2"]
+}}
+
+Фокус на ПРАКТИЧЕСКИХ шагах и КОНКРЕТНЫХ действиях!"""
+
+        try:
+            async with aiohttp.ClientSession() as http_session:
+                async with http_session.post(
+                    'https://api.deepseek.com/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": [{"role": "user", "content": analysis_prompt}],
+                        "temperature": 0.7,
+                        "max_tokens": 4000
+                    }
+                ) as ai_response:
+                    if ai_response.status == 200:
+                        ai_data = await ai_response.json()
+                        analysis_text = ai_data['choices'][0]['message']['content']
+
+                        try:
+                            # Парсим JSON
+                            analysis = json.loads(analysis_text)
+
+                            # Формируем красивый ответ
+                            result = f"🔍 **КОМПЛЕКСНЫЙ АНАЛИЗ: {query.upper()}**\n\n"
+
+                            result += f"📊 **ОБЗОР РЫНКА**\n{analysis.get('market_summary', 'Анализ не завершен')}\n\n"
+
+                            if analysis.get('key_trends'):
+                                result += "📈 **КЛЮЧЕВЫЕ ТРЕНДЫ**\n"
+                                for trend in analysis['key_trends'][:3]:
+                                    result += f"• {trend}\n"
+                                result += "\n"
+
+                            if analysis.get('competitor_analysis'):
+                                comp = analysis['competitor_analysis']
+                                if comp.get('main_competitors'):
+                                    result += "🏢 **ОСНОВНЫЕ КОНКУРЕНТЫ**\n"
+                                    for comp_name in comp['main_competitors'][:3]:
+                                        result += f"• {comp_name}\n"
+                                    result += "\n"
+
+                                if comp.get('market_gaps'):
+                                    result += "🎯 **РЫНОЧНЫЕ ПРОБЕЛЫ**\n"
+                                    for gap in comp['market_gaps'][:2]:
+                                        result += f"• {gap}\n"
+                                    result += "\n"
+
+                            if analysis.get('opportunities'):
+                                result += "🚀 **ВОЗМОЖНОСТИ**\n"
+                                for opp in analysis['opportunities'][:3]:
+                                    result += f"• {opp}\n"
+                                result += "\n"
+
+                            if analysis.get('actionable_plan'):
+                                plan = analysis['actionable_plan']
+                                if plan.get('immediate_steps'):
+                                    result += "⚡ **НЕМЕДЛЕННЫЕ ШАГИ**\n"
+                                    for step in plan['immediate_steps'][:3]:
+                                        result += f"• {step}\n"
+                                    result += "\n"
+
+                            # ПРЕДЛАГАЕМ ЗАДАЧИ
+                            if analysis.get('recommended_tasks'):
+                                result += "📋 **РЕКОМЕНДУЕМЫЕ ЗАДАЧИ**\n"
+                                for task in analysis['recommended_tasks'][:2]:
+                                    result += f"**{task['title']}**\n"
+                                    result += f"• Время: {task.get('suggested_time', 'не указано')}\n"
+                                    result += f"• Приоритет: {task.get('priority', 'средний')}\n"
+                                    if task.get('description'):
+                                        result += f"• {task['description']}\n"
+                                    result += "\n"
+
+                            result += "💡 **Что делать дальше?**\n"
+                            result += "1. Создайте задачу из предложенных выше\n"
+                            result += "2. Начните с немедленных шагов\n"
+                            result += "3. Отслеживайте прогресс еженедельно\n\n"
+
+                            result += "🔗 **Источники:** Анализ основан на 15+ свежих источниках из поиска"
+
+                            return result
+
+                        except json.JSONDecodeError as e:
+                            logger.error(f"[RESEARCH_PLAN] JSON parse error: {e}")
+                            return f"❌ Ошибка обработки анализа. Но вот сырые данные:\n\n{analysis_text[:1000]}"
+
+                    else:
+                        logger.error(f"[RESEARCH_PLAN] DeepSeek error: {ai_response.status}")
+                        return f"❌ Ошибка AI анализа: {ai_response.status}"
+
+        except Exception as e:
+            logger.error(f"[RESEARCH_PLAN] AI analysis error: {e}")
+            return f"❌ Ошибка комплексного анализа: {str(e)}"
+
+    except Exception as e:
+        logger.error(f"[RESEARCH_PLAN] Error: {e}", exc_info=True)
+        return f"❌ Ошибка комплексного исследования: {str(e)}"
     finally:
         if close_session:
             session.close()

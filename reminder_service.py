@@ -714,6 +714,17 @@ class ReminderService:
                 
                 all_tasks = all_active_tasks + overdue_tasks
                 
+                # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 30 минут)
+                last_proactive = db.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == "ai",
+                    Interaction.created_at > now_utc - timedelta(minutes=30)
+                ).order_by(Interaction.created_at.desc()).first()
+                
+                if last_proactive:
+                    logger.info(f"Skipping checkpoint message for user {user_id} - last proactive message was {last_proactive.created_at}")
+                    return
+                
                 # Определить параметры для генерации сообщения
                 task_count = len(all_active_tasks)
                 overdue_count = len(overdue_tasks)
@@ -1281,6 +1292,17 @@ class ReminderService:
                 ).order_by(Task.reminder_time).all()
                 
                 all_tasks = all_active_tasks + overdue_tasks
+                
+                # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 30 минут)
+                last_proactive = db.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == "ai",
+                    Interaction.created_at > now_utc - timedelta(minutes=30)
+                ).order_by(Interaction.created_at.desc()).first()
+                
+                if last_proactive:
+                    logger.info(f"Skipping proactive message for user {user_id} - last proactive message was {last_proactive.created_at}")
+                    return
                 
                 # Отправить проактивное сообщение с номером для разнообразия
                 proactive_text = await self.generate_proactive_message(user_id, "general", task_count, overdue_count, all_tasks)

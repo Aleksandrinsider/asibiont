@@ -1,4 +1,5 @@
 from . import handlers
+from models import Session, User, UserProfile, Interaction
 import aiohttp
 import json
 import logging
@@ -28,11 +29,12 @@ from .handlers import (  # noqa: F401
     delegate_task_with_session, delegate_task, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
     list_tasks, get_partners_list, find_partners,
+    check_time_conflicts,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
     update_profile, smart_update_profile, show_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks, get_news_trends,
-    quick_topic_search, check_topic_relevance
+    check_topic_relevance
 )
 from .autonomous_agent import chat_with_ai as autonomous_chat_with_ai
 
@@ -144,7 +146,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 weather_info=weather_info,
                 news_info=news_info,
                 proactive_context=proactive_context,
-                current_task_info=current_task_info
+                current_task_info=current_task_info,
+                user_id=user_id
             )
 
             # Используем улучшенный гибридный автономный агент (трёхэтапный подход)
@@ -520,6 +523,84 @@ async def generate_result_check(user_id, task_title):
         return f"Задача '{task_title}' выполнена."
 
 
+def generate_dynamic_fallback_message(context, task_count, overdue_count, user, profile, weather_info, partner_recommendations, tasks_list):
+    """Генерирует динамическое fallback сообщение на основе профиля и поведения пользователя"""
+
+    # Базовые компоненты
+    weather_part = ""
+    if weather_info:
+        weather_part = f"🌤 {weather_info.split(':')[1].split(',')[0].strip()} сегодня. "
+
+    partner_part = ""
+    if partner_recommendations and "@" in partner_recommendations:
+        partner_match = partner_recommendations.split("@")[1].split()[0]
+        if partner_match:
+            partner_part = f" Кстати, @{partner_match} может быть интересен для твоих целей."
+
+    # Анализируем профиль для персонализации
+    goals_mention = ""
+    interests_mention = ""
+    skills_mention = ""
+
+    if profile:
+        if profile.goals:
+            goals = [g.strip() for g in profile.goals.split(',') if g.strip()]
+            if goals:
+                goals_mention = f" Учитывая твои цели ({goals[0]}),"
+
+        if profile.interests:
+            interests = [i.strip() for i in profile.interests.split(',') if i.strip()]
+            if interests:
+                interests_mention = f" {interests[0]} может вдохновить на новые идеи."
+
+        if profile.skills:
+            skills = [s.strip() for s in profile.skills.split(',') if s.strip()]
+            if skills:
+                skills_mention = f" Твои навыки в {skills[0]} могут пригодиться."
+
+    # Анализируем конкретные задачи для контекста
+    task_context = ""
+    if tasks_list and len(tasks_list) > 0:
+        # Берем первую задачу для персонализации
+        first_task = tasks_list[0]
+        if hasattr(first_task, 'title') and first_task.title:
+            task_context = f" Например, задача '{first_task.title[:30]}...'"
+
+    # Генерируем персонализированные сообщения
+    if context == "no_tasks":
+        if goals_mention:
+            message = f"{weather_part}Отличное время для движения к целям!{goals_mention} что можем сделать сегодня?{partner_part}"
+        elif interests_mention:
+            message = f"{weather_part}Чистый список задач - возможность для творчества.{interests_mention} Что вдохновляет тебя?{partner_part}"
+        else:
+            message = f"{weather_part}Вижу свободное время для роста.{skills_mention} Какие проекты заинтересуют?{partner_part}"
+
+    elif context == "few_tasks":
+        if task_context:
+            message = f"{weather_part}Ты в продуктивном темпе с {task_count} задачами!{task_context} Как продвигается?{partner_part}"
+        else:
+            message = f"{weather_part}{task_count} задач в работе - хороший баланс.{goals_mention} Что добавить для развития?{partner_part}"
+
+    elif context == "many_tasks":
+        message = f"{weather_part}У тебя {task_count} задач - впечатляющая нагрузка!{skills_mention} Может, делегируем часть{task_context}?{partner_part}"
+
+    elif context == "overdue_tasks":
+        if task_context:
+            message = f"{weather_part}{overdue_count} задач ждут внимания.{task_context} Давай восстановим контроль вместе.{partner_part}"
+        else:
+            message = f"{weather_part}{overdue_count} просроченных задач - это нормально.{goals_mention} Составим план восстановления?{partner_part}"
+
+    else:  # general
+        if goals_mention:
+            message = f"{weather_part}Вижу возможности для роста.{goals_mention} что тебя мотивирует сегодня?{partner_part}"
+        elif interests_mention:
+            message = f"{weather_part}Интересные возможности вокруг.{interests_mention} Что обсудим?{partner_part}"
+        else:
+            message = f"{weather_part}Готов поддержать твои цели.{skills_mention} Что актуально сегодня?{partner_part}"
+
+    return message
+
+
 async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
     """Генерирует проактивное сообщение по основному промпту системы, как обычные ответы AI
     
@@ -686,6 +767,62 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                 if overdue_tasks:
                     overdue_titles = [f"{t.title}" for t in overdue_tasks]
                     user_memory += f"\nПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_titles)} - предложи помощь!"
+
+                # Расширенный анализ поведения пользователя для персонализации
+                user_insights = []
+
+                # Анализируем недавние взаимодействия (последние 10 сообщений)
+                recent_interactions = db_session.query(Interaction).filter_by(
+                    user_id=user.id
+                ).order_by(Interaction.created_at.desc()).limit(10).all()
+
+                recent_topics = set()
+                for interaction in recent_interactions:
+                    if interaction.content:
+                        content_lower = interaction.content.lower()
+                        if any(word in content_lower for word in ['задач', 'task', 'дел', 'работ', 'проект']):
+                            recent_topics.add('tasks_work')
+                        if any(word in content_lower for word in ['знаком', 'партнер', 'контакт', 'встреч', 'сеть']):
+                            recent_topics.add('networking')
+                        if any(word in content_lower for word in ['цель', 'goal', 'план', 'развити', 'рост']):
+                            recent_topics.add('goals_growth')
+                        if any(word in content_lower for word in ['врем', 'time', 'час', 'день', 'продуктив']):
+                            recent_topics.add('time_management')
+
+                if recent_topics:
+                    user_insights.append(f"Недавние темы: {', '.join(recent_topics)}")
+
+                # Анализируем паттерны задач
+                user_tasks = db_session.query(Task).filter_by(user_id=user.id).limit(20).all()
+                if user_tasks:
+                    completed_count = sum(1 for t in user_tasks if t.status == 'completed')
+                    pending_count = sum(1 for t in user_tasks if t.status == 'pending')
+                    delegated_count = sum(1 for t in user_tasks if t.delegated_to_username)
+
+                    task_patterns = []
+                    if completed_count > pending_count * 0.7:
+                        task_patterns.append("продуктивный")
+                    if delegated_count > len(user_tasks) * 0.3:
+                        task_patterns.append("хорошо делегирует")
+                    if any(t.estimated_duration and t.estimated_duration > 120 for t in user_tasks):
+                        task_patterns.append("работает со сложными задачами")
+
+                    if task_patterns:
+                        user_insights.append(f"Паттерны работы: {', '.join(task_patterns)}")
+
+                # Анализируем время активности
+                if user.last_interaction_at:
+                    last_interaction_hour = user.last_interaction_at.hour
+                    if 6 <= last_interaction_hour <= 10:
+                        user_insights.append("активен утром")
+                    elif 18 <= last_interaction_hour <= 23:
+                        user_insights.append("активен вечером")
+                    elif 10 <= last_interaction_hour <= 18:
+                        user_insights.append("активен днем")
+
+                # Добавляем insights к user_memory
+                if user_insights:
+                    user_memory += f"\n\n💡 ИНСАЙТЫ О ПОВЕДЕНИИ:\n" + "\n".join(f"- {insight}" for insight in user_insights)
 
             db_session.close()
 
@@ -1119,53 +1256,31 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                     content = clean_technical_details(content)
 
                     # Пост-обработка как в обычных ответах
-                    content = post_process_response(content, user_id, db_session)
+                    content = post_process_response(content, user_id)
 
                     logger.info(f"[PROACTIVE] Generated dynamic message: {content[:100]}...")
                     return content
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
-                    # Улучшенные fallback сообщения с погодой/новостями/партнерами
-                    fallback_base = ""
-                    if weather_info:
-                        fallback_base += f"🌤 {weather_info.split(':')[1].split(',')[0].strip()} сегодня. "
-                    
-                    # Добавляем упоминание партнеров, если есть
-                    partner_mention = ""
-                    if partner_recommendations:
-                        # Извлекаем первого партнера из рекомендаций
-                        if "@" in partner_recommendations:
-                            partner_match = partner_recommendations.split("@")[1].split()[0] if len(partner_recommendations.split("@")) > 1 else None
-                            if partner_match:
-                                partner_mention = f" Кстати, @{partner_match} может быть интересен для твоих целей. "
-                    
-                    fallback_messages = {
-                        "no_tasks": f"{fallback_base}Отличное время для планирования!{partner_mention}Может, создадим задачу или обсудим знакомства? Что актуально?",
-                        "few_tasks": f"{fallback_base}У тебя {task_count} активных задач - хороший темп!{partner_mention}Может, добавим что-то еще или сфокусируемся на качестве?",
-                        "many_tasks": f"У тебя {task_count} задач. {fallback_base}{partner_mention}Может, стоит делегировать часть или пересмотреть приоритеты?",
-                        "overdue_tasks": f"{overdue_count} просроченных задач требуют внимания. Не переживай!{partner_mention}Давай составим план восстановления?",
-                        "general": f"{fallback_base}Вижу интересные возможности.{partner_mention}Может, обсудим конкретные шаги или полезные знакомства?"
-                    }
-                    return fallback_messages.get(context, fallback_messages["general"])
+                    # Динамические fallback сообщения на основе профиля пользователя
+                    return generate_dynamic_fallback_message(
+                        context, task_count, overdue_count, user, profile,
+                        weather_info, partner_recommendations, tasks_list
+                    )
 
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Улучшенные fallback сообщения для исключений с упоминанием партнеров
-        partner_mention = ""
-        if partner_recommendations and "@" in partner_recommendations:
-            partner_match = partner_recommendations.split("@")[1].split()[0] if len(partner_recommendations.split("@")) > 1 else None
-            if partner_match:
-                partner_mention = f" Вижу, что @{partner_match} может быть интересен. "
-        
-        fallback_messages = {
-            "no_tasks": f"Добрый день! Чистый список задач - отличная возможность.{partner_mention}Может, обсудим цели и создадим конкретные шаги?",
-            "few_tasks": f"Добрый день! {task_count} задач в работе - продуктивный темп!{partner_mention}Как продвигается выполнение?",
-            "many_tasks": f"Добрый день! Вижу {task_count} задач - впечатляющая нагрузка!{partner_mention}Может, делегируем часть или оптимизируем?",
-            "overdue_tasks": f"Добрый день! {overdue_count} просроченных задач ждут внимания.{partner_mention}Без паники! Давай составим план?",
-            "general": f"Добрый день! Готов помочь с планированием.{partner_mention}Может, обсудим цели и создадим задачи? Что в приоритете?"
-        }
-        return fallback_messages.get(context, fallback_messages["general"])
+        # Динамические fallback сообщения для исключений
+        try:
+            return generate_dynamic_fallback_message(
+                context, task_count, overdue_count, user, profile,
+                weather_info, partner_recommendations, tasks_list
+            )
+        except Exception as fallback_error:
+            logger.error(f"Fallback message generation failed: {fallback_error}")
+            # Последний запасной вариант
+            return f"Привет! Готов помочь с задачами и целями. Что обсудим сегодня?"
 
 
 async def generate_daily_report(user_id):
