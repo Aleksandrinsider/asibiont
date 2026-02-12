@@ -455,11 +455,16 @@ def clean_technical_details(text):
     # Удаляем названия функций (с скобками и без, включая аргументы)
     before = text
     text = re.sub(
-        r"\b(list_tasks|add_task|delete_task|complete_task|delegate_task|cancel_delegation|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)\s*\([^)]*\)",
+        r"\b(list_tasks|add_task|delete_task|complete_task|delegate_task|cancel_delegation|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details|research_topic|find_partners)\s*\([^)]*\)",
         "",
         text,
         flags=re.IGNORECASE,
     )
+    if before != text:
+        pass
+    # Удаляем любые оставшиеся вызовы функций с аргументами
+    before = text
+    text = re.sub(r'\b\w+\([^)]+\)', '', text)
     if before != text:
         pass
     # Удаляем фразы о вызове функций
@@ -992,6 +997,7 @@ def generate_unified_recommendations(context_type, user_id=None, title=None, des
 
         from models import Session, User
         import json
+        from .memory import decrypt_data
 
         session = Session()
         try:
@@ -1113,7 +1119,10 @@ def clean_technical_details(content):
     # Убираем названия функций в скобках или кавычках
     content = re.sub(r'["\']?\w+\(\)[\'"]?', '', content)
     
-    # Убираем технические паттерны
+    # Убираем технические паттерны с аргументами: function_name("args")
+    content = re.sub(r'\b\w+\([^)]*\)', '', content)
+    
+    # Убираем технические паттерны без скобок
     content = re.sub(r'\b\w+\(\)', '', content)
     
     # Убираем лишние пробелы и пустые строки

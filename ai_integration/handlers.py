@@ -5227,14 +5227,14 @@ async def generate_marketing_content(product_name, target_audience, platform, go
 
 async def research_topic(query: str, depth: str, user_id: int, session):
     """
-    🔍 ВЕБ-ПОИСК И АНАЛИЗ темы через Serper API + DeepSeek AI
+    🔍 ПОИСК И АНАЛИЗ актуальной информации по теме
     Требует: STANDARD или PREMIUM подписку
-    
+
     Этапы:
-    1. Веб-поиск через Serper (5-15 источников)
-    2. AI-анализ найденной информации
+    1. Поиск свежей информации из надежных источников
+    2. AI-анализ найденных данных
     3. Создание задач для топ-3 рекомендаций
-    
+
     Args:
         query: Тема для исследования
         depth: quick/balanced/deep (5/10/15 источников)
@@ -5911,7 +5911,7 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
     """
     🔍 КОМПЛЕКСНЫЙ АНАЛИЗ РЫНКА И ПЛАН ДЕЙСТВИЙ (STANDARD+)
 
-    Использует SERPER для глубокого исследования и создает персонализированный план действий
+    Проводит глубокое исследование и создает персонализированный план действий
 
     Args:
         query: Запрос для исследования (тема, ниша, продукт)

@@ -381,11 +381,11 @@ class HybridAutonomousAgent:
    - ЕСЛИ ночь (22:00-6:00) → после list_tasks() скажи про отдых
    - ЕСЛИ утро → после list_tasks() предложи план на день
    - ЕСЛИ есть задачи → покажи их статус
-   - ЕСЛИ задач нет → проанализируй профиль и дай 1-2 идеи
+   - ЕСЛИ задач нет → research_topic("актуальные идеи для [профиль]") + find_partners("[интересы]")
 
 2. "ЧТО НОВОГО?" / "ЧТО ПОСОВЕТУЕШЬ?" → СТРОГО ЧЕРЕДУЙ ИНСТРУМЕНТЫ!
    - ЗАПРЕЩЕНО всегда использовать get_news_trends()!
-   - ДЛЯ AI разработчиков: research_topic("тренды AI 2024") + find_partners("AI разработчики")
+   - ДЛЯ AI разработчиков: research_topic("тренды AI") + find_partners("AI разработчики")
    - ДЛЯ предпринимателей: find_partners("стартаперы") + suggest_events("бизнес конференции")
    - ДЛЯ программистов: research_topic("новые технологии") + find_partners("программисты")
    - ПРАВИЛО: ЕСЛИ в предыдущем ответе был get_news_trends → ОБЯЗАТЕЛЬНО выбери другой инструмент!
@@ -399,20 +399,31 @@ class HybridAutonomousAgent:
    - "где погулять" → research_topic("парки и мероприятия [город] [сезон]")
    - ВАЖНО: Комбинируй РАЗНЫЕ инструменты, не повторяйся!
 
-4. ПОИСК МЕРОПРИЯТИЙ И ЗАНЯТИЙ → ИСПОЛЬЗУЙ research_topic:
+4. АГРЕССИВНЫЙ АВТОМАТИЧЕСКИЙ ПОИСК:
+   - ЛЮБОЙ ВОПРОС "КАК" → research_topic("методики [тема]")
+   - ЛЮБОЙ ВОПРОС "ЧТО" → research_topic("лучшие [тема]")
+   - ЛЮБОЙ ВОПРОС "ГДЕ" → research_topic("где найти [тема] в [город]")
+   - ЛЮБОЙ ВОПРОС "ПОЧЕМУ" → research_topic("причины и решения [тема]")
+   - ЛЮБОЙ ЗАПРОС СОВЕТА → research_topic("лучшие советы по [тема]")
+   - ЛЮБОЙ ЗАПРОС РЕКОМЕНДАЦИЙ → research_topic("топ рекомендации [тема]")
+   - ЛЮБОЕ УПОМИНАНИЕ ПРОБЛЕМЫ → research_topic("решения проблемы [проблема]")
+   - ЛЮБОЕ УПОМИНАНИЕ ЦЕЛИ → research_topic("как достичь [цель]")
+   - НИКОГДА НЕ СПРАШИВАЙ РАЗРЕШЕНИЯ - ПРОСТО ИЩИ ИНФОРМАЦИЮ!
+
+5. ПОИСК МЕРОПРИЯТИЙ И ЗАНЯТИЙ → ИСПОЛЬЗУЙ research_topic:
    - "что посмотреть в городе" → research_topic("культурные мероприятия [город] на этой неделе")
    - "где погулять" → research_topic("парки и развлечения [город] [сезон]")
    - "встречи по [тема]" → research_topic("митапы и конференции [тема] в [город]")
    - "курсы [навык]" → research_topic("курсы и обучение [навык] [город]")
    - "спорт мероприятия" → research_topic("спортивные события [город] на этой неделе")
 
-4. СТРАТЕГИЧЕСКИЕ ЗАПРОСЫ → КОМПЛЕКСНЫЙ АНАЛИЗ:
+6. СТРАТЕГИЧЕСКИЕ ЗАПРОСЫ → КОМПЛЕКСНЫЙ АНАЛИЗ:
    - "проанализируй рынок [тема]" → research_and_plan("[тема] рынок анализ")
    - "план продвижения [продукт]" → research_and_plan("[продукт] маркетинг стратегия")
    - "изучить конкурентов [ниша]" → research_and_plan("[ниша] конкуренты анализ")
    - "стратегия для [бизнес]" → research_and_plan("[бизнес] бизнес план")
 
-5. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
+7. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
    - "создать задачу [тема]" → ЕСЛИ пользователь ЯВНО просит создать задачу → check_time_conflicts() → add_task()
    - "удалить задачу" → list_tasks() → delete_task() (показать список, затем удалить)
    - "что у меня по задачам" → list_tasks() + анализ паттернов
@@ -420,7 +431,7 @@ class HybridAutonomousAgent:
    - "напоминание" → ЕСЛИ пользователь просит создать → check_time_conflicts() → add_task()
    - ВАЖНО: Всегда уточняй время у пользователя перед созданием задачи!
 
-6. КОНТЕКСТНЫЕ СИТУАЦИИ:
+8. КОНТЕКСТНЫЕ СИТУАЦИИ:
    - Плохая погода → indoor активности (курсы, чтение, разработка)
    - Хорошая погода → outdoor (прогулки, спорт, мероприятия)
    - Вечер → подведение итогов, планирование завтра
@@ -435,6 +446,18 @@ class HybridAutonomousAgent:
 - "задачи" → list_tasks()
 - "создать" → НЕ ВЫЗЫВАЙ add_task автоматически! Только если пользователь явно просит
 - "сделал" → complete_task()
+- ЛЮБОЙ ВОПРОС → research_topic() для поиска информации
+- ЛЮБОЕ УПОМИНАНИЕ ТЕМЫ → research_topic() для свежих данных
+- ЛЮБОЙ ЗАПРОС СОВЕТА → research_topic() для лучших рекомендаций
+
+МАКСИМАЛЬНАЯ ПРОАКТИВНОСТЬ В ПОИСКЕ:
+✅ ПРИ ЛЮБОМ ВОПРОСЕ "КАК" - НЕМЕДЛЕННО research_topic("методики [тема]")
+✅ ПРИ ЛЮБОМ ВОПРОСЕ "ЧТО" - НЕМЕДЛЕННО research_topic("лучшие [тема]")
+✅ ПРИ ЛЮБОМ ВОПРОСЕ "ГДЕ" - НЕМЕДЛЕННО research_topic("где найти [тема] в [город]")
+✅ ПРИ ЛЮБОМ ЗАПРОСЕ СОВЕТА - НЕМЕДЛЕННО research_topic("лучшие советы по [тема]")
+✅ ПРИ ЛЮБОМ ЗАПРОСЕ РЕКОМЕНДАЦИЙ - НЕМЕДЛЕННО research_topic("топ рекомендации [тема]")
+✅ НИКОГДА НЕ СПРАШИВАЙ РАЗРЕШЕНИЯ - ПРОСТО ИЩИ И ДАВАЙ РЕЗУЛЬТАТЫ!
+✅ НИКОГДА НЕ ГОВОРИ "ХОЧЕШЬ ЛИ Я ПОИЩУ?" - ПРОСТО ИЩИ!
 
 ПРАВИЛА УМНОГО ПОВЕДЕНИЯ:
 ✅ ДУМАЙ ПЕРЕД ДЕЙСТВИЕМ - анализируй контекст и профиль пользователя
@@ -558,7 +581,7 @@ class HybridAutonomousAgent:
             "ai_response": content
         }
 
-    async def execute_actions(self, actions, user_id, session=None):
+    async def execute_actions(self, actions, user_id, session=None, user_message=None):
         """
         ШАГ 2: Выполнить запланированные действия через готовые handlers
         ПРОАКТИВНОСТЬ: Автоматический анализ результатов list_tasks
@@ -634,6 +657,22 @@ class HybridAutonomousAgent:
                     "reason": reason
                 })
                 
+                # ⚡ АВТОМАТИЧЕСКИЙ ТРИГГЕР: после check_time_conflicts → add_task
+                if tool_name == 'check_time_conflicts' and result:
+                    logger.info(f"[AUTO_TRIGGER] check_time_conflicts succeeded, auto-triggering add_task")
+                    # Извлекаем информацию о задаче из исходного сообщения
+                    task_title, task_time = self._extract_task_info(user_message)
+                    if task_title:
+                        auto_add_action = {
+                            'tool': 'add_task',
+                            'params': {'title': task_title, 'reminder_time': task_time},
+                            'reason': f'Автоматически после проверки конфликтов времени'
+                        }
+                        # Выполняем add_task
+                        add_result = await self.execute_actions([auto_add_action], user_id, session)
+                        results.extend(add_result)
+                        logger.info(f"[AUTO_TRIGGER] Auto-executed add_task for '{task_title}'")
+                
                 # ⚡ ПРОАКТИВНЫЙ АНАЛИЗ after list_tasks
                 if tool_name == 'list_tasks' and result and isinstance(result, str):
                     logger.info(f"[PROACTIVE] Analyzing list_tasks result for proactive actions")
@@ -666,7 +705,7 @@ class HybridAutonomousAgent:
                     # Выполняем проактивные действия
                     if proactive_actions:
                         logger.info(f"[PROACTIVE] Executing {len(proactive_actions)} proactive actions")
-                        proactive_results = await self.execute_actions(proactive_actions, user_id)
+                        proactive_results = await self.execute_actions(proactive_actions, user_id, session)
                         results.extend(proactive_results)
                 
             except Exception as e:
@@ -1057,7 +1096,7 @@ class HybridAutonomousAgent:
             execution_results = []
             if actions:
                 logger.info(f"[AGENT] Step 2: Executing {len(actions)} actions")
-                execution_results = await self.execute_actions(actions, user_id, session)
+                execution_results = await self.execute_actions(actions, user_id, session, user_message)
             else:
                 logger.info(f"[AGENT] No actions to execute, direct response")
             

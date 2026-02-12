@@ -122,3 +122,13 @@ local.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Test files
+test_*.py
+*_test.py
+comprehensive_agent_test.py
+live_dialog_test.py
+quick_function_test.py
+*test_results.json
+*_results.json
+*REPORT.md
