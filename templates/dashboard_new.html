@@ -4604,9 +4604,19 @@
                 if (response.ok) {
                     const data = await response.json();
                     renderTaskGroups(data.tasks);
+                } else {
+                    console.error(`Failed to fetch tasks: HTTP ${response.status} ${response.statusText}`);
+                    const errorText = await response.text();
+                    console.error('Response body:', errorText);
                 }
             } catch (error) {
                 console.error('Failed to update tasks:', error);
+                console.error('Error type:', error.name);
+                console.error('Error message:', error.message);
+                if (error instanceof TypeError && error.message.includes('fetch')) {
+                    console.error('⚠️ Возможные причины: сервер недоступен, CORS, или проблема сети');
+                    console.error('Проверьте: 1) Работает ли сервер, 2) Правильность URL, 3) Консоль Network в DevTools');
+                }
             }
         }
 

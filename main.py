@@ -2374,7 +2374,26 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
+
+@web.middleware
+async def cors_middleware(request, handler):
+    """Add CORS headers for local development"""
+    if LOCAL:
+        # Preflight request
+        if request.method == 'OPTIONS':
+            response = web.Response()
+        else:
+            response = await handler(request)
+        
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+    return await handler(request)
+
 # app.middlewares.append(security_middleware)
+app.middlewares.append(cors_middleware)
 app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(session_error_middleware)
 app.middlewares.append(logging_middleware)
