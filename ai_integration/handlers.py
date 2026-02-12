@@ -2338,16 +2338,16 @@ def get_partners_list(user_id=None, session=None):
     # Get all profiles with filled data
     # Apply subscription-based filtering
     profile_query = (
-        session.query(UserProfile)
-        .join(User, UserProfile.user_id == User.id)
-        .filter(
-            UserProfile.user_id != user.id,
-            (UserProfile.interests.isnot(None))
-            | (UserProfile.skills.isnot(None))
-            | (UserProfile.position.isnot(None))
-            | (UserProfile.city.isnot(None))
-            | (UserProfile.bio.isnot(None))
-            | (UserProfile.languages.isnot(None)),
+            session.query(UserProfile)
+            .join(User, UserProfile.user_id == User.id)
+            .filter(
+                UserProfile.user_id != user.id,
+                (UserProfile.interests.isnot(None))
+                | (UserProfile.skills.isnot(None))
+                | (UserProfile.position.isnot(None))
+                | (UserProfile.city.isnot(None))
+                | (UserProfile.bio.isnot(None))
+                | (UserProfile.languages.isnot(None)),
         )
     )
     
@@ -2796,8 +2796,11 @@ def get_partners_list(user_id=None, session=None):
         else:
             partner.common_tasks = None
 
-    if close_session:
-        session.close()
+    try:
+        if close_session:
+            session.close()
+    except Exception as e:
+        logger.error(f"[PARTNERS] Error closing session in get_partners_list: {e}")
 
     return partners[:50]  # Увеличено с 20 до 50
 
