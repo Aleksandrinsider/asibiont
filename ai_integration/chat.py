@@ -147,7 +147,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 news_info=news_info,
                 proactive_context=proactive_context,
                 current_task_info=current_task_info,
-                user_id=user_id
+                user_id_param=user_id
             )
 
             # Используем улучшенный гибридный автономный агент (трёхэтапный подход)

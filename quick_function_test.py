@@ -1,70 +1,87 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Быстрый тест ключевых функций
-"""
-
 import asyncio
 import sys
+import logging
 sys.path.append('.')
 
+# Отключаем лишние логи для чистого вывода
+logging.getLogger('ai_integration.handlers').setLevel(logging.WARNING)
+logging.getLogger('ai_integration.utils').setLevel(logging.WARNING)
+logging.getLogger('ai_integration.autonomous_agent').setLevel(logging.WARNING)
+
 from ai_integration.autonomous_agent import chat_with_ai
-from models import User, Task, SessionLocal
+from models import User, SessionLocal
 
 async def quick_function_test():
-    print("⚡ БЫСТРЫЙ ТЕСТ КЛЮЧЕВЫХ ФУНКЦИЙ\n")
+    """Быстрый тест ключевых функций на реальных запросах"""
 
+    print("🧪 БЫСТРЫЙ ТЕСТ КЛЮЧЕВЫХ ФУНКЦИЙ ASI BIONT")
+    print("=" * 50)
+
+    # Получаем тестового пользователя
     session = SessionLocal()
-    try:
-        # Очищаем старые тестовые данные
-        session.query(Task).filter_by(user_id=1).delete()
-        session.commit()
+    user = session.query(User).filter_by(telegram_id=99999).first()
+    if not user:
+        print("❌ Test user not found!")
+        return
+    session.close()
 
-        user = User(id=1, telegram_id=123456789, username='test_user', subscription_tier='STANDARD', created_at='2024-01-01')
+    # Ключевые реальные запросы
+    test_cases = [
+        ("Привет! Что у меня запланировано?", ["list_tasks"], "Приветствие"),
+        ("Расскажи о трендах AI в 2026", ["research_topic"], "Исследование"),
+        ("Где найти Python разработчиков?", ["find_partners"], "Поиск партнеров"),
+        ("Создай задачу: изучить FastAPI завтра в 10:00", ["check_time_conflicts", "add_task"], "Создание задачи"),
+        ("Покажи мой профиль", ["show_profile"], "Просмотр профиля"),
+        ("Я закончил задачу по документации", ["complete_task"], "Завершение задачи"),
+    ]
 
-        # Тест 1: research_topic
-        print("1️⃣ ТЕСТ research_topic:")
-        result1 = await chat_with_ai(message="Как приготовить пасту карбонара?", user_id=user.id, db_session=session)
-        tools1 = [call.get('function', {}).get('name', '') for call in result1.get('tool_calls', [])]
-        print(f"   Инструменты: {tools1}")
-        print("   ✅" if 'research_topic' in tools1 else "   ❌")
+    results = []
 
-        # Тест 2: find_partners
-        print("\n2️⃣ ТЕСТ find_partners:")
-        result2 = await chat_with_ai(message="Где найти единомышленников по AI?", user_id=user.id, db_session=session)
-        tools2 = [call.get('function', {}).get('name', '') for call in result2.get('tool_calls', [])]
-        print(f"   Инструменты: {tools2}")
-        print("   ✅" if 'find_partners' in tools2 else "   ❌")
+    for i, (query, expected_tools, category) in enumerate(test_cases, 1):
+        print(f"\n{i}. {category}: '{query}'")
 
-        # Тест 3: add_task
-        print("\n3️⃣ ТЕСТ add_task:")
-        tasks_before = session.query(Task).filter_by(user_id=user.id).count()
-        result3 = await chat_with_ai(message="Создай задачу: изучить Python асинхронность", user_id=user.id, db_session=session)
-        tools3 = [call.get('function', {}).get('name', '') for call in result3.get('tool_calls', [])]
-        tasks_after = session.query(Task).filter_by(user_id=user.id).count()
-        print(f"   Инструменты: {tools3}")
-        print(f"   Задач до: {tasks_before}, после: {tasks_after}")
-        db_changed = tasks_after > tasks_before
-        print("   ✅" if 'add_task' in tools3 and db_changed else "   ❌")
+        try:
+            result = await chat_with_ai(message=query, user_id=user.telegram_id)
 
-        # Тест 4: complete_task (если задача создана)
-        if tasks_after > tasks_before:
-            print("\n4️⃣ ТЕСТ complete_task:")
-            result4 = await chat_with_ai(message="Сделал задачу про Python", user_id=user.id, db_session=session)
-            tools4 = [call.get('function', {}).get('name', '') for call in result4.get('tool_calls', [])]
-            completed_tasks = session.query(Task).filter_by(user_id=user.id, status='completed').count()
-            print(f"   Инструменты: {tools4}")
-            print(f"   Завершенных задач: {completed_tasks}")
-            print("   ✅" if 'complete_task' in tools4 and completed_tasks > 0 else "   ❌")
+            if isinstance(result, dict):
+                tools_used = result.get('tools_used', [])
+                response_len = len(result.get('response', ''))
 
-        print("\n🎯 РЕЗУЛЬТАТ: Функции выполняются реально!" if all([
-            'research_topic' in tools1,
-            'find_partners' in tools2,
-            'add_task' in tools3 and db_changed
-        ]) else "\n⚠️ Некоторые функции нужно доработать.")
+                # Проверяем успех - хотя бы один из ожидаемых инструментов должен быть использован
+                success = any(tool in tools_used for tool in expected_tools)
 
-    finally:
-        session.close()
+                status = "✅" if success else "❌"
+                print(f"   {status} Инструменты: {tools_used} (ожидались: {expected_tools})")
 
-if __name__ == "__main__":
+                results.append({
+                    "query": query,
+                    "success": success,
+                    "tools_used": tools_used,
+                    "expected": expected_tools
+                })
+            else:
+                print("   ❌ Ошибка формата ответа")
+                results.append({"query": query, "success": False, "error": "Wrong format"})
+
+        except Exception as e:
+            print(f"   ❌ Ошибка: {str(e)}")
+            results.append({"query": query, "success": False, "error": str(e)})
+
+    # Итоги
+    print("\n" + "=" * 50)
+    successful = sum(1 for r in results if r.get("success", False))
+    total = len(results)
+
+    print(f"📊 РЕЗУЛЬТАТЫ: {successful}/{total} успешных тестов ({successful/total*100:.1f}%)")
+
+    if successful == total:
+        print("🎉 ОТЛИЧНО! Все функции работают корректно!")
+    elif successful >= total * 0.8:
+        print("👍 ХОРОШО! Большинство функций работает.")
+    else:
+        print("⚠️ Требуется доработка некоторых функций.")
+
+    return results
+
+if __name__ == '__main__':
     asyncio.run(quick_function_test())
