@@ -28,7 +28,7 @@ from .handlers import (  # noqa: F401
     add_task, list_tasks, complete_task, reschedule_task,
     delegate_task_with_session, delegate_task, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
-    list_tasks, get_partners_list, find_partners,
+    list_tasks, get_partners_list, find_partners, research_topic,
     check_time_conflicts,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
@@ -42,6 +42,112 @@ logger = logging.getLogger(__name__)
 
 # Базовый системный промпт для простых сообщений
 system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
+
+
+async def _execute_proactive_tools(message, user_id, session):
+    """
+    🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызывает инструменты перед агентом
+    
+    Триггеры:
+    - Приветствие ("привет", "hello", "hi", etc.)
+    - Нет активных задач
+    - Профиль заполнен (есть интересы/навыки для поиска)
+    
+    Возвращает: dict с результатами research + contacts или None
+    """
+    try:
+        # Проверяем, это приветствие?
+        greetings = ['привет', 'приветик', 'здравствуй', 'hi', 'hello', 'hey', 'добрый день', 'добрый вечер', 'доброе утро']
+        msg_lower = message.lower().strip()
+        is_greeting = any(g in msg_lower for g in greetings) or msg_lower in greetings
+        
+        logger.info(f"[PROACTIVE_HOOK] Message: '{message}', is_greeting: {is_greeting}")
+        
+        if not is_greeting:
+            logger.info(f"[PROACTIVE_HOOK] Not a greeting, skipping")
+            return None
+            
+        logger.info(f"[PROACTIVE_HOOK] Greeting detected: '{message}'")
+        
+        # Получаем пользователя и профиль
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return None
+            
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        
+        # Проверяем задачи
+        active_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status.in_(['pending', 'active', 'in_progress'])
+        ).count()
+        
+        if active_tasks > 0:
+            logger.info(f"[PROACTIVE_HOOK] User has {active_tasks} tasks, skipping auto-tools")
+            return None
+            
+        # Проверяем, есть ли в профиле данные для поиска
+        has_interests = profile and profile.interests and len(profile.interests.strip()) > 0
+        has_skills = profile and profile.skills and len(profile.skills.strip()) > 0
+        
+        if not (has_interests or has_skills):
+            logger.info(f"[PROACTIVE_HOOK] Empty profile, skipping auto-tools")
+            return None
+            
+        logger.info(f"[PROACTIVE_HOOK] ✅ All conditions met - executing research + find_partners")
+        
+        results = {
+            'research': None,
+            'contacts': None,
+            'executed': True
+        }
+        
+        # 1. RESEARCH_TOPIC - ищем актуальную инфу по интересам пользователя
+        try:
+            # Берем первый интерес из профиля как тему
+            if has_interests:
+                interests_list = [i.strip() for i in profile.interests.split(',')]
+                topic = interests_list[0] if interests_list else "AI и технологии"
+            else:
+                skills_list = [s.strip() for s in profile.skills.split(',')]
+                topic = skills_list[0] if skills_list else "продуктивность"
+                
+            logger.info(f"[PROACTIVE_HOOK] Calling research_topic with: '{topic}'")
+            
+            # Проверяем подписку - только для STANDARD/PREMIUM
+            if user.subscription_tier and user.subscription_tier.value in ['STANDARD', 'PREMIUM']:
+                research_result = await research_topic(
+                    query=f"актуальные тренды и новости: {topic}",
+                    depth="quick",
+                    user_id=user_id,
+                    session=session
+                )
+                results['research'] = research_result
+                logger.info(f"[PROACTIVE_HOOK] ✅ research_topic completed")
+            else:
+                results['research'] = f"💡 Смотрю свежие материалы по теме '{topic}' (доступно с STANDARD)"
+                logger.info(f"[PROACTIVE_HOOK] ⚠️ LIGHT tier - research skipped")
+        except Exception as e:
+            logger.error(f"[PROACTIVE_HOOK] Error in research_topic: {e}")
+            results['research'] = f"Не удалось найти материалы: {str(e)}"
+        
+        # 2. FIND_PARTNERS - ищем людей по интересам
+        try:
+            logger.info(f"[PROACTIVE_HOOK] Calling find_partners")
+            contacts_result = find_partners(user_id=user_id, session=session)
+            results['contacts'] = contacts_result
+            logger.info(f"[PROACTIVE_HOOK] ✅ find_partners completed")
+        except Exception as e:
+            logger.error(f"[PROACTIVE_HOOK] Error in find_partners: {e}")
+            results['contacts'] = f"Не удалось найти контакты: {str(e)}"
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"[PROACTIVE_HOOK] Critical error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
@@ -101,6 +207,33 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             proactive_context = generate_proactive_context(user_id, session)
             logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
 
+            # 🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызываем инструменты при приветствии
+            preexec_results = await _execute_proactive_tools(message, user_id, session)
+            
+            # Если инструменты были выполнены - добавляем результаты в контекст
+            if preexec_results and preexec_results.get('executed'):
+                logger.info(f"[PROACTIVE_HOOK] ✅ Tools executed, adding results to context")
+                
+                # Формируем контекст с уже готовыми результатами
+                preexec_context = "\n\n🎯 АВТОМАТИЧЕСКИ ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ (используй результаты в ответе):\n\n"
+                
+                if preexec_results.get('research'):
+                    preexec_context += "📚 RESEARCH_TOPIC - уже выполнен:\n"
+                    preexec_context += str(preexec_results['research']) + "\n\n"
+                
+                if preexec_results.get('contacts'):
+                    preexec_context += "🤝 FIND_PARTNERS - уже выполнен:\n"
+                    preexec_context += str(preexec_results['contacts']) + "\n\n"
+                
+                preexec_context += "❗ НЕ ВЫЗЫВАЙ эти инструменты снова - просто используй готовые результаты выше!\n"
+                preexec_context += "Формат ответа: Приветствие → Покажи конкретные ссылки/материалы → Покажи контакты → Предложи задачу → Спроси когда удобно\n"
+                
+                # Добавляем к проактивному контексту
+                proactive_context = proactive_context + preexec_context
+                logger.info(f"[PROACTIVE_HOOK] Updated context length: {len(proactive_context)}")
+            else:
+                logger.info(f"[PROACTIVE_HOOK] No tools executed (not a greeting or conditions not met)")
+
             # Получаем погоду и новости для контекста
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
             user_city = profile.city if profile and profile.city else None
@@ -159,6 +292,37 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 db_session=session,
                 message_type=message_type
             )
+            
+            # ПОСТ-ОБРАБОТКА: УСИЛИВАЕМ ПРОАКТИВНЫЙ ЯЗЫК
+            if response_data and 'response' in response_data:
+                original_response = response_data['response']
+                
+                # Заменяем слабые фразы на сильные
+                replacements = {
+                    'могу найти': 'нашел',
+                    'могу предложить': 'предлагаю',
+                    'могу рассказать': 'расскажу',
+                    'могу подобрать': 'подобрал',
+                    'могу показать': 'показываю',
+                    'хочешь?': 'давай?',
+                    'интересует?': 'давай',
+                    'что интереснее?': 'выбери',
+                    'может, хочешь': 'давай'
+                }
+                
+                strengthened_response = original_response
+                for weak, strong in replacements.items():
+                    strengthened_response = strengthened_response.replace(weak, strong)
+                
+                # Добавляем проактивные фразы если их нет
+                if 'нашел' not in strengthened_response.lower() and 'research_topic' in str(response_data.get('tool_calls', [])):
+                    strengthened_response += " Нашел интересную информацию по теме."
+                
+                if 'вот' not in strengthened_response.lower() and 'find_partners' in str(response_data.get('tool_calls', [])):
+                    strengthened_response += " Вот контакты единомышленников."
+                
+                response_data['response'] = strengthened_response
+                logger.info(f"[POST_PROCESS] Strengthened response: {len(strengthened_response)} chars")
             
             # Отмечаем что Premium рекомендации были показаны (если были в промпте)
             if proactive_context and "ПРЕМИУМ РЕКОМЕНДАЦИИ" in proactive_context:
