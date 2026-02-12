@@ -432,8 +432,14 @@ def clean_technical_details(text):
             match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
             if match:
                 # Обрезаем текст до начала DSML тега
-                text = text[:match.start()]
+                text = text[:match.start()].strip()
+                logger.info(f"[CLEAN] Removed DSML content, kept: '{text[:100]}...'")
                 break
+    
+    # Если весь текст - это DSML, возвращаем пустую строку
+    if text.strip().startswith('<｜DSML｜') or text.strip().startswith('<|DSML|'):
+        logger.warning("[CLEAN] Entire response was DSML, returning empty")
+        return ""
     
     # Дополнительная очистка оставшихся DSML следов
     text = re.sub(r'<｜DSML｜[^>]*>', "", text, flags=re.DOTALL)

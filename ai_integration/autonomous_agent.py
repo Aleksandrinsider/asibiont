@@ -33,6 +33,7 @@ class HybridAutonomousAgent:
         self.context_memory = []  # Краткосрочная память контекста
         self.success_patterns = {}  # Паттерны успешных действий
         self.user_preferences = {}  # Предпочтения пользователей
+        self.active_sessions = 0  # Счетчик активных сессий
         
         # Загружаем статистику, если есть
         self.tool_discovery.load_stats()
@@ -206,16 +207,70 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: ПОЛНОСТЬЮ ГИБРИДНОЕ ПЛАНИРОВАНИЕ - 100% AI с TOOLS
-
-        Стратегия: AI с инструментами решает ВСЁ самостоятельно
-        - Более гибкое понимание естественного языка
-        - Учитывает контекст (current_task_id, местоимения)
-        - Меньше ложных срабатываний жестких правил
+        Планирование стратегии - сначала простые правила, потом AI
         """
+        message_lower = user_message.lower()
 
-        # ВСЁ через AI с TOOLS - полный гибридный подход!
-        # AI сам решит когда вызывать list_tasks, complete_task, add_task, edit_task и т.д.
+        # ПРЯМЫЕ КОМАНДЫ - без AI, сразу выполняем
+        if any(phrase in message_lower for phrase in ['создай задачу', 'создать задачу', 'добавь задачу', 'add task']):
+            return {
+                "intent": "add_task",
+                "actions": [{
+                    "tool": "add_task",
+                    "params": {
+                        "title": self._extract_task_title(user_message),
+                        "reminder_time": self._extract_time(user_message)
+                    },
+                    "reason": "Прямая команда создания задачи"
+                }],
+                "response_strategy": "execute_action"
+            }
+
+        if any(phrase in message_lower for phrase in ['покажи задачи', 'мои задачи', 'список задач', 'list tasks']):
+            return {
+                "intent": "list_tasks",
+                "actions": [{
+                    "tool": "list_tasks",
+                    "params": {},
+                    "reason": "Запрос списка задач"
+                }],
+                "response_strategy": "execute_action"
+            }
+
+        if any(phrase in message_lower for phrase in ['найди партнеров', 'поищи партнеров', 'find partners']):
+            return {
+                "intent": "find_partners",
+                "actions": [{
+                    "tool": "find_partners",
+                    "params": {},
+                    "reason": "Поиск партнеров"
+                }],
+                "response_strategy": "execute_action"
+            }
+
+        if any(phrase in message_lower for phrase in ['что в профиле', 'мой профиль', 'show profile']):
+            return {
+                "intent": "show_profile",
+                "actions": [{
+                    "tool": "show_profile",
+                    "params": {},
+                    "reason": "Показ профиля"
+                }],
+                "response_strategy": "execute_action"
+            }
+
+        if any(phrase in message_lower for phrase in ['запомни', 'remember']):
+            return {
+                "intent": "update_memory",
+                "actions": [{
+                    "tool": "update_user_memory_async",
+                    "params": {"content": user_message},
+                    "reason": "Обновление памяти"
+                }],
+                "response_strategy": "execute_action"
+            }
+
+        # Для сложных запросов - используем AI планирование
         return await self._plan_general_chat(user_message, user_id)
 
     def _create_command_plan(self, intent, user_message):
@@ -361,157 +416,35 @@ class HybridAutonomousAgent:
         finally:
             session.close()
 
-        system_prompt = f"{base_prompt}\n\n" + """Ты - УМНЫЙ AI-ассистент, который ДУМАЕТ перед действием и ВСЕГДА ИЩЕТ РАЗНООБРАЗИЕ!
+        system_prompt = f"{base_prompt}\n\n" + """Ты - умный AI-ассистент для управления задачами. Твоя задача - ПРАВИЛЬНО определить действия для выполнения запроса пользователя.
 
-🎯 ГЛАВНАЯ МИССИЯ: БЫТЬ ПОЛЕЗНЫМ, а не навязчивым! ДАВАТЬ КОНКРЕТНЫЕ ШАГИ!
+ПРАВИЛА ВЫБОРА ИНСТРУМЕНТОВ:
 
-🚨 АБСОЛЮТНЫЙ ПРИОРИТЕТ - ЗАКРЫТИЕ ТЕКУЩЕЙ ЗАДАЧИ:
-ЕСЛИ в промпте выше есть "🎯 ТЕКУЩАЯ ЗАДАЧА В ФОКУСЕ":
-- ANY подтверждение выполнения = НЕМЕДЛЕННО вызови complete_task
-- Примеры: "сделал", "готово", "проверил", "выполнил", "закончил", "сделано", "завершил", "закончил с этим", "закончил с ней"
-- ИЛИ фразы: "я уже [глагол]", "уже [глагол]", "всё", "её закрыл", "закрыл её", "его закрыл"
-- ИЛИ просто глагол совершенного вида без дополнений
-- НЕ спрашивай "какую задачу?" - используй ТЕКУЩУЮ ЗАДАЧУ из контекста выше
-- ВЫЗОВИ complete_task БЕЗ ПАРАМЕТРОВ - система автоматически закроет current_task
+1. ЗАДАЧИ:
+   - "создай задачу" → add_task
+   - "покажи задачи" → list_tasks  
+   - "отметь выполненной" → complete_task
+   - "перенеси задачу" → reschedule_task
+   - "измени задачу" → edit_task
 
-⚡ УМНЫЕ АВТОМАТИЧЕСКИЕ ТРИГГЕРЫ - ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ РАЗНЫЕ ИНСТРУМЕНТЫ!
+2. ПАРТНЕРЫ:
+   - "найди партнеров" → find_partners
+   - "покажи контакты" → get_partners_list
 
-1. "ПРИВЕТ" / "ЗДРАВСТВУЙ" → НЕМЕДЛЕННО list_tasks()!
-   - ВСЕГДА вызывай list_tasks() при любом приветствии
-   - ЕСЛИ ночь (22:00-6:00) → после list_tasks() скажи про отдых
-   - ЕСЛИ утро → после list_tasks() предложи план на день
-   - ЕСЛИ есть задачи → покажи их статус
-   - ЕСЛИ задач нет → research_topic("актуальные идеи для [профиль]") + find_partners("[интересы]")
+3. ПРОФИЛЬ:
+   - "что в профиле" → show_profile
+   - "обнови профиль" → update_profile
 
-2. "ЧТО НОВОГО?" / "ЧТО ПОСОВЕТУЕШЬ?" → СТРОГО ЧЕРЕДУЙ ИНСТРУМЕНТЫ!
-   - ЗАПРЕЩЕНО всегда использовать get_news_trends()!
-   - ДЛЯ AI разработчиков: research_topic("тренды AI") + find_partners("AI разработчики")
-   - ДЛЯ предпринимателей: find_partners("стартаперы") + suggest_events("бизнес конференции")
-   - ДЛЯ программистов: research_topic("новые технологии") + find_partners("программисты")
-   - ПРАВИЛО: ЕСЛИ в предыдущем ответе был get_news_trends → ОБЯЗАТЕЛЬНО выбери другой инструмент!
+4. ПАМЯТЬ:
+   - "запомни" → update_user_memory_async
 
-3. УПОМИНАНИЕ ИНТЕРЕСОВ → КОМБИНИРОВАННЫЕ ДЕЙСТВИЯ С РАЗНООБРАЗИЕМ:
-   - "интересуюсь Python" → research_topic("Python события в [город]") + find_partners("Python разработка")
-   - "хочу стартап" → research_topic("стартап митапы [город]") + find_partners("предприниматели")
-   - "ищу работу" → find_partners("HR") + research_topic("вакансии [профессия]")
-   - "хочу встретиться" → research_topic("мероприятия [тема] в [город]") + find_partners("[тема]")
-   - "что посмотреть" → research_topic("культурные события [город] на этой неделе")
-   - "где погулять" → research_topic("парки и мероприятия [город] [сезон]")
-   - ВАЖНО: Комбинируй РАЗНЫЕ инструменты, не повторяйся!
+5. ДЕЛЕГИРОВАНИЕ (только PREMIUM):
+   - "делегируй" → delegate_task
 
-4. АГРЕССИВНЫЙ АВТОМАТИЧЕСКИЙ ПОИСК:
-   - ЛЮБОЙ ВОПРОС "КАК" → research_topic("методики [тема]")
-   - ЛЮБОЙ ВОПРОС "ЧТО" → research_topic("лучшие [тема]")
-   - ЛЮБОЙ ВОПРОС "ГДЕ" → research_topic("где найти [тема] в [город]")
-   - ЛЮБОЙ ВОПРОС "ПОЧЕМУ" → research_topic("причины и решения [тема]")
-   - ЛЮБОЙ ЗАПРОС СОВЕТА → research_topic("лучшие советы по [тема]")
-   - ЛЮБОЙ ЗАПРОС РЕКОМЕНДАЦИЙ → research_topic("топ рекомендации [тема]")
-   - ЛЮБОЕ УПОМИНАНИЕ ПРОБЛЕМЫ → research_topic("решения проблемы [проблема]")
-   - ЛЮБОЕ УПОМИНАНИЕ ЦЕЛИ → research_topic("как достичь [цель]")
-   - НИКОГДА НЕ СПРАШИВАЙ РАЗРЕШЕНИЯ - ПРОСТО ИЩИ ИНФОРМАЦИЮ!
+6. ИССЛЕДОВАНИЕ:
+   - "расскажи о" → research_topic или quick_topic_search
 
-5. ПОИСК МЕРОПРИЯТИЙ И ЗАНЯТИЙ → ИСПОЛЬЗУЙ research_topic:
-   - "что посмотреть в городе" → research_topic("культурные мероприятия [город] на этой неделе")
-   - "где погулять" → research_topic("парки и развлечения [город] [сезон]")
-   - "встречи по [тема]" → research_topic("митапы и конференции [тема] в [город]")
-   - "курсы [навык]" → research_topic("курсы и обучение [навык] [город]")
-   - "спорт мероприятия" → research_topic("спортивные события [город] на этой неделе")
-
-6. СТРАТЕГИЧЕСКИЕ ЗАПРОСЫ → КОМПЛЕКСНЫЙ АНАЛИЗ:
-   - "проанализируй рынок [тема]" → research_and_plan("[тема] рынок анализ")
-   - "план продвижения [продукт]" → research_and_plan("[продукт] маркетинг стратегия")
-   - "изучить конкурентов [ниша]" → research_and_plan("[ниша] конкуренты анализ")
-   - "стратегия для [бизнес]" → research_and_plan("[бизнес] бизнес план")
-
-7. ЗАДАЧИ И ПРОДУКТИВНОСТЬ:
-   - "создать задачу [тема]" → ЕСЛИ пользователь ЯВНО просит создать задачу → check_time_conflicts() → add_task()
-   - "удалить задачу" → list_tasks() → delete_task() (показать список, затем удалить)
-   - "что у меня по задачам" → list_tasks() + анализ паттернов
-   - "сделал задачу" → complete_task() + предложение следующего шага
-   - "напоминание" → ЕСЛИ пользователь просит создать → check_time_conflicts() → add_task()
-   - ВАЖНО: Всегда уточняй время у пользователя перед созданием задачи!
-
-8. КОНТЕКСТНЫЕ СИТУАЦИИ:
-   - Плохая погода → indoor активности (курсы, чтение, разработка)
-   - Хорошая погода → outdoor (прогулки, спорт, мероприятия)
-   - Вечер → подведение итогов, планирование завтра
-   - Утро → энергичные активности, планирование дня
-
-КРИТИЧНО: ВСЕГДА ВЫЗЫВАЙ РАЗНЫЕ ИНСТРУМЕНТЫ ПРИ СООТВЕТСТВУЮЩИХ ТРИГГЕРАХ!
-- "привет" → list_tasks()
-- "что нового" → ЧЕРЕДУЙ: get_news_trends(), research_topic(), find_partners(), suggest_events()
-- "проанализируй рынок" → research_and_plan()
-- "стратегия" → research_and_plan()
-- "изучить конкурентов" → research_and_plan()
-- "задачи" → list_tasks()
-- "создать" → НЕ ВЫЗЫВАЙ add_task автоматически! Только если пользователь явно просит
-- "сделал" → complete_task()
-- ЛЮБОЙ ВОПРОС → research_topic() для поиска информации
-- ЛЮБОЕ УПОМИНАНИЕ ТЕМЫ → research_topic() для свежих данных
-- ЛЮБОЙ ЗАПРОС СОВЕТА → research_topic() для лучших рекомендаций
-
-МАКСИМАЛЬНАЯ ПРОАКТИВНОСТЬ В ПОИСКЕ:
-✅ ПРИ ЛЮБОМ ВОПРОСЕ "КАК" - НЕМЕДЛЕННО research_topic("методики [тема]")
-✅ ПРИ ЛЮБОМ ВОПРОСЕ "ЧТО" - НЕМЕДЛЕННО research_topic("лучшие [тема]")
-✅ ПРИ ЛЮБОМ ВОПРОСЕ "ГДЕ" - НЕМЕДЛЕННО research_topic("где найти [тема] в [город]")
-✅ ПРИ ЛЮБОМ ЗАПРОСЕ СОВЕТА - НЕМЕДЛЕННО research_topic("лучшие советы по [тема]")
-✅ ПРИ ЛЮБОМ ЗАПРОСЕ РЕКОМЕНДАЦИЙ - НЕМЕДЛЕННО research_topic("топ рекомендации [тема]")
-✅ НИКОГДА НЕ СПРАШИВАЙ РАЗРЕШЕНИЯ - ПРОСТО ИЩИ И ДАВАЙ РЕЗУЛЬТАТЫ!
-✅ НИКОГДА НЕ ГОВОРИ "ХОЧЕШЬ ЛИ Я ПОИЩУ?" - ПРОСТО ИЩИ!
-
-ПРАВИЛА УМНОГО ПОВЕДЕНИЯ:
-✅ ДУМАЙ ПЕРЕД ДЕЙСТВИЕМ - анализируй контекст и профиль пользователя
-✅ ИСПОЛЬЗУЙ РАЗНООБРАЗИЕ - разные комбинации инструментов для каждого запроса
-✅ БУДЬ КОНКРЕТЕН - 1-2 предложения вместо длинных списков
-✅ УЧИТЫВАЙ ПРОФИЛЬ ГЛУБОКО - персонализируй под конкретные навыки, цели, интересы
-✅ ДЕЙСТВУЙ ПРОАКТИВНО - предлагай КОНКРЕТНЫЕ actionable шаги, а не спрашивай разрешения
-✅ МЕНЯЙ ПОДХОД - если в прошлый раз использовал get_news_trends, теперь попробуй find_partners или research_topic
-✅ УВЕДОМЛЯЙ О ДЕЙСТВИЯХ - если создал задачу, ОБЯЗАТЕЛЬНО скажи об этом пользователю
-❌ ЗАПРЕЩЕНО: Использовать форматирование (жирный шрифт ** **, списки с номерами 1. 2., заголовки)
-❌ ЗАПРЕЩЕНО: Структурированные блоки типа "**Что можно сделать прямо сейчас**"
-❌ ЗАПРЕЩЕНО: Формальные заголовки и подзаголовки
-❌ ЗАПРЕЩЕНО: Нумерованные или маркированные списки любого вида
-
-СТИЛЬ: РАЗГОВОРНЫЙ, ДРУЖЕСТВЕННЫЙ, ЕСТЕСТВЕННЫЙ
-- Пиши как с другом: "Слушай, вот что можно сделать прямо сейчас..."
-- Используй обычные предложения, не списки
-- Добавляй "интересно?" или "как думаешь?" для вовлечения
-- Делай ответ живым и неформальным
-- ЕСЛИ нужно перечислить варианты → делай это в одном предложении через "или", "либо", "а еще можно"
-
-ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
-- ЕСЛИ профиль пустой или минимальный → ОБЯЗАТЕЛЬНО спроси о целях, интересах, навыках
-- Задавай вопросы естественно: "Расскажи, чем ты занимаешься? Какие у тебя цели на ближайший месяц?"
-- Не дави, но показывай пользу: "Если расскажешь о своих интересах, смогу давать более точные советы"
-- ПРИ ПУСТОМ ПРОФИЛЕ: предлагай разнообразные варианты, не зацикливайся на одном
-
-ПРИМЕРЫ УМНОГО ПОВЕДЕНИЯ С РАЗНООБРАЗИЕМ:
-
-"Привет в 3 часа ночи":
-"Привет! Сейчас глубокая ночь, вижу ты в Перми при -14°C. Отличное время для отдыха. Если не спится, могу рассказать что-то интересное про ЛитРПГ - знаю ты этим увлекаешься."
-
-"Привет днем без задач":
-"Привет! Вижу у тебя свободный день, а ты разработчик AI из Перми. Сейчас отличное время для нетворкинга - найти единомышленников в твоей сфере?"
-
-"Что нового?" (для AI разработчика):
-"Последние тренды в AI: автономные агенты становятся мейнстримом. Могу найти партнеров для совместных проектов или поискать свежие статьи по теме?"
-
-"Что нового?" (для предпринимателя):
-"В стартап-экосистеме сейчас бум инвестиций в AI-стартапы. Предложить найти потенциальных партнеров или рассказать про конкретные кейсы?"
-
-УВЕДОМЛЕНИЯ О ДЕЙСТВИЯХ:
-- ЕСЛИ создал задачу → ОБЯЗАТЕЛЬНО скажи: "Создал для тебя задачу '[название]' на [время]"
-- ЕСЛИ нашел партнеров → расскажи конкретно: "Нашел @username, работает в [компания], интересуется [тема]"
-- ЕСЛИ выполнил поиск → поделись результатами: "Нашел несколько интересных мероприятий на этой неделе"
-
-РАЗНООБРАЗИЕ ПРЕДЛОЖЕНИЙ:
-- НЕ повторяй одни и те же фразы типа "могу найти партнеров" или "посмотреть тренды"
-- Для каждого ответа используй РАЗНЫЕ комбинации: то партнеры + мероприятия, то тренды + курсы, то задачи + анализ
-- Учитывай предыдущие ответы - если в прошлый раз говорил про партнеров, теперь предложи что-то другое
-
-⚠️ ВАЖНО: Используй инструменты ТОЛЬКО когда есть реальная польза!
-Не для галочки - для конкретной помощи пользователю.
-ВАЖНО: МЕНЯЙ ВЫБОР ИНСТРУМЕНТОВ - разнообразие делает тебя умнее!"""
+ВЕРНИ ТОЛЬКО JSON с действиями, без объяснений."""
 
         # Загружаем историю диалога
         from .conversation_history import get_conversation_history
@@ -590,151 +523,206 @@ class HybridAutonomousAgent:
         from . import handlers
         
         # Если session не передан, создаем его
+        close_session = False
         if session is None:
-            session = Session()
-            close_session = True
+            # Проверяем лимит активных сессий
+            if self.active_sessions >= 3:  # Максимум 3 одновременные сессии
+                logger.warning(f"[AGENT] Too many active sessions ({self.active_sessions}), rejecting request")
+                return [{
+                    "tool": "session_limit",
+                    "success": False,
+                    "error": "Слишком много одновременных запросов. Попробуйте через минуту."
+                }]
+            
+            try:
+                session = Session()
+                close_session = True
+                self.active_sessions += 1
+                logger.info(f"[AGENT] Created new session for user {user_id} (active: {self.active_sessions})")
+            except Exception as e:
+                logger.error(f"[AGENT] Failed to create session: {e}")
+                return [{
+                    "tool": "session_creation",
+                    "success": False,
+                    "error": f"Не удалось создать подключение к базе данных: {e}"
+                }]
         else:
-            close_session = False
+            logger.info(f"[AGENT] Using provided session for user {user_id}")
         
         results = []
         
-        for action in actions:
-            tool_name = action.get('tool')
-            params = action.get('params', {})
-            reason = action.get('reason', '')
-            
-            logger.info(f"[AGENT] Executing {tool_name} with params {params} - {reason}")
-            
-            try:
-                # Получаем функцию handler
-                handler_func = getattr(handlers, tool_name, None)
+        try:
+            for action in actions:
+                tool_name = action.get('tool')
+                params = action.get('params', {})
+                reason = action.get('reason', '')
                 
-                if handler_func is None:
+                logger.info(f"[AGENT] Executing {tool_name} with params {params} - {reason}")
+                
+                try:
+                    # Получаем функцию handler
+                    handler_func = getattr(handlers, tool_name, None)
+                    
+                    if handler_func is None:
+                        results.append({
+                            "tool": tool_name,
+                            "success": False,
+                            "error": f"Handler {tool_name} not found"
+                        })
+                        continue
+                    
+                    # Добавляем user_id к параметрам
+                    params['user_id'] = user_id
+                    
+                    # Добавляем session для функций, которые его требуют
+                    import inspect
+                    sig = inspect.signature(handler_func)
+                    if 'session' in sig.parameters:
+                        params['session'] = session
+                    
+                    # Исправляем известные проблемы с параметрами
+                    if tool_name == 'find_relevant_contacts_for_task':
+                        logger.info(f"[AGENT] Original params for {tool_name}: {params}")
+                        if 'description' in params and 'task_description' not in params:
+                            params['task_description'] = params.pop('description')
+                            logger.info(f"[AGENT] Fixed parameter: description -> task_description")
+                        elif 'task_description' not in params:
+                            # Если нет task_description, берем из сообщения или устанавливаем по умолчанию
+                            params['task_description'] = params.get('task_description', 'помощь с задачей')
+                            logger.info(f"[AGENT] Added default task_description: {params['task_description']}")
+                    
+                    # 🔧 ОБРАБОТКА quick_topic_search - извлекаем topic из сообщения если не указан
+                    if tool_name == 'quick_topic_search':
+                        logger.info(f"[AGENT] Processing quick_topic_search params: {params}")
+                        if 'topic' not in params or not params['topic']:
+                            # Извлекаем topic из user_message
+                            if user_message:
+                                # Простая эвристика - берем ключевые слова из сообщения
+                                import re
+                                # Убираем стоп-слова и берем первые значимые слова
+                                stop_words = ['что', 'как', 'где', 'когда', 'почему', 'а', 'и', 'но', 'или', 'да', 'нет', 'там']
+                                words = re.findall(r'\b\w+\b', user_message.lower())
+                                topic_words = [w for w in words if w not in stop_words and len(w) > 2][:3]
+                                if topic_words:
+                                    params['topic'] = ' '.join(topic_words)
+                                    logger.info(f"[AGENT] Extracted topic from message: '{params['topic']}'")
+                                else:
+                                    params['topic'] = user_message[:50]  # fallback
+                                    logger.info(f"[AGENT] Using message as topic: '{params['topic']}'")
+                            else:
+                                params['topic'] = 'общая информация'  # ultimate fallback
+                                logger.warning(f"[AGENT] No topic provided and no message, using default")
+                        
+                        # Убеждаемся что topic - строка
+                        if not isinstance(params['topic'], str):
+                            params['topic'] = str(params['topic'])
+                    
+                    logger.info(f"[AGENT] Executing {tool_name} with final params: {params}")
+                    
+                    # Выполняем handler
+                    result = await handler_func(**params) if asyncio.iscoroutinefunction(handler_func) else handler_func(**params)
+                    
+                    # Обучаемся на успешном выполнении
+                    self.tool_discovery.learn_from_success(
+                        func_name=tool_name,
+                        user_id=user_id,
+                        context=reason,
+                        result=result
+                    )
+                    
+                    results.append({
+                        "tool": tool_name,
+                        "success": True,
+                        "result": result,
+                        "reason": reason
+                    })
+                    
+                    # ⚡ АВТОМАТИЧЕСКИЙ ТРИГГЕР: после check_time_conflicts → add_task
+                    if tool_name == 'check_time_conflicts' and result:
+                        logger.info(f"[AUTO_TRIGGER] check_time_conflicts succeeded, auto-triggering add_task")
+                        # Извлекаем информацию о задаче из исходного сообщения
+                        task_title, task_time = self._extract_task_info(user_message)
+                        if task_title:
+                            auto_add_action = {
+                                'tool': 'add_task',
+                                'params': {'title': task_title, 'reminder_time': task_time},
+                                'reason': f'Автоматически после проверки конфликтов времени'
+                            }
+                            # Выполняем add_task
+                            add_result = await self.execute_actions([auto_add_action], user_id, session)
+                            results.extend(add_result)
+                            logger.info(f"[AUTO_TRIGGER] Auto-executed add_task for '{task_title}'")
+                    
+                    # ⚡ ПРОАКТИВНЫЙ АНАЛИЗ after list_tasks
+                    if tool_name == 'list_tasks' and result and isinstance(result, str):
+                        logger.info(f"[PROACTIVE] Analyzing list_tasks result for proactive actions")
+                        proactive_actions = []
+                        
+                        # ПРОВЕРКА: ЕСЛИ ЗАДАЧ НЕТ - НЕ СОЗДАЕМ АВТОМАТИЧЕСКИ, А ПРЕДЛАГАЕМ ВАРИАНТЫ
+                        # Убираем автоматическое создание задач - пусть пользователь сам решает
+                        if "нет активных задач" in result.lower() or "список пуст" in result.lower() or "задач нет" in result.lower():
+                            logger.info(f"[PROACTIVE] No tasks found - will suggest options in response, not auto-create")
+                            # НЕ создаем задачу автоматически - это делает агента навязчивым
+                        
+                        # Проверка на социальные активности (автоматически ищем партнеров)
+                        social_keywords = ['пробежка', 'встреча', 'тренировка', 'спорт', 'кофе']
+                        for keyword in social_keywords:
+                            if keyword.lower() in result.lower():
+                                logger.info(f"[PROACTIVE] Found social activity with keyword '{keyword}', searching partners")
+                                # Извлекаем название задачи с этим ключевым словом
+                                import re
+                                pattern = rf"'([^']*{keyword}[^']*?)'(?:\s+в\s+\d+:\d+|[\s\.])"
+                                match = re.search(pattern, result, re.IGNORECASE)
+                                if match:
+                                    social_title = match.group(1)
+                                    proactive_actions.append({
+                                        'tool': 'find_relevant_contacts_for_task',
+                                        'params': {'task_description': social_title},  # Исправлено: task_description вместо task_title
+                                        'reason': f'Проактивно ищу партнеров для "{social_title}"'
+                                    })
+                                    break  # Только один поиск партнеров за раз
+                        
+                        # Выполняем проактивные действия
+                        if proactive_actions:
+                            logger.info(f"[PROACTIVE] Executing {len(proactive_actions)} proactive actions")
+                            proactive_results = await self.execute_actions(proactive_actions, user_id, session)
+                            results.extend(proactive_results)
+                
+                except Exception as e:
+                    logger.error(f"[AGENT] Error executing {tool_name}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    
+                    # Обучаемся на ошибке
+                    self.tool_discovery.learn_from_failure(
+                        func_name=tool_name,
+                        error=str(e)
+                    )
+                    
                     results.append({
                         "tool": tool_name,
                         "success": False,
-                        "error": f"Handler {tool_name} not found"
+                        "error": str(e),
+                        "reason": reason
                     })
-                    continue
-                
-                # Добавляем user_id к параметрам
-                params['user_id'] = user_id
-                
-                # Добавляем session для функций, которые его требуют
-                import inspect
-                sig = inspect.signature(handler_func)
-                if 'session' in sig.parameters:
-                    params['session'] = session
-                
-                # Исправляем известные проблемы с параметрами
-                if tool_name == 'find_relevant_contacts_for_task':
-                    logger.info(f"[AGENT] Original params for {tool_name}: {params}")
-                    if 'description' in params and 'task_description' not in params:
-                        params['task_description'] = params.pop('description')
-                        logger.info(f"[AGENT] Fixed parameter: description -> task_description")
-                    elif 'task_description' not in params:
-                        # Если нет task_description, берем из сообщения или устанавливаем по умолчанию
-                        params['task_description'] = params.get('task_description', 'помощь с задачей')
-                        logger.info(f"[AGENT] Added default task_description: {params['task_description']}")
-                
-                logger.info(f"[AGENT] Executing {tool_name} with final params: {params}")
-                
-                # Выполняем handler
-                result = await handler_func(**params) if asyncio.iscoroutinefunction(handler_func) else handler_func(**params)
-                
-                # Обучаемся на успешном выполнении
-                self.tool_discovery.learn_from_success(
-                    func_name=tool_name,
-                    user_id=user_id,
-                    context=reason,
-                    result=result
-                )
-                
-                results.append({
-                    "tool": tool_name,
-                    "success": True,
-                    "result": result,
-                    "reason": reason
-                })
-                
-                # ⚡ АВТОМАТИЧЕСКИЙ ТРИГГЕР: после check_time_conflicts → add_task
-                if tool_name == 'check_time_conflicts' and result:
-                    logger.info(f"[AUTO_TRIGGER] check_time_conflicts succeeded, auto-triggering add_task")
-                    # Извлекаем информацию о задаче из исходного сообщения
-                    task_title, task_time = self._extract_task_info(user_message)
-                    if task_title:
-                        auto_add_action = {
-                            'tool': 'add_task',
-                            'params': {'title': task_title, 'reminder_time': task_time},
-                            'reason': f'Автоматически после проверки конфликтов времени'
-                        }
-                        # Выполняем add_task
-                        add_result = await self.execute_actions([auto_add_action], user_id, session)
-                        results.extend(add_result)
-                        logger.info(f"[AUTO_TRIGGER] Auto-executed add_task for '{task_title}'")
-                
-                # ⚡ ПРОАКТИВНЫЙ АНАЛИЗ after list_tasks
-                if tool_name == 'list_tasks' and result and isinstance(result, str):
-                    logger.info(f"[PROACTIVE] Analyzing list_tasks result for proactive actions")
-                    proactive_actions = []
-                    
-                    # ПРОВЕРКА: ЕСЛИ ЗАДАЧ НЕТ - НЕ СОЗДАЕМ АВТОМАТИЧЕСКИ, А ПРЕДЛАГАЕМ ВАРИАНТЫ
-                    # Убираем автоматическое создание задач - пусть пользователь сам решает
-                    if "нет активных задач" in result.lower() or "список пуст" in result.lower() or "задач нет" in result.lower():
-                        logger.info(f"[PROACTIVE] No tasks found - will suggest options in response, not auto-create")
-                        # НЕ создаем задачу автоматически - это делает агента навязчивым
-                    
-                    # Проверка на социальные активности (автоматически ищем партнеров)
-                    social_keywords = ['пробежка', 'встреча', 'тренировка', 'спорт', 'кофе']
-                    for keyword in social_keywords:
-                        if keyword.lower() in result.lower():
-                            logger.info(f"[PROACTIVE] Found social activity with keyword '{keyword}', searching partners")
-                            # Извлекаем название задачи с этим ключевым словом
-                            import re
-                            pattern = rf"'([^']*{keyword}[^']*?)'(?:\s+в\s+\d+:\d+|[\s\.])"
-                            match = re.search(pattern, result, re.IGNORECASE)
-                            if match:
-                                social_title = match.group(1)
-                                proactive_actions.append({
-                                    'tool': 'find_relevant_contacts_for_task',
-                                    'params': {'task_description': social_title},  # Исправлено: task_description вместо task_title
-                                    'reason': f'Проактивно ищу партнеров для "{social_title}"'
-                                })
-                                break  # Только один поиск партнеров за раз
-                    
-                    # Выполняем проактивные действия
-                    if proactive_actions:
-                        logger.info(f"[PROACTIVE] Executing {len(proactive_actions)} proactive actions")
-                        proactive_results = await self.execute_actions(proactive_actions, user_id, session)
-                        results.extend(proactive_results)
-                
-            except Exception as e:
-                logger.error(f"[AGENT] Error executing {tool_name}: {e}")
-                import traceback
-                traceback.print_exc()
-                
-                # Обучаемся на ошибке
-                self.tool_discovery.learn_from_failure(
-                    func_name=tool_name,
-                    error=str(e)
-                )
-                
-                results.append({
-                    "tool": tool_name,
-                    "success": False,
-                    "error": str(e),
-                    "reason": reason
-                })
         
         # Закрываем session если создали его здесь
-        if close_session:
-            session.close()
+        finally:
+            if close_session and session:
+                try:
+                    session.close()
+                    self.active_sessions -= 1
+                    logger.info(f"[AGENT] Closed session for user {user_id} (active: {self.active_sessions})")
+                except Exception as e:
+                    logger.warning(f"[AGENT] Error closing session: {e}")
+                    self.active_sessions = max(0, self.active_sessions - 1)  # Гарантируем не отрицательное
         
         return results
 
-    async def reflect_and_respond(self, user_message, plan, execution_results, context=None, user_id=None):
+    async def reflect_and_respond(self, user_message, plan, execution_results, context=None, user_id=None, subscription_tier='LIGHT'):
         """
         ШАГ 3: AI рефлексирует над результатами и формирует естественный ответ
+        С ВОЗМОЖНОСТЬЮ ДОПОЛНИТЕЛЬНОГО ВЫЗОВА ИНСТРУМЕНТОВ
         """
         
         results_summary = []
@@ -896,12 +884,6 @@ class HybridAutonomousAgent:
 ✅ ACTIONABLE: "Создай задачу 'Позвонить партнеру'" вместо "подумай о следующем шаге"
 ✅ ПЕРСОНАЛИЗАЦИЯ: учитывай навыки, интересы, цели из профиля
 ✅ РАЗНООБРАЗИЕ: не повторяй одни и те же предложения
-❌ ЗАПРЕЩЕНО: Использовать форматирование (жирный шрифт ** **, списки с номерами 1. 2., заголовки)
-❌ ЗАПРЕЩЕНО: Структурированные блоки типа "**Что можно сделать прямо сейчас**"
-❌ ЗАПРЕЩЕНО: Формальные заголовки и подзаголовки
-❌ ЗАПРЕЩЕНО: Нумерованные или маркированные списки любого вида
-❌ ЗАПРЕЩЕНО: "1.", "2.", "-", "*" в начале строк
-❌ ЗАПРЕЩЕНО: Названия функций в ответе (list_tasks(), add_task() и т.д.)
 
 СТИЛЬ ОТВЕТА: ТОЛЬКО РАЗГОВОРНЫЙ ТЕКСТ
 - Пиши как в живом разговоре с другом
@@ -915,9 +897,7 @@ class HybridAutonomousAgent:
 
 "Новости: в AI сейчас тренд на автономных агентов. Конкретно: изучи библиотеку LangChain - она идеально подходит для твоих навыков Python. Начни с туториала на их сайте прямо сейчас."
 
-"Учитывая твой профиль разработчика ИИ агентов и вечернее время, вот что можно сделать прямо сейчас: погрузиться в тренды AI - сейчас активно развиваются автономные агенты с расширенным tool calling. Могу быстро найти свежие материалы или кейсы - просто скажи, что именно тебя интересует. Или найти единомышленников: в твоей сфере много интересных людей. Хочешь, я поищу разработчиков или предпринимателей в AI, с которыми можно обсудить идеи или запустить проект?"
-
-Верни ТОЛЬКО текст ответа пользователю (БЕЗ вызовов функций).
+Верни ТОЛЬКО текст ответа пользователю.
 """
 
         messages = [
@@ -925,15 +905,19 @@ class HybridAutonomousAgent:
             {"role": "user", "content": user_message}
         ]
 
-        # Генерируем ответ БЕЗ инструментов (они уже выполнены)
-        response = await self.call_ai(messages, use_tools=False, temperature=0.7)
+        # Генерируем ответ С ВОЗМОЖНОСТЬЮ использования инструментов для получения дополнительной информации
+        response = await self.call_ai(messages, use_tools=True, subscription_tier=subscription_tier, temperature=0.7)
+        
+        if not response or 'choices' not in response or not response['choices']:
+            logger.error(f"[AGENT] Invalid AI response structure: {response}")
+            return "Извините, произошла ошибка при формировании ответа. Попробуйте перефразировать запрос."
         
         message = response['choices'][0]['message']
         tool_calls = message.get('tool_calls', [])
         
-        # Если AI запросил tool calls - выполняем их
+        # Если AI запросил дополнительные tool calls - выполняем их
         if tool_calls:
-            logger.info(f"[HYBRID] AI requested {len(tool_calls)} tool calls")
+            logger.info(f"[REFLECT] AI requested {len(tool_calls)} additional tool calls")
             
             # Извлекаем actions из tool_calls
             new_actions = []
@@ -942,35 +926,66 @@ class HybridAutonomousAgent:
                 new_actions.append({
                     'tool': func['name'],
                     'params': json.loads(func['arguments']),
-                    'reason': f"AI auto-decision: {func['name']}"
+                    'reason': f"AI reflection: {func['name']}"
                 })
             
             # ВЫПОЛНЯЕМ НОВЫЕ ИНСТРУМЕНТЫ
             new_results = await self.execute_actions(new_actions, user_id)
             execution_results.extend(new_results)
             
-            # ПОВТОРНЫЙ ВЫЗОВ AI с результатами tool calls
-            messages.append(message)  # Assistant message с tool_calls
+            # ОБНОВЛЯЕМ ПРОМПТ с результатами новых действий
+            results_summary = []
+            for result in execution_results:
+                if result['success']:
+                    results_summary.append(f"УСПЕХ {result['tool']}: {result['reason']}\nРезультат: {str(result['result'])[:200]}")
+                else:
+                    results_summary.append(f"ОШИБКА {result['tool']}: {result['error']}")
             
-            # Добавляем результаты каждого tool call
+            updated_results_text = "\n\n".join(results_summary)
+            
+            # ПОВТОРНЫЙ ВЫЗОВ AI для финального ответа БЕЗ инструментов
+            messages.append({
+                "role": "assistant", 
+                "content": message.get('content', '') if message.get('content') else "Выполнил дополнительные действия"
+            })
+            
+            # Добавляем результаты tool calls
             for i, tool_call in enumerate(tool_calls):
-                result_content = json.dumps(
-                    new_results[i]['result'] if new_results[i]['success'] 
-                    else {'error': new_results[i]['error']},
-                    ensure_ascii=False
-                )
+                if i < len(new_results):
+                    result_content = json.dumps(
+                        new_results[i]['result'] if new_results[i]['success'] 
+                        else {'error': new_results[i]['error']},
+                        ensure_ascii=False
+                    )
+                else:
+                    result_content = json.dumps({'error': 'No result available'}, ensure_ascii=False)
+                
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call['id'],
                     "content": result_content
                 })
             
-            # Финальный ответ БЕЗ tools
-            logger.info(f"[HYBRID] Getting final response after tool execution")
-            final_response = await self.call_ai(messages, use_tools=False, temperature=0.7)
+            # Финальный промпт с обновленными результатами
+            final_system_prompt = f"{base_prompt}\n\nОБНОВЛЕННЫЕ РЕЗУЛЬТАТЫ ВСЕХ ДЕЙСТВИЙ:\n{updated_results_text}\n\n" + """\n---\n\nФИНАЛЬНЫЙ ОТВЕТ: Теперь у тебя есть ВСЕ результаты. Сформируй естественный разговорный ответ.
+
+ПРОАКТИВНЫЕ ПРЕДЛОЖЕНИЯ (добавь 1-2 умных предложения):
+- Если создана задача: "Напомню тебе за час до выполнения"
+- Если найдены партнеры: "Можешь написать им прямо сейчас"
+- Если обновлен профиль: "Теперь смогу лучше подбирать контакты"
+- Если исследована тема: "Хочешь, найду экспертов по этой теме?"
+
+Верни ТОЛЬКО текст ответа пользователю."""
+            
+            final_messages = [
+                {"role": "system", "content": final_system_prompt},
+                {"role": "user", "content": user_message}
+            ]
+            
+            final_response = await self.call_ai(final_messages, use_tools=False, temperature=0.7)
             content = final_response['choices'][0]['message']['content']
         else:
-            # Просто текстовый ответ без tool calls
+            # Просто текстовый ответ без дополнительных tool calls
             content = message.get('content', '')
         
         # КРИТИЧЕСКИ ВАЖНО: Очищаем от технических деталей и DSML тегов
@@ -981,6 +996,8 @@ class HybridAutonomousAgent:
 
     def _extract_task_title(self, message):
         """Извлекает название задачи из сообщения"""
+        if not message:
+            return None
         # Простая эвристика - берем текст после ключевых слов
         words = message.lower().split()
         keywords = ['задачу', 'задачи', 'task']
@@ -994,6 +1011,8 @@ class HybridAutonomousAgent:
 
     def _extract_time(self, message):
         """Извлекает время из сообщения"""
+        if not message:
+            return None
         import re
         message_lower = message.lower()
         
@@ -1071,7 +1090,7 @@ class HybridAutonomousAgent:
         # Fallback - последнее слово
         return words[-1] if words else "unknown"
 
-    async def process_request(self, user_message, user_id, context=None, session=None):
+    async def process_request(self, user_message, user_id, context=None, session=None, subscription_tier=None):
         """
         Основной процесс обработки запроса:
         1. Планирование стратегии
@@ -1080,6 +1099,24 @@ class HybridAutonomousAgent:
         """
         
         try:
+            # Получаем информацию о пользователе для определения тарифа
+            if subscription_tier is None:
+                if session is None:
+                    session = Session()
+                    close_session = True
+                else:
+                    close_session = False
+                
+                try:
+                    user = session.query(User).filter_by(telegram_id=user_id).first()
+                    subscription_tier = getattr(user, 'subscription_tier', 'LIGHT') if user else 'LIGHT'
+                    logger.info(f"[AGENT] User {user_id} has subscription tier: {subscription_tier}")
+                finally:
+                    if close_session:
+                        session.close()
+            else:
+                logger.info(f"[AGENT] Using provided subscription tier: {subscription_tier}")
+            
             # Сохраняем сообщение пользователя в историю
             logger.info(f"[AGENT] About to save user message to history")
             from .conversation_history import save_message_to_history
@@ -1109,7 +1146,8 @@ class HybridAutonomousAgent:
                     plan, 
                     execution_results, 
                     context,
-                    user_id
+                    user_id,
+                    subscription_tier
                 )
             else:
                 # Общее общение - используем AI
@@ -1119,7 +1157,8 @@ class HybridAutonomousAgent:
                     plan, 
                     execution_results, 
                     context,
-                    user_id
+                    user_id,
+                    subscription_tier
                 )
             
             # Сохраняем в историю и обучаемся
@@ -1154,7 +1193,18 @@ class HybridAutonomousAgent:
             logger.error(f"[AGENT] Error processing request: {e}")
             import traceback
             traceback.print_exc()
-            return "Извините, произошла ошибка при обработке запроса. Попробуйте переформулировать."
+            
+            # Более естественные ответы при ошибках
+            error_responses = [
+                "Что-то пошло не так. Давай попробуем по-другому - перефразируй свой запрос.",
+                "Извини, возникла техническая проблема. Можешь повторить по-другому?",
+                "Упс, ошибка в системе. Попробуй сказать то же самое другими словами.",
+                "Технические неполадки. Давай попробуем еще раз с другим формулировкой.",
+                "Что-то сломалось. Перефразируй запрос, пожалуйста."
+            ]
+            
+            import random
+            return random.choice(error_responses)
 
 
     def _learn_from_success(self, message, plan, user_id):
@@ -1199,10 +1249,10 @@ def get_autonomous_agent():
         _autonomous_agent = HybridAutonomousAgent()
     return _autonomous_agent
 
-async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
+async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None, subscription_tier=None):
     """Функция чата с использованием улучшенного гибридного автономного агента"""
 
-    logger.info(f"[HYBRID_AGENT] START - user_id={user_id}, message='{message[:50]}...'")
+    logger.info(f"[HYBRID_AGENT] START - user_id={user_id}, message='{str(message)[:50]}...'")
 
     if user_id is None:
         logger.error("[HYBRID_AGENT] ERROR: user_id is None!")
@@ -1213,7 +1263,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         agent = get_autonomous_agent()
 
         # Обрабатываем запрос через улучшенного агента
-        response_text = await agent.process_request(message, user_id, context, db_session)
+        response_text = await agent.process_request(message, user_id, context, db_session, subscription_tier)
 
         # Возвращаем в формате, ожидаемом остальным кодом
         # Для тестирования возвращаем tool_calls из execution_results
