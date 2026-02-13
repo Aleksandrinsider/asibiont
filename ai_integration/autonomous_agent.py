@@ -1228,8 +1228,11 @@ class HybridAutonomousAgent:
             
         except Exception as e:
             logger.error(f"[AGENT] Error processing request: {e}")
+            logger.error(f"[AGENT] Error type: {type(e).__name__}")
+            logger.error(f"[AGENT] User message: {user_message}")
+            logger.error(f"[AGENT] User ID: {user_id}")
             import traceback
-            traceback.print_exc()
+            logger.error(f"[AGENT] Full traceback:\n{traceback.format_exc()}")
             
             # Более естественные ответы при ошибках
             error_responses = [

@@ -342,7 +342,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 user_id=user_id,
                 file_content=file_content,
                 db_session=session,
-                message_type=message_type
+                message_type=message_type,
+                subscription_tier=getattr(user, 'subscription_tier', 'LIGHT')
             )
             
             # ПОСТ-ОБРАБОТКА: УСИЛИВАЕМ ПРОАКТИВНЫЙ ЯЗЫК
