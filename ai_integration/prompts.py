@@ -130,7 +130,7 @@ def get_premium_alerts_context(user_id, session):
     
     return hints
 
-def generate_proactive_context(user_id, session):
+def generate_proactive_context(user_id, session, profile_complete=True):
     """УМНЫЙ ПРОАКТИВНЫЙ КОНТЕКСТ: время, задачи, интересы, погода, паттерны поведения"""
     from models import User, UserProfile, Task
 
@@ -209,8 +209,8 @@ def generate_proactive_context(user_id, session):
             elif total_tasks == 0:
                 hints.append("✅ Нет активных задач - время для новых инициатив")
 
-        # ПРОФИЛЬ И ИНТЕРЕСЫ С КОНТЕКСТОМ
-        if profile:
+        # ПРОФИЛЬ И ИНТЕРЕСЫ С КОНТЕКСТОМ (только при полном профиле)
+        if profile and profile_complete:
             if profile.interests:
                 interests = [i.strip() for i in profile.interests.split(',')[:3]]
                 hints.append(f"💡 ИНТЕРЕСЫ: {', '.join(interests)}")
@@ -229,8 +229,8 @@ def generate_proactive_context(user_id, session):
             if profile.position:
                 hints.append(f"👔 ДОЛЖНОСТЬ: {profile.position}")
 
-        # ПАРТНЕРЫ ПО ИНТЕРЕСАМ
-        if profile and profile.interests:
+        # ПАРТНЕРЫ ПО ИНТЕРЕСАМ (только при полном профиле)
+        if profile and profile.interests and profile_complete:
             try:
                 from .handlers import get_partners_list
                 partners = get_partners_list(user.id, session)

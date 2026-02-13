@@ -187,6 +187,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Получаем профиль пользователя
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
+            # Вычисляем полноту профиля
+            profile_complete = False
+            if profile:
+                profile_missing = []
+                if not profile.goals or not profile.goals.strip():
+                    profile_missing.append('цели')
+                if not profile.skills or not profile.skills.strip():
+                    profile_missing.append('навыки')
+                if not profile.interests or not profile.interests.strip():
+                    profile_missing.append('интересы')
+                if len(profile_missing) <= 1:  # Если отсутствует не более одного поля
+                    profile_complete = True
+            logger.info(f"[PROFILE] Profile complete: {profile_complete}, missing: {profile_missing if 'profile_missing' in locals() else []}")
+
             # Определяем текущее время пользователя
             base_now = datetime.now(pytz.UTC)
             user_now = base_now
@@ -220,7 +234,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # Генерируем проактивный контекст
             from .prompts import generate_proactive_context
-            proactive_context = generate_proactive_context(user_id, session)
+            proactive_context = generate_proactive_context(user_id, session, profile_complete=profile_complete)
             logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
 
             # 🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызываем инструменты при приветствии
