@@ -237,8 +237,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     preexec_context += "🤝 FIND_PARTNERS - уже выполнен:\n"
                     preexec_context += str(preexec_results['contacts']) + "\n\n"
                 
-                preexec_context += "❗ НЕ ВЫЗЫВАЙ эти инструменты снова - просто используй готовые результаты выше!\n"
-                preexec_context += "Формат ответа: Приветствие → Покажи конкретные ссылки/материалы → Покажи контакты → Предложи задачу → Спроси когда удобно\n"
+                preexec_context += "❗ НЕ ВЫЗЫВАЙ эти инструменты снова - просто используй готовые результаты!\n\n"
+                preexec_context += "ФОРМАТ: Короткое приветствие + ОДНА конкретная мысль (не больше 2-3 предложений). Говори естественно, как друг, без списков и форматирования.\n"
                 
                 # Добавляем к проактивному контексту
                 proactive_context = proactive_context + preexec_context
