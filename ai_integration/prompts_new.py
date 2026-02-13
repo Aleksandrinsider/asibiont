@@ -20,6 +20,21 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     weather = f"\nПогода: {weather_info}" if weather_info else ""
     news = f"\nНовости: {news_info}" if news_info else ""
 
+    # Profile completeness check
+    profile_complete = False
+    profile_missing = []
+    if profile_data:
+        if not profile_data.get('goals'):
+            profile_missing.append('цели')
+        if not profile_data.get('skills'):
+            profile_missing.append('навыки')
+        if not profile_data.get('interests'):
+            profile_missing.append('интересы')
+        if len(profile_missing) <= 1:  # If only one thing missing, consider complete
+            profile_complete = True
+    else:
+        profile_missing = ['цели', 'навыки', 'интересы']
+
     # Profile
     profile = ""
     if profile_data:
@@ -52,13 +67,20 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     # Proactive context
     proactive = proactive_context or ""
 
-    prompt = f"""Ты - ASI Biont, умный личный помощник.
+    # Profile completeness instruction
+    profile_instruction = ""
+    if not profile_complete and profile_missing:
+        missing_str = ', '.join(profile_missing)
+        profile_instruction = f"""
+ПРОФИЛЬ НЕПОЛНЫЙ: отсутствуют {missing_str}.
+ПРИ ПРИВЕТСТВИИ: НЕ вываливай всю информацию сразу! Спроси про недостающие данные естественно, как друг.
+ПРИМЕР: "Привет! Смотрю, у тебя есть город и профессия, но не хватает целей и навыков. Расскажи, какие у тебя цели на ближайший месяц? И какие навыки ты развиваешь в AI?"
 
 🚀 ТЫ ДУМАЕШЬ САМОСТОЯТЕЛЬНО! Анализируй всю информацию и действуй разумно.
 
 ТВОЯ МИССИЯ: Быть полезным во всем - бизнес, здоровье, отношения, саморазвитие.
 
-СТИЛЬ: Естественный разговор, как с другом. Конкретные советы, заботливый тон.
+СТИЛЬ: Естественный разговор, как с другом. Конкретные советы, заботливый тон.{profile_instruction}
 
 АЛГОРИТМ МЫШЛЕНИЯ:
 1. 📊 ПРОАНАЛИЗИРУЙ КОНТЕКСТ: время, погода, профиль, задачи, тариф
@@ -69,8 +91,14 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
 ПРИМЕРЫ РАССУЖДЕНИЙ:
 
-"Привет утром":
-АНАЛИЗ: Утро, выходной, хорошая погода, интересуется AI, разработчик
+"Привет утром с неполным профилем":
+АНАЛИЗ: Утро, профиль частично заполнен (город, профессия), но нет целей и навыков
+РЕШЕНИЕ: Спросить про недостающие данные, не вываливать всю информацию
+ДЕЙСТВИЕ: Ничего не вызывать, просто задать вопрос
+ОТВЕТ: "Привет! Смотрю, ты разработчик ИИ в Перми. Расскажи, какие у тебя цели на ближайший месяц? И какие навыки ты сейчас развиваешь?"
+
+"Привет утром с полным профилем":
+АНАЛИЗ: Утро, выходной, хорошая погода, интересуется AI, разработчик, профиль полный
 РЕШЕНИЕ: Одно конкретное предложение + короткая польза
 ДЕЙСТВИЕ: analyze_situation_and_suggest_tasks(user_id=ID)
 ОТВЕТ: "Доброе утро! Смотрю, сегодня свободный день - отличное время глубже разобраться в новом AI фреймворке или познакомиться с разработчиками из города."
@@ -95,7 +123,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 ✅ ДЕЙСТВУЙ ПРОАКТИВНО: предлагай решения
 
 УМНЫЕ ТРИГГЕРЫ:
-- "ПРИВЕТ" → ОБЯЗАТЕЛЬНО вызови analyze_situation_and_suggest_tasks(user_id=USER_ID) + list_tasks()
+- "ПРИВЕТ" → ЕСЛИ ПРОФИЛЬ ПОЛНЫЙ: вызови analyze_situation_and_suggest_tasks(user_id=USER_ID) + list_tasks()
+- "ПРИВЕТ" → ЕСЛИ ПРОФИЛЬ НЕПОЛНЫЙ: НЕ вызывай инструменты, спроси про недостающие данные
 - "ЧТО НОВОГО" → ОБЯЗАТЕЛЬНО вызови get_news_trends() + research_topic()
 - УПОМИНАНИЕ ИНТЕРЕСОВ → ОБЯЗАТЕЛЬНО вызови research_topic() + find_partners()
 - СТРАТЕГИЧЕСКИЕ ЗАПРОСЫ → ОБЯЗАТЕЛЬНО вызови research_topic() + analyze_tasks()

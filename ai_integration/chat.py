@@ -89,11 +89,15 @@ async def _execute_proactive_tools(message, user_id, session):
         # Проверяем, есть ли в профиле данные для поиска
         has_interests = profile and profile.interests and len(profile.interests.strip()) > 0
         has_skills = profile and profile.skills and len(profile.skills.strip()) > 0
+        has_goals = profile and profile.goals and len(profile.goals.strip()) > 0
         
-        # Для приветствий всегда выполняем базовые действия, даже если профиль пустой
-        if not (has_interests or has_skills):
-            logger.info(f"[PROACTIVE_HOOK] Empty profile, but greeting detected - executing basic tools")
-            # Для пустого профиля выполняем только list_tasks
+        # Для приветствий выполняем инструменты только если профиль достаточно полный
+        # Нужно хотя бы интересы И (навыки ИЛИ цели)
+        profile_sufficient = has_interests and (has_skills or has_goals)
+        
+        if not profile_sufficient:
+            logger.info(f"[PROACTIVE_HOOK] Profile not sufficient (interests: {has_interests}, skills: {has_skills}, goals: {has_goals}) - executing only basic tools")
+            # Для неполного профиля выполняем только list_tasks
             results = {'research': None, 'contacts': None}
             
             try:
@@ -106,7 +110,7 @@ async def _execute_proactive_tools(message, user_id, session):
             
             return results
             
-        logger.info(f"[PROACTIVE_HOOK] ✅ All conditions met - executing research + find_partners")
+        logger.info(f"[PROACTIVE_HOOK] ✅ Profile sufficient - executing research + find_partners")
         
         results = {
             'research': None,
