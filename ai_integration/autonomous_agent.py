@@ -702,6 +702,16 @@ class HybridAutonomousAgent:
         
         results_text = "\n\n".join(results_summary)
         
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА: если задача не создана из-за отсутствия времени
+        for result in execution_results:
+            if result['success'] and result['tool'] == 'add_task':
+                result_str = str(result['result'])
+                if 'NEED_TIME_FOR_TASK:' in result_str:
+                    # Извлекаем сообщение о необходимости времени
+                    time_message = result_str.split('NEED_TIME_FOR_TASK:', 1)[1].strip()
+                    logger.info(f"[AGENT] Task creation failed due to missing time, returning clarification request")
+                    return f"Чтобы создать задачу, нужно указать время. {time_message}"
+        
         # Получаем информацию о пользователе для базового промпта
         session = Session()
         try:
