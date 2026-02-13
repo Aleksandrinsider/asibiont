@@ -22,7 +22,7 @@ from .utils import (
     get_news_info,
     get_weather_info
 )
-from .prompts import get_extended_system_prompt
+from .prompts_new import get_extended_system_prompt
 from .tools import TOOLS
 from .handlers import (  # noqa: F401
     add_task, list_tasks, complete_task, reschedule_task,
@@ -90,9 +90,21 @@ async def _execute_proactive_tools(message, user_id, session):
         has_interests = profile and profile.interests and len(profile.interests.strip()) > 0
         has_skills = profile and profile.skills and len(profile.skills.strip()) > 0
         
+        # Для приветствий всегда выполняем базовые действия, даже если профиль пустой
         if not (has_interests or has_skills):
-            logger.info(f"[PROACTIVE_HOOK] Empty profile, skipping auto-tools")
-            return None
+            logger.info(f"[PROACTIVE_HOOK] Empty profile, but greeting detected - executing basic tools")
+            # Для пустого профиля выполняем только list_tasks
+            results = {'research': None, 'contacts': None}
+            
+            try:
+                from . import handlers
+                list_result = handlers.list_tasks(user_id=user_id, session=session)
+                results['tasks'] = list_result
+                logger.info(f"[PROACTIVE_HOOK] Executed list_tasks successfully")
+            except Exception as e:
+                logger.error(f"[PROACTIVE_HOOK] Failed to execute list_tasks: {e}")
+            
+            return results
             
         logger.info(f"[PROACTIVE_HOOK] ✅ All conditions met - executing research + find_partners")
         

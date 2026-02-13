@@ -10,7 +10,7 @@ import pytz
 from datetime import datetime, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
-from .prompts import get_extended_system_prompt
+from .prompts_new import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
 from .tools import get_available_tools
 
@@ -267,6 +267,43 @@ class HybridAutonomousAgent:
                     "params": {"content": user_message},
                     "reason": "Обновление памяти"
                 }],
+                "response_strategy": "execute_action"
+            }
+
+        # ФИКСИРОВАННЫЕ ДЕЙСТВИЯ ДЛЯ ОБЩИХ ЗАПРОСОВ
+        if any(phrase in message_lower for phrase in ['привет', 'здравствуй', 'hi', 'hello', 'добрый день', 'добрый вечер', 'доброе утро']):
+            return {
+                "intent": "greeting",
+                "actions": [
+                    {
+                        "tool": "list_tasks",
+                        "params": {},
+                        "reason": "Проверка текущих задач при приветствии"
+                    },
+                    {
+                        "tool": "find_partners",
+                        "params": {},
+                        "reason": "Поиск потенциальных партнеров для нетворкинга"
+                    }
+                ],
+                "response_strategy": "execute_action"
+            }
+
+        if any(phrase in message_lower for phrase in ['что нового', 'что посоветуешь', 'расскажи новости', 'новости']):
+            return {
+                "intent": "news_request",
+                "actions": [
+                    {
+                        "tool": "get_news_trends",
+                        "params": {"topic": "технологии", "period": "week"},
+                        "reason": "Получение свежих новостей и трендов"
+                    },
+                    {
+                        "tool": "research_topic",
+                        "params": {"query": "тренды 2024", "depth": "medium"},
+                        "reason": "Исследование актуальных трендов"
+                    }
+                ],
                 "response_strategy": "execute_action"
             }
 
