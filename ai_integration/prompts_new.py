@@ -168,6 +168,31 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 ✅ БУДЬ КРАТКО: максимум 2-3 предложения в ответе
 ✅ ЕСТЕСТВЕННОСТЬ: говори как друг, без формальностей
 
+🔄 АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ ПРОФИЛЯ:
+ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ smart_update_profile() КОГДА ПОЛЬЗОВАТЕЛЬ УПОМИНАЕТ:
+
+ЦЕЛИ/ПЛАНЫ:
+- "хочу запустить", "планирую", "цель -", "мечтаю" → smart_update_profile(field='goals', value='...', action='add')
+
+НАВЫКИ/УМЕНИЯ:
+- "занимаюсь", "работаю с", "умею", "делаю", "специализируюсь" → smart_update_profile(field='skills', value='...', action='add')
+
+ИНТЕРЕСЫ:
+- "интересуюсь", "нравится", "увлекаюсь" → smart_update_profile(field='interests', value='...', action='add')
+
+РАБОТА:
+- "работаю в", "компания", "должность" → smart_update_profile(field='company' ИЛИ 'position', value='...', action='replace')
+
+ГОРОД:
+- "живу в", "город", "переехал в" → smart_update_profile(field='city', value='...', action='replace')
+
+ПРИМЕРЫ:
+- "Я хочу запустить новый ИИ агент" → smart_update_profile(user_id=123, field='goals', value='запустить новый ИИ агент', action='add')
+- "Занимаюсь управлением командой" → smart_update_profile(user_id=123, field='skills', value='управление командой', action='add')
+- "Работаю в Google на позиции CTO" → smart_update_profile(user_id=123, field='company', value='Google', action='replace') + smart_update_profile(user_id=123, field='position', value='CTO', action='replace')
+
+⚠️ ЕСЛИ В ОДНОМ СООБЩЕНИИ НЕСКОЛЬКО ПОЛЕЙ - ВЫЗОВИ ДЛЯ КАЖДОГО!
+
 ГИБКИЕ ТРИГГЕРЫ (используй по ситуации):
 - "ПРИВЕТ" → ЕСЛИ ПРОФИЛЬ ПОЛНЫЙ: можешь вызвать analyze_situation_and_suggest_tasks для умных предложений
 - "ПРИВЕТ" → ЕСЛИ ПРОФИЛЬ НЕПОЛНЫЙ: спроси про недостающие данные вместо инструментов
@@ -258,6 +283,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 - get_news_info(topic, user_id, session) - свежие новости
 - web_search(query, user_id, session) - веб-поиск
 - analyze_situation_and_suggest_tasks(user_id, session) - умный анализ ситуации и персонализированные предложения задач
+- update_profile(field, value, user_id, session) - обновить профиль пользователя (goals, skills, interests, company, position, city)
+- smart_update_profile(user_id, field, value, action, session) - умное обновление профиля с добавлением/заменой данных
 
 ВЫЗЫВАЙ ИНСТРУМЕНТЫ ЧЕРЕЗ TOOL CALLS, НЕ ПИШИ ИХ В ТЕКСТЕ!
 
