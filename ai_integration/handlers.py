@@ -140,7 +140,6 @@ CITY_TIMEZONE_MAP = {
     'сидней': 'Australia/Sydney',
 }
 
-
 def check_time_conflicts_sync(user_db_id, parsed_time, session):
     """
     Проверяет конфликты по времени для новой задачи
@@ -197,7 +196,6 @@ def check_time_conflicts_sync(user_db_id, parsed_time, session):
         return None
     
     return None
-
 
 def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=4):
     """
@@ -273,7 +271,6 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
     
     return None
 
-
 async def check_time_conflicts(reminder_time, user_id=None, session=None):
     """
     Асинхронная функция для проверки конфликтов времени (для tool calling)
@@ -333,7 +330,6 @@ async def check_time_conflicts(reminder_time, user_id=None, session=None):
         if session and 'close_session' in locals() and close_session:
             session.close()
         return f"Ошибка при проверке времени: {str(e)}"
-
 
 async def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1):
     """Add a new task"""
@@ -630,52 +626,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         logger.info(f"[ADD_TASK] Session not closed, returning: {result_msg}")
     return result_msg
 
-
 # set_recurring_task removed - feature not critical, required subscription
-
-
-def delete_all_tasks(user_id=None, session=None):
-    """Delete all tasks for a user"""
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if close_session:
-                session.close()
-            return "❌ Пользователь не найден"
-
-        # Count tasks before deletion
-        task_count = session.query(Task).filter_by(user_id=user.id).count()
-
-        # Delete all tasks
-        session.query(Task).filter_by(user_id=user.id).delete()
-        session.commit()
-
-        # Reset profile analytics
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if profile:
-            profile.total_tasks_created = 0
-            profile.completed_tasks = 0
-            profile.skipped_tasks = 0
-            session.commit()
-
-        if close_session:
-            session.close()
-        return f"🗑️ Удалено {task_count} задач"
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        session.rollback()
-        if close_session:
-            session.close()
-        return f"❌ Ошибка удаления задач: {str(e)}"
-
 
 async def complete_task(task_id=None, task_title=None, completion_note=None, user_id=None, session=None):
     """Mark task as completed
@@ -977,7 +928,6 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         session.close()
     return result
 
-
 async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
     if session is None:
         session = Session()
@@ -1085,7 +1035,6 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
         session.close()
     return result
 
-
 async def restore_task(task_id=None, task_title=None, user_id=None, session=None):
     logger.info(f"[RESTORE_TASK] Called with task_id={task_id}, task_title={task_title}, user_id={user_id}")
     if session is None:
@@ -1155,7 +1104,6 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
     if close_session:
         session.close()
     return result
-
 
 async def reschedule_task(task_title=None, new_time=None, user_id=None, session=None):
     from models import User  # Явный импорт для избежания конфликтов области видимости
@@ -1324,7 +1272,6 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
     if close_session:
         session.close()
     return result
-
 
 def delegate_task(
     title, reminder_time=None, delegated_to_username=None, user_id=None, description="", delegation_details=""
@@ -1500,10 +1447,6 @@ def check_subscription_status(user_id=None):
     except Exception as e:
         return f"Ошибка проверки подписки: {str(e)}"
 
-
-
-
-
 def accept_delegated_task(task_id=None, task_title=None, user_id=None):
     """Accept a delegated task - supports both task_id and task_title"""
     session = Session()
@@ -1589,7 +1532,6 @@ def accept_delegated_task(task_id=None, task_title=None, user_id=None):
         session.rollback()
         session.close()
         return f"Ошибка: {str(e)}"
-
 
 def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=None):
     """Reject a delegated task"""
@@ -1693,8 +1635,6 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
         session.rollback()
         session.close()
         return f"Ошибка: {str(e)}"
-
-
 
 def get_delegation_progress(user_id, session=None):
     """Получить отчет о статусе делегированных задач"""
@@ -1801,7 +1741,6 @@ def get_delegation_progress(user_id, session=None):
             session.close()
         return f"Ошибка при получении отчета о делегировании: {str(e)}"
 
-
 def cancel_delegation(task_id, user_id=None):
     """Cancel delegation of a task, returning it to the initiator"""
     session = Session()
@@ -1846,7 +1785,6 @@ def cancel_delegation(task_id, user_id=None):
         session.rollback()
         session.close()
         return f"Ошибка при отмене делегирования: {str(e)}"
-
 
 async def edit_task(
         task_id=None,
@@ -1970,7 +1908,6 @@ async def edit_task(
     if close_session:
         session.close()
     return result
-
 
 def list_tasks(user_id=None, session=None, include_completed=False, filter_type=None):
     """Return list of user's tasks in plain text format
@@ -2282,9 +2219,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         if close_session:
             session.close()
 
-
 # Function removed
-
 
 def get_partners_list(user_id=None, session=None):
     """Return list of all users with profiles (except self and those with existing delegation)"""
@@ -2807,7 +2742,6 @@ def get_partners_list(user_id=None, session=None):
 
     return partners[:50]  # Увеличено с 20 до 50
 
-
 def analyze_group_opportunities(user_id, session):
     """
     Анализирует задачи ВСЕХ пользователей и находит возможности для объединения:
@@ -3003,7 +2937,6 @@ def analyze_group_opportunities(user_id, session):
     
     return None
 
-
 def find_partners(user_id=None, session=None):
     """Find potential partners based on user profile - FULL implementation here"""
     # Due to size limit, implementing key part only
@@ -3094,7 +3027,6 @@ def find_partners(user_id=None, session=None):
         session.close()
 
     return response
-
 
 def find_relevant_contacts_for_task(task_description: str, user_id: int = None, limit: int = 5, session=None) -> str:
     """
@@ -3441,7 +3373,6 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     else:
         return "Не нашел подходящих контактов для этой задачи. Попробуй заполнить больше информации в профиле."
 
-
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
     try:
         from main import bot
@@ -3477,7 +3408,6 @@ async def generate_delegation_notification_async(delegator_username, recipient_u
 
     except Exception as e:
         logging.error(f"Failed to send delegation notification: {e}")
-
 
 async def generate_delegation_notification(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, user_id):
     import aiohttp
@@ -3536,7 +3466,6 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
         logger.error(f"Error generating delegation notification: {e}")
         return None
 
-
 async def generate_progress_request(task_title, delegator_username, time_remaining, user_id):
     import aiohttp
     from config import DEEPSEEK_API_KEY
@@ -3590,7 +3519,6 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
         logger.error(f"Error generating progress request: {e}")
         return None
 
-
 async def generate_delegation_response_notification_async(task_title, response, delegator_telegram_id, delegatee_username):
     try:
         from main import bot
@@ -3612,7 +3540,6 @@ async def generate_delegation_response_notification_async(task_title, response, 
 
     except Exception as e:
         logging.error(f"Failed to send delegation response notification: {e}")
-
 
 def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline):
     """Schedule delegation monitoring with three progress checkpoints for all tasks"""
@@ -3679,7 +3606,6 @@ def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline
     except Exception as e:
         logger.error(f"Failed to schedule delegation monitoring for task {task_id}: {e}")
 
-
 def check_delegation_deadlines():
     """Check for overdue delegated tasks and send reminders"""
     session = Session()
@@ -3713,171 +3639,6 @@ def check_delegation_deadlines():
         session.rollback()
         session.close()
 
-
-async def update_user_memory(memory_type='general', content=None, info=None, user_id=None, session=None):
-    """Async обертка для update_user_memory_async"""
-    # Прямой вызов async версии
-    return await update_user_memory_async(
-        memory_type=memory_type,
-        content=content,
-        info=info,
-        user_id=user_id,
-        session=session,
-        close_session=(session is None)
-    )
-def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
-    """Delete a task by ID or title"""
-    from models import User  # Явный импорт для избежания конфликтов области видимости
-    logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', reason='{reason}', user_id={user_id}, confirmed={confirmed}")
-    
-    if user_id is None:
-        logger.error("[DELETE_TASK] user_id is None")
-        return "ERROR: user_id не может быть None"
-    
-    if task_id is None and (task_title is None or task_title.strip() == ""):
-        logger.error("[DELETE_TASK] Both task_id and task_title are None/empty") 
-        return "ERROR: Не указан идентификатор или название задачи"
-    
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        if close_session:
-            session.close()
-        return "Пользователь не найден."
-
-    # СПЕЦИАЛЬНАЯ ОБРАБОТКА МЕСТОИМЕНИЙ - используем текущую задачу
-    if task_title:
-        from .task_context import extract_task_reference_from_message, get_user_current_task
-        task_reference = extract_task_reference_from_message(task_title)
-        if task_reference == "__CURRENT_TASK__":
-            current_task = get_user_current_task(user)
-            if current_task:
-                logger.info(f"[DELETE_TASK] Using current task: '{current_task.title}' for pronoun '{task_title}'")
-                task = current_task
-                # Пропускаем обычный поиск
-            else:
-                logger.warning(f"[DELETE_TASK] No current task set for pronoun '{task_title}'")
-                task = None
-        else:
-            task = None  # Будет найден через find_task_flexible
-    else:
-        task = None
-
-    # Если задача не найдена через контекст, используем обычный поиск
-    if task is None:
-        # Find task using flexible search with stemming
-        from ai_integration.task_search import find_task_flexible
-        
-        task_id_int = None
-        if task_id:
-            try:
-                task_id_int = int(task_id)
-            except (ValueError, TypeError):
-                if close_session:
-                    session.close()
-                return f"Некорректный ID задачи: {task_id}"
-
-        task = find_task_flexible(
-            session=session,
-            user=user,
-            task_id=task_id_int,
-            task_title=task_title,
-            include_completed=True,
-            include_delegated=True
-        )
-    if task:
-        # Check if task is already completed - allow deletion but with different message
-        was_completed = task.status == "completed"
-        
-        # If not confirmed and task is active, ask for confirmation
-        if not confirmed and task.status in ["pending", "active", "in_progress"]:
-            if close_session:
-                session.close()
-            return f"CONFIRM_DELETE: Вы уверены, что хотите удалить задачу '{task.title}'? Это действие нельзя отменить."
-        
-        # Save deletion reason for analytics
-        deletion_reason = reason or "Пользователь удалил задачу"
-        
-        # Cancel all scheduled jobs for this task
-        try:
-            from reminder_service import REMINDER_SERVICE
-            if REMINDER_SERVICE and REMINDER_SERVICE.scheduler:
-                # Cancel reminder
-                reminder_job_id = f"reminder_{task.id}"
-                if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
-                    REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
-                    logger.info(f"[DELETE_TASK] Cancelled reminder job for task {task.id}")
-                
-                # Cancel result check
-                result_check_job_id = f"result_check_{task.id}"
-                if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
-                    REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
-                    logger.info(f"[DELETE_TASK] Cancelled result check job for task {task.id}")
-                
-                # Cancel task checkpoints
-                for checkpoint_type in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
-                    checkpoint_job_id = f"task_overdue_{task.id}_{checkpoint_type}_{user.telegram_id}"
-                    if REMINDER_SERVICE.scheduler.get_job(checkpoint_job_id):
-                        REMINDER_SERVICE.scheduler.remove_job(checkpoint_job_id)
-                        logger.info(f"[DELETE_TASK] Cancelled checkpoint job {checkpoint_type} for task {task.id}")
-                
-                # Cancel 1/3 checkpoint
-                checkpoint_1_3_job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
-                if REMINDER_SERVICE.scheduler.get_job(checkpoint_1_3_job_id):
-                    REMINDER_SERVICE.scheduler.remove_job(checkpoint_1_3_job_id)
-                    logger.info(f"[DELETE_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
-        except Exception as e:
-            logger.warning(f"[DELETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
-            import traceback
-            traceback.print_exc()
-            session.rollback()
-
-        # ВАЖНО: Обнулить current_task_id если удаляемая задача является текущей
-        if user.current_task_id == task.id:
-            user.current_task_id = None
-            session.commit()
-            logger.info(f"[DELETE_TASK] Cleared current_task_id for user {user.id}")
-
-        # Delete the task from database
-        task_title = task.title
-        # Deleting task
-        session.delete(task)
-        session.commit()
-        # Task deleted successfully
-
-        # Update profile analytics
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if profile:
-            if was_completed:
-                # If task was completed, decrement completed count
-                if profile.completed_tasks and profile.completed_tasks > 0:
-                    profile.completed_tasks -= 1
-            else:
-                # If task was not completed, decrement created count
-                if profile.total_tasks_created and profile.total_tasks_created > 0:
-                    profile.total_tasks_created -= 1
-            session.commit()
-
-        # Return appropriate message
-        if was_completed:
-            result = f"Задача '{task_title}' удалена из истории выполненных задач."
-        else:
-            result = f"Задача '{task_title}' удалена."
-
-        if close_session:
-            session.close()
-        return result
-    else:
-        if close_session:
-            session.close()
-        return "Задача не найдена."
-
-
 def create_subscription_payment(tier=None, user_id=None, session=None):
     """Create subscription payment"""
     from subscription_service import create_subscription_payment as create_sub_payment
@@ -3888,7 +3649,6 @@ def create_subscription_payment(tier=None, user_id=None, session=None):
         return f"Ссылка на оплату месячной подписки создана: {payment_url}"
     except Exception as e:
         return f"Ошибка создания платежа: {str(e)}"
-
 
 def cancel_subscription(user_id=None):
     """Cancel subscription"""
@@ -3903,7 +3663,6 @@ def cancel_subscription(user_id=None):
     except Exception as e:
         return f"Ошибка отмены подписки: {str(e)}"
 
-
 async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, close_session=True) -> str:
     """Async wrapper for delete_task_sync"""
     return delete_task_sync(
@@ -3914,7 +3673,6 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         session=session,
         confirmed=True  # Auto-confirm for AI agent
     )
-
 
 def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
     """Get detailed information about a task"""
@@ -4031,10 +3789,7 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
             session.close()
         return f"Ошибка при получении деталей задачи: {str(e)}"
 
-
-
 # Function removed
-
 
 def delegate_task_with_session(title, description, reminder_time, delegated_to_username, delegation_details="", user_id=None, session=None):
     """Delegate a task to another user"""
@@ -4144,9 +3899,6 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
         session.close()
     
     return f"Задача '{title}' делегирована пользователю @{delegated_username}"
-
-
-
 
 def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggestions=3, session=None):
     """Предложить новые тренды и возможности развития на основе профиля пользователя"""
@@ -4326,7 +4078,6 @@ def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggesti
         if close_session:
             session.close()
 
-
 def _merge_similar_goals(current_goals: str, new_goals: str) -> tuple[str, bool, str]:
     """
     Умно объединяет похожие цели, избегая дубликатов.
@@ -4376,7 +4127,6 @@ def _merge_similar_goals(current_goals: str, new_goals: str) -> tuple[str, bool,
     
     return result, True, f"Добавлены новые цели: {', '.join(added_goals)}"
 
-
 def _add_to_list_field(current_value: str, new_value: str) -> tuple[str, bool]:
     """
     Добавляет новое значение в поле-список (через запятую).
@@ -4415,7 +4165,6 @@ def _add_to_list_field(current_value: str, new_value: str) -> tuple[str, bool]:
         result = ', '.join(added_items)
     
     return result, True
-
 
 def update_profile(user_id: int, city: str = None, birth_date: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, replace_mode: bool = False, session=None, close_session: bool = True) -> str:
     """
@@ -4568,7 +4317,6 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         if close_session:
             session.close()
 
-
 def smart_update_profile(user_id: int, field: str, value: str, action: str = 'add', session=None, close_session: bool = True) -> str:
     """
     Умное обновление профиля с выбором действия.
@@ -4662,255 +4410,6 @@ def smart_update_profile(user_id: int, field: str, value: str, action: str = 'ad
         if close_session:
             session.close()
 
-
-async def update_user_memory_async(memory_type: str = 'general', content: str = None, info: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
-    """
-    Сохранить информацию в память пользователя.
-
-    Args:
-        memory_type: Тип информации (preference, project, contact, interest, etc.)
-        content: Что запомнить
-        user_id: ID пользователя (опционально)
-        session: Сессия базы данных (опционально)
-        close_session: Закрывать ли сессию после выполнения
-
-    Returns:
-        Сообщение об успешном сохранении
-    """
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        if not user_id:
-            return "Необходимо указать ID пользователя"
-        
-        # Поддерживаем оба формата: info (старый) и content (новый)
-        actual_content = content if content else info
-        
-        if not actual_content:
-            return "❌ Требуется указать содержимое для сохранения"
-
-        # Получить пользователя
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-
-        # Получить или создать профиль
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if not profile:
-            profile = UserProfile(user_id=user.id)
-            session.add(profile)
-
-        # Нормализуем content - убираем лишние слова
-        content_clean = actual_content.lower()
-        for phrase in ['хочу заняться', 'хочу научиться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь', 'умею', 'владею', 'моя цель', 'хочу достичь']:
-            content_clean = content_clean.replace(phrase, '').strip()
-        
-        # СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ ИНТЕРЕСОВ
-        if memory_type.lower() in ['interest', 'interests', 'интерес', 'интересы', 'хобби', 'увлечение']:
-            new_value, was_added = _add_to_list_field(profile.interests, content_clean)
-            if was_added:
-                profile.interests = new_value
-                session.commit()
-                return f"✅ Добавил в интересы: {content_clean}"
-            else:
-                return f"Интерес '{content_clean}' уже есть в профиле"
-        
-        # ОБРАБОТКА ДЛЯ НАВЫКОВ
-        elif memory_type.lower() in ['skill', 'skills', 'навык', 'навыки']:
-            new_value, was_added = _add_to_list_field(profile.skills, content_clean)
-            if was_added:
-                profile.skills = new_value
-                session.commit()
-                return f"✅ Добавил в навыки: {content_clean}"
-            else:
-                return f"Навык '{content_clean}' уже есть в профиле"
-        
-        # ОБРАБОТКА ДЛЯ ЦЕЛЕЙ
-        elif memory_type.lower() in ['goal', 'goals', 'цель', 'цели']:
-            new_value, was_added = _add_to_list_field(profile.goals, content_clean)
-            if was_added:
-                profile.goals = new_value
-                session.commit()
-                return f"✅ Добавил в цели: {content_clean}"
-            else:
-                return f"Цель '{content_clean}' уже есть в профиле"
-
-        # Обычное сохранение в память
-        current_memory = user.memory or ""
-
-        # Добавить новую информацию с типом
-        timestamp = datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M")
-        new_memory_entry = f"[{timestamp}] {memory_type.upper()}: {content}"
-
-        if current_memory:
-            user.memory = current_memory + "\n" + new_memory_entry
-        else:
-            user.memory = new_memory_entry
-
-        session.commit()
-
-        return f"✅ Запомнил: {memory_type} - {content}"
-
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Ошибка при сохранении памяти пользователя {user_id}: {e}")
-        return f"❌ Ошибка при сохранении: {e}"
-
-    finally:
-        if close_session:
-            session.close()
-
-
-# analyze_tasks функция удалена - используется async версия ниже (строка 4861)
-
-
-def show_profile(user_id: int, session=None, close_session: bool = True) -> str:
-    """Показать информацию о профиле пользователя"""
-    try:
-        if session is None:
-            from models import Session as SessionLocal
-            session = SessionLocal()
-            should_close = True
-        else:
-            should_close = close_session
-
-        try:
-            # Получаем пользователя по telegram_id
-            from models import User
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-
-            if not user:
-                return "❌ Пользователь не найден"
-            
-            # Получаем профиль пользователя
-            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-
-            profile_info = []
-
-            # Основная информация
-            username = f"@{user.username}" if user.username else "без имени"
-            profile_info.append(f"👤 **Профиль пользователя {username}**")
-
-            if not profile:
-                profile_info.append("📝 Профиль еще не заполнен")
-                profile_info.append("")
-                profile_info.append("💡 *Заполните профиль, чтобы получить персонализированные рекомендации и найти подходящих партнеров*")
-                return "\n".join(profile_info)
-
-            # Город
-            if profile.city:
-                profile_info.append(f"🏙️ **Город:** {profile.city}")
-
-            # Дата рождения и знак зодиака
-            if profile.birthdate:
-                profile_info.append(f"🎂 **Дата рождения:** {profile.birthdate}")
-                if profile.zodiac_sign:
-                    profile_info.append(f"♈ **Знак зодиака:** {profile.zodiac_sign}")
-
-            # Работа
-            work_info = []
-            if profile.company:
-                work_info.append(f"компания «{profile.company}»")
-            if profile.position:
-                work_info.append(f"должность «{profile.position}»")
-            if work_info:
-                profile_info.append(f"💼 **Работа:** {', '.join(work_info)}")
-
-            # Навыки
-            if profile.skills:
-                try:
-                    skills_list = json.loads(profile.skills) if profile.skills.startswith('[') else [s.strip() for s in profile.skills.split(',')]
-                    if skills_list:
-                        profile_info.append(f"🛠️ **Навыки:** {', '.join(skills_list[:10])}" + ("..." if len(skills_list) > 10 else ""))
-                except Exception as e:
-                    logger.warning(f"[PROFILE] Error parsing skills: {e}")
-                    profile_info.append(f"🛠️ **Навыки:** {profile.skills[:200]}" + ("..." if len(profile.skills) > 200 else ""))
-
-            # Интересы
-            if profile.interests:
-                try:
-                    interests_list = json.loads(profile.interests) if profile.interests.startswith('[') else [i.strip() for i in profile.interests.split(',')]
-                    if interests_list:
-                        profile_info.append(f"🎯 **Интересы:** {', '.join(interests_list[:10])}" + ("..." if len(interests_list) > 10 else ""))
-                except Exception as e:
-                    logger.warning(f"[PROFILE] Error parsing interests: {e}")
-                    profile_info.append(f"🎯 **Интересы:** {profile.interests[:200]}" + ("..." if len(profile.interests) > 200 else ""))
-
-            # Цели
-            if profile.goals:
-                profile_info.append(f"🎯 **Цели:** {profile.goals[:300]}" + ("..." if len(profile.goals) > 300 else ""))
-
-            # Био
-            if profile.bio:
-                profile_info.append(f"📖 **О себе:** {profile.bio[:300]}" + ("..." if len(profile.bio) > 300 else ""))
-
-            # Языки
-            if profile.languages:
-                profile_info.append(f"🌍 **Языки:** {profile.languages}")
-
-            # Текущие планы
-            if profile.current_plans:
-                profile_info.append(f"📅 **Текущие планы:** {profile.current_plans[:200]}" + ("..." if len(profile.current_plans) > 200 else ""))
-
-            # Статистика задач
-            stats = []
-            if profile.total_tasks_created > 0:
-                stats.append(f"создано задач: {profile.total_tasks_created}")
-            if profile.completed_tasks > 0:
-                stats.append(f"выполнено: {profile.completed_tasks}")
-            if profile.average_completion_time > 0:
-                hours = profile.average_completion_time // 60
-                minutes = profile.average_completion_time % 60
-                time_str = f"{hours}ч {minutes}м" if hours > 0 else f"{minutes}м"
-                stats.append(f"среднее время выполнения: {time_str}")
-            if stats:
-                profile_info.append(f"📊 **Статистика:** {', '.join(stats)}")
-
-            # Рейтинг
-            if profile.rating_count > 0:
-                profile_info.append(f"⭐ **Рейтинг:** {profile.average_rating}/10 (на основе {profile.rating_count} оценок)")
-
-            # Последняя активность
-            if profile.last_activity:
-                # Убедимся, что оба datetime имеют одинаковый timezone
-                now = datetime.now(pytz.UTC)
-                if profile.last_activity.tzinfo is None:
-                    # Если last_activity naive, добавим UTC timezone
-                    last_activity_aware = profile.last_activity.replace(tzinfo=pytz.UTC)
-                else:
-                    last_activity_aware = profile.last_activity
-                
-                delta = now - last_activity_aware
-                if delta.days > 0:
-                    activity_str = f"{delta.days} дней назад"
-                elif delta.seconds // 3600 > 0:
-                    activity_str = f"{delta.seconds // 3600} часов назад"
-                else:
-                    activity_str = f"{delta.seconds // 60} минут назад"
-                profile_info.append(f"🕒 **Последняя активность:** {activity_str}")
-
-            return "\n".join(profile_info)
-
-        finally:
-            if should_close and session:
-                session.close()
-
-    except Exception as e:
-        logger.error(f"Ошибка при получении профиля пользователя {user_id}: {e}")
-        return "❌ Не удалось получить информацию о профиле"
-
-
-async def analyze_tasks(user_id, session=None):
-    """Анализирует ближайшие задачи и предлагает немедленные действия"""
-    should_close = False
-    if session is None:
-        session = Session()
-        should_close = True
-
     try:
         # Получаем пользователя для timezone
         user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -5001,7 +4500,6 @@ async def analyze_tasks(user_id, session=None):
         if should_close and session:
             session.close()
 
-
 def set_activity_alert(activity_type=None, keywords=None, location=None, frequency='any', enabled=True, user_id=None, session=None):
     """🌟 PREMIUM: Set up automatic activity alerts from other users
     
@@ -5091,7 +4589,6 @@ def set_activity_alert(activity_type=None, keywords=None, location=None, frequen
     finally:
         if close_session:
             session.close()
-
 
 def set_contact_alert(skill=None, interest=None, city=None, position=None, enabled=True, user_id=None, session=None):
     """🌟 PREMIUM: Set up automatic alerts for new users with specific skills/interests
@@ -5186,7 +4683,6 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
         if close_session:
             session.close()
 
-
 def set_auto_post_time(post_time, user_id=None, session=None):
     """🌟 PREMIUM: Set preferred time for automatic posting
     
@@ -5241,7 +4737,6 @@ def set_auto_post_time(post_time, user_id=None, session=None):
         if close_session:
             session.close()
 
-
 # ============================================================================
 # MARKETING & GROWTH AUTOMATION
 # ============================================================================
@@ -5281,7 +4776,6 @@ async def generate_marketing_content(product_name, target_audience, platform, go
     finally:
         if close_session:
             session.close()
-
 
 async def research_topic(query: str, depth: str, user_id: int, session):
     """
@@ -5343,7 +4837,6 @@ async def research_topic(query: str, depth: str, user_id: int, session):
         if close_session:
             session.close()
 
-
 async def set_content_strategy(strategy: str, user_id: int, session):
     """
     🎯 СОХРАНИТЬ СТРАТЕГИЮ КОНТЕНТА для автоматического маркетинга
@@ -5388,7 +4881,6 @@ async def set_content_strategy(strategy: str, user_id: int, session):
     finally:
         if close_session:
             session.close()
-
 
 async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, session):
     """
@@ -5454,7 +4946,6 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
         if close_session:
             session.close()
 
-
 async def publish_to_telegram(content: str, user_id: int, session):
     """
     📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
@@ -5511,7 +5002,6 @@ async def publish_to_telegram(content: str, user_id: int, session):
     finally:
         if close_session:
             session.close()
-
 
 async def quick_topic_search(topic: str, user_id: int = None, session=None):
     """
@@ -6201,7 +5691,6 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
         if close_session:
             session.close()
 
-
 # ===== EXTERNAL API FUNCTIONS =====
 
 async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
@@ -6247,7 +5736,6 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
     except Exception as e:
         logger.error(f"[WEATHER] Error: {e}")
         return f"❌ Ошибка получения погоды: {str(e)}"
-
 
 async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
     """
@@ -6296,7 +5784,6 @@ async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
     except Exception as e:
         logger.error(f"[STOCK] Error: {e}")
         return f"❌ Ошибка получения котировок: {str(e)}"
-
 
 async def get_news_info(topic: str = None, user_id: int = None, session=None) -> str:
     """
@@ -6361,7 +5848,6 @@ async def get_news_info(topic: str = None, user_id: int = None, session=None) ->
         logger.error(f"[NEWS] Error: {e}")
         return f"❌ Ошибка получения новостей: {str(e)}"
 
-
 async def web_search(query: str, user_id: int = None, session=None) -> str:
     """
     Выполнить веб-поиск с помощью Serper API
@@ -6416,7 +5902,6 @@ async def web_search(query: str, user_id: int = None, session=None) -> str:
     except Exception as e:
         logger.error(f"[SEARCH] Error: {e}")
         return f"❌ Ошибка поиска: {str(e)}"
-
 
 async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None) -> str:
     """
@@ -6788,7 +6273,6 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
         if close_session:
             session.close()
 
-
 # ===== EXTERNAL API FUNCTIONS =====
 
 async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
@@ -6834,7 +6318,6 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
     except Exception as e:
         logger.error(f"[WEATHER] Error: {e}")
         return f"❌ Ошибка получения погоды: {str(e)}"
-
 
 async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
     """
@@ -6883,7 +6366,6 @@ async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
     except Exception as e:
         logger.error(f"[STOCK] Error: {e}")
         return f"❌ Ошибка получения котировок: {str(e)}"
-
 
 async def get_news_info(topic: str = None, user_id: int = None, session=None) -> str:
     """
@@ -6947,7 +6429,6 @@ async def get_news_info(topic: str = None, user_id: int = None, session=None) ->
     except Exception as e:
         logger.error(f"[NEWS] Error: {e}")
         return f"❌ Ошибка получения новостей: {str(e)}"
-
 
 async def web_search(query: str, user_id: int = None, session=None) -> str:
     """

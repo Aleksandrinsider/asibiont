@@ -26,14 +26,14 @@ from .prompts_new import get_extended_system_prompt
 from .tools import TOOLS
 from .handlers import (  # noqa: F401
     add_task, list_tasks, complete_task, reschedule_task,
-    delegate_task_with_session, delegate_task, check_subscription_status, accept_delegated_task,
+    delegate_task, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
     list_tasks, get_partners_list, find_partners, research_topic,
     check_time_conflicts,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
-    check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
+    check_delegation_deadlines, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, smart_update_profile, show_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks, get_news_trends,
+    update_profile, smart_update_profile, delete_task, find_relevant_contacts_for_task, get_news_trends,
     check_topic_relevance, analyze_situation_and_suggest_tasks
 )
 from .autonomous_agent import chat_with_ai as autonomous_chat_with_ai
