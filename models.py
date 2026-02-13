@@ -3,7 +3,7 @@ import logging
 import enum
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, text
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship, scoped_session
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
 logger = logging.getLogger(__name__)
@@ -382,6 +382,6 @@ def init_db():
         logger.error(f"Failed to create database tables: {e}")
         raise
 
-# Thread-safe scoped session
+# Create sessionmaker with proper autocommit/autoflush settings
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Session = scoped_session(SessionLocal)
+Session = sessionmaker(bind=engine)
