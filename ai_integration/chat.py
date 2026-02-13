@@ -157,18 +157,36 @@ async def _execute_proactive_tools(message, user_id, session, profile_complete=F
             logger.error(f"[PROACTIVE_HOOK] Error in find_partners: {e}")
             results['contacts'] = f"Не удалось найти контакты: {str(e)}"
         
-        # 3. ANALYZE_SITUATION - только при полном профиле для умных предложений
-        # TODO: Реализовать функцию analyze_situation_and_suggest_tasks
-        # if profile_complete:
-        #     try:
-        #         logger.info(f"[PROACTIVE_HOOK] Calling analyze_situation_and_suggest_tasks")
-        #         from .handlers import analyze_situation_and_suggest_tasks
-        #         situation_result = await analyze_situation_and_suggest_tasks(user_id=user_id, session=session)
-        #         results['situation'] = situation_result
-        #         logger.info(f"[PROACTIVE_HOOK] ✅ analyze_situation_and_suggest_tasks completed")
-        #     except Exception as e:
-        #         logger.error(f"[PROACTIVE_HOOK] Error in analyze_situation_and_suggest_tasks: {e}")
-        #         results['situation'] = f"Не удалось проанализировать ситуацию: {str(e)}"
+        # 3. ANALYZE_SITUATION - умный анализ и предложения задач
+        try:
+            logger.info(f"[PROACTIVE_HOOK] Calling analyze_situation_and_suggest_tasks")
+            situation_result = await analyze_situation_and_suggest_tasks(user_id=user_id, session=session)
+            results['situation'] = situation_result
+            logger.info(f"[PROACTIVE_HOOK] ✅ analyze_situation_and_suggest_tasks completed")
+        except Exception as e:
+            logger.error(f"[PROACTIVE_HOOK] Error in analyze_situation_and_suggest_tasks: {e}")
+            results['situation'] = f"Не удалось проанализировать ситуацию: {str(e)}"
+        
+        # 4. SMART_UPDATE_PROFILE - автоматически обновляем профиль при упоминании целей/планов
+        profile_updates = _extract_profile_updates(message, profile)
+        if profile_updates:
+            results['profile_updates'] = []
+            for update in profile_updates:
+                try:
+                    logger.info(f"[PROACTIVE_HOOK] Calling smart_update_profile: {update}")
+                    update_result = smart_update_profile(
+                        user_id=user_id,
+                        field=update['field'],
+                        value=update['value'],
+                        action=update['action'],
+                        session=session,
+                        close_session=False
+                    )
+                    results['profile_updates'].append(update_result)
+                    logger.info(f"[PROACTIVE_HOOK] ✅ smart_update_profile completed: {update}")
+                except Exception as e:
+                    logger.error(f"[PROACTIVE_HOOK] Error in smart_update_profile: {e}")
+                    results['profile_updates'].append(f"Не удалось обновить профиль: {str(e)}")
         
         return results
         
@@ -177,6 +195,85 @@ async def _execute_proactive_tools(message, user_id, session, profile_complete=F
         import traceback
         traceback.print_exc()
         return None
+
+
+def _extract_profile_updates(message, profile=None):
+    """
+    Автоматически извлекает обновления профиля из сообщения пользователя.
+    
+    Анализирует сообщение на предмет упоминания целей, планов, навыков и т.д.
+    Возвращает список обновлений для smart_update_profile.
+    """
+    msg_lower = message.lower().strip()
+    updates = []
+    
+    # Паттерны для распознавания обновлений профиля
+    patterns = {
+        'goals': {
+            'keywords': ['планирую', 'хочу', 'цель', 'задача', 'проект', 'разработать', 'создать', 'запустить'],
+            'action': 'add'
+        },
+        'skills': {
+            'keywords': ['умею', 'знаю', 'специализируюсь', 'работаю с', 'занимаюсь'],
+            'action': 'add'
+        },
+        'interests': {
+            'keywords': ['интересуюсь', 'нравится', 'увлекаюсь', 'люблю'],
+            'action': 'add'
+        },
+        'company': {
+            'keywords': ['работаю в', 'компания'],
+            'action': 'replace'
+        },
+        'position': {
+            'keywords': ['позиция', 'должность', 'работаю как'],
+            'action': 'replace'
+        },
+        'city': {
+            'keywords': ['живу в', 'город'],
+            'action': 'replace'
+        }
+    }
+    
+    # Анализируем сообщение на каждый тип поля
+    for field, config in patterns.items():
+        for keyword in config['keywords']:
+            if keyword in msg_lower:
+                # Извлекаем значение после ключевого слова
+                keyword_pos = msg_lower.find(keyword)
+                if keyword_pos != -1:
+                    # Берем текст после ключевого слова, но не более 100 символов
+                    value_start = keyword_pos + len(keyword)
+                    value_text = message[value_start:].strip()[:100]
+                    
+                    # Очищаем от лишних символов
+                    value_text = value_text.split('.')[0].split(',')[0].split('!')[0].strip()
+                    
+                    if value_text and len(value_text) > 2:  # Минимум 3 символа
+                        updates.append({
+                            'field': field,
+                            'value': value_text,
+                            'action': config['action']
+                        })
+                        break  # Только одно обновление на поле
+    
+    # Специальная обработка для целей - если пользователь говорит о планах
+    if 'планирую' in msg_lower or 'хочу' in msg_lower:
+        # Ищем фразы типа "планирую сделать X" или "хочу Y"
+        sentences = message.split('.')
+        for sentence in sentences:
+            sentence_lower = sentence.lower().strip()
+            if ('планирую' in sentence_lower or 'хочу' in sentence_lower) and len(sentence.strip()) > 10:
+                # Добавляем как цель
+                goal_text = sentence.strip()
+                if goal_text and not any(u['value'] == goal_text for u in updates):
+                    updates.append({
+                        'field': 'goals',
+                        'value': goal_text,
+                        'action': 'add'
+                    })
+    
+    return updates if updates else None
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
@@ -272,6 +369,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 if preexec_results.get('situation'):
                     preexec_context += "🧠 ANALYZE_SITUATION - уже выполнен:\n"
                     preexec_context += str(preexec_results['situation']) + "\n\n"
+                
+                if preexec_results.get('profile_updates'):
+                    preexec_context += "👤 ПРОФИЛЬ ОБНОВЛЕН - автоматически:\n"
+                    for update in preexec_results['profile_updates']:
+                        preexec_context += f"• {update}\n"
+                    preexec_context += "\n"
                 
                 preexec_context += "❗ НЕ ВЫЗЫВАЙ эти инструменты снова - просто используй готовые результаты!\n\n"
                 preexec_context += "ФОРМАТ: Короткое приветствие + ОДНА конкретная мысль (не больше 2-3 предложений). Говори естественно, как друг, без списков и форматирования.\n"
