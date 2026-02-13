@@ -207,12 +207,12 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        Планирование стратегии - сначала простые правила, потом AI
+        Планирование стратегии - минимальные жесткие правила, остальное через AI (гибрид)
         """
         message_lower = user_message.lower()
 
-        # ПРЯМЫЕ КОМАНДЫ - без AI, сразу выполняем
-        if any(phrase in message_lower for phrase in ['создай задачу', 'создать задачу', 'добавь задачу', 'add task']):
+        # ТОЛЬКО САМЫЕ ОЧЕВИДНЫЕ КОМАНДЫ - остальное решает AI
+        if 'создай задачу' in message_lower or 'добавь задачу' in message_lower:
             return {
                 "intent": "add_task",
                 "actions": [{
@@ -226,7 +226,7 @@ class HybridAutonomousAgent:
                 "response_strategy": "execute_action"
             }
 
-        if any(phrase in message_lower for phrase in ['покажи задачи', 'мои задачи', 'список задач', 'list tasks']):
+        if 'покажи задачи' in message_lower or 'мои задачи' in message_lower or 'список задач' in message_lower:
             return {
                 "intent": "list_tasks",
                 "actions": [{
@@ -237,77 +237,7 @@ class HybridAutonomousAgent:
                 "response_strategy": "execute_action"
             }
 
-        if any(phrase in message_lower for phrase in ['найди партнеров', 'поищи партнеров', 'find partners']):
-            return {
-                "intent": "find_partners",
-                "actions": [{
-                    "tool": "find_partners",
-                    "params": {},
-                    "reason": "Поиск партнеров"
-                }],
-                "response_strategy": "execute_action"
-            }
-
-        if any(phrase in message_lower for phrase in ['что в профиле', 'мой профиль', 'show profile']):
-            return {
-                "intent": "show_profile",
-                "actions": [{
-                    "tool": "show_profile",
-                    "params": {},
-                    "reason": "Показ профиля"
-                }],
-                "response_strategy": "execute_action"
-            }
-
-        if any(phrase in message_lower for phrase in ['запомни', 'remember']):
-            return {
-                "intent": "update_memory",
-                "actions": [{
-                    "tool": "update_user_memory_async",
-                    "params": {"content": user_message},
-                    "reason": "Обновление памяти"
-                }],
-                "response_strategy": "execute_action"
-            }
-
-        # ФИКСИРОВАННЫЕ ДЕЙСТВИЯ ДЛЯ ОБЩИХ ЗАПРОСОВ
-        if any(phrase in message_lower for phrase in ['привет', 'здравствуй', 'hi', 'hello', 'добрый день', 'добрый вечер', 'доброе утро']):
-            return {
-                "intent": "greeting",
-                "actions": [
-                    {
-                        "tool": "list_tasks",
-                        "params": {},
-                        "reason": "Проверка текущих задач при приветствии"
-                    },
-                    {
-                        "tool": "find_partners",
-                        "params": {},
-                        "reason": "Поиск потенциальных партнеров для нетворкинга"
-                    }
-                ],
-                "response_strategy": "execute_action"
-            }
-
-        if any(phrase in message_lower for phrase in ['что нового', 'что посоветуешь', 'расскажи новости', 'новости']):
-            return {
-                "intent": "news_request",
-                "actions": [
-                    {
-                        "tool": "get_news_trends",
-                        "params": {"topic": "технологии", "period": "week"},
-                        "reason": "Получение свежих новостей и трендов"
-                    },
-                    {
-                        "tool": "research_topic",
-                        "params": {"query": "тренды 2024", "depth": "medium"},
-                        "reason": "Исследование актуальных трендов"
-                    }
-                ],
-                "response_strategy": "execute_action"
-            }
-
-        # Для сложных запросов - используем AI планирование
+        # ВСЕ ОСТАЛЬНОЕ - через AI гибридный подход
         return await self._plan_general_chat(user_message, user_id)
 
     def _create_command_plan(self, intent, user_message):
@@ -453,35 +383,35 @@ class HybridAutonomousAgent:
         finally:
             session.close()
 
-        system_prompt = f"{base_prompt}\n\n" + """Ты - умный AI-ассистент для управления задачами. Твоя задача - ПРАВИЛЬНО определить действия для выполнения запроса пользователя.
+        system_prompt = f"{base_prompt}\n\n" + """Ты - умный AI-ассистент. ГИБРИДНЫЙ ПОДХОД - ты САМ решаешь когда нужны инструменты.
 
-ПРАВИЛА ВЫБОРА ИНСТРУМЕНТОВ:
+ПРАВИЛА РАЗЛИЧЕНИЯ ВОПРОСОВ И КОМАНД:
 
-1. ЗАДАЧИ:
-   - "создай задачу" → add_task
-   - "покажи задачи" → list_tasks  
-   - "отметь выполненной" → complete_task
-   - "перенеси задачу" → reschedule_task
-   - "измени задачу" → edit_task
+❓ ВОПРОСЫ (НЕ вызывай инструменты, просто отвечай):
+- "Как создать задачу?" - объясни
+- "Можешь помочь с задачей?" - спроси детали
+- "Что умеет бот?" - расскажи о функциях
+- "А если я хочу...?" - посоветуй подход
+- Длинное сообщение с несколькими вопросами - НЕ парси как команду!
 
-2. ПАРТНЕРЫ:
-   - "найди партнеров" → find_partners
-   - "покажи контакты" → get_partners_list
+✅ КОМАНДЫ (вызывай соответствующие инструменты):
+- "Создай задачу 'Купить молоко' на завтра" → add_task
+- "Покажи мои задачи" → list_tasks
+- "Найди партнеров" → find_partners
+- "Обнови профиль" → smart_update_profile
+- "Я работаю в Google" → smart_update_profile (упоминание о себе)
+- "Моя цель - выучить Python" → smart_update_profile
 
-3. ПРОФИЛЬ:
-   - "что в профиле" → show_profile
-   - "обнови профиль" → update_profile
+🔍 НЕЯВНЫЕ КОМАНДЫ (упоминания о себе - обновляй профиль автоматически):
+- Упоминает навыки, интересы, цели, работу, город → smart_update_profile
+- НО: если это вопрос "Какие мои навыки?" - НЕ обновляй, просто покажи show_profile
 
-4. ПАМЯТЬ:
-   - "запомни" → update_user_memory_async
+⚠️ ВАЖНО:
+- Если сообщение > 100 символов И содержит вопросы - это скорее всего НЕ команда!
+- Не извлекай весь текст как title задачи - только СУТЬ
+- При сомнении - спроси уточняющий вопрос
 
-5. ДЕЛЕГИРОВАНИЕ (только PREMIUM):
-   - "делегируй" → delegate_task
-
-6. ИССЛЕДОВАНИЕ:
-   - "расскажи о" → research_topic или quick_topic_search
-
-ВЕРНИ ТОЛЬКО JSON с действиями, без объяснений."""
+Выбирай инструменты мудро!"""
 
         # Загружаем историю диалога
         from .conversation_history import get_conversation_history
@@ -1277,6 +1207,64 @@ class HybridAutonomousAgent:
         if user_id not in self.user_preferences:
             self.user_preferences[user_id] = {}
         self.user_preferences[user_id][preference_key] = value
+
+    def _extract_profile_updates(self, message):
+        """Извлекает обновления профиля из сообщения"""
+        updates = {}
+        message_lower = message.lower()
+        
+        # Извлечение навыков
+        if 'навыки' in message_lower or 'умею' in message_lower or 'занимаюсь' in message_lower:
+            # Ищем слова после ключевых слов
+            import re
+            skills_match = re.search(r'(?:навыки|умею|занимаюсь)[:\s]+(.+?)(?:\s+(?:интересы|работаю|живу|$))', message, re.IGNORECASE)
+            if skills_match:
+                skills = skills_match.group(1).strip()
+                updates['field'] = 'skills'
+                updates['value'] = skills
+                updates['action'] = 'add'
+        
+        # Извлечение интересов
+        if 'интересы' in message_lower or 'интересуюсь' in message_lower or 'нравится' in message_lower:
+            interests_match = re.search(r'(?:интересы|интересуюсь|нравится)[:\s]+(.+?)(?:\s+(?:навыки|работаю|живу|$))', message, re.IGNORECASE)
+            if interests_match:
+                interests = interests_match.group(1).strip()
+                updates['field'] = 'interests'
+                updates['value'] = interests
+                updates['action'] = 'add'
+        
+        # Извлечение города
+        if 'живу' in message_lower or 'город' in message_lower:
+            city_match = re.search(r'(?:живу|город)[:\s]+(.+?)(?:\s+(?:работаю|навыки|интересы|$))', message, re.IGNORECASE)
+            if city_match:
+                city = city_match.group(1).strip()
+                updates['field'] = 'city'
+                updates['value'] = city
+                updates['action'] = 'replace'
+        
+        # Извлечение работы
+        if 'работаю' in message_lower or 'компания' in message_lower or 'должность' in message_lower:
+            company_match = re.search(r'(?:работаю|компания)[:\s]+(.+?)(?:\s+(?:должность|навыки|интересы|$))', message, re.IGNORECASE)
+            position_match = re.search(r'(?:должность|позиция)[:\s]+(.+?)(?:\s+(?:компания|навыки|интересы|$))', message, re.IGNORECASE)
+            
+            if company_match:
+                updates['field'] = 'company'
+                updates['value'] = company_match.group(1).strip()
+                updates['action'] = 'replace'
+            elif position_match:
+                updates['field'] = 'position'
+                updates['value'] = position_match.group(1).strip()
+                updates['action'] = 'replace'
+        
+        # Если ничего не найдено, возвращаем базовые параметры
+        if not updates:
+            updates = {
+                'field': 'goals',
+                'value': message.strip(),
+                'action': 'add'
+            }
+        
+        return updates
 
 
 # Глобальный экземпляр агента

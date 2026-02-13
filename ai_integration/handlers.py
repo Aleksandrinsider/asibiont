@@ -6594,9 +6594,16 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
                 logger.warning(f"[SITUATION_ANALYSIS] Failed to get trends: {e}")
                 analysis_data['trends_info'] = None
 
-        # 5. ФОРМИРУЕМ УНИВЕРСАЛЬНЫЕ ПЕРСОНАЛИЗИРОВАННЫЕ ПРЕДЛОЖЕНИЯ
+        # 5. ФОРМИРУЕМ ПРЕДЛОЖЕНИЯ - ПРИОРИТЕТ НА ПОМОЩЬ С АКТИВНЫМИ ЗАДАЧАМИ
 
-        # АНАЛИЗ НАВЫКОВ - для каждого навыка предлагаем релевантные действия
+        # А. ПОМОЩЬ С АКТИВНЫМИ ЗАДАЧАМИ - ПРИОРИТЕТ #1
+        if analysis_data['active_tasks']:
+            for task in analysis_data['active_tasks'][:2]:  # Топ-2 активные задачи
+                task_title = task.title[:50]
+                # Предлагаем КОНКРЕТНУЮ помощь с этой задачей
+                suggestions.append(f"🎯 Нужна помощь с '{task_title}'? Расскажи, что мешает")
+        
+        # Б. АНАЛИЗ НАВЫКОВ - ПРАКТИЧНЫЕ СОВЕТЫ
         if analysis_data['profile_skills']:
             for skill in analysis_data['profile_skills'][:3]:  # Берем топ-3 навыка
                 skill_lower = skill.lower().strip()
@@ -6608,7 +6615,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
                     elif analysis_data['time_context'] == 'день':
                         suggestions.append("Рефакторить код или улучшить производительность ⚡")
                     elif analysis_data['time_context'] == 'вечер':
-                        suggestions.append("Разбить крупную задачу на мелкие подзадачи 📝")
+                        suggestions.append("Подготовить план на завтра: на чём сосредоточиться? 📝")
 
                 # Дизайн и творчество
                 elif any(word in skill_lower for word in ['дизайн', 'дизайнер', 'креатив', 'творчество', 'графика']):
@@ -6725,11 +6732,11 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
 
                 suggestions.append(contact_suggestion)
 
-        # ЦЕЛИ - маленькие шаги к большим целям
+        # ЦЕЛИ - КОНКРЕТНЫЕ ВОПРОСЫ ДЛЯ ПОМОЩИ
         if analysis_data['profile_goals']:
-            for goal in analysis_data['profile_goals'][:2]:  # Первые две цели
+            for goal in analysis_data['profile_goals'][:1]:  # Первая цель
                 if len(goal) > 10:  # Значимая цель
-                    suggestions.append(f"Сделать маленький шаг к цели '{goal}' 🎯")
+                    suggestions.append(f"🎯 Что мешает цели '{goal[:40]}'? Могу помочь с решением")
 
         # УНИВЕРСАЛЬНЫЕ ПРЕДЛОЖЕНИЯ ПО ВРЕМЕНИ СУТОК (если мало персонализированных)
         if len(suggestions) < 4:
@@ -6749,23 +6756,26 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
         # Ограничиваем до 5 предложений
         suggestions = suggestions[:5]
 
-        # Формируем результат
+        # Формируем результат - ФОКУС НА ПОМОЩИ
         if not suggestions:
-            result = "Сейчас у тебя нет активных задач, но я вижу что ты занимаешься интересными вещами. Может расскажешь что планируешь? 🤔"
+            result = "Если есть какие-то задачи или цели - расскажи, помогу разобраться 🤝"
         else:
-            result = "Смотрю по твоему профилю и времени... Вот что может быть полезно прямо сейчас:\n\n"
+            # Если есть активные задачи - акцент на помощь с ними
+            has_active_tasks = len(analysis_data['active_tasks']) > 0
+            
+            if has_active_tasks:
+                result = "Вижу у тебя есть активные задачи. Чем могу помочь? 💪\n\n"
+            else:
+                result = "Смотрю по твоему профилю... Вот несколько идей:\n\n"
+            
             for suggestion in suggestions:
                 result += f"• {suggestion}\n"
 
-            # Добавляем дополнительную информацию о трендах если есть что-то интересное
-            if analysis_data.get('trends_info') and len(analysis_data['trends_info'].strip()) > 50:
-                # Показываем краткую сводку трендов
-                trends_preview = analysis_data['trends_info'].split('\n')[0][:150]
-                if len(analysis_data['trends_info'].split('\n')[0]) > 150:
-                    trends_preview += "..."
-                result += f"\n📈 По теме '{analysis_data['trends_topic']}' сейчас популярно: {trends_preview}"
-
-        return result
+            # Добавляем призыв к диалогу для уточнения
+            if has_active_tasks:
+                result += "\nВыбери задачу, с которой нужна помощь, или расскажи что застопорилось"
+            else:
+                result += "\nЕсли что-то интересно - пиши, обсудим!"
 
         return result
 
