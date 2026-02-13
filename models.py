@@ -3,7 +3,7 @@ import logging
 import enum
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, text
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship, scoped_session
 from config import DATABASE_URL
 
 logger = logging.getLogger(__name__)
@@ -364,10 +364,10 @@ if db_url and db_url.startswith('postgresql'):
 
 engine = create_engine(
     db_url,
-    pool_size=2,  # Further reduced for Railway limits
-    max_overflow=1,  # Minimal overflow
-    pool_timeout=15,  # Reduced timeout
-    pool_recycle=900,  # More frequent recycling (15 min)
+    pool_size=1,  # Minimal pool size for Railway
+    max_overflow=2,  # Allow some overflow
+    pool_timeout=10,  # Shorter timeout
+    pool_recycle=600,  # Recycle every 10 minutes
     pool_pre_ping=True,
     connect_args=connect_args,
     echo=False  # Disable SQL logging in production
@@ -382,5 +382,6 @@ def init_db():
         logger.error(f"Failed to create database tables: {e}")
         raise
 
-Session = sessionmaker(bind=engine)
+# Thread-safe scoped session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Session = scoped_session(SessionLocal)

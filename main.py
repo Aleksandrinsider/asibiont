@@ -33,6 +33,21 @@ def get_db_session():
     """Get a new database session"""
     return Session()
 
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_session_context():
+    """Context manager for database sessions - ensures proper cleanup"""
+    session = Session()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
 # Aiogram imports
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiogram import Bot, Dispatcher
