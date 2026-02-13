@@ -1,20 +1,39 @@
 # Enhanced TOOLS with clear, specific descriptions to prevent AI hallucinations
 
-# Premium functions available only on higher tiers
-PREMIUM_FUNCTIONS = {
+# Функции для ПОЛУЧЕНИЯ делегированных задач - доступны ВСЕМ (включая LIGHT)
+DELEGATION_RECEIVE_FUNCTIONS = {
+    'accept_delegated_task',
+    'reject_delegated_task'
+}
+
+# Функции для ОТПРАВКИ делегирования - доступны только STANDARD и PREMIUM
+DELEGATION_SEND_FUNCTIONS = {
+    'delegate_task',
+    'get_delegation_progress',
+    'research_and_plan'  # расширенное исследование с планированием
+}
+
+# Все функции делегирования
+DELEGATION_FUNCTIONS = DELEGATION_RECEIVE_FUNCTIONS | DELEGATION_SEND_FUNCTIONS
+
+# Функции доступные только на PREMIUM (не на LIGHT и STANDARD)
+PREMIUM_ONLY_FUNCTIONS = {
     'set_contact_alert',
     'set_activity_alert',
-    'research_and_plan',
+    'set_auto_post_time',
     'set_content_strategy',
     'toggle_autonomous_feature'
 }
 
-STANDARD_FUNCTIONS = PREMIUM_FUNCTIONS - {
-    'set_contact_alert',
-    'set_activity_alert',
-    'set_content_strategy',
-    'toggle_autonomous_feature'
-}
+# Ограниченные функции для каждого тарифа (что БЛОКИРУЕТСЯ на том тарифе)
+# LIGHT: не может делегировать другим (но может получать)
+LIGHT_RESTRICTED = DELEGATION_SEND_FUNCTIONS | PREMIUM_ONLY_FUNCTIONS
+
+# STANDARD: может делегировать, но нет Premium функций
+STANDARD_RESTRICTED = PREMIUM_ONLY_FUNCTIONS
+
+# PREMIUM: нет ограничений
+PREMIUM_RESTRICTED = set()
 
 def get_available_tools(subscription_tier):
     """
@@ -40,8 +59,25 @@ def get_available_tools(subscription_tier):
     else:
         tier_value = str(subscription_tier).upper()
     
-    # Use dynamic tool filtering
-    return tool_discovery.get_available_tools_for_tier(tier_value)
+    # Check if dynamic tools are discovered
+    if tool_discovery.discovered_tools:
+        # Use dynamic tool filtering
+        return tool_discovery.get_available_tools_for_tier(tier_value)
+    else:
+        # Fallback to static TOOLS filtering
+        tier_value = tier_value.upper()
+        
+        # Determine restricted functions based on tier
+        if tier_value == 'PREMIUM':
+            restricted = PREMIUM_RESTRICTED
+        elif tier_value == 'STANDARD':
+            restricted = STANDARD_RESTRICTED
+        else:  # LIGHT
+            restricted = LIGHT_RESTRICTED
+        
+        # Filter out restricted functions
+        return [tool for tool in TOOLS 
+               if tool['function']['name'] not in restricted]
 
 TOOLS = [
     {
@@ -513,6 +549,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "set_auto_post_time",
+            "description": "⏰ НАСТРОЙКА ВРЕМЕНИ АВТОПОСТИНГА (PREMIUM): Установить предпочтительное время для автоматической публикации контента. AI будет постить каждый день ровно в указанное время в вашем часовом поясе. Ключевые слова: 'постить в 14:00', 'автопостинг в 9 утра', 'каждый день в 18:30'. ЕСЛИ пользователь говорит о времени постинга - ОБЯЗАТЕЛЬНО ВЫЗОВИ set_auto_post_time()! Примеры: 'хочу постить каждый день в 14:00' → set_auto_post_time(post_time='14:00'), 'автопостинг в 9:15' → set_auto_post_time(post_time='09:15'). [ТОЛЬКО PREMIUM]",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "post_time": {
+                        "type": "string",
+                        "description": "Время постинга в формате HH:MM (24-часовой формат). Примеры: '14:30', '09:15', '18:00'"
+                    }
+                },
+                "required": ["post_time"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "generate_marketing_content",
             "description": "🚀 AI МАРКЕТИНГ (STANDARD+): Автоматическая генерация профессионального маркетингового контента для привлечения клиентов. AI создаст цепляющий заголовок, текст поста, хэштеги и призыв к действию. ⚠️ НЕ СПРАШИВАЙ ДЕТАЛИ - ГЕНЕРИРУЙ СРАЗУ с тем что есть! Используй разумные defaults: если аудитория не указана → 'предприниматели 25-40', если платформа не указана → 'telegram'. Используй когда пользователь хочет: написать пост для соцсетей, создать рекламу, привлечь клиентов, продвинуть продукт. Примеры: 'напиши пост про AI' → generate_marketing_content(product_name='AI инструменты', target_audience='предприниматели 25-40', platform='telegram'), 'создай рекламу для Instagram' → generate_marketing_content(..., platform='instagram'). Доступно с STANDARD или PREMIUM.",
             "parameters": {
@@ -546,7 +599,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "research_topic",
-            "description": "🔍 УНИВЕРСАЛЬНЫЙ ПОИСК И АНАЛИЗ (ВСЕ ТАРИФЫ): AI-powered исследование через Google Search с адаптивным анализом под ваш тариф. LIGHT: быстрый обзор (3-5 источников), STANDARD: детальный анализ (8-10 источников), PREMIUM: глубокий анализ с планом действий (12-15 источников). Автоматически подстраивается под сложность темы и дает actionable insights. Примеры: 'рынок AI-агентов', 'тренды в стартапах 2026', 'конкуренты в нише X'.",
+            "description": "🔍 УНИВЕРСАЛЬНЫЙ ПОИСК И АНАЛИЗ (ВСЕ ТАРИФЫ): AI-powered исследование через Google Search с глубоким анализом. Автоматически находит 10+ свежих источников, анализирует тренды и дает actionable insights. Доступно для всех тарифов с одинаковым качеством. Примеры: 'рынок AI-агентов', 'тренды в стартапах 2026', 'конкуренты в нише X'.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -579,6 +632,52 @@ TOOLS = [
                     }
                 },
                 "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather_info",
+            "description": "🌤️ ПОГОДА (ВСЕ ТАРИФЫ): Получить актуальную информацию о погоде для любого города. Показывает температуру, влажность, ветер и описание погоды. Ключевые слова: 'погода в Москве', 'какая погода', 'прогноз погоды'. ЕСЛИ пользователь спрашивает о погоде - ОБЯЗАТЕЛЬНО ВЫЗОВИ get_weather_info()! Примеры: 'какая погода в СПб?' → get_weather_info(city='Санкт-Петербург'), 'погода в Екатеринбурге' → get_weather_info(city='Екатеринбург').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "Название города на русском или английском. Примеры: 'Москва', 'Moscow', 'Санкт-Петербург', 'Yekaterinburg'"
+                    }
+                },
+                "required": ["city"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_news_trends",
+            "description": "📰 НОВОСТИ И ТРЕНДЫ (ВСЕ ТАРИФЫ): Анализ новостей и трендов по теме с помощью AI. Ищет свежие новости, анализирует тренды и дает инсайты. Ключевые слова: 'новости по AI', 'тренды в бизнесе', 'что происходит в отрасли'. ЕСЛИ пользователь спрашивает о новостях/трендах - ОБЯЗАТЕЛЬНО ВЫЗОВИ get_news_trends()! Примеры: 'новости по AI' → get_news_trends(topic='AI', period='week', focus='trends'), 'тренды в стартапах' → get_news_trends(topic='стартапы', period='month', focus='opportunities').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Тема для поиска новостей. Примеры: 'AI', 'бизнес', 'технологии', 'стартапы', 'финансы'"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Период времени: 'today' (сегодня), 'week' (неделя), 'month' (месяц)",
+                        "default": "week",
+                        "enum": ["today", "week", "month"]
+                    },
+                    "focus": {
+                        "type": "string",
+                        "description": "Фокус анализа: 'news' (новости), 'trends' (тренды), 'opportunities' (возможности), 'business' (бизнес)",
+                        "default": "trends",
+                        "enum": ["news", "trends", "opportunities", "business"]
+                    }
+                },
+                "required": ["topic"]
             }
         }
     },

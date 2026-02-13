@@ -5187,6 +5187,61 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
             session.close()
 
 
+def set_auto_post_time(post_time, user_id=None, session=None):
+    """🌟 PREMIUM: Set preferred time for automatic posting
+    
+    Args:
+        post_time: Time in HH:MM format (e.g., '14:30')
+        user_id: Telegram ID of the user
+        session: Database session
+    
+    Returns:
+        Success message
+    """
+    from models import Session, User, UserProfile, SubscriptionTier
+    
+    logger.info(f"[SET_AUTO_POST_TIME] user_id={user_id}, post_time={post_time}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        # Check premium status
+        if user.subscription_tier != SubscriptionTier.PREMIUM:
+            return "⭐ Настройка времени автопостинга доступна только Premium пользователям. Оформи подписку Premium для персонализированного расписания постинга!"
+        
+        # Validate time format
+        import re
+        if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', post_time):
+            return "Неверный формат времени. Используй HH:MM, например: '14:30' или '09:15'"
+        
+        # Get or create user profile
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=user.id)
+            session.add(profile)
+        
+        # Update post time
+        profile.auto_post_time = post_time
+        session.commit()
+        
+        return f"✅ Время автопостинга установлено на {post_time}! Каждый день в это время я буду автоматически публиковать контент в ваш канал. Следующий пост: завтра в {post_time}."
+        
+    except Exception as e:
+        logger.error(f"[SET_AUTO_POST_TIME] Error: {e}", exc_info=True)
+        return f"Ошибка настройки времени: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 # ============================================================================
 # MARKETING & GROWTH AUTOMATION
 # ============================================================================
@@ -5231,7 +5286,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
 async def research_topic(query: str, depth: str, user_id: int, session):
     """
     🔍 ПОИСК И АНАЛИЗ актуальной информации по теме
-    Требует: STANDARD или PREMIUM подписку
+    Доступно для ВСЕХ тарифов с одинаковым качеством
 
     Этапы:
     1. Поиск свежей информации из надежных источников
@@ -5250,11 +5305,7 @@ async def research_topic(query: str, depth: str, user_id: int, session):
         close_session = True
     
     try:
-        # Проверка subscription tier (STANDARD или PREMIUM)
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
-            return "🔍 Веб-исследование тем доступно с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
-        
+        # Функция доступна для всех тарифов
         logger.info(f"[RESEARCH] Starting for user {user_id}: query='{query}', depth={depth}")
         
         result = await marketing_agent.research_topic(
@@ -6365,6 +6416,367 @@ async def web_search(query: str, user_id: int = None, session=None) -> str:
     except Exception as e:
         logger.error(f"[SEARCH] Error: {e}")
         return f"❌ Ошибка поиска: {str(e)}"
+
+
+async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None) -> str:
+    """
+    Умный анализ ситуации пользователя и предложение релевантных задач.
+    Анализирует профиль, контакты, тренды и предлагает персонализированные задачи.
+    """
+    if not user_id:
+        return "❌ Не указан ID пользователя"
+
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "❌ Пользователь не найден"
+
+        # Получаем профиль пользователя
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        suggestions = []
+        analysis_data = {
+            'profile_interests': [],
+            'profile_skills': [],
+            'profile_goals': [],
+            'relevant_contacts': [],
+            'active_tasks': [],  # Добавляем активные задачи
+            'trends': [],
+            'time_context': None
+        }
+
+        # 1. АНАЛИЗ ПРОФИЛЯ
+        if profile:
+            if profile.interests:
+                analysis_data['profile_interests'] = [i.strip() for i in profile.interests.split(',')]
+            if profile.skills:
+                analysis_data['profile_skills'] = [s.strip() for s in profile.skills.split(',')]
+            if profile.goals:
+                analysis_data['profile_goals'] = [g.strip() for g in profile.goals.split(',')]
+
+        # 1.5. ПОЛУЧАЕМ АКТИВНЫЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ
+        active_tasks = session.query(Task).filter_by(
+            user_id=user.id
+        ).filter(
+            Task.status.in_(['pending', 'in_progress'])  # Активные задачи
+        ).filter(
+            or_(Task.due_date.is_(None), Task.due_date >= datetime.now(pytz.UTC))
+        ).limit(5).all()
+
+        analysis_data['active_tasks'] = active_tasks
+
+        # 2. АНАЛИЗ КОНТАКТОВ - находим релевантных людей и их активности
+        if analysis_data['profile_interests'] or analysis_data['profile_skills']:
+            partners = get_partners_list(user.id, session)
+            analysis_data['relevant_contacts'] = partners[:5]  # Топ-5 релевантных контактов
+
+        # 2.5. ПОИСК КОНТАКТОВ ПО ПОХОЖИМ ЗАДАЧАМ
+        task_based_contacts = []
+        print(f"[DEBUG] analysis_data['active_tasks'] exists: {'active_tasks' in analysis_data}")  # ВРЕМЕННЫЙ ДЕБАГ
+        if 'active_tasks' in analysis_data:
+            print(f"[DEBUG] active_tasks count: {len(analysis_data['active_tasks'])}")  # ВРЕМЕННЫЙ ДЕБАГ
+        if analysis_data['active_tasks']:
+            logger.info(f"[TASK_CONTACTS] Ищем контакты по задачам. Активных задач: {len(analysis_data['active_tasks'])}")
+            # Для каждой активной задачи ищем пользователей с похожими задачами
+            for user_task in analysis_data['active_tasks'][:3]:  # Берем топ-3 задачи пользователя
+                task_title_lower = user_task.title.lower().strip()
+                logger.info(f"[TASK_CONTACTS] Обрабатываем задачу: '{task_title_lower}'")
+
+                # Ищем похожие задачи у других пользователей
+                # Разбиваем заголовок на ключевые слова и ищем по ним
+                task_words = [word.strip() for word in task_title_lower.split() if len(word.strip()) > 2]
+
+                # Простая карта синонимов для распространенных активностей
+                synonyms = {
+                    'бег': ['бег', 'пробежка', 'бегать', 'пробежки', 'джоггинг', 'run', 'running'],
+                    'тренировка': ['тренировка', 'workout', 'фитнес', 'спорт', 'упражнения'],
+                    'программирование': ['программирование', 'код', 'разработка', 'programming', 'code'],
+                    'чтение': ['чтение', 'книга', 'читать', 'read', 'reading'],
+                    'работа': ['работа', 'проект', 'задача', 'work', 'task'],
+                    'учеба': ['учеба', 'изучение', 'обучение', 'study', 'learning']
+                }
+
+                # Расширяем ключевые слова синонимами
+                expanded_words = set(task_words)
+                for word in task_words:
+                    for key, syn_list in synonyms.items():
+                        if word in syn_list:
+                            expanded_words.update(syn_list)
+                        elif any(word in syn for syn in syn_list):
+                            expanded_words.add(key)
+                            expanded_words.update(syn_list)
+
+                # Получаем все активные задачи других пользователей
+                all_other_tasks = session.query(Task).filter(
+                    Task.user_id != user.id,
+                    Task.status.in_(['pending', 'in_progress'])
+                ).all()
+
+                # Фильтруем по ключевым словам в Python (более надежно)
+                similar_tasks = []
+                for task in all_other_tasks:
+                    task_lower = task.title.lower()
+                    if any(word in task_lower for word in expanded_words):
+                        similar_tasks.append(task)
+
+                logger.info(f"[TASK_CONTACTS] Найдено похожих задач: {len(similar_tasks)}")
+                for st in similar_tasks[:5]:  # Ограничим для логов
+                    st_user = session.query(User).filter_by(id=st.user_id).first()
+                    st_username = st_user.first_name if st_user else "Unknown"
+                    logger.info(f"[TASK_CONTACTS]   - '{st.title}' (пользователь: {st_username})")
+
+                # Группируем по пользователям и считаем схожесть
+                user_task_matches = {}
+                for similar_task in similar_tasks:
+                    if similar_task.user_id not in user_task_matches:
+                        user_task_matches[similar_task.user_id] = {
+                            'user_id': similar_task.user_id,
+                            'matching_tasks': [],
+                            'similarity_score': 0
+                        }
+                    user_task_matches[similar_task.user_id]['matching_tasks'].append(similar_task.title)
+                    user_task_matches[similar_task.user_id]['similarity_score'] += 1
+
+                # Добавляем топ пользователей с похожими задачами
+                for match in sorted(user_task_matches.values(), key=lambda x: x['similarity_score'], reverse=True)[:2]:
+                    # Проверяем, что этого пользователя еще нет в контактах
+                    existing_contact_ids = [c.user_id for c in analysis_data['relevant_contacts']]
+                    if match['user_id'] not in existing_contact_ids:
+                        match_user = session.query(User).filter_by(id=match['user_id']).first()
+                        if match_user:
+                            # Используем first_name или telegram_id как username
+                            display_name = match_user.first_name or f"user_{match_user.telegram_id}"
+                            task_based_contacts.append({
+                                'user_id': match['user_id'],
+                                'username': display_name,
+                                'common_tasks': match['matching_tasks'][:2],  # Топ-2 похожих задач
+                                'similarity_score': match['similarity_score']
+                            })
+
+            # Добавляем контакты по задачам в общий список
+            analysis_data['task_based_contacts'] = task_based_contacts[:3]  # Топ-3 контакта по задачам
+
+        # 3. АНАЛИЗ ВРЕМЕНИ И КОНТЕКСТА
+        now = datetime.now(pytz.UTC)
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
+        user_now = now.astimezone(user_tz)
+
+        hour = user_now.hour
+        if 6 <= hour < 12:
+            analysis_data['time_context'] = 'утро'
+        elif 12 <= hour < 18:
+            analysis_data['time_context'] = 'день'
+        elif 18 <= hour < 22:
+            analysis_data['time_context'] = 'вечер'
+        else:
+            analysis_data['time_context'] = 'ночь'
+
+        # 4. ПОЛУЧАЕМ КОНКРЕТНЫЕ ТРЕНДЫ ПО ИНТЕРЕСАМ
+        if analysis_data['profile_interests']:
+            # Берем первый интерес для анализа трендов
+            primary_interest = analysis_data['profile_interests'][0]
+            try:
+                trends_result = await get_news_info(primary_interest, user_id, session)
+                if trends_result and "❌" not in trends_result and len(trends_result.strip()) > 10:
+                    analysis_data['trends_info'] = trends_result  # Сохраняем конкретную информацию
+                    analysis_data['trends_topic'] = primary_interest
+                else:
+                    analysis_data['trends_info'] = None
+            except Exception as e:
+                logger.warning(f"[SITUATION_ANALYSIS] Failed to get trends: {e}")
+                analysis_data['trends_info'] = None
+
+        # 5. ФОРМИРУЕМ УНИВЕРСАЛЬНЫЕ ПЕРСОНАЛИЗИРОВАННЫЕ ПРЕДЛОЖЕНИЯ
+
+        # АНАЛИЗ НАВЫКОВ - для каждого навыка предлагаем релевантные действия
+        if analysis_data['profile_skills']:
+            for skill in analysis_data['profile_skills'][:3]:  # Берем топ-3 навыка
+                skill_lower = skill.lower().strip()
+
+                # Программирование и разработка
+                if any(word in skill_lower for word in ['программист', 'разработчик', 'developer', 'код', 'программирование']):
+                    if analysis_data['time_context'] == 'утро':
+                        suggestions.append("Проверить свежие коммиты в репозиториях, над которыми работаешь 💻")
+                    elif analysis_data['time_context'] == 'день':
+                        suggestions.append("Рефакторить код или улучшить производительность ⚡")
+                    elif analysis_data['time_context'] == 'вечер':
+                        suggestions.append("Разбить крупную задачу на мелкие подзадачи 📝")
+
+                # Дизайн и творчество
+                elif any(word in skill_lower for word in ['дизайн', 'дизайнер', 'креатив', 'творчество', 'графика']):
+                    if analysis_data['time_context'] == 'утро':
+                        suggestions.append("Посмотреть свежие тренды в дизайне и UX 🎨")
+                    elif analysis_data['time_context'] == 'день':
+                        suggestions.append("Поупражняться в новых техниках дизайна 🖌️")
+                    elif analysis_data['time_context'] == 'вечер':
+                        suggestions.append("Проанализировать свои лучшие работы и подумать над улучшениями 📊")
+
+                # Маркетинг и продажи
+                elif any(word in skill_lower for word in ['маркетинг', 'продажи', 'sales', 'marketing', 'продвижение']):
+                    if analysis_data['time_context'] == 'утро':
+                        suggestions.append("Изучить новые маркетинговые каналы 📈")
+                    elif analysis_data['time_context'] == 'день':
+                        suggestions.append("Связаться с потенциальными клиентами 🤝")
+                    elif analysis_data['time_context'] == 'вечер':
+                        suggestions.append("Проанализировать эффективность текущих кампаний 📊")
+
+                # Аналитика и данные
+                elif any(word in skill_lower for word in ['аналитика', 'данные', 'data', 'анализ']):
+                    if analysis_data['time_context'] == 'утро':
+                        suggestions.append("Посмотреть свежие данные по твоей сфере 📊")
+                    elif analysis_data['time_context'] == 'день':
+                        suggestions.append("Создать новый дашборд или отчет 📈")
+                    elif analysis_data['time_context'] == 'вечер':
+                        suggestions.append("Проанализировать тренды в данных 🔍")
+
+                # Управление и менеджмент
+                elif any(word in skill_lower for word in ['менеджмент', 'управление', 'менеджер', 'руководство']):
+                    if analysis_data['time_context'] == 'утро':
+                        suggestions.append("Спланировать день для команды 📅")
+                    elif analysis_data['time_context'] == 'день':
+                        suggestions.append("Провести встречу или созвон с командой 👥")
+                    elif analysis_data['time_context'] == 'вечер':
+                        suggestions.append("Подвести итоги дня и спланировать завтра 📝")
+
+                # Образование и преподавание
+                elif any(word in skill_lower for word in ['преподаватель', 'учитель', 'образование', 'обучение']):
+                    if analysis_data['time_context'] == 'утро':
+                        suggestions.append("Подготовить материалы для следующего занятия 📚")
+                    elif analysis_data['time_context'] == 'день':
+                        suggestions.append("Связаться с учениками или коллегами по образованию 👥")
+                    elif analysis_data['time_context'] == 'вечер':
+                        suggestions.append("Оценить эффективность проведенных занятий 📊")
+
+        # АНАЛИЗ ИНТЕРЕСОВ - для каждого интереса предлагаем релевантные действия
+        if analysis_data['profile_interests']:
+            for interest in analysis_data['profile_interests'][:2]:  # Берем топ-2 интереса
+                interest_lower = interest.lower().strip()
+
+                # Если есть конкретная информация о трендах по этому интересу
+                if analysis_data.get('trends_info') and analysis_data.get('trends_topic') == interest:
+                    # Извлекаем ключевую информацию из трендов
+                    trends_lines = analysis_data['trends_info'].split('\n')[:2]  # Первые 2 строки
+                    key_info = ""
+                    for line in trends_lines:
+                        line = line.strip()
+                        if line and len(line) > 20 and not line.startswith('❌'):
+                            key_info = line[:100] + "..." if len(line) > 100 else line
+                            break
+
+                    if key_info:
+                        suggestions.append(f"Изучить тренд: {key_info} 📈")
+                    else:
+                        suggestions.append(f"Посмотреть свежие новости по теме '{interest}' 📰")
+                else:
+                    # Общие предложения по интересам
+                    if any(word in interest_lower for word in ['технологии', 'tech', 'it', 'программирование']):
+                        suggestions.append(f"Посмотреть что нового в мире {interest} 💻")
+                    elif any(word in interest_lower for word in ['бизнес', 'стартапы', 'предпринимательство']):
+                        suggestions.append(f"Изучить кейсы успешных {interest} компаний 🚀")
+                    elif any(word in interest_lower for word in ['искусство', 'творчество', 'креатив']):
+                        suggestions.append(f"Посмотреть свежие работы в {interest} 🎨")
+                    elif any(word in interest_lower for word in ['спорт', 'здоровье', 'fitness']):
+                        suggestions.append(f"Попробовать новую тренировку по {interest} 💪")
+                    elif any(word in interest_lower for word in ['путешествия', 'туризм']):
+                        suggestions.append(f"Посмотреть интересные места для {interest} ✈️")
+                    else:
+                        suggestions.append(f"Узнать что-то новое по теме '{interest}' 📚")
+
+        # КОНТАКТЫ - предлагаем конкретных людей с похожими интересами/навыками/задачами
+        # Сначала контакты по профилю
+        if analysis_data['relevant_contacts']:
+            # Берем топ-2 контакта по профилю
+            for i, contact in enumerate(analysis_data['relevant_contacts'][:2]):
+                partner_user = session.query(User).filter_by(id=contact.user_id).first()
+                if partner_user and partner_user.username:
+                    contact_suggestion = f"Написать @{partner_user.username}"
+
+                    # Добавляем контекст почему этот контакт релевантен
+                    if contact.common_interests:
+                        contact_suggestion += f" - у вас общие интересы в {contact.common_interests} 💬"
+                    elif contact.common_skills:
+                        contact_suggestion += f" - общие навыки в {contact.common_skills} 🤝"
+                    else:
+                        contact_suggestion += f" - похоже по профилю 👥"
+
+                    suggestions.append(contact_suggestion)
+
+        # Затем контакты по задачам
+        if analysis_data.get('task_based_contacts'):
+            # Берем топ-2 контакта по задачам
+            for contact in analysis_data['task_based_contacts'][:2]:
+                contact_suggestion = f"Написать @{contact['username']}"
+
+                # Добавляем контекст по общим задачам
+                if contact['common_tasks']:
+                    task_examples = contact['common_tasks'][:2]  # Показываем 1-2 примера задач
+                    task_text = task_examples[0] if len(task_examples) == 1 else f"{task_examples[0]} и {task_examples[1]}"
+                    contact_suggestion += f" - у вас похожие задачи: '{task_text}' 🏃"
+                else:
+                    contact_suggestion += f" - у вас похожие привычки и задачи 🏃"
+
+                suggestions.append(contact_suggestion)
+
+        # ЦЕЛИ - маленькие шаги к большим целям
+        if analysis_data['profile_goals']:
+            for goal in analysis_data['profile_goals'][:2]:  # Первые две цели
+                if len(goal) > 10:  # Значимая цель
+                    suggestions.append(f"Сделать маленький шаг к цели '{goal}' 🎯")
+
+        # УНИВЕРСАЛЬНЫЕ ПРЕДЛОЖЕНИЯ ПО ВРЕМЕНИ СУТОК (если мало персонализированных)
+        if len(suggestions) < 4:
+            if analysis_data['time_context'] == 'утро':
+                suggestions.append("Определить 3 главных приоритета на день 🌅")
+                suggestions.append("Сделать небольшую разминку или прогулку 🚶")
+            elif analysis_data['time_context'] == 'день':
+                suggestions.append("Сделать короткий перерыв и подышать свежим воздухом 🌬️")
+                suggestions.append("Связаться с кем-то из знакомых, с кем давно не общался ☎️")
+            elif analysis_data['time_context'] == 'вечер':
+                suggestions.append("Подвести итоги дня - что удалось, что можно улучшить 📊")
+                suggestions.append("Прочитать что-то полезное перед сном 📖")
+            else:  # ночь
+                suggestions.append("Поспать нормально - сон важнее всего 😴")
+                suggestions.append("Запланировать завтрашний день 📅")
+
+        # Ограничиваем до 5 предложений
+        suggestions = suggestions[:5]
+
+        # Формируем результат
+        if not suggestions:
+            result = "Сейчас у тебя нет активных задач, но я вижу что ты занимаешься интересными вещами. Может расскажешь что планируешь? 🤔"
+        else:
+            result = "Смотрю по твоему профилю и времени... Вот что может быть полезно прямо сейчас:\n\n"
+            for suggestion in suggestions:
+                result += f"• {suggestion}\n"
+
+            # Добавляем дополнительную информацию о трендах если есть что-то интересное
+            if analysis_data.get('trends_info') and len(analysis_data['trends_info'].strip()) > 50:
+                # Показываем краткую сводку трендов
+                trends_preview = analysis_data['trends_info'].split('\n')[0][:150]
+                if len(analysis_data['trends_info'].split('\n')[0]) > 150:
+                    trends_preview += "..."
+                result += f"\n📈 По теме '{analysis_data['trends_topic']}' сейчас популярно: {trends_preview}"
+
+        return result
+
+        return result
+
+    except Exception as e:
+        logger.error(f"[SITUATION_ANALYSIS] Error: {e}")
+        if close_session:
+            session.close()
+        return f"❌ Ошибка анализа ситуации: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
 
 
 # ===== EXTERNAL API FUNCTIONS =====

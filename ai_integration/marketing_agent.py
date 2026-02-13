@@ -156,36 +156,12 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         except Exception as e:
             logger.warning(f"[RESEARCH] Cache check failed: {e}")
     
-    # Определяем параметры на основе тарифа
-    close_session = False
-    if session is None:
-        session = Session()
-        close_session = True
+    # Определяем параметры исследования (ОДИНАКОВО ДЛЯ ВСЕХ ТАРИФОВ)
+    num_results = 10  # Фиксированное количество результатов для всех тарифов
+    analysis_type = "comprehensive"  # Полный анализ для всех
+    max_tokens = 600  # Максимальная длина анализа для всех
     
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        
-        if user and user.subscription_tier == SubscriptionTier.LIGHT:
-            # LIGHT: быстрый анализ
-            num_results = 5
-            analysis_type = "quick"
-            max_tokens = 200
-        elif user and user.subscription_tier == SubscriptionTier.STANDARD:
-            # STANDARD: детальный анализ
-            num_results = 10
-            analysis_type = "detailed" 
-            max_tokens = 400
-        else:
-            # PREMIUM: глубокий анализ
-            num_results = 15
-            analysis_type = "comprehensive"
-            max_tokens = 600
-            
-        logger.info(f"[RESEARCH] Tier: {user.subscription_tier.value if user else 'UNKNOWN'}, results: {num_results}, type: {analysis_type}")
-    
-    finally:
-        if close_session:
-            session.close()
+    logger.info(f"[RESEARCH] Universal analysis: {num_results} results, type: {analysis_type}")
     
     try:
         # Шаг 1: Веб-поиск через Serper

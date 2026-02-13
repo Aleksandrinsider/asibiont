@@ -44,61 +44,31 @@ class DynamicToolDiscovery:
             logger.warning("[TOOL FILTER] No tools discovered yet")
             return {}
         
-        # Базовые инструменты доступны всем
-        base_tools = {
-            'LIGHT': [
-                'list_tasks', 'add_task', 'complete_task', 'delete_task', 'edit_task',
-                'find_partners', 'show_profile', 'update_profile', 'smart_update_profile',
-                'get_partners_list', 'quick_topic_search', 'analyze_tasks', 'check_time_conflicts'
-            ],
-            'STANDARD': [
-                # Все LIGHT инструменты плюс
-                'list_tasks', 'add_task', 'complete_task', 'delete_task', 'edit_task',
-                'find_partners', 'show_profile', 'update_profile', 'smart_update_profile',
-                'get_partners_list', 'quick_topic_search', 'analyze_tasks', 'check_time_conflicts',
-                # STANDARD инструменты - фокус на управлении командой
-                'research_topic', 'delegate_task', 'delegate_task_with_session', 'accept_delegated_task',
-                'cancel_delegation', 'check_delegation_deadlines', 'get_delegation_progress',
-                'check_time_conflicts_sync', 'find_nearest_free_slot', 'generate_progress_request',
-                'reschedule_task', 'schedule_delegation_monitoring'
-            ],
-            'PREMIUM': [
-                # Все инструменты доступны
-                # Полный список будет включать все discovered_tools
-            ]
-        }
+        # Import tier restrictions from tools.py (single source of truth)
+        try:
+            from .tools import LIGHT_RESTRICTED, STANDARD_RESTRICTED, PREMIUM_RESTRICTED
+        except ImportError:
+            logger.error("[TOOL FILTER] Could not import tier restrictions")
+            return self.discovered_tools.copy()
         
         tier_value = subscription_tier.upper() if subscription_tier else 'LIGHT'
         
+        # Determine which functions are restricted for this tier
         if tier_value == 'PREMIUM':
-            # PREMIUM имеет доступ ко всем инструментам
-            filtered_tools = self.discovered_tools.copy()
-            logger.info(f"[TOOL FILTER] PREMIUM tier - all {len(filtered_tools)} tools available")
-            return filtered_tools
+            restricted = PREMIUM_RESTRICTED
+        elif tier_value == 'STANDARD':
+            restricted = STANDARD_RESTRICTED
+        else:  # LIGHT
+            restricted = LIGHT_RESTRICTED
         
-        elif tier_value in base_tools:
-            # Фильтруем инструменты для LIGHT/STANDARD
-            allowed_tools = base_tools[tier_value]
-            filtered_tools = {}
-            
-            for tool_name, tool_data in self.discovered_tools.items():
-                if tool_name in allowed_tools:
-                    filtered_tools[tool_name] = tool_data
-            
-            logger.info(f"[TOOL FILTER] {tier_value} tier - {len(filtered_tools)}/{len(self.discovered_tools)} tools available")
-            return filtered_tools
+        # Filter out restricted functions
+        filtered_tools = {}
+        for tool_name, tool_data in self.discovered_tools.items():
+            if tool_name not in restricted:
+                filtered_tools[tool_name] = tool_data
         
-        else:
-            # Неизвестный тариф - даем базовый набор
-            logger.warning(f"[TOOL FILTER] Unknown tier '{tier_value}', using LIGHT tools")
-            allowed_tools = base_tools['LIGHT']
-            filtered_tools = {}
-            
-            for tool_name, tool_data in self.discovered_tools.items():
-                if tool_name in allowed_tools:
-                    filtered_tools[tool_name] = tool_data
-            
-            return filtered_tools
+        logger.info(f"[TOOL FILTER] {tier_value} tier - {len(filtered_tools)}/{len(self.discovered_tools)} tools available")
+        return filtered_tools
     
     def get_available_tools_for_tier(self, subscription_tier: str) -> List[Dict[str, Any]]:
         """

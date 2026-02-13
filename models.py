@@ -131,6 +131,7 @@ class UserProfile(Base):
     content_strategy = Column(Text)  # User's content strategy: what they want to post about, target audience, goals
     auto_marketing_enabled = Column(Boolean, default=True)  # Enable/disable autonomous marketing (Premium)
     auto_delegation_enabled = Column(Boolean, default=True)  # Enable/disable autonomous delegation (Premium)
+    auto_post_time = Column(String(5), default='12:00')  # Preferred time for auto-posting in HH:MM format (Premium)
 
     user = relationship("User", backref="profile")
 

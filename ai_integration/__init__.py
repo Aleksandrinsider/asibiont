@@ -13,7 +13,7 @@ from .handlers import (
     find_partners, update_profile, smart_update_profile,
     create_subscription_payment, check_subscription_status,
     cancel_subscription, get_partners_list, check_delegation_deadlines, restore_task, update_user_memory_async, analyze_tasks,
-    analyze_group_opportunities, research_and_plan
+    analyze_group_opportunities, research_and_plan, analyze_situation_and_suggest_tasks, set_auto_post_time, get_weather_info, get_news_trends
 )
 
 __all__ = [
@@ -51,4 +51,8 @@ __all__ = [
     'analyze_tasks',
     'analyze_group_opportunities',
     'research_and_plan',
+    'analyze_situation_and_suggest_tasks',
+    'set_auto_post_time',
+    'get_weather_info',
+    'get_news_trends',
 ]

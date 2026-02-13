@@ -246,6 +246,15 @@ try:
             else:
                 logger.info("Migration: auto_delegation_enabled column already exists")
 
+            # Migration for auto_post_time column
+            if 'auto_post_time' not in columns:
+                logger.info("Adding auto_post_time column to user_profiles table")
+                session.execute(text("ALTER TABLE user_profiles ADD COLUMN auto_post_time VARCHAR(5) DEFAULT '12:00'"))
+                session.commit()
+                logger.info("Migration: auto_post_time column added successfully")
+            else:
+                logger.info("Migration: auto_post_time column already exists")
+
         # Migration for users table columns
         if inspector.has_table('users'):
             user_columns = [col['name'] for col in inspector.get_columns('users')]
@@ -6370,6 +6379,26 @@ if __name__ == "__main__":
                     except Exception as e:
                         logger.error(f"Failed to start auto-post service: {e}")
 
+                # Start auto-marketing service for Premium users (every 30 minutes)
+                auto_marketing_task = None
+                try:
+                    from auto_marketing_service import start_marketing_service
+                    logger.info("Starting auto-marketing service in background...")
+                    auto_marketing_task = asyncio.create_task(start_marketing_service(bot, check_interval_minutes=30))
+                    logger.info("Auto-marketing service task created")
+                except Exception as e:
+                    logger.error(f"Failed to start auto-marketing service: {e}")
+
+                # Start contact alerts service for Premium users (every 30 minutes)
+                contact_alerts_task = None
+                try:
+                    from contact_alerts_service import start_contact_alerts_service
+                    logger.info("Starting contact alerts service in background...")
+                    contact_alerts_task = asyncio.create_task(start_contact_alerts_service(bot, check_interval_minutes=30))
+                    logger.info("Contact alerts service task created")
+                except Exception as e:
+                    logger.error(f"Failed to start contact alerts service: {e}")
+
                 # Start polling for bot ONLY in local mode
                 polling_task = None
                 if LOCAL and bot and dp:
@@ -6399,6 +6428,12 @@ if __name__ == "__main__":
                     if auto_post_task and not auto_post_task.done():
                         logger.info("Cancelling auto-post service...")
                         auto_post_task.cancel()
+                    if auto_marketing_task and not auto_marketing_task.done():
+                        logger.info("Cancelling auto-marketing service...")
+                        auto_marketing_task.cancel()
+                    if contact_alerts_task and not contact_alerts_task.done():
+                        logger.info("Cancelling contact alerts service...")
+                        contact_alerts_task.cancel()
                     await runner.cleanup()
                     logger.info("Server shut down")
 

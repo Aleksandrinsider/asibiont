@@ -66,10 +66,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 ПРИМЕРЫ РАССУЖДЕНИЙ:
 
 "Привет утром":
-АНАЛИЗ: Утро, выходной, хорошая погода, интересуется AI
-РЕШЕНИЕ: Свежая информация + контакты помогут развитию
-ДЕЙСТВИЕ: research_topic("тренды AI") + find_partners("AI разработчики")
-ОТВЕТ: "Доброе утро! Нашел свежие тренды в AI - multi-agent системы популярны. Также нашел 3 разработчика в твоем городе."
+АНАЛИЗ: Утро, выходной, хорошая погода, интересуется AI, разработчик
+РЕШЕНИЕ: Персонализированные предложения + свежая информация помогут развитию
+ДЕЙСТВИЕ: analyze_situation_and_suggest_tasks(user_id=ID) + research_topic("тренды AI")
+ОТВЕТ: "Доброе утро! Вот персонализированные предложения для тебя: 1. Изучить новый AI фреймворк 2. Связаться с разработчиками в городе. Также нашел свежие тренды в AI - multi-agent системы популярны."
 
 "Привет вечером с задачами":
 АНАЛИЗ: Вечер, просроченные задачи, усталость
@@ -91,7 +91,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 ✅ ДЕЙСТВУЙ ПРОАКТИВНО: предлагай решения
 
 УМНЫЕ ТРИГГЕРЫ:
-- "ПРИВЕТ" → ОБЯЗАТЕЛЬНО вызови list_tasks() для проверки статуса
+- "ПРИВЕТ" → ОБЯЗАТЕЛЬНО вызови analyze_situation_and_suggest_tasks(user_id=USER_ID) + list_tasks()
 - "ЧТО НОВОГО" → ОБЯЗАТЕЛЬНО вызови get_news_trends() + research_topic()
 - УПОМИНАНИЕ ИНТЕРЕСОВ → ОБЯЗАТЕЛЬНО вызови research_topic() + find_partners()
 - СТРАТЕГИЧЕСКИЕ ЗАПРОСЫ → ОБЯЗАТЕЛЬНО вызови research_topic() + analyze_tasks()
@@ -148,6 +148,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 - get_stock_info(symbol, user_id, session) - котировки акций
 - get_news_info(topic, user_id, session) - свежие новости
 - web_search(query, user_id, session) - веб-поиск
+- analyze_situation_and_suggest_tasks(user_id, session) - умный анализ ситуации и персонализированные предложения задач
 
 ВЫЗЫВАЙ ИНСТРУМЕНТЫ ЧЕРЕЗ TOOL CALLS, НЕ ПИШИ ИХ В ТЕКСТЕ!
 
@@ -179,6 +180,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 - Для акций: get_stock_info(symbol="AAPL", user_id=ID)
 - Для свежих новостей: get_news_info(topic="технологии", user_id=ID)
 - Для веб-поиска: web_search(query="как приготовить борщ", user_id=ID)
+- Для персонализированных предложений: analyze_situation_and_suggest_tasks(user_id=ID, session=SESSION)
 - Для задач: list_tasks(user_id=ID), add_task(title="...", reminder_time="завтра 10:00", user_id=ID)"""
 
     return prompt
