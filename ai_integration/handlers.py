@@ -1036,6 +1036,18 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
     return result
 
 async def restore_task(task_id=None, task_title=None, user_id=None, session=None):
+    """
+    Восстановить завершенную задачу обратно в активные
+
+    Args:
+        task_id: ID задачи для восстановления (опционально)
+        task_title: Название задачи для поиска (опционально)
+        user_id: ID пользователя в Telegram
+        session: Сессия базы данных (опционально)
+
+    Returns:
+        Сообщение о результате восстановления задачи
+    """
     logger.info(f"[RESTORE_TASK] Called with task_id={task_id}, task_title={task_title}, user_id={user_id}")
     if session is None:
         session = Session()
@@ -1061,7 +1073,9 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
         task = (
             session.query(Task)
             .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
+                Task.id == task_id_int,
+                Task.status == "completed",  # Only restore completed tasks
+                or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
             .first()
         )
@@ -1071,9 +1085,10 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
         conditions = [Task.title.ilike(f"%{word}%") for word in words]
         task = session.query(Task).filter(
             or_(
-                and_(Task.user_id == user.id, or_(*conditions)),
+                and_(Task.user_id == user.id, Task.status == "completed", or_(*conditions)),
                 and_(
                     Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                    Task.status == "completed",
                     or_(*conditions)
                 )
             )
@@ -1741,7 +1756,17 @@ def get_delegation_progress(user_id, session=None):
             session.close()
         return f"Ошибка при получении отчета о делегировании: {str(e)}"
 
-def cancel_delegation(task_id, user_id=None):
+async def cancel_delegation(task_id, user_id):
+    """
+    Отменить делегирование задачи и вернуть её инициатору
+
+    Args:
+        task_id: ID задачи, делегирование которой нужно отменить
+        user_id: ID пользователя в Telegram (делегатор)
+
+    Returns:
+        Сообщение о результате отмены делегирования
+    """
     """Cancel delegation of a task, returning it to the initiator"""
     session = Session()
     try:
@@ -4683,7 +4708,18 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
         if close_session:
             session.close()
 
-def set_auto_post_time(post_time, user_id=None, session=None):
+async def set_auto_post_time(post_time, user_id=None, session=None):
+    """
+    Установить время автоматической публикации контента (только для Premium)
+
+    Args:
+        post_time: Время в формате HH:MM (например, '14:30')
+        user_id: ID пользователя в Telegram
+        session: Сессия базы данных (опционально)
+
+    Returns:
+        Сообщение о настройке времени автопостинга
+    """
     """🌟 PREMIUM: Set preferred time for automatic posting
     
     Args:

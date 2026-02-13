@@ -117,8 +117,8 @@ class DynamicToolDiscovery:
                 required_params = []
                 
                 for param_name, param in signature.parameters.items():
-                    # Пропускаем self и служебные параметры
-                    if param_name in ['self', 'cls', 'session', 'user_id']:
+                    # Пропускаем self и служебные параметры, кроме user_id
+                    if param_name in ['self', 'cls', 'session']:
                         continue
                     
                     param_info = {

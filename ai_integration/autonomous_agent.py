@@ -10,7 +10,7 @@ import pytz
 from datetime import datetime, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
-from .prompts_new import get_extended_system_prompt
+from .prompts import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
 from .tools import get_available_tools
 
@@ -359,8 +359,9 @@ class HybridAutonomousAgent:
                     logger.error(f"Error loading current task: {e}")
 
             # Генерируем проактивный контекст (профиль, интересы, партнеры, задачи)
-            from .prompts import generate_proactive_context
-            proactive_context = generate_proactive_context(user_id, session)
+            from .context_builder import ContextBuilder
+            context_builder = ContextBuilder()
+            proactive_context = context_builder.build_proactive_context(user_id, session)
             logger.info(f"[AGENT PLANNING] Generated proactive context length: {len(proactive_context)}")
 
             base_prompt = get_extended_system_prompt(

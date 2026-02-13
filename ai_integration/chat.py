@@ -22,7 +22,7 @@ from .utils import (
     get_news_info,
     get_weather_info
 )
-from .prompts_new import get_extended_system_prompt
+from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 from .handlers import (  # noqa: F401
     add_task, list_tasks, complete_task, reschedule_task,
@@ -246,8 +246,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     logger.warning(f"[DATETIME] Error in Moscow fallback: {e}")
 
             # Генерируем проактивный контекст
-            from .prompts import generate_proactive_context
-            proactive_context = generate_proactive_context(user_id, session, profile_complete=profile_complete)
+            from .context_builder import ContextBuilder
+            context_builder = ContextBuilder()
+            proactive_context = context_builder.build_proactive_context(user_id, session, profile_complete=profile_complete)
             logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
 
             # 🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызываем инструменты при приветствии
