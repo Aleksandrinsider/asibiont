@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
 
 
-async def _execute_proactive_tools(message, user_id, session):
+async def _execute_proactive_tools(message, user_id, session, profile_complete=False):
     """
     🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызывает инструменты перед агентом
     
@@ -157,6 +157,19 @@ async def _execute_proactive_tools(message, user_id, session):
             logger.error(f"[PROACTIVE_HOOK] Error in find_partners: {e}")
             results['contacts'] = f"Не удалось найти контакты: {str(e)}"
         
+        # 3. ANALYZE_SITUATION - только при полном профиле для умных предложений
+        # TODO: Реализовать функцию analyze_situation_and_suggest_tasks
+        # if profile_complete:
+        #     try:
+        #         logger.info(f"[PROACTIVE_HOOK] Calling analyze_situation_and_suggest_tasks")
+        #         from .handlers import analyze_situation_and_suggest_tasks
+        #         situation_result = await analyze_situation_and_suggest_tasks(user_id=user_id, session=session)
+        #         results['situation'] = situation_result
+        #         logger.info(f"[PROACTIVE_HOOK] ✅ analyze_situation_and_suggest_tasks completed")
+        #     except Exception as e:
+        #         logger.error(f"[PROACTIVE_HOOK] Error in analyze_situation_and_suggest_tasks: {e}")
+        #         results['situation'] = f"Не удалось проанализировать ситуацию: {str(e)}"
+        
         return results
         
     except Exception as e:
@@ -238,7 +251,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
 
             # 🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызываем инструменты при приветствии
-            preexec_results = await _execute_proactive_tools(message, user_id, session)
+            preexec_results = await _execute_proactive_tools(message, user_id, session, profile_complete=profile_complete)
             
             # Если инструменты были выполнены - добавляем результаты в контекст
             if preexec_results and preexec_results.get('executed'):
@@ -255,8 +268,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     preexec_context += "🤝 FIND_PARTNERS - уже выполнен:\n"
                     preexec_context += str(preexec_results['contacts']) + "\n\n"
                 
+                if preexec_results.get('situation'):
+                    preexec_context += "🧠 ANALYZE_SITUATION - уже выполнен:\n"
+                    preexec_context += str(preexec_results['situation']) + "\n\n"
+                
                 preexec_context += "❗ НЕ ВЫЗЫВАЙ эти инструменты снова - просто используй готовые результаты!\n\n"
                 preexec_context += "ФОРМАТ: Короткое приветствие + ОДНА конкретная мысль (не больше 2-3 предложений). Говори естественно, как друг, без списков и форматирования.\n"
+                
+                # Ограничиваем длину preexec_context, чтобы не перегружать
+                max_preexec_length = 1000
+                if len(preexec_context) > max_preexec_length:
+                    preexec_context = preexec_context[:max_preexec_length] + "...\n[Контекст усечен для краткости]"
                 
                 # Добавляем к проактивному контексту
                 proactive_context = proactive_context + preexec_context
