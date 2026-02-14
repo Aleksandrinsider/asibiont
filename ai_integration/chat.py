@@ -115,10 +115,12 @@ async def _execute_proactive_tools(message, user_id, session, profile_complete=F
         results = {
             'research': None,
             'contacts': None,
-            'executed': True
+            'executed': True,
+            'day_of_week': datetime.now().strftime('%A')  # Monday, Tuesday, etc.
         }
         
-        # 1. RESEARCH_TOPIC - ищем актуальную инфу по интересам пользователя
+        # СТРАТЕГИЯ: всегда ищем актуальную информацию ПЕРЕД ответом
+        # 1. RESEARCH_TOPIC или GET_NEWS_TRENDS - для свежих данных
         try:
             # Берем первый интерес из профиля как тему
             if has_interests:
@@ -130,22 +132,33 @@ async def _execute_proactive_tools(message, user_id, session, profile_complete=F
                 
             logger.info(f"[PROACTIVE_HOOK] Calling research_topic with: '{topic}'")
             
-            # Проверяем подписку - только для STANDARD/PREMIUM
-            if user.subscription_tier and user.subscription_tier.value in ['STANDARD', 'PREMIUM']:
-                research_result = await research_topic(
-                    query=f"актуальные тренды и новости: {topic}",
-                    depth="quick",
+            # Вызываем research_topic для ВСЕХ тарифов (функция доступна всем)
+            research_result = await research_topic(
+                query=f"последние новости и тренды: {topic}",
+                depth="quick",  # Быстрый поиск для приветствий
+                user_id=user_id,
+                session=session
+            )
+            results['research'] = research_result
+            logger.info(f"[PROACTIVE_HOOK] ✅ research_topic completed: {research_result[:100] if isinstance(research_result, str) else 'dict'}")
+        except Exception as e:
+            logger.error(f"[PROACTIVE_HOOK] Error in research_topic: {e}")
+            # Fallback на get_news_trends
+            try:
+                logger.info(f"[PROACTIVE_HOOK] Trying get_news_trends as fallback")
+                from .handlers import get_news_trends
+                news_result = await get_news_trends(
+                    topic=topic,
+                    period="day",
+                    focus="trends",
                     user_id=user_id,
                     session=session
                 )
-                results['research'] = research_result
-                logger.info(f"[PROACTIVE_HOOK] ✅ research_topic completed")
-            else:
-                results['research'] = f"💡 Смотрю свежие материалы по теме '{topic}' (доступно с STANDARD)"
-                logger.info(f"[PROACTIVE_HOOK] ⚠️ LIGHT tier - research skipped")
-        except Exception as e:
-            logger.error(f"[PROACTIVE_HOOK] Error in research_topic: {e}")
-            results['research'] = f"Не удалось найти материалы: {str(e)}"
+                results['research'] = news_result
+                logger.info(f"[PROACTIVE_HOOK] ✅ get_news_trends completed")
+            except Exception as e2:
+                logger.error(f"[PROACTIVE_HOOK] get_news_trends also failed: {e2}")
+                results['research'] = None
         
         # 2. FIND_PARTNERS - ищем людей по интересам
         try:
@@ -356,33 +369,49 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[PROACTIVE_HOOK] ✅ Tools executed, adding results to context")
                 
                 # Формируем контекст с уже готовыми результатами
-                preexec_context = "\n\n🎯 АВТОМАТИЧЕСКИ ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ (используй результаты в ответе):\n\n"
+                day_of_week = preexec_results.get('day_of_week', datetime.now().strftime('%A'))
+                weekday_ru = {
+                    'Monday': 'понедельник',
+                    'Tuesday': 'вторник', 
+                    'Wednesday': 'среда',
+                    'Thursday': 'четверг',
+                    'Friday': 'пятница',
+                    'Saturday': 'суббота',
+                    'Sunday': 'воскресенье'
+                }.get(day_of_week, day_of_week)
+                
+                preexec_context = f"\n\n🎯 ДЕНЬ НЕДЕЛИ: {weekday_ru} - выбери соответствующий тип ответа (тренды/контакты/анализ по ротации)\n\n"
+                preexec_context += "🤖 АВТОМАТИЧЕСКИ ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ (используй результаты в ответе):\n\n"
                 
                 if preexec_results.get('research'):
-                    preexec_context += "📚 RESEARCH_TOPIC - уже выполнен:\n"
-                    preexec_context += str(preexec_results['research']) + "\n\n"
+                    preexec_context += "📚 RESEARCH_TOPIC - актуальная информация найдена:\n"
+                    research_text = str(preexec_results['research'])[:800]  # Ограничиваем
+                    preexec_context += research_text + "\n\n"
                 
                 if preexec_results.get('contacts'):
-                    preexec_context += "🤝 FIND_PARTNERS - уже выполнен:\n"
-                    preexec_context += str(preexec_results['contacts']) + "\n\n"
+                    preexec_context += "🤝 FIND_PARTNERS - релевантные контакты найдены:\n"
+                    contacts_text = str(preexec_results['contacts'])[:600]  # Ограничиваем
+                    preexec_context += contacts_text + "\n\n"
                 
                 if preexec_results.get('situation'):
-                    preexec_context += "🧠 ANALYZE_SITUATION - уже выполнен:\n"
-                    preexec_context += str(preexec_results['situation']) + "\n\n"
+                    preexec_context += "🧠 ANALYZE_SITUATION - анализ ситуации:\n"
+                    situation_text = str(preexec_results['situation'])[:500]
+                    preexec_context += situation_text + "\n\n"
                 
                 if preexec_results.get('profile_updates'):
-                    preexec_context += "👤 ПРОФИЛЬ ОБНОВЛЕН - автоматически:\n"
+                    preexec_context += "👤 ПРОФИЛЬ ОБНОВЛЕН:\n"
                     for update in preexec_results['profile_updates']:
                         preexec_context += f"• {update}\n"
                     preexec_context += "\n"
                 
-                preexec_context += "❗ НЕ ВЫЗЫВАЙ эти инструменты снова - просто используй готовые результаты!\n\n"
-                preexec_context += "ФОРМАТ: Короткое приветствие + ОДНА конкретная мысль (не больше 2-3 предложений). Говори естественно, как друг, без списков и форматирования.\n"
+                preexec_context += "❗ ВАЖНО: Не вызывай эти инструменты снова! Используй УЖЕ ГОТОВЫЕ результаты!\n"
+                preexec_context += "❗ ФОРМАТ ОТВЕТА: Приветствие + ОДИН конкретный инсайт на основе найденных данных (2-3 предложения, обычный текст, без списков)\n"
+                preexec_context += f"❗ ТИП ОТВЕТА на сегодня ({weekday_ru}): следуй ротации из промпта\n\n"
                 
-                # Ограничиваем длину preexec_context, чтобы не перегружать
-                max_preexec_length = 1000
+                # Ограничиваем длину preexec_context
+                max_preexec_length = 1500
                 if len(preexec_context) > max_preexec_length:
-                    preexec_context = preexec_context[:max_preexec_length] + "...\n[Контекст усечен для краткости]"
+                    preexec_context = preexec_context[:max_preexec_length] + "...\n[Контекст усечен]"
                 
                 # Добавляем к проактивному контексту
                 proactive_context = proactive_context + preexec_context
