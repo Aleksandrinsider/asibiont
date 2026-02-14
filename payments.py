@@ -25,9 +25,9 @@ TIER_PRICES = {
 }
 
 TIER_NAMES = {
-    'light': '🥉 Бронза',
-    'standard': '🥈 Серебро',
-    'premium': '🥇 Золото'
+    'light': '🟢 Лайт',
+    'standard': '🔵 Стандарт',
+    'premium': '🟡 Премиум'
 }
 
 def create_payment(amount, description, user_id, tier='light', promo_code=None):
@@ -122,4 +122,4 @@ def get_tier_price(tier):
 
 def get_tier_name(tier):
     """Get display name for subscription tier"""
-    return TIER_NAMES.get(tier, '🥉 Бронза')
+    return TIER_NAMES.get(tier, '🟢 Лайт')

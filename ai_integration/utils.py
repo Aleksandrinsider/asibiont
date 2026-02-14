@@ -1111,32 +1111,5 @@ def post_process_response(response, user_id):
     # This function was removed during cleanup, keeping as stub
     return response
 
-
-def clean_technical_details(content):
-    """
-    Очищает технические детали из ответа AI:
-    - Убирает названия функций
-    - Убирает технические теги
-    - Оставляет только естественный текст
-    """
-    if not content:
-        return content
-    
-    # Убираем названия функций в скобках или кавычках
-    content = re.sub(r'["\']?\w+\(\)[\'"]?', '', content)
-    
-    # Убираем технические паттерны с аргументами: function_name("args")
-    content = re.sub(r'\b\w+\([^)]*\)', '', content)
-    
-    # Убираем технические паттерны без скобок
-    content = re.sub(r'\b\w+\(\)', '', content)
-    
-    # Убираем лишние пробелы и пустые строки
-    content = re.sub(r'\n\s*\n', '\n', content)
-    content = content.strip()
-    
-    # Если после очистки ничего не осталось, возвращаем исходный текст
-    if not content:
-        return "Извините, произошла ошибка при формировании ответа."
-    
-    return content
+# clean_technical_details — единственная версия определена выше (строка ~411)
+# Дубликат удалён при рефакторинге

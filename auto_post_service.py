@@ -12,10 +12,41 @@ import random
 import aiohttp
 
 from models import Session, User, UserProfile, Task, Post
-from ai_integration.chat import chat_with_ai
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+async def _generate_text_with_ai(prompt: str) -> str:
+    """Прямой вызов AI API для генерации текста (без агентского пайплайна).
+    
+    Используется для генерации постов и другого контента,
+    где НЕ нужен полный цикл plan→execute→reflect.
+    """
+    url = "https://api.deepseek.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": "Ты - копирайтер. Пиши естественные посты от первого лица. Только текст поста, без пояснений."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.8,
+        "max_tokens": 500
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            if response.status == 200:
+                result = await response.json()
+                return result['choices'][0]['message']['content'].strip()
+            else:
+                error_text = await response.text()
+                raise Exception(f"AI API error: {response.status} {error_text[:200]}")
 
 
 async def generate_progress_post(user_id, session):
@@ -99,14 +130,9 @@ async def generate_progress_post(user_id, session):
 
 Создай пост:"""
         
-        # Use AI to generate natural post
+        # Прямой вызов AI API для генерации поста (без полного агентского пайплайна)
         try:
-            ai_result = await chat_with_ai(
-                user_id=user_id,
-                message=context,
-                db_session=session
-            )
-            response = ai_result['response']
+            response = await _generate_text_with_ai(context)
             
             if response and len(response) > 20:
                 # Clean up response - remove quotes if present
@@ -114,7 +140,6 @@ async def generate_progress_post(user_id, session):
                 logger.info(f"[AUTO POST] Generated AI post for {user_id}: {post_content[:100]}")
                 return post_content
             else:
-                # Fallback to simple message
                 logger.warning(f"AI response too short for {user_id}, using fallback")
                 return generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks)
                 
@@ -214,27 +239,20 @@ async def generate_research_post(user_id, query, analysis, session):
 
 Создай пост:"""
         
-        # Generate with AI
-        response = await chat_with_ai(context, user_id=user_id, db_session=session)
+        # Прямой вызов AI API (без агентского пайплайна, чтобы не было рекурсии)
+        try:
+            post_content = await _generate_text_with_ai(context)
+        except Exception as ai_err:
+            logger.error(f"[RESEARCH POST] AI generation failed: {ai_err}")
+            return None
         
-        if response:
-            # Handle both dict and string responses
-            if isinstance(response, dict):
-                post_content = response.get('response', '') or response.get('message', '') or str(response)
-            else:
-                post_content = str(response)
-            
-            # Clean up response
-            post_content = post_content.strip()
-            
+        if post_content and len(post_content) > 20:
             # Remove quotes if AI wrapped it
-            if post_content.startswith('"') and post_content.endswith('"'):
-                post_content = post_content[1:-1]
-            
+            post_content = post_content.strip().strip('"').strip("'")
             logger.info(f"[RESEARCH POST] Generated post for {user_id}: {post_content[:100]}...")
             return post_content
         else:
-            logger.warning(f"[RESEARCH POST] AI returned empty response for {user_id}")
+            logger.warning(f"[RESEARCH POST] AI returned empty/short response for {user_id}")
             return None
             
     except Exception as e:

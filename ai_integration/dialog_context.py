@@ -55,10 +55,29 @@ class DialogContext:
 
 # Глобальный словарь контекстов для каждого пользователя
 _user_contexts: dict[int, DialogContext] = {}
+_MAX_CONTEXTS = 1000  # Лимит записей для предотвращения утечки памяти
+
+
+def _cleanup_stale_contexts():
+    """Удаляет устаревшие контексты для предотвращения утечки памяти"""
+    if len(_user_contexts) <= _MAX_CONTEXTS:
+        return
+    stale = [uid for uid, ctx in _user_contexts.items() if not ctx.is_valid()]
+    for uid in stale:
+        del _user_contexts[uid]
+    # Если после очистки все ещё слишком много — удаляем самые старые
+    if len(_user_contexts) > _MAX_CONTEXTS:
+        sorted_by_time = sorted(
+            _user_contexts.items(),
+            key=lambda x: x[1].last_update or datetime.min
+        )
+        for uid, _ in sorted_by_time[:len(_user_contexts) - _MAX_CONTEXTS]:
+            del _user_contexts[uid]
 
 
 def get_user_context(user_id: int) -> DialogContext:
     """Получает или создает контекст для пользователя"""
+    _cleanup_stale_contexts()
     if user_id not in _user_contexts:
         _user_contexts[user_id] = DialogContext()
     return _user_contexts[user_id]

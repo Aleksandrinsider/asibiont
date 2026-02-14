@@ -55,107 +55,7 @@ class HybridAutonomousAgent:
         logger.warning("[AGENT] Using fallback default tools")
         # Здесь можно добавить базовый набор, если динамическое обнаружение не сработало
 
-    async def _generate_proactive_context(self, user_id, session, user_now):
-        """
-        ПРОАКТИВНАЯ ЛОГИКА: Генерирует контекст для проактивных предложений
-        Анализирует: время суток, интересы, задачи, доступных людей
-        Возвращает строку с контекстом для AI
-        """
-        from models import UserProfile, Task, User
-        from datetime import datetime, timedelta
-        
-        proactive_hints = []
-        
-        try:
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                return ""
-            
-            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-            if not profile:
-                return ""
-            
-            # АНАЛИЗ ВРЕМЕНИ СУТОК
-            hour = user_now.hour
-            if 6 <= hour < 12:
-                time_context = "утро"
-                time_suggestions = ["энергичные активности", "планирование дня", "спорт"]
-            elif 12 <= hour < 18:
-                time_context = "день"
-                time_suggestions = ["рабочие встречи", "обучение", "продуктивные задачи"]
-            elif 18 <= hour < 23:
-                time_context = "вечер"
-                time_suggestions = ["отдых", "социальные активности", "анализ дня", "спорт"]
-            else:
-                time_context = "ночь"
-                time_suggestions = ["отдых", "подготовка ко сну"]
-            
-            proactive_hints.append(f"Сейчас {time_context} - подходит для: {', '.join(time_suggestions)}")
-            
-            # АНАЛИЗ ИНТЕРЕСОВ И ЦЕЛЕЙ
-            if profile.interests:
-                interests_list = [i.strip() for i in profile.interests.split(',')[:3]]
-                proactive_hints.append(f"Интересы пользователя: {', '.join(interests_list)}")
-                
-                # Поиск людей с похожими интересами
-                from .handlers import get_partners_list
-                partners = get_partners_list(user.id, session)
-                if partners:
-                    # Берем топ-3 партнера
-                    top_partners = []
-                    for p in partners[:3]:
-                        partner_user = session.query(User).filter_by(id=p.user_id).first()
-                        if partner_user and partner_user.username:
-                            # Найти общие интересы
-                            if p.interests:
-                                partner_interests = set(i.strip().lower() for i in p.interests.split(','))
-                                user_interests = set(i.strip().lower() for i in profile.interests.split(','))
-                                common = user_interests & partner_interests
-                                if common:
-                                    top_partners.append(f"@{partner_user.username} (интересы: {', '.join(list(common)[:2])})")
-                    
-                    if top_partners:
-                        proactive_hints.append(f"Доступны для активностей: {'; '.join(top_partners[:2])}")
-            
-            if profile.goals:
-                goals_list = [g.strip() for g in profile.goals.split(',')[:2]]
-                proactive_hints.append(f"Цели: {', '.join(goals_list)}")
-            
-            # АНАЛИЗ ЗАДАЧ
-            tasks = session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status.in_(['pending', 'active', 'in_progress'])
-            ).order_by(Task.reminder_time.asc()).limit(5).all()
-            
-            if tasks:
-                overdue = []
-                today = []
-                for task in tasks:
-                    if task.reminder_time:
-                        try:
-                            reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_now.tzinfo)
-                            if reminder_dt < user_now:
-                                overdue.append(task.title)
-                            elif reminder_dt.date() == user_now.date():
-                                today.append(task.title)
-                        except Exception as e:
-                            logger.warning(f"[AGENT] Error parsing task reminder time: {e}")
-                
-                if overdue:
-                    proactive_hints.append(f"⚠️ Просроченные задачи: {', '.join(overdue[:2])}")
-                if today:
-                    proactive_hints.append(f"📅 Сегодня запланировано: {', '.join(today[:2])}")
-            
-            # Формируем итоговый проактивный контекст
-            if proactive_hints:
-                return "\n\nПРОАКТИВНЫЙ КОНТЕКСТ (используй для предложений):\n" + "\n".join(proactive_hints) + "\n\nНа основе этого контекста предложи 1-2 конкретных действия с указанием времени и людей."
-            
-        except Exception as e:
-            logger.error(f"[PROACTIVE] Error generating proactive context: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        return ""
+    # _generate_proactive_context удалён — весь проактивный контекст генерируется в context_builder.build_proactive_context()
 
     async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, subscription_tier=None, tool_choice=None, **kwargs):
         """Универсальный вызов AI API с опциональными tools"""
@@ -618,40 +518,9 @@ class HybridAutonomousAgent:
                             results.extend(add_result)
                             logger.info(f"[AUTO_TRIGGER] Auto-executed add_task for '{task_title}'")
                     
-                    # ⚡ ПРОАКТИВНЫЙ АНАЛИЗ after list_tasks
-                    if tool_name == 'list_tasks' and result and isinstance(result, str):
-                        logger.info(f"[PROACTIVE] Analyzing list_tasks result for proactive actions")
-                        proactive_actions = []
-                        
-                        # ПРОВЕРКА: ЕСЛИ ЗАДАЧ НЕТ - НЕ СОЗДАЕМ АВТОМАТИЧЕСКИ, А ПРЕДЛАГАЕМ ВАРИАНТЫ
-                        # Убираем автоматическое создание задач - пусть пользователь сам решает
-                        if "нет активных задач" in result.lower() or "список пуст" in result.lower() or "задач нет" in result.lower():
-                            logger.info(f"[PROACTIVE] No tasks found - will suggest options in response, not auto-create")
-                            # НЕ создаем задачу автоматически - это делает агента навязчивым
-                        
-                        # Проверка на социальные активности (автоматически ищем партнеров)
-                        social_keywords = ['пробежка', 'встреча', 'тренировка', 'спорт', 'кофе']
-                        for keyword in social_keywords:
-                            if keyword.lower() in result.lower():
-                                logger.info(f"[PROACTIVE] Found social activity with keyword '{keyword}', searching partners")
-                                # Извлекаем название задачи с этим ключевым словом
-                                import re
-                                pattern = rf"'([^']*{keyword}[^']*?)'(?:\s+в\s+\d+:\d+|[\s\.])"
-                                match = re.search(pattern, result, re.IGNORECASE)
-                                if match:
-                                    social_title = match.group(1)
-                                    proactive_actions.append({
-                                        'tool': 'find_relevant_contacts_for_task',
-                                        'params': {'task_description': social_title},  # Исправлено: task_description вместо task_title
-                                        'reason': f'Проактивно ищу партнеров для "{social_title}"'
-                                    })
-                                    break  # Только один поиск партнеров за раз
-                        
-                        # Выполняем проактивные действия
-                        if proactive_actions:
-                            logger.info(f"[PROACTIVE] Executing {len(proactive_actions)} proactive actions")
-                            proactive_results = await self.execute_actions(proactive_actions, user_id, session)
-                            results.extend(proactive_results)
+                    # Проактивный анализ после list_tasks убран:
+                    # авто-поиск партнёров по ключевым словам задач был слишком агрессивным
+                    # и вызывал непредсказуемые tool calls. AI сам предложит это в ответе.
                 
                 except Exception as e:
                     logger.error(f"[AGENT] Error executing {tool_name}: {e}")
@@ -880,8 +749,19 @@ class HybridAutonomousAgent:
             {"role": "user", "content": user_message}
         ]
 
-        # Генерируем ответ С ВОЗМОЖНОСТЬЮ использования инструментов для получения дополнительной информации
-        response = await self.call_ai(messages, use_tools=True, subscription_tier=subscription_tier, temperature=0.7)
+        # Если plan-фаза УЖЕ выполнила действия — НЕ даём tools в reflect
+        # (предотвращает дубликаты: add_task x2, list_tasks x2 и т.д.)
+        # Если plan НЕ выполнил действий — даём tools как fallback
+        # (для случаев когда plan_strategy AI не вызвал tools, но reflect может)
+        has_executed_actions = len(execution_results) > 0 and any(r.get('success') for r in execution_results)
+        allow_tools_in_reflect = not has_executed_actions
+        
+        if has_executed_actions:
+            logger.info(f"[REFLECT] Plan already executed {len(execution_results)} actions — tools disabled in reflect")
+        else:
+            logger.info(f"[REFLECT] No actions from plan — tools enabled as fallback")
+        
+        response = await self.call_ai(messages, use_tools=allow_tools_in_reflect, subscription_tier=subscription_tier, temperature=0.7)
         
         if not response or 'choices' not in response or not response['choices']:
             logger.error(f"[AGENT] Invalid AI response structure: {response}")
@@ -905,7 +785,7 @@ class HybridAutonomousAgent:
                 })
             
             # ВЫПОЛНЯЕМ НОВЫЕ ИНСТРУМЕНТЫ
-            new_results = await self.execute_actions(new_actions, user_id)
+            new_results = await self.execute_actions(new_actions, user_id, session)
             execution_results.extend(new_results)
             
             # ОБНОВЛЯЕМ ПРОМПТ с результатами новых действий
@@ -1092,6 +972,11 @@ class HybridAutonomousAgent:
             else:
                 logger.info(f"[AGENT] Using provided subscription tier: {subscription_tier}")
             
+            # Гарантируем наличие session для execute_actions
+            if session is None:
+                session = Session()
+                logger.info(f"[AGENT] Created session for execute_actions (user {user_id})")
+            
             # Сохраняем сообщение пользователя в историю
             logger.info(f"[AGENT] About to save user message to history")
             from .conversation_history import save_message_to_history
@@ -1124,6 +1009,11 @@ class HybridAutonomousAgent:
                     user_id,
                     subscription_tier
                 )
+            elif plan.get('ai_response'):
+                # AI уже сформировал ответ на этапе планирования — используем его напрямую (экономим API-вызов)
+                logger.info(f"[AGENT] Step 3: Using AI response from plan phase (no extra API call)")
+                from .utils import clean_technical_details
+                response = clean_technical_details(plan['ai_response']).strip()
             else:
                 # Общее общение - используем AI
                 logger.info(f"[AGENT] Step 3: AI generating natural response")
@@ -1157,6 +1047,24 @@ class HybridAutonomousAgent:
             from .conversation_history import save_message_to_history
             save_message_to_history(user_id, "assistant", response)
             logger.info(f"[AGENT] Assistant response saved to history")
+            
+            # Сохраняем ключевую информацию в долгосрочную память (user.memory)
+            try:
+                from .memory import update_user_memory
+                memory_facts = []
+                for r in execution_results:
+                    if r.get('success') and r.get('tool') in (
+                        'add_task', 'complete_task', 'edit_task', 'delete_task',
+                        'update_profile', 'create_goal', 'update_goal_progress',
+                        'delegate_task', 'set_contact_alert', 'set_content_strategy'
+                    ):
+                        result_str = str(r.get('result', ''))[:150]
+                        memory_facts.append(f"{r['tool']}: {result_str}")
+                if memory_facts:
+                    update_user_memory("\n".join(memory_facts), user_id=user_id)
+                    logger.info(f"[AGENT] Saved {len(memory_facts)} facts to user memory")
+            except Exception as mem_err:
+                logger.warning(f"[AGENT] Failed to save memory: {mem_err}")
             
             # Ограничиваем размер истории
             if len(self.execution_history) > 50:  # Больше истории для обучения

@@ -59,7 +59,7 @@ class AutoMarketingService:
                 User.subscription_tier == SubscriptionTier.PREMIUM,
                 User.telegram_channel.isnot(None),
                 User.telegram_channel != '',
-                Subscription.plan == 'premium',
+                Subscription.tier == SubscriptionTier.PREMIUM,
                 Subscription.end_date > now
             ).all()
             
@@ -189,6 +189,27 @@ class AutoMarketingService:
             logger.error(f"[AUTO_MARKETING_SERVICE] Error running marketing for user {user_id}: {e}")
             return {'status': 'error', 'user_id': user_id, 'errors': [str(e)]}
     
+    async def _posted_today(self, user_data):
+        """Проверяет, был ли уже пост от этого пользователя сегодня"""
+        session = Session()
+        try:
+            from models import Post
+            user_tz = pytz.timezone(user_data.get('timezone', 'Europe/Moscow'))
+            now_user = datetime.now(pytz.UTC).astimezone(user_tz)
+            today_start = now_user.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start_utc = today_start.astimezone(pytz.UTC).replace(tzinfo=None)
+            
+            post_count = session.query(Post).filter(
+                Post.user_id == user_data['user_id'],
+                Post.created_at >= today_start_utc
+            ).count()
+            return post_count > 0
+        except Exception as e:
+            logger.error(f"[AUTO_MARKETING_SERVICE] Error checking posted_today: {e}")
+            return False
+        finally:
+            session.close()
+
     async def should_post_now(self, user_data):
         """
         Проверяет, пора ли постить для данного пользователя
@@ -255,7 +276,7 @@ class AutoMarketingService:
                         continue
                     
                     # Проверяем, не постили ли уже сегодня
-                    if await self.posted_today(user_data['user_id']):
+                    if await self._posted_today(user_data):
                         logger.info(f"[AUTO_MARKETING_SERVICE] Skipping user {user_data['telegram_id']} - already posted today")
                         continue
                     
@@ -273,7 +294,7 @@ class AutoMarketingService:
             successful = sum(1 for r in reports if r['status'] == 'success')
             total_posts = sum(r.get('posts_published', 0) for r in reports)
             
-            logger.info(f"[AUTO_MARKETING_SERVICE] ✅ Cycle completed: {successful}/{len(user_ids)} users, {total_posts} posts total")
+            logger.info(f"[AUTO_MARKETING_SERVICE] ✅ Cycle completed: {successful}/{len(users_data)} users, {total_posts} posts total")
             
         except Exception as e:
             logger.error(f"[AUTO_MARKETING_SERVICE] Cycle error: {e}")
@@ -314,7 +335,7 @@ class AutoMarketingService:
 _marketing_service = None
 
 
-def init_marketing_service(bot=None, check_interval_hours=6):
+def init_marketing_service(bot=None, check_interval_hours=6):  # noqa: check_interval_hours kept for backward compat
     """
     Инициализирует глобальный экземпляр сервиса
     

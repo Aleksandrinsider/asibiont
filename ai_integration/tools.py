@@ -10,27 +10,44 @@ DELEGATION_RECEIVE_FUNCTIONS = {
 DELEGATION_SEND_FUNCTIONS = {
     'delegate_task',
     'get_delegation_progress',
-    'research_and_plan'  # расширенное исследование с планированием
 }
 
 # Все функции делегирования
 DELEGATION_FUNCTIONS = DELEGATION_RECEIVE_FUNCTIONS | DELEGATION_SEND_FUNCTIONS
 
-# Функции доступные только на PREMIUM (не на LIGHT и STANDARD)
-PREMIUM_ONLY_FUNCTIONS = {
+# Фоновые алерты — STANDARD и PREMIUM (автоматические уведомления о контактах)
+ALERT_FUNCTIONS = {
     'set_contact_alert',
-    'set_activity_alert',
-    'set_auto_post_time',
-    'set_content_strategy',
-    'toggle_autonomous_feature'
 }
 
-# Ограниченные функции для каждого тарифа (что БЛОКИРУЕТСЯ на том тарифе)
-# LIGHT: не может делегировать другим (но может получать)
-LIGHT_RESTRICTED = DELEGATION_SEND_FUNCTIONS | PREMIUM_ONLY_FUNCTIONS
+# Инструменты исключённые из обнаружения (дубли, устаревшие)
+# Функции-обработчики остаются в handlers.py, но не предлагаются AI
+EXCLUDED_TOOLS = {
+    'web_search',                       # дубль research_topic
+    'get_news_info',                     # дубль get_news_trends
+    'check_topic_relevance',             # дубль research_topic
+    'research_and_plan',                 # дубль research_topic(depth='deep')
+    'smart_update_profile',              # дубль update_profile
+    'update_user_memory',                # дубль update_profile
+    'find_partners',                     # дубль find_relevant_contacts_for_task
+    'get_task_details',                  # покрывается list_tasks + контекст
+    'reschedule_task',                   # покрывается edit_task(reminder_time)
+    'set_activity_alert',                # объединяется в set_contact_alert
+    'analyze_situation_and_suggest_tasks', # AI собирает сам из контекста
+}
 
-# STANDARD: может делегировать, но нет Premium функций
-STANDARD_RESTRICTED = PREMIUM_ONLY_FUNCTIONS
+# Автопилот канала — только PREMIUM (автономное ведение)
+PREMIUM_AUTOPILOT_FUNCTIONS = {
+    'set_auto_post_time',
+    'set_content_strategy',
+}
+
+# Ограниченные функции для каждого тарифа (что БЛОКИРУЕТСЯ)
+# LIGHT: не может делегировать, нет алертов и автопилота (но может получать делегированные)
+LIGHT_RESTRICTED = DELEGATION_SEND_FUNCTIONS | ALERT_FUNCTIONS | PREMIUM_AUTOPILOT_FUNCTIONS
+
+# STANDARD: может делегировать + алерты, но нет автопилота канала
+STANDARD_RESTRICTED = PREMIUM_AUTOPILOT_FUNCTIONS
 
 # PREMIUM: нет ограничений
 PREMIUM_RESTRICTED = set()
@@ -165,27 +182,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "reschedule_task",
-            "description": "⚠️ ПЕРЕНЕСТИ ВРЕМЯ СУЩЕСТВУЮЩЕЙ ЗАДАЧИ. ОБЯЗАТЕЛЬНО используй когда пользователь хочет ИЗМЕНИТЬ ВРЕМЯ задачи. Ключевые слова: 'перенеси', 'давай перенесем', 'измени время', 'поставь на другое время', 'отложи', 'подвинь'. ВСЕГДА используй reschedule_task для переноса, НИКОГДА не создавай новую задачу через add_task. Если название не указано, будет перенесена последняя активная задача. Примеры: 'перенеси встречу на завтра в 16:00' → reschedule_task(task_title='встреча', new_time='завтра в 16:00'), 'перенеси проверку почты на 5 минут' → reschedule_task(task_title='почт', new_time='через 5 минут'), 'отложи на час' → reschedule_task(new_time='через 1 час'), 'перенеси её через 15 минут' → reschedule_task(new_time='через 15 минут')",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_title": {
-                        "type": "string",
-                        "description": "Ключевые слова для поиска задачи. ОПЦИОНАЛЬНО - если не указано, будет перенесена последняя активная задача. ВАЖНО: извлекай УНИКАЛЬНЫЕ ключевые слова из контекста - если есть @username, имена, специфические термины - используй их! Примеры: 'почта' найдёт 'Проверить почту', '@battle сообщение' найдёт 'Написать @battle_test_user', 'notion api' найдёт 'Настроить Notion API'",
-                    },
-                    "new_time": {
-                        "type": "string",
-                        "description": "Новое время в ЛЮБОМ формате: 'YYYY-MM-DD HH:MM', 'HH:MM', 'через 2 часа', 'завтра в 10:00', 'послезавтра в 14:00', 'через 15 минут'",
-                    },
-                },
-                "required": ["new_time"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "edit_task",
             "description": "ИЗМЕНИТЬ НАЗВАНИЕ ИЛИ ОПИСАНИЕ СУЩЕСТВУЮЩЕЙ ЗАДАЧИ. Вызывай ТОЛЬКО когда пользователь хочет изменить текст задачи (название, описание). Ключевые слова: 'измени название', 'исправь задачу', 'обнови описание'. НЕ вызывай для изменения времени (используй reschedule_task). Примеры: 'измени название задачи на X' → edit_task, 'добавь описание к задаче Y' → edit_task",
             "parameters": {
@@ -255,88 +251,11 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "smart_update_profile",
-            "description": "УМНОЕ РЕДАКТИРОВАНИЕ ПРОФИЛЯ С ВЫБОРОМ ДЕЙСТВИЯ. Используй когда нужно ТОЧНО КОНТРОЛИРОВАТЬ как обновить профиль: добавить, заменить или умно объединить. Для целей поддерживает семантическое объединение похожих целей. ПРИМЕРЫ: 'замени все цели на новую' → smart_update_profile(field='goals', value='новая цель', action='replace'), 'добавь навык Python' → smart_update_profile(field='skills', value='Python', action='add'), 'обнови город' → smart_update_profile(field='city', value='Москва', action='replace').",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "field": {
-                        "type": "string",
-                        "description": "Поле для обновления",
-                        "enum": ["goals", "interests", "skills", "city", "company", "position"]
-                    },
-                    "value": {
-                        "type": "string",
-                        "description": "Новое значение для поля"
-                    },
-                    "action": {
-                        "type": "string",
-                        "description": "Действие: 'add' - добавить к существующим, 'replace' - заменить полностью, 'merge' - умно объединить (только для goals)",
-                        "enum": ["add", "replace", "merge"],
-                        "default": "add"
-                    }
-                },
-                "required": ["field", "value"]
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "show_profile",
             "description": "ТОЛЬКО ДЛЯ ПОКАЗА ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ! СТРОГО ЗАПРЕЩЕНО использовать для других действий. Вызывай ТОЛЬКО когда пользователь хочет посмотреть/узнать информацию о своем профиле. Ключевые слова: 'покажи профиль', 'что в профиле', 'мой профиль', 'информация о профиле'. СТРОГО ЗАПРЕЩЕНО: для обновления профиля (используй update_profile), для создания задач, для разговоров. Примеры: 'покажи мой профиль' → show_profile, 'что у меня в профиле' → show_profile. ЗАПРЕЩЕНО: 'обнови профиль' (используй update_profile), 'добавь навык' (используй update_profile)",
             "parameters": {
                 "type": "object",
                 "properties": {},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "find_partners",
-            "description": "ТОЛЬКО ДЛЯ ПОИСКА ПАРТНЕРОВ! СТРОГО ЗАПРЕЩЕНО использовать для других действий. Вызывай ТОЛЬКО когда пользователь ищет контакты или партнеров. Ключевые слова: 'найди партнеров', 'поищи контакты', 'кто может помочь'. СТРОГО ЗАПРЕЩЕНО: для создания задач, для обновления профиля, для разговоров. Примеры: 'найди партнеров по интересам' → find_partners, 'поищи контакты для проекта' → find_partners. ЗАПРЕЩЕНО: 'обнови профиль' (используй update_profile), 'создай задачу' (используй add_task)",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_task_details",
-            "description": "ТОЛЬКО ДЛЯ ПОЛУЧЕНИЯ ДЕТАЛЕЙ ЗАДАЧИ! СТРОГО ЗАПРЕЩЕНО использовать для других действий. Вызывай ТОЛЬКО когда пользователь хочет подробности одной задачи. Ключевые слова: 'детали задачи', 'покажи задачу', 'что в задаче'. СТРОГО ЗАПРЕЩЕНО: для обновления профиля, для создания задач, для списка всех задач. Примеры: 'покажи детали задачи про презентацию' → get_task_details, 'что в задаче о встрече' → get_task_details. ЗАПРЕЩЕНО: 'обнови профиль' (используй update_profile), 'покажи все задачи' (используй list_tasks)",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_title": {
-                        "type": "string",
-                        "description": "Название задачи",
-                    },
-                },
-                "required": ["task_title"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "update_user_memory",
-            "description": "Сохраняет информацию в память пользователя. ВАЖНО: ДОБАВЛЯЕТ данные, НЕ заменяет их. Для interest/skill/goal - добавляет к существующим в профиле. Для других типов - добавляет в общую память с временной меткой. Используй для: интересов ('хочу научиться покер' → memory_type='interest', content='покер'), навыков ('умею играть на гитаре' → memory_type='skill', content='гитара'), целей ('хочу открыть бизнес' → memory_type='goal', content='открыть бизнес'), предпочтений ('люблю кофе' → memory_type='preference', content='кофе'). Функция автоматически проверяет дубликаты и не добавит повторно.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "memory_type": {
-                        "type": "string",
-                        "description": "Тип информации (preference, project, contact, etc.)",
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Что запомнить",
-                    },
-                },
-                "required": ["memory_type", "content"],
             },
         },
     },
@@ -433,43 +352,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "set_activity_alert",
-            "description": "🌟 PREMIUM: Настроить автоматическое уведомление об активностях других пользователей. Система будет мониторить задачи других и АВТОМАТИЧЕСКИ добавит информацию в твой следующий диалог через AI (проактивный контекст). Примеры: 'скажи когда кто-то пойдет на пробежку' → AI упомянет в следующем сообщении 'Кстати, @user123 планирует пробежку завтра в 7:00, хочешь присоединиться?'. Работает для: спорт (пробежка, зал, йога), бизнес (митапы, встречи), обучение (курсы, воркшопы), хобби (покер, кино). Информация приходит ЕСТЕСТВЕННО в разговоре, НЕ как push-уведомление.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "activity_type": {
-                        "type": "string",
-                        "description": "Тип активности для мониторинга. Примеры: 'пробежка', 'тренажерный зал', 'митап по AI', 'воркшоп', 'покер', 'кино', 'бизнес-встреча'"
-                    },
-                    "keywords": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Ключевые слова для поиска в задачах других. Примеры: ['пробежка', 'бег', 'running'], ['митап', 'meetup', 'конференция'], ['покер', 'poker']"
-                    },
-                    "location": {
-                        "type": "string",
-                        "description": "Опционально: фильтр по городу. Примеры: 'Москва', 'Санкт-Петербург', 'любой'"
-                    },
-                    "frequency": {
-                        "type": "string",
-                        "enum": ["any", "regular", "one_time"],
-                        "description": "Частота активности: 'any' - любые, 'regular' - только регулярные (еженедельные), 'one_time' - только разовые. По умолчанию 'any'",
-                        "default": "any"
-                    },
-                    "enabled": {
-                        "type": "boolean",
-                        "description": "Включить (true) или отключить (false) уведомление. По умолчанию true",
-                        "default": True
-                    }
-                },
-                "required": ["activity_type", "keywords"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "list_tasks",
             "description": "Показать все активные задачи пользователя. Вызывай ТОЛЬКО когда спрашивают о задачах ('мои задачи', 'список', 'что запланировано'). НЕ вызывай для создания, завершения или других операций с задачами.",
             "parameters": {
@@ -499,7 +381,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "set_contact_alert",
-            "description": "⚠️ МОНИТОРИНГ КОНТАКТОВ ПО НАВЫКАМ/ИНТЕРЕСАМ [ДОСТУПНО - ВЫЗЫВАЙ!]: Настроить автоматическое уведомление о новых пользователях с нужными навыками/интересами. Ключевые слова: 'мониторь @user', 'отслеживай контакт', 'следи за пользователем', 'скажи когда появится Python разработчик'. ЕСЛИ пользователь говорит 'мониторь @user' или подобное - ОБЯЗАТЕЛЬНО ВЫЗОВИ set_contact_alert()! Система будет мониторить регистрации и обновления профилей, и АВТОМАТИЧЕСКИ добавит информацию в твой следующий диалог через AI. Примеры: 'скажи когда появится специалист по продажам' → set_contact_alert(skill='продажи'), 'мониторь @test_user' → set_contact_alert(skill='test_user'). [ПРЕМИУМ функция, но ДОСТУПНА в твоем списке - значит ВЫЗЫВАЙ].",
+            "description": "⚠️ МОНИТОРИНГ КОНТАКТОВ (СТАНДАРТ+): Настроить автоматическое уведомление о новых пользователях с нужными навыками/интересами. Ключевые слова: 'мониторь @user', 'отслеживай контакт', 'скажи когда появится Python разработчик'. Система мониторит регистрации и обновления профилей, и АВТОМАТИЧЕСКИ добавит информацию в следующий диалог. Примеры: 'скажи когда появится специалист по продажам' → set_contact_alert(skill='продажи'). [СТАНДАРТ или ПРЕМИУМ]",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -550,7 +432,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "generate_marketing_content",
-            "description": "🚀 AI МАРКЕТИНГ (STANDARD+): Автоматическая генерация профессионального маркетингового контента для привлечения клиентов. AI создаст цепляющий заголовок, текст поста, хэштеги и призыв к действию. ⚠️ НЕ СПРАШИВАЙ ДЕТАЛИ - ГЕНЕРИРУЙ СРАЗУ с тем что есть! Используй разумные defaults: если аудитория не указана → 'предприниматели 25-40', если платформа не указана → 'telegram'. Используй когда пользователь хочет: написать пост для соцсетей, создать рекламу, привлечь клиентов, продвинуть продукт. Примеры: 'напиши пост про AI' → generate_marketing_content(product_name='AI инструменты', target_audience='предприниматели 25-40', platform='telegram'), 'создай рекламу для Instagram' → generate_marketing_content(..., platform='instagram'). Доступно с STANDARD или PREMIUM.",
+            "description": "🚀 AI МАРКЕТИНГ (ВСЕ ТАРИФЫ): Автоматическая генерация профессионального маркетингового контента для привлечения клиентов. AI создаст цепляющий заголовок, текст поста, хэштеги и призыв к действию. ⚙️ НЕ СПРАШИВАЙ ДЕТАЛИ - ГЕНЕРИРУЙ СРАЗУ с тем что есть! Используй разумные defaults. Примеры: 'напиши пост про AI', 'создай рекламу для Instagram'.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -595,23 +477,6 @@ TOOLS = [
                         "description": "Глубина анализа: 'basic' (базовый), 'full' (полный), 'deep' (глубокий). По умолчанию 'full'",
                         "default": "full",
                         "enum": ["basic", "full", "deep"]
-                    }
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "research_and_plan",
-            "description": "🎯 КОМПЛЕКСНЫЙ АНАЛИЗ РЫНКА + ПЛАН ДЕЙСТВИЙ (STANDARD+): Глубокое исследование рынка через SERPER с анализом конкурентов, трендов и возможностей. Создает персонализированный план действий с конкретными задачами. Идеально для: запуска бизнеса, изучения ниши, стратегического планирования. Примеры: 'проанализируй рынок AI-агентов и составь план продвижения', 'изучи конкурентов в нише X и предложи стратегию'. Доступно с STANDARD или PREMIUM.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Тема для комплексного анализа. Примеры: 'AI-агенты для бизнеса', 'стартап в сфере образования', 'B2B маркетинг 2026'"
                     }
                 },
                 "required": ["query"]
@@ -668,7 +533,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_telegram",
-            "description": "📢 ПУБЛИКАЦИЯ В TELEGRAM (STANDARD+): Публикует пост в Telegram канал пользователя. Требуется настроенный telegram_channel в профиле. Используй ПОСЛЕ generate_marketing_content или когда пользователь просит 'опубликуй пост', 'запости это'. Бот должен быть админом канала. Доступно с STANDARD или PREMIUM.",
+            "description": "📢 ПУБЛИКАЦИЯ В TELEGRAM (ВСЕ ТАРИФЫ): Публикует пост в Telegram канал пользователя. Требуется настроенный telegram_channel в профиле. Используй ПОСЛЕ generate_marketing_content или когда пользователь просит 'опубликуй пост', 'запости это'. Бот должен быть админом канала.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -684,8 +549,95 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "create_goal",
+            "description": "🎯 СОЗДАТЬ ЦЕЛЬ: Долгосрочная цель пользователя с отслеживанием прогресса. Цели объединяют задачи и показывают общий прогресс. Ключевые слова: 'хочу достичь', 'моя цель', 'планирую за N месяцев', 'стремлюсь к'. Примеры: 'хочу выучить Python за 3 месяца' → create_goal(title='Выучить Python', category='learning', target_date='через 3 месяца'). ПОСЛЕ создания цели предложи разбить её на задачи через add_task!",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Краткое название цели (2-8 слов). Примеры: 'Выучить Python', 'Запустить стартап', 'Пробежать марафон'"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Подробное описание цели (опционально)"
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Категория цели",
+                        "enum": ["work", "personal", "health", "learning", "finance", "social"]
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "Приоритет цели",
+                        "enum": ["low", "medium", "high", "critical"]
+                    },
+                    "target_date": {
+                        "type": "string",
+                        "description": "Целевая дата достижения. Форматы: 'через 3 месяца', '2026-06-01', 'к лету'"
+                    },
+                    "success_criteria": {
+                        "type": "string",
+                        "description": "Как измерить успех. Примеры: 'сдать сертификацию', 'пробежать 42 км за 4 часа', 'выручка 1 млн'"
+                    }
+                },
+                "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_goal_progress",
+            "description": "📊 ОБНОВИТЬ ПРОГРЕСС ЦЕЛИ: Изменить процент, статус или добавить заметку к цели. Ключевые слова: 'прогресс по цели', 'я продвинулся', 'обнови цель', 'завершил цель', 'приостанови цель'. Примеры: 'прогресс по Python 40%' → update_goal_progress(goal_title='Python', progress=40), 'завершил цель марафон' → update_goal_progress(goal_title='марафон', status='completed')",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal_title": {
+                        "type": "string",
+                        "description": "Название или ключевые слова цели для поиска"
+                    },
+                    "progress": {
+                        "type": "integer",
+                        "description": "Процент выполнения (0-100). При 100% цель автоматически завершается"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Новый статус цели",
+                        "enum": ["active", "completed", "paused", "cancelled"]
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Заметка о прогрессе (добавляется к истории)"
+                    }
+                },
+                "required": ["goal_title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_goals",
+            "description": "🎯 ПОКАЗАТЬ ЦЕЛИ: Список целей пользователя с прогрессом и статистикой. Ключевые слова: 'мои цели', 'покажи цели', 'какие у меня цели', 'прогресс'. Примеры: 'покажи мои цели' → list_goals(), 'завершённые цели' → list_goals(status_filter='completed')",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status_filter": {
+                        "type": "string",
+                        "description": "Фильтр по статусу: 'active' (активные), 'completed' (завершённые), 'all' (все)",
+                        "enum": ["active", "completed", "paused", "all"]
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "set_content_strategy",
-            "description": "🎯 НАСТРОИТЬ СТРАТЕГИЮ КОНТЕНТА (STANDARD+): Сохраняет стратегию контента для автоматического маркетинга. Используй когда пользователь хочет настроить автопостинг или описывает что хочет видеть в постах. Примеры: 'хочу постить про свой бизнес', 'расскажи как настроить автопубликацию', 'буду публиковать кейсы по дизайну'. ВАЖНО: Спроси у пользователя детали если их нет - что постить, для кого, какая цель.",
+            "description": "🎯 НАСТРОИТЬ СТРАТЕГИЮ КОНТЕНТА (ТОЛЬКО ПРЕМИУМ): Сохраняет стратегию контента для автономного ведения канала. AI будет автоматически генерировать и публиковать контент по этой стратегии. Примеры: 'хочу постить про свой бизнес', 'буду публиковать кейсы по дизайну'. ВАЖНО: Спроси детали — что постить, для кого, цель. [ТОЛЬКО ПРЕМИУМ]",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -695,45 +647,6 @@ TOOLS = [
                     }
                 },
                 "required": ["strategy"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "toggle_autonomous_feature",
-            "description": "⚙️ УПРАВЛЕНИЕ АВТОНОМНЫМИ ФУНКЦИЯМИ (PREMIUM): Включает/выключает автоматические Premium функции. Используй когда пользователь говорит: 'отключи автопостинг', 'больше не пости автоматически', 'выключи автоделегирование', 'включи обратно автоматику'. Доступно только для PREMIUM.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "feature": {
-                        "type": "string",
-                        "description": "Какую функцию управлять: 'marketing' (автопостинг), 'delegation' (автоделегирование), 'all' (все автономные функции)",
-                        "enum": ["marketing", "delegation", "all"]
-                    },
-                    "enabled": {
-                        "type": "boolean",
-                        "description": "true = включить, false = выключить. Определяй из запроса пользователя: 'отключи' → false, 'включи' → true"
-                    }
-                },
-                "required": ["feature", "enabled"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_topic_relevance",
-            "description": "📊 ПРОВЕРКА АКТУАЛЬНОСТИ ТЕМЫ (LIGHT+): Быстрая проверка есть ли свежая информация по теме. Показывает актуальность темы без детального анализа. Примеры: 'актуальна ли тема блокчейн', 'есть ли новости про метавселенные', 'стоит ли изучать эту технологию'. Доступно всем пользователям.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "topic": {
-                        "type": "string",
-                        "description": "Тема для проверки актуальности. Примеры: 'NFT', 'web3', 'квантовые компьютеры', 'солнечная энергетика'"
-                    }
-                },
-                "required": ["topic"]
             }
         }
     },

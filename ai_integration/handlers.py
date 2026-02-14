@@ -349,14 +349,14 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     # УМНОЕ СОКРАЩЕНИЕ НАЗВАНИЯ: если слишком длинное, пытаемся извлечь суть
     original_title = title
     word_count = len(title.split())
-    if len(title) > 60 or word_count > 10:
+    if len(title) > 120 or word_count > 15:
         logger.warning(f"[ADD_TASK] Title too long ({len(title)} chars, {word_count} words), attempting smart extraction")
         # Попытка извлечь ключевые слова (простая эвристика)
-        # Убираем стоп-слова и берём первые 5 значимых слов
+        # Убираем стоп-слова и берём первые 8 значимых слов
         stop_words = ['нужно', 'надо', 'необходимо', 'давай', 'создай', 'добавь', 'напомни', 'поставь', 'я', 'мне', 'для', 'чтобы', 'как']
         words = [w for w in title.split() if w.lower() not in stop_words and len(w) > 2]
-        if len(words) > 5:
-            title = ' '.join(words[:5])
+        if len(words) > 8:
+            title = ' '.join(words[:8])
             logger.info(f"[ADD_TASK] Title shortened: '{original_title}' -> '{title}'")
         else:
             title = ' '.join(words)
@@ -1351,7 +1351,7 @@ def delegate_task(
             try:
                 import json
                 blocked_list = json.loads(recipient_profile.blocked_contacts)
-                if delegator.username.lower().replace('@', '') in [b.lower().replace('@', '') for b in blocked_list]:
+                if delegator.username and delegator.username.lower().replace('@', '') in [b.lower().replace('@', '') for b in blocked_list]:
                     # Notify delegator that recipient is not accepting tasks from them
                     try:
                         from main import bot
@@ -1435,8 +1435,11 @@ def delegate_task(
     except Exception as e:
         logger.error(f"[DELEGATE] Unexpected error in delegate_task: {e}")
         if 'session' in locals():
-            session.close()
+            session.rollback()
         return f"ERROR: Произошла ошибка при делегировании задачи: {str(e)}"
+    finally:
+        if 'session' in locals():
+            session.close()
 
 def check_subscription_status(user_id=None):
     """Check subscription status"""
@@ -1545,8 +1548,9 @@ def accept_delegated_task(task_id=None, task_title=None, user_id=None):
         import traceback
         traceback.print_exc()
         session.rollback()
-        session.close()
         return f"Ошибка: {str(e)}"
+    finally:
+        session.close()
 
 def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=None):
     """Reject a delegated task"""
@@ -1648,8 +1652,9 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
         import traceback
         traceback.print_exc()
         session.rollback()
-        session.close()
         return f"Ошибка: {str(e)}"
+    finally:
+        session.close()
 
 def get_delegation_progress(user_id, session=None):
     """Получить отчет о статусе делегированных задач"""
@@ -1745,7 +1750,7 @@ def get_delegation_progress(user_id, session=None):
         if should_close:
             session.close()
 
-        return f"DELEGATION_REPORT: {report}"
+        return "DELEGATION_REPORT:\n" + "\n".join(report)
 
     except Exception as e:
         logger.error(f"Error getting delegation progress for user {user_id}: {e}")
@@ -1772,22 +1777,22 @@ async def cancel_delegation(task_id, user_id):
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            session.close()
             return "Ошибка: Пользователь не найден."
 
         # Ищем задачу где текущий пользователь является делегатором
-        task = session.query(Task).filter_by(id=int(task_id), delegated_by=user.id).first()
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            return f"Некорректный ID задачи: {task_id}"
+        task = session.query(Task).filter_by(id=task_id_int, delegated_by=user.id).first()
         if not task:
-            session.close()
             return "Задача не найдена или вы не являетесь делегатором этой задачи."
 
         if not task.delegated_to_username:
-            session.close()
             return "Эта задача не делегирована."
 
         # Check if task is already completed
         if task.status == "completed":
-            session.close()
             return "Нельзя отменить делегирование выполненной задачи."
 
         # Cancel delegation - возвращаем задачу делегатору
@@ -1801,15 +1806,15 @@ async def cancel_delegation(task_id, user_id):
         task.delegation_details = None
 
         session.commit()
-        session.close()
 
         return f"Делегирование задачи '{task_title}' для @{delegated_to} отменено. Задача возвращена в ваш список."
     except Exception as e:
         import traceback
         traceback.print_exc()
         session.rollback()
-        session.close()
         return f"Ошибка при отмене делегирования: {str(e)}"
+    finally:
+        session.close()
 
 async def edit_task(
         task_id=None,
@@ -1869,11 +1874,7 @@ async def edit_task(
         if title:
             task.title = title
         if description is not None:
-            # Only encrypt if not already encrypted (prevents double encryption)
-            if description and not description.startswith('gAAAAA'):
-                task.description = encrypt_data(description)
-            else:
-                task.description = description
+            task.description = encrypt_data(description)
         if reminder_time:
             try:
                 # Use AI-powered flexible time parser
@@ -2258,6 +2259,9 @@ def get_partners_list(user_id=None, session=None):
 
     user = session.query(User).filter_by(id=user_id).first()
     if not user:
+        # Fallback: может быть передан telegram_id вместо db pk
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
         logger.warning(f"[PARTNERS] User not found for user_id: {user_id}")
         if close_session:
             session.close()
@@ -2454,13 +2458,49 @@ def get_partners_list(user_id=None, session=None):
                     match_reasons.append(f"current_plans: {interest}")
                     break
 
-        # Check goals
+        # Check goals (text from UserProfile)
         if user_profile.goals and profile.goals:
             user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
             profile_goals = set(g.strip().lower() for g in profile.goals.split(","))
             if user_goals & profile_goals:
                 has_match = True
                 match_reasons.append(f"goals: {user_goals & profile_goals}")
+
+        # Check structured Goals from Goal table
+        if not has_match:
+            try:
+                user_goals_db = session.query(Goal).filter(
+                    Goal.user_id == user.id,
+                    Goal.status.in_(['active', 'in_progress'])
+                ).all()
+                partner_goals_db = session.query(Goal).filter(
+                    Goal.user_id == profile.user_id,
+                    Goal.status.in_(['active', 'in_progress'])
+                ).all()
+                if user_goals_db and partner_goals_db:
+                    # Match by category
+                    user_goal_categories = set(g.category.lower().strip() for g in user_goals_db if g.category)
+                    partner_goal_categories = set(g.category.lower().strip() for g in partner_goals_db if g.category)
+                    common_categories = user_goal_categories & partner_goal_categories
+                    if common_categories:
+                        has_match = True
+                        match_reasons.append(f"goal categories: {common_categories}")
+                    # Match by title keywords (>= 4 chars)
+                    if not has_match:
+                        user_goal_words = set()
+                        for g in user_goals_db:
+                            if g.title:
+                                user_goal_words.update(w.lower() for w in g.title.split() if len(w) >= 4)
+                        partner_goal_words = set()
+                        for g in partner_goals_db:
+                            if g.title:
+                                partner_goal_words.update(w.lower() for w in g.title.split() if len(w) >= 4)
+                        common_goal_words = user_goal_words & partner_goal_words
+                        if common_goal_words:
+                            has_match = True
+                            match_reasons.append(f"goal keywords: {common_goal_words}")
+            except Exception as e:
+                logger.debug(f"[PARTNERS] Goal table check error: {e}")
 
         # Check company
         if hasattr(user_profile, "company") and hasattr(profile, "company"):
@@ -2537,6 +2577,21 @@ def get_partners_list(user_id=None, session=None):
             goal_matches = len(user_goals & profile_goals)
             relevance_score += goal_matches * 4  # Каждая совпадающая цель = 4 балла
 
+        # Бонус за совпадение структурированных целей (Goal table)
+        try:
+            user_goals_db = session.query(Goal).filter(
+                Goal.user_id == user.id, Goal.status.in_(['active', 'in_progress'])
+            ).all()
+            partner_goals_db = session.query(Goal).filter(
+                Goal.user_id == p.user_id, Goal.status.in_(['active', 'in_progress'])
+            ).all()
+            if user_goals_db and partner_goals_db:
+                u_cats = set(g.category.lower().strip() for g in user_goals_db if g.category)
+                p_cats = set(g.category.lower().strip() for g in partner_goals_db if g.category)
+                relevance_score += len(u_cats & p_cats) * 5
+        except Exception:
+            pass
+
         # Бонус за тот же город (но не блокировка)
         city_bonus = 0
         partner_city = p.city.lower() if p.city else None
@@ -2599,6 +2654,49 @@ def get_partners_list(user_id=None, session=None):
             user_task_keywords.update(words)
     
     logger.info(f"[PARTNERS] User task keywords: {user_task_keywords}")
+    
+    # ENRICHMENT: Добавляем ключевые слова из LTM (weighted interests + search history)
+    try:
+        ltm_data = json.loads(user.long_term_memory) if user.long_term_memory else {}
+        # LTM interests — берём топ-10 по весу
+        ltm_interests = ltm_data.get('interests', {})
+        if ltm_interests:
+            top_interests = sorted(ltm_interests.items(), key=lambda x: x[1], reverse=True)[:10]
+            for topic, weight in top_interests:
+                if len(topic) >= 3 and weight >= 2:  # минимум 2 упоминания
+                    user_task_keywords.add(topic.lower().strip())
+            logger.info(f"[PARTNERS] Added LTM interests: {[t for t, w in top_interests if w >= 2]}")
+        # Search history — последние 20 запросов, берём topics
+        search_history = ltm_data.get('search_history', [])
+        for entry in search_history[-20:]:
+            topics = entry.get('topics', [])
+            for topic in topics:
+                if len(topic) >= 3:
+                    user_task_keywords.add(topic.lower().strip())
+            # Также слова из самого запроса
+            query = entry.get('query', '')
+            if query:
+                q_words = [w.lower().strip() for w in query.split() if len(w) >= 4]
+                user_task_keywords.update(q_words)
+        if search_history:
+            logger.info(f"[PARTNERS] Added {min(len(search_history), 20)} search history entries to keywords")
+    except Exception as e:
+        logger.debug(f"[PARTNERS] LTM enrichment error: {e}")
+    
+    # ENRICHMENT: Добавляем ключевые слова из структурированных целей (Goal table)
+    try:
+        user_goals_db = session.query(Goal).filter(
+            Goal.user_id == user.id, Goal.status.in_(['active', 'in_progress'])
+        ).all()
+        for g in user_goals_db:
+            if g.title:
+                user_task_keywords.update(w.lower() for w in g.title.split() if len(w) >= 4)
+            if g.category:
+                user_task_keywords.add(g.category.lower().strip())
+        if user_goals_db:
+            logger.info(f"[PARTNERS] Added {len(user_goals_db)} goal keywords")
+    except Exception:
+        pass
     
     # Добавляем информацию об общих интересах, навыках, целях и задачах
     user_interests = set(i.strip().lower() for i in user_profile.interests.split(',')) if user_profile.interests else set()
@@ -2689,6 +2787,19 @@ def get_partners_list(user_id=None, session=None):
                     if task.title:
                         words = [w.lower().strip() for w in task.title.split() if len(w) > 3]
                         partner_task_keywords.update(words)
+                    if task.description:
+                        desc_words = [w.lower().strip() for w in task.description.split() if len(w) > 4]
+                        partner_task_keywords.update(desc_words)
+                
+                # Enrichment: LTM interests партнера расширяют его ключевые слова
+                try:
+                    p_ltm = json.loads(partner_user.long_term_memory) if partner_user.long_term_memory else {}
+                    p_ltm_interests = p_ltm.get('interests', {})
+                    for topic, weight in p_ltm_interests.items():
+                        if weight >= 2 and len(topic) >= 3:
+                            partner_task_keywords.add(topic.lower().strip())
+                except Exception:
+                    pass
                 
                 common_task_words = user_task_keywords & partner_task_keywords
                 if common_task_words and not partner.task_relevance:
@@ -2780,7 +2891,7 @@ def analyze_group_opportunities(user_id, session):
     from datetime import datetime, timedelta
     import pytz
     
-    user = session.query(User).filter_by(id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         return None
     
@@ -2963,6 +3074,302 @@ def analyze_group_opportunities(user_id, session):
     return None
 
 
+def create_goal(title=None, description=None, category=None, priority=None, target_date=None, success_criteria=None, user_id=None, session=None):
+    """Создать новую цель пользователя
+    
+    Args:
+        title: Название цели
+        description: Описание цели
+        category: Категория (work, personal, health, learning, finance, social)
+        priority: Приоритет (low, medium, high, critical)
+        target_date: Целевая дата достижения
+        success_criteria: Критерии успеха
+        user_id: Telegram ID пользователя
+        session: SQLAlchemy session
+    """
+    if not title:
+        return "Укажи название цели."
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        # Проверяем количество активных целей (лимит 20)
+        active_goals = session.query(Goal).filter_by(user_id=user.id, status='active').count()
+        if active_goals >= 20:
+            return "❌ У тебя уже 20 активных целей. Заверши или отмени старые перед созданием новых."
+        
+        # Парсим target_date
+        parsed_date = None
+        if target_date:
+            # Пробуем разные форматы
+            for fmt in ('%Y-%m-%d', '%d.%m.%Y', '%d/%m/%Y'):
+                try:
+                    parsed_date = datetime.strptime(target_date, fmt)
+                    break
+                except (ValueError, TypeError):
+                    continue
+            
+            # Парсим относительные даты
+            if not parsed_date:
+                try:
+                    td_lower = target_date.lower()
+                    import re as _re
+                    m = _re.search(r'(\d+)\s*(?:месяц|мес)', td_lower)
+                    if m:
+                        parsed_date = datetime.now() + timedelta(days=int(m.group(1)) * 30)
+                    else:
+                        m = _re.search(r'(\d+)\s*(?:недел|нед)', td_lower)
+                        if m:
+                            parsed_date = datetime.now() + timedelta(weeks=int(m.group(1)))
+                        else:
+                            m = _re.search(r'(\d+)\s*(?:дн|день|дня)', td_lower)
+                            if m:
+                                parsed_date = datetime.now() + timedelta(days=int(m.group(1)))
+                            else:
+                                m = _re.search(r'(\d+)\s*(?:год|лет)', td_lower)
+                                if m:
+                                    parsed_date = datetime.now() + timedelta(days=int(m.group(1)) * 365)
+                except Exception:
+                    pass
+        
+        goal = Goal(
+            user_id=user.id,
+            title=title[:255],
+            description=description[:1000] if description else None,
+            category=category or 'personal',
+            priority=priority or 'medium',
+            target_date=parsed_date,
+            success_criteria=success_criteria[:500] if success_criteria else None,
+            status='active',
+            progress_percentage=0
+        )
+        session.add(goal)
+        session.commit()
+        
+        result = f"🎯 Цель создана: **{goal.title}**"
+        if goal.category:
+            result += f"\n📂 Категория: {goal.category}"
+        if goal.priority and goal.priority != 'medium':
+            result += f"\n⚡ Приоритет: {goal.priority}"
+        if parsed_date:
+            result += f"\n📅 Дедлайн: {parsed_date.strftime('%d.%m.%Y')}"
+        if goal.success_criteria:
+            result += f"\n✅ Критерии: {goal.success_criteria}"
+        result += f"\n\nТеперь можешь привязывать задачи к этой цели — так ты увидишь прогресс!"
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error creating goal for user {user_id}: {e}")
+        return f"❌ Ошибка при создании цели: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def update_goal_progress(goal_title=None, progress=None, status=None, notes=None, user_id=None, session=None):
+    """Обновить прогресс или статус цели
+    
+    Args:
+        goal_title: Название или часть названия цели для поиска
+        progress: Новый процент прогресса (0-100)
+        status: Новый статус (active, completed, paused, cancelled)
+        notes: Заметки о прогрессе
+        user_id: Telegram ID
+        session: SQLAlchemy session
+    """
+    if not goal_title:
+        return "Укажи название цели для обновления."
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        # Гибкий поиск цели
+        goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status.in_(['active', 'paused'])
+        ).all()
+        
+        if not goals:
+            return "У тебя нет активных целей. Создай цель командой или просто скажи — например, 'хочу выучить Python за 3 месяца'."
+        
+        # Ищем по ключевым словам
+        search = goal_title.lower()
+        matched = None
+        for g in goals:
+            if search in g.title.lower() or (g.description and search in g.description.lower()):
+                matched = g
+                break
+        
+        # Fuzzy fallback
+        if not matched:
+            for g in goals:
+                title_words = g.title.lower().split()
+                if any(w in search for w in title_words if len(w) > 2):
+                    matched = g
+                    break
+        
+        if not matched:
+            titles = ', '.join(f'"{g.title}"' for g in goals[:5])
+            return f"Цель \"{goal_title}\" не найдена. Активные цели: {titles}"
+        
+        changes = []
+        
+        if progress is not None:
+            try:
+                pct = int(progress)
+                pct = max(0, min(100, pct))
+                matched.progress_percentage = pct
+                changes.append(f"прогресс: {pct}%")
+                if pct == 100 and matched.status == 'active':
+                    matched.status = 'completed'
+                    matched.completed_at = datetime.now()
+                    changes.append("статус: завершено! 🎉")
+            except (ValueError, TypeError):
+                pass
+        
+        if status:
+            valid = {'active', 'completed', 'paused', 'cancelled'}
+            if status in valid:
+                matched.status = status
+                if status == 'completed':
+                    matched.completed_at = datetime.now()
+                    matched.progress_percentage = 100
+                changes.append(f"статус: {status}")
+        
+        if notes:
+            existing = matched.progress_notes or ''
+            timestamp = datetime.now().strftime('%d.%m')
+            new_note = f"[{timestamp}] {notes[:200]}"
+            matched.progress_notes = (existing + '\n' + new_note).strip()[-2000:]
+            changes.append("добавлена заметка")
+        
+        if not changes:
+            return f"Укажи что обновить: progress (0-100), status (active/completed/paused/cancelled), или notes."
+        
+        session.commit()
+        
+        result = f"🎯 **{matched.title}** обновлена:\n"
+        result += ", ".join(changes)
+        result += f"\n📊 Прогресс: {matched.progress_percentage}%"
+        
+        # Связанные задачи
+        linked_tasks = session.query(Task).filter_by(user_id=user.id, goal_id=matched.id, status='pending').count()
+        if linked_tasks:
+            result += f"\n📋 Связанных задач: {linked_tasks}"
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error updating goal for user {user_id}: {e}")
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def list_goals(status_filter=None, user_id=None, session=None):
+    """Показать цели пользователя
+    
+    Args:
+        status_filter: Фильтр по статусу (active, completed, paused, all)
+        user_id: Telegram ID
+        session: SQLAlchemy session
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        query = session.query(Goal).filter_by(user_id=user.id)
+        
+        if status_filter and status_filter != 'all':
+            query = query.filter_by(status=status_filter)
+        else:
+            # По умолчанию показываем активные и приостановленные
+            query = query.filter(Goal.status.in_(['active', 'paused']))
+        
+        goals = query.order_by(Goal.created_at.desc()).limit(15).all()
+        
+        if not goals:
+            if status_filter == 'completed':
+                return "У тебя нет завершённых целей."
+            return "У тебя пока нет целей. Расскажи о своих планах — помогу сформулировать и отслеживать!"
+        
+        priority_emoji = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🟢'}
+        status_emoji = {'active': '🎯', 'completed': '✅', 'paused': '⏸️', 'cancelled': '❌'}
+        
+        result = "🎯 **Твои цели:**\n\n"
+        for g in goals:
+            emoji = status_emoji.get(g.status, '🎯')
+            pri = priority_emoji.get(g.priority, '')
+            progress_bar = _progress_bar(g.progress_percentage)
+            
+            result += f"{emoji} **{g.title}** {pri}\n"
+            result += f"   {progress_bar} {g.progress_percentage}%"
+            
+            if g.category:
+                result += f" | {g.category}"
+            if g.target_date:
+                days = g.days_until_target()
+                if days is not None:
+                    if days < 0:
+                        result += f" | ⚠️ просрочено на {abs(days)} дн."
+                    elif days == 0:
+                        result += f" | 🔥 дедлайн сегодня!"
+                    elif days <= 7:
+                        result += f" | ⏳ {days} дн. осталось"
+                    else:
+                        result += f" | до {g.target_date.strftime('%d.%m.%Y')}"
+            
+            # Связанные задачи
+            linked = session.query(Task).filter_by(user_id=user.id, goal_id=g.id).all()
+            if linked:
+                done = sum(1 for t in linked if t.status == 'completed')
+                total = len(linked)
+                result += f" | задачи: {done}/{total}"
+            
+            result += "\n"
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error listing goals for user {user_id}: {e}")
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def _progress_bar(pct):
+    """Визуальная полоска прогресса"""
+    filled = int(pct / 10)
+    empty = 10 - filled
+    return '█' * filled + '░' * empty
+
+
 def show_profile(user_id=None, session=None):
     """Показать профиль пользователя с основной информацией"""
     if session is None:
@@ -2999,8 +3406,8 @@ def show_profile(user_id=None, session=None):
                 result += f"🛠️ Навыки: {profile.skills}\n"
             if profile.goals:
                 result += f"🎯 Цели: {profile.goals}\n"
-            if profile.birth_date:
-                result += f"🎂 Дата рождения: {profile.birth_date}\n"
+            if profile.birthdate:
+                result += f"🎂 Дата рождения: {profile.birthdate}\n"
         else:
             result += "\n⚠️ Профиль ещё не заполнен. Расскажи о себе — город, интересы, навыки, цели — и я всё запомню!"
 
@@ -3303,6 +3710,23 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     
     logger.info(f"[FIND_RELEVANT] Task keywords: {task_keywords}")
     
+    # ENRICHMENT: Добавляем LTM interests + search history для расширения поиска
+    try:
+        ltm_data = json.loads(user.long_term_memory) if user.long_term_memory else {}
+        ltm_interests = ltm_data.get('interests', {})
+        if ltm_interests:
+            top_interests = sorted(ltm_interests.items(), key=lambda x: x[1], reverse=True)[:5]
+            for topic, weight in top_interests:
+                if len(topic) >= 3 and weight >= 3:
+                    task_keywords.add(topic.lower().strip())
+        search_history = ltm_data.get('search_history', [])
+        for entry in search_history[-10:]:
+            for topic in entry.get('topics', []):
+                if len(topic) >= 3:
+                    task_keywords.add(topic.lower().strip())
+    except Exception:
+        pass
+    
     # Получить город пользователя для приоритизации
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     user_city = user_profile.city.lower().strip() if user_profile and user_profile.city else None
@@ -3371,6 +3795,24 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
             if goal_match:
                 relevance_score += len(goal_match) * 6  # Цели важны
                 match_reasons.append(f"цели: {', '.join(list(goal_match)[:2])}")
+        
+        # ПРИОРИТЕТ 4.5: Структурированные цели (Goal table)
+        try:
+            partner_goals_db = session.query(Goal).filter(
+                Goal.user_id == partner.user_id,
+                Goal.status.in_(['active', 'in_progress'])
+            ).all()
+            if partner_goals_db:
+                for pg in partner_goals_db:
+                    goal_text = ((pg.title or '') + ' ' + (pg.description or '') + ' ' + (pg.category or '')).lower()
+                    goal_words = set(w for w in goal_text.split() if len(w) >= 4)
+                    goal_kw_match = task_keywords & goal_words
+                    if goal_kw_match:
+                        relevance_score += len(goal_kw_match) * 5
+                        match_reasons.append(f"цель «{pg.title[:30]}»")
+                        break  # Одного совпадения достаточно
+        except Exception:
+            pass
         
         # Используем уже вычисленную релевантность из get_partners_list
         if hasattr(partner, 'task_relevance_score') and partner.task_relevance_score > 0:
@@ -3791,12 +4233,12 @@ def check_delegation_deadlines():
                 traceback.print_exc()
                 session.rollback()
 
-        session.close()
     except Exception as e:
         logger.error(f"Error in check_delegation_deadlines: {e}")
         import traceback
         traceback.print_exc()
         session.rollback()
+    finally:
         session.close()
 
 def create_subscription_payment(tier=None, user_id=None, session=None):
@@ -3824,15 +4266,93 @@ def cancel_subscription(user_id=None):
         return f"Ошибка отмены подписки: {str(e)}"
 
 async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, close_session=True) -> str:
-    """Async wrapper for delete_task_sync"""
-    return delete_task_sync(
-        task_id=task_id,
-        task_title=task_title,
-        reason=reason,
-        user_id=user_id,
-        session=session,
-        confirmed=True  # Auto-confirm for AI agent
-    )
+    """Delete a task by ID or title search
+    
+    Args:
+        task_id: ID задачи (опционально)
+        task_title: Название или часть названия задачи (опционально)
+        reason: Причина удаления (опционально)
+        user_id: telegram_id пользователя
+        session: Сессия БД
+        close_session: Закрывать ли сессию (если создана внутри)
+    """
+    logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', reason='{reason}', user_id={user_id}")
+    
+    if user_id is None:
+        return "ERROR: user_id не может быть None"
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        task = None
+        
+        # Поиск по ID
+        if task_id is not None:
+            try:
+                task_id_int = int(task_id)
+                task = session.query(Task).filter(
+                    Task.id == task_id_int,
+                    Task.user_id == user.id
+                ).first()
+            except (ValueError, TypeError):
+                logger.warning(f"[DELETE_TASK] Invalid task_id: {task_id}")
+        
+        # Поиск по названию
+        if task is None and task_title:
+            task = find_task_flexible(session, user, task_id=None, task_title=task_title)
+        
+        # Если ничего не найдено - последняя задача
+        if task is None and not task_id and not task_title:
+            task = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status != "completed"
+            ).order_by(Task.created_at.desc()).first()
+        
+        if not task:
+            search_term = task_title or task_id or "неизвестно"
+            return f"Задача '{search_term}' не найдена."
+        
+        task_name = task.title
+        task_db_id = task.id
+        
+        # Отменяем напоминание если есть
+        try:
+            from reminder_service import REMINDER_SERVICE
+            if REMINDER_SERVICE and hasattr(REMINDER_SERVICE, 'scheduler'):
+                job_id = f"reminder_{task_db_id}"
+                try:
+                    REMINDER_SERVICE.scheduler.remove_job(job_id)
+                    logger.info(f"[DELETE_TASK] Removed reminder job {job_id}")
+                except Exception:
+                    pass
+        except ImportError:
+            pass
+        
+        # Удаляем задачу
+        session.delete(task)
+        session.commit()
+        
+        logger.info(f"[DELETE_TASK] Task '{task_name}' (ID: {task_db_id}) deleted successfully")
+        
+        reason_text = f" Причина: {reason}" if reason else ""
+        return f"Задача '{task_name}' удалена.{reason_text}"
+    
+    except Exception as e:
+        logger.error(f"[DELETE_TASK] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Ошибка при удалении задачи: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
 
 def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
     """Get detailed information about a task"""
@@ -3892,8 +4412,7 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
             details += f"📝 Название: {task.title}\n"
             
             if task.description:
-                description = decrypt_data(task.description) if task.description.startswith('gAAAAA') else task.description
-                details += f"📄 Описание: {description}\n"
+                details += f"📄 Описание: {decrypt_data(task.description)}\n"
             
             details += f"📊 Статус: {task.status}\n"
             
@@ -3912,8 +4431,7 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
                     details += f"📋 Детали делегирования: {task.delegation_details}\n"
             
             if task.completion_notes:
-                completion_notes = decrypt_data(task.completion_notes) if task.completion_notes.startswith('gAAAAA') else task.completion_notes
-                details += f"✅ Заметки о выполнении: {completion_notes}\n"
+                details += f"✅ Заметки о выполнении: {decrypt_data(task.completion_notes)}\n"
             
             if task.actual_completion_time:
                 local_completion = task.actual_completion_time.astimezone(user_tz)
@@ -4431,26 +4949,23 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
             # Валидация - для replace_mode позволяем пустые строки (удаление)
             if replace_mode and goals.strip() == "":
                 # Разрешаем пустую строку для удаления
-                pass
-            elif len(goals.strip()) < 2 or len(goals.strip()) > 200:
-                logger.warning(f"Invalid goals length: {len(goals)}")
-            elif any(char in goals.lower() for char in ['<', '>', 'script', 'http']):
-                logger.warning(f"Invalid goals content: {goals}")
-            else:
-                # Если не прошла валидация, пропускаем
-                pass
-            
-            # Выполняем обновление независимо от валидации для replace_mode с пустой строкой
-            if replace_mode:
                 profile.goals = goals
                 updates.append(f"цели заменены: {goals}")
+            elif len(goals.strip()) < 2 or len(goals.strip()) > 200:
+                logger.warning(f"Invalid goals length: {len(goals)}")
+            elif any(pattern in goals.lower() for pattern in ['<script', 'http://', 'https://', 'onclick', 'onerror']):
+                logger.warning(f"Invalid goals content (suspicious): {goals}")
             else:
-                new_value, was_added = _add_to_list_field(profile.goals, goals)
-                if was_added:
-                    profile.goals = new_value
-                    added.append(f"цель: {goals}")
+                if replace_mode:
+                    profile.goals = goals
+                    updates.append(f"цели заменены: {goals}")
                 else:
-                    updates.append(f"цель '{goals}' уже есть")
+                    new_value, was_added = _add_to_list_field(profile.goals, goals)
+                    if was_added:
+                        profile.goals = new_value
+                        added.append(f"цель: {goals}")
+                    else:
+                        updates.append(f"цель '{goals}' уже есть")
 
         # Обновляем время последнего обновления
         profile.updated_at = datetime.utcnow()
@@ -4891,14 +5406,15 @@ async def research_topic(query: str, depth: str, user_id: int, session):
         )
         
         # Create auto-post from research results (для разнообразия ленты новостей)
-        if result.get('success') and result.get('analysis'):
+        analysis_data = result.get('analysis') if isinstance(result, dict) else None
+        if isinstance(result, dict) and result.get('success') and isinstance(analysis_data, dict):
             try:
                 from auto_post_service import generate_research_post, create_auto_post
                 
                 post_content = await generate_research_post(
                     user_id=user_id,
                     query=query,
-                    analysis=result['analysis'],
+                    analysis=analysis_data,
                     session=session
                 )
                 
@@ -4909,7 +5425,10 @@ async def research_topic(query: str, depth: str, user_id: int, session):
                 logger.warning(f"[RESEARCH] Could not create auto-post: {post_error}")
                 # Не прерываем основной flow, продолжаем нормально
         
-        return result.get('message', 'Исследование завершено')
+        if isinstance(result, dict):
+            return result.get('message', 'Исследование завершено')
+        else:
+            return str(result) if result else 'Исследование завершено'
         
     except Exception as e:
         logger.error(f"[RESEARCH] Error in handler: {e}", exc_info=True)
@@ -5088,15 +5607,9 @@ async def quick_topic_search(topic: str, user_id: int = None, session=None):
     """
     🔍 БЫСТРЫЙ ПОИСК ПО ТЕМЕ (LIGHT+)
     Простой поиск без AI анализа - топ-3 результата с ссылками
-    
-    Args:
-        topic: Тема для поиска
-        user_id: ID пользователя  
-        session: DB сессия
-    
-    Returns:
-        Список топ-3 результатов с ссылками
     """
+    from .api_client import get_api_client
+    
     close_session = False
     if session is None:
         session = Session()
@@ -5108,108 +5621,36 @@ async def quick_topic_search(topic: str, user_id: int = None, session=None):
             return "Пользователь не найден"
         
         logger.info(f"[QUICK_SEARCH] Starting for user {user_id}: topic='{topic}'")
+        api = get_api_client()
         
-        # Поиск через SERPER API
-        from config import SERPER_API_KEY
-        import aiohttp
+        results = await api.serper_search(topic, num=3)
+        if not results:
+            return f"🔍 По запросу '{topic}' не найдено результатов"
         
-        if not SERPER_API_KEY:
-            return "❌ Поиск временно недоступен"
+        result_text = f"🔍 **Быстрый поиск**: {topic}\n\n"
+        for i, r in enumerate(results, 1):
+            result_text += f"{i}. **{r['title']}**\n"
+            snippet = r['snippet']
+            if snippet:
+                result_text += f"   {snippet[:150]}{'...' if len(snippet) > 150 else ''}\n"
+            result_text += f"   🔗 [Читать далее]({r['link']})\n\n"
         
+        # AI анализ для всех тарифов
         try:
-            async with aiohttp.ClientSession() as http_session:
-                async with http_session.post(
-                    'https://google.serper.dev/search',
-                    headers={
-                        'X-API-KEY': SERPER_API_KEY,
-                        'Content-Type': 'application/json'
-                    },
-                    json={
-                        "q": topic,
-                        "num": 3,
-                        "gl": "ru",
-                        "hl": "ru"
-                    }
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        results = []
-                        for item in data.get('organic', [])[:3]:
-                            title = item.get('title', '')
-                            snippet = item.get('snippet', '')
-                            link = item.get('link', '')
-                            
-                            if title and link:
-                                results.append({
-                                    'title': title, 
-                                    'snippet': snippet[:150] + '...' if len(snippet) > 150 else snippet,
-                                    'link': link
-                                })
-                        
-                        if results:
-                            result_text = f"🔍 **Быстрый поиск**: {topic}\n\n"
-                            
-                            for i, result in enumerate(results, 1):
-                                result_text += f"{i}. **{result['title']}**\n"
-                                if result['snippet']:
-                                    result_text += f"   {result['snippet']}\n"
-                                result_text += f"   🔗 [Читать далее]({result['link']})\n\n"
-                            
-                            # Для LIGHT тарифа добавляем базовый AI анализ
-                            if user and user.subscription_tier == SubscriptionTier.LIGHT:
-                                try:
-                                    # Формируем контекст для AI
-                                    context = "\n\n".join([
-                                        f"**{r['title']}**\n{r['snippet']}"
-                                        for r in results[:3]
-                                    ])
-                                    
-                                    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-                                    import aiohttp
-                                    
-                                    prompt = f"""Кратко проанализируй информацию по теме "{topic}" на основе этих результатов поиска:
+            context = "\n\n".join([f"**{r['title']}**\n{r['snippet']}" for r in results[:3]])
+            prompt = f"""На основе этих результатов поиска по теме "{topic}":
 
 {context}
 
-Дай краткий анализ в 2-3 предложения: основные выводы, тренды или ключевые факты. Будь конкретным и полезным."""
-
-                                    async with aiohttp.ClientSession() as http_session:
-                                        async with http_session.post(
-                                            'https://api.deepseek.com/chat/completions',
-                                            headers={
-                                                'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                                                'Content-Type': 'application/json'
-                                            },
-                                            json={
-                                                "model": DEEPSEEK_MODEL,
-                                                "messages": [
-                                                    {"role": "system", "content": "Ты эксперт по быстрому анализу информации."},
-                                                    {"role": "user", "content": prompt}
-                                                ],
-                                                "temperature": 0.5,
-                                                "max_tokens": 150
-                                            }
-                                        ) as response:
-                                            if response.status == 200:
-                                                data = await response.json()
-                                                ai_analysis = data['choices'][0]['message']['content'].strip()
-                                                result_text += f"🤖 **AI анализ**: {ai_analysis}\n\n"
-                                
-                                except Exception as e:
-                                    logger.warning(f"[QUICK_SEARCH] AI analysis failed: {e}")
-                            
-                            result_text += "💡 **Подсказка**: Для более детального анализа и трендов используйте STANDARD тариф с функцией research_topic."
-                            return result_text
-                        else:
-                            return f"🔍 По запросу '{topic}' не найдено результатов"
-                    else:
-                        logger.warning(f"[QUICK_SEARCH] Serper API error: {response.status}")
-                        return "❌ Ошибка поиска. Попробуйте позже"
-        
+Сделай краткий практичный вывод в 2-3 предложениях: суть темы, ключевой факт, и что с этим делать. Не пересказывай, а синтезируй."""
+            ai_analysis = await api.deepseek_analyze(prompt, system_prompt="Ты эксперт-аналитик. Давай конкретику и практическую пользу.", max_tokens=200)
+            if ai_analysis:
+                result_text += f"🤖 **AI анализ**: {ai_analysis}\n\n"
         except Exception as e:
-            logger.error(f"[QUICK_SEARCH] Serper error: {e}")
-            return "❌ Ошибка выполнения поиска"
+            logger.warning(f"[QUICK_SEARCH] AI analysis failed: {e}")
+        
+        result_text += "💡 **Подсказка**: Для более детального анализа используйте функцию research_topic."
+        return result_text
         
     except Exception as e:
         logger.error(f"Error in quick_topic_search: {e}")
@@ -5221,15 +5662,7 @@ async def quick_topic_search(topic: str, user_id: int = None, session=None):
 async def check_topic_relevance(topic: str, user_id: int = None, session=None):
     """
     📊 ПРОВЕРКА АКТУАЛЬНОСТИ ТЕМЫ (LIGHT+)
-    Быстрая проверка есть ли свежая информация по теме
-    
-    Args:
-        topic: Тема для проверки
-        user_id: ID пользователя
-        session: DB сессия
-    
-    Returns:
-        Краткая информация об актуальности темы
+    AI-анализ: насколько тема актуальна сейчас и стоит ли ей заниматься
     """
     close_session = False
     if session is None:
@@ -5243,67 +5676,44 @@ async def check_topic_relevance(topic: str, user_id: int = None, session=None):
         
         logger.info(f"[RELEVANCE_CHECK] Starting for user {user_id}: topic='{topic}'")
         
-        # Поиск через SERPER API  
-        from config import SERPER_API_KEY
-        import aiohttp
+        from .api_client import get_api_client
+        api = get_api_client()
         
-        if not SERPER_API_KEY:
-            return "❌ Проверка временно недоступна"
+        current_year = datetime.now().year
         
-        try:
-            async with aiohttp.ClientSession() as http_session:
-                async with http_session.post(
-                    'https://google.serper.dev/search',
-                    headers={
-                        'X-API-KEY': SERPER_API_KEY,
-                        'Content-Type': 'application/json'
-                    },
-                    json={
-                        "q": f"{topic} 2025 2026",  # Ищем свежую информацию
-                        "num": 5,
-                        "gl": "ru",
-                        "hl": "ru"
-                    }
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        total_results = len(data.get('organic', []))
-                        fresh_count = 0
-                        
-                        # Считаем "свежие" результаты
-                        for item in data.get('organic', []):
-                            title_snippet = (item.get('title', '') + ' ' + item.get('snippet', '')).lower()
-                            if any(year in title_snippet for year in ['2025', '2026', 'новый', 'последний', 'свежий']):
-                                fresh_count += 1
-                        
-                        if total_results == 0:
-                            return f"📊 **Проверка актуальности**: {topic}\n\n❌ Информация по теме не найдена"
-                        
-                        freshness_score = (fresh_count / total_results) * 100 if total_results > 0 else 0
-                        
-                        result = f"📊 **Проверка актуальности**: {topic}\n\n"
-                        
-                        if freshness_score >= 60:
-                            result += "🔥 **ВЫСОКАЯ актуальность** - много свежих материалов\n"
-                        elif freshness_score >= 30:
-                            result += "📈 **СРЕДНЯЯ актуальность** - есть новая информация\n"
-                        else:
-                            result += "📉 **НИЗКАЯ актуальность** - в основном устаревшие данные\n"
-                        
-                        result += f"Найдено источников: {total_results}\n"
-                        result += f"Свежих материалов: {fresh_count}\n\n"
-                        result += "💡 **Рекомендация**: Для детального анализа трендов используйте STANDARD тариф."
-                        
-                        return result
-                    else:
-                        logger.warning(f"[RELEVANCE_CHECK] Serper API error: {response.status}")
-                        return "❌ Ошибка проверки. Попробуйте позже"
+        results = await api.serper_search(f"{topic} {current_year} тренды актуальность", num=7)
         
-        except Exception as e:
-            logger.error(f"[RELEVANCE_CHECK] Serper error: {e}")
-            return "❌ Ошибка выполнения проверки"
+        if not results:
+            return f"📊 **Проверка актуальности**: {topic}\n\n❌ Информация по теме не найдена"
         
+        # AI-анализ актуальности вместо подсчёта слов
+        context = "\n\n".join([
+            f"**{r['title']}**\n{r['snippet']}"
+            for r in results[:7]
+        ])
+        
+        prompt = f"""Проанализируй актуальность темы "{topic}" на основе этих свежих данных из поиска:
+
+{context}
+
+Ответь кратко (3-5 предложений):
+1. Насколько тема актуальна прямо сейчас? (высокая/средняя/низкая)
+2. Почему? Приведи 1-2 конкретных факта из данных
+3. На что обратить внимание / что сейчас происходит в этой области
+4. Стоит ли сейчас погружаться в эту тему?"""
+
+        analysis = await api.deepseek_analyze(
+            prompt=prompt,
+            system_prompt="Ты аналитик. Отвечай кратко и конкретно, опираясь на данные.",
+            max_tokens=300
+        )
+        
+        result = f"📊 **Проверка актуальности**: {topic}\n\n"
+        if analysis:
+            result += f"{analysis}\n\n"
+        result += f"Найдено {len(results)} свежих источников по теме."
+        
+        return result
     except Exception as e:
         logger.error(f"Error in check_topic_relevance: {e}")
         return f"❌ Ошибка проверки темы: {topic}"
@@ -5314,216 +5724,31 @@ async def check_topic_relevance(topic: str, user_id: int = None, session=None):
 async def get_news_trends(topic: str, period: str = "week", focus: str = "trends", user_id: int = None, session=None):
     """
     📰 ПОЛУЧЕНИЕ НОВОСТЕЙ И АНАЛИЗ ТРЕНДОВ
-    Требует: STANDARD или PREMIUM подписку
-    
     Использует NewsAPI для поиска новостей + AI для анализа трендов
-    
-    Args:
-        topic: Тема для поиска новостей
-        period: Период (today/week/month)
-        focus: Фокус (news/trends/opportunities)
-        user_id: ID пользователя
-        session: DB сессия
-    
-    Returns:
-        Анализ новостей и трендов
     """
+    from .api_client import get_api_client
+    
     close_session = False
     if session is None:
         session = Session()
         close_session = True
     
     try:
-        # Проверка subscription tier (теперь доступно для всех тарифов)
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден."
         
         logger.info(f"[NEWS_TRENDS] Starting for user {user_id}: topic='{topic}', period={period}, focus={focus}")
         
-        # Определяем временной период
-        from datetime import datetime, timedelta
-        now = datetime.now()
+        api = get_api_client()
+        result = await api.news_and_analyze(
+            topic=topic,
+            period=period,
+            focus=focus,
+            max_articles=15
+        )
         
-        if period == "today":
-            from_date = (now - timedelta(days=1)).strftime('%Y-%m-%d')
-            sort_by = 'publishedAt'
-        elif period == "month":
-            from_date = (now - timedelta(days=30)).strftime('%Y-%m-%d')
-            sort_by = 'popularity'
-        else:  # week
-            from_date = (now - timedelta(days=7)).strftime('%Y-%m-%d')
-            sort_by = 'publishedAt'
-        
-        # Поиск новостей через NewsAPI
-        from config import NEWSAPI_API_KEY
-        import aiohttp
-        
-        if not NEWSAPI_API_KEY:
-            return "❌ Не настроен NewsAPI. Обратитесь к администратору."
-        
-        news_articles = []
-        
-        try:
-            async with aiohttp.ClientSession() as http_session:
-                # Поиск новостей по теме
-                api_url = f"https://newsapi.org/v2/everything"
-                
-                # Динамически определяем язык и дополнительные термины
-                if any(char in 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя' for char in topic.lower()):
-                    # Русская тема
-                    params = {
-                        'q': f"{topic}",
-                        'language': 'ru',
-                        'from': from_date,
-                        'sortBy': sort_by,
-                        'pageSize': 15,
-                        'apiKey': NEWSAPI_API_KEY
-                    }
-                else:
-                    # Английская тема  
-                    params = {
-                        'q': topic,
-                        'language': 'en',
-                        'from': from_date,
-                        'sortBy': sort_by,
-                        'pageSize': 15,
-                        'apiKey': NEWSAPI_API_KEY
-                    }
-                
-                async with http_session.get(api_url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        if data.get('status') == 'ok' and data.get('articles'):
-                            for article in data['articles'][:15]:
-                                title = article.get('title') or ''
-                                description = article.get('description') or ''
-                                url = article.get('url') or ''
-                                published = article.get('publishedAt') or ''
-                                source = article.get('source', {}).get('name') or ''
-                                
-                                # Безопасная обработка
-                                title = title.strip() if title else ''
-                                description = description.strip() if description else ''
-                                
-                                if title and title != '[Removed]' and description:
-                                    news_articles.append({
-                                        'title': title,
-                                        'description': description,
-                                        'url': url,
-                                        'published': published,
-                                        'source': source
-                                    })
-                            
-                            logger.info(f"[NEWS_TRENDS] Found {len(news_articles)} articles")
-                    else:
-                        logger.warning(f"[NEWS_TRENDS] NewsAPI error: {response.status}")
-                        return f"❌ Ошибка получения новостей: {response.status}"
-        
-        except Exception as e:
-            logger.error(f"[NEWS_TRENDS] NewsAPI error: {e}")
-            return f"❌ Ошибка поиска новостей: {str(e)}"
-        
-        if not news_articles:
-            return f"🔍 По запросу '{topic}' не найдено свежих новостей за {period}."
-        
-        # AI-анализ новостей
-        if focus == "news":
-            # Просто список новостей
-            result_lines = [f"📰 **Новости по теме**: {topic}"]
-            
-            for i, article in enumerate(news_articles[:5], 1):
-                result_lines.append(f"\n{i}. **{article['title']}**")
-                if article['description']:
-                    result_lines.append(f"   {article['description'][:150]}...")
-                if article['source']:
-                    result_lines.append(f"   ➡️ {article['source']}")
-            
-            return "\n".join(result_lines)
-        
-        else:
-            # AI-анализ трендов и возможностей
-            articles_text = "\n\n".join([
-                f"**{article['title']}**\n{article['description']}"
-                for article in news_articles[:10]
-            ])
-            
-            focus_prompts = {
-                "trends": f"""Проанализируй новости по теме: "{topic}" и выдели ключевые тренды.
-
-НОВОСТИ:
-{articles_text}
-
-Создай анализ в формате:
-🔥 **Главные тренды**:
-• Тренд 1 (краткое объяснение)
-• Тренд 2
-• Тренд 3
-
-📈 **О чём говорят**:
-Краткое резюме (3-4 предложения)
-
-📋 **Ключевые события**:
-• Событие 1
-• Событие 2""",
-                
-                "opportunities": f"""Проанализируй новости по теме: "{topic}" и найди бизнес-возможности.
-
-НОВОСТИ:
-{articles_text}
-
-Создай анализ в формате:
-🚀 **Бизнес-возможности**:
-• Возможность 1 (кратко почему)
-• Возможность 2
-• Возможность 3
-
-📋 **На что обратить внимание**:
-Краткое резюме (3-4 предложения)
-
-🔍 **Рекомендации**:
-• Конкретное действие 1
-• Конкретное действие 2"""
-            }
-            
-            prompt = focus_prompts.get(focus, focus_prompts["trends"])
-            
-            # Отправляем запрос к DeepSeek AI
-            from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-            
-            try:
-                async with aiohttp.ClientSession() as http_session:
-                    async with http_session.post(
-                        'https://api.deepseek.com/chat/completions',
-                        headers={
-                            'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                            'Content-Type': 'application/json'
-                        },
-                        json={
-                            "model": DEEPSEEK_MODEL,
-                            "messages": [
-                                {
-                                    "role": "user",
-                                    "content": prompt
-                                }
-                            ],
-                            "temperature": 0.7,
-                            "max_tokens": 1500
-                        }
-                    ) as ai_response:
-                        if ai_response.status == 200:
-                            ai_data = await ai_response.json()
-                            ai_analysis = ai_data['choices'][0]['message']['content']
-                            
-                            return f"📰 **Анализ новостей**: {topic}\n\n{ai_analysis}"
-                        else:
-                            logger.error(f"[NEWS_TRENDS] DeepSeek error: {ai_response.status}")
-                            return f"❌ Ошибка анализа: {ai_response.status}"
-            
-            except Exception as e:
-                logger.error(f"[NEWS_TRENDS] AI analysis error: {e}")
-                return f"❌ Ошибка AI анализа: {str(e)}"
+        return result['message']
     
     except Exception as e:
         logger.error(f"[NEWS_TRENDS] Error: {e}", exc_info=True)
@@ -5546,6 +5771,8 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
     Returns:
         Детальный анализ рынка + план действий + предлагаемые задачи
     """
+    from .api_client import get_api_client
+    
     close_session = False
     if session is None:
         session = Session()
@@ -5556,214 +5783,181 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
         if not user:
             return "Пользователь не найден"
 
-        # Получаем профиль пользователя
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
         logger.info(f"[RESEARCH_PLAN] Starting comprehensive research for user {user_id}: '{query}'")
 
-        # ШАГ 1: Многоаспектный поиск через SERPER
-        from config import SERPER_API_KEY, DEEPSEEK_API_KEY
-        import aiohttp
+        api = get_api_client()
+        
+        # Динамический год
+        current_year = datetime.now().year
+        next_year = current_year + 1
 
-        if not SERPER_API_KEY:
-            return "❌ Поиск временно недоступен"
-
+        # ШАГ 1: Многоаспектный ПАРАЛЛЕЛЬНЫЙ поиск
         search_queries = [
-            f"{query} рынок 2025 2026",  # Рыночные тренды
-            f"{query} конкуренты анализ",  # Конкурентный анализ
-            f"{query} возможности стартапы",  # Возможности
-            f"{query} контакты партнеры",  # Контакты и партнеры
-            f"{query} кейсы успехи"  # Кейсы успеха
+            f"{query} {current_year} {next_year}",
+            f"{query} анализ обзор",
+            f"{query} практические советы опыт",
+            f"{query} плюсы минусы отзывы",
+            f"{query} рекомендации лучшие"
         ]
 
-        all_results = []
-        for search_query in search_queries:
-            try:
-                async with aiohttp.ClientSession() as http_session:
-                    async with http_session.post(
-                        'https://google.serper.dev/search',
-                        headers={
-                            'X-API-KEY': SERPER_API_KEY,
-                            'Content-Type': 'application/json'
-                        },
-                        json={
-                            "q": search_query,
-                            "num": 5,
-                            "gl": "ru",
-                            "hl": "ru"
-                        }
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            results = []
-                            for item in data.get('organic', [])[:5]:
-                                results.append({
-                                    'title': item.get('title', ''),
-                                    'snippet': item.get('snippet', ''),
-                                    'link': item.get('link', ''),
-                                    'query_type': search_query.split()[1] if len(search_query.split()) > 1 else 'general'
-                                })
-                            all_results.extend(results)
-                            logger.info(f"[RESEARCH_PLAN] Found {len(results)} results for '{search_query}'")
-
-            except Exception as e:
-                logger.error(f"[RESEARCH_PLAN] Search error for '{search_query}': {e}")
+        all_results = await api.serper_multi_search(search_queries, num_per_query=5)
 
         if not all_results:
             return f"❌ Не удалось найти информацию по запросу '{query}'"
 
         # ШАГ 2: AI анализ всех результатов
         context = "\n\n".join([
-            f"**{r['title']}**\n{r['snippet']}\nИсточник: {r['link']}\nТип: {r['query_type']}"
-            for r in all_results[:15]  # Ограничиваем для AI
+            f"**{r['title']}**\n{r['snippet']}\nИсточник: {r['link']}"
+            for r in all_results[:15]
         ])
 
         # Персонализация на основе профиля
         profile_context = ""
         if profile:
-            skills = profile.skills or ""
-            interests = profile.interests or ""
-            goals = profile.goals or ""
-            profile_context = f"""
-ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
-- Навыки: {skills}
-- Интересы: {interests}
-- Цели: {goals}
-- Город: {profile.city or 'Не указан'}
+            profile_parts = []
+            if profile.skills: profile_parts.append(f"Навыки: {profile.skills}")
+            if profile.interests: profile_parts.append(f"Интересы: {profile.interests}")
+            if profile.goals: profile_parts.append(f"Цели: {profile.goals}")
+            if profile.city: profile_parts.append(f"Город: {profile.city}")
+            if profile.company: profile_parts.append(f"Компания: {profile.company}")
+            if profile.position: profile_parts.append(f"Должность: {profile.position}")
+            if profile_parts:
+                profile_context = f"""
+ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (персонализируй рекомендации под ЭТОГО человека):
+{chr(10).join('- ' + p for p in profile_parts)}
 """
 
-        analysis_prompt = f"""Проведи комплексный анализ рынка по теме: "{query}"
+        analysis_prompt = f"""Ты — бизнес-аналитик. Проведи исследование по теме "{query}" для конкретного человека.
 
 {profile_context}
 
-ДАННЫЕ ИЗ ПОИСКА:
+ДАННЫЕ ИЗ ИНТЕРНЕТА (свежие результаты поиска):
 {context}
 
-Создай детальный анализ рынка и персонализированный план действий в формате JSON:
+ЗАДАЧА: На основе РЕАЛЬНЫХ данных выше (не выдумывай!) создай анализ.
 
+Правила:
+- Цитируй конкретные цифры, компании, факты ИЗ ДАННЫХ ПОИСКА
+- Связывай каждую рекомендацию с профилем пользователя
+- "Возможность" = что конкретно этот человек может сделать с его навыками
+- "Шаг" = действие, которое можно выполнить за 1-3 дня
+- НЕ пиши общие слова. "Рынок растёт" — плохо. "Рынок вырос с $X до $Y по данным [источник]" — хорошо
+
+Формат JSON:
 {{
-    "market_summary": "краткий обзор рынка (3-4 предложения)",
-    "key_trends": ["тренд 1", "тренд 2", "тренд 3"],
+    "market_summary": "обзор на основе данных поиска: размер рынка, динамика, ключевые цифры",
+    "key_trends": ["конкретный тренд с данными", "второй тренд с примером"],
     "competitor_analysis": {{
-        "main_competitors": ["компания 1", "компания 2"],
-        "competitive_advantages": ["преимущество 1", "преимущество 2"],
-        "market_gaps": ["пробел 1", "пробел 2"]
+        "main_players": ["название компании — что делает — чем интересна"],
+        "gaps": ["конкретный пробел на рынке, который следует из данных"]
     }},
-    "opportunities": ["возможность 1", "возможность 2", "возможность 3"],
-    "target_audience": "описание целевой аудитории",
-    "actionable_plan": {{
-        "immediate_steps": ["шаг 1 (на этой неделе)", "шаг 2 (на этой неделе)"],
-        "short_term_goals": ["цель 1 (1-2 месяца)", "цель 2 (1-2 месяца)"],
-        "long_term_strategy": ["стратегия 1", "стратегия 2"]
+    "opportunities_for_user": ["возможность привязанная к навыкам/целям пользователя"],
+    "action_plan": {{
+        "this_week": ["конкретное действие на эту неделю"],
+        "this_month": ["цель на месяц с метрикой успеха"]
     }},
+    "risks": ["главный риск или подводный камень"],
     "recommended_tasks": [
         {{
-            "title": "конкретная задача",
-            "description": "подробное описание",
-            "suggested_time": "предлагаемое время (например: завтра в 10:00)",
+            "title": "задача для бота, максимум 50 символов",
+            "description": "что именно сделать и зачем",
             "priority": "высокий/средний/низкий"
         }}
-    ],
-    "contacts_networking": ["контакт 1", "контакт 2", "сообщество 1"],
-    "budget_considerations": "рекомендации по бюджету",
-    "success_metrics": ["метрика 1", "метрика 2"]
-}}
+    ]
+}}"""
 
-Фокус на ПРАКТИЧЕСКИХ шагах и КОНКРЕТНЫХ действиях!"""
+        analysis = await api.deepseek_analyze(
+            prompt=analysis_prompt,
+            max_tokens=4000,
+            temperature=0.5,
+            parse_json=True
+        )
 
-        try:
-            async with aiohttp.ClientSession() as http_session:
-                async with http_session.post(
-                    'https://api.deepseek.com/v1/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                        'Content-Type': 'application/json'
-                    },
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": [{"role": "user", "content": analysis_prompt}],
-                        "temperature": 0.7,
-                        "max_tokens": 4000
-                    }
-                ) as ai_response:
-                    if ai_response.status == 200:
-                        ai_data = await ai_response.json()
-                        analysis_text = ai_data['choices'][0]['message']['content']
+        if not analysis:
+            return f"❌ Ошибка AI анализа"
 
-                        try:
-                            # Парсим JSON
-                            analysis = json.loads(analysis_text)
+        # Форматируем ответ
+        if isinstance(analysis, dict):
+            result = f"🔍 **АНАЛИЗ: {query.upper()}**\n\n"
+            
+            summary = analysis.get('summary') or analysis.get('market_summary', '')
+            if summary:
+                result += f"📊 **ОБЗОР**\n{summary}\n\n"
 
-                            # Формируем красивый ответ
-                            result = f"🔍 **КОМПЛЕКСНЫЙ АНАЛИЗ: {query.upper()}**\n\n"
+            findings = analysis.get('key_findings') or analysis.get('key_trends', [])
+            if findings:
+                result += "📝 **КЛЮЧЕВЫЕ ФАКТЫ**\n"
+                for item in findings[:3]:
+                    result += f"• {item}\n"
+                result += "\n"
 
-                            result += f"📊 **ОБЗОР РЫНКА**\n{analysis.get('market_summary', 'Анализ не завершен')}\n\n"
+            existing = analysis.get('what_exists') or []
+            if existing:
+                result += "🔎 **ЧТО УЖЕ ЕСТЬ**\n"
+                for item in existing[:3]:
+                    result += f"• {item}\n"
+                result += "\n"
+            elif analysis.get('competitor_analysis'):
+                comp = analysis['competitor_analysis']
+                players = comp.get('main_players') or comp.get('main_competitors', [])
+                if players:
+                    result += "🔎 **ОСНОВНЫЕ ИГРОКИ**\n"
+                    for player in players[:3]:
+                        result += f"• {player}\n"
+                    result += "\n"
 
-                            if analysis.get('key_trends'):
-                                result += "📈 **КЛЮЧЕВЫЕ ТРЕНДЫ**\n"
-                                for trend in analysis['key_trends'][:3]:
-                                    result += f"• {trend}\n"
-                                result += "\n"
+            opps = analysis.get('gaps_or_opportunities') or analysis.get('opportunities_for_user') or analysis.get('opportunities', [])
+            if opps:
+                result += "🚀 **ВОЗМОЖНОСТИ ДЛЯ ТЕБЯ**\n"
+                for opp in opps[:3]:
+                    result += f"• {opp}\n"
+                result += "\n"
 
-                            if analysis.get('competitor_analysis'):
-                                comp = analysis['competitor_analysis']
-                                if comp.get('main_competitors'):
-                                    result += "🏢 **ОСНОВНЫЕ КОНКУРЕНТЫ**\n"
-                                    for comp_name in comp['main_competitors'][:3]:
-                                        result += f"• {comp_name}\n"
-                                    result += "\n"
+            advice = analysis.get('personalized_advice', '')
+            if advice:
+                result += f"💡 **ПЕРСОНАЛЬНЫЙ СОВЕТ**\n{advice}\n\n"
 
-                                if comp.get('market_gaps'):
-                                    result += "🎯 **РЫНОЧНЫЕ ПРОБЕЛЫ**\n"
-                                    for gap in comp['market_gaps'][:2]:
-                                        result += f"• {gap}\n"
-                                    result += "\n"
+            plan = analysis.get('action_plan') or analysis.get('actionable_plan', {})
+            if isinstance(plan, dict):
+                steps = plan.get('this_week') or plan.get('immediate_steps', [])
+                if steps:
+                    result += "⚡ **НА ЭТОЙ НЕДЕЛЕ**\n"
+                    for step in steps[:3]:
+                        result += f"• {step}\n"
+                    result += "\n"
+                month = plan.get('this_month') or plan.get('short_term_goals', [])
+                if month:
+                    result += "📅 **НА МЕСЯЦ**\n"
+                    for goal in month[:2]:
+                        result += f"• {goal}\n"
+                    result += "\n"
 
-                            if analysis.get('opportunities'):
-                                result += "🚀 **ВОЗМОЖНОСТИ**\n"
-                                for opp in analysis['opportunities'][:3]:
-                                    result += f"• {opp}\n"
-                                result += "\n"
+            risks = analysis.get('risks_or_caveats') or analysis.get('risks', [])
+            if risks:
+                if isinstance(risks, str):
+                    risks = [risks]
+                result += "⚠️ **НЮАНСЫ**\n"
+                for risk in risks[:2]:
+                    result += f"• {risk}\n"
+                result += "\n"
 
-                            if analysis.get('actionable_plan'):
-                                plan = analysis['actionable_plan']
-                                if plan.get('immediate_steps'):
-                                    result += "⚡ **НЕМЕДЛЕННЫЕ ШАГИ**\n"
-                                    for step in plan['immediate_steps'][:3]:
-                                        result += f"• {step}\n"
-                                    result += "\n"
-
-                            # ПРЕДЛАГАЕМ ЗАДАЧИ
-                            if analysis.get('recommended_tasks'):
-                                result += "📋 **РЕКОМЕНДУЕМЫЕ ЗАДАЧИ**\n"
-                                for task in analysis['recommended_tasks'][:2]:
-                                    result += f"**{task['title']}**\n"
-                                    result += f"• Время: {task.get('suggested_time', 'не указано')}\n"
-                                    result += f"• Приоритет: {task.get('priority', 'средний')}\n"
-                                    if task.get('description'):
-                                        result += f"• {task['description']}\n"
-                                    result += "\n"
-
-                            result += "💡 **Что делать дальше?**\n"
-                            result += "1. Создайте задачу из предложенных выше\n"
-                            result += "2. Начните с немедленных шагов\n"
-                            result += "3. Отслеживайте прогресс еженедельно\n\n"
-
-                            result += "🔗 **Источники:** Анализ основан на 15+ свежих источниках из поиска"
-
-                            return result
-
-                        except json.JSONDecodeError as e:
-                            logger.error(f"[RESEARCH_PLAN] JSON parse error: {e}")
-                            return f"❌ Ошибка обработки анализа. Но вот сырые данные:\n\n{analysis_text[:1000]}"
-
+            if analysis.get('recommended_tasks'):
+                result += "📋 **РЕКОМЕНДУЕМЫЕ ЗАДАЧИ**\n"
+                for task in analysis['recommended_tasks'][:2]:
+                    if isinstance(task, dict):
+                        result += f"• **{task.get('title', '')}** — {task.get('description', '')}\n"
                     else:
-                        logger.error(f"[RESEARCH_PLAN] DeepSeek error: {ai_response.status}")
-                        return f"❌ Ошибка AI анализа: {ai_response.status}"
+                        result += f"• {task}\n"
+                result += "\n"
 
-        except Exception as e:
-            logger.error(f"[RESEARCH_PLAN] AI analysis error: {e}")
-            return f"❌ Ошибка комплексного анализа: {str(e)}"
+            result += f"🔗 Анализ основан на {len(all_results)} актуальных источниках"
+
+            return result
+        else:
+            # Если JSON не распарсился — вернём текстовый ответ
+            return f"🔍 **Анализ: {query}**\n\n{analysis}"
 
     except Exception as e:
         logger.error(f"[RESEARCH_PLAN] Error: {e}", exc_info=True)
@@ -5772,214 +5966,190 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
         if close_session:
             session.close()
 
-# ===== EXTERNAL API FUNCTIONS =====
+# ===== EXTERNAL API FUNCTIONS (через единый api_client) =====
 
 async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
-    """
-    Получить информацию о погоде для указанного города
-    """
-    if not OPENWEATHERMAP_API_KEY:
-        return "❌ Сервис погоды временно недоступен"
-
+    """Получить информацию о погоде с практическими рекомендациями"""
+    from .api_client import get_api_client
+    
     try:
-        # Нормализация названия города
-        city = city.strip().lower()
+        api = get_api_client()
+        data = await api.get_weather(city)
+        
+        if not data:
+            return f"❌ Не удалось получить погоду для города '{city}'"
+        
+        temp = data['temp']
+        feels = data['feels_like']
+        desc = data['description']
+        humidity = data['humidity']
+        wind = data['wind_speed']
+        
+        result = f"🌤️ **Погода в {data['city_name']}:**\n"
+        result += f"• Температура: {temp:.1f}°C (ощущается как {feels:.1f}°C)\n"
+        result += f"• {desc.capitalize()}, влажность {humidity}%, ветер {wind} м/с\n"
+        
+        # Практические рекомендации
+        tips = []
+        if temp < 0:
+            tips.append("Тепло одевайтесь: мороз")
+        elif temp < 10:
+            tips.append("Понадобится куртка")
+        elif temp > 30:
+            tips.append("Жарко — пейте больше воды")
+        
+        if wind > 10:
+            tips.append("сильный ветер")
+        if humidity > 80:
+            tips.append("высокая влажность")
+        if 'дожд' in desc.lower() or 'rain' in desc.lower():
+            tips.append("возьмите зонт")
+        if 'снег' in desc.lower() or 'snow' in desc.lower():
+            tips.append("осторожно на дорогах")
+        
+        if tips:
+            result += f"\n⚠️ {', '.join(tips).capitalize()}\n"
+        
+        return result
 
-        # Используем OpenWeatherMap API
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru"
-
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.get(url, timeout=10) as response:
-                if response.status == 200:
-                    data = await response.json()
-
-                    # Извлекаем данные
-                    temp = data['main']['temp']
-                    feels_like = data['main']['feels_like']
-                    humidity = data['main']['humidity']
-                    wind_speed = data['wind']['speed']
-                    description = data['weather'][0]['description'].capitalize()
-                    city_name = data['name']
-
-                    result = f"🌤️ **Погода в {city_name}:**\n"
-                    result += f"• Температура: {temp:.1f}°C (ощущается как {feels_like:.1f}°C)\n"
-                    result += f"• Описание: {description}\n"
-                    result += f"• Влажность: {humidity}%\n"
-                    result += f"• Ветер: {wind_speed} м/с\n"
-
-                    return result
-                else:
-                    logger.error(f"[WEATHER] API error: {response.status}")
-                    return f"❌ Не удалось получить погоду для города '{city}'"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис погоды не отвечает (таймаут)"
     except Exception as e:
         logger.error(f"[WEATHER] Error: {e}")
         return f"❌ Ошибка получения погоды: {str(e)}"
 
 async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
-    """
-    Получить информацию о котировках акций
-    """
-    if not ALPHA_VANTAGE_API_KEY:
-        return "❌ Сервис котировок временно недоступен"
-
+    """Получить информацию о котировках акций"""
+    from .api_client import get_api_client
+    
     try:
-        # Нормализация символа
-        symbol = symbol.strip().upper()
+        api = get_api_client()
+        data = await api.get_stock(symbol)
+        
+        if not data:
+            return f"❌ Акция '{symbol}' не найдена или данные недоступны"
+        
+        price = float(data['price'])
+        change = data['change']
+        change_pct = data['change_percent']
+        
+        # Определяем направление
+        try:
+            change_val = float(str(change).replace('%', ''))
+            emoji = "📈" if change_val >= 0 else "📉"
+            signal = "рост" if change_val >= 0 else "падение"
+        except (ValueError, TypeError):
+            emoji = "📈"
+            signal = ""
+        
+        result = f"{emoji} **{data['symbol']}** — ${price:.2f}\n"
+        result += f"• Изменение: {change} ({change_pct}) {signal}\n"
+        result += f"• Объём торгов: {data['volume']}\n"
+        result += f"• Дата: {data['trading_day']}\n"
+        return result
 
-        # Используем Alpha Vantage API
-        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
-
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.get(url, timeout=10) as response:
-                if response.status == 200:
-                    data = await response.json()
-
-                    if "Global Quote" in data and data["Global Quote"]:
-                        quote = data["Global Quote"]
-
-                        symbol = quote.get("01. symbol", symbol)
-                        price = quote.get("05. price", "N/A")
-                        change = quote.get("09. change", "N/A")
-                        change_percent = quote.get("10. change percent", "N/A")
-                        volume = quote.get("06. volume", "N/A")
-                        latest_trading_day = quote.get("07. latest trading day", "N/A")
-
-                        result = f"📈 **{symbol}**\n"
-                        result += f"• Цена: ${price}\n"
-                        result += f"• Изменение: {change} ({change_percent})\n"
-                        result += f"• Объем: {volume}\n"
-                        result += f"• Дата: {latest_trading_day}\n"
-
-                        return result
-                    else:
-                        return f"❌ Акция '{symbol}' не найдена или данные недоступны"
-                else:
-                    logger.error(f"[STOCK] API error: {response.status}")
-                    return f"❌ Не удалось получить котировки для '{symbol}'"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис котировок не отвечает (таймаут)"
     except Exception as e:
         logger.error(f"[STOCK] Error: {e}")
         return f"❌ Ошибка получения котировок: {str(e)}"
 
 async def get_news_info(topic: str = None, user_id: int = None, session=None) -> str:
-    """
-    Получить новости по теме или общие новости
-    """
-    if not NEWSAPI_API_KEY:
-        return "❌ Сервис новостей временно недоступен"
-
+    """Получить новости по теме с AI-анализом"""
+    from .api_client import get_api_client
+    
     try:
-        # Если тема не указана, получаем общие новости
-        if not topic or topic.lower() in ['общие', 'главные', 'главное', 'новости']:
-            url = f"https://newsapi.org/v2/top-headlines?country=ru&apiKey={NEWSAPI_API_KEY}&pageSize=5"
+        api = get_api_client()
+        articles = await api.get_news(topic=topic, page_size=7)
+        
+        if not articles:
+            return f"❌ Новости по теме '{topic}' не найдены"
+        
+        if topic and topic.lower() not in ['общие', 'главные', 'главное', 'новости']:
+            result = f"📰 **Новости: {topic}**\n\n"
         else:
-            # Ищем новости по теме
-            url = f"https://newsapi.org/v2/everything?q={topic}&language=ru&sortBy=publishedAt&apiKey={NEWSAPI_API_KEY}&pageSize=5"
+            result = "📰 **Главные новости:**\n\n"
+        
+        # AI-синтез главного
+        articles_text = "\n".join([
+            f"- {a.get('title', '')}" for a in articles[:7]
+        ])
+        
+        try:
+            prompt = f"""Вот заголовки новостей по теме "{topic or 'главные'}":
 
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.get(url, timeout=15) as response:
-                if response.status == 200:
-                    data = await response.json()
+{articles_text}
 
-                    if data.get("status") == "ok" and data.get("articles"):
-                        articles = data["articles"]
+Выдели главное в 2-3 предложениях: о чём все эти новости, какой общий тренд, что важно."""
+            
+            summary = await api.deepseek_analyze(
+                prompt=prompt,
+                system_prompt="Ты новостной аналитик. Кратко и по сути.",
+                max_tokens=200
+            )
+            if summary:
+                result += f"📝 **Главное:** {summary}\n\n"
+        except Exception:
+            pass
+        
+        for i, article in enumerate(articles[:5], 1):
+            title = article.get('title', 'Без заголовка')
+            source = article.get('source', '')
+            url = article.get('url', '')
+            
+            result += f"**{i}. {title}**\n"
+            if source:
+                result += f"📰 {source}"
+            if url:
+                result += f" | 🔗 {url}"
+            result += "\n\n"
+        
+        return result
 
-                        if topic and topic.lower() not in ['общие', 'главные', 'главное', 'новости']:
-                            result = f"📰 **Новости по теме '{topic}':**\n\n"
-                        else:
-                            result = "📰 **Главные новости:**\n\n"
-
-                        for i, article in enumerate(articles[:5], 1):
-                            title = article.get('title', 'Без заголовка')
-                            source = article.get('source', {}).get('name', 'Неизвестный источник')
-                            url = article.get('url', '')
-                            published_at = article.get('publishedAt', '')
-
-                            # Форматируем дату
-                            if published_at:
-                                try:
-                                    dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
-                                    date_str = dt.strftime('%d.%m.%Y %H:%M')
-                                except:
-                                    date_str = published_at[:16]
-                            else:
-                                date_str = "Неизвестно"
-
-                            result += f"**{i}. {title}**\n"
-                            result += f"📅 {date_str} | 📰 {source}\n"
-                            if url:
-                                result += f"🔗 {url}\n"
-                            result += "\n"
-
-                        return result
-                    else:
-                        return f"❌ Новости по теме '{topic}' не найдены"
-                else:
-                    logger.error(f"[NEWS] API error: {response.status}")
-                    return "❌ Не удалось получить новости"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис новостей не отвечает (таймаут)"
     except Exception as e:
         logger.error(f"[NEWS] Error: {e}")
         return f"❌ Ошибка получения новостей: {str(e)}"
 
 async def web_search(query: str, user_id: int = None, session=None) -> str:
-    """
-    Выполнить веб-поиск с помощью Serper API
-    """
-    if not SERPER_API_KEY:
-        return "❌ Сервис поиска временно недоступен"
-
+    """Выполнить веб-поиск с AI-синтезом результатов"""
+    from .api_client import get_api_client
+    
     try:
-        url = "https://google.serper.dev/search"
-        headers = {
-            'X-API-KEY': SERPER_API_KEY,
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            "q": query,
-            "num": 5  # Количество результатов
-        }
+        api = get_api_client()
+        results = await api.serper_search(query, num=7)
+        
+        if not results:
+            return f"❌ Результаты поиска по '{query}' не найдены"
+        
+        # AI-синтез результатов
+        context = "\n\n".join([
+            f"**{r['title']}**\n{r['snippet']}"
+            for r in results[:7]
+        ])
+        
+        prompt = f"""На основе результатов поиска по запросу "{query}":
 
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.post(url, headers=headers, json=payload, timeout=15) as response:
-                if response.status == 200:
-                    data = await response.json()
+{context}
 
-                    if "organic" in data and data["organic"]:
-                        results = data["organic"]
+Составь краткий ответ (3-5 предложений) на запрос пользователя, используя данные из поиска. Извлеки суть, цифры, конкретику. Не пересказывай каждый результат отдельно — синтезируй в конкретный ответ."""
+        
+        try:
+            synthesis = await api.deepseek_analyze(
+                prompt=prompt,
+                system_prompt="Ты исследователь. Извлекай суть из данных, не пересказывай.",
+                max_tokens=400
+            )
+        except Exception:
+            synthesis = None
+        
+        result = f"🔍 **По запросу: {query}**\n\n"
+        
+        if synthesis:
+            result += f"{synthesis}\n\n"
+        
+        # Добавляем топ-3 источника для проверки
+        result += "🔗 **Источники:**\n"
+        for i, item in enumerate(results[:3], 1):
+            result += f"{i}. [{item['title']}]({item['link']})\n"
+        
+        return result
 
-                        result = f"🔍 **Результаты поиска по '{query}':**\n\n"
-
-                        for i, item in enumerate(results[:5], 1):
-                            title = item.get('title', 'Без заголовка')
-                            link = item.get('link', '')
-                            snippet = item.get('snippet', '')
-
-                            result += f"**{i}. {title}**\n"
-                            if snippet:
-                                # Ограничиваем длину сниппета
-                                snippet = snippet[:200] + "..." if len(snippet) > 200 else snippet
-                                result += f"{snippet}\n"
-                            if link:
-                                result += f"🔗 {link}\n"
-                            result += "\n"
-
-                        return result
-                    else:
-                        return f"❌ Результаты поиска по '{query}' не найдены"
-                else:
-                    logger.error(f"[SEARCH] API error: {response.status}")
-                    return f"❌ Не удалось выполнить поиск"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис поиска не отвечает (таймаут)"
     except Exception as e:
         logger.error(f"[SEARCH] Error: {e}")
         return f"❌ Ошибка поиска: {str(e)}"
@@ -6008,13 +6178,13 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
         # Получаем профиль пользователя
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
-        suggestions = []
+        suggestions = []  # legacy, может использоваться позже
         analysis_data = {
             'profile_interests': [],
             'profile_skills': [],
             'profile_goals': [],
             'relevant_contacts': [],
-            'active_tasks': [],  # Добавляем активные задачи
+            'active_tasks': [],
             'trends': [],
             'time_context': None
         }
@@ -6160,189 +6330,95 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
                 logger.warning(f"[SITUATION_ANALYSIS] Failed to get trends: {e}")
                 analysis_data['trends_info'] = None
 
-        # 5. ФОРМИРУЕМ ПРЕДЛОЖЕНИЯ - ПРИОРИТЕТ НА ПОМОЩЬ С АКТИВНЫМИ ЗАДАЧАМИ
-
-        # А. ПОМОЩЬ С АКТИВНЫМИ ЗАДАЧАМИ - ПРИОРИТЕТ #1
-        if analysis_data['active_tasks']:
-            for task in analysis_data['active_tasks'][:2]:  # Топ-2 активные задачи
-                task_title = task.title[:50]
-                # Предлагаем КОНКРЕТНУЮ помощь с этой задачей
-                suggestions.append(f"🎯 Нужна помощь с '{task_title}'? Расскажи, что мешает")
+        # 5. AI-ГЕНЕРАЦИЯ ПЕРСОНАЛЬНЫХ ПРЕДЛОЖЕНИЙ
+        from .api_client import get_api_client
+        api = get_api_client()
         
-        # Б. АНАЛИЗ НАВЫКОВ - ПРАКТИЧНЫЕ СОВЕТЫ
-        if analysis_data['profile_skills']:
-            for skill in analysis_data['profile_skills'][:3]:  # Берем топ-3 навыка
-                skill_lower = skill.lower().strip()
-
-                # Программирование и разработка
-                if any(word in skill_lower for word in ['программист', 'разработчик', 'developer', 'код', 'программирование']):
-                    if analysis_data['time_context'] == 'утро':
-                        suggestions.append("Проверить свежие коммиты в репозиториях, над которыми работаешь 💻")
-                    elif analysis_data['time_context'] == 'день':
-                        suggestions.append("Рефакторить код или улучшить производительность ⚡")
-                    elif analysis_data['time_context'] == 'вечер':
-                        suggestions.append("Подготовить план на завтра: на чём сосредоточиться? 📝")
-
-                # Дизайн и творчество
-                elif any(word in skill_lower for word in ['дизайн', 'дизайнер', 'креатив', 'творчество', 'графика']):
-                    if analysis_data['time_context'] == 'утро':
-                        suggestions.append("Посмотреть свежие тренды в дизайне и UX 🎨")
-                    elif analysis_data['time_context'] == 'день':
-                        suggestions.append("Поупражняться в новых техниках дизайна 🖌️")
-                    elif analysis_data['time_context'] == 'вечер':
-                        suggestions.append("Проанализировать свои лучшие работы и подумать над улучшениями 📊")
-
-                # Маркетинг и продажи
-                elif any(word in skill_lower for word in ['маркетинг', 'продажи', 'sales', 'marketing', 'продвижение']):
-                    if analysis_data['time_context'] == 'утро':
-                        suggestions.append("Изучить новые маркетинговые каналы 📈")
-                    elif analysis_data['time_context'] == 'день':
-                        suggestions.append("Связаться с потенциальными клиентами 🤝")
-                    elif analysis_data['time_context'] == 'вечер':
-                        suggestions.append("Проанализировать эффективность текущих кампаний 📊")
-
-                # Аналитика и данные
-                elif any(word in skill_lower for word in ['аналитика', 'данные', 'data', 'анализ']):
-                    if analysis_data['time_context'] == 'утро':
-                        suggestions.append("Посмотреть свежие данные по твоей сфере 📊")
-                    elif analysis_data['time_context'] == 'день':
-                        suggestions.append("Создать новый дашборд или отчет 📈")
-                    elif analysis_data['time_context'] == 'вечер':
-                        suggestions.append("Проанализировать тренды в данных 🔍")
-
-                # Управление и менеджмент
-                elif any(word in skill_lower for word in ['менеджмент', 'управление', 'менеджер', 'руководство']):
-                    if analysis_data['time_context'] == 'утро':
-                        suggestions.append("Спланировать день для команды 📅")
-                    elif analysis_data['time_context'] == 'день':
-                        suggestions.append("Провести встречу или созвон с командой 👥")
-                    elif analysis_data['time_context'] == 'вечер':
-                        suggestions.append("Подвести итоги дня и спланировать завтра 📝")
-
-                # Образование и преподавание
-                elif any(word in skill_lower for word in ['преподаватель', 'учитель', 'образование', 'обучение']):
-                    if analysis_data['time_context'] == 'утро':
-                        suggestions.append("Подготовить материалы для следующего занятия 📚")
-                    elif analysis_data['time_context'] == 'день':
-                        suggestions.append("Связаться с учениками или коллегами по образованию 👥")
-                    elif analysis_data['time_context'] == 'вечер':
-                        suggestions.append("Оценить эффективность проведенных занятий 📊")
-
-        # АНАЛИЗ ИНТЕРЕСОВ - для каждого интереса предлагаем релевантные действия
+        # Собираем контекст для AI
+        context_parts = []
+        context_parts.append(f"Время суток: {analysis_data['time_context']}")
+        
+        if analysis_data['active_tasks']:
+            tasks_str = ", ".join([t.title for t in analysis_data['active_tasks'][:5]])
+            context_parts.append(f"Активные задачи: {tasks_str}")
+        
         if analysis_data['profile_interests']:
-            for interest in analysis_data['profile_interests'][:2]:  # Берем топ-2 интереса
-                interest_lower = interest.lower().strip()
-
-                # Если есть конкретная информация о трендах по этому интересу
-                if analysis_data.get('trends_info') and analysis_data.get('trends_topic') == interest:
-                    # Извлекаем ключевую информацию из трендов
-                    trends_lines = analysis_data['trends_info'].split('\n')[:2]  # Первые 2 строки
-                    key_info = ""
-                    for line in trends_lines:
-                        line = line.strip()
-                        if line and len(line) > 20 and not line.startswith('❌'):
-                            key_info = line[:100] + "..." if len(line) > 100 else line
-                            break
-
-                    if key_info:
-                        suggestions.append(f"Изучить тренд: {key_info} 📈")
-                    else:
-                        suggestions.append(f"Посмотреть свежие новости по теме '{interest}' 📰")
-                else:
-                    # Общие предложения по интересам
-                    if any(word in interest_lower for word in ['технологии', 'tech', 'it', 'программирование']):
-                        suggestions.append(f"Посмотреть что нового в мире {interest} 💻")
-                    elif any(word in interest_lower for word in ['бизнес', 'стартапы', 'предпринимательство']):
-                        suggestions.append(f"Изучить кейсы успешных {interest} компаний 🚀")
-                    elif any(word in interest_lower for word in ['искусство', 'творчество', 'креатив']):
-                        suggestions.append(f"Посмотреть свежие работы в {interest} 🎨")
-                    elif any(word in interest_lower for word in ['спорт', 'здоровье', 'fitness']):
-                        suggestions.append(f"Попробовать новую тренировку по {interest} 💪")
-                    elif any(word in interest_lower for word in ['путешествия', 'туризм']):
-                        suggestions.append(f"Посмотреть интересные места для {interest} ✈️")
-                    else:
-                        suggestions.append(f"Узнать что-то новое по теме '{interest}' 📚")
-
-        # КОНТАКТЫ - предлагаем конкретных людей с похожими интересами/навыками/задачами
-        # Сначала контакты по профилю
-        if analysis_data['relevant_contacts']:
-            # Берем топ-2 контакта по профилю
-            for i, contact in enumerate(analysis_data['relevant_contacts'][:2]):
-                partner_user = session.query(User).filter_by(id=contact.user_id).first()
-                if partner_user and partner_user.username:
-                    contact_suggestion = f"Написать @{partner_user.username}"
-
-                    # Добавляем контекст почему этот контакт релевантен
-                    if contact.common_interests:
-                        contact_suggestion += f" - у вас общие интересы в {contact.common_interests} 💬"
-                    elif contact.common_skills:
-                        contact_suggestion += f" - общие навыки в {contact.common_skills} 🤝"
-                    else:
-                        contact_suggestion += f" - похоже по профилю 👥"
-
-                    suggestions.append(contact_suggestion)
-
-        # Затем контакты по задачам
-        if analysis_data.get('task_based_contacts'):
-            # Берем топ-2 контакта по задачам
-            for contact in analysis_data['task_based_contacts'][:2]:
-                contact_suggestion = f"Написать @{contact['username']}"
-
-                # Добавляем контекст по общим задачам
-                if contact['common_tasks']:
-                    task_examples = contact['common_tasks'][:2]  # Показываем 1-2 примера задач
-                    task_text = task_examples[0] if len(task_examples) == 1 else f"{task_examples[0]} и {task_examples[1]}"
-                    contact_suggestion += f" - у вас похожие задачи: '{task_text}' 🏃"
-                else:
-                    contact_suggestion += f" - у вас похожие привычки и задачи 🏃"
-
-                suggestions.append(contact_suggestion)
-
-        # ЦЕЛИ - КОНКРЕТНЫЕ ВОПРОСЫ ДЛЯ ПОМОЩИ
+            context_parts.append(f"Интересы: {', '.join(analysis_data['profile_interests'])}")
+        if analysis_data['profile_skills']:
+            context_parts.append(f"Навыки: {', '.join(analysis_data['profile_skills'])}")
         if analysis_data['profile_goals']:
-            for goal in analysis_data['profile_goals'][:1]:  # Первая цель
-                if len(goal) > 10:  # Значимая цель
-                    suggestions.append(f"🎯 Что мешает цели '{goal[:40]}'? Могу помочь с решением")
+            context_parts.append(f"Цели: {', '.join(analysis_data['profile_goals'])}")
+        
+        # Контакты
+        contact_names = []
+        if analysis_data['relevant_contacts']:
+            for contact in analysis_data['relevant_contacts'][:3]:
+                partner = session.query(User).filter_by(id=contact.user_id).first()
+                if partner and partner.first_name:
+                    reason = contact.common_interests or contact.common_skills or ""
+                    contact_names.append(f"{partner.first_name} ({reason})" if reason else partner.first_name)
+        if analysis_data.get('task_based_contacts'):
+            for c in analysis_data['task_based_contacts'][:2]:
+                tasks_ex = ", ".join(c['common_tasks'][:2])
+                contact_names.append(f"{c['username']} (похожие задачи: {tasks_ex})")
+        if contact_names:
+            context_parts.append(f"Релевантные контакты: {'; '.join(contact_names)}")
+        
+        if analysis_data.get('trends_info'):
+            # Краткая выжимка трендов
+            trends_short = analysis_data['trends_info'][:300]
+            context_parts.append(f"Свежие тренды по '{analysis_data.get('trends_topic', '')}': {trends_short}")
+        
+        user_context = "\n".join(context_parts)
+        
+        prompt = f"""Контекст пользователя:
+{user_context}
 
-        # УНИВЕРСАЛЬНЫЕ ПРЕДЛОЖЕНИЯ ПО ВРЕМЕНИ СУТОК (если мало персонализированных)
-        if len(suggestions) < 4:
-            if analysis_data['time_context'] == 'утро':
-                suggestions.append("Определить 3 главных приоритета на день 🌅")
-                suggestions.append("Сделать небольшую разминку или прогулку 🚶")
-            elif analysis_data['time_context'] == 'день':
-                suggestions.append("Сделать короткий перерыв и подышать свежим воздухом 🌬️")
-                suggestions.append("Связаться с кем-то из знакомых, с кем давно не общался ☎️")
-            elif analysis_data['time_context'] == 'вечер':
-                suggestions.append("Подвести итоги дня - что удалось, что можно улучшить 📊")
-                suggestions.append("Прочитать что-то полезное перед сном 📖")
-            else:  # ночь
-                suggestions.append("Поспать нормально - сон важнее всего 😴")
-                suggestions.append("Запланировать завтрашний день 📅")
+Предложи 3-5 конкретных действий, которые пользователь может сделать ПРЯМО СЕЙЧАС.
 
-        # Ограничиваем до 5 предложений
-        suggestions = suggestions[:5]
+Правила:
+- Каждое предложение — одно конкретное действие (не "подумай о...", а "сделай...")
+- Если есть активные задачи — предложи помощь с ними (разбить на шаги, найти ресурсы)
+- Если есть контакты — предложи написать конкретному человеку и зачем
+- Учитывай время суток (не предлагай тренировку ночью)
+- Предложения могут касаться ЛЮБОЙ сферы: работа, здоровье, хобби, отношения, учёба
+- Будь конкретным: не "развивайся", а "пройди бесплатный урок по X на Y"
+- Формат: одна строка на предложение, без нумерации"""
 
-        # Формируем результат - ФОКУС НА ПОМОЩИ
-        if not suggestions:
-            result = "Если есть какие-то задачи или цели - расскажи, помогу разобраться 🤝"
+        try:
+            ai_suggestions = await api.deepseek_analyze(
+                prompt=prompt,
+                system_prompt="Ты персональный ассистент. Генерируй конкретные, выполнимые предложения. Кратко, по делу.",
+                max_tokens=400
+            )
+        except Exception as e:
+            logger.warning(f"[SITUATION_ANALYSIS] AI suggestions failed: {e}")
+            ai_suggestions = None
+        
+        # Формируем результат
+        has_active_tasks = len(analysis_data['active_tasks']) > 0
+        
+        if ai_suggestions:
+            if has_active_tasks:
+                result = "💪 **Вижу у тебя есть задачи. Вот что предлагаю:**\n\n"
+            else:
+                result = "🧠 **Вот что можно сделать прямо сейчас:**\n\n"
+            
+            # Парсим предложения AI
+            for line in ai_suggestions.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                # Убираем маркеры если AI их добавил
+                line = line.lstrip("•-*0123456789.) ")
+                if line:
+                    result += f"• {line}\n"
+            
+            result += "\nВыбери что интересно — помогу с деталями!"
         else:
-            # Если есть активные задачи - акцент на помощь с ними
-            has_active_tasks = len(analysis_data['active_tasks']) > 0
-            
-            if has_active_tasks:
-                result = "Вижу у тебя есть активные задачи. Чем могу помочь? 💪\n\n"
-            else:
-                result = "Смотрю по твоему профилю... Вот несколько идей:\n\n"
-            
-            for suggestion in suggestions:
-                result += f"• {suggestion}\n"
-
-            # Добавляем призыв к диалогу для уточнения
-            if has_active_tasks:
-                result += "\nВыбери задачу, с которой нужна помощь, или расскажи что застопорилось"
-            else:
-                result += "\nЕсли что-то интересно - пиши, обсудим!"
-
+            # Фоллбэк без AI
+            result = "Расскажи, чем занимаешься или что планируешь — помогу разобраться 🤝"
+        
         return result
 
     except Exception as e:

@@ -34,25 +34,7 @@ def start_premium_scheduler():
     
     PREMIUM_SCHEDULER = AsyncIOScheduler(timezone=pytz.UTC)  # type: ignore
     
-    # Утренний сбор инсайтов (9:00 UTC = 12:00 MSK для большинства)
-    PREMIUM_SCHEDULER.add_job(
-        morning_insights_job,
-        CronTrigger(hour=6, minute=0),  # 9:00 MSK
-        id='premium_morning_insights',
-        name='Premium Morning Insights',
-        replace_existing=True
-    )
-    
-    # Вечерний сбор инсайтов (20:00 UTC = 23:00 MSK)
-    PREMIUM_SCHEDULER.add_job(
-        evening_insights_job,
-        CronTrigger(hour=17, minute=0),  # 20:00 MSK
-        id='premium_evening_insights',
-        name='Premium Evening Insights',
-        replace_existing=True
-    )
-    
-    # Еженедельная аналитика (понедельник 10:00 MSK)
+    # Еженедельная аналитика (понедельник 10:00 MSK) — единственная фоновая задача
     PREMIUM_SCHEDULER.add_job(
         weekly_analytics_job,
         CronTrigger(day_of_week='mon', hour=7, minute=0),  # Понедельник 10:00 MSK

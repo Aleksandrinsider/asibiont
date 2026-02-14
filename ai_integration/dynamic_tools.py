@@ -105,9 +105,19 @@ class DynamicToolDiscovery:
         """
         tools = {}
         
+        # Import excluded tools list
+        try:
+            from .tools import EXCLUDED_TOOLS
+        except ImportError:
+            EXCLUDED_TOOLS = set()
+        
         for name, obj in inspect.getmembers(module):
             # Пропускаем приватные функции и не-функции
             if name.startswith('_') or not inspect.isfunction(obj):
+                continue
+            
+            # Пропускаем исключённые инструменты
+            if name in EXCLUDED_TOOLS:
                 continue
                 
             # Получаем сигнатуру функции

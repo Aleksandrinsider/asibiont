@@ -43,35 +43,23 @@ async def send_delegation_notification_async(chat_id, message_text):
         logger.warning(f"Error sending delegation notification: {e}")
 
 PREMIUM_DESCRIPTION = """
-Ваш AI-партнёр, который не спит!
+ASI Biont — AI-ассистент для всех сфер жизни
 
-Пока вы занимаетесь главным — он растит вашу сеть, постит контент, делегирует задачи и ловит возможности. Не помощник. Партнёр.
+🟢 ЛАЙТ — 3 000 ₽/мес
+Все инструменты: задачи, поиск партнёров, исследования, котировки, погода, новости, маркетинг-контент, публикации, проактивные рекомендации.
 
-Управление задачами
-«Завтра в 9 созвон с инвестором» — он помнит. «Через час пост в канал» — он напомнит. Вы говорите, он делает. Без списков и стресса.
+🔵 СТАНДАРТ — 9 000 ₽/мес
+Всё из Лайт + делегирование задач + фоновые алерты о подходящих контактах.
 
-Поиск партнёров
-Говорите: «Ищу дизайнера для стартапа». Получаете: @anna, 5 лет в дизайне, живёт рядом, открыта к проектам. Не поиск. Готовые связи.
-
-Делегирование задач
-«Кто может написать статью за 3 дня?» — AI находит исполнителя из сети, передаёт задачу, следит за сроками. Вы даёте команду, он собирает команду.
-
-AI-исполнение задач
-Вы спите — он постит в канал каждые 6 часов. Вы на встрече — он делегирует задачи. Вы заняты — он шлёт алерт: «Важный контакт онлайн».
-
-Проактивные предложения
-Утро, +15°, вы идёте в парк. Он: «@dima тоже бегает по утрам, тема для коллаба?» Не уведомления. Точечные возможности в нужный момент.
-
-Telegram-бот + веб-дашборд
-В кармане — бот для команд на ходу. На экране — дашборд с графом связей и аналитикой. Где удобно, там и работает. Два интерфейса, одна сила.
-
-Хватит работать в одиночку. Возьмите партнёра.
+🟡 ПРЕМИУМ — 27 000 ₽/мес
+Всё из Стандарт + автономное ведение канала: автопостинг каждый день + контент-стратегия.
 
 Для доступа нужна активная подписка.
-Выберите тариф в веб-приложении или используйте команду /subscription
+Выберите тариф: /subscription
 
-Есть вопросы? Поддержка: @aleksandrinsider
-"""
+Есть промокод? /promo <КОД>
+Поддержка: @aleksandrinsider
+"""""
 
 try:
     import speech_recognition as sr
@@ -261,16 +249,16 @@ async def subscription_handler(message: Message):
             return
     
     # Описание тарифов
-    tiers_description = """Выберите свой темп роста:
+    tiers_description = """Выберите свой тариф:
 
-LIGHT — 3000₽/месяц
-«Ищу маркетолога» — AI ищет в сети по целям и навыкам. «Познакомь с дизайнерами» — подбирает и предлагает. Вы растёте. AI находит.
+🟢 ЛАЙТ — 3 000₽/мес
+Все инструменты: задачи, партнёры, исследования, котировки, погода, новости, маркетинг, публикации, проактивные рекомендации.
 
-STANDARD — 9000₽/месяц (ПОПУЛЯРНЫЙ)
-Всё из Лайт + делегирование. «Кому передать статью?» — AI находит @maria из сети, передаёт задачу, следит за дедлайном. Вы думаете, AI собирает команду.
+🔵 СТАНДАРТ — 9 000₽/мес (ПОПУЛЯРНЫЙ)
+Всё из Лайт + делегирование задач + фоновые алерты о подходящих контактах.
 
-PREMIUM — 27000₽/месяц
-Всё из Стандарт + автопилот. Вы спите — он постит каждые 6 часов. Вы на встрече — он делегирует. Вы заняты — алерт: «@dima онлайн». AI никогда не спит.
+🟡 ПРЕМИУМ — 27 000₽/мес
+Всё из Стандарт + автономное ведение канала: автопостинг + контент-стратегия.
 
 Есть промокод? Введите его на сайте https://asibiont.ru
 
@@ -483,9 +471,9 @@ async def promo_handler(message: Message):
         session.commit()
         
         tier_names = {
-            SubscriptionTier.LIGHT: '🥉 Бронза',
-            SubscriptionTier.STANDARD: '🥈 Серебро',
-            SubscriptionTier.PREMIUM: '🥇 Золото'
+            SubscriptionTier.LIGHT: '🟢 Лайт',
+            SubscriptionTier.STANDARD: '🔵 Стандарт',
+            SubscriptionTier.PREMIUM: '🟡 Премиум'
         }
         
         await message.answer(
@@ -519,16 +507,16 @@ async def subscribe_handler(message: Message):
         return
     
     # Описание тарифов
-    tiers_description = """Доступные тарифы подписки:
+    tiers_description = """Выберите свой тариф:
 
-LIGHT — 3000₽/месяц
-Для нетворкинга. AI находит партнеров в городе по целям и интересам, инициирует знакомства, организует встречи.
+🟢 ЛАЙТ — 3 000₽/мес
+Все инструменты: задачи, партнёры, исследования, котировки, погода, новости, маркетинг, публикации, проактивные рекомендации.
 
-STANDARD — 9000₽/месяц (ПОПУЛЯРНЫЙ)
-Всё из Лайт + для делегирования. AI подбирает исполнителей из сообщества, координирует команду, контролирует прогресс.
+🔵 СТАНДАРТ — 9 000₽/мес (ПОПУЛЯРНЫЙ)
+Всё из Лайт + делегирование задач + фоновые алерты о подходящих контактах.
 
-PREMIUM — 27000₽/месяц
-Всё из Стандарт + для тех, кто хочет масштаба. AI на автопилоте: находит партнёров для ваших задач, инициирует выполнение, предоставляет отчет. Premium-приоритет в рекомендациях.
+🟡 ПРЕМИУМ — 27 000₽/мес
+Всё из Стандарт + автономное ведение канала: автопостинг + контент-стратегия.
 
 Подробнее о тарифах: https://asibiont.ru/subscription-tiers
 Есть промокод? Используйте команду /promo <КОД>
@@ -542,7 +530,7 @@ PREMIUM — 27000₽/месяц
     standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', None)
     premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', None)
     
-    payment_message = """LIGHT (3000₽/мес):
+    payment_message = f"""LIGHT (3000₽/мес):
 {light_url}
 
 STANDARD (9000₽/мес):
@@ -778,7 +766,8 @@ async def process_other_message(user_id, message, state):
         return
 
 
-def delegate_task(title, description, reminder_time, delegated_to_username, user_id, session=None, delegation_details=None):
+def get_delegation_report(user_id, session=None):
+    """Получить отчёт о делегированных задачах"""
     should_close = False
     if session is None:
         session = Session()
@@ -1014,46 +1003,6 @@ async def dashboard_handler(message: Message):
 
 
 # Business logic functions for command handlers
-    """Reschedule an existing task"""
-    try:
-        from models import Task, User
-        from ai_integration.time_parser import parse_time
-        
-        user = session.query(User).filter_by(id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-        
-        # Find task by title keywords
-        tasks = session.query(Task).filter(
-            Task.user_id == user_id,
-            Task.status == 'pending'
-        ).all()
-        
-        # Find best match
-        best_match = None
-        for task in tasks:
-            if task_title.lower() in task.title.lower():
-                best_match = task
-                break
-        
-        if not best_match:
-            return f"Задача с ключевыми словами '{task_title}' не найдена"
-        
-        # Parse new time
-        parsed_time = parse_time(new_time, user.timezone if user.timezone else 'UTC')
-        if not parsed_time:
-            return f"Не удалось распознать новое время: {new_time}"
-        
-        # Update task
-        best_match.reminder_time = parsed_time
-        session.commit()
-        
-        return f"Задача '{best_match.title}' перенесена на {parsed_time.strftime('%d.%m.%Y %H:%M')}"
-    
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Error rescheduling task: {e}")
-        return f"Ошибка при переносе задачи: {str(e)}"
 
 
 def delegate_task(task_title, executor_username, deadline=None, description=None, delegator_id=None, session=None):

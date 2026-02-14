@@ -160,13 +160,19 @@ class Goal(Base):
     def is_overdue(self):
         """Check if goal is overdue"""
         if self.target_date and self.status == 'active':
-            return datetime.datetime.now(datetime.timezone.utc) > self.target_date
+            target = self.target_date
+            if target.tzinfo is None:
+                target = target.replace(tzinfo=datetime.timezone.utc)
+            return datetime.datetime.now(datetime.timezone.utc) > target
         return False
 
     def days_until_target(self):
         """Calculate days until target date"""
         if self.target_date:
-            delta = self.target_date - datetime.datetime.now(datetime.timezone.utc)
+            target = self.target_date
+            if target.tzinfo is None:
+                target = target.replace(tzinfo=datetime.timezone.utc)
+            delta = target - datetime.datetime.now(datetime.timezone.utc)
             return delta.days
         return None
 

@@ -123,27 +123,20 @@ async def generate_marketing_content(product_name, target_audience, platform, go
 async def research_topic(query, depth="full", user_id=None, session=None):
     """
     УНИВЕРСАЛЬНЫЙ ПОИСК И АНАЛИЗ
-    Автоматически адаптируется под тариф пользователя
-    
-    Args:
-        query: Тема для исследования
-        user_id: ID пользователя
-    
-    Returns:
-        dict с анализом рынка/темы
+    Использует единый API-клиент с кэшированием и rate-limiting
     """
-    from config import SERPER_API_KEY
+    from .api_client import get_api_client
     
     logger.info(f"[RESEARCH] Universal analysis for '{query}'")
     
-    # Проверяем кэш для похожих запросов
+    # Проверяем LTM-кэш для похожих запросов
     if user_id:
         try:
             from .memory import LongTermMemory
             ltm = LongTermMemory(user_id)
             cached_result = ltm.get_cached_search_result(query)
             if cached_result:
-                logger.info(f"[RESEARCH] Using cached result for user {user_id}")
+                logger.info(f"[RESEARCH] Using LTM cached result for user {user_id}")
                 return {
                     "success": True,
                     "cached": True,
@@ -154,245 +147,82 @@ async def research_topic(query, depth="full", user_id=None, session=None):
                     "message": f"🔍 Кэшированный анализ: {query}\n\n{cached_result['results']}\n\n💡 Ранее полученные инсайты:\n" + "\n".join(f"• {insight}" for insight in cached_result['insights'][:3])
                 }
         except Exception as e:
-            logger.warning(f"[RESEARCH] Cache check failed: {e}")
-    
-    # Определяем параметры исследования (ОДИНАКОВО ДЛЯ ВСЕХ ТАРИФОВ)
-    num_results = 10  # Фиксированное количество результатов для всех тарифов
-    analysis_type = "comprehensive"  # Полный анализ для всех
-    max_tokens = 600  # Максимальная длина анализа для всех
-    
-    logger.info(f"[RESEARCH] Universal analysis: {num_results} results, type: {analysis_type}")
+            logger.warning(f"[RESEARCH] LTM cache check failed: {e}")
     
     try:
-        # Шаг 1: Веб-поиск через Serper
-        search_results = []
+        api = get_api_client()
         
-        if SERPER_API_KEY:
-            try:
-                async with aiohttp.ClientSession() as http_session:
-                    async with http_session.post(
-                        'https://google.serper.dev/search',
-                        headers={
-                            'X-API-KEY': SERPER_API_KEY,
-                            'Content-Type': 'application/json'
-                        },
-                        json={
-                            "q": query,
-                            "num": num_results,
-                            "gl": "ru",  # Russian results
-                            "hl": "ru"
-                        }
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            
-                            # Извлекаем результаты
-                            for item in data.get('organic', [])[:num_results]:
-                                search_results.append({
-                                    "title": item.get('title'),
-                                    "snippet": item.get('snippet'),
-                                    "link": item.get('link')
-                                })
-                            
-                            logger.info(f"[RESEARCH] Found {len(search_results)} results")
-                        else:
-                            logger.warning(f"[RESEARCH] Serper API error: {response.status}")
-                            
-            except Exception as e:
-                logger.error(f"[RESEARCH] Serper error: {e}")
-        
-        # Шаг 2: AI анализ результатов
-        if search_results:
-            # Формируем контекст для AI (адаптируем под тариф)
-            context_length = min(len(search_results), num_results)
-            context = "\n\n".join([
-                f"**{r['title']}**\n{r['snippet']}\nИсточник: {r['link']}"
-                for r in search_results[:context_length]
-            ])
-            
-            # Адаптивный промпт на основе типа анализа
-            if analysis_type == "quick":
-                prompt = f"""Дай быстрый анализ темы: "{query}"
+        # Поиск + AI-анализ через единый клиент
+        prompt = f"""Комплексный анализ темы: "{{query}}"
 
-ОСНОВНЫЕ ДАННЫЕ:
-{context}
+ДАННЫЕ:
+{{context}}
 
-КРАТКИЙ АНАЛИЗ в формате JSON:
+Проведи ГЛУБОКИЙ анализ в формате JSON:
 {{
-    "summary": "резюме в 1-2 предложения",
-    "key_facts": ["факт 1", "факт 2", "факт 3"],
-    "actionable_insight": "один главный вывод для действия"
-}}
-
-Фокус: Быстрые, полезные insights."""
-                
-            elif analysis_type == "detailed":
-                prompt = f"""Детальный анализ темы: "{query}"
-
-ДАННЫЕ ИЗ ПОИСКА:
-{context}
-
-АНАЛИЗ в формате JSON:
-{{
-    "summary": "резюме 2-3 предложения",
-    "key_insights": ["инсайт 1", "инсайт 2", "инсайт 3"],
-    "trends": ["тренд 1", "тренд 2"],
-    "opportunities": ["возможность 1", "возможность 2"],
-    "actionable_steps": ["шаг 1", "шаг 2"],
-    "sources": ["главный источник 1", "главный источник 2"]
-}}
-
-Фокус: Практические рекомендации и тренды."""
-                
-            else:  # comprehensive
-                prompt = f"""Комплексный анализ темы: "{query}"
-
-ПОЛНЫЕ ДАННЫЕ:
-{context}
-
-ГЛУБОКИЙ АНАЛИЗ в формате JSON:
-{{
-    "summary": "подробное резюме",
-    "key_insights": ["инсайт 1", "инсайт 2", "инсайт 3", "инсайт 4"],
-    "market_analysis": {{
-        "trends": ["тренд 1", "тренд 2", "тренд 3"],
-        "opportunities": ["возможность 1", "возможность 2", "возможность 3"],
-        "competitors": ["конкурент 1", "конкурент 2"],
-        "challenges": ["проблема 1", "проблема 2"]
+    "summary": "чёткое резюме: что это, текущее состояние, главные факты с цифрами",
+    "key_insights": ["конкретный вывод 1 с данными", "вывод 2", "вывод 3"],
+    "analysis": {{
+        "trends": ["актуальный тренд 1 с примером", "тренд 2"],
+        "opportunities": ["конкретная возможность 1", "возможность 2"],
+        "risks": ["реальный риск 1", "риск 2"]
     }},
-    "action_plan": ["шаг 1", "шаг 2", "шаг 3", "шаг 4"],
-    "sources": ["главный источник 1", "главный источник 2", "главный источник 3"]
+    "action_plan": ["конкретный шаг 1", "шаг 2", "шаг 3"],
+    "sources": ["главный источник 1", "источник 2"]
 }}
 
-Фокус: Стратегический анализ и конкретный план действий."""
+ВАЖНО: Извлекай КОНКРЕТНЫЕ данные, цифры, названия, даты из источников. Не пиши общие фразы вроде "растущий рынок" — пиши "рынок $X в 2024, рост Y%"."""
+
+        result = await api.search_and_analyze(
+            query=query,
+            num_results=10,
+            analysis_prompt=prompt,
+            max_tokens=600,
+            cache_ttl=3600
+        )
+        
+        analysis = result.get('analysis')
+        
+        # Если анализ — dict, форматируем красиво
+        if isinstance(analysis, dict):
+            summary = f"🔍 Анализ по теме: {query}\n\n"
             
-            async with aiohttp.ClientSession() as http_session:
-                async with http_session.post(
-                    'https://api.deepseek.com/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                        'Content-Type': 'application/json'
-                    },
-                    json={
-                        "model": DEEPSEEK_MODEL,
-                        "messages": [
-                            {"role": "system", "content": "Ты эксперт-аналитик с практическим опытом в бизнес-анализе и конкурентной разведке."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        "temperature": 0.5,
-                        "max_tokens": max_tokens
-                    }
-                ) as response:
-                    result = await response.json()
-                    content = result['choices'][0]['message']['content']
-                    
-                    # Парсим JSON
-                    try:
-                        start = content.find('{')
-                        end = content.rfind('}') + 1
-                        if start != -1 and end > start:
-                            analysis = json.loads(content[start:end])
-                        else:
-                            analysis = {"summary": content}
-                        
-                        # Формируем ответ
-                        summary = f"🔍 Анализ по теме: {query}\n\n"
-                        
-                        if analysis.get('summary'):
-                            summary += f"📊 Резюме:\n{analysis['summary']}\n\n"
-                        
-                        if analysis.get('key_insights'):
-                            summary += f"💡 Ключевые инсайты:\n"
-                            for insight in analysis['key_insights'][:3]:
-                                summary += f"• {insight}\n"
-                            summary += "\n"
-                        
-                        if analysis.get('opportunities'):
-                            summary += f"🎯 Возможности:\n"
-                            for opp in analysis['opportunities'][:2]:
-                                summary += f"• {opp}\n"
-                            summary += "\n"
-                        
-                        if analysis.get('actionable_steps'):
-                            summary += f"✅ Рекомендации:\n"
-                            for i, step in enumerate(analysis['actionable_steps'][:3], 1):
-                                summary += f"{i}. {step}\n"
-                        
-                        return {
-                            "success": True,
-                            "analysis": analysis,
-                            "sources": search_results[:5],
-                            "message": summary
-                        }
-                        
-                    except json.JSONDecodeError:
-                        return {
-                            "success": True,
-                            "analysis": {"summary": content},
-                            "sources": search_results[:5],
-                            "message": f"🔍 Анализ:\n\n{content[:500]}..."
-                        }
+            if analysis.get('summary'):
+                summary += f"📊 Резюме:\n{analysis['summary']}\n\n"
+            
+            if analysis.get('key_insights'):
+                summary += "💡 Ключевые инсайты:\n"
+                for insight in analysis['key_insights'][:3]:
+                    summary += f"• {insight}\n"
+                summary += "\n"
+            
+            if analysis.get('opportunities'):
+                summary += "🎯 Возможности:\n"
+                for opp in analysis['opportunities'][:2]:
+                    summary += f"• {opp}\n"
+                summary += "\n"
+            
+            steps = analysis.get('actionable_steps') or analysis.get('action_plan', [])
+            if steps:
+                summary += "✅ Рекомендации:\n"
+                for i, step in enumerate(steps[:3], 1):
+                    summary += f"{i}. {step}\n"
+            
+            result['message'] = summary
         
-        return {
-            "success": True,
-            "analysis": analysis,
-            "sources": search_results[:5] if 'search_results' in locals() else [],
-            "message": summary if 'summary' in locals() else f"🔍 Поиск по теме: {query}"
-        }
+        # Сохраняем в LTM
+        if user_id and analysis:
+            try:
+                from .memory import LongTermMemory
+                ltm = LongTermMemory(user_id)
+                results_summary = analysis.get('summary', str(analysis))[:200] if isinstance(analysis, dict) else str(analysis)[:200]
+                insights = analysis.get('key_insights', []) if isinstance(analysis, dict) else []
+                ltm.save_search_query(query, results_summary, insights)
+                logger.info(f"[RESEARCH] Saved search data to LTM for user {user_id}")
+            except Exception as e:
+                logger.warning(f"[RESEARCH] Failed to save to LTM: {e}")
         
-        # Fallback: только AI без веб-поиска (если SERPER недоступен)
-        prompt = f"""Проанализируй тему: "{query}"
-
-Создай краткий анализ на основе твоих знаний:
-- Общий обзор
-- Ключевые моменты
-- Рекомендации (3 шага)
-
-Формат: структурированный текст."""
-        
-        async with aiohttp.ClientSession() as http_session:
-            async with http_session.post(
-                'https://api.deepseek.com/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "model": DEEPSEEK_MODEL,
-                    "messages": [
-                        {"role": "system", "content": "Ты эксперт-аналитик."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.6,
-                    "max_tokens": 1000
-                }
-            ) as response:
-                result = await response.json()
-                content = result['choices'][0]['message']['content']
-                
-                analysis = {"summary": content}
-                
-                # Сохраняем данные поиска в долгосрочную память для персонализации
-                if user_id and analysis:
-                    try:
-                        from .memory import LongTermMemory
-                        ltm = LongTermMemory(user_id)
-                        
-                        # Сохраняем краткое резюме результатов
-                        results_summary = analysis.get('summary', '')[:200]
-                        insights = []
-                        
-                        ltm.save_search_query(query, results_summary, insights)
-                        logger.info(f"[RESEARCH] Saved search data for user {user_id}")
-                    except Exception as e:
-                        logger.warning(f"[RESEARCH] Failed to save search data: {e}")
-                
-                return {
-                    "success": True,
-                    "analysis": analysis,
-                    "sources": [],
-                    "message": f"🔍 Анализ (базовые знания):\n\n{content[:500]}...\n\n⚠️ Для глубокого анализа нужен доступ к веб-поиску"
-                }
+        return result
                     
     except Exception as e:
         logger.error(f"[RESEARCH] Error: {e}")
@@ -496,7 +326,7 @@ async def publish_to_telegram(content, user_id=None, session=None):
                     if user_id and session:
                         from models import Task
                         report_task = Task(
-                            user_id=user_id,
+                            user_id=user.id,
                             title=f"✅ Пост опубликован в {channel}",
                             description=f"Контент:\n{post_text[:200]}...",
                             status='completed',

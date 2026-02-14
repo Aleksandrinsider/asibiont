@@ -56,30 +56,38 @@ def update_user_current_task(user: User, task_title: str, session) -> Optional[T
         return None
 
 
-def get_user_current_task(user: User) -> Optional[Task]:
+def get_user_current_task(user: User, session=None) -> Optional[Task]:
     """
     Получает текущую задачу пользователя
 
     Args:
         user: Объект пользователя
+        session: Сессия БД (если None, используется сессия из объекта user)
 
     Returns:
         Текущая задача или None
     """
     try:
-        if user.current_task_id:
-            # Проверяем, что задача все еще существует и активна
+        if not user.current_task_id:
+            return None
+        
+        # Используем переданную сессию или создаём новую
+        should_close = False
+        if session is None:
             session = Session()
-            try:
-                task = session.query(Task).filter_by(id=user.current_task_id).first()
-                if task:
-                    return task
-                else:
-                    # Задача больше не существует, сбрасываем
-                    user.current_task_id = None
-                    session.commit()
-                    logger.info(f"[CONTEXT] Cleared non-existent current_task for user {user.telegram_id}")
-            finally:
+            should_close = True
+        
+        try:
+            task = session.query(Task).filter_by(id=user.current_task_id).first()
+            if task:
+                return task
+            else:
+                # Задача больше не существует, сбрасываем
+                user.current_task_id = None
+                session.commit()
+                logger.info(f"[CONTEXT] Cleared non-existent current_task for user {user.telegram_id}")
+        finally:
+            if should_close:
                 session.close()
         return None
     except Exception as e:

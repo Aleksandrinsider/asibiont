@@ -21,6 +21,13 @@ def sanitize_username(username: str, max_length: int = 50) -> Optional[str]:
     # Удаляем пробелы по краям
     username = username.strip()
     
+    # Убираем ведущий @ (стандарт Telegram)
+    if username.startswith('@'):
+        username = username[1:]
+    
+    if not username:
+        return None
+    
     # Ограничиваем длину
     username = username[:max_length]
     
@@ -74,6 +81,9 @@ def sanitize_task_title(title: str, max_length: int = 200) -> str:
         return "Без названия"
     
     title = title.strip()
+    
+    # Удаляем HTML-теги (защита от XSS)
+    title = re.sub(r'<[^>]+>', '', title)
     
     # Ограничиваем длину
     if len(title) > max_length:

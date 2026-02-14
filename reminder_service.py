@@ -758,11 +758,15 @@ class ReminderService:
                 db.close()
 
     async def check_and_send_proactive(self, user_id: int):
-        """Проверка и отправка проактивного сообщения, если нет задач на ближайший час"""
+        """Проверка и отправка проактивного сообщения.
+        
+        Упрощённая логика: все anti-spam проверки остаются,
+        но выбор контента полностью делегирован AI (generate_proactive_message).
+        """
         from datetime import timedelta
         from config import FREE_ACCESS_MODE
         
-        # Проверить подписку - если нет доступа, не отправлять проактивное сообщение
+        # Проверить подписку
         from subscription_service import check_subscription
         if not check_subscription(user_id):
             return
@@ -773,148 +777,91 @@ class ReminderService:
             if not user:
                 return
             
-            # Проверить время - не отправлять с 22:00 до 10:00 по времени пользователя
+            # Проверить время — не отправлять с 22:00 до 10:00
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
             now_user_time = datetime.now(user_tz)
             current_hour = now_user_time.hour
             
-            # Проверить, находится ли текущее время в периоде запрета (22:00 - 10:00)
             if PROACTIVE_NO_SEND_START_HOUR <= current_hour or current_hour < PROACTIVE_SEND_START_HOUR:
-                # Время запрета, перепланировать следующий чек с правильным интервалом
-                await self._reschedule_proactive_check(user_id, has_tasks=False, task_count=0)
+                await self._reschedule_proactive_check(user_id, task_count=0)
                 return
             
-            # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
+            # Проверить последнее взаимодействие — 15 мин порог
             last_interaction = db.query(Interaction).filter(
                 Interaction.user_id == user.id
             ).order_by(Interaction.created_at.desc()).first()
             
             if last_interaction:
-                time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
-                if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
-                    # Недавно общались, пропустить проактивное сообщение
+                time_since = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
+                if time_since < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
                     return
             
-            # Проверить режим "не беспокоить"
+            # Проверить DND
             if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
-                # Пользователь в режиме "не беспокоить", пропустить
                 return
             
-            # Получить текущее время в UTC
             now_utc = datetime.now(pytz.UTC)
             
-            # Проверить задачи на ближайшие 60 минут (в UTC)
-            next_60_min_utc = now_utc + timedelta(minutes=PROACTIVE_CHECK_AHEAD_MINUTES)
-            
-            # Получить все pending задачи с reminder_time
+            # Получить pending задачи
             pending_tasks = db.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status == 'pending',
                 Task.reminder_time.isnot(None)
             ).all()
             
-            # Проверить, есть ли задачи с reminder_time в ближайшие 60 минут
+            total_active = len(pending_tasks)
+            
+            # Если есть задачи в ближайшие 60 мин — не отправлять (скоро будет напоминание)
+            next_60_min = now_utc + timedelta(minutes=PROACTIVE_CHECK_AHEAD_MINUTES)
             tasks_in_60_min = 0
             for task in pending_tasks:
-                # Сделать reminder_time aware с UTC, если он naive
-                reminder_time = task.reminder_time
-                if reminder_time.tzinfo is None:
-                    reminder_time = pytz.UTC.localize(reminder_time)
-                
-                if now_utc <= reminder_time < next_60_min_utc:
+                rt = task.reminder_time
+                if rt.tzinfo is None:
+                    rt = pytz.UTC.localize(rt)
+                if now_utc <= rt < next_60_min:
                     tasks_in_60_min += 1
             
-            # Проверить, не было ли уже отправлено проактивное сообщение в ближайший час
+            if tasks_in_60_min > 0:
+                await self._reschedule_proactive_check(user_id, task_count=total_active)
+                return
+            
+            # Anti-spam: не чаще 1 раза в час
             recent_proactive = db.query(Interaction).filter(
                 Interaction.user_id == user.id,
-                Interaction.message_type == 'ai',  # Изменено с 'proactive' на 'ai'
+                Interaction.message_type == 'ai',
                 Interaction.created_at >= now_utc - timedelta(hours=1)
             ).first()
             
             if recent_proactive:
-                logger.debug(f"Proactive message was already sent in the last hour for user {user_id}, skipping")
+                logger.debug(f"Proactive already sent in last hour for user {user_id}")
+                await self._reschedule_proactive_check(user_id, task_count=total_active)
                 return
             
-            # ДОБАВИТЬ: Проверить недавние напоминания о задачах (последние 2 часа)
+            # Anti-spam: не после недавних напоминаний (1 час)
             recent_reminders = db.query(Interaction).filter(
                 Interaction.user_id == user.id,
                 Interaction.message_type == 'reminder',
-                Interaction.created_at >= now_utc - timedelta(hours=2)
-            ).all()
-            
-            if recent_reminders:
-                logger.debug(f"Recent task reminders found ({len(recent_reminders)}) in last 2 hours for user {user_id}, skipping proactive message")
-                return
-            
-            # ДОБАВИТЬ: Проверить недавнюю активность с задачами (последние 30 минут)
-            recent_task_activity = db.query(Interaction).filter(
-                Interaction.user_id == user.id,
-                Interaction.message_type.in_(['task_created', 'task_completed', 'task_updated']),
-                Interaction.created_at >= now_utc - timedelta(minutes=30)
+                Interaction.created_at >= now_utc - timedelta(hours=1)
             ).first()
             
-            if recent_task_activity:
-                logger.debug(f"Recent task activity found in last 30 minutes for user {user_id}, skipping proactive message")
+            if recent_reminders:
+                logger.debug(f"Recent reminder found for user {user_id}, skipping proactive")
+                await self._reschedule_proactive_check(user_id, task_count=total_active)
                 return
             
-            # Новая адаптивная логика: частота зависит от количества задач
-            total_pending_tasks = len(pending_tasks)
-            total_active_tasks = total_pending_tasks
+            # Определяем context hint для AI (просроченные задачи — приоритет)
+            overdue_tasks = [t for t in pending_tasks
+                            if t.reminder_time and (t.reminder_time if t.reminder_time.tzinfo else pytz.UTC.localize(t.reminder_time)) < now_utc]
             
-            # 1. Если есть задачи в ближайший час - не отправлять (пользователь активен)
-            if tasks_in_60_min > 0:
-                await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks)
-                return
+            context = "overdue_tasks" if overdue_tasks else "general"
             
-            # 2. Проверить, есть ли просроченные задачи
-            overdue_tasks = []
-            for task in pending_tasks:
-                reminder_time = task.reminder_time
-                if reminder_time.tzinfo is None:
-                    reminder_time = pytz.UTC.localize(reminder_time)
-                
-                if reminder_time < now_utc:
-                    overdue_tasks.append(task)
-            
-            if overdue_tasks:
-                # Есть просроченные задачи - отправить напоминание
-                await self.send_proactive_message(user_id, context="overdue_tasks", overdue_count=len(overdue_tasks))
-                await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks, urgent=True)
-                return
-            
-            # 3. Адаптивная логика на основе количества задач
-            if total_active_tasks == 0:
-                # Нет задач - отправлять реже (было чаще, теперь реже чтобы не надоедать)
-                await self.send_proactive_message(user_id, context="no_tasks")
-                await self._reschedule_proactive_check(user_id, has_tasks=False, task_count=0)
-            elif total_active_tasks <= 2:
-                # Мало задач - обычная частота
-                await self.send_proactive_message(user_id, context="few_tasks", task_count=total_active_tasks)
-                await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks)
-            elif total_active_tasks <= 5:
-                # Среднее количество задач - реже отправлять
-                recent_proactive_3h = db.query(Interaction).filter(
-                    Interaction.user_id == user.id,
-                    Interaction.message_type == 'ai',
-                    Interaction.created_at >= now_utc - timedelta(hours=3)
-                ).first()
-                
-                if not recent_proactive_3h:
-                    await self.send_proactive_message(user_id, context="many_tasks", task_count=total_active_tasks)
-                
-                await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks)
-            else:
-                # Очень много задач - очень редко отправлять, только если прошло >4 часов
-                recent_proactive_4h = db.query(Interaction).filter(
-                    Interaction.user_id == user.id,
-                    Interaction.message_type == 'ai',
-                    Interaction.created_at >= now_utc - timedelta(hours=4)
-                ).first()
-                
-                if not recent_proactive_4h:
-                    await self.send_proactive_message(user_id, context="many_tasks", task_count=total_active_tasks)
-                
-                await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks)
+            # Отправляем проактивное сообщение — AI сам выберет, что полезнее
+            await self.send_proactive_message(
+                user_id, context=context,
+                task_count=total_active,
+                overdue_count=len(overdue_tasks)
+            )
+            await self._reschedule_proactive_check(user_id, task_count=total_active)
         finally:
             db.close()
 
@@ -1037,14 +984,15 @@ class ReminderService:
         finally:
             db.close()
 
-    async def _reschedule_proactive_check(self, user_id: int, has_tasks: bool, task_count: int = 0, urgent: bool = False):
-        """Перепланирование следующей проактивной проверки с адаптивным интервалом
+    async def _reschedule_proactive_check(self, user_id: int, task_count: int = 0):
+        """Перепланирование следующей проактивной проверки с СОКРАЩЁННЫМИ интервалами.
         
-        Args:
-            user_id: ID пользователя
-            has_tasks: Есть ли задачи у пользователя
-            task_count: Количество активных задач
-            urgent: Задачи в urgent состоянии (осталось <1/3 времени до дедлайна)
+        Новые интервалы (были 4-10ч, стали 2-4ч):
+        - 0 задач: 2ч (мотивация к планированию)
+        - 1-3: 2.5ч
+        - 4-7: 3ч
+        - 8-12: 3.5ч
+        - 13+: 4ч
         """
         import random
         
@@ -1057,33 +1005,31 @@ class ReminderService:
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
             job_id = f"proactive_{user.telegram_id}"
             
-            # Адаптивный интервал на основе загруженности
+            # Сокращённые адаптивные интервалы
             if task_count == 0:
-                base_hours = 4  # Мало задач - чаще сообщения для мотивации
+                base_hours = 2
             elif task_count <= 3:
-                base_hours = 5  # Немного задач
+                base_hours = 2.5
             elif task_count <= 7:
-                base_hours = 6  # Оптимальное количество
+                base_hours = 3
             elif task_count <= 12:
-                base_hours = 8  # Много задач - реже
+                base_hours = 3.5
             else:
-                base_hours = 10  # Очень много - не отвлекаем
+                base_hours = 4
             
-            # Добавляем случайность ±30-60 минут для разнообразия
-            random_offset_minutes = random.randint(-60, 60)
+            # Случайность ±30 минут
+            random_offset_minutes = random.randint(-30, 30)
             hours_with_variance = base_hours + (random_offset_minutes / 60.0)
             
-            # Получить время последнего сообщения пользователя
+            # Привязка к последнему сообщению пользователя
             last_user_message = db.query(Interaction).filter(
                 Interaction.user_id == user.id,
                 Interaction.message_type == "user"
             ).order_by(Interaction.created_at.desc()).first()
             
             if last_user_message:
-                # Привязываемся к последнему сообщению + адаптивный интервал
                 next_check_time = last_user_message.created_at.replace(tzinfo=pytz.UTC) + timedelta(hours=hours_with_variance)
             else:
-                # Если нет сообщений, используем текущее время + интервал
                 next_check_time = datetime.now(pytz.UTC) + timedelta(hours=hours_with_variance)
             
             # Убедимся, что время в будущем
@@ -1091,22 +1037,17 @@ class ReminderService:
             if next_check_time <= now_utc:
                 next_check_time = now_utc + timedelta(hours=hours_with_variance)
             
-            # Конвертируем в локальное время пользователя для планирования
+            # Проверка разрешённого диапазона (10:00 - 22:00)
             next_check_local = next_check_time.astimezone(user_tz)
             
-            # Проверить, попадает ли время в разрешенный диапазон (10:00-22:00)
             if next_check_local.hour < PROACTIVE_SEND_START_HOUR:
-                # Если раньше 10:00, перенести на 10:00 того же дня
                 next_check_local = next_check_local.replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
             elif next_check_local.hour >= PROACTIVE_NO_SEND_START_HOUR:
-                # Если 22:00 или позже, перенести на 10:00 следующего дня
                 next_check_local = (next_check_local + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
             
-            # Если после корректировки время оказалось в прошлом, перенести на следующий день
             if next_check_local <= datetime.now(user_tz):
                 next_check_local = (datetime.now(user_tz) + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
             
-            # Перепланировать джоб на конкретное время
             self.scheduler.add_job(
                 _check_and_send_proactive_job,
                 trigger=DateTrigger(run_date=next_check_local, timezone=user_tz),
@@ -1115,7 +1056,7 @@ class ReminderService:
                 replace_existing=True,
                 max_instances=1
             )
-            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} at {next_check_local} ({base_hours}h base + {random_offset_minutes}m random, {task_count} tasks, adjusted for daytime 10-22)")
+            logger.debug(f"Rescheduled proactive for user {user.telegram_id} at {next_check_local} ({base_hours}h base + {random_offset_minutes}m, {task_count} tasks)")
         finally:
             db.close()
 
@@ -1331,27 +1272,36 @@ class ReminderService:
                 db.close()
 
     async def check_and_send_overdue_reminder(self, user_id: int):
-        """Проверка и отправка напоминания о просроченных задачах"""
+        """Проверка и отправка напоминания о просроченных задачах
+        
+        Note: user_id here is actually telegram_id (passed from scheduler).
+        """
         from datetime import datetime
         
         db = Session()
         try:
+            # user_id is telegram_id from scheduler — resolve to internal DB user first
+            user = db.query(User).filter(User.telegram_id == user_id).first()
+            if not user:
+                logger.warning(f"[OVERDUE_CHECK] User with telegram_id {user_id} not found")
+                return
+            
             now = datetime.utcnow()
             
-            # Находим просроченные задачи пользователя
+            # Находим просроченные задачи пользователя (по внутреннему DB id)
             overdue_tasks = db.query(Task).filter(
-                Task.user_id == user_id,
+                Task.user_id == user.id,
                 Task.status.in_(['pending', 'in_progress']),
                 Task.due_date.isnot(None),
                 Task.due_date < now
             ).all()
             
-            logger.info(f"[OVERDUE_CHECK] User {user_id}: Found {len(overdue_tasks)} overdue tasks")
+            logger.info(f"[OVERDUE_CHECK] User {user_id} (db id {user.id}): Found {len(overdue_tasks)} overdue tasks")
             for task in overdue_tasks:
                 logger.info(f"[OVERDUE_CHECK] Task: {task.title}, due_date: {task.due_date}, status: {task.status}")
             
             if overdue_tasks:
-                # Есть просроченные задачи - отправляем напоминание
+                # Есть просроченные задачи - отправляем напоминание (user_id = telegram_id for bot.send_message)
                 await self.send_overdue_reminder(user_id, overdue_tasks)
         finally:
             db.close()

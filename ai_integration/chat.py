@@ -1,5 +1,5 @@
 from . import handlers
-from models import Session, User, UserProfile, Interaction
+from models import Session, User, Task, UserProfile, Subscription, Interaction, Goal
 import aiohttp
 import json
 import logging
@@ -12,7 +12,6 @@ import hashlib
 import time
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-from models import Session, User, Task, UserProfile, Subscription
 from .memory import encrypt_data, decrypt_data
 from .utils import (
     determine_timezone_from_time,
@@ -25,16 +24,15 @@ from .utils import (
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 from .handlers import (  # noqa: F401
-    add_task, list_tasks, complete_task, reschedule_task,
+    add_task, list_tasks, complete_task,
     delegate_task, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
-    list_tasks, get_partners_list, find_partners, research_topic,
+    get_partners_list, research_topic,
     check_time_conflicts,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, create_subscription_payment,
-    cancel_subscription, get_task_details,
-    update_profile, smart_update_profile, delete_task, find_relevant_contacts_for_task, get_news_trends,
-    check_topic_relevance, analyze_situation_and_suggest_tasks
+    cancel_subscription,
+    update_profile, delete_task, find_relevant_contacts_for_task, get_news_trends,
 )
 from .autonomous_agent import chat_with_ai as autonomous_chat_with_ai
 
@@ -42,6 +40,70 @@ logger = logging.getLogger(__name__)
 
 # Базовый системный промпт для простых сообщений
 system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
+
+
+def _build_session_summary(user_db_id, session):
+    """Строит краткую сводку предыдущих сессий для контекстного окна чата.
+    
+    Анализирует последние сообщения, группирует их по сессиям (пауза > 2 часов),
+    извлекает ключевые темы из прошлых сессий.
+    """
+    try:
+        # Берём последние 30 сообщений пользователя
+        interactions = session.query(Interaction).filter(
+            Interaction.user_id == user_db_id,
+            Interaction.message_type == 'user'
+        ).order_by(Interaction.created_at.desc()).limit(30).all()
+        
+        if len(interactions) < 3:
+            return None
+        
+        # Группируем по сессиям (пауза > 2ч)
+        sessions = []
+        current_session = [interactions[0]]
+        SESSION_GAP = timedelta(hours=2)
+        
+        for i in range(1, len(interactions)):
+            gap = interactions[i-1].created_at - interactions[i].created_at
+            if gap > SESSION_GAP:
+                sessions.append(current_session)
+                current_session = [interactions[i]]
+            else:
+                current_session.append(interactions[i])
+        sessions.append(current_session)
+        
+        # Пропускаем текущую сессию (первая в списке — самая новая)
+        past_sessions = sessions[1:4]  # Берём 3 предыдущих сессии
+        
+        if not past_sessions:
+            return None
+        
+        summaries = []
+        for sess in past_sessions:
+            # Извлекаем ключевые фразы из сообщений сессии
+            topics = []
+            for msg in sess:
+                if msg.content and len(msg.content) > 3:
+                    # Берём первые 50 символов каждого сообщения
+                    topics.append(msg.content[:50].strip())
+            
+            if topics:
+                when = sess[0].created_at
+                time_ago = (datetime.now(pytz.UTC) - when.replace(tzinfo=pytz.UTC))
+                if time_ago.days > 0:
+                    ago_str = f"{time_ago.days}дн назад"
+                else:
+                    hours = time_ago.seconds // 3600
+                    ago_str = f"{hours}ч назад" if hours > 0 else "недавно"
+                
+                # Краткое описание сессии
+                topic_preview = "; ".join(topics[:3])
+                summaries.append(f"[{ago_str}, {len(sess)} сообщ.] {topic_preview}")
+        
+        return "\n".join(summaries) if summaries else None
+    except Exception as e:
+        logger.warning(f"[SESSION_SUMMARY] Error: {e}")
+        return None
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
@@ -130,6 +192,63 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     decrypted_memory = decrypt_data(user.memory)
                 except Exception as e:
                     logger.error(f"Error decrypting user memory: {e}")
+            
+            # Дополняем контекст данными из long_term_memory
+            if user.long_term_memory:
+                try:
+                    ltm = json.loads(decrypt_data(user.long_term_memory))
+                    interests = ltm.get('interests', {})
+                    if interests:
+                        sorted_interests = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:5]
+                        interest_str = ", ".join(f"{topic} ({count})" for topic, count in sorted_interests)
+                        decrypted_memory += f"\n🎯 Устойчивые интересы: {interest_str}"
+                    searches = ltm.get('search_history', [])
+                    if searches:
+                        recent_queries = [s['query'] for s in searches[-5:]]
+                        decrypted_memory += f"\n🔍 Недавно искал: {', '.join(recent_queries)}"
+                    projects = ltm.get('projects', {})
+                    if projects:
+                        project_names = list(projects.keys())[-3:]
+                        decrypted_memory += f"\n📁 Проекты: {', '.join(project_names)}"
+                except Exception as e:
+                    logger.warning(f"[CHAT] Could not parse long_term_memory: {e}")
+            
+            # Дополняем контекст статистикой продуктивности
+            if profile:
+                stats_parts = []
+                if profile.total_tasks_created:
+                    stats_parts.append(f"создано задач: {profile.total_tasks_created}")
+                if profile.completed_tasks:
+                    stats_parts.append(f"завершено: {profile.completed_tasks}")
+                if profile.skipped_tasks:
+                    stats_parts.append(f"пропущено: {profile.skipped_tasks}")
+                if profile.average_completion_time:
+                    stats_parts.append(f"ср. время: {profile.average_completion_time}")
+                if stats_parts:
+                    decrypted_memory += f"\n📊 Статистика: {', '.join(stats_parts)}"
+            
+            # Цели пользователя
+            active_goals = session.query(Goal).filter_by(user_id=user.id, status='active').order_by(Goal.priority.desc()).limit(5).all()
+            if active_goals:
+                goal_lines = []
+                for g in active_goals:
+                    line = f"{g.title} ({g.progress_percentage}%)"
+                    if g.target_date:
+                        days = g.days_until_target()
+                        if days is not None and days < 0:
+                            line += " ⚠️ПРОСРОЧЕНО"
+                        elif days is not None and days <= 7:
+                            line += f" ⏳{days}дн"
+                    goal_lines.append(line)
+                decrypted_memory += f"\n🎯 ЦЕЛИ:\n" + "\n".join(f"- {l}" for l in goal_lines)
+            
+            # Сводка предыдущих сессий (контекстное окно)
+            try:
+                session_summary = _build_session_summary(user.id, session)
+                if session_summary:
+                    decrypted_memory += f"\n\n📝 ПРЕДЫДУЩИЕ СЕССИИ:\n{session_summary}"
+            except Exception as e:
+                logger.warning(f"[CHAT] Could not build session summary: {e}")
 
             # Получаем информацию о текущей задаче если есть
             current_task_info = None
@@ -573,980 +692,601 @@ async def generate_result_check(user_id, task_title):
 
 
 
-async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
-    """Генерирует проактивное сообщение по основному промпту системы, как обычные ответы AI
+def _analyze_proactive_engagement(user_db_id, session):
+    """Анализирует реакции пользователя на проактивные сообщения.
     
-    Args:
-        user_id: ID пользователя
-        context: Контекст сообщения
-        task_count: Количество задач
-        overdue_count: Количество просроченных
-        tasks_list: Список задач для анализа
+    Смотрит: были ли ответы пользователя после AI-сообщений?
+    Если да — тема вызвала интерес. Если нет — тема проигнорирована.
+    Возвращает dict с engagement данными для адаптации будущих сообщений.
     """
     try:
-        # Используем тот же подход, что и в chat_with_ai
-        import json
-
-        # Получить контекст чата из БД
-        context = []
-
-        # Получить данные пользователя (как в chat_with_ai)
-        user_memory = ""
-        profile = None
-        user = None
-        subscription_tier = None
-        weather_info = None
-        news_info = None
-        partner_recommendations = ""  # Для хранения рекомендаций партнеров
-        months = [
-            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-        ]
-
-        if user_id:
-            db_session = Session()
-            user = db_session.query(User).filter_by(telegram_id=user_id).first()
-
-            if user:
-                # Получаем subscription_tier
-                subscription_tier = user.subscription_tier.value if user.subscription_tier else None
-
-                # Получаем время пользователя
-                base_now = datetime.now(pytz.UTC)
-                user_now = base_now
-                # Default to Moscow time instead of UTC
-                user_tz = pytz.timezone('Europe/Moscow')
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-
-                if user.timezone:
-                    try:
-                        user_tz = pytz.timezone(user.timezone)
-                        user_now = base_now.astimezone(user_tz)
-                        # Обновляем с учетом таймзоны пользователя
-                        current_time_str = f"{user_now.strftime('%H:%M')} ({user.timezone})"
-                        current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                    except Exception as e:
-                        logger.error(f"Error setting user timezone: {e}")
-                        # Fallback to Moscow
-                        user_tz = pytz.timezone('Europe/Moscow')
-                        user_now = base_now.astimezone(user_tz)
-                        current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                        current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-
-                # Получаем память пользователя
-                if user.memory:
-                    try:
-                        decrypted = decrypt_data(user.memory)
-                        user_memory = f"\nИнформация о пользователе: {decrypted}"
-                    except Exception:
-                        user_memory = ""
-
-                # Получаем погоду и новости для контекста
-                weather_info = None
-                news_info = None
-                try:
-                    from .utils import get_weather_info, get_news_info
-                    if profile and profile.city:
-                        weather_info = get_weather_info(profile.city)
-                        news_info = get_news_info(profile.city)
-                    if not news_info:
-                        news_info = get_news_info()  # Общие новости России
-                    
-                    if weather_info:
-                        user_memory += f"\n\n🌤 ПОГОДА: {weather_info}"
-                    if news_info:
-                        user_memory += f"\n\n📰 АКТУАЛЬНЫЕ НОВОСТИ:\n{news_info}"
-                except Exception as e:
-                    logger.warning(f"[PROACTIVE] Could not load weather/news: {e}")
-
-                # Получаем рекомендации партнеров/Premium инсайты
-                try:
-                    from .premium_simple import collect_premium_insights, manage_recommendations
-                    
-                    if subscription_tier == 'PREMIUM':
-                        # Для Premium показываем automation insights
-                        premium_context = collect_premium_insights(user_id, mode='prompt', session=db_session)
-                        if premium_context and premium_context.strip():
-                            partner_recommendations = premium_context  # Сохраняем для fallback
-                            user_memory += f"\n\n🔥 PREMIUM АВТОМАТИЗАЦИЯ:\n{premium_context}"
-                            logger.info(f"[PROACTIVE] Added Premium automation context for user {user_id}")
-                    else:
-                        # Для обычных пользователей показываем партнеров
-                        partner_context = manage_recommendations(user_id, 'get', session=db_session)
-                        if partner_context and partner_context.strip():
-                            partner_recommendations = partner_context  # Сохраняем для fallback
-                            user_memory += f"\n\n👥 РЕКОМЕНДАЦИИ ПАРТНЕРОВ:\n{partner_context}"
-                            logger.info(f"[PROACTIVE] Added partner recommendations context for user {user_id}")
-                except Exception as e:
-                    logger.warning(f"[PROACTIVE] Could not load partner recommendations: {e}")
-
-                # Получаем профиль
-                profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
-                if profile:
-                    profile_info = []
-                    if profile.city:
-                        profile_info.append(f"Город: {profile.city}")
-                    if profile.company:
-                        profile_info.append(f"Компания: {profile.company}")
-                    if profile.position:
-                        profile_info.append(f"Должность: {profile.position}")
-                    if profile.languages:
-                        profile_info.append(f"Языки: {profile.languages}")
-                    if profile.skills:
-                        profile_info.append(f"Навыки: {profile.skills}")
-                    if profile.interests:
-                        profile_info.append(f"Интересы: {profile.interests}")
-                    if profile.goals:
-                        profile_info.append(f"Цели: {profile.goals}")
-
-                    if profile_info:
-                        user_memory += f"\nПрофиль: {', '.join(profile_info)}"
-
-                    # Определяем незаполненные поля
-                    empty_fields = []
-                    if not profile.city:
-                        empty_fields.append("город")
-                    if not profile.company:
-                        empty_fields.append("компания")
-                    if not profile.position:
-                        empty_fields.append("должность")
-                    if not profile.skills:
-                        empty_fields.append("навыки")
-                    if not profile.interests:
-                        empty_fields.append("интересы")
-                    if not profile.goals:
-                        empty_fields.append("цели")
-                    if not profile.languages:
-                        empty_fields.append("языки")
-
-                    if empty_fields:
-                        fields_list = ', '.join(empty_fields[:3])
-                        user_memory += f"\nВНИМАНИЕ: НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво). НЕ ПОВТОРЯЙ вопросы, которые уже задавал в последних сообщениях!"
-
-                # Добавляем информацию о задачах
-                tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
-                if tasks_summary > 0:
-                    user_memory += f"\nСводка: всего активных задач {tasks_summary}"
-
-                overdue_tasks = (
-                    db_session.query(Task)
-                    .filter(Task.user_id == user.id, Task.reminder_time < user_now, Task.status == "pending")
-                    .limit(5)
-                    .all()
-                )
-                if overdue_tasks:
-                    overdue_titles = [f"{t.title}" for t in overdue_tasks]
-                    user_memory += f"\nПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_titles)} - предложи помощь!"
-
-                # Расширенный анализ поведения пользователя для персонализации
-                user_insights = []
-
-                # Анализируем недавние взаимодействия (последние 10 сообщений)
-                recent_interactions = db_session.query(Interaction).filter_by(
-                    user_id=user.id
-                ).order_by(Interaction.created_at.desc()).limit(10).all()
-
-                recent_topics = set()
-                for interaction in recent_interactions:
-                    if interaction.content:
-                        content_lower = interaction.content.lower()
-                        if any(word in content_lower for word in ['задач', 'task', 'дел', 'работ', 'проект']):
-                            recent_topics.add('tasks_work')
-                        if any(word in content_lower for word in ['знаком', 'партнер', 'контакт', 'встреч', 'сеть']):
-                            recent_topics.add('networking')
-                        if any(word in content_lower for word in ['цель', 'goal', 'план', 'развити', 'рост']):
-                            recent_topics.add('goals_growth')
-                        if any(word in content_lower for word in ['врем', 'time', 'час', 'день', 'продуктив']):
-                            recent_topics.add('time_management')
-
-                if recent_topics:
-                    user_insights.append(f"Недавние темы: {', '.join(recent_topics)}")
-
-                # Анализируем паттерны задач
-                user_tasks = db_session.query(Task).filter_by(user_id=user.id).limit(20).all()
-                if user_tasks:
-                    completed_count = sum(1 for t in user_tasks if t.status == 'completed')
-                    pending_count = sum(1 for t in user_tasks if t.status == 'pending')
-                    delegated_count = sum(1 for t in user_tasks if t.delegated_to_username)
-
-                    task_patterns = []
-                    if completed_count > pending_count * 0.7:
-                        task_patterns.append("продуктивный")
-                    if delegated_count > len(user_tasks) * 0.3:
-                        task_patterns.append("хорошо делегирует")
-                    if any(t.estimated_duration and t.estimated_duration > 120 for t in user_tasks):
-                        task_patterns.append("работает со сложными задачами")
-
-                    if task_patterns:
-                        user_insights.append(f"Паттерны работы: {', '.join(task_patterns)}")
-
-                # Анализируем время активности
-                if user.last_interaction_at:
-                    last_interaction_hour = user.last_interaction_at.hour
-                    if 6 <= last_interaction_hour <= 10:
-                        user_insights.append("активен утром")
-                    elif 18 <= last_interaction_hour <= 23:
-                        user_insights.append("активен вечером")
-                    elif 10 <= last_interaction_hour <= 18:
-                        user_insights.append("активен днем")
-
-                # Добавляем insights к user_memory
-                if user_insights:
-                    user_memory += f"\n\n💡 ИНСАЙТЫ О ПОВЕДЕНИИ:\n" + "\n".join(f"- {insight}" for insight in user_insights)
-
-            db_session.close()
-
-        # Формируем system_prompt ТОЧНО как в chat_with_ai
-        user_username = f"@{user.username}" if user and user.username else "@unknown"
-        mentions_str = ""
-
-        # Извлекаем последние ответы агента для предотвращения повторов (УСИЛЕННАЯ ВЕРСИЯ)
-        last_responses = []
-        if context and isinstance(context, list):
-            for item in context[-5:]:
-                if isinstance(item, dict) and 'agent' in item:
-                    response_text = item['agent'].strip()
-                    if response_text and len(response_text) > 10:
-                        # Берем первые 80 символов для более точной проверки
-                        last_responses.append(response_text[:80])
-        # Убираем дубликаты, сохраняя порядок
-        seen = set()
-        last_responses = [x for x in last_responses if not (x in seen or seen.add(x))]
-        last_responses = last_responses[-5:]  # Последние 5 уникальных ответов
-
-        system_prompt = get_extended_system_prompt(
-            user_now,
-            current_time_str,
-            current_date_str,
-            user_username,
-            mentions_str,
-            user_memory,
-            subscription_tier=subscription_tier,
-            message_type='proactive')
+        # Получаем последние 20 ai+user сообщений
+        recent = session.query(Interaction).filter(
+            Interaction.user_id == user_db_id,
+            Interaction.message_type.in_(['ai', 'user'])
+        ).order_by(Interaction.created_at.desc()).limit(20).all()
         
-        # Добавляем последние ответы для избегания повторов
-        if last_responses:
-            responses_text = "\n".join([f"- {resp}" for resp in last_responses])
-            system_prompt += f"\n\nВНИМАНИЕ: ЗАПРЕЩЕНО ПОВТОРЯТЬ ЭТИ ФРАЗЫ (твои последние ответы):\n{responses_text}\n\nГенерируй НОВЫЙ уникальный ответ!"
+        if len(recent) < 4:
+            return {}
         
-        logger.info("[PROACTIVE] Using extended prompt system")
-
-        # Создаем messages как в обычном чате, но с проактивным контекстом
-        messages = [{"role": "system", "content": system_prompt}]
-
-        # Добавляем последние сообщения из контекста
-        if context and isinstance(context, list):
-            for item in context[-6:]:  # Берем последние 6 сообщений для контекста
-                if "user" in item:
-                    messages.append({"role": "user", "content": item["user"]})
-                if "agent" in item:
-                    messages.append({"role": "assistant", "content": item["agent"]})
-
-        # Проактивный контекст - создаем разные сообщения для разных ситуаций
-        import random
+        # Ищем пары: AI → user ответ (engaged) vs AI → долгое молчание (ignored)
+        engaged_topics = []
+        ignored_count = 0
+        total_proactive = 0
         
-        proactive_prompts = {
-            "no_tasks": [
-                """Напиши естественное, дружелюбное проактивное сообщение для пользователя без активных задач.
-
-ДОСТУПНЫЙ КОНТЕКСТ (используй ВСЁ релевантное):
-- Профиль: интересы, навыки, цели, город, компания, должность
-- Погода и новости (если есть)
-- Рекомендации партнеров для знакомств (если есть)
-- Premium automation insights (если есть)
-
-ЦЕЛЬ: 
-- Мотивировать к новым начинаниям
-- Предложить 2-3 КОНКРЕТНЫЕ идеи задач из реальных интересов/целей пользователя
-- Упомянуть возможность полезных знакомств (если есть рекомендации партнеров)
-- Связать с текущим контекстом (погода, время суток, актуальные новости)
-
-ФОРМАТ:
-- Естественное обращение (без "ПРОАКТИВНОЕ СООБЩЕНИЕ")
-- 3-5 предложений с живым, персональным тоном
-- Упоминание РЕАЛЬНЫХ данных (не выдумывай!)
-- Конкретные actionable предложения
-- Вовлекающий вопрос в конце
-
-НЕ ВЫДУМЫВАЙ данные! Используй только реальную информацию из контекста.""",
-                
-                """Сгенерируй мотивирующее проактивное сообщение - у пользователя нет задач, самое время для планирования!
-
-ИСПОЛЬЗУЙ ВСЕ ДОСТУПНЫЕ ДАННЫЕ:
-- Цели и интересы из профиля: предложи конкретные шаги к их достижению
-- Навыки: идеи для их развития/применения
-- Рекомендации партнеров: возможность познакомиться с людьми, у кого схожие интересы
-- Погода/новости: свяжи с планами (например, хорошая погода -> встреча, плохая -> удаленка)
-- Город/компания: локальные возможности
-
-СТИЛЬ:
-- Теплый, поддерживающий тон (как приятель, а не робот)
-- Персонализация через упоминание конкретных данных профиля
-- Фокус на действиях И нетворкинге (новые знакомства помогают достигать целей!)
-- 3-5 предложений
-
-Закончи вопросом, который приглашает к диалогу и действию."""
-            ],
-
-            "few_tasks": [
-                f"""У пользователя {task_count} активных задач - оптимальная загруженность. Напиши естественное проактивное сообщение.
-
-КОНТЕКСТ ДЛЯ ИСПОЛЬЗОВАНИЯ:
-- Текущие задачи (см. список ниже)
-- Профиль: интересы, цели, навыки
-- Рекомендации партнеров (если есть)
-- Погода/новости
-- Premium insights (если есть)
-
-ЦЕЛЬ:
-- Поддержать текущий темп работы
-- Предложить оптимизации или дополнительные возможности
-- Упомянуть релевантных партнеров для коллабораций (если есть рекомендации)
-- Связать с контекстом дня (погода, новости)
-
-ФОРМАТ:
-- Естественный, дружеский тон
-- 3-4 предложения
-- Признание текущих усилий + предложение развития
-- Может упомянуть конкретную задачу из списка
-- Вопрос для вовлечения
-
-ВАЖНО: Используй только РЕАЛЬНЫЕ данные из контекста, не выдумывай!""",
-                
-                f"""Напиши поддерживающее сообщение для пользователя с {task_count} задачами.
-
-ИНТЕГРИРУЙ РЕАЛЬНЫЙ КОНТЕКСТ:
-- Задачи пользователя (анализируй их содержание)
-- Цели и интересы: возможности для роста
-- Навыки: как их применить эффективнее
-- Партнеры (если есть): кто может помочь с задачами или целями
-- Текущая обстановка (погода, новости, время суток)
-
-АКЦЕНТЫ:
-- Признание продуктивности
-- Конкретная идея для улучшения workflow
-- Возможность делегирования или коллаборации (через партнеров)
-- Баланс работы и общения (нетворкинг = источник новых возможностей!)
-
-3-4 предложения, теплый тон, actionable совет, вопрос."""
-            ],
-
-            "many_tasks": [
-                f"""У пользователя много задач ({task_count}). Напиши мягкое, поддерживающее проактивное сообщение.
-
-ДОСТУПНЫЕ ДАННЫЕ:
-- Список задач (анализируй приоритеты)
-- Профиль: навыки, цели, контакты
-- Рекомендации партнеров для делегирования/помощи (если есть)
-- Premium automation возможности (если есть)
-
-ЦЕЛЬ:
-- Поддержать, не давить
-- Предложить конкретные способы оптимизации:
-  * Приоритизация (что важнее?)
-  * Делегирование (можно предложить партнеров из рекомендаций!)
-  * Автоматизация (если Premium)
-  * Разбиение на этапы
-- Напомнить о важности баланса и не забывать про отдых
-
-СТИЛЬ:
-- Эмпатичный, заботливый тон
-- 2-3 предложения (не перегружать!)
-- Конкретное, actionable предложение
-- Легкое напоминание про self-care
-
-НЕ ВЫДУМЫВАЙ информацию!""",
-                
-                f"""Сгенерируй деликатное сообщение для пользователя с высокой загрузкой ({task_count} задач).
-
-ИСПОЛЬЗУЙ КОНТЕКСТ:
-- Задачи: определи, что можно делегировать/автоматизировать
-- Рекомендации партнеров: конкретные люди, которые могут помочь
-- Premium возможности: automation insights
-- Навыки: что делать самому, что можно поручить
-
-ФОКУС:
-- Забота о пользователе (многозадачность -> burnout)
-- Предложение конкретной разгрузки (делегирование партнерам, автоматизация)
-- Напоминание: эффективность > количество
-- Может, стоит обсудить приоритеты?
-
-2-3 предложения, мягкий тон, практичный совет."""
-            ],
-
-            "overdue_tasks": [
-                f"""У пользователя {overdue_count} просроченных задач. Напиши деликатное, поддерживающее сообщение.
-
-КОНТЕКСТ:
-- Просроченные задачи (см. список)
-- Профиль пользователя
-- Рекомендации партнеров (кто может помочь?)
-- Погода/ситуация
-
-ЦЕЛЬ:
-- НЕ ВИНИТЬ, а поддержать
-- Предложить конкретный план восстановления:
-  * Выбрать 1-2 критичные задачи для старта
-  * Делегировать часть (если есть партнеры)
-  * Переоценить приоритеты
-- Напомнить: просрочки случаются, важно как мы реагируем
-- Предложить помощь
-
-СТИЛЬ:
-- Максимально эмпатичный, без осуждения
-- 3-4 предложения
-- Конкретный actionable план
-- Вопрос-предложение помощи
-
-ВАЖНО: Не усугублять стресс, а мотивировать!""",
-                
-                f"""Напиши мягкое напоминание о {overdue_count} просроченных задачах с планом действий.
-
-ИСПОЛЬЗУЙ ДАННЫЕ:
-- Просроченные задачи: какие критичнее?
-- Профиль: цели, приоритеты пользователя
-- Партнеры: кто может взять часть нагрузки?
-- Контекст дня
-
-ПОДХОД:
-- Понимание: просрочки бывают у всех
-- Фокус на решении, не на проблеме
-- Конкретный первый шаг (одна задача для старта)
-- Предложение делегирования через партнеров (если есть)
-- Открытость к обсуждению
-
-3-4 предложения, поддерживающий тон, план + вопрос."""
-            ],
-
-            "general": [
-                """Напиши естественное, живое проактивное сообщение для пользователя.
-
-ЭТО КЛЮЧЕВОЙ КОНТЕКСТ - ИСПОЛЬЗУЙ ВСЁ РЕЛЕВАНТНОЕ:
-
-ПРОФИЛЬ:
-- Интересы, цели, навыки
-- Город, компания, должность, языки
-- Что важно для пользователя?
-
-РЕКОМЕНДАЦИИ ПАРТНЕРОВ (если есть):
-- Конкретные люди для знакомства
-- Общие интересы, возможности коллабораций
-- ВАЖНО: Это мощный инструмент для нетворкинга!
-
-PREMIUM AUTOMATION (если есть):
-- Найденные автоматически партнеры
-- Activity/Contact alerts
-- Инсайты для оптимизации
-
-ПОГОДА + НОВОСТИ (если есть):
-- Свяжи с планами пользователя
-- Актуальный контекст дня
-
-ЗАДАЧИ (если есть):
-- Текущие активности
-- Возможности для развития
-
-ЦЕЛЬ СООБЩЕНИЯ:
-- РЕАБИЛИТИРОВАТЬ пользователя к действиям и общению
-- Мотивировать к конкретным шагам (задачи ИЛИ нетворкинг)
-- Предложить РЕАЛЬНЫЕ возможности (из данных!)
-- Вовлечь в диалог
-
-ФОРМАТ:
-- Естественный, дружеский тон (как сообщение от знакомого, а не бота)
-- 3-5 предложений
-- Упоминание КОНКРЕТНЫХ данных (партнеры, погода, интересы, цели)
-- Actionable предложение: конкретная задача ИЛИ знакомство с партнером
-- Может связать несколько элементов контекста (например: погода + цель + партнер)
-- Вопрос для вовлечения
-
-КРИТИЧЕСКИ ВАЖНО:
-- НЕ ВЫДУМЫВАЙ информацию, которой нет!
-- Если есть партнеры - ОБЯЗАТЕЛЬНО упомяни релевантного (@username)
-- Если есть погода/новости - используй для контекста
-- Фокус на новых знакомствах и полезных связях (это помогает расти!)
-- Баланс между задачами и нетворкингом""",
-                
-                """Сгенерируй персонализированное проактивное сообщение.
-
-ВЕСЬ ДОСТУПНЫЙ КОНТЕКСТ:
-- Профиль (интересы, навыки, цели, город, компания)
-- Рекомендации партнеров для нетворкинга
-- Premium insights (automation, найденные контакты)
-- Погода и актуальные новости
-- Задачи пользователя
-
-СТРАТЕГИЯ СООБЩЕНИЯ:
-1. ПЕРСОНАЛИЗАЦИЯ через реальные данные
-2. МОТИВАЦИЯ к действию (задача ИЛИ знакомство)
-3. КОНТЕКСТ дня (погода/новости/время)
-4. КОНКРЕТИКА: не "подумай о целях", а "давай поработаем над [конкретная цель]"
-5. НЕТВОРКИНГ: если есть партнеры, предложи познакомиться/обсудить коллаборацию
-
-АКЦЕНТЫ:
-- Реабилитация к общению (новые знакомства = рост!)
-- Actionable предложения (что сделать прямо сейчас?)
-- Связь интересов/целей с текущими возможностями
-- Упоминание РЕАЛЬНЫХ партнеров (@username), если есть
-
-ФОРМАТ:
-- 3-5 предложений, теплый тон
-- Интеграция 2-3 элементов контекста
-- Конкретное предложение (задача ИЛИ встреча/знакомство)
-- Вопрос, приглашающий к действию
-
-НЕ ВЫДУМЫВАЙ! Используй только реальные данные.""",
-                
-                """Создай вовлекающее проактивное сообщение с фокусом на возможности.
-
-ИНТЕГРИРУЙ ВСЁ:
-
-ДАННЫЕ ПОЛЬЗОВАТЕЛЯ:
-- Что важно для него? (цели, интересы, навыки)
-- Где он находится? (город: локальные возможности)
-- Чем занимается? (компания, должность)
-
-ВОЗМОЖНОСТИ ДЛЯ РОСТА:
-- Партнеры: кто может быть полезен? (конкретные @username)
-- Premium: какие insights/контакты найдены автоматически?
-- Задачи: что можно улучшить/оптимизировать?
-
-КОНТЕКСТ МОМЕНТА:
-- Погода: влияет на планы (встречи, удаленка, etc.)
-- Новости: связь с интересами/целями
-- Время суток: утро (планирование), вечер (рефлексия)
-
-ЦЕЛЬ:
-- ПОМОЧЬ пользователю двигаться вперед через:
-  * Конкретные задачи к целям
-  * Полезные знакомства (партнеры!)
-  * Оптимизацию текущих процессов
-- ВОВЛЕЧЬ в активное общение и действия
-- РЕАБИЛИТИРОВАТЬ к регулярному взаимодействию
-
-СТИЛЬ:
-- Живой, персональный (не роботизированный!)
-- Вдохновляющий, но без банальностей
-- 3-5 предложений
-- Упоминание 2-3 реальных элементов контекста
-- ОБЯЗАТЕЛЬНО: actionable предложение (что сделать?)
-- Если есть партнеры: предложи познакомиться/обсудить идеи
-- Вопрос для старта диалога"""
-            ]
-        }
-
-        # Выбираем подходящий промпт (случайный вариант для разнообразия)
-        # Убеждаемся, что context - строка
-        if isinstance(context, list):
-            context = "general"  # Если context - список, используем general
-        
-        prompt_options = proactive_prompts.get(context, proactive_prompts["general"])
-        if isinstance(prompt_options, list):
-            selected_prompt = random.choice(prompt_options)
-        else:
-            selected_prompt = prompt_options
-        
-        # Добавляем информацию о задачах, если есть
-        if tasks_list:
-            tasks_info = "\n\nАКТИВНЫЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:\n"
-            now_utc = datetime.now(pytz.UTC)
-            upcoming_tasks = []
-            overdue_tasks = []
+        for i in range(len(recent) - 1):
+            msg = recent[i]
+            prev = recent[i + 1]
             
-            for task in tasks_list[:15]:  # Ограничиваем 15 задачами
-                if task.status != 'pending':
-                    continue  # Пропускаем неактивные задачи
-                    
-                task_time = ""
-                if task.reminder_time:
-                    try:
-                        # Конвертируем в локальное время пользователя
-                        if task.reminder_time.tzinfo is None:
-                            task_time_utc = pytz.UTC.localize(task.reminder_time)
-                        else:
-                            task_time_utc = task.reminder_time
-                        task_time_local = task_time_utc.astimezone(user_tz)
-                        
-                        # Проверяем, просрочена ли задача
-                        if task_time_utc < now_utc:
-                            overdue_tasks.append(task)
-                        else:
-                            upcoming_tasks.append(task)
-                        
-                        task_time = f" (на {task_time_local.strftime('%H:%M')})"
-                    except Exception as e:
-                        logger.warning(f"[PROACTIVE] Error formatting task time: {e}")
+            # Нашли AI-сообщение, за которым следует user-ответ
+            if prev.message_type == 'ai' and msg.message_type == 'user':
+                gap = (msg.created_at - prev.created_at).total_seconds()
+                total_proactive += 1
+                
+                if gap < 3600:  # Ответ в течение часа = engaged
+                    # Извлекаем ключевые слова из AI-сообщения
+                    if prev.content:
+                        content_lower = prev.content[:200].lower()
+                        topic_map = {
+                            'задач': 'задачи',
+                            'прогресс': 'продуктивность',
+                            'погод': 'погода',
+                            'новост': 'новости',
+                            'партн': 'партнёры',
+                            'цел': 'цели',
+                            'совет': 'советы',
+                            'трен': 'тренды',
+                            'здоров': 'здоровье',
+                            'финанс': 'финансы',
+                        }
+                        for keyword, topic in topic_map.items():
+                            if keyword in content_lower:
+                                engaged_topics.append(topic)
+                                break
                 else:
-                    upcoming_tasks.append(task)  # Задачи без времени считаем предстоящими
-            
-            # Для proactive режима показываем ТОЛЬКО ПРЕДСТОЯЩИЕ задачи
-            relevant_tasks = upcoming_tasks[:5]  # Ограничиваем 5 задачами для краткости
-            
-            if relevant_tasks:
-                for task in relevant_tasks:
-                    task_time = ""
-                    if task.reminder_time:
-                        try:
-                            if task.reminder_time.tzinfo is None:
-                                task_time_utc = pytz.UTC.localize(task.reminder_time)
-                            else:
-                                task_time_utc = task.reminder_time
-                            task_time_local = task_time_utc.astimezone(user_tz)
-                            task_time = f" (на {task_time_local.strftime('%H:%M')})"
-                        except Exception as e:
-                            logger.warning(f"[PROACTIVE] Error formatting task time in list: {e}")
-                    tasks_info += f"• {task.title}{task_time}\n"
-            else:
-                tasks_info += "• Нет предстоящих задач\n"
-                
-            selected_prompt += tasks_info
+                    ignored_count += 1
         
-        messages.append({"role": "user", "content": selected_prompt})
+        result = {
+            'engaged_topics': engaged_topics,
+            'ignored_count': ignored_count,
+            'total_proactive': total_proactive,
+        }
+        
+        # Формируем summary для промпта
+        if engaged_topics:
+            from collections import Counter
+            top_engaged = Counter(engaged_topics).most_common(3)
+            topics_str = ", ".join(f"{t}({c})" for t, c in top_engaged)
+            result['summary'] = f"Вовлечённость: реагирует на темы [{topics_str}]"
+            if ignored_count > total_proactive * 0.6:
+                result['summary'] += ", часто игнорирует проактивные"
+        elif total_proactive > 3 and ignored_count > total_proactive * 0.7:
+            result['summary'] = "Редко реагирует на проактивные — лучше писать только по делу"
+        
+        return result
+    
+    except Exception as e:
+        logger.warning(f"[ENGAGEMENT] Analysis error: {e}")
+        return {}
 
-        # Используем параметры для более подробных, персонализированных сообщений
-        temperature = 0.85  # Повысили для большего разнообразия и естественности
-        top_p = 0.92  # Больше вариативности при сохранении качества
 
+async def _build_proactive_context(user_id):
+    """Собирает полный контекст пользователя для проактивного сообщения.
+    Возвращает dict со всеми данными или None если пользователь не найден."""
+    months = [
+        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+    ]
+    
+    db_session = Session()
+    try:
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return None
+        
+        ctx = {
+            'user': user,
+            'username': f"@{user.username}" if user.username else "@unknown",
+            'subscription_tier': user.subscription_tier.value if user.subscription_tier else None,
+        }
+        
+        # Время пользователя
+        base_now = datetime.now(pytz.UTC)
+        user_tz = pytz.timezone('Europe/Moscow')
+        user_now = base_now.astimezone(user_tz)
+        
+        if user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+                user_now = base_now.astimezone(user_tz)
+            except Exception:
+                pass
+        
+        ctx['user_tz'] = user_tz
+        ctx['user_now'] = user_now
+        ctx['current_time_str'] = f"{user_now.strftime('%H:%M')} ({user_tz.zone})"
+        ctx['current_date_str'] = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+        
+        # Память пользователя
+        user_memory = ""
+        if user.memory:
+            try:
+                decrypted = decrypt_data(user.memory)
+                user_memory = f"\nИнформация о пользователе: {decrypted}"
+            except Exception:
+                pass
+        
+        # Профиль
+        profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
+        ctx['profile'] = profile
+        
+        if profile:
+            profile_parts = []
+            for field, label in [('city', 'Город'), ('company', 'Компания'), ('position', 'Должность'),
+                                  ('languages', 'Языки'), ('skills', 'Навыки'), ('interests', 'Интересы'), ('goals', 'Цели')]:
+                val = getattr(profile, field, None)
+                if val:
+                    profile_parts.append(f"{label}: {val}")
+            if profile_parts:
+                user_memory += f"\nПрофиль: {', '.join(profile_parts)}"
+            
+            # Статистика продуктивности
+            stats_parts = []
+            if profile.total_tasks_created:
+                stats_parts.append(f"создано задач: {profile.total_tasks_created}")
+            if profile.completed_tasks:
+                stats_parts.append(f"завершено: {profile.completed_tasks}")
+            if profile.skipped_tasks:
+                stats_parts.append(f"пропущено: {profile.skipped_tasks}")
+            if profile.average_completion_time:
+                stats_parts.append(f"ср. время выполнения: {profile.average_completion_time}")
+            if stats_parts:
+                user_memory += f"\n📊 Статистика: {', '.join(stats_parts)}"
+        
+        # Долгосрочная память (интересы, проекты, поисковые паттерны)
+        ctx['long_term_data'] = {}
+        if user.long_term_memory:
+            try:
+                ltm = json.loads(decrypt_data(user.long_term_memory))
+                ctx['long_term_data'] = ltm
+                
+                # Интересы с весами — что пользователю реально важно
+                interests = ltm.get('interests', {})
+                if interests:
+                    sorted_interests = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:5]
+                    interest_str = ", ".join(f"{topic} ({count})" for topic, count in sorted_interests)
+                    user_memory += f"\n🎯 Устойчивые интересы: {interest_str}"
+                
+                # Последние поисковые запросы — что волнует прямо сейчас
+                searches = ltm.get('search_history', [])
+                if searches:
+                    recent_queries = [s['query'] for s in searches[-5:]]
+                    user_memory += f"\n🔍 Недавно искал: {', '.join(recent_queries)}"
+                
+                # Проекты — долгосрочные активности
+                projects = ltm.get('projects', {})
+                if projects:
+                    project_names = list(projects.keys())[-3:]
+                    user_memory += f"\n📁 Проекты: {', '.join(project_names)}"
+            except Exception as e:
+                logger.warning(f"[PROACTIVE] Could not parse long_term_memory: {e}")
+        
+        # Погода и новости
+        ctx['weather'] = None
+        ctx['news'] = None
+        try:
+            from .utils import get_weather_info as _get_weather, get_news_info
+            if profile and profile.city:
+                ctx['weather'] = _get_weather(profile.city)
+                ctx['news'] = get_news_info(profile.city)
+            if not ctx['news']:
+                ctx['news'] = get_news_info()
+            
+            if ctx['weather']:
+                user_memory += f"\n\n🌤 ПОГОДА: {ctx['weather']}"
+            if ctx['news']:
+                user_memory += f"\n\n📰 НОВОСТИ:\n{ctx['news']}"
+        except Exception as e:
+            logger.warning(f"[PROACTIVE] Could not load weather/news: {e}")
+        
+        # Партнёры / Premium инсайты
+        ctx['partners'] = ""
+        try:
+            from .premium_simple import collect_premium_insights, manage_recommendations
+            if ctx['subscription_tier'] == 'PREMIUM':
+                premium_ctx = collect_premium_insights(user_id, mode='prompt', session=db_session)
+                if premium_ctx and premium_ctx.strip():
+                    ctx['partners'] = premium_ctx
+                    user_memory += f"\n\n🔥 PREMIUM:\n{premium_ctx}"
+            else:
+                partner_ctx = manage_recommendations(user_id, 'get', session=db_session)
+                if partner_ctx and partner_ctx.strip():
+                    ctx['partners'] = partner_ctx
+                    user_memory += f"\n\n👥 ПАРТНЁРЫ:\n{partner_ctx}"
+        except Exception as e:
+            logger.warning(f"[PROACTIVE] Could not load partners: {e}")
+        
+        # Цели пользователя
+        active_goals = db_session.query(Goal).filter_by(user_id=user.id, status='active').order_by(Goal.priority.desc()).limit(5).all()
+        ctx['goals'] = active_goals
+        if active_goals:
+            goal_lines = []
+            for g in active_goals:
+                line = f"{g.title} ({g.progress_percentage}%)"
+                if g.target_date:
+                    days = g.days_until_target()
+                    if days is not None and days < 0:
+                        line += " ⚠️ПРОСРОЧЕНО"
+                    elif days is not None and days <= 7:
+                        line += f" ⏳{days}дн"
+                goal_lines.append(line)
+            user_memory += f"\n\n🎯 ЦЕЛИ:\n" + "\n".join(f"- {l}" for l in goal_lines)
+        
+        # Задачи — сводка
+        pending_count = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
+        ctx['task_count'] = pending_count
+        if pending_count:
+            user_memory += f"\nАктивных задач: {pending_count}"
+        
+        # Просроченные задачи
+        overdue = db_session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.reminder_time < user_now,
+            Task.status == "pending"
+        ).limit(5).all()
+        ctx['overdue_count'] = len(overdue)
+        ctx['overdue_titles'] = [t.title for t in overdue]
+        if overdue:
+            user_memory += f"\nПРОСРОЧЕННЫЕ: {', '.join(ctx['overdue_titles'])}"
+        
+        # Поведенческий анализ
+        insights = []
+        recent = db_session.query(Interaction).filter_by(
+            user_id=user.id
+        ).order_by(Interaction.created_at.desc()).limit(10).all()
+        
+        topic_keywords = {
+            'работа/задачи': ['задач', 'task', 'дел', 'работ', 'проект'],
+            'нетворкинг': ['знаком', 'партнер', 'контакт', 'встреч'],
+            'цели/рост': ['цель', 'goal', 'план', 'развити', 'рост'],
+            'продуктивность': ['врем', 'time', 'продуктив', 'эффект'],
+            'здоровье': ['здоров', 'спорт', 'тренир', 'сон', 'питан'],
+            'финансы': ['деньг', 'финанс', 'инвест', 'бюджет', 'доход'],
+            'обучение': ['учи', 'курс', 'книг', 'навык', 'изуч'],
+        }
+        
+        recent_topics = set()
+        last_user_msg = ""
+        for inter in recent:
+            if inter.content:
+                c_lower = inter.content.lower()
+                if inter.message_type == 'user' and not last_user_msg:
+                    last_user_msg = inter.content[:200]
+                for topic, words in topic_keywords.items():
+                    if any(w in c_lower for w in words):
+                        recent_topics.add(topic)
+        
+        if recent_topics:
+            insights.append(f"Недавние темы: {', '.join(recent_topics)}")
+        ctx['recent_topics'] = recent_topics
+        ctx['last_user_msg'] = last_user_msg
+        
+        # Паттерны задач
+        all_tasks = db_session.query(Task).filter_by(user_id=user.id).limit(20).all()
+        if all_tasks:
+            completed = sum(1 for t in all_tasks if t.status == 'completed')
+            pending = sum(1 for t in all_tasks if t.status == 'pending')
+            delegated = sum(1 for t in all_tasks if t.delegated_to_username)
+            patterns = []
+            if completed > pending * 0.7:
+                patterns.append("продуктивный")
+            if delegated > len(all_tasks) * 0.3:
+                patterns.append("делегирует")
+            if patterns:
+                insights.append(f"Паттерны: {', '.join(patterns)}")
+        
+        # Время активности
+        if user.last_interaction_at:
+            h = user.last_interaction_at.hour
+            if 6 <= h <= 10:
+                insights.append("активен утром")
+            elif 18 <= h <= 23:
+                insights.append("активен вечером")
+        
+        if insights:
+            user_memory += f"\n\n💡 ИНСАЙТЫ:\n" + "\n".join(f"- {i}" for i in insights)
+        ctx['insights'] = insights
+        
+        # Последние ответы агента — для антиповторов
+        last_ai_msgs = db_session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type == 'ai'
+        ).order_by(Interaction.created_at.desc()).limit(5).all()
+        ctx['last_responses'] = [m.content[:80] for m in last_ai_msgs if m.content and len(m.content) > 10]
+        
+        # Активное обучение: анализ реакций на проактивные сообщения
+        ctx['proactive_engagement'] = _analyze_proactive_engagement(user.id, db_session)
+        engagement = ctx['proactive_engagement']
+        if engagement.get('summary'):
+            insights.append(engagement['summary'])
+        
+        ctx['user_memory'] = user_memory
+        return ctx
+    
+    finally:
+        db_session.close()
+
+
+def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_list=None):
+    """Формирует умный промпт — AI сам выбирает, что полезнее всего сказать."""
+    import random
+    
+    parts = []
+    parts.append("Ты пишешь проактивное сообщение пользователю. Не в ответ на его запрос — ты сам решил написать, потому что у тебя есть что-то полезное.")
+    
+    # Время суток
+    hour = ctx['user_now'].hour
+    if 6 <= hour < 12:
+        time_of_day = "Утро"
+    elif 12 <= hour < 18:
+        time_of_day = "День"
+    elif 18 <= hour < 22:
+        time_of_day = "Вечер"
+    else:
+        time_of_day = "Позднее время"
+    
+    situation_parts = [time_of_day]
+    situation_parts.append(f"задач: {ctx.get('task_count', 0)}")
+    if ctx.get('overdue_count', 0) > 0:
+        situation_parts.append(f"просроченных: {ctx['overdue_count']}")
+    if ctx.get('recent_topics'):
+        situation_parts.append(f"недавние темы: {', '.join(list(ctx['recent_topics'])[:3])}")
+    
+    parts.append(f"\nСИТУАЦИЯ: {', '.join(situation_parts)}")
+    
+    # Доступные данные
+    available = []
+    if ctx.get('weather'):
+        available.append(f"Погода: {ctx['weather']}")
+    if ctx.get('news'):
+        available.append(f"Новости: {str(ctx['news'])[:400]}")
+    if ctx.get('partners'):
+        available.append(f"Партнёры/контакты: {str(ctx['partners'])[:300]}")
+    if ctx.get('insights'):
+        available.append(f"Наблюдения: {'; '.join(ctx['insights'])}")
+    
+    if ctx.get('goals'):
+        goal_lines = []
+        for g in ctx['goals']:
+            line = f"{g.title} ({g.progress_percentage}%)"
+            if g.target_date:
+                days = g.days_until_target()
+                if days is not None and days < 0:
+                    line += " ⚠️просрочено"
+                elif days is not None and days <= 7:
+                    line += f" ⏳{days}дн"
+            goal_lines.append(line)
+        available.append(f"Цели: " + ", ".join(goal_lines))
+    
+    # Долгосрочные данные
+    ltm_data = ctx.get('long_term_data', {})
+    if ltm_data.get('interests'):
+        sorted_ints = sorted(ltm_data['interests'].items(), key=lambda x: x[1], reverse=True)[:5]
+        available.append(f"Устойчивые интересы: {', '.join(f'{t}({c})' for t, c in sorted_ints)}")
+    if ltm_data.get('search_history'):
+        recent_q = [s['query'] for s in ltm_data['search_history'][-3:]]
+        available.append(f"Недавние поиски: {', '.join(recent_q)}")
+    if ltm_data.get('projects'):
+        available.append(f"Проекты: {', '.join(list(ltm_data['projects'].keys())[-3:])}")
+    
+    if available:
+        parts.append("\nДОСТУПНЫЕ ДАННЫЕ:\n" + "\n".join(available))
+    
+    # Задачи
+    if tasks_list:
+        user_tz = ctx.get('user_tz', pytz.UTC)
+        now_utc = datetime.now(pytz.UTC)
+        upcoming = []
+        overdue_found = []
+        
+        for t in tasks_list[:10]:
+            if t.status != 'pending':
+                continue
+            time_str = ""
+            if t.reminder_time:
+                try:
+                    rt = t.reminder_time if t.reminder_time.tzinfo else pytz.UTC.localize(t.reminder_time)
+                    if rt < now_utc:
+                        overdue_found.append(t.title)
+                        continue
+                    time_str = f" (на {rt.astimezone(user_tz).strftime('%H:%M')})"
+                except Exception:
+                    pass
+            desc = f" — {t.description[:80]}" if t.description else ""
+            upcoming.append(f"• {t.title}{time_str}{desc}")
+        
+        if upcoming:
+            parts.append("\nЗАДАЧИ:\n" + "\n".join(upcoming[:5]))
+        if overdue_found:
+            parts.append("\n⚠️ ПРОСРОЧЕННЫЕ: " + ", ".join(overdue_found[:5]))
+    elif ctx.get('overdue_titles'):
+        parts.append("\n⚠️ ПРОСРОЧЕННЫЕ: " + ", ".join(ctx['overdue_titles']))
+    
+    # Специальные задачи если переданы отдельно
+    if overdue_tasks_list:
+        if hasattr(overdue_tasks_list[0], 'title'):
+            titles = [t.title for t in overdue_tasks_list[:5]]
+        else:
+            titles = [t.get('title', 'Задача') for t in overdue_tasks_list[:5]]
+        parts.append(f"\n⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ ({len(overdue_tasks_list)}):\n" + "\n".join(f"• {t}" for t in titles))
+    
+    # Intent hint
+    if intent:
+        intent_hints = {
+            'morning': "Утреннее приветствие — коротко о дне, настрой на продуктивность, упомяни что нового",
+            'evening': "Вечерний итог — признание работы за день, что дальше, мягкая забота",
+            'overdue': "Мягкое напоминание о просроченных — поддержка, конкретный первый шаг, предложение помощи",
+            'insight': "Поделись полезной находкой из новостей/данных, свяжи с интересами пользователя",
+            'trend': "Расскажи о тренде или новости, которая релевантна целям/интересам пользователя",
+            'weather': "Предложи активность исходя из погоды и планов пользователя",
+            'contact': "Предложи познакомиться с интересным партнёром из рекомендаций",
+            'productivity': "Наблюдение о продуктивности + практичный совет",
+        }
+        if intent in intent_hints:
+            parts.append(f"\nАКЦЕНТ: {intent_hints[intent]}")
+    
+    # Выбираем случайный фокус для разнообразия (если нет явного intent)
+    if not intent:
+        possible_focuses = [
+            "Инсайт по теме интересов/целей (с конкретикой из новостей/данных)",
+            "Полезное наблюдение о паттернах работы пользователя",
+            "Мотивация + конкретный следующий шаг к цели",
+            "Интересная возможность (партнёр, тренд, событие)",
+            "Совет по ситуации (погода → активность, новость → действие)",
+            "Связь текущих задач с долгосрочными целями",
+            "Идея или лайфхак по недавней теме разговора",
+        ]
+        # Фильтруем контекстно
+        if not ctx.get('weather'):
+            possible_focuses = [f for f in possible_focuses if 'погода' not in f]
+        if not ctx.get('partners'):
+            possible_focuses = [f for f in possible_focuses if 'партнёр' not in f]
+        if not ctx.get('news'):
+            possible_focuses = [f for f in possible_focuses if 'новост' not in f]
+        
+        focus = random.choice(possible_focuses) if possible_focuses else "Дружеская поддержка и мотивация"
+        parts.append(f"\nФОКУС ЭТОГО СООБЩЕНИЯ: {focus}")
+    
+    # Активное обучение — что работает, а что нет
+    engagement = ctx.get('proactive_engagement', {})
+    if engagement.get('engaged_topics'):
+        from collections import Counter
+        top = Counter(engagement['engaged_topics']).most_common(3)
+        parts.append(f"\n📈 ВОВЛЕЧЁННОСТЬ: пользователь чаще реагирует на темы: {', '.join(t for t, _ in top)}")
+    if engagement.get('ignored_count', 0) > engagement.get('total_proactive', 0) * 0.6:
+        parts.append("⚠️ Пользователь часто игнорирует проактивные сообщения — пиши только когда есть РЕАЛЬНАЯ польза")
+    
+    # Универсальные правила
+    parts.append("""
+ПРАВИЛА:
+- 2-4 предложения, живой тон как от умного друга
+- Конкретика: цифры, имена, факты из реальных данных
+- НЕ выдумывай @username, контакты, статистику
+- Закончи действием или вопросом (но не навязчиво)
+- НЕ начинай с банального «Привет!» без повода
+- НЕ перечисляй функции бота
+- НЕ пиши «я заметил/я проанализировал» — просто дай пользу
+- Упоминай ТОЛЬКО реальных людей из данных выше
+- Каждое сообщение должно быть УНИКАЛЬНЫМ и отличаться от предыдущих""")
+    
+    return "\n".join(parts)
+
+
+async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
+    """Единый умный генератор проактивных сообщений.
+    
+    Вместо жёстких категорий (no_tasks/few_tasks/etc.) — AI сам выбирает,
+    что полезнее всего сказать на основе полного контекста ситуации.
+    
+    Заменяет: старый generate_proactive_message с 690 строками хардкод-промптов.
+    """
+    try:
+        # 1. Собираем полный контекст
+        ctx = await _build_proactive_context(user_id)
+        if not ctx:
+            return "Привет! Готов помочь. Что обсудим?"
+        
+        # 2. Определяем intent на основе ситуации
+        intent = None
+        hour = ctx['user_now'].hour
+        
+        if isinstance(context, str) and context == 'overdue_tasks':
+            intent = 'overdue'
+        elif hour < 12:
+            intent = 'morning'
+        elif hour >= 20:
+            intent = 'evening'
+        # Остальные случаи — AI сам выберет фокус
+        
+        # 3. Формируем ситуационный промпт
+        situation_prompt = _build_situation_prompt(ctx, intent=intent, tasks_list=tasks_list)
+        
+        # 4. System prompt
+        system_prompt = get_extended_system_prompt(
+            ctx['user_now'],
+            ctx['current_time_str'],
+            ctx['current_date_str'],
+            ctx['username'],
+            "",
+            ctx['user_memory'],
+            subscription_tier=ctx['subscription_tier'],
+            message_type='proactive'
+        )
+        
+        # Антиповтор — запрещаем повторять последние ответы
+        if ctx.get('last_responses'):
+            anti_repeat = "\n".join(f"- {r}" for r in ctx['last_responses'])
+            system_prompt += f"\n\nЗАПРЕЩЕНО повторять эти фразы (твои последние ответы):\n{anti_repeat}\nГенерируй УНИКАЛЬНЫЙ ответ!"
+        
+        # 5. Собираем messages
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": situation_prompt}
+        ]
+        
+        # 6. Запрос к DeepSeek
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
             "model": DEEPSEEK_MODEL,
             "messages": messages,
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": 600  # Увеличили для более богатых, персонализированных сообщений (3-5 предложений)
+            "temperature": 0.9,
+            "top_p": 0.95,
+            "max_tokens": 400
         }
-
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
-                    content = replace_placeholders(content, user_now, current_time_str)
+                    content = replace_placeholders(content, ctx['user_now'], ctx['current_time_str'])
                     content = clean_technical_details(content)
-
-                    # Пост-обработка как в обычных ответах
                     content = post_process_response(content, user_id)
-
-                    logger.info(f"[PROACTIVE] Generated dynamic message: {content[:100]}...")
+                    logger.info(f"[PROACTIVE] Generated smart message: {content[:100]}...")
                     return content
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
-                    # Динамические fallback сообщения на основе профиля пользователя
                     from .utils import generate_unified_recommendations
                     return generate_unified_recommendations(
                         'fallback', task_count=task_count, overdue_count=overdue_count,
-                        profile=profile, weather_info=weather_info,
-                        partner_recommendations=partner_recommendations, tasks_list=tasks_list
+                        profile=ctx.get('profile'), weather_info=ctx.get('weather'),
+                        partner_recommendations=ctx.get('partners', ''), tasks_list=tasks_list
                     )
-
+    
     except Exception as e:
-        logger.error(f"Error in generate_proactive_message: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        # Динамические fallback сообщения для исключений
+        logger.error(f"Error in generate_proactive_message: {e}\n{traceback.format_exc()}")
         try:
             from .utils import generate_unified_recommendations
-            return generate_unified_recommendations(
-                'fallback', task_count=task_count, overdue_count=overdue_count,
-                profile=profile, weather_info=weather_info,
-                partner_recommendations=partner_recommendations, tasks_list=tasks_list
-            )
-        except Exception as fallback_error:
-            logger.error(f"Fallback message generation failed: {fallback_error}")
-            # Последний запасной вариант
-            return f"Привет! Готов помочь с задачами и целями. Что обсудим сегодня?"
+            return generate_unified_recommendations('fallback', task_count=task_count, overdue_count=overdue_count)
+        except Exception:
+            return "Привет! Готов помочь с задачами и целями. Что обсудим?"
 
 
 async def generate_daily_report(user_id):
-    """Генерирует ежедневный отчет о задачах"""
-    try:
-        # Получить пользователя для timezone
-        db_session = Session()
-        user = db_session.query(User).filter_by(telegram_id=user_id).first()
-        db_session.close()
-
-        # Получить задачи пользователя
-        db_session = Session()
-        tasks = db_session.query(Task).filter_by(user_id=user_id).all()
-        db_session.close()
-
-        completed = [t for t in tasks if t.status == "completed"]
-        pending = [t for t in tasks if t.status in ["pending", "in_progress"]]
-
-        # Получить память пользователя
-        user_memory = ""
-        if user and user.memory:
-            try:
-                decrypted = decrypt_data(user.memory)
-                user_memory = f"\nИнформация о пользователе: {decrypted}"
-            except (Exception,):
-                user_memory = ""
-
-        # Используем единый унифицированный промпт для всех AI-сообщений
-
-
-        base_now = datetime.now(pytz.UTC)
-        user_now = base_now  # Default to UTC
-        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-        current_date_str = user_now.strftime("%Y-%m-%d")
-        
-        months = [
-            'января',
-            'февраля',
-            'марта',
-            'апреля',
-            'мая',
-            'июня',
-            'июля',
-            'августа',
-            'сентября',
-            'октября',
-            'ноября',
-            'декабря']
-        
-        # Get user timezone if available, default to Moscow if not set
-        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
-        try:
-            user_tz = pytz.timezone(user_timezone)
-            user_now = base_now.astimezone(user_tz)
-            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-        except Exception as e:
-            logger.error(f"Error setting user timezone for daily_report: {e}")
-            # Fallback to Moscow time
-            try:
-                moscow_tz = pytz.timezone('Europe/Moscow')
-                user_now = base_now.astimezone(moscow_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.warning(f"[DAILY_REPORT] Failed Moscow timezone fallback: {e}")
-        
-        user_username = "пользователь"
-        mentions_str = ""
-
-        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, message_type='daily_report')
-
-        system_prompt = base_prompt
-
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Создай отчет: выполнено {len(completed)}, ожидают {len(pending)}"},
-        ]
-
-        data = {"model": DEEPSEEK_MODEL, "messages": messages}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    content = result["choices"][0]["message"]["content"]
-                    # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(
-                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
-                    )
-                    content = clean_technical_details(content)
-
-                    # Проверяем и принуждаем соблюдение промпта
-                    is_compliant, issues = validate_response_compliance(content, "daily_report")
-                    if not is_compliant:
-                        logger.warning(f"[COMPLIANCE] Daily report response not compliant: {issues}")
-                        # Принуждаем исправление - функция временно отключена
-                        # content = await enforce_prompt_compliance(
-                        #     content, "daily_report", user_id, None, system_prompt, messages, url, headers
-                        # )
-
-                    return content
-                else:
-                    logger.error(f"Failed to generate daily report: status {response.status}")
-                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Ежедневный отчёт."}]
-                    retry_data = {"model": DEEPSEEK_MODEL, "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
-                    async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
-                        if retry_resp.status == 200:
-                            retry_result = await retry_resp.json()
-                            return retry_result["choices"][0]["message"]["content"].strip()
-                    # Генерируем fallback через AI
-                    try:
-                        url = "https://api.deepseek.com/v1/chat/completions"
-                        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Время подвести итоги дня. Создай короткое напоминание."}]
-                        data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
-                        async with aiohttp.ClientSession() as sess:
-                            async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                                if resp.status == 200:
-                                    result = await resp.json()
-                                    return result["choices"][0]["message"]["content"].strip()
-                    except Exception:
-                        pass
-                    return "Время подвести итоги! 🌙"
-    except Exception as e:
-        logger.error(f"Error in generate_daily_report: {e}")
-        try:
-            url = "https://api.deepseek.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-            msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Отчёт о дне. Создай короткий вопрос о дне."}]
-            data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
-            async with aiohttp.ClientSession() as sess:
-                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
-                    if resp.status == 200:
-                        res = await resp.json()
-                        return res["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            logger.warning(f"[REPORT] AI report generation failed: {e}")
-        return "Как прошёл день? 🌆"
+    """Вечерний итог — делегирует в generate_proactive_message с intent='evening'.
+    Сохранена для обратной совместимости (используется в reminder_service)."""
+    return await generate_proactive_message(user_id, context="general")
 
 
 async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
-    """Генерирует напоминание о просроченных задачах"""
-    try:
-        # Поддержка как объектов Task, так и словарей
-        if overdue_tasks and isinstance(overdue_tasks[0], dict):
-            task_titles = [t.get('title', 'Задача') for t in overdue_tasks]
-        else:
-            task_titles = [t.title for t in overdue_tasks]
-        # Получить память пользователя
-        user_memory = ""
-        if user_id:
-            db_session = Session()
-            user = db_session.query(User).filter_by(telegram_id=user_id).first()
-            if user and user.memory:
-                try:
-                    decrypted = decrypt_data(user.memory)
-                    user_memory = f"\nИнформация о пользователе: {decrypted}"
-                except (Exception,):
-                    user_memory = ""
-            db_session.close()
-
-        # Используем единый унифицированный промпт для всех AI-сообщений
-
-
-        base_now = datetime.now(pytz.UTC)
-        user_now = base_now  # Default to UTC
-        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-        current_date_str = user_now.strftime("%Y-%m-%d")
-        
-        months = [
-            'января',
-            'февраля',
-            'марта',
-            'апреля',
-            'мая',
-            'июня',
-            'июля',
-            'августа',
-            'сентября',
-            'октября',
-            'ноября',
-            'декабря']
-        
-        # Get user timezone if available, default to Moscow if not set
-        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
-        try:
-            user_tz = pytz.timezone(user_timezone)
-            user_now = base_now.astimezone(user_tz)
-            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-        except Exception as e:
-            logger.error(f"Error setting user timezone for overdue: {e}")
-            # Fallback to Moscow time
-            try:
-                moscow_tz = pytz.timezone('Europe/Moscow')
-                user_now = base_now.astimezone(moscow_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.warning(f"[OVERDUE] Failed Moscow timezone fallback: {e}")
-        
-        user_username = "пользователь"
-        mentions_str = ""
-
-        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, message_type='overdue')
-
-        system_prompt = base_prompt
-
-        # Адаптируем тон в зависимости от уровня эскалации
-        if escalation_level == 1:
-            tone_instruction = "Будь дружелюбным, но настойчивым. Напомни о важности выполнения задач."
-        elif escalation_level == 2:
-            tone_instruction = "Будь более строгим. Подчеркни негативные последствия невыполнения."
-        else:  # 3+
-            tone_instruction = "Будь очень строгим и мотивирующим. Предложи конкретные альтернативы и помощь."
-
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-
-        messages = [
-            {
-                "role": "system", "content": system_prompt}, {
-                "role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи конкретные шаги решения.", }, ]
-
-        data = {"model": DEEPSEEK_MODEL, "messages": messages}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    content = result["choices"][0]["message"]["content"]
-                    # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(
-                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
-                    )
-                    content = clean_technical_details(content)
-
-                    # Проверяем и принуждаем соблюдение промпта
-                    is_compliant, issues = validate_response_compliance(content, "overdue")
-                    if not is_compliant:
-                        logger.warning(f"[COMPLIANCE] Overdue reminder response not compliant: {issues}")
-                        # Принуждаем исправление - функция временно отключена
-                        # content = await enforce_prompt_compliance(
-                        #     content, "overdue", user_id, None, system_prompt, messages, url, headers
-                        # )
-
-                    return content
-                else:
-                    logger.error(f"Failed to generate overdue reminder: status {response.status}")
-                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Напоминание о просроченных задачах."}]
-                    retry_data = {"model": DEEPSEEK_MODEL, "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
-                    async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
-                        if retry_resp.status == 200:
-                            retry_result = await retry_resp.json()
-                            return retry_result["choices"][0]["message"]["content"].strip()
-                    # Генерируем сообщение через AI с контекстом просроченных задач
-                    try:
-                        url = "https://api.deepseek.com/v1/chat/completions"
-                        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Просроченные задачи пользователя: {', '.join(task_titles)}. Создай короткое напоминание."}]
-                        data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 80}
-                        async with aiohttp.ClientSession() as sess:
-                            async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                                if resp.status == 200:
-                                    result = await resp.json()
-                                    return result["choices"][0]["message"]["content"].strip()
-                    except Exception:
-                        pass
-                    return "Обратите внимание на просроченные задачи."
-    except Exception as e:
-        logger.error(f"Error in generate_overdue_reminder: {e}")
-        try:
-            url = "https://api.deepseek.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-            msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Просроченные задачи. Напомни коротко."}]
-            data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
-            async with aiohttp.ClientSession() as sess:
-                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
-                    if resp.status == 200:
-                        res = await resp.json()
-                        return res["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            logger.warning(f"[REMINDER] AI reminder generation failed: {e}")
-        return "Задачи ожидают внимания."
+    """Напоминание о просроченных — делегирует в generate_proactive_message с intent='overdue'.
+    Сохранена для обратной совместимости."""
+    return await generate_proactive_message(
+        user_id, context="overdue_tasks",
+        overdue_count=len(overdue_tasks) if overdue_tasks else 0,
+        tasks_list=overdue_tasks
+    )
 
 
 def validate_response_compliance(content, msg_type):

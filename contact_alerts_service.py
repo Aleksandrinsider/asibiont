@@ -46,10 +46,10 @@ class ContactAlertsService:
         """
         session = Session()
         try:
-            # Получаем Premium пользователей с активными contact alerts
+            # Получаем STANDARD+ пользователей с активными contact alerts
             alerts = session.query(ContactAlert).join(User).filter(
                 ContactAlert.enabled == True,
-                User.subscription_tier == SubscriptionTier.PREMIUM
+                User.subscription_tier.in_([SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM])
             ).all()
 
             result = []

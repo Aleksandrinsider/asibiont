@@ -4821,8 +4821,8 @@
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
                                     } else {
-                                        const tierNames = {'light': '?? Light', 'standard': '?? Standard', 'premium': '?? Premium'};
-                                        const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
+                                        const tierNames = {'light': '🟢 Лайт', 'standard': '🔵 Стандарт', 'premium': '🟡 Премиум'};
+                                        const requiredTierName = tierNames[partner.required_tier] || '🔵 Стандарт';
                                         html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     

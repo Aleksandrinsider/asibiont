@@ -7,7 +7,7 @@ from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 import os
-from sqlalchemy import text, or_, and_, inspect
+from sqlalchemy import text, or_, and_
 import re
 import jinja2
 import aiohttp_jinja2
@@ -97,552 +97,9 @@ if os.getenv('CLEAR_DB') == '1':
 # Initialize database tables
 init_db()
 
-# Run database migrations
-logger.info("Running database migrations...")
-try:
-    try:
-        session = Session()
-        inspector = inspect(engine)
-
-        # Migration for user_profiles table columns
-        if inspector.has_table('user_profiles'):
-            columns = [col['name'] for col in inspector.get_columns('user_profiles')]
-
-            # Migration for activity_streak column
-            if 'activity_streak' not in columns:
-                logger.info("Adding activity_streak column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN activity_streak INTEGER DEFAULT 0'))
-                session.commit()
-                logger.info("Migration: activity_streak column added successfully")
-            else:
-                logger.info("Migration: activity_streak column already exists")
-
-            # Migration for bio column
-            logger.info(f"Checking bio column, current columns: {columns}")
-            if 'bio' not in columns:
-                try:
-                    logger.info("Adding bio column to user_profiles table")
-                    session.execute(text('ALTER TABLE user_profiles ADD COLUMN bio TEXT'))
-                    session.commit()
-                    logger.info("Migration: bio column added successfully")
-                except Exception as e:
-                    logger.error(f"Failed to add bio column: {e}")
-                    session.rollback()
-            else:
-                logger.info("Migration: bio column already exists")
-
-            # Migration for birthdate column
-            if 'birthdate' not in columns:
-                logger.info("Adding birthdate column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN birthdate VARCHAR(10)'))
-                session.commit()
-                logger.info("Migration: birthdate column added successfully")
-            else:
-                logger.info("Migration: birthdate column already exists")
-
-            # Migration for interests column
-            if 'interests' not in columns:
-                logger.info("Adding interests column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN interests TEXT'))
-                session.commit()
-                logger.info("Migration: interests column added successfully")
-            else:
-                logger.info("Migration: interests column already exists")
-
-            # Migration for city column
-            if 'city' not in columns:
-                logger.info("Adding city column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN city VARCHAR(100)'))
-                session.commit()
-                logger.info("Migration: city column added successfully")
-            else:
-                logger.info("Migration: city column already exists")
-
-            # Migration for company column
-            if 'company' not in columns:
-                logger.info("Adding company column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN company VARCHAR(200)'))
-                session.commit()
-                logger.info("Migration: company column added successfully")
-            else:
-                logger.info("Migration: company column already exists")
-
-            # Migration for position column
-            if 'position' not in columns:
-                logger.info("Adding position column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN position VARCHAR(200)'))
-                session.commit()
-                logger.info("Migration: position column added successfully")
-            else:
-                logger.info("Migration: position column already exists")
-
-            # Migration for timezone column
-            if 'timezone' not in columns:
-                logger.info("Adding timezone column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN timezone VARCHAR(50) DEFAULT \'UTC\''))
-                session.commit()
-                logger.info("Migration: timezone column added successfully")
-            else:
-                logger.info("Migration: timezone column already exists")
-
-            # Migration for subscription_tier column
-            if 'subscription_tier' not in columns:
-                logger.info("Adding subscription_tier column to user_profiles table")
-                if LOCAL:
-                    session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier TEXT DEFAULT \'LIGHT\''))
-                else:
-                    # First, create the enum type if it doesn't exist
-                    try:
-                        session.execute(text('CREATE TYPE subscription_tier_enum AS ENUM (\'LIGHT\', \'STANDARD\', \'PREMIUM\')'))
-                        session.commit()
-                        logger.info("Migration: subscription_tier_enum type created")
-                    except Exception as e:
-                        logger.info(f"Migration: subscription_tier_enum type already exists or error: {e}")
-                        session.rollback()
-                
-                    # Now add the column
-                    session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'LIGHT\''))
-                session.commit()
-                logger.info("Migration: subscription_tier column added successfully")
-            else:
-                logger.info("Migration: subscription_tier column already exists")
-
-            # Migration for subscription_expires_at column
-            if 'subscription_expires_at' not in columns:
-                logger.info("Adding subscription_expires_at column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_expires_at TIMESTAMP'))
-                session.commit()
-                logger.info("Migration: subscription_expires_at column added successfully")
-            else:
-                logger.info("Migration: subscription_expires_at column already exists")
-
-            # Migration for subscription_renewal_date column
-            if 'subscription_renewal_date' not in columns:
-                logger.info("Adding subscription_renewal_date column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_renewal_date TIMESTAMP'))
-                session.commit()
-                logger.info("Migration: subscription_renewal_date column added successfully")
-            else:
-                logger.info("Migration: subscription_renewal_date column already exists")
-
-            # Migration for pending_premium_recommendations column
-            if 'pending_premium_recommendations' not in columns:
-                logger.info("Adding pending_premium_recommendations column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN pending_premium_recommendations TEXT'))
-                session.commit()
-                logger.info("Migration: pending_premium_recommendations column added successfully")
-            else:
-                logger.info("Migration: pending_premium_recommendations column already exists")
-
-            # Migration for content_strategy column
-            if 'content_strategy' not in columns:
-                logger.info("Adding content_strategy column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN content_strategy TEXT'))
-                session.commit()
-                logger.info("Migration: content_strategy column added successfully")
-            else:
-                logger.info("Migration: content_strategy column already exists")
-
-            # Migration for auto_marketing_enabled column
-            if 'auto_marketing_enabled' not in columns:
-                logger.info("Adding auto_marketing_enabled column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN auto_marketing_enabled BOOLEAN DEFAULT TRUE'))
-                session.commit()
-                logger.info("Migration: auto_marketing_enabled column added successfully")
-            else:
-                logger.info("Migration: auto_marketing_enabled column already exists")
-
-            # Migration for auto_delegation_enabled column
-            if 'auto_delegation_enabled' not in columns:
-                logger.info("Adding auto_delegation_enabled column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN auto_delegation_enabled BOOLEAN DEFAULT TRUE'))
-                session.commit()
-                logger.info("Migration: auto_delegation_enabled column added successfully")
-            else:
-                logger.info("Migration: auto_delegation_enabled column already exists")
-
-            # Migration for auto_post_time column
-            if 'auto_post_time' not in columns:
-                logger.info("Adding auto_post_time column to user_profiles table")
-                session.execute(text("ALTER TABLE user_profiles ADD COLUMN auto_post_time VARCHAR(5) DEFAULT '12:00'"))
-                session.commit()
-                logger.info("Migration: auto_post_time column added successfully")
-            else:
-                logger.info("Migration: auto_post_time column already exists")
-
-        # Migration for users table columns
-        if inspector.has_table('users'):
-            user_columns = [col['name'] for col in inspector.get_columns('users')]
-
-            # Migration for referral_balance column
-            if 'referral_balance' not in user_columns:
-                logger.info("Adding referral_balance column to users table")
-                session.execute(text('ALTER TABLE users ADD COLUMN referral_balance INTEGER DEFAULT 0'))
-                session.commit()
-                logger.info("Migration: referral_balance column added successfully")
-            else:
-                logger.info("Migration: referral_balance column already exists")
-
-            # Migration for referrer_id column
-            if 'referrer_id' not in user_columns:
-                logger.info("Adding referrer_id column to users table")
-                session.execute(text('ALTER TABLE users ADD COLUMN referrer_id INTEGER REFERENCES users(id)'))
-                session.commit()
-                logger.info("Migration: referrer_id column added successfully")
-            else:
-                logger.info("Migration: referrer_id column already exists")
-
-            # Migration for telegram_channel column
-            if 'telegram_channel' not in user_columns:
-                logger.info("Adding telegram_channel column to users table")
-                session.execute(text('ALTER TABLE users ADD COLUMN telegram_channel VARCHAR(255)'))
-                session.commit()
-                logger.info("Migration: telegram_channel column added successfully")
-            else:
-                logger.info("Migration: telegram_channel column already exists")
-
-        # Migration for tasks table
-        if not inspector.has_table('tasks'):
-            logger.info("Creating tasks table")
-            if LOCAL:
-                session.execute(text('''
-                    CREATE TABLE tasks (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        title VARCHAR(500) NOT NULL,
-                        description TEXT,
-                        status VARCHAR(20) DEFAULT 'pending',
-                        priority VARCHAR(20) DEFAULT 'medium',
-                        reminder_time TIMESTAMP,
-                        actual_completion_time TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                '''))
-            else:
-                session.execute(text('''
-                    CREATE TABLE tasks (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id),
-                        title VARCHAR(500) NOT NULL,
-                        description TEXT,
-                        status VARCHAR(20) DEFAULT 'pending',
-                        priority VARCHAR(20) DEFAULT 'medium',
-                        reminder_time TIMESTAMP,
-                        actual_completion_time TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                '''))
-            session.commit()
-            logger.info("Migration: tasks table created successfully")
-        else:
-            logger.info("Migration: tasks table already exists")
-
-            # Migration for recurring task columns in tasks table
-            task_columns = [col['name'] for col in inspector.get_columns('tasks')]
-        
-            # Migration for is_recurring column
-            if 'is_recurring' not in task_columns:
-                logger.info("Adding is_recurring column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN is_recurring BOOLEAN DEFAULT FALSE'))
-                session.commit()
-                logger.info("Migration: is_recurring column added successfully")
-            else:
-                logger.info("Migration: is_recurring column already exists")
-
-            # Migration for recurrence_pattern column
-            if 'recurrence_pattern' not in task_columns:
-                logger.info("Adding recurrence_pattern column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN recurrence_pattern VARCHAR(50)'))
-                session.commit()
-                logger.info("Migration: recurrence_pattern column added successfully")
-            else:
-                logger.info("Migration: recurrence_pattern column already exists")
-
-            # Migration for recurrence_interval column
-            if 'recurrence_interval' not in task_columns:
-                logger.info("Adding recurrence_interval column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER DEFAULT 1'))
-                session.commit()
-                logger.info("Migration: recurrence_interval column added successfully")
-            else:
-                logger.info("Migration: recurrence_interval column already exists")
-
-            # Migration for recurrence_end_date column
-            if 'recurrence_end_date' not in task_columns:
-                logger.info("Adding recurrence_end_date column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN recurrence_end_date TIMESTAMP'))
-                session.commit()
-                logger.info("Migration: recurrence_end_date column added successfully")
-            else:
-                logger.info("Migration: recurrence_end_date column already exists")
-
-            # Migration for parent_task_id column
-            if 'parent_task_id' not in task_columns:
-                logger.info("Adding parent_task_id column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER REFERENCES tasks(id)'))
-                session.commit()
-                logger.info("Migration: parent_task_id column added successfully")
-            else:
-                logger.info("Migration: parent_task_id column already exists")
-
-            # Migration for followup_reminder_sent column
-            if 'followup_reminder_sent' not in task_columns:
-                logger.info("Adding followup_reminder_sent column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN followup_reminder_sent BOOLEAN DEFAULT FALSE'))
-                session.commit()
-                logger.info("Migration: followup_reminder_sent column added successfully")
-            else:
-                logger.info("Migration: followup_reminder_sent column already exists")
-
-        # Migration for posts table
-        if not inspector.has_table('posts'):
-            logger.info("Creating posts table")
-            if LOCAL:
-                session.execute(text('''
-                    CREATE TABLE posts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        username VARCHAR(100) NOT NULL,
-                        content TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                '''))
-            else:
-                session.execute(text('''
-                    CREATE TABLE posts (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id),
-                        username VARCHAR(100) NOT NULL,
-                        content TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                '''))
-            session.commit()
-            logger.info("Migration: posts table created successfully")
-        else:
-            logger.info("Migration: posts table already exists")
-
-        # Migration for subscriptions table
-        if not inspector.has_table('subscriptions'):
-            logger.info("Creating subscriptions table")
-            if LOCAL:
-                session.execute(text('''
-                    CREATE TABLE subscriptions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        tier TEXT DEFAULT 'FREE',
-                        expires_at TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                '''))
-            else:
-                session.execute(text('''
-                    CREATE TABLE subscriptions (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id),
-                        tier subscription_tier_enum DEFAULT 'FREE',
-                        expires_at TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                '''))
-            session.commit()
-            logger.info("Migration: subscriptions table created successfully")
-        else:
-            logger.info("Migration: subscriptions table already exists")
-
-        # Migration for payments table
-        if not inspector.has_table('payments'):
-            logger.info("Creating payments table")
-            if LOCAL:
-                session.execute(text('''
-                    CREATE TABLE payments (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        amount DECIMAL(10,2) NOT NULL,
-                        currency VARCHAR(3) DEFAULT 'RUB',
-                        status VARCHAR(20) DEFAULT 'pending',
-                        payment_id VARCHAR(100),
-                        tier TEXT DEFAULT 'LIGHT',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                '''))
-            else:
-                session.execute(text('''
-                    CREATE TABLE payments (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id),
-                        amount DECIMAL(10,2) NOT NULL,
-                        currency VARCHAR(3) DEFAULT 'RUB',
-                        status VARCHAR(20) DEFAULT 'pending',
-                        payment_id VARCHAR(100),
-                        tier subscription_tier_enum DEFAULT 'LIGHT',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                '''))
-            session.commit()
-            logger.info("Migration: payments table created successfully")
-        else:
-            logger.info("Migration: payments table already exists")
-
-        # Migration for promo_codes table
-        if not inspector.has_table('promo_codes'):
-            logger.info("Creating promo_codes table")
-            if LOCAL:
-                session.execute(text('''
-                    CREATE TABLE promo_codes (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        code VARCHAR(50) UNIQUE NOT NULL,
-                        tier TEXT DEFAULT 'LIGHT',
-                        duration_days INTEGER DEFAULT 30,
-                        expires_at TIMESTAMP NOT NULL,
-                        is_used BOOLEAN DEFAULT FALSE,
-                        used_by_user_id INTEGER,
-                        used_at TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (used_by_user_id) REFERENCES users (id)
-                    )
-                '''))
-            else:
-                session.execute(text('''
-                    CREATE TABLE promo_codes (
-                        id SERIAL PRIMARY KEY,
-                        code VARCHAR(50) UNIQUE NOT NULL,
-                        tier subscription_tier_enum DEFAULT 'LIGHT',
-                        duration_days INTEGER DEFAULT 30,
-                        expires_at TIMESTAMP NOT NULL,
-                        is_used BOOLEAN DEFAULT FALSE,
-                        used_by_user_id INTEGER REFERENCES users(id),
-                        used_at TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                '''))
-            session.commit()
-            logger.info("Migration: promo_codes table created successfully")
-        else:
-            logger.info("Migration: promo_codes table already exists")
-            # Add missing columns if they don't exist
-            inspector = inspect(engine)
-            columns = [col['name'] for col in inspector.get_columns('promo_codes')]
-            if 'discount_percent' not in columns:
-                logger.info("Adding discount_percent column to promo_codes")
-                session.execute(text("ALTER TABLE promo_codes ADD COLUMN discount_percent INTEGER DEFAULT 0"))
-            if 'max_uses' not in columns:
-                logger.info("Adding max_uses column to promo_codes")
-                session.execute(text("ALTER TABLE promo_codes ADD COLUMN max_uses INTEGER"))
-            if 'used_count' not in columns:
-                logger.info("Adding used_count column to promo_codes")
-                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_count INTEGER DEFAULT 0"))
-            if 'used_by_users' not in columns:
-                logger.info("Adding used_by_users column to promo_codes")
-                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
-            if 'used_by_user_id' not in columns:
-                logger.info("Adding used_by_user_id column to promo_codes")
-                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_user_id INTEGER"))
-            if 'used_at' not in columns:
-                logger.info("Adding used_at column to promo_codes")
-                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP"))
-            session.commit()
-
-        # Migration for users table - current_task_id column
-        if inspector.has_table('users'):
-            user_columns = [col['name'] for col in inspector.get_columns('users')]
-            if 'current_task_id' not in user_columns:
-                logger.info("Adding current_task_id column to users table")
-                session.execute(text('ALTER TABLE users ADD COLUMN current_task_id INTEGER REFERENCES tasks(id)'))
-                session.commit()
-                logger.info("Migration: current_task_id column added successfully")
-            else:
-                logger.info("Migration: current_task_id column already exists")
-
-            # Migration for users table - referral_balance and referrer_id columns
-            if 'referral_balance' not in user_columns:
-                logger.info("Adding referral_balance column to users table")
-                session.execute(text('ALTER TABLE users ADD COLUMN referral_balance INTEGER DEFAULT 0'))
-                session.commit()
-                logger.info("Migration: referral_balance column added successfully")
-            else:
-                logger.info("Migration: referral_balance column already exists")
-
-            if 'referrer_id' not in user_columns:
-                logger.info("Adding referrer_id column to users table")
-                session.execute(text('ALTER TABLE users ADD COLUMN referrer_id INTEGER REFERENCES users(id)'))
-                session.commit()
-                logger.info("Migration: referrer_id column added successfully")
-            else:
-                logger.info("Migration: referrer_id column already exists")
-
-        session.close()
-        logger.info("Migration session closed successfully")
-    except Exception as e:
-        logger.error(f"Migration failed: {e}")
-        session.close()
-        raise
-
-    logger.info("✅ Database migrations completed")
-except Exception as e:
-    logger.error(f"❌ Database migrations failed: {e}")
-    raise
-
-
-# Test data creation removed for production
-
-# Create test promo codes (3 for each tier, valid until Feb 1, 2026, unlimited uses)
-# COMMENTED OUT FOR PRODUCTION - Remove this block before deploying
-# try:
-#     session_db = Session()
-
-#     # Check if promo codes already exist
-#     existing_promos = session_db.query(PromoCode).filter(PromoCode.code.like('SPORT%')).all()
-#     if existing_promos:
-#         logger.info(f"Test promo codes already exist: {[p.code for p in existing_promos]}")
-#     else:
-#         # Create promo codes valid until February 1, 2026
-#         expires_at = datetime(2026, 2, 1, tzinfo=dt_timezone.utc)
-
-#         # LIGHT tier promo codes
-#         light_promos = [
-#             PromoCode(code='SPORTLIGHT1', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-#             PromoCode(code='SPORTLIGHT2', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-#             PromoCode(code='SPORTLIGHT3', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-#         ]
-
-#         # STANDARD tier promo codes
-#         standard_promos = [
-#             PromoCode(code='SPORTSTAND1', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-#             PromoCode(code='SPORTSTAND2', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-#             PromoCode(code='SPORTSTAND3', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-#         ]
-
-#         # PREMIUM tier promo codes
-#         premium_promos = [
-#             PromoCode(code='SPORTPREM1', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-#             PromoCode(code='SPORTPREM2', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-#             PromoCode(code='SPORTPREM3', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-#         ]
-
-#         # Add all promo codes
-#         all_promos = light_promos + standard_promos + premium_promos
-#         for promo in all_promos:
-#             session_db.add(promo)
-
-#         session_db.commit()
-#         logger.info(f"Created {len(all_promos)} test promo codes valid until {expires_at.date()}")
-#         for promo in all_promos:
-#             logger.info(f"  - {promo.code}: {promo.tier.value} tier for {promo.duration_days} days")
-
-#     session_db.close()
-# except Exception as e:
-#     logger.error(f"Failed to create test promo codes: {e}")
+# Run database migrations (extracted to migrations.py)
+from migrations import run_migrations
+run_migrations()
 
 # Test database connection before starting
 try:
@@ -653,169 +110,97 @@ try:
 except Exception as e:
     logger.error(f"❌ CRITICAL: Cannot connect to database: {e}", exc_info=True)
     logger.error(f"DATABASE_URL: {DATABASE_URL[:50]}..." if DATABASE_URL else "DATABASE_URL not set")
-    # Don't exit, let Railway restart the app
 
-try:
-    # Migrations are already run above
-    logger.info("Database migrations completed")
-    # Production mode: Test users and promo codes disabled
-    logger.info("Production mode: Test data creation disabled")
+# Create test users ONLY when explicitly enabled with CREATE_TEST_USERS=1
+if os.getenv('CREATE_TEST_USERS') == '1':
+    try:
+        session_db = Session()
+        logger.info("Creating test users with different subscription tiers")
 
-    # Create test users ONLY when explicitly enabled with CREATE_TEST_USERS=1
-    if os.getenv('CREATE_TEST_USERS') == '1':
-        try:
-            session_db = Session()
-            logger.info("Creating test users with different subscription tiers")
+        test_users_data = [
+            # LIGHT tier users
+            {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'Москва', 'username': 'test1'},
+            {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'Санкт-Петербург', 'username': 'test2'},
+            {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Екатеринбург', 'username': 'test3'},
+            {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'Новосибирск', 'username': 'test4'},
+            {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Test User 5', 'city': 'Казань', 'username': 'test5'},
+            {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'Нижний Новгород', 'username': 'test6'},
+            {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Test User 7', 'city': 'Челябинск', 'username': 'test7'},
+            {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Test User 8', 'city': 'Омск', 'username': 'test8'},
 
-            test_users_data = [
-                # LIGHT tier users
-                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'Москва', 'username': 'test1'},
-                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'Санкт-Петербург', 'username': 'test2'},
-                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Екатеринбург', 'username': 'test3'},
-                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'Новосибирск', 'username': 'test4'},
-                {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Test User 5', 'city': 'Казань', 'username': 'test5'},
-                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'Нижний Новгород', 'username': 'test6'},
-                {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Test User 7', 'city': 'Челябинск', 'username': 'test7'},
-                {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Test User 8', 'city': 'Омск', 'username': 'test8'},
+            # STANDARD tier users
+            {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Ростов-на-Дону', 'username': 'test9'},
+            {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Test User 10', 'city': 'Уфа', 'username': 'test10'},
+            {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Test User 11', 'city': 'Волгоград', 'username': 'test11'},
+            {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'Красноярск', 'username': 'test12'},
+            {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Воронеж', 'username': 'test13'},
+            {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Test User 14', 'city': 'Пермь', 'username': 'test14'},
 
-                # STANDARD tier users
-                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Ростов-на-Дону', 'username': 'test9'},
-                {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Test User 10', 'city': 'Уфа', 'username': 'test10'},
-                {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Test User 11', 'city': 'Волгоград', 'username': 'test11'},
-                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'Красноярск', 'username': 'test12'},
-                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Воронеж', 'username': 'test13'},
-                {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Test User 14', 'city': 'Пермь', 'username': 'test14'},
+            # PREMIUM tier users
+            {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'Краснодар', 'username': 'test15'},
+            {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Test User 16', 'city': 'Тюмень', 'username': 'test16'},
+            {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Барнаул', 'username': 'test17'},
+            {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'Ижевск', 'username': 'test18'},
+            {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Владивосток', 'username': 'test19'},
+            {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'Ярославль', 'username': 'test20'},
+        ]
 
-                # PREMIUM tier users
-                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'Краснодар', 'username': 'test15'},
-                {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Test User 16', 'city': 'Тюмень', 'username': 'test16'},
-                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Барнаул', 'username': 'test17'},
-                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'Ижевск', 'username': 'test18'},
-                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Владивосток', 'username': 'test19'},
-                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'Ярославль', 'username': 'test20'},
-            ]
+        now = datetime.now()
 
-            now = datetime.now()
+        added_count = 0
+        updated_count = 0
+        for user_data in test_users_data:
+            existing_user = session_db.query(User).filter(User.telegram_id == user_data['telegram_id']).first()
+            if existing_user:
+                existing_profile = session_db.query(UserProfile).filter_by(user_id=existing_user.id).first()
+                if existing_profile:
+                    existing_profile.interests = 'спорт'
+                    updated_count += 1
+                continue
 
-            added_count = 0
-            updated_count = 0
-            for user_data in test_users_data:
-                # Check if user already exists
-                existing_user = session_db.query(User).filter(User.telegram_id == user_data['telegram_id']).first()
-                if existing_user:
-                    logger.info(f"Test user {user_data['telegram_id']} already exists, updating profile interests")
-                    # Update existing profile interests to 'спорт'
-                    existing_profile = session_db.query(UserProfile).filter_by(user_id=existing_user.id).first()
-                    if existing_profile:
-                        existing_profile.interests = 'спорт'
-                        updated_count += 1
-                        logger.info(f"Updated interests for test user {user_data['telegram_id']}")
-                    continue
+            user = User(
+                telegram_id=user_data['telegram_id'],
+                username=user_data['username'],
+                first_name=user_data['name'],
+                photo_url=f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN or 'fake_token'}/photos/file_test_{user_data['telegram_id']}.jpg?r={user_data['telegram_id']}",
+                subscription_tier=user_data['tier'],
+                created_at=now
+            )
+            session_db.add(user)
+            session_db.flush()
 
-                # Create user
-                user = User(
-                    telegram_id=user_data['telegram_id'],
-                    username=user_data['username'],
-                    first_name=user_data['name'],
-                    photo_url=f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN or 'fake_token'}/photos/file_test_{user_data['telegram_id']}.jpg?r={user_data['telegram_id']}",  # Fake avatar URL for testing
-                    subscription_tier=user_data['tier'],  # Set subscription tier
-                    created_at=now
-                )
-                session_db.add(user)
-                session_db.flush()  # Get user.id
+            profile = UserProfile(
+                user_id=user.id,
+                interests='спорт',
+                city=user_data['city'],
+                contact_info=f'user{user_data["telegram_id"]}@test.com'
+            )
+            session_db.add(profile)
 
-                # Create profile with sport interests
-                profile = UserProfile(
-                    user_id=user.id,
-                    interests='спорт',  # All users have 'sport' interest
-                    city=user_data['city'],  # Use city from user data
-                    contact_info=f'user{user_data["telegram_id"]}@test.com'
-                )
-                session_db.add(profile)
+            subscription = Subscription(
+                user_id=user.id,
+                telegram_id=user.telegram_id,
+                telegram_username=user.username,
+                status='active',
+                tier=user_data['tier'],
+                start_date=now,
+                end_date=now + timedelta(days=30)
+            )
+            session_db.add(subscription)
+            added_count += 1
 
-                # Create active subscription
-                subscription = Subscription(
-                    user_id=user.id,
-                    telegram_id=user.telegram_id,
-                    telegram_username=user.username,
-                    status='active',
-                    tier=user_data['tier'],
-                    start_date=now,
-                    end_date=now + timedelta(days=30)
-                )
-                session_db.add(subscription)
-
-                logger.info(f"Created test user {user_data['telegram_id']} with {user_data['tier']} tier")
-                added_count += 1
-
-            # Create test tasks for delegation testing
-            if added_count > 0:
-                # Create tasks delegated to user 1001 from other users
-                user_1001 = session_db.query(User).filter_by(telegram_id=1001).first()
-                user_1002 = session_db.query(User).filter_by(telegram_id=1002).first()
-                user_1003 = session_db.query(User).filter_by(telegram_id=1003).first()
-
-                if user_1001 and user_1002:
-                    # Task from user 1002 delegated to user 1001
-                    task1 = Task(
-                        user_id=user_1002.id,
-                        title="Подготовить презентацию для клиента",
-                        description="Создать презентацию о наших услугах",
-                        status="pending",
-                        created_at=now,
-                        delegated_to_username=user_1001.username,
-                        delegation_status="accepted"
-                    )
-                    session_db.add(task1)
-                    logger.info("Created delegated task from user 1002 to user 1001")
-
-                if user_1001 and user_1003:
-                    # Task from user 1003 delegated to user 1001
-                    task2 = Task(
-                        user_id=user_1003.id,
-                        title="Проверить код на ошибки",
-                        description="Ревью кода для нового модуля",
-                        status="pending",
-                        created_at=now,
-                        delegated_to_username=user_1001.username,
-                        delegation_status="accepted"
-                    )
-                    session_db.add(task2)
-                    logger.info("Created delegated task from user 1003 to user 1001")
-
-                # Create task delegated by user 1001 to user 1002
-                if user_1001 and user_1002:
-                    task3 = Task(
-                        user_id=user_1001.id,
-                        title="Организовать встречу с командой",
-                        description="Запланировать еженедельную встречу",
-                        status="pending",
-                        created_at=now,
-                        delegated_to_username=user_1002.username,
-                        delegation_status="accepted"
-                    )
-                    session_db.add(task3)
-                    logger.info("Created delegated task from user 1001 to user 1002")
-
-            if added_count > 0 or updated_count > 0:
-                session_db.commit()
-                if added_count > 0:
-                    logger.info(f"Successfully added {added_count} test users")
-                if updated_count > 0:
-                    logger.info(f"Successfully updated {updated_count} test user profiles")
-            else:
-                logger.info("All test users already exist and up to date")
-        except Exception as e:
-            logger.error(f"Error creating test users: {e}")
+        if added_count > 0 or updated_count > 0:
+            session_db.commit()
+            logger.info(f"Test users: added={added_count}, updated={updated_count}")
+        else:
+            logger.info("All test users already exist")
+    except Exception as e:
+        logger.error(f"Error creating test users: {e}")
+        if 'session_db' in locals():
             session_db.rollback()
-        finally:
-            if 'session_db' in locals():
-                session_db.close()
-    else:
-        logger.info("Skipping test user creation (not in local mode)")
-
-except Exception as e:
-    logger.error(f"Failed to run migrations: {e}", exc_info=True)
+    finally:
+        if 'session_db' in locals():
+            session_db.close()
 
 
 # Helper functions for context management
@@ -5365,6 +4750,14 @@ async def on_shutdown(app):
             logger.info("✅ Webhook deleted on shutdown")
         except Exception as e:
             logger.error(f"❌ Failed to delete webhook: {e}")
+    
+    # Закрываем единый API-клиент
+    try:
+        from ai_integration.api_client import close_api_client
+        await close_api_client()
+        logger.info("✅ API client closed")
+    except Exception as e:
+        logger.error(f"❌ Failed to close API client: {e}")
 
 
 async def api_tasks_handler(request):
