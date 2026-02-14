@@ -1018,13 +1018,13 @@ async def _build_proactive_context(user_id):
 
 
 def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_list=None):
-    """Формирует умный промпт — AI сам выбирает, что полезнее всего сказать."""
+    """Формирует умный промпт с ФРЕЙМВОРКОМ МЫШЛЕНИЯ — AI анализирует ситуацию и действует."""
     import random
     
     parts = []
-    parts.append("Ты пишешь проактивное сообщение пользователю. Не в ответ на его запрос — ты сам решил написать, потому что у тебя есть что-то полезное.")
+    parts.append("Ты пишешь проактивное сообщение пользователю. Не в ответ на его запрос — ты сам решил написать.")
     
-    # Время суток
+    # === АНАЛИЗ СИТУАЦИИ ===
     hour = ctx['user_now'].hour
     if 6 <= hour < 12:
         time_of_day = "Утро"
@@ -1035,16 +1035,57 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
     else:
         time_of_day = "Позднее время"
     
-    situation_parts = [time_of_day]
-    situation_parts.append(f"задач: {ctx.get('task_count', 0)}")
-    if ctx.get('overdue_count', 0) > 0:
-        situation_parts.append(f"просроченных: {ctx['overdue_count']}")
+    task_count = ctx.get('task_count', 0)
+    overdue_count = ctx.get('overdue_count', 0)
+    has_goals = bool(ctx.get('goals'))
+    has_profile = bool(ctx.get('profile') and ctx['profile'].strip() and ctx['profile'].strip() != 'Профиль не заполнен')
+    
+    parts.append(f"\n=== СИТУАЦИЯ ===")
+    parts.append(f"Время: {time_of_day} ({ctx['user_now'].strftime('%H:%M')})")
+    parts.append(f"Задач: {task_count}")
+    if overdue_count > 0:
+        parts.append(f"Просроченных: {overdue_count}")
+    parts.append(f"Профиль заполнен: {'Да' if has_profile else 'НЕТ'}")
+    parts.append(f"Цели заданы: {'Да' if has_goals else 'НЕТ'}")
     if ctx.get('recent_topics'):
-        situation_parts.append(f"недавние темы: {', '.join(list(ctx['recent_topics'])[:3])}")
+        parts.append(f"Недавние темы: {', '.join(list(ctx['recent_topics'])[:3])}")
     
-    parts.append(f"\nСИТУАЦИЯ: {', '.join(situation_parts)}")
+    # === КРАСНЫЕ ФЛАГИ (приоритет над всем) ===
+    critical_flags = []
     
-    # Доступные данные
+    if task_count == 0:
+        critical_flags.append("""🚩 КРИТИЧНО: У пользователя НЕТ ЗАДАЧ!
+Человек без плана = потерянный день. Ты ОБЯЗАН:
+- Предложить 2-3 КОНКРЕТНЫЕ задачи с ТОЧНЫМ ВРЕМЕНЕМ (10:00, 14:00, 17:00)
+- Основываясь на его профиле/целях/интересах
+- Если профиль пуст — предложи базовые: утренняя рутина, главное дело дня, вечерний обзор
+- Спроси: "Создать эти задачи?" — и будь готов создать по ответу
+НЕ ПИШИ "могу помочь с планированием" — СРАЗУ покажи план!""")
+    
+    if not has_profile:
+        critical_flags.append("""🚩 КРИТИЧНО: Профиль ПУСТ!
+Без профиля ты работаешь ВСЛЕПУЮ — не можешь персонализировать советы.
+Задай 1-2 конкретных вопроса:
+- "Чем занимаешься? Онлайн или офлайн?"
+- "Какая главная цель на ближайший месяц?"
+Объясни ПОЧЕМУ: "Чтобы давать точные советы, мне нужно знать контекст"
+НЕ спрашивай всё разом — 1-2 вопроса за раз.""")
+    
+    if not has_goals and has_profile:
+        critical_flags.append("""🚩 ВАЖНО: Нет целей!
+Пользователь не задал цели — значит нет ориентира для советов.
+Предложи: "Давай поставим 1 главную цель на месяц? Что для тебя сейчас самое важное?"
+Используй create_goal когда он ответит.""")
+    
+    if overdue_count > 0:
+        critical_flags.append(f"""🚩 ВНИМАНИЕ: {overdue_count} просроченных задач!
+Мягко напомни. НЕ ругай. Предложи: перенести, разбить на подзадачи, или отменить если неактуально.""")
+    
+    if critical_flags:
+        parts.append("\n=== 🚩 КРАСНЫЕ ФЛАГИ (РЕАГИРУЙ ПЕРВЫМ ДЕЛОМ!) ===")
+        parts.extend(critical_flags)
+    
+    # === ДОСТУПНЫЕ ДАННЫЕ ===
     available = []
     if ctx.get('weather'):
         available.append(f"Погода: {ctx['weather']}")
@@ -1080,9 +1121,9 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
         available.append(f"Проекты: {', '.join(list(ltm_data['projects'].keys())[-3:])}")
     
     if available:
-        parts.append("\nДОСТУПНЫЕ ДАННЫЕ:\n" + "\n".join(available))
+        parts.append("\n=== ДОСТУПНЫЕ ДАННЫЕ ===\n" + "\n".join(available))
     
-    # Задачи
+    # === ЗАДАЧИ ===
     if tasks_list:
         user_tz = ctx.get('user_tz', pytz.UTC)
         now_utc = datetime.now(pytz.UTC)
@@ -1120,64 +1161,68 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
             titles = [t.get('title', 'Задача') for t in overdue_tasks_list[:5]]
         parts.append(f"\n⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ ({len(overdue_tasks_list)}):\n" + "\n".join(f"• {t}" for t in titles))
     
-    # Intent hint
+    # === INTENT ===
     if intent:
         intent_hints = {
-            'morning': "Утреннее приветствие — коротко о дне, настрой на продуктивность, упомяни что нового",
-            'evening': "Вечерний итог — признание работы за день, что дальше, мягкая забота",
-            'overdue': "Мягкое напоминание о просроченных — поддержка, конкретный первый шаг, предложение помощи",
-            'insight': "Поделись полезной находкой из новостей/данных, свяжи с интересами пользователя",
-            'trend': "Расскажи о тренде или новости, которая релевантна целям/интересам пользователя",
-            'weather': "Предложи активность исходя из погоды и планов пользователя",
-            'contact': "Предложи познакомиться с интересным партнёром из рекомендаций",
-            'productivity': "Наблюдение о продуктивности + практичный совет",
+            'morning': "Утро — подготовь ПЛАН дня. Если задач 0 → предложи конкретные. Если есть → напомни приоритетные.",
+            'evening': "Вечер — итог дня. Что сделано? Что на завтра? Конкретно, по фактам.",
+            'overdue': "Просроченные задачи — мягко, но конкретно. Что делаем: переносить, разбить, или отменить?",
+            'insight': "Полезная находка — свяжи с профилем/целями. Конкретный вывод + следующий шаг.",
+            'trend': "Тренд/новость релевантная целям — конкретика + как использовать.",
+            'weather': "Погода → конкретная активность. Связь с задачами/целями.",
+            'contact': "Интересный партнёр — конкретно кто и ЗАЧЕМ.",
+            'productivity': "Продуктивность — КОНКРЕТНОЕ наблюдение + КОНКРЕТНЫЙ совет.",
         }
         if intent in intent_hints:
             parts.append(f"\nАКЦЕНТ: {intent_hints[intent]}")
     
-    # Выбираем случайный фокус для разнообразия (если нет явного intent)
-    if not intent:
+    # Фокус ТОЛЬКО если нет критических флагов и нет intent
+    if not intent and not critical_flags:
         possible_focuses = [
-            "Инсайт по теме интересов/целей (с конкретикой из новостей/данных)",
-            "Полезное наблюдение о паттернах работы пользователя",
-            "Мотивация + конкретный следующий шаг к цели",
-            "Интересная возможность (партнёр, тренд, событие)",
-            "Совет по ситуации (погода → активность, новость → действие)",
-            "Связь текущих задач с долгосрочными целями",
-            "Идея или лайфхак по недавней теме разговора",
+            "Конкретный инсайт по теме интересов/целей пользователя",
+            "Прогресс по целям — что сделано, что дальше, конкретный шаг",
+            "Интересная возможность из новостей/трендов связанная с профилем",
+            "Практический совет из недавней темы разговора",
+            "Связь текущих задач с долгосрочными целями — что упущено",
         ]
-        # Фильтруем контекстно
         if not ctx.get('weather'):
-            possible_focuses = [f for f in possible_focuses if 'погода' not in f]
+            possible_focuses = [f for f in possible_focuses if 'погода' not in f.lower()]
         if not ctx.get('partners'):
-            possible_focuses = [f for f in possible_focuses if 'партнёр' not in f]
+            possible_focuses = [f for f in possible_focuses if 'партнёр' not in f.lower()]
         if not ctx.get('news'):
-            possible_focuses = [f for f in possible_focuses if 'новост' not in f]
+            possible_focuses = [f for f in possible_focuses if 'новост' not in f.lower()]
         
-        focus = random.choice(possible_focuses) if possible_focuses else "Дружеская поддержка и мотивация"
-        parts.append(f"\nФОКУС ЭТОГО СООБЩЕНИЯ: {focus}")
+        focus = random.choice(possible_focuses) if possible_focuses else "Конкретная помощь на основе профиля"
+        parts.append(f"\nФОКУС: {focus}")
     
-    # Активное обучение — что работает, а что нет
+    # === ВОВЛЕЧЁННОСТЬ ===
     engagement = ctx.get('proactive_engagement', {})
     if engagement.get('engaged_topics'):
         from collections import Counter
         top = Counter(engagement['engaged_topics']).most_common(3)
-        parts.append(f"\n📈 ВОВЛЕЧЁННОСТЬ: пользователь чаще реагирует на темы: {', '.join(t for t, _ in top)}")
+        parts.append(f"\n📈 ВОВЛЕЧЁННОСТЬ: пользователь реагирует на: {', '.join(t for t, _ in top)}")
     if engagement.get('ignored_count', 0) > engagement.get('total_proactive', 0) * 0.6:
-        parts.append("⚠️ Пользователь часто игнорирует проактивные сообщения — пиши только когда есть РЕАЛЬНАЯ польза")
+        parts.append("⚠️ Пользователь часто игнорирует — пиши только когда есть РЕАЛЬНАЯ конкретная польза")
     
-    # Универсальные правила
+    # === ПРАВИЛА ===
     parts.append("""
-ПРАВИЛА:
-- 2-4 предложения, живой тон как от умного друга
-- Конкретика: цифры, имена, факты из реальных данных
-- НЕ выдумывай @username, контакты, статистику
-- Закончи действием или вопросом (но не навязчиво)
-- НЕ начинай с банального «Привет!» без повода
-- НЕ перечисляй функции бота
-- НЕ пиши «я заметил/я проанализировал» — просто дай пользу
-- Упоминай ТОЛЬКО реальных людей из данных выше
-- Каждое сообщение должно быть УНИКАЛЬНЫМ и отличаться от предыдущих""")
+=== ПРАВИЛА ГЕНЕРАЦИИ ===
+ОБЯЗАТЕЛЬНО:
+- Пройди ФРЕЙМВОРК МЫШЛЕНИЯ перед ответом: Ситуация → Проблема → Анализ → Действие → Подача
+- Если есть красные флаги — они ПРИОРИТЕТ над всем остальным
+- 2-5 предложений, живой тон, конкретика
+- Каждое сообщение = минимум 1 КОНКРЕТНОЕ действие (не "могу помочь", а конкретика)
+- Если предлагаешь задачи — указывай ТОЧНОЕ ВРЕМЯ (10:00, 14:00, 17:00)
+- Привязывай к профилю/целям/интересам пользователя
+
+ЗАПРЕЩЕНО:
+- Общие фразы: "как дела", "могу помочь", "чем заняться"
+- Перечисление функций бота
+- Придумывать @username, контакты, статистику, цифры
+- Начинать с банального «Привет!» без конкретной пользы
+- Писать «я заметил/я проанализировал» — просто дай пользу
+- Предлагать ЛОКАЛЬНЫЕ мероприятия/сообщества если бизнес ОНЛАЙН
+- Повторять формулировки и темы предыдущих сообщений""")
     
     return "\n".join(parts)
 
@@ -1240,9 +1285,9 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         data = {
             "model": DEEPSEEK_MODEL,
             "messages": messages,
-            "temperature": 0.9,
-            "top_p": 0.95,
-            "max_tokens": 400
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "max_tokens": 600
         }
         
         async with aiohttp.ClientSession() as session:
