@@ -429,12 +429,9 @@ class HybridAutonomousAgent:
         messages.append({"role": "user", "content": user_message})
 
         # ГИБРИДНЫЙ ПОДХОД: AI с tools - сам решает когда нужно вызвать инструменты
-        # По умолчанию AI сам решает, но для некоторых запросов заставляем использовать инструменты
+        # Для приветствий НЕ принуждаем — AI сам решит, нужен ли инструмент
         force_tool_choice = "auto"  # По умолчанию AI сам решает
-        if any(keyword in user_message.lower() for keyword in ['привет', 'здравствуй', 'доброе утро', 'добрый день', 'добрый вечер']):
-            force_tool_choice = "required"  # Принудительно требуем tool calls для приветствий
-            logger.info(f"[HYBRID] Forcing tool usage for greeting: '{user_message}'")
-        elif any(keyword in user_message.lower() for keyword in ['что нового', 'что посоветуешь', 'расскажи новости', 'новости']):
+        if any(keyword in user_message.lower() for keyword in ['что нового', 'что посоветуешь', 'расскажи новости', 'новости']):
             force_tool_choice = "required"  # Принудительно требуем tool calls для запросов новостей
             logger.info(f"[HYBRID] Forcing tool usage for news request: '{user_message}'")
         elif any(keyword in user_message.lower() for keyword in ['задачи', 'что по задачам', 'мои задачи']):

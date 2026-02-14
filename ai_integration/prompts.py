@@ -132,5 +132,3 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
                                f"СТИЛЬ: Естественный разговор, как с другом. Конкретные советы, заботливый тон.{profile_instruction}")
 
     return prompt
-
-    return prompt

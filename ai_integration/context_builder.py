@@ -188,8 +188,11 @@ class ContextBuilder:
                 Task.status.in_(['pending', 'active', 'in_progress'])
             ).order_by(Task.reminder_time.asc()).limit(10).all()
 
+            total_tasks = 0
+            overdue, today, upcoming = [], [], []
+
             if tasks:
-                overdue, today, upcoming = [], [], []
+                total_tasks = len(tasks)
 
                 for t in tasks:
                     if t.reminder_time:
@@ -212,7 +215,6 @@ class ContextBuilder:
                     hints.append(f"🔮 ЗАВТРА: {', '.join(upcoming[:2])}")
 
                 # АНАЛИЗ ПАТТЕРНОВ ПРОДУКТИВНОСТИ
-                total_tasks = len(tasks)
                 if total_tasks > 5:
                     hints.append(f"📊 Много задач ({total_tasks}) - фокус на приоритетах")
                 elif total_tasks == 0:
@@ -239,10 +241,12 @@ class ContextBuilder:
                     hints.append(f"👔 ДОЛЖНОСТЬ: {profile.position}")
 
             # ПАРТНЕРЫ ПО ИНТЕРЕСАМ (только при полном профиле)
+            cached_partners = None
             if profile and profile.interests and profile_complete:
                 try:
                     from .handlers import get_partners_list
-                    partners = get_partners_list(user.id, session)
+                    cached_partners = get_partners_list(user.id, session)
+                    partners = cached_partners
                     if partners:
                         # Найдем общие интересы
                         common_interests = set()
@@ -323,19 +327,22 @@ class ContextBuilder:
                     hints.append("📅 СЕГОДНЯ: время действовать - начни с утренней задачи")
 
             # ПОГОДА + АКТИВНОСТИ
-            if profile and profile.city and weather_hint:
+            if profile and profile.city and weather_hint and profile.interests:
+                interests_list = [i.strip().lower() for i in profile.interests.split(',')]
                 if 'холодно' in weather_hint.lower() or 'снег' in weather_hint.lower():
-                    if any(i in ['спорт', 'прогулки'] for i in interests):
-                        hints.append("❄️ ПОГОДА: холодно - лучше室内 активности или онлайн-встречи")
+                    if any(i in ['спорт', 'прогулки'] for i in interests_list):
+                        hints.append("❄️ ПОГОДА: холодно - лучше домашние активности или онлайн-встречи")
                 elif 'жарко' in weather_hint.lower() or 'солнце' in weather_hint.lower():
-                    if any(i in ['спорт', 'прогулки'] for i in interests):
+                    if any(i in ['спорт', 'прогулки'] for i in interests_list):
                         hints.append("☀️ ПОГОДА: тепло - отличное время для outdoor активностей")
 
-            # ПАРТНЕРЫ + КОНКРЕТНЫЕ ПРЕДЛОЖЕНИЯ
+            # ПАРТНЕРЫ + КОНКРЕТНЫЕ ПРЕДЛОЖЕНИЯ (используем кэш)
             if profile and profile.interests:
                 try:
-                    from .handlers import get_partners_list
-                    partners = get_partners_list(user_id, session)
+                    partners = cached_partners
+                    if partners is None:
+                        from .handlers import get_partners_list
+                        partners = get_partners_list(user.id, session)
                     if partners:
                         # Найдем общие интересы для конкретных предложений
                         common_themes = set()

@@ -37,6 +37,19 @@ def update_user_memory(info, user_id=None):
                 existing_decrypted += "\n" + info
             else:
                 existing_decrypted = info
+            # Ограничиваем размер памяти (максимум 5000 символов)
+            if len(existing_decrypted) > 5000:
+                # Оставляем последние 4000 символов
+                lines = existing_decrypted.split('\n')
+                trimmed = []
+                total = 0
+                for line in reversed(lines):
+                    if total + len(line) + 1 > 4000:
+                        break
+                    trimmed.insert(0, line)
+                    total += len(line) + 1
+                existing_decrypted = '\n'.join(trimmed)
+                logger.info(f"[MEMORY] Trimmed memory for user {user_id} to {len(existing_decrypted)} chars")
             # Encrypt and save
             encrypted = encrypt_data(existing_decrypted)
             user.memory = encrypted

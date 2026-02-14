@@ -2962,6 +2962,141 @@ def analyze_group_opportunities(user_id, session):
     
     return None
 
+
+def show_profile(user_id=None, session=None):
+    """Показать профиль пользователя с основной информацией"""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        result = "📋 **Твой профиль:**\n\n"
+
+        # Основная информация
+        if user.username:
+            result += f"👤 Имя: @{user.username}\n"
+        if user.first_name:
+            result += f"📛 Имя: {user.first_name}\n"
+
+        if profile:
+            if profile.city:
+                result += f"🏙️ Город: {profile.city}\n"
+            if profile.company:
+                result += f"🏢 Компания: {profile.company}\n"
+            if profile.position:
+                result += f"👔 Должность: {profile.position}\n"
+            if profile.interests:
+                result += f"💡 Интересы: {profile.interests}\n"
+            if profile.skills:
+                result += f"🛠️ Навыки: {profile.skills}\n"
+            if profile.goals:
+                result += f"🎯 Цели: {profile.goals}\n"
+            if profile.birth_date:
+                result += f"🎂 Дата рождения: {profile.birth_date}\n"
+        else:
+            result += "\n⚠️ Профиль ещё не заполнен. Расскажи о себе — город, интересы, навыки, цели — и я всё запомню!"
+
+        # Подписка
+        subscription = session.query(Subscription).filter_by(user_id=user.id, status='active').first()
+        if subscription:
+            tier = subscription.tier.value if subscription.tier else 'LIGHT'
+            result += f"\n💎 Тариф: {tier}"
+        else:
+            result += f"\n💎 Тариф: LIGHT"
+
+        # Timezone
+        if user.timezone:
+            result += f"\n🕐 Часовой пояс: {user.timezone}"
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Ошибка при показе профиля пользователя {user_id}: {e}")
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def update_user_memory(memory_type=None, content=None, user_id=None, session=None):
+    """Сохраняет информацию в память/профиль пользователя.
+    
+    Для interest/skill/goal — добавляет в соответствующее поле профиля.
+    Для остальных типов — сохраняет в общую память.
+    
+    Args:
+        memory_type: Тип информации (interest, skill, goal, preference, project, contact, etc.)
+        content: Что запомнить
+        user_id: Telegram ID пользователя
+        session: SQLAlchemy session
+    """
+    if not content:
+        return "Не указано что запомнить."
+
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=user.id)
+            session.add(profile)
+
+        content = content.strip()
+
+        # Для профильных типов — добавляем в соответствующие поля
+        if memory_type in ('interest', 'interests'):
+            existing = set(i.strip().lower() for i in (profile.interests or '').split(',') if i.strip())
+            if content.lower() not in existing:
+                profile.interests = (profile.interests + ', ' + content) if profile.interests else content
+                session.commit()
+                return f"✅ Добавлен интерес: {content}"
+            return f"Интерес '{content}' уже есть в профиле."
+
+        elif memory_type in ('skill', 'skills'):
+            existing = set(s.strip().lower() for s in (profile.skills or '').split(',') if s.strip())
+            if content.lower() not in existing:
+                profile.skills = (profile.skills + ', ' + content) if profile.skills else content
+                session.commit()
+                return f"✅ Добавлен навык: {content}"
+            return f"Навык '{content}' уже есть в профиле."
+
+        elif memory_type in ('goal', 'goals'):
+            existing = set(g.strip().lower() for g in (profile.goals or '').split(',') if g.strip())
+            if content.lower() not in existing:
+                profile.goals = (profile.goals + ', ' + content) if profile.goals else content
+                session.commit()
+                return f"✅ Добавлена цель: {content}"
+            return f"Цель '{content}' уже есть в профиле."
+
+        else:
+            # Для остальных типов — сохраняем в общую память
+            from .memory import update_user_memory as _update_memory
+            return _update_memory(f"[{memory_type or 'info'}] {content}", user_id=user_id)
+
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении памяти пользователя {user_id}: {e}")
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 def find_partners(user_id=None, session=None):
     """Find potential partners based on user profile - FULL implementation here"""
     # Due to size limit, implementing key part only
@@ -4433,96 +4568,6 @@ def smart_update_profile(user_id: int, field: str, value: str, action: str = 'ad
 
     finally:
         if close_session:
-            session.close()
-
-    try:
-        # Получаем пользователя для timezone
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-
-        # Получаем ближайшие задачи (сегодня-завтра)
-        now = datetime.now(pytz.UTC)
-        
-        # Конвертируем в timezone пользователя
-        if user.timezone:
-            try:
-                user_tz = pytz.timezone(user.timezone)
-                user_now = now.astimezone(user_tz)
-                user_today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
-                user_today_end = user_today_start + timedelta(days=1)
-                user_tomorrow_end = user_today_start + timedelta(days=2)
-            except Exception as e:
-                logger.warning(f"[DASHBOARD] Timezone conversion failed: {e}")
-                user_now = now
-                user_today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                user_today_end = user_today_start + timedelta(days=1)
-                user_tomorrow_end = user_today_start + timedelta(days=2)
-        else:
-            user_now = now
-            user_today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            user_today_end = user_today_start + timedelta(days=1)
-            user_tomorrow_end = user_today_start + timedelta(days=2)
-
-        # Получаем задачи на сегодня и завтра
-        tasks_today = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status == 'pending',
-            Task.reminder_time >= user_today_start,
-            Task.reminder_time < user_today_end
-        ).order_by(Task.reminder_time).all()
-
-        tasks_tomorrow = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status == 'pending',
-            Task.reminder_time >= user_today_end,
-            Task.reminder_time < user_tomorrow_end
-        ).order_by(Task.reminder_time).all()
-
-        # Анализируем и предлагаем действия
-        analysis = []
-        
-        if tasks_today:
-            analysis.append(f"📅 Сегодня ({len(tasks_today)} задач):")
-            for task in tasks_today[:3]:  # Показываем максимум 3
-                time_str = task.reminder_time.astimezone(user_tz).strftime('%H:%M') if user.timezone else task.reminder_time.strftime('%H:%M')
-                analysis.append(f"• {time_str}: {task.title}")
-        
-        if tasks_tomorrow:
-            analysis.append(f"\n📅 Завтра ({len(tasks_tomorrow)} задач):")
-            for task in tasks_tomorrow[:2]:  # Показываем максимум 2
-                time_str = task.reminder_time.astimezone(user_tz).strftime('%H:%M') if user.timezone else task.reminder_time.strftime('%H:%M')
-                analysis.append(f"• {time_str}: {task.title}")
-
-        if not tasks_today and not tasks_tomorrow:
-            analysis.append("У тебя нет ближайших задач. Отличная возможность начать что-то новое!")
-
-        # Предлагаем немедленные действия
-        suggestions = []
-        if tasks_today:
-            next_task = tasks_today[0]
-            # Убеждаемся, что reminder_time aware
-            reminder = next_task.reminder_time if next_task.reminder_time.tzinfo else pytz.UTC.localize(next_task.reminder_time)
-            time_diff = (reminder - user_now).total_seconds() / 3600
-            if time_diff <= 2:  # Следующая задача в ближайшие 2 часа
-                suggestions.append(f"Ближайшая задача '{next_task.title}' через {int(time_diff * 60)} минут")
-            elif time_diff <= 4:  # В ближайшие 4 часа
-                suggestions.append(f"У тебя есть время подготовиться к '{next_task.title}' в {next_task.reminder_time.astimezone(user_tz).strftime('%H:%M')}")
-
-        if not tasks_today and not tasks_tomorrow:
-            suggestions.append("Предлагаю создать задачу на сегодня - например, 15-минутную прогулку или изучение новой технологии")
-
-        result = "\n".join(analysis)
-        if suggestions:
-            result += "\n\n💡 " + "\n💡 ".join(suggestions)
-
-        return result
-
-    except Exception as e:
-        logger.error(f"Ошибка при анализе задач пользователя {user_id}: {e}")
-        return "❌ Не удалось проанализировать задачи"
-    finally:
-        if should_close and session:
             session.close()
 
 def set_activity_alert(activity_type=None, keywords=None, location=None, frequency='any', enabled=True, user_id=None, session=None):
@@ -6308,215 +6353,3 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
     finally:
         if close_session:
             session.close()
-
-# ===== EXTERNAL API FUNCTIONS =====
-
-async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
-    """
-    Получить информацию о погоде для указанного города
-    """
-    if not OPENWEATHERMAP_API_KEY:
-        return "❌ Сервис погоды временно недоступен"
-
-    try:
-        # Нормализация названия города
-        city = city.strip().lower()
-
-        # Используем OpenWeatherMap API
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru"
-
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.get(url, timeout=10) as response:
-                if response.status == 200:
-                    data = await response.json()
-
-                    # Извлекаем данные
-                    temp = data['main']['temp']
-                    feels_like = data['main']['feels_like']
-                    humidity = data['main']['humidity']
-                    wind_speed = data['wind']['speed']
-                    description = data['weather'][0]['description'].capitalize()
-                    city_name = data['name']
-
-                    result = f"🌤️ **Погода в {city_name}:**\n"
-                    result += f"• Температура: {temp:.1f}°C (ощущается как {feels_like:.1f}°C)\n"
-                    result += f"• Описание: {description}\n"
-                    result += f"• Влажность: {humidity}%\n"
-                    result += f"• Ветер: {wind_speed} м/с\n"
-
-                    return result
-                else:
-                    logger.error(f"[WEATHER] API error: {response.status}")
-                    return f"❌ Не удалось получить погоду для города '{city}'"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис погоды не отвечает (таймаут)"
-    except Exception as e:
-        logger.error(f"[WEATHER] Error: {e}")
-        return f"❌ Ошибка получения погоды: {str(e)}"
-
-async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
-    """
-    Получить информацию о котировках акций
-    """
-    if not ALPHA_VANTAGE_API_KEY:
-        return "❌ Сервис котировок временно недоступен"
-
-    try:
-        # Нормализация символа
-        symbol = symbol.strip().upper()
-
-        # Используем Alpha Vantage API
-        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
-
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.get(url, timeout=10) as response:
-                if response.status == 200:
-                    data = await response.json()
-
-                    if "Global Quote" in data and data["Global Quote"]:
-                        quote = data["Global Quote"]
-
-                        symbol = quote.get("01. symbol", symbol)
-                        price = quote.get("05. price", "N/A")
-                        change = quote.get("09. change", "N/A")
-                        change_percent = quote.get("10. change percent", "N/A")
-                        volume = quote.get("06. volume", "N/A")
-                        latest_trading_day = quote.get("07. latest trading day", "N/A")
-
-                        result = f"📈 **{symbol}**\n"
-                        result += f"• Цена: ${price}\n"
-                        result += f"• Изменение: {change} ({change_percent})\n"
-                        result += f"• Объем: {volume}\n"
-                        result += f"• Дата: {latest_trading_day}\n"
-
-                        return result
-                    else:
-                        return f"❌ Акция '{symbol}' не найдена или данные недоступны"
-                else:
-                    logger.error(f"[STOCK] API error: {response.status}")
-                    return f"❌ Не удалось получить котировки для '{symbol}'"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис котировок не отвечает (таймаут)"
-    except Exception as e:
-        logger.error(f"[STOCK] Error: {e}")
-        return f"❌ Ошибка получения котировок: {str(e)}"
-
-async def get_news_info(topic: str = None, user_id: int = None, session=None) -> str:
-    """
-    Получить новости по теме или общие новости
-    """
-    if not NEWSAPI_API_KEY:
-        return "❌ Сервис новостей временно недоступен"
-
-    try:
-        # Если тема не указана, получаем общие новости
-        if not topic or topic.lower() in ['общие', 'главные', 'главное', 'новости']:
-            url = f"https://newsapi.org/v2/top-headlines?country=ru&apiKey={NEWSAPI_API_KEY}&pageSize=5"
-        else:
-            # Ищем новости по теме
-            url = f"https://newsapi.org/v2/everything?q={topic}&language=ru&sortBy=publishedAt&apiKey={NEWSAPI_API_KEY}&pageSize=5"
-
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.get(url, timeout=15) as response:
-                if response.status == 200:
-                    data = await response.json()
-
-                    if data.get("status") == "ok" and data.get("articles"):
-                        articles = data["articles"]
-
-                        if topic and topic.lower() not in ['общие', 'главные', 'главное', 'новости']:
-                            result = f"📰 **Новости по теме '{topic}':**\n\n"
-                        else:
-                            result = "📰 **Главные новости:**\n\n"
-
-                        for i, article in enumerate(articles[:5], 1):
-                            title = article.get('title', 'Без заголовка')
-                            source = article.get('source', {}).get('name', 'Неизвестный источник')
-                            url = article.get('url', '')
-                            published_at = article.get('publishedAt', '')
-
-                            # Форматируем дату
-                            if published_at:
-                                try:
-                                    dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
-                                    date_str = dt.strftime('%d.%m.%Y %H:%M')
-                                except:
-                                    date_str = published_at[:16]
-                            else:
-                                date_str = "Неизвестно"
-
-                            result += f"**{i}. {title}**\n"
-                            result += f"📅 {date_str} | 📰 {source}\n"
-                            if url:
-                                result += f"🔗 {url}\n"
-                            result += "\n"
-
-                        return result
-                    else:
-                        return f"❌ Новости по теме '{topic}' не найдены"
-                else:
-                    logger.error(f"[NEWS] API error: {response.status}")
-                    return "❌ Не удалось получить новости"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис новостей не отвечает (таймаут)"
-    except Exception as e:
-        logger.error(f"[NEWS] Error: {e}")
-        return f"❌ Ошибка получения новостей: {str(e)}"
-
-async def web_search(query: str, user_id: int = None, session=None) -> str:
-    """
-    Выполнить веб-поиск с помощью Serper API
-    """
-    if not SERPER_API_KEY:
-        return "❌ Сервис поиска временно недоступен"
-
-    try:
-        url = "https://google.serper.dev/search"
-        headers = {
-            'X-API-KEY': SERPER_API_KEY,
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            "q": query,
-            "num": 5  # Количество результатов
-        }
-
-        async with aiohttp.ClientSession() as client_session:
-            async with client_session.post(url, headers=headers, json=payload, timeout=15) as response:
-                if response.status == 200:
-                    data = await response.json()
-
-                    if "organic" in data and data["organic"]:
-                        results = data["organic"]
-
-                        result = f"🔍 **Результаты поиска по '{query}':**\n\n"
-
-                        for i, item in enumerate(results[:5], 1):
-                            title = item.get('title', 'Без заголовка')
-                            link = item.get('link', '')
-                            snippet = item.get('snippet', '')
-
-                            result += f"**{i}. {title}**\n"
-                            if snippet:
-                                # Ограничиваем длину сниппета
-                                snippet = snippet[:200] + "..." if len(snippet) > 200 else snippet
-                                result += f"{snippet}\n"
-                            if link:
-                                result += f"🔗 {link}\n"
-                            result += "\n"
-
-                        return result
-                    else:
-                        return f"❌ Результаты поиска по '{query}' не найдены"
-                else:
-                    logger.error(f"[SEARCH] API error: {response.status}")
-                    return f"❌ Не удалось выполнить поиск"
-
-    except aiohttp.ClientTimeout:
-        return "❌ Сервис поиска не отвечает (таймаут)"
-    except Exception as e:
-        logger.error(f"[SEARCH] Error: {e}")
-        return f"❌ Ошибка поиска: {str(e)}"

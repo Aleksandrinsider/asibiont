@@ -44,250 +44,6 @@ logger = logging.getLogger(__name__)
 system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
 
 
-async def _execute_proactive_tools(message, user_id, session, profile_complete=False):
-    """
-    🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызывает инструменты перед агентом
-    
-    Триггеры:
-    - Приветствие ("привет", "hello", "hi", etc.)
-    - Нет активных задач
-    - Профиль заполнен (есть интересы/навыки для поиска)
-    
-    Возвращает: dict с результатами research + contacts или None
-    """
-    try:
-        # Проверяем, это приветствие?
-        greetings = ['привет', 'приветик', 'здравствуй', 'hi', 'hello', 'hey', 'добрый день', 'добрый вечер', 'доброе утро']
-        msg_lower = message.lower().strip()
-        is_greeting = any(g in msg_lower for g in greetings) or msg_lower in greetings
-        
-        logger.info(f"[PROACTIVE_HOOK] Message: '{message}', is_greeting: {is_greeting}")
-        
-        if not is_greeting:
-            logger.info(f"[PROACTIVE_HOOK] Not a greeting, skipping")
-            return None
-            
-        logger.info(f"[PROACTIVE_HOOK] Greeting detected: '{message}'")
-        
-        # Получаем пользователя и профиль
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return None
-            
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        
-        # Проверяем задачи
-        active_tasks = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status.in_(['pending', 'active', 'in_progress'])
-        ).count()
-        
-        if active_tasks > 0:
-            logger.info(f"[PROACTIVE_HOOK] User has {active_tasks} tasks, skipping auto-tools")
-            return None
-            
-        # Проверяем, есть ли в профиле данные для поиска
-        has_interests = profile and profile.interests and len(profile.interests.strip()) > 0
-        has_skills = profile and profile.skills and len(profile.skills.strip()) > 0
-        has_goals = profile and profile.goals and len(profile.goals.strip()) > 0
-        
-        # Для приветствий выполняем инструменты только если профиль достаточно полный
-        # Нужно хотя бы интересы И (навыки ИЛИ цели)
-        profile_sufficient = has_interests and (has_skills or has_goals)
-        
-        if not profile_sufficient:
-            logger.info(f"[PROACTIVE_HOOK] Profile not sufficient (interests: {has_interests}, skills: {has_skills}, goals: {has_goals}) - executing only basic tools")
-            # Для неполного профиля выполняем только list_tasks
-            results = {'research': None, 'contacts': None}
-            
-            try:
-                from . import handlers
-                list_result = handlers.list_tasks(user_id=user_id, session=session)
-                results['tasks'] = list_result
-                logger.info(f"[PROACTIVE_HOOK] Executed list_tasks successfully")
-            except Exception as e:
-                logger.error(f"[PROACTIVE_HOOK] Failed to execute list_tasks: {e}")
-            
-            return results
-            
-        logger.info(f"[PROACTIVE_HOOK] ✅ Profile sufficient - executing research + find_partners")
-        
-        results = {
-            'research': None,
-            'contacts': None,
-            'executed': True
-        }
-        
-        # СТРАТЕГИЯ: всегда ищем актуальную информацию ПЕРЕД ответом
-        # 1. RESEARCH_TOPIC или GET_NEWS_TRENDS - для свежих данных
-        try:
-            # Берем первый интерес из профиля как тему
-            if has_interests:
-                interests_list = [i.strip() for i in profile.interests.split(',')]
-                topic = interests_list[0] if interests_list else "AI и технологии"
-            else:
-                skills_list = [s.strip() for s in profile.skills.split(',')]
-                topic = skills_list[0] if skills_list else "продуктивность"
-                
-            logger.info(f"[PROACTIVE_HOOK] Calling research_topic with: '{topic}'")
-            
-            # Вызываем research_topic для ВСЕХ тарифов (функция доступна всем)
-            research_result = await research_topic(
-                query=f"последние новости и тренды: {topic}",
-                depth="quick",  # Быстрый поиск для приветствий
-                user_id=user_id,
-                session=session
-            )
-            results['research'] = research_result
-            logger.info(f"[PROACTIVE_HOOK] ✅ research_topic completed: {research_result[:100] if isinstance(research_result, str) else 'dict'}")
-        except Exception as e:
-            logger.error(f"[PROACTIVE_HOOK] Error in research_topic: {e}")
-            # Fallback на get_news_trends
-            try:
-                logger.info(f"[PROACTIVE_HOOK] Trying get_news_trends as fallback")
-                from .handlers import get_news_trends
-                news_result = await get_news_trends(
-                    topic=topic,
-                    period="day",
-                    focus="trends",
-                    user_id=user_id,
-                    session=session
-                )
-                results['research'] = news_result
-                logger.info(f"[PROACTIVE_HOOK] ✅ get_news_trends completed")
-            except Exception as e2:
-                logger.error(f"[PROACTIVE_HOOK] get_news_trends also failed: {e2}")
-                results['research'] = None
-        
-        # 2. FIND_PARTNERS - ищем людей по интересам
-        try:
-            logger.info(f"[PROACTIVE_HOOK] Calling find_partners")
-            contacts_result = find_partners(user_id=user_id, session=session)
-            results['contacts'] = contacts_result
-            logger.info(f"[PROACTIVE_HOOK] ✅ find_partners completed")
-        except Exception as e:
-            logger.error(f"[PROACTIVE_HOOK] Error in find_partners: {e}")
-            results['contacts'] = f"Не удалось найти контакты: {str(e)}"
-        
-        # 3. ANALYZE_SITUATION - умный анализ и предложения задач
-        try:
-            logger.info(f"[PROACTIVE_HOOK] Calling analyze_situation_and_suggest_tasks")
-            situation_result = await analyze_situation_and_suggest_tasks(user_id=user_id, session=session)
-            results['situation'] = situation_result
-            logger.info(f"[PROACTIVE_HOOK] ✅ analyze_situation_and_suggest_tasks completed")
-        except Exception as e:
-            logger.error(f"[PROACTIVE_HOOK] Error in analyze_situation_and_suggest_tasks: {e}")
-            results['situation'] = f"Не удалось проанализировать ситуацию: {str(e)}"
-        
-        # 4. SMART_UPDATE_PROFILE - автоматически обновляем профиль при упоминании целей/планов
-        profile_updates = _extract_profile_updates(message, profile)
-        if profile_updates:
-            results['profile_updates'] = []
-            for update in profile_updates:
-                try:
-                    logger.info(f"[PROACTIVE_HOOK] Calling smart_update_profile: {update}")
-                    update_result = smart_update_profile(
-                        user_id=user_id,
-                        field=update['field'],
-                        value=update['value'],
-                        action=update['action'],
-                        session=session,
-                        close_session=False
-                    )
-                    results['profile_updates'].append(update_result)
-                    logger.info(f"[PROACTIVE_HOOK] ✅ smart_update_profile completed: {update}")
-                except Exception as e:
-                    logger.error(f"[PROACTIVE_HOOK] Error in smart_update_profile: {e}")
-                    results['profile_updates'].append(f"Не удалось обновить профиль: {str(e)}")
-        
-        return results
-        
-    except Exception as e:
-        logger.error(f"[PROACTIVE_HOOK] Critical error: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-
-def _extract_profile_updates(message, profile=None):
-    """
-    Автоматически извлекает обновления профиля из сообщения пользователя.
-    
-    Анализирует сообщение на предмет упоминания целей, планов, навыков и т.д.
-    Возвращает список обновлений для smart_update_profile.
-    """
-    msg_lower = message.lower().strip()
-    updates = []
-    
-    # Паттерны для распознавания обновлений профиля
-    patterns = {
-        'goals': {
-            'keywords': ['планирую', 'хочу', 'цель', 'задача', 'проект', 'разработать', 'создать', 'запустить'],
-            'action': 'add'
-        },
-        'skills': {
-            'keywords': ['умею', 'знаю', 'специализируюсь', 'работаю с', 'занимаюсь'],
-            'action': 'add'
-        },
-        'interests': {
-            'keywords': ['интересуюсь', 'нравится', 'увлекаюсь', 'люблю'],
-            'action': 'add'
-        },
-        'company': {
-            'keywords': ['работаю в', 'компания'],
-            'action': 'replace'
-        },
-        'position': {
-            'keywords': ['позиция', 'должность', 'работаю как'],
-            'action': 'replace'
-        },
-        'city': {
-            'keywords': ['живу в', 'город'],
-            'action': 'replace'
-        }
-    }
-    
-    # Анализируем сообщение на каждый тип поля
-    for field, config in patterns.items():
-        for keyword in config['keywords']:
-            if keyword in msg_lower:
-                # Извлекаем значение после ключевого слова
-                keyword_pos = msg_lower.find(keyword)
-                if keyword_pos != -1:
-                    # Берем текст после ключевого слова, но не более 100 символов
-                    value_start = keyword_pos + len(keyword)
-                    value_text = message[value_start:].strip()[:100]
-                    
-                    # Очищаем от лишних символов
-                    value_text = value_text.split('.')[0].split(',')[0].split('!')[0].strip()
-                    
-                    if value_text and len(value_text) > 2:  # Минимум 3 символа
-                        updates.append({
-                            'field': field,
-                            'value': value_text,
-                            'action': config['action']
-                        })
-                        break  # Только одно обновление на поле
-    
-    # Специальная обработка для целей - если пользователь говорит о планах
-    if 'планирую' in msg_lower or 'хочу' in msg_lower:
-        # Ищем фразы типа "планирую сделать X" или "хочу Y"
-        sentences = message.split('.')
-        for sentence in sentences:
-            sentence_lower = sentence.lower().strip()
-            if ('планирую' in sentence_lower or 'хочу' in sentence_lower) and len(sentence.strip()) > 10:
-                # Добавляем как цель
-                goal_text = sentence.strip()
-                if goal_text and not any(u['value'] == goal_text for u in updates):
-                    updates.append({
-                        'field': 'goals',
-                        'value': goal_text,
-                        'action': 'add'
-                    })
-    
-    return updates if updates else None
-
-
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
     """Функция чата с использованием tools-based подхода"""
 
@@ -359,56 +115,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             context_builder = ContextBuilder()
             proactive_context = context_builder.build_proactive_context(user_id, session, profile_complete=profile_complete)
             logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
-
-            # 🚀 УМНЫЙ PRE-EXECUTION HOOK - автоматически вызываем инструменты при приветствии
-            preexec_results = await _execute_proactive_tools(message, user_id, session, profile_complete=profile_complete)
-            
-            # Если инструменты были выполнены - добавляем результаты в контекст
-            if preexec_results and preexec_results.get('executed'):
-                logger.info(f"[PROACTIVE_HOOK] ✅ Tools executed, adding results to context")
-                
-                # Формируем контекст с уже готовыми результатами
-                preexec_context = "\n\n🤖 АВТОМАТИЧЕСКИ ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ (используй результаты в ответе):\n\n"
-                
-                if preexec_results.get('research'):
-                    preexec_context += "📚 RESEARCH_TOPIC - актуальная информация найдена:\n"
-                    research_text = str(preexec_results['research'])[:800]  # Ограничиваем
-                    preexec_context += research_text + "\n\n"
-                
-                if preexec_results.get('contacts'):
-                    preexec_context += "🤝 FIND_PARTNERS - релевантные контакты найдены:\n"
-                    contacts_text = str(preexec_results['contacts'])[:600]  # Ограничиваем
-                    preexec_context += contacts_text + "\n\n"
-                
-                if preexec_results.get('situation'):
-                    preexec_context += "🧠 ANALYZE_SITUATION - анализ ситуации:\n"
-                    situation_text = str(preexec_results['situation'])[:500]
-                    preexec_context += situation_text + "\n\n"
-                
-                if preexec_results.get('profile_updates'):
-                    preexec_context += "👤 ПРОФИЛЬ ОБНОВЛЕН:\n"
-                    for update in preexec_results['profile_updates']:
-                        preexec_context += f"• {update}\n"
-                    preexec_context += "\n"
-                
-                preexec_context += "❗ ВАЖНО: Не вызывай эти инструменты снова! Используй УЖЕ ГОТОВЫЕ результаты!\n"
-                preexec_context += "❗ ВЫБЕРИ НАИБОЛЕЕ РЕЛЕВАНТНЫЙ тип ответа на основе найденных данных и ситуации:\n"
-                preexec_context += "   - Если research нашел интересное → дай инсайт с применением\n"
-                preexec_context += "   - Если есть релевантные contacts → предложи коллаборацию\n"
-                preexec_context += "   - Если непонятна ситуация → задай уточняющий вопрос\n"
-                preexec_context += "   - Если видишь задачу/проблему → дай практический совет\n"
-                preexec_context += "❗ ФОРМАТ: Приветствие + ОДИН конкретный инсайт (2-3 предложения, обычный текст, без списков)\n\n"
-                
-                # Ограничиваем длину preexec_context
-                max_preexec_length = 1500
-                if len(preexec_context) > max_preexec_length:
-                    preexec_context = preexec_context[:max_preexec_length] + "...\n[Контекст усечен]"
-                
-                # Добавляем к проактивному контексту
-                proactive_context = proactive_context + preexec_context
-                logger.info(f"[PROACTIVE_HOOK] Updated context length: {len(proactive_context)}")
-            else:
-                logger.info(f"[PROACTIVE_HOOK] No tools executed (not a greeting or conditions not met)")
 
             # Получаем погоду и новости для контекста
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -680,7 +386,7 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             
             2: """Сгенерируй НАСТОЙЧИВОЕ повторное напоминание о задаче: '{task_title}'.
 
-⚠️ ЭТО ПОВТОРНОЕ НАПОМИНАНИЕ - прошло 15 минут с первого
+ВНИМАНИЕ: ЭТО ПОВТОРНОЕ НАПОМИНАНИЕ - прошло 15 минут с первого
 
 ВРЕМЯ СУТОК: {time_context}
 
@@ -699,7 +405,7 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             
             3: """Сгенерируй КРИТИЧНОЕ напоминание о задаче: '{task_title}'.
 
-🚨 КРИТИЧЕСКОЕ НАПОМИНАНИЕ - задача требует срочного внимания
+КРИТИЧЕСКОЕ НАПОМИНАНИЕ - задача требует срочного внимания
 
 ВРЕМЯ СУТОК: {time_context}
 
@@ -1017,7 +723,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 
                     if empty_fields:
                         fields_list = ', '.join(empty_fields[:3])
-                        user_memory += f"\n⚠️ НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво). НЕ ПОВТОРЯЙ вопросы, которые уже задавал в последних сообщениях!"
+                        user_memory += f"\nВНИМАНИЕ: НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво). НЕ ПОВТОРЯЙ вопросы, которые уже задавал в последних сообщениях!"
 
                 # Добавляем информацию о задачах
                 tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
@@ -1123,7 +829,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         # Добавляем последние ответы для избегания повторов
         if last_responses:
             responses_text = "\n".join([f"- {resp}" for resp in last_responses])
-            system_prompt += f"\n\n⚠️ ЗАПРЕЩЕНО ПОВТОРЯТЬ ЭТИ ФРАЗЫ (твои последние ответы):\n{responses_text}\n\nГенерируй НОВЫЙ уникальный ответ!"
+            system_prompt += f"\n\nВНИМАНИЕ: ЗАПРЕЩЕНО ПОВТОРЯТЬ ЭТИ ФРАЗЫ (твои последние ответы):\n{responses_text}\n\nГенерируй НОВЫЙ уникальный ответ!"
         
         logger.info("[PROACTIVE] Using extended prompt system")
 
@@ -1169,11 +875,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                 """Сгенерируй мотивирующее проактивное сообщение - у пользователя нет задач, самое время для планирования!
 
 ИСПОЛЬЗУЙ ВСЕ ДОСТУПНЫЕ ДАННЫЕ:
-- Цели и интересы из профиля → предложи конкретные шаги к их достижению
-- Навыки → идеи для их развития/применения
-- Рекомендации партнеров → возможность познакомиться с людьми, у кого схожие интересы
-- Погода/новости → свяжи с планами (например, хорошая погода → встреча, плохая → удаленка)
-- Город/компания → локальные возможности
+- Цели и интересы из профиля: предложи конкретные шаги к их достижению
+- Навыки: идеи для их развития/применения
+- Рекомендации партнеров: возможность познакомиться с людьми, у кого схожие интересы
+- Погода/новости: свяжи с планами (например, хорошая погода -> встреча, плохая -> удаленка)
+- Город/компания: локальные возможности
 
 СТИЛЬ:
 - Теплый, поддерживающий тон (как приятель, а не робот)
@@ -1213,9 +919,9 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 
 ИНТЕГРИРУЙ РЕАЛЬНЫЙ КОНТЕКСТ:
 - Задачи пользователя (анализируй их содержание)
-- Цели и интересы → возможности для роста
-- Навыки → как их применить эффективнее
-- Партнеры (если есть) → кто может помочь с задачами или целями
+- Цели и интересы: возможности для роста
+- Навыки: как их применить эффективнее
+- Партнеры (если есть): кто может помочь с задачами или целями
 - Текущая обстановка (погода, новости, время суток)
 
 АКЦЕНТЫ:
@@ -1256,13 +962,13 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                 f"""Сгенерируй деликатное сообщение для пользователя с высокой загрузкой ({task_count} задач).
 
 ИСПОЛЬЗУЙ КОНТЕКСТ:
-- Задачи → определи, что можно делегировать/автоматизировать
-- Рекомендации партнеров → конкретные люди, которые могут помочь
-- Premium возможности → automation insights
-- Навыки → что делать самому, что можно поручить
+- Задачи: определи, что можно делегировать/автоматизировать
+- Рекомендации партнеров: конкретные люди, которые могут помочь
+- Premium возможности: automation insights
+- Навыки: что делать самому, что можно поручить
 
 ФОКУС:
-- Забота о пользователе (многозадачность → burnout)
+- Забота о пользователе (многозадачность -> burnout)
 - Предложение конкретной разгрузки (делегирование партнерам, автоматизация)
 - Напоминание: эффективность > количество
 - Может, стоит обсудить приоритеты?
@@ -1299,9 +1005,9 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                 f"""Напиши мягкое напоминание о {overdue_count} просроченных задачах с планом действий.
 
 ИСПОЛЬЗУЙ ДАННЫЕ:
-- Просроченные задачи → какие критичнее?
-- Профиль → цели, приоритеты пользователя
-- Партнеры → кто может взять часть нагрузки?
+- Просроченные задачи: какие критичнее?
+- Профиль: цели, приоритеты пользователя
+- Партнеры: кто может взять часть нагрузки?
 - Контекст дня
 
 ПОДХОД:
@@ -1319,34 +1025,34 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 
 ЭТО КЛЮЧЕВОЙ КОНТЕКСТ - ИСПОЛЬЗУЙ ВСЁ РЕЛЕВАНТНОЕ:
 
-🎯 ПРОФИЛЬ:
+ПРОФИЛЬ:
 - Интересы, цели, навыки
 - Город, компания, должность, языки
 - Что важно для пользователя?
 
-👥 РЕКОМЕНДАЦИИ ПАРТНЕРОВ (если есть):
+РЕКОМЕНДАЦИИ ПАРТНЕРОВ (если есть):
 - Конкретные люди для знакомства
 - Общие интересы, возможности коллабораций
 - ВАЖНО: Это мощный инструмент для нетворкинга!
 
-🔥 PREMIUM AUTOMATION (если есть):
+PREMIUM AUTOMATION (если есть):
 - Найденные автоматически партнеры
 - Activity/Contact alerts
 - Инсайты для оптимизации
 
-🌤️ ПОГОДА + 📰 НОВОСТИ (если есть):
+ПОГОДА + НОВОСТИ (если есть):
 - Свяжи с планами пользователя
 - Актуальный контекст дня
 
-📋 ЗАДАЧИ (если есть):
+ЗАДАЧИ (если есть):
 - Текущие активности
 - Возможности для развития
 
 ЦЕЛЬ СООБЩЕНИЯ:
-✅ РЕАБИЛИТИРОВАТЬ пользователя к действиям и общению
-✅ Мотивировать к конкретным шагам (задачи ИЛИ нетворкинг)
-✅ Предложить РЕАЛЬНЫЕ возможности (из данных!)
-✅ Вовлечь в диалог
+- РЕАБИЛИТИРОВАТЬ пользователя к действиям и общению
+- Мотивировать к конкретным шагам (задачи ИЛИ нетворкинг)
+- Предложить РЕАЛЬНЫЕ возможности (из данных!)
+- Вовлечь в диалог
 
 ФОРМАТ:
 - Естественный, дружеский тон (как сообщение от знакомого, а не бота)
@@ -1357,11 +1063,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 - Вопрос для вовлечения
 
 КРИТИЧЕСКИ ВАЖНО:
-❌ НЕ ВЫДУМЫВАЙ информацию, которой нет!
-✅ Если есть партнеры - ОБЯЗАТЕЛЬНО упомяни релевантного (@username)
-✅ Если есть погода/новости - используй для контекста
-✅ Фокус на новых знакомствах и полезных связях (это помогает расти!)
-✅ Баланс между задачами и нетворкингом""",
+- НЕ ВЫДУМЫВАЙ информацию, которой нет!
+- Если есть партнеры - ОБЯЗАТЕЛЬНО упомяни релевантного (@username)
+- Если есть погода/новости - используй для контекста
+- Фокус на новых знакомствах и полезных связях (это помогает расти!)
+- Баланс между задачами и нетворкингом""",
                 
                 """Сгенерируй персонализированное проактивное сообщение.
 
@@ -1399,7 +1105,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 
 ДАННЫЕ ПОЛЬЗОВАТЕЛЯ:
 - Что важно для него? (цели, интересы, навыки)
-- Где он находится? (город → локальные возможности)
+- Где он находится? (город: локальные возможности)
 - Чем занимается? (компания, должность)
 
 ВОЗМОЖНОСТИ ДЛЯ РОСТА:
@@ -1426,7 +1132,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 - 3-5 предложений
 - Упоминание 2-3 реальных элементов контекста
 - ОБЯЗАТЕЛЬНО: actionable предложение (что сделать?)
-- Если есть партнеры → предложи познакомиться/обсудить идеи
+- Если есть партнеры: предложи познакомиться/обсудить идеи
 - Вопрос для старта диалога"""
             ]
         }
@@ -1889,207 +1595,6 @@ def validate_response_compliance(content, msg_type):
             issues.append("No completion confirmation")
     
     return len(issues) == 0, issues
-
-
-async def call_ai_with_tools(user_message, system_prompt, user_id, context=None):
-    """Вызов AI с инструментами для обработки запроса"""
-
-    try:
-        # Создаем сообщение для AI
-        messages = [
-            {"role": "system", "content": system_prompt},
-        ]
-
-        # Добавляем контекст разговора
-        if context:
-            for msg in context[-5:]:  # Последние 5 сообщений
-                if msg.get('user'):
-                    messages.append({"role": "user", "content": msg['user']})
-                if msg.get('agent'):
-                    messages.append({"role": "assistant", "content": msg['agent']})
-
-        # Добавляем текущее сообщение пользователя
-        messages.append({"role": "user", "content": user_message})
-
-        # Вызываем AI API
-        async with aiohttp.ClientSession() as session:
-            payload = {
-                "model": DEEPSEEK_MODEL,
-                "messages": messages,
-                "tools": TOOLS,
-                "tool_choice": "auto",
-                "temperature": 0.7,
-                "max_tokens": 1000
-            }
-
-            headers = {
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                "Content-Type": "application/json"
-            }
-
-            logger.info(f"[AI_CALL] Sending request to {DEEPSEEK_MODEL}")
-
-            async with session.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info(f"[AI_CALL] Response received, choices: {len(data.get('choices', []))}")
-
-                    choice = data['choices'][0]
-                    message = choice['message']
-
-                    # Проверяем, есть ли tool calls
-                    tool_calls = message.get('tool_calls', [])
-                    response_text = message.get('content', '')
-
-                    # Если есть tool calls, выполняем их
-                    if tool_calls:
-                        logger.info(f"[AI_CALL] Executing {len(tool_calls)} tool calls")
-                        tool_results = []
-
-                        for tool_call in tool_calls:
-                            try:
-                                function_name = tool_call['function']['name']
-                                function_args = json.loads(tool_call['function']['arguments'])
-
-                                logger.info(f"[TOOL_CALL] {function_name} with args: {function_args}")
-
-                                # Выполняем функцию
-                                if function_name == 'add_task':
-                                    result = await add_task(
-                                        user_id=user_id,
-                                        title=function_args.get('title'),
-                                        description=function_args.get('description', ''),
-                                        reminder_time=function_args.get('reminder_time'),
-                                        is_recurring=function_args.get('is_recurring', False),
-                                        recurrence_pattern=function_args.get('recurrence_pattern'),
-                                        recurrence_interval=function_args.get('recurrence_interval')
-                                    )
-                                elif function_name == 'complete_task':
-                                    result = await complete_task(user_id=user_id, task_title=function_args.get('task_title'))
-                                elif function_name == 'list_tasks':
-                                    result = list_tasks(user_id=user_id)
-                                elif function_name == 'reschedule_task':
-                                    result = await reschedule_task(
-                                        user_id=user_id,
-                                        task_title=function_args.get('task_title'),
-                                        new_time=function_args.get('new_time')
-                                    )
-                                elif function_name == 'find_relevant_contacts_for_task':
-                                    result = find_relevant_contacts_for_task(
-                                        user_id=user_id,
-                                        task_description=function_args.get('task_description'),
-                                        limit=function_args.get('limit', 5)
-                                    )
-                                elif function_name == 'find_partners':
-                                    result = find_partners(user_id=user_id)
-                                elif function_name == 'update_profile':
-                                    result = update_profile(user_id=user_id, **function_args)
-                                elif function_name == 'analyze_tasks':
-                                    result = await analyze_tasks(user_id=user_id)
-                                elif function_name == 'analyze_situation_and_suggest_tasks':
-                                    result = await analyze_situation_and_suggest_tasks(user_id=user_id)
-                                else:
-                                    result = f"Функция {function_name} не поддерживается"
-
-                                tool_results.append({
-                                    'tool_call_id': tool_call.get('id'),
-                                    'name': function_name,
-                                    'content': str(result)
-                                })
-
-                            except Exception as e:
-                                logger.error(f"[TOOL_CALL] Error executing {function_name}: {e}")
-                                tool_results.append({
-                                    'tool_call_id': tool_call.get('id'),
-                                    'name': function_name,
-                                    'content': f"Ошибка: {e}"
-                                })
-
-                        # Отправляем результаты инструментов обратно в AI для формирования ответа
-                        # Добавляем результаты как контекст для AI
-                        tool_results_text = "\n\n".join([
-                            f"Результат {tr['name']}:\n{tr['content']}"
-                            for tr in tool_results
-                        ])
-                        
-                        # Добавляем результаты как системное сообщение для контекста
-                        messages.append({
-                            "role": "user",
-                            "content": f"""Результаты выполнения инструментов:
-
-{tool_results_text}
-
-Теперь сформулируй человечный и понятный ответ пользователю, используя эти результаты. 
-Если контактов не найдено - объясни почему и что делать дальше.
-Если найдены - покажи их и расскажи как с ними связаться.
-Отвечай кратко и по делу."""
-                        })
-                        
-                        # Второй запрос к AI для формирования итогового ответа
-                        payload_second = {
-                            "model": DEEPSEEK_MODEL,
-                            "messages": messages,
-                            "temperature": 0.7,
-                            "max_tokens": 500
-                        }
-                        
-                        logger.info(f"[AI_CALL] Sending tool results back to AI for final response")
-                        
-                        async with session.post(
-                            "https://api.deepseek.com/v1/chat/completions",
-                            json=payload_second,
-                            headers=headers,
-                            timeout=aiohttp.ClientTimeout(total=30)
-                        ) as response_second:
-                            if response_second.status == 200:
-                                data_second = await response_second.json()
-                                final_response = data_second['choices'][0]['message'].get('content', '')
-                                
-                                if not final_response:
-                                    # Fallback если AI не вернул текст
-                                    final_response = "Выполнено: " + "; ".join([tr['content'] for tr in tool_results])
-                            else:
-                                # Fallback при ошибке второго запроса
-                                final_response = "Выполнено: " + "; ".join([tr['content'] for tr in tool_results])
-
-                    else:
-                        # Нет tool calls, возвращаем текстовый ответ
-                        final_response = response_text or "Извините, я не понял запрос"
-
-                    # Проверяем соответствие промпту только для ответов БЕЗ tool calls
-                    # Ответы после tool calls могут быть длиннее и не требуют валидации
-                    if not tool_calls:
-                        is_compliant, issues = validate_response_compliance(final_response, "response")
-                        if not is_compliant:
-                            logger.warning(f"[RESPONSE] Non-compliant response: {issues}")
-                            final_response = "Извините, произошла ошибка при формировании ответа. Попробуйте переформулировать запрос."
-
-                    return {
-                        'response': final_response,
-                        'tool_calls': tool_calls
-                    }
-
-                else:
-                    error_text = await response.text()
-                    logger.error(f"[AI_CALL] API error {response.status}: {error_text}")
-                    return {
-                        'response': "Извините, произошла ошибка при обращении к AI. Попробуйте позже.",
-                        'tool_calls': []
-                    }
-
-    except Exception as e:
-        logger.error(f"[AI_CALL] Exception: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'response': f"Извините, произошла техническая ошибка: {str(e)}",
-            'tool_calls': []
-        }
 
 
 # Функции для работы с задачами
