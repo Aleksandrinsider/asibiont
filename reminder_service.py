@@ -635,7 +635,7 @@ class ReminderService:
                 
                 # Запланировать начальную проактивную проверку
                 import asyncio
-                asyncio.create_task(self._reschedule_proactive_check(user.telegram_id, task_count > 0, task_count))
+                asyncio.create_task(self._reschedule_proactive_check(user.telegram_id, task_count))
         finally:
             db.close()
 
