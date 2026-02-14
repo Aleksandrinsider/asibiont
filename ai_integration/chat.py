@@ -115,8 +115,7 @@ async def _execute_proactive_tools(message, user_id, session, profile_complete=F
         results = {
             'research': None,
             'contacts': None,
-            'executed': True,
-            'day_of_week': datetime.now().strftime('%A')  # Monday, Tuesday, etc.
+            'executed': True
         }
         
         # СТРАТЕГИЯ: всегда ищем актуальную информацию ПЕРЕД ответом
@@ -369,19 +368,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[PROACTIVE_HOOK] ✅ Tools executed, adding results to context")
                 
                 # Формируем контекст с уже готовыми результатами
-                day_of_week = preexec_results.get('day_of_week', datetime.now().strftime('%A'))
-                weekday_ru = {
-                    'Monday': 'понедельник',
-                    'Tuesday': 'вторник', 
-                    'Wednesday': 'среда',
-                    'Thursday': 'четверг',
-                    'Friday': 'пятница',
-                    'Saturday': 'суббота',
-                    'Sunday': 'воскресенье'
-                }.get(day_of_week, day_of_week)
-                
-                preexec_context = f"\n\n🎯 ДЕНЬ НЕДЕЛИ: {weekday_ru} - выбери соответствующий тип ответа (тренды/контакты/анализ по ротации)\n\n"
-                preexec_context += "🤖 АВТОМАТИЧЕСКИ ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ (используй результаты в ответе):\n\n"
+                preexec_context = "\n\n🤖 АВТОМАТИЧЕСКИ ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ (используй результаты в ответе):\n\n"
                 
                 if preexec_results.get('research'):
                     preexec_context += "📚 RESEARCH_TOPIC - актуальная информация найдена:\n"
@@ -405,8 +392,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     preexec_context += "\n"
                 
                 preexec_context += "❗ ВАЖНО: Не вызывай эти инструменты снова! Используй УЖЕ ГОТОВЫЕ результаты!\n"
-                preexec_context += "❗ ФОРМАТ ОТВЕТА: Приветствие + ОДИН конкретный инсайт на основе найденных данных (2-3 предложения, обычный текст, без списков)\n"
-                preexec_context += f"❗ ТИП ОТВЕТА на сегодня ({weekday_ru}): следуй ротации из промпта\n\n"
+                preexec_context += "❗ ВЫБЕРИ НАИБОЛЕЕ РЕЛЕВАНТНЫЙ тип ответа на основе найденных данных и ситуации:\n"
+                preexec_context += "   - Если research нашел интересное → дай инсайт с применением\n"
+                preexec_context += "   - Если есть релевантные contacts → предложи коллаборацию\n"
+                preexec_context += "   - Если непонятна ситуация → задай уточняющий вопрос\n"
+                preexec_context += "   - Если видишь задачу/проблему → дай практический совет\n"
+                preexec_context += "❗ ФОРМАТ: Приветствие + ОДИН конкретный инсайт (2-3 предложения, обычный текст, без списков)\n\n"
                 
                 # Ограничиваем длину preexec_context
                 max_preexec_length = 1500
