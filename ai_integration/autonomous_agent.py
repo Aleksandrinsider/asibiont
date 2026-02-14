@@ -57,8 +57,12 @@ class HybridAutonomousAgent:
 
     # _generate_proactive_context удалён — весь проактивный контекст генерируется в context_builder.build_proactive_context()
 
-    async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, subscription_tier=None, tool_choice=None, **kwargs):
-        """Универсальный вызов AI API с опциональными tools"""
+    async def call_ai(self, messages, use_tools=False, save_history=False, user_id=None, subscription_tier=None, tool_choice=None, exclude_tools=None, **kwargs):
+        """Универсальный вызов AI API с опциональными tools
+        
+        Args:
+            exclude_tools: set of tool names to exclude (for preventing duplicates in reflect)
+        """
         
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
@@ -77,6 +81,10 @@ class HybridAutonomousAgent:
         # Добавляем tools если нужно (HYBRID APPROACH)
         if use_tools:
             available_tools = get_available_tools(subscription_tier)
+            # Фильтруем уже вызванные tools чтобы предотвратить дубликаты
+            if exclude_tools:
+                available_tools = [t for t in available_tools if t['function']['name'] not in exclude_tools]
+                logger.info(f"[HYBRID] Excluded {len(exclude_tools)} already-executed tools: {exclude_tools}")
             data["tools"] = available_tools
             # Используем переданный tool_choice или по умолчанию "auto"
             data["tool_choice"] = tool_choice if tool_choice is not None else "auto"
@@ -701,19 +709,26 @@ class HybridAutonomousAgent:
             {"role": "user", "content": user_message}
         ]
 
-        # Если plan-фаза УЖЕ выполнила действия — НЕ даём tools в reflect
-        # (предотвращает дубликаты: add_task x2, list_tasks x2 и т.д.)
-        # Если plan НЕ выполнил действий — даём tools как fallback
-        # (для случаев когда plan_strategy AI не вызвал tools, но reflect может)
-        has_executed_actions = len(execution_results) > 0 and any(r.get('success') for r in execution_results)
-        allow_tools_in_reflect = not has_executed_actions
+        # TOOL CHAINING: вместо полной блокировки tools в reflect,
+        # исключаем только УЖЕ вызванные tools (предотвращает дубликаты: add_task x2)
+        # но разрешаем КОМПЛЕМЕНТАРНЫЕ tools (add_task → find_relevant_contacts_for_task)
+        executed_tool_names = set()
+        for r in execution_results:
+            if r.get('success'):
+                executed_tool_names.add(r['tool'])
         
-        if has_executed_actions:
-            logger.info(f"[REFLECT] Plan already executed {len(execution_results)} actions — tools disabled in reflect")
+        if executed_tool_names:
+            logger.info(f"[REFLECT] Plan executed tools: {executed_tool_names} — excluding from reflect, allowing complementary tools")
         else:
-            logger.info(f"[REFLECT] No actions from plan — tools enabled as fallback")
+            logger.info(f"[REFLECT] No actions from plan — all tools enabled as fallback")
         
-        response = await self.call_ai(messages, use_tools=allow_tools_in_reflect, subscription_tier=subscription_tier, temperature=0.7)
+        response = await self.call_ai(
+            messages, 
+            use_tools=True, 
+            subscription_tier=subscription_tier, 
+            temperature=0.7,
+            exclude_tools=executed_tool_names if executed_tool_names else None
+        )
         
         if not response or 'choices' not in response or not response['choices']:
             logger.error(f"[AGENT] Invalid AI response structure: {response}")
@@ -1001,20 +1016,25 @@ class HybridAutonomousAgent:
             logger.info(f"[AGENT] Assistant response saved to history")
             
             # Сохраняем ключевую информацию в долгосрочную память (user.memory)
+            # ТОЛЬКО значимые факты — НЕ CRUD-операции с задачами (задачи уже в БД)
             try:
                 from .memory import update_user_memory
                 memory_facts = []
                 for r in execution_results:
                     if r.get('success') and r.get('tool') in (
-                        'add_task', 'complete_task', 'edit_task', 'delete_task',
-                        'update_profile', 'create_goal', 'update_goal_progress',
-                        'delegate_task', 'set_contact_alert', 'set_content_strategy'
+                        'create_goal', 'update_goal_progress',
+                        'set_content_strategy', 'set_contact_alert',
+                        'research_topic', 'get_news_trends'
                     ):
-                        result_str = str(r.get('result', ''))[:150]
-                        memory_facts.append(f"{r['tool']}: {result_str}")
+                        # Для research/news — сохраняем краткую суть (что искал)
+                        if r['tool'] in ('research_topic', 'get_news_trends'):
+                            memory_facts.append(f"Искал: {r.get('reason', '')[:100]}")
+                        else:
+                            result_str = str(r.get('result', ''))[:150]
+                            memory_facts.append(f"{r['tool']}: {result_str}")
                 if memory_facts:
                     update_user_memory("\n".join(memory_facts), user_id=user_id)
-                    logger.info(f"[AGENT] Saved {len(memory_facts)} facts to user memory")
+                    logger.info(f"[AGENT] Saved {len(memory_facts)} meaningful facts to memory")
             except Exception as mem_err:
                 logger.warning(f"[AGENT] Failed to save memory: {mem_err}")
             

@@ -9,7 +9,7 @@ from models import Session, User
 
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_MESSAGES = 10  # Keep last 10 messages (5 exchanges)
+MAX_HISTORY_MESSAGES = 16  # Keep last 16 messages (8 exchanges)
 
 
 def save_message_to_history(user_id, role, content, session=None):
@@ -48,9 +48,11 @@ def save_message_to_history(user_id, role, content, session=None):
                 history = []
         
         # Add new message
+        # Ассистент пишет длиннее — даём больше места для контекста
+        max_len = 2000 if role == 'assistant' else 1200
         message = {
             "role": role,
-            "content": content[:1000],  # Limit content length
+            "content": content[:max_len],
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         history.append(message)
