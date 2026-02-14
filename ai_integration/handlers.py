@@ -452,6 +452,9 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             import traceback
             traceback.print_exc()
             session.rollback()
+            if close_session:
+                session.close()
+            return f"❌ Ошибка обработки времени '{reminder_time}': {e}. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
         if due_date:
             try:
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
@@ -700,10 +703,18 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         
         # Если task_title не указан, завершаем последнюю активную задачу
         elif not task_title or not task_title.strip():
-            logger.info("[COMPLETE_TASK] No task_title provided, completing the most recent active task")
+            logger.info("[COMPLETE_TASK] No task_title provided, completing the nearest active task")
             
-            # Найти последнюю активную задачу пользователя
-            recent_task = session.query(Task).filter(
+            # Найти ближайшую по времени активную задачу пользователя
+            from datetime import datetime as dt_import
+            nearest_task = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status != "completed",
+                Task.reminder_time != None
+            ).order_by(Task.reminder_time.asc()).first()
+            
+            # Fallback на последнюю созданную если нет задач с временем
+            recent_task = nearest_task or session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status != "completed"
             ).order_by(Task.created_at.desc()).first()

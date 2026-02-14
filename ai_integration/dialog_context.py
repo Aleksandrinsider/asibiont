@@ -17,7 +17,7 @@ class DialogContext:
         self.last_action: Optional[str] = None
         self.last_result: Optional[str] = None
         self.last_update: Optional[datetime] = None
-        self.context_timeout = timedelta(minutes=5)  # Контекст живет 5 минут
+        self.context_timeout = timedelta(minutes=15)  # Контекст живет 15 минут
     
     def is_valid(self) -> bool:
         """Проверяет актуален ли контекст"""

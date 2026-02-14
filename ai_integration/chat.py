@@ -295,36 +295,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 subscription_tier=getattr(user, 'subscription_tier', 'LIGHT')
             )
             
-            # ПОСТ-ОБРАБОТКА: УСИЛИВАЕМ ПРОАКТИВНЫЙ ЯЗЫК
+            # ПОСТ-ОБРАБОТКА: минимальная очистка (агент сам формирует проактивный язык через промпт)
             if response_data and 'response' in response_data:
-                original_response = response_data['response']
-                
-                # Заменяем слабые фразы на сильные
-                replacements = {
-                    'могу найти': 'нашел',
-                    'могу предложить': 'предлагаю',
-                    'могу рассказать': 'расскажу',
-                    'могу подобрать': 'подобрал',
-                    'могу показать': 'показываю',
-                    'хочешь?': 'давай?',
-                    'интересует?': 'давай',
-                    'что интереснее?': 'выбери',
-                    'может, хочешь': 'давай'
-                }
-                
-                strengthened_response = original_response
-                for weak, strong in replacements.items():
-                    strengthened_response = strengthened_response.replace(weak, strong)
-                
-                # Добавляем проактивные фразы если их нет
-                if 'нашел' not in strengthened_response.lower() and 'research_topic' in str(response_data.get('tool_calls', [])):
-                    strengthened_response += " Нашел интересную информацию по теме."
-                
-                if 'вот' not in strengthened_response.lower() and 'find_partners' in str(response_data.get('tool_calls', [])):
-                    strengthened_response += " Вот контакты единомышленников."
-                
-                response_data['response'] = strengthened_response
-                logger.info(f"[POST_PROCESS] Strengthened response: {len(strengthened_response)} chars")
+                logger.info(f"[POST_PROCESS] Response length: {len(response_data['response'])} chars")
             
             # Отмечаем что Premium рекомендации были показаны (если были в промпте)
             if proactive_context and "ПРЕМИУМ РЕКОМЕНДАЦИИ" in proactive_context:
