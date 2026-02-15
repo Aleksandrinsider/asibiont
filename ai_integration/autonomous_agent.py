@@ -404,6 +404,14 @@ class HybridAutonomousAgent:
             # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
             from .cognitive import CognitiveEngine
             cognitive_hints = CognitiveEngine.build_cognitive_hints(user_message)
+            
+            # Планирование стратегии ответа
+            profile_data = ctx.get('profile', {})
+            tasks_data = ctx.get('tasks', [])
+            strategy = CognitiveEngine.plan_response_strategy(user_message, profile_data, tasks_data)
+            if strategy:
+                cognitive_hints += f"\n\n[СТРАТЕГИЯ ОТВЕТА]\nПриоритет: {strategy['priority']}\nТон: {strategy['tone']}\nДействие: {strategy['action']}\nПочему: {strategy['why']}"
+            
             if cognitive_hints:
                 base_prompt += cognitive_hints
 
@@ -559,6 +567,9 @@ class HybridAutonomousAgent:
         final, issues = CognitiveEngine.validate_response(final, user_message)
         if issues:
             logger.info(f"[COGNITIVE] Response fixed: {issues}")
+
+        # Рефлексия для обучения
+        CognitiveEngine.reflect_on_response(user_message, final, all_execution_results)
 
         self._save_and_learn(user_message, user_id, execution_results, final)
         return final

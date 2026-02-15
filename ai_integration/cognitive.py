@@ -116,40 +116,39 @@ class CognitiveEngine:
 
     @staticmethod
     def build_cognitive_hints(user_message):
-        """Строит когнитивный контекст для инъекции в системный промпт.
+        """Строит глубокий когнитивный анализ для инъекции в системный промпт.
         
-        Даёт агенту «подсказку» как реагировать, основываясь на
-        эмоции и намерении пользователя.
+        Добавляет внутренний монолог: эмоции, намерение, стратегия ответа.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
 
         hints = []
 
-        # Эмоциональная подсказка
+        # Эмоциональный анализ
         if emotion != 'neutral' and emotion in CognitiveEngine.EMOTIONS:
-            hints.append(f"⚡ {CognitiveEngine.EMOTIONS[emotion][1]}")
+            hints.append(f"⚡ ЭМОЦИЯ: {CognitiveEngine.EMOTIONS[emotion][1]}")
 
-        # Подсказка по намерению
+        # Анализ намерения
         intent_hints = {
-            'greeting': '🎯 Приветствие → будь проактивным, дай ценность '
-                        '(research/trends по интересам), не спрашивай «чем помочь».',
-            'farewell': '🎯 Прощание → кратко, тепло (2 предложения max). '
-                        'Напомни про завтрашние планы если есть.',
-            'emotional_sharing': '🎯 Делится эмоциями → ЭМПАТИЯ ПЕРВАЯ. '
-                                 'Потом один вопрос. Без советов, без задач.',
-            'advice_seeking': '🎯 Просит совет → дай СВОЁ мнение с аргументами. '
-                              'Не «зависит от», а «я бы на твоём месте...».',
-            'information_request': '🎯 Информационный запрос → используй '
-                                   'research_topic для экспертного ответа с данными.',
+            'greeting': '🎯 ПРИВЕТСТВИЕ: Профиль пустой? → Заполнить. Задач нет? → Проактивность с research.',
+            'farewell': '🎯 ПРОЩАНИЕ: Коротко, тепло. Напомнить о планах.',
+            'task_management': '🎯 ЗАДАЧИ: Только предлагать, не создавать. Проверить конфликты.',
+            'information_request': '🎯 ИНФОРМАЦИЯ: Research + анализ, не сырые факты. Понять ПОЧЕМУ спрашивает.',
+            'advice_seeking': '🎯 СОВЕТ: Моё мнение с аргументами. Не варианты, а выбор.',
+            'emotional_sharing': '🎯 ЭМОЦИИ: Эмпатия ПЕРВАЯ. Слушать, не решать. Один вопрос.',
+            'general': '🎯 ОБЩЕЕ: Профиль? Задачи? Проактивность по интересам.'
         }
         if intent in intent_hints:
             hints.append(intent_hints[intent])
 
+        # Стратегия ответа
+        hints.append("🧠 СТРАТЕГИЯ: Одно действие максимум ценности. Человечность: юмор/спор/память.")
+
         if not hints:
             return ""
 
-        return "\n\n[КОГНИТИВНЫЙ АНАЛИЗ]\n" + "\n".join(hints)
+        return "\n\n[КОГНИТИВНЫЙ АНАЛИЗ — ДУМАЙ ГЛУБОКО]\n" + "\n".join(hints)
 
     # ═══════════════════════════════════════════════════════════════
     # ПРОГРАММНАЯ ВАЛИДАЦИЯ ОТВЕТА (Quality Gate)
@@ -314,31 +313,40 @@ class CognitiveEngine:
         return result_json[:max_length]
 
     # ═══════════════════════════════════════════════════════════════
-    # ИЗВЛЕЧЕНИЕ ТЕМ ИЗ ИСТОРИИ (без API вызова)
+    # ПЛАНИРОВАНИЕ И РЕФЛЕКСИЯ
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def extract_conversation_topics(messages, top_n=8):
-        """Извлекает ключевые темы из списка сообщений.
+    def plan_response_strategy(user_message, profile_data, tasks_data):
+        """Планирует стратегию ответа: что сказать, какие инструменты, почему.
         
-        Использует частотный анализ без AI API вызова.
-        Возвращает список ключевых слов.
+        Returns: dict with strategy hints.
         """
-        all_text = " ".join(m.get('content', '')[:300] for m in messages)
-
-        stop = {
-            'что', 'как', 'где', 'это', 'для', 'при', 'или', 'если', 'так',
-            'уже', 'ещё', 'еще', 'будет', 'был', 'мне', 'тебе', 'нас', 'них',
-            'она', 'они', 'его', 'можно', 'нужно', 'просто', 'могу', 'хочу',
-            'есть', 'нет', 'всё', 'все', 'тоже', 'надо', 'вот', 'тут',
-            'привет', 'пока', 'давай', 'ладно', 'окей', 'будем', 'только',
-            'потом', 'сейчас', 'когда', 'чтобы', 'через', 'после', 'перед',
-            'which', 'that', 'this', 'with', 'have', 'from', 'your', 'will',
-            'about', 'would', 'could', 'should', 'been', 'more', 'very',
+        emotion = CognitiveEngine.detect_emotion(user_message)
+        intent = CognitiveEngine.classify_intent(user_message)
+        
+        strategy = {
+            'priority': 'profile' if not profile_data else ('tasks' if not tasks_data else 'proactive'),
+            'tone': 'empathetic' if emotion in ['tired', 'sad', 'anxious'] else 'enthusiastic' if emotion == 'excited' else 'normal',
+            'action': 'ask_profile' if not profile_data else ('research_topic' if intent == 'information_request' else 'chat'),
+            'why': 'Заполнить профиль для персонализации' if not profile_data else 'Дать ценность без задач'
         }
+        
+        return strategy
 
-        words = re.findall(r'\b[а-яёa-z]{4,}\b', all_text.lower())
-        filtered = [w for w in words if w not in stop]
-
-        counter = Counter(filtered)
-        return [word for word, _ in counter.most_common(top_n)]
+    @staticmethod
+    def reflect_on_response(user_message, response, tools_used):
+        """Рефлексия после ответа: что было хорошо, что улучшить.
+        
+        Для будущего обучения (сейчас логируется).
+        """
+        issues = CognitiveEngine.validate_response(response, user_message)[1]
+        reflection = {
+            'quality': 'good' if not issues else 'needs_improvement',
+            'issues': issues,
+            'tools_effective': len(tools_used) > 0,
+            'human_like': 'high' if len(response.split()) < 50 else 'medium'
+        }
+        
+        logger.info(f"[REFLECTION] {reflection}")
+        return reflection
