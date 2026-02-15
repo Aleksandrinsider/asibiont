@@ -221,68 +221,6 @@ class DynamicToolDiscovery:
         
         return docstring
     
-    async def generate_ai_description(self, func_name: str, docstring: str, 
-                                     parameters: Dict) -> str:
-        """
-        Генерирует улучшенное описание функции с помощью AI
-        
-        Args:
-            func_name: Имя функции
-            docstring: Оригинальный docstring
-            parameters: Параметры функции
-            
-        Returns:
-            Улучшенное описание
-        """
-        try:
-            from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-            
-            prompt = f"""Создай краткое и четкое описание функции для AI-ассистента.
-
-Функция: {func_name}
-Оригинальное описание: {docstring}
-Параметры: {json.dumps(parameters, ensure_ascii=False, indent=2)}
-
-Требования к описанию:
-1. Максимум 2-3 предложения
-2. Четко указать КОГДА использовать функцию
-3. Указать ключевые слова из запросов пользователя
-4. Быть на русском языке
-5. Использовать эмодзи для наглядности (1-2 максимум)
-
-Пример хорошего описания:
-"⚠️ ТОЛЬКО ДЛЯ НОВЫХ ЗАДАЧ! Создает новую задачу с напоминанием. Ключевые слова: 'создай', 'напомни', 'добавь задачу'."
-
-Верни только описание, без пояснений."""
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": DEEPSEEK_MODEL,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.7,
-                        "max_tokens": 200
-                    },
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        description = data['choices'][0]['message']['content'].strip()
-                        logger.info(f"[TOOL AI] Generated description for {func_name}")
-                        return description
-                    else:
-                        logger.warning(f"[TOOL AI] Failed to generate description: {response.status}")
-                        return docstring
-                        
-        except Exception as e:
-            logger.error(f"[TOOL AI] Error generating AI description: {e}")
-            return docstring
-    
     def learn_from_success(self, func_name: str, user_id: int, 
                           context: str, result: Any):
         """
@@ -400,23 +338,6 @@ class DynamicToolDiscovery:
         
         return tools
     
-    def get_tools_for_context(self, context: str, user_id: Optional[int] = None) -> List[Dict]:
-        """
-        Возвращает наиболее релевантные инструменты для данного контекста.
-        Гибридный подход: просто возвращаем все приоритизированные инструменты,
-        пусть AI сам решает через DeepSeek tool_calls какие использовать.
-        
-        Args:
-            context: Контекст запроса пользователя (не используется в гибридном подходе)
-            user_id: ID пользователя
-            
-        Returns:
-            Список приоритизированных инструментов
-        """
-        # Гибридный подход: возвращаем все приоритизированные инструменты
-        # AI сам решит через DeepSeek какие инструменты вызвать
-        return self.get_prioritized_tools(user_id)
-    
     def save_stats(self, filepath: str = "tool_stats.json"):
         """Сохраняет статистику использования"""
         try:
@@ -452,20 +373,3 @@ class DynamicToolDiscovery:
 
 # Глобальный экземпляр для использования в приложении
 tool_discovery = DynamicToolDiscovery()
-
-
-def get_dynamic_tools(user_id: Optional[int] = None, context: Optional[str] = None) -> List[Dict]:
-    """
-    Основная функция для получения инструментов
-    
-    Args:
-        user_id: ID пользователя для персонализации
-        context: Контекст запроса для фильтрации
-        
-    Returns:
-        Список инструментов
-    """
-    if context:
-        return tool_discovery.get_tools_for_context(context, user_id)
-    else:
-        return tool_discovery.get_prioritized_tools(user_id)

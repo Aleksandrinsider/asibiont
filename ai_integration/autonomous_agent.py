@@ -48,12 +48,7 @@ class HybridAutonomousAgent:
         except Exception as e:
             logger.error(f"[AGENT] Failed to initialize dynamic tools: {e}")
             # Fallback на базовые инструменты
-            self._init_default_tools()
-    
-    def _init_default_tools(self):
-        """Инициализирует базовый набор инструментов (fallback)"""
-        logger.warning("[AGENT] Using fallback default tools")
-        # Здесь можно добавить базовый набор, если динамическое обнаружение не сработало
+            logger.warning("[AGENT] Dynamic tools initialization failed, using base tools only")
 
     # _generate_proactive_context удалён — весь проактивный контекст генерируется в context_builder.build_proactive_context()
 
@@ -147,46 +142,6 @@ class HybridAutonomousAgent:
 
         # ВСЕ ОСТАЛЬНОЕ - через AI гибридный подход
         return await self._plan_general_chat(user_message, user_id)
-
-    def _create_command_plan(self, intent, user_message):
-        """Создает план для команды"""
-        params = {}
-        if intent == 'delete_task':
-            params = {"task_title": self._extract_task_title(user_message)}
-        elif intent == 'complete_task':
-            params = {"task_title": self._extract_task_title(user_message)}
-        elif intent == 'reschedule_task':
-            params = {
-                "task_title": self._extract_task_title(user_message),
-                "new_time": self._extract_time(user_message)
-            }
-        elif intent == 'edit_task':
-            params = {
-                "task_title": self._extract_task_title(user_message),
-                "title": self._extract_new_title(user_message)
-            }
-        elif intent == 'add_task':
-            title, time_str = self._extract_task_info(user_message)
-            params = {"title": title, "reminder_time": time_str}
-        elif intent == 'find_relevant_contacts_for_task':
-            params = {"task_description": user_message}
-        elif intent == 'get_task_details':
-            params = {"task_title": self._extract_task_title(user_message)}
-        elif intent == 'delegate_task':
-            params = {
-                "task_title": self._extract_task_title(user_message),
-                "delegate_to": self._extract_delegate_username(user_message)
-            }
-
-        return {
-            "intent": intent,
-            "actions": [{
-                "tool": intent,
-                "params": params,
-                "reason": f"Распознано по ключевым словам: {intent}"
-            }],
-            "response_strategy": "execute_action"
-        }
 
     async def _plan_general_chat(self, user_message, user_id):
         """
@@ -740,8 +695,7 @@ class HybridAutonomousAgent:
 4. Если запрос неоднозначный — задай 1 уточняющий вопрос
 
 ЗАПРЕЩЕНО:
-- Начинать с "Создал задачу", "Создал", "Готово", "Добавил", "Настроил" — это скучно и однообразно
-- Начинать с "Отлично!", "Класс!", "Хороший вопрос!" — сразу давай суть
+- НАЧИНАТЬ со слов "Отлично", "Отличное", "Отличный" (даже с эмодзи: 🚀 Отлично — ЗАПРЕЩЕНО) — сразу давай суть
 - Пересказывать слова пользователя — добавляй НОВУЮ информацию
 - Давать ОБЩИЕ советы без цифр, дат, конкретных инструментов, платформ
 - Соглашаться со всем — если идея слабая, предложи альтернативу
@@ -753,9 +707,9 @@ class HybridAutonomousAgent:
 - Если data из research_topic — синтезируй ВЫВОДЫ, не пересказывай сырые данные
 
 ФОРМАТ: от 3 до 15 предложений, количество определяется СЛОЖНОСТЬЮ темы. Живой тон.
-НЕ используй **жирный** или *курсив* — Telegram не рендерит markdown. Эмодзи (📊⚡🎯💡⚠️) — где уместно.
+НЕ используй **жирный** или *курсив* — Telegram не рендерит markdown. Эмодзи ОБЯЗАТЕЛЬНЫ — минимум 1-2 в каждом ответе.
 Списки (• или 1. 2. 3.) — когда сравниваешь варианты или даёшь пошаговый план.
-Варьируй начало: факт из данных → предупреждение → вопрос → инсайт.
+Варьируй начало: факт из данных → предупреждение → вопрос → инсайт. НЕ начинай каждый ответ с одного и того же эмодзи.
 Верни ТОЛЬКО текст ответа пользователю.
 """
 
@@ -806,9 +760,14 @@ class HybridAutonomousAgent:
             new_actions = []
             for tool_call in tool_calls:
                 func = tool_call['function']
+                try:
+                    params = json.loads(func['arguments'])
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning(f"[REFLECT] Failed to parse arguments for {func['name']}: {func['arguments'][:200]}")
+                    continue
                 new_actions.append({
                     'tool': func['name'],
-                    'params': json.loads(func['arguments']),
+                    'params': params,
                     'reason': f"AI reflection: {func['name']}"
                 })
             
@@ -857,7 +816,7 @@ class HybridAutonomousAgent:
 - Упомяни выполненные действия ВНУТРИ ответа, НЕ в первом предложении
 - Дай 1 следующий шаг с датой/временем
 - Если есть риск, альтернатива или нюанс — назови его
-- НЕ начинай с "Создал", "Готово", "Добавил", "Отлично!" — начни с сути
+- НЕ начинай со слов "Отлично"/"Отличное"/"Отличный" (даже с эмодзи перед ними) — сразу давай суть
 
 Верни ТОЛЬКО текст ответа пользователю."""
             
@@ -1152,75 +1111,6 @@ class HybridAutonomousAgent:
         # Ограничиваем размер паттернов
         if len(self.success_patterns[pattern_key]) > 5:
             self.success_patterns[pattern_key] = self.success_patterns[pattern_key][-5:]
-    
-    def get_similar_patterns(self, user_id, intent):
-        """Получить похожие успешные паттерны"""
-        pattern_key = f"{user_id}:{intent}"
-        return self.success_patterns.get(pattern_key, [])
-    
-    def adapt_to_user(self, user_id, preference_key, value):
-        """Адаптация под предпочтения пользователя"""
-        if user_id not in self.user_preferences:
-            self.user_preferences[user_id] = {}
-        self.user_preferences[user_id][preference_key] = value
-
-    def _extract_profile_updates(self, message):
-        """Извлекает обновления профиля из сообщения"""
-        updates = {}
-        message_lower = message.lower()
-        
-        # Извлечение навыков
-        if 'навыки' in message_lower or 'умею' in message_lower or 'занимаюсь' in message_lower:
-            # Ищем слова после ключевых слов
-            import re
-            skills_match = re.search(r'(?:навыки|умею|занимаюсь)[:\s]+(.+?)(?:\s+(?:интересы|работаю|живу|$))', message, re.IGNORECASE)
-            if skills_match:
-                skills = skills_match.group(1).strip()
-                updates['field'] = 'skills'
-                updates['value'] = skills
-                updates['action'] = 'add'
-        
-        # Извлечение интересов
-        if 'интересы' in message_lower or 'интересуюсь' in message_lower or 'нравится' in message_lower:
-            interests_match = re.search(r'(?:интересы|интересуюсь|нравится)[:\s]+(.+?)(?:\s+(?:навыки|работаю|живу|$))', message, re.IGNORECASE)
-            if interests_match:
-                interests = interests_match.group(1).strip()
-                updates['field'] = 'interests'
-                updates['value'] = interests
-                updates['action'] = 'add'
-        
-        # Извлечение города
-        if 'живу' in message_lower or 'город' in message_lower:
-            city_match = re.search(r'(?:живу|город)[:\s]+(.+?)(?:\s+(?:работаю|навыки|интересы|$))', message, re.IGNORECASE)
-            if city_match:
-                city = city_match.group(1).strip()
-                updates['field'] = 'city'
-                updates['value'] = city
-                updates['action'] = 'replace'
-        
-        # Извлечение работы
-        if 'работаю' in message_lower or 'компания' in message_lower or 'должность' in message_lower:
-            company_match = re.search(r'(?:работаю|компания)[:\s]+(.+?)(?:\s+(?:должность|навыки|интересы|$))', message, re.IGNORECASE)
-            position_match = re.search(r'(?:должность|позиция)[:\s]+(.+?)(?:\s+(?:компания|навыки|интересы|$))', message, re.IGNORECASE)
-            
-            if company_match:
-                updates['field'] = 'company'
-                updates['value'] = company_match.group(1).strip()
-                updates['action'] = 'replace'
-            elif position_match:
-                updates['field'] = 'position'
-                updates['value'] = position_match.group(1).strip()
-                updates['action'] = 'replace'
-        
-        # Если ничего не найдено, возвращаем базовые параметры
-        if not updates:
-            updates = {
-                'field': 'goals',
-                'value': message.strip(),
-                'action': 'add'
-            }
-        
-        return updates
 
 
 # Глобальный экземпляр агента

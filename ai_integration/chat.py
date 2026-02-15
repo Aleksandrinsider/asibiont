@@ -14,10 +14,7 @@ import time
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from .memory import encrypt_data, decrypt_data
 from .utils import (
-    determine_timezone_from_time,
     replace_placeholders, clean_technical_details,
-    post_process_tool_calls,
-    post_process_response,
     get_news_info,
     get_weather_info
 )
@@ -1270,7 +1267,6 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                     content = result["choices"][0]["message"]["content"]
                     content = replace_placeholders(content, ctx['user_now'], ctx['current_time_str'])
                     content = clean_technical_details(content)
-                    content = post_process_response(content, user_id)
                     logger.info(f"[PROACTIVE] Generated smart message: {content[:100]}...")
                     return content
                 else:
