@@ -108,6 +108,197 @@ class HybridAutonomousAgent:
                     error_text = await response.text()
                     raise Exception(f"AI call failed: {response.status} {error_text}")
 
+    # ===== МУЛЬТИ-АГЕНТНЫЙ КОНВЕЙЕР МЫШЛЕНИЯ =====
+
+    async def _run_thinking_pipeline(self, user_message, context_summary, subscription_tier='LIGHT'):
+        """
+        Мульти-агентный конвейер мышления.
+        Каждый агент — быстрый вызов AI без инструментов.
+        
+        LIGHT:    Аналитик → Критик (2 вызова)
+        STANDARD: Аналитик → Критик → Стратег (3 вызова)
+        PREMIUM:  Аналитик → Критик → Стратег → Визионер (4 вызова)
+        """
+        thinking = {}
+        
+        # Нормализуем тариф (может быть enum или строка)
+        tier_str = str(subscription_tier.value if hasattr(subscription_tier, 'value') else subscription_tier).upper()
+        
+        try:
+            # Шаг 1: Аналитик (все тарифы)
+            thinking['analyst'] = await self._think_as_analyst(user_message, context_summary)
+            logger.info(f"[THINKING] Analyst done: {len(thinking['analyst'])} chars")
+            
+            # Шаг 2: Критик (все тарифы)
+            thinking['critic'] = await self._think_as_critic(
+                user_message, context_summary, thinking['analyst']
+            )
+            logger.info(f"[THINKING] Critic done: {len(thinking['critic'])} chars")
+            
+            # Шаг 3: Стратег (STANDARD и PREMIUM)
+            if tier_str in ('STANDARD', 'PREMIUM'):
+                thinking['strategist'] = await self._think_as_strategist(
+                    user_message, context_summary, thinking['analyst'], thinking['critic']
+                )
+                logger.info(f"[THINKING] Strategist done: {len(thinking['strategist'])} chars")
+            
+            # Шаг 4: Визионер (только PREMIUM)
+            if tier_str == 'PREMIUM':
+                thinking['visionary'] = await self._think_as_visionary(
+                    user_message, context_summary,
+                    thinking['analyst'], thinking['critic'], thinking.get('strategist', '')
+                )
+                logger.info(f"[THINKING] Visionary done: {len(thinking['visionary'])} chars")
+            
+        except Exception as e:
+            logger.error(f"[THINKING] Pipeline error: {e}")
+            import traceback
+            logger.error(f"[THINKING] Traceback: {traceback.format_exc()}")
+        
+        return thinking
+
+    def _format_thinking_for_prompt(self, thinking):
+        """Форматирует результаты мышления для вставки в системный промпт"""
+        if not thinking:
+            return ""
+        
+        sections = []
+        
+        if thinking.get('analyst'):
+            sections.append(f"АНАЛИТИК: {thinking['analyst']}")
+        
+        if thinking.get('critic'):
+            sections.append(f"КРИТИК: {thinking['critic']}")
+        
+        if thinking.get('strategist'):
+            sections.append(f"СТРАТЕГ: {thinking['strategist']}")
+        
+        if thinking.get('visionary'):
+            sections.append(f"ВИЗИОНЕР: {thinking['visionary']}")
+        
+        if not sections:
+            return ""
+        
+        return "\n\n## ВНУТРЕННИЙ АНАЛИЗ (используй для качества ответа, НЕ цитируй пользователю)\n\n" + "\n\n".join(sections) + "\n\nУчти этот анализ при формировании ответа и выборе инструментов. Не пересказывай анализ — покажи его РЕЗУЛЬТАТ в действиях и качестве ответа."
+
+    async def _think_as_analyst(self, user_message, context_summary):
+        """Аналитик: Что происходит? Истинная потребность пользователя."""
+        system_prompt = f"""Ты — Аналитик в мульти-агентной системе мышления. Твоя задача — быстрый глубокий анализ.
+
+Проанализируй КОРОТКО (3-5 предложений):
+1. Истинная потребность пользователя (не буквальная формулировка, а глубинный запрос)
+2. Какой контекст из профиля/задач/целей РЕЛЕВАНТЕН этому запросу
+3. Чего НЕ ХВАТАЕТ для идеального ответа (информация, уточнения)
+4. Эмоциональный тон и уровень срочности
+
+КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
+{context_summary[:2000]}"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            response = await self.call_ai(messages, use_tools=False, max_tokens=300, temperature=0.3)
+            return response['choices'][0]['message'].get('content', '').strip()
+        except Exception as e:
+            logger.error(f"[THINKING] Analyst error: {e}")
+            return ""
+
+    async def _think_as_critic(self, user_message, context_summary, analyst_output):
+        """Критик: Что не так? Риски, противоречия, слепые пятна."""
+        system_prompt = f"""Ты — Критик в мульти-агентной системе мышления. Твоя задача — найти проблемы, которые другие пропустили.
+
+На основе анализа найди КОРОТКО (3-5 предложений):
+1. Какие РИСКИ не учтены в запросе пользователя
+2. Есть ли ПРОТИВОРЕЧИЯ в его подходе или ситуации
+3. Какие ПРЕДПОЛОЖЕНИЯ делаются (и верны ли они)
+4. Что может пойти НЕ ТАК и как это предотвратить
+
+АНАЛИЗ АНАЛИТИКА:
+{analyst_output}
+
+КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
+{context_summary[:1500]}"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            response = await self.call_ai(messages, use_tools=False, max_tokens=300, temperature=0.4)
+            return response['choices'][0]['message'].get('content', '').strip()
+        except Exception as e:
+            logger.error(f"[THINKING] Critic error: {e}")
+            return ""
+
+    async def _think_as_strategist(self, user_message, context_summary, analyst_output, critic_output):
+        """Стратег: Как лучше? Связь с целями и оптимизация. (STANDARD+)"""
+        system_prompt = f"""Ты — Стратег в мульти-агентной системе мышления. Твоя задача — оптимизировать план и связать с целями.
+
+Оптимизируй КОРОТКО (3-5 предложений):
+1. Как запрос связан с ДОЛГОСРОЧНЫМИ целями пользователя
+2. Какие ПАТТЕРНЫ поведения заметны (повторяющиеся темы, ошибки, сильные стороны)
+3. Какой ОПТИМАЛЬНЫЙ план действий с учётом критики
+4. Какие СИНЕРГИИ можно использовать (связать задачи, цели, контакты)
+
+АНАЛИЗ:
+{analyst_output}
+
+КРИТИКА:
+{critic_output}
+
+КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
+{context_summary[:1500]}"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            response = await self.call_ai(messages, use_tools=False, max_tokens=300, temperature=0.4)
+            return response['choices'][0]['message'].get('content', '').strip()
+        except Exception as e:
+            logger.error(f"[THINKING] Strategist error: {e}")
+            return ""
+
+    async def _think_as_visionary(self, user_message, context_summary, analyst_output, critic_output, strategist_output):
+        """Визионер: Что дальше? Сценарии и долгосрочные последствия. (PREMIUM)"""
+        system_prompt = f"""Ты — Визионер в мульти-агентной системе мышления. Твоя задача — видеть будущее и неочевидные возможности.
+
+Спрогнозируй КОРОТКО (3-5 предложений):
+1. Что произойдёт через 1 неделю / 1 месяц если действовать по плану
+2. Какие РЫНОЧНЫЕ/ОТРАСЛЕВЫЕ тренды релевантны ситуации пользователя
+3. Какие СЦЕНАРИИ стоит подготовить (оптимистичный / пессимистичный)
+4. Какое КОНКУРЕНТНОЕ ПРЕИМУЩЕСТВО можно построить
+
+АНАЛИЗ:
+{analyst_output}
+
+КРИТИКА:
+{critic_output}
+
+СТРАТЕГИЯ:
+{strategist_output}
+
+КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
+{context_summary[:1500]}"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            response = await self.call_ai(messages, use_tools=False, max_tokens=400, temperature=0.5)
+            return response['choices'][0]['message'].get('content', '').strip()
+        except Exception as e:
+            logger.error(f"[THINKING] Visionary error: {e}")
+            return ""
+
     async def plan_strategy(self, user_message, user_id, context=None):
         """
         Планирование стратегии - минимальные жесткие правила, остальное через AI (гибрид)
@@ -264,10 +455,30 @@ class HybridAutonomousAgent:
                 current_task_info=current_task_info,
                 user_id_param=user_id
             )
+            
+            # Сохраняем данные для использования после закрытия сессии
+            user_sub_tier = getattr(user, 'subscription_tier', 'LIGHT')
+            
+            # Формируем контекст для конвейера мышления
+            context_summary = f"Пользователь: @{user.username or 'unknown'}, тариф: {user_sub_tier}\n"
+            context_summary += f"Время: {current_time_str}, {current_date_str}\n"
+            if proactive_context:
+                context_summary += proactive_context[:2000]
+            if decrypted_memory:
+                context_summary += f"\nПамять: {decrypted_memory[:500]}"
+            if current_task_info:
+                context_summary += f"\nТекущая задача в фокусе: {current_task_info}"
         finally:
             session.close()
 
-        system_prompt = f"{base_prompt}\n\n" + """ГИБРИДНЫЙ ПОДХОД — ты САМ решаешь когда нужны инструменты.
+        # --- МУЛЬТИ-АГЕНТНЫЙ КОНВЕЙЕР МЫШЛЕНИЯ ---
+        thinking_results = await self._run_thinking_pipeline(
+            user_message, context_summary, subscription_tier=user_sub_tier
+        )
+        thinking_section = self._format_thinking_for_prompt(thinking_results)
+        logger.info(f"[AGENT] Thinking pipeline: {len(thinking_results)} agents, section={len(thinking_section)} chars")
+
+        system_prompt = f"{base_prompt}{thinking_section}\n\n" + """ГИБРИДНЫЙ ПОДХОД — ты САМ решаешь когда нужны инструменты.
 
 ВАЖНО:
 - Упоминания о себе (навыки, работа, город, интересы) → update_profile
@@ -303,7 +514,7 @@ class HybridAutonomousAgent:
             force_tool_choice = "required"  # Принудительно требуем tool calls для поиска партнеров
             logger.info(f"[HYBRID] Forcing tool usage for partners request: '{user_message}'")
         
-        response = await self.call_ai(messages, use_tools=True, subscription_tier=user.subscription_tier, tool_choice=force_tool_choice)
+        response = await self.call_ai(messages, use_tools=True, subscription_tier=user_sub_tier, tool_choice=force_tool_choice)
         
         message = response['choices'][0]['message']
         content = message.get('content', '')
@@ -330,7 +541,8 @@ class HybridAutonomousAgent:
             return {
                 "intent": "ai_tool_call",
                 "actions": actions,
-                "response_strategy": "execute_action"
+                "response_strategy": "execute_action",
+                "thinking_results": thinking_results
             }
         
         # Если инструменты не вызваны - просто общение
@@ -338,7 +550,8 @@ class HybridAutonomousAgent:
             "intent": "general_chat",
             "actions": [],
             "response_strategy": "natural_response",
-            "ai_response": content
+            "ai_response": content,
+            "thinking_results": thinking_results
         }
 
     async def execute_actions(self, actions, user_id, session=None, user_message=None):
@@ -669,6 +882,10 @@ class HybridAutonomousAgent:
         finally:
             session.close()
         
+        # Получаем результаты мышления из фазы планирования
+        thinking_results = plan.get('thinking_results', {})
+        thinking_section = self._format_thinking_for_prompt(thinking_results) if thinking_results else ""
+        
         # Дополняем базовый промпт инструкциями для ответа
         profile_section = f"\nПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:\n{profile_data}" if profile_data else ""
         
@@ -678,7 +895,7 @@ class HybridAutonomousAgent:
         if is_profile_empty:
             profile_instruction = "\n\n⚠️ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ ПОЧТИ ПУСТОЙ! ОБЯЗАТЕЛЬНО СПРОСИ о целях, интересах, навыках, городе проживания. Это поможет давать более релевантные советы. Задавай вопросы естественно, без давления."
         
-        system_prompt = f"{base_prompt}{profile_section}{profile_instruction}\n\n" + f"""\n---
+        system_prompt = f"{base_prompt}{profile_section}{profile_instruction}{thinking_section}\n\n" + f"""\n---
 
 РЕЖИМ: ФОРМИРОВАНИЕ ОТВЕТА
 
