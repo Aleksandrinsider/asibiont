@@ -370,10 +370,10 @@ def clean_technical_details(text):
     # КРИТИЧЕСКАЯ ПРОВЕРКА: если после очистки ничего не осталось,
     # значит AI вернул ТОЛЬКО технические детали — НЕ возвращать оригинал!
     if not text.strip():
-        logger.warning(f"[CLEAN] Content was completely cleaned, returning fallback. Original: '{original_text[:200]}'")
+        logger.debug(f"[CLEAN] Content was completely cleaned, returning fallback. Original: '{original_text[:200]}'")
         return ""
     if original_text != text:
-        logger.warning(f"[CLEAN] Original: '{original_text[:100]}...' -> Cleaned: '{text[:100]}...'")
+        logger.debug(f"[CLEAN] Original: '{original_text[:100]}...' -> Cleaned: '{text[:100]}...'")
     return text.strip()
 # Alias for backward compatibility
 clean_content = clean_technical_details
