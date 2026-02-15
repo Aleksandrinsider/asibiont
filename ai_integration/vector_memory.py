@@ -20,13 +20,14 @@ import logging
 import re
 from datetime import datetime
 
+from config import PINECONE_API_KEY
+
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
 # PINECONE CLIENT
 # ═══════════════════════════════════════════════════════════════
 
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "pcsk_4sXf5C_9SdV5HpdKtyKqgJZonya4M33QLGygj6Wyh1Km7NVEdwapePeEWDnrjtvHLjT2Gq")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "asi-biont-memory")
 PINECONE_HOST = os.getenv("PINECONE_HOST", "")  # Will be set after index creation
 

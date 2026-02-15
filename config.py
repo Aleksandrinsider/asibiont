@@ -142,6 +142,10 @@ NEWSAPI_API_KEY = os.getenv("NEWSAPI_API_KEY")
 if not NEWSAPI_API_KEY:
     logger.warning("NEWSAPI_API_KEY not set - news integration will not work")
 
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+if not PINECONE_API_KEY:
+    logger.warning("PINECONE_API_KEY not set - vector memory will not work")
+
 # Redis Configuration
 REDIS_ENABLED = os.getenv("REDIS_ENABLED", "True").lower() in ("true", "1", "yes") and not LOCAL
 
