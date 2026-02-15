@@ -266,7 +266,7 @@ class AgentDialogTester:
         t10n = self._tool_names(9)
         morning = any(w in t10 for w in ['утро','план','день','задач','назначен',
             'начн','сначала','перв','расписани','сегодня'])
-        used_tasks = any(n in ('get_tasks','check_time_conflicts') for n in t10n)
+        used_tasks = any(n in ('get_tasks','list_tasks','check_time_conflicts') for n in t10n)
         print(f'\n  10. «ДОБРОЕ УТРО»')
         print(f'     План дня:               {"✅" if morning else "❌"}')
         print(f'     Посмотрел задачи:       {"✅" if used_tasks else "❌"}')

@@ -204,8 +204,13 @@ class ContextBuilder:
                 if tomorrow_tasks and not today_tasks:
                     hints.append(f"🔮 Завтра: {', '.join(tomorrow_tasks[:2])}")
             else:
-                # Нет задач — второй приоритет после профиля
-                hints.append("📋 Нет активных задач.")
+                # Нет задач — подтолкни агента к проактивному действию
+                if profile and profile.interests:
+                    hints.append(f"📋 Нет задач. Проактивность: используй research_topic или get_news_trends по интересам ({profile.interests[:60]}) и предложи идею.")
+                elif profile and profile.goals:
+                    hints.append(f"📋 Нет задач. Проактивность: предложи конкретный шаг к цели ({profile.goals[:60]}).")
+                else:
+                    hints.append("📋 Нет задач. Узнай, чем человек занимается.")
 
             # ═══ ПРИОРИТЕТ 3: ЦЕЛИ ═══
             from models import Goal
