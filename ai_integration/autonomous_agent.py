@@ -629,40 +629,11 @@ class HybridAutonomousAgent:
         
         results = []
         
-        # Маппинг инструментов на понятные пользователю действия
-        tool_labels = {
-            'add_task': '\u2795 Создаю задачу...',
-            'list_tasks': '\ud83d\udccb Загружаю задачи...',
-            'complete_task': '\u2705 Завершаю задачу...',
-            'edit_task': '\u270f\ufe0f Редактирую задачу...',
-            'delete_task': '\ud83d\uddd1 Удаляю задачу...',
-            'check_time_conflicts': '\u231a Проверяю конфликты...',
-            'update_profile': '\ud83d\udc64 Обновляю профиль...',
-            'show_profile': '\ud83d\udc64 Загружаю профиль...',
-            'create_goal': '\ud83c\udfaf Создаю цель...',
-            'update_goal_progress': '\ud83d\udcca Обновляю прогресс...',
-            'list_goals': '\ud83c\udfaf Загружаю цели...',
-            'research_topic': '\ud83d\udd2c Исследую тему...',
-            'get_news_trends': '\ud83d\udcf0 Ищу новости...',
-            'get_weather_info': '\u2600\ufe0f Проверяю погоду...',
-            'find_relevant_contacts_for_task': '\ud83e\udd1d Ищу людей...',
-            'delegate_task': '\ud83d\udce4 Делегирую задачу...',
-            'get_delegation_progress': '\ud83d\udce5 Проверяю делегирование...',
-            'set_contact_alert': '\ud83d\udd14 Настраиваю алерт...',
-            'generate_marketing_content': '\u270d\ufe0f Генерирую контент...',
-            'set_auto_post_time': '\u23f0 Настраиваю автопостинг...',
-            'set_content_strategy': '\ud83d\udcdd Задаю стратегию...',
-        }
-        
         try:
             for action in actions:
                 tool_name = action.get('tool')
                 params = action.get('params', {})
                 reason = action.get('reason', '')
-                
-                # Стримим действие пользователю
-                if progress_callback and tool_name in tool_labels:
-                    await progress_callback(tool_labels[tool_name])
                 
                 logger.info(f"[AGENT] Executing {tool_name} with params {params} - {reason}")
                 
