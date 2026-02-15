@@ -710,12 +710,47 @@ async def process_text_message(user_id, text, message, state):
         
         context = []  # Simplified: no context in bot
         
+        # Создаём progress callback для стриминга прогресса в чат
+        chat_id = message.chat.id
+        bot = message.bot
+        
+        # Храним ID последнего прогресс-сообщения для обновления
+        _progress_state = {'last_msg_id': None}
+        
+        async def progress_callback(text):
+            """Отправляет или обновляет прогресс-сообщение в Telegram"""
+            try:
+                if _progress_state['last_msg_id']:
+                    # Обновляем существующее сообщение (не спамим чат)
+                    try:
+                        await bot.edit_message_text(
+                            text=text,
+                            chat_id=chat_id,
+                            message_id=_progress_state['last_msg_id']
+                        )
+                        return
+                    except Exception:
+                        pass  # Если не удалось обновить — отправим новое
+                
+                sent = await bot.send_message(chat_id, text)
+                _progress_state['last_msg_id'] = sent.message_id
+            except Exception as e:
+                logger.warning(f"Progress callback error: {e}")
+        
         # Use autonomous agent instead of command router
         from ai_integration import chat_with_ai
         db_session = Session()
         try:
-            result = await chat_with_ai(text, context=context, user_id=user_id, db_session=db_session)
+            result = await chat_with_ai(text, context=context, user_id=user_id, db_session=db_session, progress_callback=progress_callback)
             response_text = result.get('response', '') if isinstance(result, dict) else str(result)
+            
+            # Удаляем прогресс-сообщение перед финальным ответом
+            if _progress_state['last_msg_id']:
+                try:
+                    await bot.delete_message(chat_id, _progress_state['last_msg_id'])
+                except Exception:
+                    pass
+            
             await message.bot.send_message(message.chat.id, response_text)
         except Exception as e:
             logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)

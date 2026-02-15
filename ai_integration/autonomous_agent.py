@@ -110,10 +110,11 @@ class HybridAutonomousAgent:
 
     # ===== МУЛЬТИ-АГЕНТНЫЙ КОНВЕЙЕР МЫШЛЕНИЯ =====
 
-    async def _run_thinking_pipeline(self, user_message, context_summary, subscription_tier='LIGHT'):
+    async def _run_thinking_pipeline(self, user_message, context_summary, subscription_tier='LIGHT', progress_callback=None):
         """
         Мульти-агентный конвейер мышления.
         Каждый агент — быстрый вызов AI без инструментов.
+        progress_callback — async func(text) для стриминга прогресса пользователю.
         
         LIGHT:    Аналитик → Критик (2 вызова)
         STANDARD: Аналитик → Критик → Стратег (3 вызова)
@@ -124,16 +125,51 @@ class HybridAutonomousAgent:
         # Нормализуем тариф (может быть enum или строка)
         tier_str = str(subscription_tier.value if hasattr(subscription_tier, 'value') else subscription_tier).upper()
         
+        # Эмодзи и заголовки для стриминга
+        agent_labels = {
+            'analyst': ('🔍', 'Анализирую запрос...'),
+            'critic': ('⚡', 'Проверяю риски...'),
+            'strategist': ('🎯', 'Строю стратегию...'),
+            'visionary': ('🔮', 'Прогнозирую...'),
+        }
+        
+        async def _stream_agent(agent_key, result_text):
+            """Отправляет краткое резюме агента пользователю"""
+            if not progress_callback or not result_text:
+                return
+            emoji, _ = agent_labels.get(agent_key, ('💭', ''))
+            import re
+            # Убираем markdown: **жирный**, ### заголовки
+            clean = re.sub(r'\*\*|###?\s*', '', result_text).strip()
+            # Убираем начальную нумерацию (1. 2. и т.д.)
+            clean = re.sub(r'^\d+\.\s*', '', clean)
+            # Заменяем переносы на пробелы (для однострочного прогресса)
+            clean = re.sub(r'\n+', ' ', clean).strip()
+            # Берём первое ПОЛНОЕ предложение (до .!? с пробелом, но не после цифры)
+            match = re.search(r'(?<!\d)[.!?](?:\s|$)', clean)
+            if match:
+                first_sentence = clean[:match.start() + 1].strip()
+            else:
+                first_sentence = clean[:120].strip()
+            if len(first_sentence) > 120:
+                first_sentence = first_sentence[:117] + '...'
+            if len(first_sentence) > 15:  # Минимум 15 символов
+                await progress_callback(f"{emoji} {first_sentence}")
+        
         try:
             # Шаг 1: Аналитик (все тарифы)
+            if progress_callback:
+                await progress_callback("🔍 Анализирую запрос...")
             thinking['analyst'] = await self._think_as_analyst(user_message, context_summary)
             logger.info(f"[THINKING] Analyst done: {len(thinking['analyst'])} chars")
+            await _stream_agent('analyst', thinking['analyst'])
             
             # Шаг 2: Критик (все тарифы)
             thinking['critic'] = await self._think_as_critic(
                 user_message, context_summary, thinking['analyst']
             )
             logger.info(f"[THINKING] Critic done: {len(thinking['critic'])} chars")
+            await _stream_agent('critic', thinking['critic'])
             
             # Шаг 3: Стратег (STANDARD и PREMIUM)
             if tier_str in ('STANDARD', 'PREMIUM'):
@@ -141,6 +177,7 @@ class HybridAutonomousAgent:
                     user_message, context_summary, thinking['analyst'], thinking['critic']
                 )
                 logger.info(f"[THINKING] Strategist done: {len(thinking['strategist'])} chars")
+                await _stream_agent('strategist', thinking['strategist'])
             
             # Шаг 4: Визионер (только PREMIUM)
             if tier_str == 'PREMIUM':
@@ -149,6 +186,7 @@ class HybridAutonomousAgent:
                     thinking['analyst'], thinking['critic'], thinking.get('strategist', '')
                 )
                 logger.info(f"[THINKING] Visionary done: {len(thinking['visionary'])} chars")
+                await _stream_agent('visionary', thinking['visionary'])
             
         except Exception as e:
             logger.error(f"[THINKING] Pipeline error: {e}")
@@ -332,9 +370,9 @@ class HybridAutonomousAgent:
             }
 
         # ВСЕ ОСТАЛЬНОЕ - через AI гибридный подход
-        return await self._plan_general_chat(user_message, user_id)
+        return await self._plan_general_chat(user_message, user_id, progress_callback=getattr(self, '_progress_callback', None))
 
-    async def _plan_general_chat(self, user_message, user_id):
+    async def _plan_general_chat(self, user_message, user_id, progress_callback=None):
         """
         AI планирование с TOOLS - гибридный подход.
         AI сам решает какие инструменты вызвать через DeepSeek tool_calls.
@@ -473,7 +511,8 @@ class HybridAutonomousAgent:
 
         # --- МУЛЬТИ-АГЕНТНЫЙ КОНВЕЙЕР МЫШЛЕНИЯ ---
         thinking_results = await self._run_thinking_pipeline(
-            user_message, context_summary, subscription_tier=user_sub_tier
+            user_message, context_summary, subscription_tier=user_sub_tier,
+            progress_callback=progress_callback
         )
         thinking_section = self._format_thinking_for_prompt(thinking_results)
         logger.info(f"[AGENT] Thinking pipeline: {len(thinking_results)} agents, section={len(thinking_section)} chars")
@@ -487,9 +526,9 @@ class HybridAutonomousAgent:
 - Не извлекай весь текст сообщения как title задачи — только СУТЬ
 - Для переноса задач используй edit_task(reminder_time=...), НЕ add_task"""
 
-        # Загружаем историю диалога
+        # Загружаем историю диалога (session уже закрыта выше — передаём None, чтобы функция создала свою)
         from .conversation_history import get_conversation_history
-        history = get_conversation_history(user_id, session, limit=6)  # Last 3 exchanges
+        history = get_conversation_history(user_id, session=None, limit=6)  # Last 3 exchanges
         
         messages = [{"role": "system", "content": system_prompt}]
         
@@ -554,11 +593,12 @@ class HybridAutonomousAgent:
             "thinking_results": thinking_results
         }
 
-    async def execute_actions(self, actions, user_id, session=None, user_message=None):
+    async def execute_actions(self, actions, user_id, session=None, user_message=None, progress_callback=None):
         """
         ШАГ 2: Выполнить запланированные действия через готовые handlers
         ПРОАКТИВНОСТЬ: Автоматический анализ результатов list_tasks
         """
+        progress_callback = progress_callback or getattr(self, '_progress_callback', None)
         # Импортируем handlers
         from . import handlers
         
@@ -566,7 +606,7 @@ class HybridAutonomousAgent:
         close_session = False
         if session is None:
             # Проверяем лимит активных сессий
-            if self.active_sessions >= 3:  # Максимум 3 одновременные сессии
+            if self.active_sessions >= 5:  # Максимум 5 одновременных сессий
                 logger.warning(f"[AGENT] Too many active sessions ({self.active_sessions}), rejecting request")
                 return [{
                     "tool": "session_limit",
@@ -591,11 +631,40 @@ class HybridAutonomousAgent:
         
         results = []
         
+        # Маппинг инструментов на понятные пользователю действия
+        tool_labels = {
+            'add_task': '\u2795 Создаю задачу...',
+            'list_tasks': '\ud83d\udccb Загружаю задачи...',
+            'complete_task': '\u2705 Завершаю задачу...',
+            'edit_task': '\u270f\ufe0f Редактирую задачу...',
+            'delete_task': '\ud83d\uddd1 Удаляю задачу...',
+            'check_time_conflicts': '\u231a Проверяю конфликты...',
+            'update_profile': '\ud83d\udc64 Обновляю профиль...',
+            'show_profile': '\ud83d\udc64 Загружаю профиль...',
+            'create_goal': '\ud83c\udfaf Создаю цель...',
+            'update_goal_progress': '\ud83d\udcca Обновляю прогресс...',
+            'list_goals': '\ud83c\udfaf Загружаю цели...',
+            'research_topic': '\ud83d\udd2c Исследую тему...',
+            'get_news_trends': '\ud83d\udcf0 Ищу новости...',
+            'get_weather_info': '\u2600\ufe0f Проверяю погоду...',
+            'find_relevant_contacts_for_task': '\ud83e\udd1d Ищу людей...',
+            'delegate_task': '\ud83d\udce4 Делегирую задачу...',
+            'get_delegation_progress': '\ud83d\udce5 Проверяю делегирование...',
+            'set_contact_alert': '\ud83d\udd14 Настраиваю алерт...',
+            'generate_marketing_content': '\u270d\ufe0f Генерирую контент...',
+            'set_auto_post_time': '\u23f0 Настраиваю автопостинг...',
+            'set_content_strategy': '\ud83d\udcdd Задаю стратегию...',
+        }
+        
         try:
             for action in actions:
                 tool_name = action.get('tool')
                 params = action.get('params', {})
                 reason = action.get('reason', '')
+                
+                # Стримим действие пользователю
+                if progress_callback and tool_name in tool_labels:
+                    await progress_callback(tool_labels[tool_name])
                 
                 logger.info(f"[AGENT] Executing {tool_name} with params {params} - {reason}")
                 
@@ -988,8 +1057,8 @@ class HybridAutonomousAgent:
                     'reason': f"AI reflection: {func['name']}"
                 })
             
-            # ВЫПОЛНЯЕМ НОВЫЕ ИНСТРУМЕНТЫ
-            new_results = await self.execute_actions(new_actions, user_id, session)
+            # ВЫПОЛНЯЕМ НОВЫЕ ИНСТРУМЕНТЫ (session уже закрыта, execute_actions создаст свою)
+            new_results = await self.execute_actions(new_actions, user_id, session=None)
             execution_results.extend(new_results)
             
             # ОБНОВЛЯЕМ ПРОМПТ с результатами новых действий
@@ -1156,37 +1225,30 @@ class HybridAutonomousAgent:
         # Fallback - последнее слово
         return words[-1] if words else "unknown"
 
-    async def process_request(self, user_message, user_id, context=None, session=None, subscription_tier=None):
+    async def process_request(self, user_message, user_id, context=None, session=None, subscription_tier=None, progress_callback=None):
         """
         Основной процесс обработки запроса:
         1. Планирование стратегии
         2. Выполнение действий
         3. Рефлексия и формирование ответа
+        
+        progress_callback — async func(text) для стриминга прогресса в чат пользователю.
         """
+        # Сохраняем callback для доступа из вложенных методов
+        self._progress_callback = progress_callback
         
         try:
             # Получаем информацию о пользователе для определения тарифа
             if subscription_tier is None:
-                if session is None:
-                    session = Session()
-                    close_session = True
-                else:
-                    close_session = False
-                
+                tier_session = Session()
                 try:
-                    user = session.query(User).filter_by(telegram_id=user_id).first()
+                    user = tier_session.query(User).filter_by(telegram_id=user_id).first()
                     subscription_tier = getattr(user, 'subscription_tier', 'LIGHT') if user else 'LIGHT'
                     logger.info(f"[AGENT] User {user_id} has subscription tier: {subscription_tier}")
                 finally:
-                    if close_session:
-                        session.close()
+                    tier_session.close()
             else:
                 logger.info(f"[AGENT] Using provided subscription tier: {subscription_tier}")
-            
-            # Гарантируем наличие session для execute_actions
-            if session is None:
-                session = Session()
-                logger.info(f"[AGENT] Created session for execute_actions (user {user_id})")
             
             # Сохраняем сообщение пользователя в историю
             logger.info(f"[AGENT] About to save user message to history")
@@ -1200,17 +1262,19 @@ class HybridAutonomousAgent:
             
             actions = plan.get('actions', [])
             
-            # ШАГ 2: Выполнение
+            # ШАГ 2: Выполнение (execute_actions создаёт и закрывает свою сессию)
             execution_results = []
             if actions:
                 logger.info(f"[AGENT] Step 2: Executing {len(actions)} actions")
-                execution_results = await self.execute_actions(actions, user_id, session, user_message)
+                execution_results = await self.execute_actions(actions, user_id, session=None, user_message=user_message, progress_callback=progress_callback)
             else:
                 logger.info(f"[AGENT] No actions to execute, direct response")
             
             # ШАГ 3: Формирование ответа
             if execution_results:
                 # Были выполнены действия - формируем естественный ответ через AI
+                if progress_callback:
+                    await progress_callback("💬 Формирую ответ...")
                 logger.info(f"[AGENT] Step 3: Generating natural response from execution results")
                 response = await self.reflect_and_respond(
                     user_message, 
@@ -1340,8 +1404,11 @@ def get_autonomous_agent():
         _autonomous_agent = HybridAutonomousAgent()
     return _autonomous_agent
 
-async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None, subscription_tier=None):
-    """Функция чата с использованием улучшенного гибридного автономного агента"""
+async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None, subscription_tier=None, progress_callback=None):
+    """Функция чата с использованием улучшенного гибридного автономного агента.
+    
+    progress_callback — async func(text) для стриминга прогресса в чат.
+    """
 
     logger.info(f"[HYBRID_AGENT] START - user_id={user_id}, message='{str(message)[:50]}...'")
 
@@ -1353,8 +1420,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Получаем гибридного автономного агента
         agent = get_autonomous_agent()
 
+        # Запоминаем длину истории ДО вызова (чтобы не читать устаревшие записи)
+        history_len_before = len(agent.execution_history)
+
         # Обрабатываем запрос через улучшенного агента
-        response_text = await agent.process_request(message, user_id, context, db_session, subscription_tier)
+        response_text = await agent.process_request(message, user_id, context, db_session, subscription_tier, progress_callback=progress_callback)
 
         # Возвращаем в формате, ожидаемом остальным кодом
         # Для тестирования возвращаем tool_calls из execution_results
@@ -1362,7 +1432,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         tools_used = []  # For test tracking
         try:
             # Извлекаем информацию о вызванных инструментах из execution_history
-            if agent.execution_history:
+            # ТОЛЬКО если была добавлена НОВАЯ запись в этом ходе
+            if len(agent.execution_history) > history_len_before:
                 last_execution = agent.execution_history[-1]
                 # Берём results вместо plan - там реальные вызовы
                 if last_execution.get('results'):
