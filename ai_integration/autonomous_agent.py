@@ -476,21 +476,18 @@ class HybridAutonomousAgent:
             # Собираем историю с учётом старого контекста
             from .conversation_history import get_conversation_history
             
-            # ═══ КЛЮЧЕВОЕ: при пустом профиле — урезаем историю ═══
-            # Без этого AI видит 16 сообщений и начинает шутить про "пятое приветствие"
-            # вместо того, чтобы спросить о пользователе
-            profile_filled_count = len(profile_data)  # сколько полей заполнено
+            # При пустом профиле — немного урезаем историю (но не до 2)
+            # Шутки/юмор ОК, главное чтобы агент спросил о профиле
+            profile_filled_count = len(profile_data)
             
             if profile_filled_count < 3:
-                # Профиль пустой — берём МИНИМУМ истории
-                # AI должен фокусироваться на знакомстве, а не на паттернах
-                full_history = get_conversation_history(user_id, session=None, limit=4)
-                history = full_history[-2:] if len(full_history) > 2 else full_history
-                logger.info(f"[CONTEXT] Profile empty ({profile_filled_count} fields) — history limited to {len(history)} msgs")
+                # Профиль пустой — берём меньше истории, чтобы фокус был на знакомстве
+                full_history = get_conversation_history(user_id, session=None, limit=8)
+                history = full_history[-6:] if len(full_history) > 6 else full_history
+                logger.info(f"[CONTEXT] Profile sparse ({profile_filled_count} fields) — history limited to {len(history)} msgs")
             else:
                 full_history = get_conversation_history(user_id, session=None, limit=16)
                 if len(full_history) > 10:
-                    # Извлекаем темы из старых сообщений (без API вызова)
                     old_msgs = full_history[:-8]
                     history = full_history[-8:]
                     topics = CognitiveEngine.extract_conversation_topics(old_msgs)
