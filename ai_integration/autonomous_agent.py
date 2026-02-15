@@ -475,26 +475,16 @@ class HybridAutonomousAgent:
 
             # Собираем историю с учётом старого контекста
             from .conversation_history import get_conversation_history
-            
-            # При пустом профиле — немного урезаем историю (но не до 2)
-            # Шутки/юмор ОК, главное чтобы агент спросил о профиле
-            profile_filled_count = len(profile_data)
-            
-            if profile_filled_count < 3:
-                # Профиль пустой — берём меньше истории, чтобы фокус был на знакомстве
-                full_history = get_conversation_history(user_id, session=None, limit=8)
-                history = full_history[-6:] if len(full_history) > 6 else full_history
-                logger.info(f"[CONTEXT] Profile sparse ({profile_filled_count} fields) — history limited to {len(history)} msgs")
+            full_history = get_conversation_history(user_id, session=None, limit=16)
+
+            if len(full_history) > 10:
+                old_msgs = full_history[:-8]
+                history = full_history[-8:]
+                topics = CognitiveEngine.extract_conversation_topics(old_msgs)
+                if topics:
+                    base_prompt += f"\n\n[РАНЕЕ ОБСУЖДАЛИ: {', '.join(topics)}]"
             else:
-                full_history = get_conversation_history(user_id, session=None, limit=16)
-                if len(full_history) > 10:
-                    old_msgs = full_history[:-8]
-                    history = full_history[-8:]
-                    topics = CognitiveEngine.extract_conversation_topics(old_msgs)
-                    if topics:
-                        base_prompt += f"\n\n[РАНЕЕ ОБСУЖДАЛИ: {', '.join(topics)}]"
-                else:
-                    history = full_history
+                history = full_history
 
             messages = [{"role": "system", "content": base_prompt}]
             if history:
