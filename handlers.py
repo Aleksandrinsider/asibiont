@@ -4,12 +4,18 @@ import os
 import tempfile
 import json
 import traceback
+import time as time_module
+import threading
 from datetime import datetime, timedelta, timezone
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 router = Router()
+
+# Dedup cache for message processing
+message_cache = {}
+message_cache_lock = threading.Lock()
 from ai_integration import chat_with_ai
 from models import Session, User, Subscription, Task
 from payments import create_payment
@@ -904,112 +910,9 @@ def get_delegation_report(user_id, session=None):
         return f"Ошибка при получении отчета о делегировании: {str(e)}"
 
 
-def delegate_task(title, description, reminder_time, delegated_to_username, user_id, session=None, delegation_details=None):
-    """Делегировать задачу другому пользователю"""
-    should_close = False
-    if session is None:
-        session = Session()
-        should_close = True
 
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if should_close:
-                session.close()
-            return "Пользователь не найден"
-
-        # Проверить подписку (Standard/Premium)
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if not subscription or subscription.status != 'active':
-            if should_close:
-                session.close()
-            return "DELEGATION_SUBSCRIPTION_REQUIRED: Делегирование задач доступно только на тарифах Standard и Premium. Обновите подписку: https://asibiont.ru/subscription_tiers"
-
-        # Проверить, что пользователь пытается делегировать не себе
-        if delegated_to_username.lower() == (user.username or "").lower().replace('@', ''):
-            if should_close:
-                session.close()
-            return "SELF_DELEGATION_ERROR: Нельзя делегировать задачу самому себе"
-
-        # Создать задачу
-        from datetime import datetime
-        task = Task(
-            user_id=user.id,
-            title=title,
-            description=description,
-            reminder_time=datetime.fromisoformat(reminder_time.replace('Z', '+00:00')) if isinstance(reminder_time, str) else reminder_time,
-            delegated_by=user.id,
-            delegated_to_username=delegated_to_username.replace('@', ''),  # Убрать @ если есть
-            delegation_status='pending',
-            delegation_details=delegation_details
-        )
-
-        session.add(task)
-        
-        # Создать план контроля для агента
-        import json
-        from datetime import datetime, timezone, timedelta
-        
-        control_plan = {
-            'task_id': task.id,
-            'executor_username': delegated_to_username,
-            'user_id': user.id,
-            'created_at': datetime.now(timezone.utc).isoformat(),
-            'checkpoints': [
-                {'type': 'start_notification', 'completed': True, 'timestamp': datetime.now(timezone.utc).isoformat()},
-                {'type': 'progress_check', 'interval_hours': 4, 'next_check': (datetime.now(timezone.utc) + timedelta(hours=4)).isoformat()},
-                {'type': 'deadline_warning', 'hours_before': 4, 'scheduled': None},
-                {'type': 'final_check', 'scheduled': task.reminder_time.isoformat() if task.reminder_time else None}
-            ],
-            'escalation_level': 0,
-            'last_contact': datetime.now(timezone.utc).isoformat(),
-            'agent_controlled': True
-        }
-        
-        task.delegation_details = json.dumps(control_plan)
-        session.commit()
-
-        # Отправить уведомление получателю (если бот может найти пользователя)
-        try:
-            recipient = session.query(User).filter(
-                User.username.ilike(delegated_to_username.replace('@', ''))
-            ).first()
-
-            if recipient:
-                # Импортировать здесь чтобы избежать циклических импортов
-                from main import bot
-                if bot:
-                    notification_text = "📥 Вам делегирована задача!\n\n"
-                    notification_text += f"📋 Задача: {title}\n"
-                    notification_text += f"👤 От: @{user.username or user.first_name or 'пользователь'}\n"
-                    if description:
-                        notification_text += f"📝 Описание: {description[:200]}...\n"
-                    if reminder_time:
-                        task_time = task.reminder_time.strftime('%d.%m.%Y %H:%M') if task.reminder_time else "не указан"
-                        notification_text += f"⏰ Дедлайн: {task_time}\n"
-                    notification_text += "\nИспользуйте команды:\n"
-                    notification_text += f"/accept_{task.id} - принять\n"
-                    notification_text += f"/reject_{task.id} - отклонить"
-
-                    # Отправка уведомления в фоне (асинхронно)
-                    import asyncio
-                    from config import TELEGRAM_TOKEN
-                    if TELEGRAM_TOKEN:
-                        asyncio.create_task(send_delegation_notification_async(recipient.telegram_id, notification_text))
-        except Exception as e:
-            logger.warning(f"Could not send delegation notification: {e}")
-
-        if should_close:
-            session.close()
-
-        return f"TASK_DELEGATED_SUCCESS: Задача '{title}' успешно делегирована пользователю @{delegated_to_username}. Он получит уведомление и сможет принять или отклонить задачу."
-
-    except Exception as e:
-        logger.error(f"Error delegating task for user {user_id}: {e}")
-        if should_close:
-            session.close()
-        return f"Ошибка при делегировании задачи: {str(e)}"
-
+# NOTE: delegate_task для AI-агента  в ai_integration/handlers.py
+# Дубль #1 удалён как мёртвый код
 
 @router.message(Command("dashboard"))
 async def dashboard_handler(message: Message):

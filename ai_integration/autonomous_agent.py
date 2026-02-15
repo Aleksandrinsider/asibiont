@@ -126,15 +126,18 @@ class HybridAutonomousAgent:
         words = msg.split()
         word_count = len(words)
         
-        # SIMPLE: приветствия, подтверждения, короткие реплики
-        # Используем \b для точного совпадения слов (иначе "да" матчит "удали")
+        # Командные глаголы — всегда минимум medium (нужны tools)
+        action_verbs = r'\b(создай|добавь|удали|покажи|редактируй|измени|перенеси|отмени|заверши|поищи|найди|обнови|запланируй|напомни|отредактируй|сохрани|поставь|запиши|проверь|отправь|делегируй|передай)\b'
+        has_action = bool(re.search(action_verbs, msg))
+        
+        # SIMPLE: приветствия, подтверждения, короткие реплики (БЕЗ командных глаголов)
         simple_words = r'\b(привет|здравствуй|хай|hi|hello|добрый|ок|ладно|хорошо|понятно|ясно|спасибо|да|нет|угу|ага|пока|bye|здорово)\b'
         simple_phrases = ['как дела', 'что умеешь', 'кто ты']
         is_simple_word = bool(re.search(simple_words, msg))
         is_simple_phrase = any(p in msg for p in simple_phrases)
-        if word_count <= 4 and (is_simple_word or is_simple_phrase):
+        if word_count <= 4 and not has_action and (is_simple_word or is_simple_phrase):
             return 'simple'
-        if word_count <= 2:
+        if word_count <= 2 and not has_action:
             return 'simple'
         
         # DEEP: аналитика, стратегия, исследование, прогнозы
@@ -157,6 +160,75 @@ class HybridAutonomousAgent:
         
         # MEDIUM: всё остальное (команды, средние запросы)
         return 'medium'
+
+    # ===== ПЕРСОНАЛИЗИРОВАННЫЙ ИНЖЕКТ ДЛЯ ПРИВЕТСТВИЙ =====
+
+    def _build_greeting_inject(self, user_state):
+        """
+        Строит персонализированный инжект для простых сообщений (приветствий).
+        Использует РЕАЛЬНЫЕ данные пользователя вместо шаблонных фраз.
+        Возвращает строку, которая добавляется к user_message.
+        """
+        parts = []
+        parts.append("\n\n[СИСТЕМНАЯ ИНСТРУКЦИЯ — НЕ ПОКАЗЫВАЙ ПОЛЬЗОВАТЕЛЮ]")
+        parts.append("Веди ЖИВОЙ диалог. Будь кратким (2-4 предложения). НЕ перечисляй что не заполнено в профиле.")
+
+        tod = user_state.get('time_of_day', 'день')
+
+        if not user_state.get('has_profile'):
+            # Новый пользователь — профиль пустой
+            parts.append("Пользователь новый — данных нет.")
+            parts.append("Задай 1-2 естественных вопроса: чем занимается, какие цели на ближайшее время.")
+        else:
+            # Есть данные — используем их
+            profile_facts = []
+            if user_state.get('position') and user_state.get('company'):
+                profile_facts.append(f"{user_state['position']} в {user_state['company']}")
+            elif user_state.get('position'):
+                profile_facts.append(f"должность: {user_state['position']}")
+            elif user_state.get('company'):
+                profile_facts.append(f"компания: {user_state['company']}")
+            if user_state.get('skills'):
+                profile_facts.append(f"навыки: {user_state['skills']}")
+            if user_state.get('interests'):
+                profile_facts.append(f"интересы: {user_state['interests']}")
+            if user_state.get('goals_text'):
+                profile_facts.append(f"цели: {user_state['goals_text']}")
+            if user_state.get('city'):
+                profile_facts.append(f"город: {user_state['city']}")
+
+            if profile_facts:
+                parts.append("Профиль: " + "; ".join(profile_facts) + ".")
+
+            tasks = user_state.get('tasks', [])
+            goals = user_state.get('active_goals', [])
+
+            if tasks:
+                parts.append(f"Активные задачи: {', '.join(tasks[:3])}.")
+                parts.append("Спроси о прогрессе конкретной задачи ИЛИ предложи помощь с ней.")
+            elif goals:
+                parts.append(f"Цели: {', '.join(goals[:3])}.")
+                parts.append("Предложи КОНКРЕТНЫЙ шаг к одной из целей — привязанный к сегодня.")
+            else:
+                # Есть профиль, но нет задач/целей
+                if user_state.get('interests') or user_state.get('goals_text'):
+                    parts.append("Нет задач. Предложи задачу на основе интересов/целей — КОНКРЕТНУЮ и релевантную.")
+                else:
+                    parts.append("Нет задач и целей. Спроси чем хочет заняться сегодня.")
+
+        # Контекст времени суток
+        if tod == 'утро':
+            parts.append("Утро — предложи начать с главного.")
+        elif tod == 'вечер':
+            parts.append("Вечер — предложи подвести итоги или запланировать завтра.")
+        elif tod == 'ночь':
+            parts.append("Ночь — будь краток.")
+
+        parts.append("ЗАПРЕЩЕНО: банальности ('составить план на неделю'), описание проблем профиля, шаблонные фразы.")
+        parts.append("ОБЯЗАТЕЛЬНО: предложи ОДНО конкретное действие, основанное на данных выше.")
+        parts.append("[КОНЕЦ ИНСТРУКЦИИ]")
+
+        return "\n".join(parts)
 
     # ===== МУЛЬТИ-АГЕНТНЫЙ КОНВЕЙЕР МЫШЛЕНИЯ =====
 
@@ -441,6 +513,7 @@ class HybridAutonomousAgent:
             user_now = base_now
             current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
             current_date_str = user_now.strftime("%Y-%m-%d")
+            time_of_day = 'день'  # default, overridden below
             
             months = [
                 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -554,6 +627,31 @@ class HybridAutonomousAgent:
                 context_summary += f"\nПамять: {decrypted_memory[:500]}"
             if current_task_info:
                 context_summary += f"\nТекущая задача в фокусе: {current_task_info}"
+            
+            # Собираем краткую сводку состояния пользователя (для персонализированного инжекта)
+            from models import Goal
+            _user_state = {
+                'has_profile': bool(profile and (profile.goals or profile.interests or profile.skills)),
+                'goals_text': profile.goals if profile and profile.goals else None,
+                'interests': profile.interests if profile and profile.interests else None,
+                'skills': profile.skills if profile and profile.skills else None,
+                'company': profile.company if profile else None,
+                'position': profile.position if profile else None,
+                'city': profile.city if profile else None,
+                'has_tasks': bool(current_task_info),
+                'time_of_day': time_of_day,
+                'current_time': current_time_str,
+            }
+            # Задачи
+            active_tasks = session.query(Task).filter(
+                Task.user_id == user.id, Task.status.in_(['pending', 'active', 'in_progress'])
+            ).order_by(Task.reminder_time.asc()).limit(5).all()
+            _user_state['tasks'] = [t.title for t in active_tasks] if active_tasks else []
+            # Цели
+            active_goals = session.query(Goal).filter(
+                Goal.user_id == user.id, Goal.status == 'active'
+            ).limit(3).all()
+            _user_state['active_goals'] = [f"{g.title} ({g.progress_percentage}%)" for g in active_goals] if active_goals else []
         finally:
             session.close()
 
@@ -608,17 +706,10 @@ class HybridAutonomousAgent:
             logger.info(f"[AGENT] Added {len(history)} messages from history")
         
         # Добавляем текущее сообщение
-        # Для простых сообщений (приветствия) — инжектируем проактивную инструкцию
-        # чтобы AI не просто описывал проблемы, а ДЕЙСТВОВАЛ и ЗАДАВАЛ ВОПРОСЫ
+        # Для простых сообщений (приветствий) — персонализированный инжект на основе реальных данных
         if complexity == 'simple':
-            # Создаём краткую сводку состояния пользователя из контекста
-            proactive_inject = "\n\n[СИСТЕМНАЯ ИНСТРУКЦИЯ: Это приветствие. Ты ОБЯЗАН:"
-            proactive_inject += "\n1. Если профиль пустой — задай 1 конкретный вопрос (чем занимаешься? какая главная цель?)"
-            proactive_inject += "\n2. Если нет задач — предложи конкретную задачу с временем, исходя из профиля и времени суток"
-            proactive_inject += "\n3. Если есть задачи/цели — дай статус и один полезный инсайт"
-            proactive_inject += "\n4. Будь кратким (3-5 предложений), не перечисляй функции бота"
-            proactive_inject += "\nНЕ описывай проблемы — РЕШАЙ их. Не говори 'профиль не заполнен' — спроси конкретно.]"
-            messages.append({"role": "user", "content": user_message + proactive_inject})
+            inject = self._build_greeting_inject(_user_state)
+            messages.append({"role": "user", "content": user_message + inject})
         else:
             messages.append({"role": "user", "content": user_message})
 
