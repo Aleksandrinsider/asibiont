@@ -158,8 +158,6 @@ class HybridAutonomousAgent:
         
         try:
             # Шаг 1: Аналитик (все тарифы)
-            if progress_callback:
-                await progress_callback("🔍 Анализирую запрос...")
             thinking['analyst'] = await self._think_as_analyst(user_message, context_summary)
             logger.info(f"[THINKING] Analyst done: {len(thinking['analyst'])} chars")
             await _stream_agent('analyst', thinking['analyst'])
@@ -1273,8 +1271,6 @@ class HybridAutonomousAgent:
             # ШАГ 3: Формирование ответа
             if execution_results:
                 # Были выполнены действия - формируем естественный ответ через AI
-                if progress_callback:
-                    await progress_callback("💬 Формирую ответ...")
                 logger.info(f"[AGENT] Step 3: Generating natural response from execution results")
                 response = await self.reflect_and_respond(
                     user_message, 
