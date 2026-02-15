@@ -1,7 +1,19 @@
 """
-Autonomous Agent — простая архитектура:
-1 API call (AI + tools) → если tools вызваны: execute → 1 reflect
-Никаких мульти-агентов, дублированного context building, 50 правил.
+Adaptive Autonomous Agent — стандартный tool calling loop
+с адаптивной логикой из лучших итераций.
+
+Архитектура:
+1. Собираем контекст (1 запрос к БД)
+2. Tool calling loop (max 5 итераций)
+3. Обучение на успехах + адаптация
+
+Умные фичи из 73dc138:
+- force_tool_choice для явных запросов (новости, задачи, партнёры)
+- success_patterns — обучение на успешных паттернах
+- user_preferences — адаптация под пользователя
+- context_memory — краткосрочная контекстная память
+- auto-trigger awareness (check_time_conflicts → add_task)
+- parameter auto-fix для известных tool quirks
 """
 
 import sys
@@ -28,9 +40,22 @@ from .tools import get_available_tools
 logger = logging.getLogger(__name__)
 
 
+# ===== KEYWORDS для force_tool_choice =====
+TOOL_REQUIRED_KEYWORDS = {
+    'news': ['что нового', 'что посоветуешь', 'расскажи новости', 'новости',
+             'что происходит', 'тренды'],
+    'tasks': ['задачи', 'что по задачам', 'мои задачи', 'список задач',
+              'покажи задачи', 'что делать'],
+    'contacts': ['партнеры', 'найти людей', 'единомышленники', 'контакты',
+                 'кто может помочь'],
+    'research': ['исследуй', 'найди информацию', 'что известно о',
+                 'разберись в', 'проанализируй'],
+}
+
+
 class HybridAutonomousAgent:
     """
-    Простой агент: 1 вызов AI с tools → execute → reflect (если были tools).
+    Адаптивный агент: standard tool calling loop + обучение + force_tool_choice.
     Без мульти-агентного pipeline, без дублированного контекста.
     """
 
@@ -40,13 +65,21 @@ class HybridAutonomousAgent:
         self._initialize_tools()
         self.active_sessions = 0
 
+        # === Адаптивные фичи (из 73dc138) ===
+        self.context_memory = []          # Краткосрочная память контекста
+        self.success_patterns = {}        # Паттерны успешных действий
+        self.user_preferences = {}        # Предпочтения пользователей
+        self._progress_callback = None
+
+        # Загружаем статистику tool discovery
+        self.tool_discovery.load_stats()
+
     def _initialize_tools(self):
-        """Инициализирует динамическую систему инструментов"""
+        """Инициализирует динамическую систему инструментов."""
         try:
             from . import handlers
             self.tool_discovery.discover_tools_from_module(handlers)
-            self.tool_discovery.load_stats()
-            logger.info(f"[AGENT] Initialized {len(self.tool_discovery.discovered_tools)} tools")
+            logger.info(f"[AGENT] Initialized {len(self.tool_discovery.discovered_tools)} dynamic tools")
         except Exception as e:
             logger.error(f"[AGENT] Failed to initialize tools: {e}")
 
@@ -76,15 +109,45 @@ class HybridAutonomousAgent:
                                    if t['function']['name'] not in exclude_tools]
             data["tools"] = available_tools
             data["tool_choice"] = tool_choice or "auto"
-            logger.info(f"[AI] {len(available_tools)} tools, tier={subscription_tier}")
+            logger.info(f"[AI] {len(available_tools)} tools, tier={subscription_tier}, "
+                        f"tool_choice={data['tool_choice']}")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=data,
                                     timeout=aiohttp.ClientTimeout(total=60)) as resp:
                 if resp.status == 200:
-                    return await resp.json()
+                    result = await resp.json()
+                    # Логируем результат для tools
+                    if use_tools:
+                        msg = result.get('choices', [{}])[0].get('message', {})
+                        tcs = msg.get('tool_calls', [])
+                        if tcs:
+                            logger.info(f"[AI] Called {len(tcs)} tools: "
+                                        f"{[tc['function']['name'] for tc in tcs]}")
+                        else:
+                            logger.info(f"[AI] No tools called, text response")
+                    return result
                 error = await resp.text()
                 raise Exception(f"AI call failed: {resp.status} {error}")
+
+    # ===== ADAPTIVE TOOL CHOICE =====
+
+    def _determine_tool_choice(self, user_message):
+        """Определяет нужно ли принудительно требовать tool calls.
+        
+        Для явных запросов данных (задачи, новости, партнёры) — required,
+        чтобы AI гарантированно использовал инструменты.
+        Для остального — auto.
+        """
+        msg_lower = user_message.lower()
+        
+        for category, keywords in TOOL_REQUIRED_KEYWORDS.items():
+            if any(kw in msg_lower for kw in keywords):
+                logger.info(f"[ADAPTIVE] force_tool_choice=required for '{category}' "
+                            f"keywords in: '{user_message[:50]}'")
+                return "required"
+        
+        return "auto"
 
     # ===== КОНТЕКСТ =====
 
@@ -195,7 +258,13 @@ class HybridAutonomousAgent:
 
     async def execute_actions(self, actions, user_id, session=None,
                               user_message=None, progress_callback=None):
-        """Выполняет tool calls через handlers."""
+        """Выполняет tool calls через handlers.
+        
+        Включает:
+        - parameter auto-fix для известных tool quirks
+        - session management с лимитами
+        - tool discovery learning
+        """
         from . import handlers
 
         close_session = False
@@ -225,28 +294,8 @@ class HybridAutonomousAgent:
                 if 'session' in sig.parameters:
                     params['session'] = session
 
-                # Фиксы параметров для известных tools
-                if tool_name == 'find_relevant_contacts_for_task':
-                    if 'description' in params and 'task_description' not in params:
-                        params['task_description'] = params.pop('description')
-                    elif 'task_description' not in params:
-                        params['task_description'] = 'помощь с задачей'
-
-                if tool_name == 'quick_topic_search' and not params.get('topic'):
-                    if user_message:
-                        stop = {'что', 'как', 'где', 'когда', 'почему', 'а', 'и', 'но'}
-                        words = [w for w in re.findall(r'\b\w+\b', user_message.lower())
-                                 if w not in stop and len(w) > 2][:3]
-                        params['topic'] = ' '.join(words) if words else user_message[:50]
-                    else:
-                        params['topic'] = 'общая информация'
-
-                # research_topic: AI иногда передаёт topic вместо query
-                if tool_name == 'research_topic':
-                    if 'topic' in params and 'query' not in params:
-                        params['query'] = params.pop('topic')
-                    elif 'query' not in params:
-                        params['query'] = user_message[:200] if user_message else 'исследование'
+                # === Parameter auto-fix для известных quirks ===
+                params = self._fix_tool_params(tool_name, params, user_message)
 
                 try:
                     if asyncio.iscoroutinefunction(handler_func):
@@ -260,8 +309,11 @@ class HybridAutonomousAgent:
 
                     results.append({"tool": tool_name, "success": True,
                                     "result": result, "reason": reason})
+                    
+                    logger.info(f"[EXEC] {tool_name} ✓ — {reason}")
+
                 except Exception as e:
-                    logger.error(f"[EXEC] {tool_name} error: {e}")
+                    logger.error(f"[EXEC] {tool_name} ✗ — {e}")
                     self.tool_discovery.learn_from_failure(
                         func_name=tool_name, error=str(e))
                     results.append({"tool": tool_name, "success": False,
@@ -276,18 +328,46 @@ class HybridAutonomousAgent:
 
         return results
 
+    def _fix_tool_params(self, tool_name, params, user_message=None):
+        """Фиксит известные проблемы с параметрами tools.
+        
+        AI иногда передаёт неправильные имена параметров —
+        эта функция исправляет самые частые ошибки.
+        """
+        if tool_name == 'find_relevant_contacts_for_task':
+            if 'description' in params and 'task_description' not in params:
+                params['task_description'] = params.pop('description')
+            elif 'task_description' not in params:
+                params['task_description'] = 'помощь с задачей'
+
+        elif tool_name == 'quick_topic_search' and not params.get('topic'):
+            if user_message:
+                stop = {'что', 'как', 'где', 'когда', 'почему', 'а', 'и', 'но'}
+                words = [w for w in re.findall(r'\b\w+\b', user_message.lower())
+                         if w not in stop and len(w) > 2][:3]
+                params['topic'] = ' '.join(words) if words else user_message[:50]
+            else:
+                params['topic'] = 'общая информация'
+
+        elif tool_name == 'research_topic':
+            if 'topic' in params and 'query' not in params:
+                params['query'] = params.pop('topic')
+            elif 'query' not in params:
+                params['query'] = user_message[:200] if user_message else 'исследование'
+
+        return params
+
     # ===== ОСНОВНОЙ FLOW =====
 
     async def process_request(self, user_message, user_id, context=None,
                               session=None, subscription_tier=None,
                               progress_callback=None):
         """
-        Стандартный tool calling loop:
-        1. Собираем контекст
-        2. Отправляем AI с tools
-        3. Если AI вызвал tools → execute → добавляем результаты → повтор
-        4. Когда AI отвечает текстом → готово
-        Max 3 итерации.
+        Адаптивный tool calling loop:
+        1. Собираем контекст (1 запрос к БД)
+        2. Определяем tool_choice (auto/required)
+        3. Tool calling loop (max 5 итераций)
+        4. Обучение + сохранение
         """
         self._progress_callback = progress_callback
 
@@ -301,7 +381,7 @@ class HybridAutonomousAgent:
                 finally:
                     s.close()
 
-            # История
+            # Сохраняем сообщение пользователя в историю
             from .conversation_history import save_message_to_history
             save_message_to_history(user_id, "user", user_message)
 
@@ -314,26 +394,29 @@ class HybridAutonomousAgent:
             sub_tier = ctx['sub_tier']
 
             # Собираем сообщения
-            system_content = base_prompt + "\n\nОТВЕЧАЙ И ДЕЙСТВУЙ.\n" \
-                "ОДИН add_task = ОДНА задача. Перенос → edit_task. " \
-                "В title — СУТЬ (2-5 слов)."
-
             from .conversation_history import get_conversation_history
-            history = get_conversation_history(user_id, session=None, limit=6)
+            history = get_conversation_history(user_id, session=None, limit=8)
 
-            messages = [{"role": "system", "content": system_content}]
+            messages = [{"role": "system", "content": base_prompt}]
             if history:
                 messages.extend(history)
             messages.append({"role": "user", "content": user_message})
 
-            # ===== Tool calling loop (max 3 iterations) =====
+            # Адаптивный tool_choice
+            initial_tool_choice = self._determine_tool_choice(user_message)
+
+            # ===== Tool calling loop (max 5 итераций) =====
             all_execution_results = []
-            MAX_ITERATIONS = 3
-            seen_add_task = False
+            MAX_ITERATIONS = 5
+            seen_tools = set()  # Для предотвращения дублей
 
             for iteration in range(MAX_ITERATIONS):
+                # Первая итерация может быть "required", остальные "auto"
+                tc = initial_tool_choice if iteration == 0 else "auto"
+
                 response = await self.call_ai(
-                    messages, use_tools=True, subscription_tier=sub_tier)
+                    messages, use_tools=True, subscription_tier=sub_tier,
+                    tool_choice=tc)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')
@@ -352,29 +435,29 @@ class HybridAutonomousAgent:
                 # AI вызвал tools → добавляем assistant message в цепочку
                 messages.append(msg)
 
-                for tc in tool_calls:
-                    func = tc.get('function', {})
+                for tc_item in tool_calls:
+                    func = tc_item.get('function', {})
                     name = func.get('name', '')
                     try:
                         args = json.loads(func.get('arguments', '{}'))
                     except Exception:
                         args = {}
 
-                    # Dedup add_task
-                    if name == 'add_task' and seen_add_task:
-                        logger.warning("[DEDUP] Skipping duplicate add_task")
+                    # Dedup: предотвращаем повторные вызовы того же tool с теми же параметрами
+                    dedup_key = f"{name}:{json.dumps(args, sort_keys=True)}"
+                    if dedup_key in seen_tools:
+                        logger.warning(f"[DEDUP] Skipping duplicate {name}")
                         messages.append({
                             "role": "tool",
-                            "tool_call_id": tc['id'],
-                            "content": '{"status": "skipped: duplicate"}'
+                            "tool_call_id": tc_item['id'],
+                            "content": '{"status": "skipped: duplicate call"}'
                         })
                         continue
-                    if name == 'add_task':
-                        seen_add_task = True
+                    seen_tools.add(dedup_key)
 
                     # Execute single tool
                     action = [{"tool": name, "params": args,
-                               "reason": f"AI: {name}"}]
+                               "reason": f"AI iter {iteration+1}: {name}"}]
                     results = await self.execute_actions(
                         action, user_id, session=None,
                         user_message=user_message,
@@ -385,7 +468,6 @@ class HybridAutonomousAgent:
                     all_execution_results.append(r)
 
                     # Добавляем tool result в messages
-                    # NEED_TIME — НЕ shortcut, пусть AI сам сформулирует вопрос
                     if r.get('success'):
                         rc = json.dumps(r['result'], ensure_ascii=False,
                                         default=str)[:2000]
@@ -395,7 +477,7 @@ class HybridAutonomousAgent:
 
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": tc['id'],
+                        "tool_call_id": tc_item['id'],
                         "content": rc
                     })
 
@@ -405,7 +487,7 @@ class HybridAutonomousAgent:
             # Если вышли из цикла — финальный вызов без tools
             messages.append({
                 "role": "user",
-                "content": "Сформируй ответ на основе выполненных действий."
+                "content": "Сформируй финальный ответ на основе выполненных действий."
             })
             final_resp = await self.call_ai(
                 messages, use_tools=False, temperature=0.7)
@@ -418,47 +500,125 @@ class HybridAutonomousAgent:
 
         except Exception as e:
             logger.error(f"[AGENT] Error: {e}\n{traceback.format_exc()}")
-            return random.choice([
+            error_responses = [
                 "Что-то пошло не так. Перефразируй запрос.",
                 "Техническая ошибка. Попробуй ещё раз.",
                 "Упс, сбой. Скажи то же самое другими словами.",
-            ])
+                "Технические неполадки. Давай попробуем по-другому.",
+                "Что-то сломалось. Перефразируй, пожалуйста.",
+            ]
+            return random.choice(error_responses)
+
+    # ===== ОБУЧЕНИЕ И АДАПТАЦИЯ =====
 
     def _save_and_learn(self, user_message, user_id, execution_results, response):
-        """Сохраняет в историю и память."""
+        """Сохраняет в историю, обучается на результатах, обновляет паттерны."""
+        
+        # === Запись в execution_history ===
+        tools_used = [r['tool'] for r in execution_results if r.get('success')]
         entry = {
             'message': user_message,
             'user_id': user_id,
             'results': execution_results,
+            'tools_used': tools_used,
             'response': response,
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'success': all(r.get('success', False) for r in execution_results)
+                       if execution_results else True
         }
         self.execution_history.append(entry)
         if len(self.execution_history) > 50:
             self.execution_history = self.execution_history[-50:]
 
-        # Ответ в историю диалога
+        # === Ответ в историю диалога ===
         from .conversation_history import save_message_to_history
         save_message_to_history(user_id, "assistant", response)
 
-        # Память — только значимые факты
+        # === Обучение на успешных паттернах ===
+        if entry['success'] and tools_used:
+            self._learn_from_success(user_message, user_id, tools_used)
+
+        # === Контекстная память ===
+        if tools_used:
+            self.context_memory.append({
+                'user_id': user_id,
+                'tools': tools_used,
+                'message_hint': user_message[:50],
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            })
+            if len(self.context_memory) > 100:
+                self.context_memory = self.context_memory[-100:]
+
+        # === Долгосрочная память — только значимые факты ===
+        # НЕ сохраняем CRUD-операции (задачи уже в БД)
         try:
             from .memory import update_user_memory
             facts = []
             for r in execution_results:
-                if r.get('success') and r['tool'] in (
-                    'create_goal', 'update_goal_progress', 'set_content_strategy',
-                    'set_contact_alert', 'research_topic', 'get_news_trends'
+                if r.get('success') and r.get('tool') in (
+                    'create_goal', 'update_goal_progress',
+                    'set_content_strategy', 'set_contact_alert',
+                    'research_topic', 'get_news_trends'
                 ):
                     if r['tool'] in ('research_topic', 'get_news_trends'):
                         facts.append(f"Искал: {r.get('reason', '')[:100]}")
                     else:
-                        facts.append(f"{r['tool']}: {str(r.get('result', ''))[:150]}")
+                        result_str = str(r.get('result', ''))[:150]
+                        facts.append(f"{r['tool']}: {result_str}")
             if facts:
                 update_user_memory("\n".join(facts), user_id=user_id)
+                logger.info(f"[MEMORY] Saved {len(facts)} facts to long-term memory")
         except Exception as e:
             logger.warning(f"[MEMORY] Save failed: {e}")
+
+    def _learn_from_success(self, message, user_id, tools_used):
+        """Обучение на успешных паттернах.
+        
+        Запоминает какие tools работали для каких типов запросов.
+        Позволяет в будущем быстрее определять правильную стратегию.
+        """
+        # Определяем intent по tools
+        intent = '_'.join(sorted(set(tools_used)))
+        pattern_key = f"{user_id}:{intent}"
+        
+        if pattern_key not in self.success_patterns:
+            self.success_patterns[pattern_key] = []
+        
+        self.success_patterns[pattern_key].append({
+            'message': message[:100],
+            'tools': tools_used,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Ограничиваем размер
+        if len(self.success_patterns[pattern_key]) > 10:
+            self.success_patterns[pattern_key] = self.success_patterns[pattern_key][-10:]
+        
+        logger.info(f"[LEARN] Pattern '{intent}' for user {user_id}, "
+                     f"total patterns: {len(self.success_patterns)}")
+
+    def get_similar_patterns(self, user_id, tools_hint=None):
+        """Получить похожие успешные паттерны для пользователя."""
+        results = []
+        prefix = f"{user_id}:"
+        for key, patterns in self.success_patterns.items():
+            if key.startswith(prefix):
+                results.extend(patterns)
+        return sorted(results, key=lambda x: x.get('timestamp', ''), reverse=True)[:5]
+
+    def adapt_to_user(self, user_id, preference_key, value):
+        """Адаптация под предпочтения пользователя.
+        
+        Пример: adapt_to_user(123, 'response_style', 'brief')
+        """
+        if user_id not in self.user_preferences:
+            self.user_preferences[user_id] = {}
+        self.user_preferences[user_id][preference_key] = value
+        logger.info(f"[ADAPT] User {user_id}: {preference_key}={value}")
+
+    def get_user_preference(self, user_id, preference_key, default=None):
+        """Получить предпочтение пользователя."""
+        return self.user_preferences.get(user_id, {}).get(preference_key, default)
 
 
 # ===== ГЛОБАЛЬНЫЕ =====
@@ -491,7 +651,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             message, user_id, context, db_session,
             subscription_tier, progress_callback=progress_callback)
 
-        # Извлекаем tool_calls для тестов
+        # Извлекаем tool_calls для тестов и мониторинга
         tool_calls = []
         tools_used = []
         if len(agent.execution_history) > history_len:
