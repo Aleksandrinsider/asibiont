@@ -601,8 +601,12 @@ async def _build_proactive_context(user_id):
         try:
             from .premium_simple import collect_premium_insights, manage_recommendations
             if ctx['subscription_tier'] == 'PREMIUM':
-                premium_ctx = collect_premium_insights(user_id, mode='prompt', session=db_session)
-                if premium_ctx and premium_ctx.strip():
+                import asyncio
+                try:
+                    premium_ctx = await collect_premium_insights(user_id, mode='prompt', session=db_session)
+                except Exception:
+                    premium_ctx = None
+                if premium_ctx and isinstance(premium_ctx, str) and premium_ctx.strip():
                     ctx['partners'] = premium_ctx
                     user_memory += f"\n\n🔥 PREMIUM:\n{premium_ctx}"
             else:
@@ -745,7 +749,9 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
     task_count = ctx.get('task_count', 0)
     overdue_count = ctx.get('overdue_count', 0)
     has_goals = bool(ctx.get('goals'))
-    has_profile = bool(ctx.get('profile') and ctx['profile'].strip() and ctx['profile'].strip() != 'Профиль не заполнен')
+    # ctx['profile'] — объект UserProfile или None
+    profile_obj = ctx.get('profile')
+    has_profile = bool(profile_obj and (getattr(profile_obj, 'goals', None) or getattr(profile_obj, 'interests', None) or getattr(profile_obj, 'skills', None)))
     
     parts.append(f"\n=== СИТУАЦИЯ ===")
     parts.append(f"Время: {time_of_day} ({ctx['user_now'].strftime('%H:%M')})")

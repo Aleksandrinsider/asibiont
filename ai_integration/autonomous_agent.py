@@ -692,7 +692,18 @@ class HybridAutonomousAgent:
                     # AI ответил текстом → готово
                     from .utils import clean_technical_details
                     final = clean_technical_details(content).strip()
-                    return final if final else self._system_message_fallback(mode, instruction)
+                    if final:
+                        return final
+                    # Если clean_technical_details убрала всё (DSML), retry без tools
+                    if content.strip():
+                        logger.warning(f"[AGENT:SYSTEM] Content cleaned to empty, retrying without tools")
+                        retry_resp = await self.call_ai(
+                            messages, use_tools=False, max_tokens=max_tokens)
+                        retry_content = retry_resp['choices'][0]['message'].get('content', '')
+                        retry_clean = clean_technical_details(retry_content).strip()
+                        if retry_clean:
+                            return retry_clean
+                    return self._system_message_fallback(mode, instruction)
 
                 # AI вызвал tools
                 messages.append(msg)
