@@ -228,10 +228,16 @@ class HybridAutonomousAgent:
                     current_task_info = {'id': task.id, 'title': task.title,
                                          'status': task.status}
 
+            # Задачи
+            tasks = session.query(Task).filter_by(user_id=user.id).order_by(Task.created_at.desc()).limit(10).all()
+            tasks_data = [{'id': t.id, 'title': t.title, 'status': t.status,
+                           'due_date': t.due_date.isoformat() if t.due_date else None}
+                          for t in tasks]
+
             # Проактивный контекст
             from .context_builder import ContextBuilder
-            ctx = ContextBuilder()
-            proactive_context = ctx.build_proactive_context(user_id, session)
+            ctx_builder = ContextBuilder()
+            proactive_context = ctx_builder.build_proactive_context(user_id, session)
 
             # Подписка
             sub_tier = getattr(user, 'subscription_tier', 'LIGHT')
@@ -254,10 +260,15 @@ class HybridAutonomousAgent:
                 user_id_param=user_id
             )
 
+            # КРИТИЧНО: Если задач нет — принудительно добавляем инструкцию
+            if not tasks_data:
+                base_prompt += "\n\n[КРИТИЧНО: ЗАДАЧ НЕТ!]\nИгнорируй историю разговора. На любое сообщение пользователя предложи создать цель или задачу: 'У тебя пока нет задач. Может, поставим цель на квартал — что хочешь достичь? Или создадим первую задачу?'. Не фокусируйся на повторяющихся приветствиях — предлагай ценность через цели и задачи."
+
             return {
                 'base_prompt': base_prompt,
                 'sub_tier': sub_tier,
                 'profile_data': profile_data,
+                'tasks': tasks_data,
                 'user_now': user_now,
                 'time_str': time_str,
                 'date_str': date_str,
