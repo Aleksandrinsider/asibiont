@@ -161,7 +161,7 @@ def check_time_conflicts_sync(user_db_id, parsed_time, session):
         if not user:
             return None
             
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         
         # Ищем задачи в интервале ±30 минут от новой задачи
         time_window_start = parsed_time - timedelta(minutes=30)
@@ -213,7 +213,7 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
     try:
         # Получаем все задачи пользователя на ближайшие часы
         user = session.query(User).filter_by(id=user_db_id).first()
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         
         search_start = target_time - timedelta(hours=search_range_hours//2)
         search_end = target_time + timedelta(hours=search_range_hours//2)
@@ -309,7 +309,7 @@ async def check_time_conflicts(reminder_time, user_id=None, session=None):
         # Конвертируем строку в datetime
         from datetime import datetime
         import pytz
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         parsed_time = datetime.strptime(parsed_time_str, "%Y-%m-%d %H:%M")
         parsed_time = user_tz.localize(parsed_time)
             
@@ -400,13 +400,13 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             if isinstance(reminder_time, datetime):
                 logger.info(f"[ADD_TASK] reminder_time is already datetime: {reminder_time}")
                 # Assume it's in user's timezone, convert to UTC
-                user_tz = pytz.UTC
+                user_tz = pytz.timezone('Europe/Moscow')
                 if user.timezone:
                     try:
                         user_tz = pytz.timezone(user.timezone)
                     except pytz.exceptions.UnknownTimeZoneError:
-                        logging.warning(f"Unknown timezone {user.timezone}, using UTC")
-                        user_tz = pytz.UTC
+                        logging.warning(f"Unknown timezone {user.timezone}, using Europe/Moscow")
+                        user_tz = pytz.timezone('Europe/Moscow')
                 
                 # If datetime has no timezone, assume it's in user's timezone
                 if reminder_time.tzinfo is None:
@@ -417,13 +417,13 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             else:
                 # Parse string time
                 # Get user timezone
-                user_tz = pytz.UTC
+                user_tz = pytz.timezone('Europe/Moscow')
                 if user.timezone:
                     try:
                         user_tz = pytz.timezone(user.timezone)
                     except pytz.exceptions.UnknownTimeZoneError:
-                        logging.warning(f"Unknown timezone {user.timezone}, using UTC")
-                        user_tz = pytz.UTC
+                        logging.warning(f"Unknown timezone {user.timezone}, using Europe/Moscow")
+                        user_tz = pytz.timezone('Europe/Moscow')
 
                 # Use AI-powered flexible time parser
                 from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
@@ -457,7 +457,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             return f"❌ Ошибка обработки времени '{reminder_time}': {e}. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
         if due_date:
             try:
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
                 local_dt = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
                 local_dt = user_tz.localize(local_dt)
                 task.due_date = local_dt.astimezone(pytz.UTC)
@@ -610,7 +610,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     # Format result message
     result_msg = f"Добавлена задача '{title}'"
     if task.reminder_time:
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         local_time = task.reminder_time.astimezone(user_tz)
         time_str = local_time.strftime('%H:%M')
         date_str = local_time.strftime('%d.%m.%Y')
@@ -1208,7 +1208,7 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
     if task:
         try:
             # Parse new time with AI (flexible!)
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             current_time = datetime.now(user_tz)
             logger.info(f"[RESCHEDULE_TASK] Parsing time '{new_time}', current time: {current_time}")
             
@@ -1401,7 +1401,7 @@ def delegate_task(
 
         if reminder_time:
             try:
-                user_tz = pytz.timezone(recipient.timezone) if recipient.timezone else pytz.UTC
+                user_tz = pytz.timezone(recipient.timezone) if recipient.timezone else pytz.timezone('Europe/Moscow')
                 local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
                 local_dt = user_tz.localize(local_dt)
                 task.reminder_time = local_dt.astimezone(pytz.UTC)
@@ -1891,7 +1891,7 @@ async def edit_task(
                 # Use AI-powered flexible time parser
                 from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
                 
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
                 current_time = datetime.now(user_tz)
                 logger.info(f"[EDIT_TASK] Parsing time '{reminder_time}' with AI, current: {current_time}")
                 
@@ -2020,7 +2020,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
             if not completed_tasks:
                 return "У вас пока нет выполненных задач"
             
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             result = f"Выполненные задачи ({len(completed_tasks)}):\n\n"
             
             # Показываем последние 20 выполненных задач
@@ -2047,7 +2047,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         my_tasks = [t for t in active_tasks if not t.delegated_to_username]
 
         # Determine user timezone
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         now = datetime.now(user_tz)
 
         # Count overdue tasks
@@ -4416,7 +4416,7 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
 
         if task:
             # Format detailed task information
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             
             details = "📋 Подробная информация о задаче:\n\n"
             details += f"🆔 ID: {task.id}\n"
@@ -4550,7 +4550,7 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
     # Parse reminder_time
     if reminder_time:
         try:
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             # Try different formats
             for fmt in ["%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
                 try:

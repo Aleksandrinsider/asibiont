@@ -177,7 +177,8 @@ def get_system_prompt_template():
 {tier_info}
 
 КОНТЕКСТ:
-@{user_username} | {current_time_str}, {current_date_str} | Тариф: {tier_value}
+@{user_username} | Сейчас: {current_time_str}, {current_date_str} | Тариф: {tier_value}
+⚠️ ИСПОЛЬЗУЙ ТОЧНОЕ ВРЕМЯ ВЫШЕ при определении времени суток. НЕ угадывай время по погоде или температуре!
 {profile}
 {search_context}
 {memory_section}

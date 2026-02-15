@@ -220,7 +220,17 @@ class HybridAutonomousAgent:
             try:
                 user_tz = pytz.timezone(user_timezone)
                 user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                # Определяем время суток
+                hour = user_now.hour
+                if 6 <= hour < 12:
+                    time_of_day = "утро"
+                elif 12 <= hour < 18:
+                    time_of_day = "день"
+                elif 18 <= hour < 23:
+                    time_of_day = "вечер"
+                else:
+                    time_of_day = "ночь"
+                current_time_str = f"{user_now.strftime('%H:%M')} ({time_of_day}, {user_timezone})"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
             except Exception as e:
                 logger.error(f"Error setting user timezone: {e}")
@@ -228,7 +238,17 @@ class HybridAutonomousAgent:
                 try:
                     moscow_tz = pytz.timezone('Europe/Moscow')
                     user_now = base_now.astimezone(moscow_tz)
-                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                    # Определяем время суток в fallback
+                    hour = user_now.hour
+                    if 6 <= hour < 12:
+                        time_of_day = "утро"
+                    elif 12 <= hour < 18:
+                        time_of_day = "день"
+                    elif 18 <= hour < 23:
+                        time_of_day = "вечер"
+                    else:
+                        time_of_day = "ночь"
+                    current_time_str = f"{user_now.strftime('%H:%M')} ({time_of_day}, Europe/Moscow)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                 except Exception as e:
                     logger.warning(f"[AGENT] Moscow timezone fallback failed: {e}")
@@ -616,7 +636,17 @@ class HybridAutonomousAgent:
             try:
                 user_tz = pytz.timezone(user_timezone)
                 user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                # Определяем время суток
+                hour = user_now.hour
+                if 6 <= hour < 12:
+                    time_of_day = "утро"
+                elif 12 <= hour < 18:
+                    time_of_day = "день"
+                elif 18 <= hour < 23:
+                    time_of_day = "вечер"
+                else:
+                    time_of_day = "ночь"
+                current_time_str = f"{user_now.strftime('%H:%M')} ({time_of_day}, {user_timezone})"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
             except Exception as e:
                 logger.error(f"Error setting user timezone: {e}")
@@ -624,7 +654,17 @@ class HybridAutonomousAgent:
                 try:
                     moscow_tz = pytz.timezone('Europe/Moscow')
                     user_now = base_now.astimezone(moscow_tz)
-                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                    # Определяем время суток в fallback
+                    hour = user_now.hour
+                    if 6 <= hour < 12:
+                        time_of_day = "утро"
+                    elif 12 <= hour < 18:
+                        time_of_day = "день"
+                    elif 18 <= hour < 23:
+                        time_of_day = "вечер"
+                    else:
+                        time_of_day = "ночь"
+                    current_time_str = f"{user_now.strftime('%H:%M')} ({time_of_day}, Europe/Moscow)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                 except Exception as e:
                     logger.warning(f"[AGENT] Moscow timezone fallback failed in reflect: {e}")

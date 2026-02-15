@@ -778,7 +778,7 @@ class ReminderService:
                 return
             
             # Проверить время — не отправлять с 22:00 до 10:00
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             now_user_time = datetime.now(user_tz)
             current_hour = now_user_time.hour
             
@@ -889,7 +889,7 @@ class ReminderService:
                 Task.reminder_time.isnot(None)
             ).all()
             
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             current_time = datetime.now(pytz.UTC)
             
             for task in pending_tasks:
@@ -1002,7 +1002,7 @@ class ReminderService:
             if not user:
                 return
             
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             job_id = f"proactive_{user.telegram_id}"
             
             # Сокращённые адаптивные интервалы
@@ -1076,7 +1076,7 @@ class ReminderService:
                     logger.debug(f"Overdue check job {job_id} already exists, skipping")
                     continue
                 
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
                 
                 # Планируем проверки просроченных задач
                 # Если интервал >= 60 минут, используем часовой триггер

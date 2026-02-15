@@ -61,7 +61,7 @@ async def generate_progress_post(user_id, session):
             return None
         
         # Get today's tasks stats
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         now_utc = datetime.now(pytz.UTC)
         user_now = now_utc.astimezone(user_tz)
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
@@ -348,7 +348,7 @@ async def check_and_create_posts():
                 if not profile:
                     continue
                 
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
                 user_now = datetime.now(pytz.UTC).astimezone(user_tz)
                 
                 # Create progress post at random time during the day

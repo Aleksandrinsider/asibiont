@@ -1041,7 +1041,7 @@ async def dashboard_handler(request):
             end_dt = subscription.end_date
             if end_dt.tzinfo is None:
                 end_dt = end_dt.replace(tzinfo=pytz.UTC)
-            end_local = end_dt.astimezone(user_tz if user.timezone else pytz.UTC)
+            end_local = end_dt.astimezone(user_tz if user.timezone else pytz.timezone('Europe/Moscow'))
             formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
 
         # Calculate upcoming reminders
@@ -1052,9 +1052,9 @@ async def dashboard_handler(request):
                     if task.reminder_time.tzinfo is None:
                         task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
                     if task.reminder_time.astimezone(
-                            user_tz if user.timezone else pytz.UTC) > user_now and task.status == 'pending':
+                            user_tz if user.timezone else pytz.timezone('Europe/Moscow')) > user_now and task.status == 'pending':
                         reminder_time_local = task.reminder_time.astimezone(
-                            user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
+                            user_tz if user.timezone else pytz.timezone('Europe/Moscow')).strftime("%H:%M")
                         upcoming_reminders.append(f"{task.title}  {reminder_time_local}")
 
         #      JSON 
@@ -5240,7 +5240,7 @@ async def api_profile_handler(request):
             end_dt = subscription.end_date
             if end_dt.tzinfo is None:
                 end_dt = end_dt.replace(tzinfo=pytz.UTC)
-            end_local = end_dt.astimezone(user_tz if user.timezone else pytz.UTC)
+            end_local = end_dt.astimezone(user_tz if user.timezone else pytz.timezone('Europe/Moscow'))
             formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
 
         # Get user avatar URL

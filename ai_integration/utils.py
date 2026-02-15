@@ -203,7 +203,7 @@ def parse_time_to_datetime(time_text, user_id):
     # Получаем timezone пользователя
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
-    user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.UTC
+    user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.timezone('Europe/Moscow')
     session.close()
     now = datetime.now(user_tz)
     time_text = time_text.lower().strip()
