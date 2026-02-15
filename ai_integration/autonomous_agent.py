@@ -401,9 +401,25 @@ class HybridAutonomousAgent:
             base_prompt = ctx['base_prompt']
             sub_tier = ctx['sub_tier']
 
-            # Собираем сообщения
+            # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
+            from .cognitive import CognitiveEngine
+            cognitive_hints = CognitiveEngine.build_cognitive_hints(user_message)
+            if cognitive_hints:
+                base_prompt += cognitive_hints
+
+            # Собираем историю с учётом старого контекста
             from .conversation_history import get_conversation_history
-            history = get_conversation_history(user_id, session=None, limit=8)
+            full_history = get_conversation_history(user_id, session=None, limit=16)
+
+            if len(full_history) > 10:
+                # Извлекаем темы из старых сообщений (без API вызова)
+                old_msgs = full_history[:-8]
+                history = full_history[-8:]
+                topics = CognitiveEngine.extract_conversation_topics(old_msgs)
+                if topics:
+                    base_prompt += f"\n\n[РАНЕЕ ОБСУЖДАЛИ: {', '.join(topics)}]"
+            else:
+                history = full_history
 
             messages = [{"role": "system", "content": base_prompt}]
             if history:
@@ -431,14 +447,9 @@ class HybridAutonomousAgent:
                 tool_calls = msg.get('tool_calls', [])
 
                 if not tool_calls:
-                    # AI ответил текстом → готово
-                    from .utils import clean_technical_details
-                    final = clean_technical_details(content).strip()
-                    if not final:
-                        final = content.strip() or "Готово!"
-                    self._save_and_learn(user_message, user_id,
-                                        all_execution_results, final)
-                    return final
+                    # AI ответил текстом → когнитивная валидация → готово
+                    return self._finalize_response(
+                        content, user_message, user_id, all_execution_results)
 
                 # AI вызвал tools → добавляем assistant message в цепочку
                 messages.append(msg)
@@ -488,10 +499,11 @@ class HybridAutonomousAgent:
                                                      "error": "no result"}
                     all_execution_results.append(r)
 
-                    # Добавляем tool result в messages
+                    # Добавляем tool result в messages (со сжатием)
                     if r.get('success'):
                         rc = json.dumps(r['result'], ensure_ascii=False,
-                                        default=str)[:2000]
+                                        default=str)
+                        rc = CognitiveEngine.compress_tool_result(rc)
                     else:
                         rc = json.dumps({"error": str(r.get('error', ''))},
                                         ensure_ascii=False)
@@ -513,11 +525,8 @@ class HybridAutonomousAgent:
             final_resp = await self.call_ai(
                 messages, use_tools=False, temperature=0.7)
             final_text = final_resp['choices'][0]['message'].get('content', '')
-            from .utils import clean_technical_details
-            final = clean_technical_details(final_text).strip() or "Готово!"
-            self._save_and_learn(user_message, user_id,
-                                all_execution_results, final)
-            return final
+            return self._finalize_response(
+                final_text, user_message, user_id, all_execution_results)
 
         except Exception as e:
             logger.error(f"[AGENT] Error: {e}\n{traceback.format_exc()}")
@@ -529,6 +538,30 @@ class HybridAutonomousAgent:
                 "Что-то сломалось. Перефразируй, пожалуйста.",
             ]
             return random.choice(error_responses)
+
+    # ===== КОГНИТИВНАЯ ФИНАЛИЗАЦИЯ =====
+
+    def _finalize_response(self, content, user_message, user_id, execution_results):
+        """Clean → validate → save → return.
+        
+        Единая точка выхода: чистка тех. деталей, когнитивная валидация
+        (убирает шаблонные начала, markdown, автоответчик, списки),
+        сохранение в историю и обучение.
+        """
+        from .utils import clean_technical_details
+        from .cognitive import CognitiveEngine
+
+        final = clean_technical_details(content).strip()
+        if not final:
+            final = content.strip() or "Готово!"
+
+        # Когнитивная валидация (quality gate)
+        final, issues = CognitiveEngine.validate_response(final, user_message)
+        if issues:
+            logger.info(f"[COGNITIVE] Response fixed: {issues}")
+
+        self._save_and_learn(user_message, user_id, execution_results, final)
+        return final
 
     # ===== ОБУЧЕНИЕ И АДАПТАЦИЯ =====
 

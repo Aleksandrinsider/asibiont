@@ -9,7 +9,7 @@ from models import Session, User
 
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_MESSAGES = 16  # Keep last 16 messages (8 exchanges)
+MAX_HISTORY_MESSAGES = 24  # Keep last 24 messages (12 exchanges) for topic extraction
 
 
 def save_message_to_history(user_id, role, content, session=None):
