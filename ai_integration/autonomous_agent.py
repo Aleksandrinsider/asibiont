@@ -592,6 +592,183 @@ class HybridAutonomousAgent:
         except Exception as e:
             logger.warning(f"[MEMORY] Save failed: {e}")
 
+    # ===== ЕДИНЫЙ МОЗГ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ =====
+
+    async def generate_system_message(self, user_id, mode, instruction,
+                                       extra_context=None, max_tokens=600,
+                                       max_iterations=2):
+        """Генерация системного сообщения (напоминание, проактивное, поздравление)
+        через тот же мозг с tool calling, но без сохранения в историю диалога.
+
+        Args:
+            user_id: telegram ID пользователя
+            mode: 'reminder' | 'proactive' | 'result_check'
+            instruction: текст задания для AI (что сгенерировать)
+            extra_context: дополнительный контекст (ситуация, красные флаги и т.д.)
+            max_tokens: лимит токенов (короткие сообщения = меньше)
+            max_iterations: макс. итераций tool calling (2 для скорости)
+
+        Returns:
+            str — готовый текст сообщения
+        """
+        try:
+            # Контекст — тот же что и для обычного чата
+            ctx = self._build_context(user_id)
+            if not ctx:
+                return self._system_message_fallback(mode, instruction)
+
+            base_prompt = ctx['base_prompt']
+            sub_tier = ctx['sub_tier']
+
+            # Добавляем режим в системный промпт
+            mode_instructions = {
+                'reminder': (
+                    "\n\n[РЕЖИМ: НАПОМИНАНИЕ]\n"
+                    "Ты отправляешь НАПОМИНАНИЕ о задаче. Правила:\n"
+                    "- Краткость: 2-4 предложения максимум\n"
+                    "- Дружественный тон, адаптированный под время суток\n"
+                    "- ОБЯЗАТЕЛЬНО заверши вопросом о статусе задачи\n"
+                    "- Можешь использовать get_task_details для контекста\n"
+                    "- НЕ создавай новые задачи\n"
+                    "- НЕ пиши длинные мотивационные тексты"
+                ),
+                'proactive': (
+                    "\n\n[РЕЖИМ: ПРОАКТИВНОЕ СООБЩЕНИЕ]\n"
+                    "Ты SAM решил написать пользователю — не в ответ на его запрос.\n"
+                    "Правила:\n"
+                    "- 2-5 предложений, живой тон, конкретика\n"
+                    "- Каждое сообщение = минимум 1 КОНКРЕТНОЕ действие\n"
+                    "- Можешь использовать инструменты для актуальных данных\n"
+                    "- НЕ начинай с банального 'Привет!' без пользы\n"
+                    "- НЕ перечисляй функции бота\n"
+                    "- НЕ придумывай @username, контакты, цифры"
+                ),
+                'result_check': (
+                    "\n\n[РЕЖИМ: ПОЗДРАВЛЕНИЕ]\n"
+                    "Задача выполнена — поздравь КРАТКО и позитивно.\n"
+                    "1-2 предложения максимум. Без лишних вопросов."
+                ),
+            }
+
+            system_prompt = base_prompt + mode_instructions.get(mode, '')
+
+            # Собираем messages — БЕЗ истории диалога (это системное сообщение)
+            messages = [{"role": "system", "content": system_prompt}]
+
+            # Если есть extra_context (ситуация, красные флаги) — добавляем
+            if extra_context:
+                messages.append({
+                    "role": "user",
+                    "content": f"[КОНТЕКСТ СИТУАЦИИ]\n{extra_context}"
+                })
+
+            messages.append({"role": "user", "content": instruction})
+
+            # Определяем какие инструменты ИСКЛЮЧИТЬ по режиму
+            exclude_tools = set()
+            if mode == 'reminder':
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'}
+            elif mode == 'result_check':
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task',
+                                 'edit_task', 'reschedule_task'}
+            elif mode == 'proactive':
+                exclude_tools = {'delegate_task'}
+
+            # ===== Tool calling loop (облегчённый) =====
+            all_execution_results = []
+            seen_tools = set()
+
+            for iteration in range(max_iterations):
+                response = await self.call_ai(
+                    messages, use_tools=True, subscription_tier=sub_tier,
+                    tool_choice="auto", max_tokens=max_tokens,
+                    exclude_tools=list(exclude_tools))
+
+                msg = response['choices'][0]['message']
+                content = msg.get('content', '')
+                tool_calls = msg.get('tool_calls', [])
+
+                if not tool_calls:
+                    # AI ответил текстом → готово
+                    from .utils import clean_technical_details
+                    final = clean_technical_details(content).strip()
+                    return final if final else self._system_message_fallback(mode, instruction)
+
+                # AI вызвал tools
+                messages.append(msg)
+
+                for tc_item in tool_calls:
+                    func = tc_item.get('function', {})
+                    name = func.get('name', '')
+                    try:
+                        args = json.loads(func.get('arguments', '{}'))
+                    except Exception:
+                        args = {}
+
+                    # Dedup
+                    dedup_key = f"{name}:{json.dumps(args, sort_keys=True)}"
+                    if dedup_key in seen_tools:
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc_item['id'],
+                            "content": '{"status": "skipped: duplicate"}'
+                        })
+                        continue
+                    seen_tools.add(dedup_key)
+
+                    # Блокируем запрещённые инструменты
+                    if name in exclude_tools:
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc_item['id'],
+                            "content": f'{{"status": "blocked: {name} not available in {mode} mode"}}'
+                        })
+                        continue
+
+                    # Execute
+                    action = [{"tool": name, "params": args,
+                               "reason": f"system:{mode} iter {iteration+1}"}]
+                    results = await self.execute_actions(
+                        action, user_id, session=None, user_message=instruction)
+
+                    r = results[0] if results else {"success": False, "error": "no result"}
+                    all_execution_results.append(r)
+
+                    if r.get('success'):
+                        rc = json.dumps(r['result'], ensure_ascii=False, default=str)[:1500]
+                    else:
+                        rc = json.dumps({"error": str(r.get('error', ''))}, ensure_ascii=False)
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc_item['id'],
+                        "content": rc
+                    })
+
+            # Финальный вызов без tools после исчерпания итераций
+            final_resp = await self.call_ai(
+                messages, use_tools=False, max_tokens=max_tokens)
+            final_text = final_resp['choices'][0]['message'].get('content', '')
+            from .utils import clean_technical_details
+            return clean_technical_details(final_text).strip() or self._system_message_fallback(mode, instruction)
+
+        except Exception as e:
+            logger.error(f"[AGENT:SYSTEM] Error in {mode}: {e}\n{traceback.format_exc()}")
+            return self._system_message_fallback(mode, instruction)
+
+    def _system_message_fallback(self, mode, instruction):
+        """Fallback текст если AI недоступен."""
+        if mode == 'reminder':
+            # Извлекаем имя задачи из instruction
+            import re
+            match = re.search(r"[«'](.+?)[»']", instruction)
+            task_name = match.group(1) if match else "задача"
+            return f"Напоминаю о задаче: {task_name}. Как продвигается?"
+        elif mode == 'result_check':
+            return "Отлично, задача выполнена! 👍"
+        else:
+            return "Привет! Готов помочь с задачами и целями."
+
     def _learn_from_success(self, message, user_id, tools_used):
         """Обучение на успешных паттернах.
         

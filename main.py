@@ -5722,21 +5722,8 @@ async def start_reminder_service(app):
         logger.info(f"Job: {job.id} at {job.next_run_time}")
 
 
-# Premium scheduler       real-time
-# async def start_premium_scheduler(app):
-#     """ Premium scheduler   """
-#     logger.info("Starting Premium Scheduler...")
-#     try:
-#         from ai_integration.premium_scheduler import start_premium_scheduler
-#         start_premium_scheduler()
-#         logger.info("Premium Scheduler started successfully")
-#     except Exception as e:
-#         logger.error(f"Failed to start Premium Scheduler: {e}")
-
-
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
-# app.on_startup.append(start_premium_scheduler)  #   real-time 
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 

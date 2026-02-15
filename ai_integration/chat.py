@@ -323,7 +323,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         }
 
 async def generate_reminder(user_id, task_title, task_id=None, escalation_level=1):
-    """Генерирует текст напоминания о задаче с полным контекстом
+    """Генерирует напоминание через единый мозг агента (с tool calling).
     
     Args:
         user_id: ID пользователя
@@ -332,331 +332,68 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
         escalation_level: Уровень эскалации (1=мягко, 2=настойчиво, 3=критично)
     """
     try:
-        # Получить полную информацию о задаче и пользователе
-        db_session = Session()
-        user = db_session.query(User).filter_by(telegram_id=user_id).first()
-        
-        if not user:
-            db_session.close()
-            return f"Привет! Напоминаю о задаче: {task_title}. Время начать!"
-        
-        # Получить задачу для дополнительного контекста
-        task = None
-        task_context = ""
-        if task_id:
-            task = db_session.query(Task).filter_by(id=task_id).first()
-            if task:
-                # Добавляем контекст о делегировании
-                if task.delegated_to_username:
-                    delegator = db_session.query(User).filter_by(id=task.user_id).first()
-                    delegator_name = f"@{delegator.username}" if delegator and delegator.username else "другой пользователь"
-                    task_context += f"\nЭто делегированная задача от {delegator_name}."
-                
-                # Описание задачи
-                if task.description:
-                    try:
-                        desc = decrypt_data(task.description)
-                        if desc:
-                            task_context += f"\nДетали: {desc}"
-                    except Exception as e:
-                        logger.warning(f"[CONTEXT] Error decrypting task description: {e}")
-        
-        # Получить память и профиль пользователя
-        user_memory = ""
-        profile_context = ""
-        if user.memory:
-            try:
-                decrypted = decrypt_data(user.memory)
-                user_memory = f"\nИнформация о пользователе: {decrypted}"
-            except Exception as e:
-                logger.warning(f"[CONTEXT] Error decrypting user memory: {e}")
-        
-        # Получить профиль для контекста
-        profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
-        if profile:
-            if profile.current_plans:
-                profile_context += f"\nТекущие планы пользователя: {profile.current_plans}"
-            if profile.goals:
-                profile_context += f"\nЦели: {profile.goals}"
-        
-        db_session.close()
+        from .autonomous_agent import get_autonomous_agent
+        agent = get_autonomous_agent()
 
-        # Используем единый унифицированный промпт для всех AI-сообщений
-        base_now = datetime.now(pytz.UTC)
-        user_now = base_now  # Default to UTC
-        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-        current_date_str = user_now.strftime("%Y-%m-%d")
-        
-        months = [
-            'января',
-            'февраля',
-            'марта',
-            'апреля',
-            'мая',
-            'июня',
-            'июля',
-            'августа',
-            'сентября',
-            'октября',
-            'ноября',
-            'декабря']
-        
-        # Get user timezone if available, default to Moscow if not set
-        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
-        try:
-            user_tz = pytz.timezone(user_timezone)
-            user_now = base_now.astimezone(user_tz)
-            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-        except Exception as e:
-            logger.error(f"Error setting user timezone for reminder: {e}")
-            # Fallback to Moscow time
-            try:
-                moscow_tz = pytz.timezone('Europe/Moscow')
-                user_now = base_now.astimezone(moscow_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.warning(f"[CHAT] Failed Moscow timezone fallback: {e}")
-        
-        user_username = user.username if user and user.username else "пользователь"
-        mentions_str = ""
-        
-        # Анализ времени суток для контекстного тона
-        hour = user_now.hour
-        time_context = ""
-        if 0 <= hour < 6:
-            time_context = "Ранее утро (0-6): тон очень мягкий, деликатный"
-        elif 6 <= hour < 9:
-            time_context = "Утро (6-9): бодрый, мотивирующий тон"
-        elif 9 <= hour < 12:
-            time_context = "До обеда (9-12): рабочий, продуктивный тон"
-        elif 12 <= hour < 14:
-            time_context = "Обед (12-14): легкий, ненавязчивый тон"
-        elif 14 <= hour < 18:
-            time_context = "После обеда (14-18): активный, деловой тон"
-        elif 18 <= hour < 22:
-            time_context = "Вечер (18-22): умеренный, спокойный тон"
-        else:
-            time_context = "Позднее время (22-0): очень мягкий, расслабленный тон"
-
-        base_prompt = get_extended_system_prompt(
-            user_now,
-            current_time_str,
-            current_date_str,
-            user_username,
-            mentions_str,
-            user_memory,
-            message_type='reminder')
-
-        system_prompt = base_prompt
-
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-
-        # Настройка тона в зависимости от уровня эскалации
-        escalation_prompts = {
-            1: """Сгенерируй ДРУЖЕЛЮБНОЕ и МЯГКОЕ напоминание о задаче: '{task_title}'.
-
-ВРЕМЯ СУТОК: {time_context}
-
-ТОН: Легкий, не навязчивый, поддерживающий (адаптируй под время суток)
-СТИЛЬ: Как напоминание от друга, мотивирующее
-
-ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (1-2 абзаца максимум).
-- Начни с дружеского приветствия с учётом времени суток
-- Напомни о задаче деликатно
-- Добавь мотивацию и практические советы
-- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ВОПРОСОМ: "Задача выполнена?" или "Как продвигается?"
-- НЕ пиши промежуточные мысли или "сейчас посмотрю задачи"
-
-КОНТЕКСТ ЗАДАЧИ:{context_tasks}
-КОНТЕКСТ ПРОФИЛЯ:{context_profile}""",
-            
-            2: """Сгенерируй НАСТОЙЧИВОЕ повторное напоминание о задаче: '{task_title}'.
-
-ВНИМАНИЕ: ЭТО ПОВТОРНОЕ НАПОМИНАНИЕ - прошло 15 минут с первого
-
-ВРЕМЯ СУТОК: {time_context}
-
-ТОН: Более настойчивый, но всё ещё дружелюбный и мотивирующий (адаптируй под время суток)
-СТИЛЬ: Акцент на важности задачи и последствиях откладывания
-
-ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (2-3 абзаца).
-- УКАЖИ что это повторное напоминание
-- Подчеркни важность задачи
-- Спроси что мешает начать или предложи разбить на части
-- Дай конкретный совет как приступить
-- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ВОПРОСОМ О СТАТУСЕ
-
-КОНТЕКСТ ЗАДАЧИ:{context_tasks}
-КОНТЕКСТ ПРОФИЛЯ:{context_profile}""",
-            
-            3: """Сгенерируй КРИТИЧНОЕ напоминание о задаче: '{task_title}'.
-
-КРИТИЧЕСКОЕ НАПОМИНАНИЕ - задача требует срочного внимания
-
-ВРЕМЯ СУТОК: {time_context}
-
-ТОН: Срочный, серьёзный, но конструктивный (несмотря на время суток)
-СТИЛЬ: Акцент на последствиях и необходимости действовать сейчас
-
-ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (2-3 абзаца).
-- ЯВНО укажи критичность ситуации
-- Объясни возможные последствия откладывания
-- Предложи экстренный план действий (первый минимальный шаг)
-- Спроси нужна ли помощь/делегирование/перенос
-- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ТРЕБОВАНИЕМ ОТВЕТА
-
-КОНТЕКСТ ЗАДАЧИ:{context_tasks}
-КОНТЕКСТ ПРОФИЛЯ:{context_profile}"""
+        # Формируем инструкцию с учётом уровня эскалации
+        escalation_tones = {
+            1: "дружелюбный и мягкий, как от друга",
+            2: "настойчивый (это ПОВТОРНОЕ напоминание, прошло 15 минут)",
+            3: "срочный и серьёзный (КРИТИЧЕСКОЕ напоминание, задача требует немедленного внимания)"
         }
-        
-        prompt_template = escalation_prompts.get(escalation_level, escalation_prompts[1])
-        user_prompt = prompt_template.format(
-            task_title=task_title,
-            time_context=time_context,
-            context_tasks=task_context if task_context else 'Нет дополнительного контекста',
-            context_profile=profile_context if profile_context else 'Нет информации о профиле'
+        tone = escalation_tones.get(escalation_level, escalation_tones[1])
+
+        instruction = (
+            f"Сгенерируй напоминание о задаче «{task_title}»"
+            f"{f' (ID: {task_id})' if task_id else ''}.\n"
+            f"Тон: {tone}.\n"
+            f"Уровень эскалации: {escalation_level}/3.\n"
+            "Используй get_task_details если нужен контекст задачи.\n"
+            "ОБЯЗАТЕЛЬНО заверши вопросом: «Задача выполнена?» или «Как продвигается?»"
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        result = await agent.generate_system_message(
+            user_id=user_id,
+            mode='reminder',
+            instruction=instruction,
+            max_tokens=300,
+            max_iterations=2
+        )
+        
+        logger.info(f"[REMINDER] Generated via agent brain: {result[:100]}...")
+        return result
 
-        data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.8, "max_tokens": 200}  # Уменьшено с 300
-        
-        logger.info(f"[REMINDER] Generating AI reminder for task_id={task_id}, user={user_id}")
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    content = result["choices"][0]["message"]["content"]
-                    # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(
-                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
-                    )
-                    content = clean_technical_details(content)
-                    
-                    logger.info(f"[REMINDER] AI generated: {content[:100]}...")
-                    return content
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Failed to generate reminder: status {response.status}, error: {error_text}")
-                    # Более качественный fallback
-                    return f"Напоминание о задаче: {task_title}\n\nПора приступить к выполнению. Как планируете подойти к задаче?"
     except Exception as e:
         logger.error(f"Error in generate_reminder: {e}", exc_info=True)
-        # Более качественный fallback с контекстом
-        return f"Напоминание о задаче: {task_title}\n\nВремя приступить к выполнению. Готов начать?"
+        return f"Напоминание о задаче: {task_title}\nВремя приступить к выполнению. Готов начать?"
 
 
 async def generate_result_check(user_id, task_title):
-    """Генерирует вопрос о результате выполнения задачи"""
+    """Генерирует поздравление с выполнением задачи через единый мозг агента."""
     try:
-        # Получить память пользователя
-        user_memory = ""
-        if user_id:
-            db_session = Session()
-            user = db_session.query(User).filter_by(telegram_id=user_id).first()
-            if user and user.memory:
-                try:
-                    decrypted = decrypt_data(user.memory)
-                    user_memory = f"\nИнформация о пользователе: {decrypted}"
-                except (Exception,):
-                    user_memory = ""
-            db_session.close()
+        from .autonomous_agent import get_autonomous_agent
+        agent = get_autonomous_agent()
 
-        # Используем единый унифицированный промпт для всех AI-сообщений
+        instruction = (
+            f"Задача «{task_title}» отмечена как выполненная. "
+            "Поздравь с завершением кратко и позитивно (1-2 предложения). "
+            "Не задавай дополнительных вопросов."
+        )
 
+        result = await agent.generate_system_message(
+            user_id=user_id,
+            mode='result_check',
+            instruction=instruction,
+            max_tokens=150,
+            max_iterations=1
+        )
 
-        base_now = datetime.now(pytz.UTC)
-        user_now = base_now  # Default to UTC
-        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-        current_date_str = user_now.strftime("%Y-%m-%d")
-        
-        months = [
-            'января',
-            'февраля',
-            'марта',
-            'апреля',
-            'мая',
-            'июня',
-            'июля',
-            'августа',
-            'сентября',
-            'октября',
-            'ноября',
-            'декабря']
-        
-        # Get user timezone if available, default to Moscow if not set
-        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
-        try:
-            user_tz = pytz.timezone(user_timezone)
-            user_now = base_now.astimezone(user_tz)
-            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-        except Exception as e:
-            logger.error(f"Error setting user timezone for result_check: {e}")
-            # Fallback to Moscow time
-            try:
-                moscow_tz = pytz.timezone('Europe/Moscow')
-                user_now = base_now.astimezone(moscow_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.warning(f"[RESULT_CHECK] Failed Moscow timezone fallback: {e}")
-        
-        user_username = "пользователь"
-        mentions_str = ""
+        logger.info(f"[RESULT_CHECK] Generated via agent brain: {result[:100]}...")
+        return result
 
-        base_prompt = get_extended_system_prompt(
-            user_now,
-            current_time_str,
-            current_date_str,
-            user_username,
-            mentions_str,
-            user_memory,
-            message_type='result_check')
-
-        system_prompt = base_prompt
-
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"Задача '{task_title}' отмечена как выполненная. Поздравь с завершением задачи кратко и позитивно (1-2 предложения). Не задавай дополнительных вопросов.",
-            },
-        ]
-
-        data = {"model": DEEPSEEK_MODEL, "messages": messages}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    content = result["choices"][0]["message"]["content"]
-                    # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(
-                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
-                    )
-                    content = clean_technical_details(content)
-
-                    return content
-                else:
-                    logger.error(f"Failed to generate result check: status {response.status}")
-                    return f"Задача '{task_title}' выполнена успешно."
     except Exception as e:
         logger.error(f"Error in generate_result_check: {e}")
-        return f"Задача '{task_title}' выполнена."
+        return f"Задача «{task_title}» выполнена. Отличная работа! 🎉"
 
 
 
@@ -1198,20 +935,18 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
 
 
 async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
-    """Единый умный генератор проактивных сообщений.
+    """Единый умный генератор проактивных сообщений через мозг агента.
     
-    Вместо жёстких категорий (no_tasks/few_tasks/etc.) — AI сам выбирает,
-    что полезнее всего сказать на основе полного контекста ситуации.
-    
-    Заменяет: старый generate_proactive_message с 690 строками хардкод-промптов.
+    Использует _build_proactive_context() для ситуационного анализа,
+    затем передаёт всё через agent.generate_system_message() с tool calling.
     """
     try:
-        # 1. Собираем полный контекст
+        # 1. Собираем полный контекст ситуации
         ctx = await _build_proactive_context(user_id)
         if not ctx:
             return "Привет! Готов помочь. Что обсудим?"
         
-        # 2. Определяем intent на основе ситуации
+        # 2. Определяем intent
         intent = None
         hour = ctx['user_now'].hour
         
@@ -1221,63 +956,38 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             intent = 'morning'
         elif hour >= 20:
             intent = 'evening'
-        # Остальные случаи — AI сам выберет фокус
         
-        # 3. Формируем ситуационный промпт
+        # 3. Формируем ситуационный промпт (красные флаги, доступные данные, правила)
         situation_prompt = _build_situation_prompt(ctx, intent=intent, tasks_list=tasks_list)
         
-        # 4. System prompt
-        system_prompt = get_extended_system_prompt(
-            ctx['user_now'],
-            ctx['current_time_str'],
-            ctx['current_date_str'],
-            ctx['username'],
-            "",
-            ctx['user_memory'],
-            subscription_tier=ctx['subscription_tier'],
-            message_type='proactive'
-        )
-        
-        # Антиповтор — запрещаем повторять последние ответы
+        # 4. Антиповтор — запрещаем повторять последние ответы
+        anti_repeat = ""
         if ctx.get('last_responses'):
-            anti_repeat = "\n".join(f"- {r}" for r in ctx['last_responses'])
-            system_prompt += f"\n\nЗАПРЕЩЕНО повторять эти фразы (твои последние ответы):\n{anti_repeat}\nГенерируй УНИКАЛЬНЫЙ ответ!"
+            anti_repeat = "\n\nЗАПРЕЩЕНО повторять эти фразы (твои последние ответы):\n"
+            anti_repeat += "\n".join(f"- {r}" for r in ctx['last_responses'])
+            anti_repeat += "\nГенерируй УНИКАЛЬНЫЙ ответ!"
         
-        # 5. Собираем messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": situation_prompt}
-        ]
-        
-        # 6. Запрос к DeepSeek
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        data = {
-            "model": DEEPSEEK_MODEL,
-            "messages": messages,
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "max_tokens": 600
-        }
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    content = result["choices"][0]["message"]["content"]
-                    content = replace_placeholders(content, ctx['user_now'], ctx['current_time_str'])
-                    content = clean_technical_details(content)
-                    logger.info(f"[PROACTIVE] Generated smart message: {content[:100]}...")
-                    return content
-                else:
-                    logger.error(f"Failed to generate proactive message: status {response.status}")
-                    from .utils import generate_unified_recommendations
-                    return generate_unified_recommendations(
-                        'fallback', task_count=task_count, overdue_count=overdue_count,
-                        profile=ctx.get('profile'), weather_info=ctx.get('weather'),
-                        partner_recommendations=ctx.get('partners', ''), tasks_list=tasks_list
-                    )
-    
+        # 5. Генерируем через единый мозг агента
+        from .autonomous_agent import get_autonomous_agent
+        agent = get_autonomous_agent()
+
+        instruction = (
+            "Напиши проактивное сообщение пользователю на основе анализа ситуации выше. "
+            "Используй инструменты если нужны актуальные данные (задачи, новости, погода)."
+        )
+
+        result = await agent.generate_system_message(
+            user_id=user_id,
+            mode='proactive',
+            instruction=instruction,
+            extra_context=situation_prompt + anti_repeat,
+            max_tokens=600,
+            max_iterations=2
+        )
+
+        logger.info(f"[PROACTIVE] Generated via agent brain: {result[:100]}...")
+        return result
+
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}\n{traceback.format_exc()}")
         try:
