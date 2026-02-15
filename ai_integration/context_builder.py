@@ -140,7 +140,7 @@ class ContextBuilder:
         return hints
 
     def build_proactive_context(self, user_id, session, profile_complete=True):
-        """УМНЫЙ ПРОАКТИВНЫЙ КОНТЕКСТ: время, задачи, интересы, погода, паттерны поведения"""
+        """ФОКУСНЫЙ КОНТЕКСТ: только то, что сейчас важно. Не вываливай всё."""
         from models import User, UserProfile, Task
 
         try:
@@ -154,132 +154,66 @@ class ContextBuilder:
             base_now = datetime.now(pytz.UTC)
             user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
             user_now = base_now.astimezone(user_tz)
+            hour = user_now.hour
 
             hints = []
 
-            # АНАЛИЗ ВРЕМЕНИ СУТОК С КОНТЕКСТОМ
-            hour = user_now.hour
-            if 6 <= hour < 12:
-                time_context = "🌅 Утро - время планирования и энергичных активностей"
-            elif 12 <= hour < 18:
-                time_context = "🌞 День - продуктивное время для работы и встреч"
-            elif 18 <= hour < 23:
-                time_context = "🌆 Вечер - время отдыха, анализа дня, социальных активностей"
-            else:
-                time_context = "🌙 Ночь - время отдыха и подготовки ко сну"
+            # ═══ ПРИОРИТЕТ 1: ПРОФИЛЬ ═══
+            # Если профиль пустой — это ГЛАВНАЯ проблема. Всё остальное вторично.
+            profile_fields_filled = 0
+            if profile:
+                for f in ['interests', 'skills', 'goals', 'city', 'company', 'position']:
+                    if getattr(profile, f, None):
+                        profile_fields_filled += 1
 
-            hints.append(time_context)
+            if profile_fields_filled < 2:
+                hints.append("⚠️ ПРИОРИТЕТ: Профиль почти пустой. Без профиля ты слепой — не знаешь кому помогаешь. Начни разговор с узнавания пользователя.")
+                # При пустом профиле не добавляем ничего лишнего
+                if hints:
+                    return "\n\nФОКУС:\n" + "\n".join(hints)
 
-            # ПОГОДА (если доступна)
-            weather_hint = ""
-            if profile and profile.city:
-                try:
-                    from .utils import get_weather_info
-                    weather = get_weather_info(profile.city)
-                    if weather:
-                        weather_hint = f"🌤️ {weather}"
-                        hints.append(weather_hint)
-                except:
-                    pass
-
-            # АНАЛИЗ ЗАДАЧ С ПАТТЕРНАМИ
+            # ═══ ПРИОРИТЕТ 2: ЗАДАЧИ ═══
             tasks = session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status.in_(['pending', 'active', 'in_progress'])
             ).order_by(Task.reminder_time.asc()).limit(10).all()
 
-            total_tasks = 0
-            overdue, today, upcoming = [], [], []
+            overdue = []
+            today_tasks = []
+            tomorrow_tasks = []
 
             if tasks:
-                total_tasks = len(tasks)
-
                 for t in tasks:
                     if t.reminder_time:
                         try:
                             dt = t.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_tz)
                             if dt < user_now:
-                                desc = f" — {t.description[:60]}" if t.description else ""
-                                overdue.append(f"{t.title}{desc}")
+                                overdue.append(t.title)
                             elif dt.date() == user_now.date():
-                                desc = f" — {t.description[:60]}" if t.description else ""
-                                today.append(f"{t.title} ({dt.strftime('%H:%M')}){desc}")
+                                today_tasks.append(f"{t.title} ({dt.strftime('%H:%M')})")
                             elif dt.date() == (user_now.date() + timedelta(days=1)):
-                                desc = f" — {t.description[:60]}" if t.description else ""
-                                upcoming.append(f"{t.title}{desc}")
+                                tomorrow_tasks.append(t.title)
                         except:
                             pass
 
+                # Просроченные — критично
                 if overdue:
-                    hints.append(f"⚠️ ПРОСРОЧЕНО: {', '.join(overdue[:3])}")
-                if today:
-                    hints.append(f"📅 СЕГОДНЯ: {', '.join(today[:3])}")
-                if upcoming:
-                    hints.append(f"🔮 ЗАВТРА: {', '.join(upcoming[:2])}")
+                    hints.append(f"🚨 Просрочено: {', '.join(overdue[:3])}")
+                if today_tasks:
+                    hints.append(f"📅 Сегодня: {', '.join(today_tasks[:3])}")
+                if tomorrow_tasks and not today_tasks:
+                    hints.append(f"🔮 Завтра: {', '.join(tomorrow_tasks[:2])}")
+            else:
+                # Нет задач — второй приоритет после профиля
+                hints.append("📋 Нет активных задач.")
 
-                # АНАЛИЗ ПАТТЕРНОВ ПРОДУКТИВНОСТИ
-                if total_tasks > 5:
-                    hints.append(f"📊 Много задач ({total_tasks}) - фокус на приоритетах")
-                elif total_tasks == 0:
-                    hints.append("✅ Нет активных задач - время для новых инициатив")
-
-            # ПРОФИЛЬ И ИНТЕРЕСЫ С КОНТЕКСТОМ (только при полном профиле)
-            if profile and profile_complete:
-                if profile.interests:
-                    interests = [i.strip() for i in profile.interests.split(',')[:3]]
-                    hints.append(f"💡 ИНТЕРЕСЫ: {', '.join(interests)}")
-
-                if profile.goals:
-                    goals = [g.strip() for g in profile.goals.split(',')[:2]]
-                    hints.append(f"🎯 ЦЕЛИ: {', '.join(goals)}")
-
-                if profile.skills:
-                    skills = [s.strip() for s in profile.skills.split(',')[:2]]
-                    hints.append(f"🛠️ НАВЫКИ: {', '.join(skills)}")
-
-                if profile.company:
-                    hints.append(f"🏢 РАБОТА: {profile.company}")
-
-                if profile.position:
-                    hints.append(f"👔 ДОЛЖНОСТЬ: {profile.position}")
-                
-                # Статистика продуктивности
-                stats_parts = []
-                if profile.total_tasks_created:
-                    stats_parts.append(f"создано: {profile.total_tasks_created}")
-                if profile.completed_tasks:
-                    stats_parts.append(f"завершено: {profile.completed_tasks}")
-                if profile.skipped_tasks:
-                    stats_parts.append(f"пропущено: {profile.skipped_tasks}")
-                if profile.average_completion_time:
-                    stats_parts.append(f"ср. время: {profile.average_completion_time}")
-                if stats_parts:
-                    hints.append(f"📊 СТАТИСТИКА: {', '.join(stats_parts)}")
-
-            # Долгосрочная память (интересы, проекты, поиски)
-            if user.long_term_memory:
-                try:
-                    ltm = json.loads(user.long_term_memory)
-                    interests = ltm.get('interests', {})
-                    if interests:
-                        sorted_interests = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:5]
-                        hints.append(f"🎯 УСТОЙЧИВЫЕ ИНТЕРЕСЫ: {', '.join(f'{t}({c})' for t, c in sorted_interests)}")
-                    searches = ltm.get('search_history', [])
-                    if searches:
-                        recent_q = [s['query'] for s in searches[-3:]]
-                        hints.append(f"🔍 НЕДАВНИЕ ПОИСКИ: {', '.join(recent_q)}")
-                    projects = ltm.get('projects', {})
-                    if projects:
-                        hints.append(f"📁 ПРОЕКТЫ: {', '.join(list(projects.keys())[-3:])}")
-                except Exception:
-                    pass
-
-            # ЦЕЛИ пользователя (из таблицы Goal)
+            # ═══ ПРИОРИТЕТ 3: ЦЕЛИ ═══
             from models import Goal
             active_goals = session.query(Goal).filter(
                 Goal.user_id == user.id,
                 Goal.status == 'active'
-            ).order_by(Goal.priority.desc()).limit(5).all()
+            ).order_by(Goal.priority.desc()).limit(3).all()
+            
             if active_goals:
                 goal_lines = []
                 for g in active_goals:
@@ -287,121 +221,43 @@ class ContextBuilder:
                     if g.target_date:
                         days = g.days_until_target()
                         if days is not None and days < 0:
-                            line += " ⚠️просроч"
+                            line += " ПРОСРОЧЕНО"
                         elif days is not None and days <= 7:
-                            line += f" ⏳{days}дн"
+                            line += f" осталось {days}дн"
                     goal_lines.append(line)
-                hints.append(f"🎯 ЦЕЛИ:\n" + "\n".join(f"  {l}" for l in goal_lines))
+                hints.append("🎯 Цели: " + "; ".join(goal_lines))
 
-            # РЕАЛЬНЫЕ КОНТАКТЫ ИЗ БД (явный список с @username)
-            cached_partners = None
-            real_contacts = []  # Список реальных контактов для анти-галлюцинации
+            # ═══ КОНТАКТЫ (минимально) ═══
+            real_contacts = []
             if profile and profile.interests and profile_complete:
                 try:
                     from .handlers import get_partners_list
-                    cached_partners = get_partners_list(user.id, session)
-                    partners = cached_partners
+                    partners = get_partners_list(user.id, session)
                     if partners:
-                        for p in partners[:5]:
+                        for p in partners[:3]:
                             partner_user = session.query(User).filter_by(id=p.user_id).first()
                             if partner_user and partner_user.username:
-                                # Определяем общие интересы
-                                common = set()
-                                if p.interests and profile.interests:
-                                    partner_ints = set(i.strip().lower() for i in p.interests.split(','))
-                                    user_ints = set(i.strip().lower() for i in profile.interests.split(','))
-                                    common = user_ints & partner_ints
-                                city = p.city or ''
-                                real_contacts.append({
-                                    'username': partner_user.username,
-                                    'common': list(common)[:3],
-                                    'city': city,
-                                    'skills': (p.skills or '')[:80]
-                                })
+                                real_contacts.append(f"@{partner_user.username}")
                 except Exception:
                     pass
 
-            # Формируем блок контактов — явный, чтобы AI не выдумывал несуществующих
             if real_contacts:
-                contact_lines = []
-                for c in real_contacts:
-                    common_str = f", общее: {', '.join(c['common'])}" if c['common'] else ''
-                    city_str = f", {c['city']}" if c['city'] else ''
-                    contact_lines.append(f"  @{c['username']}{city_str}{common_str}")
-                hints.append(f"🤝 РЕАЛЬНЫЕ КОНТАКТЫ ({len(real_contacts)}):\n" + "\n".join(contact_lines))
+                hints.append(f"🤝 Контакты: {', '.join(real_contacts)}")
             else:
-                hints.append("🤝 КОНТАКТЫ: пока нет подходящих людей в базе. НЕ выдумывай @username!")
+                hints.append("🤝 Контактов нет. НЕ выдумывай @username!")
 
-            # PREMIUM АЛЕРТЫ
-            alert_hints = self.build_premium_alerts_context(user_id, session)
-            if alert_hints:
-                hints.extend(alert_hints)
-
-            # КОНТЕКСТНЫЕ ПОДСКАЗКИ (краткие, AI сам решит что предложить)
+            # ═══ ВРЕМЯ СУТОК (одна строка) ═══
             time_labels = {(6,12): "утро", (12,18): "день", (18,23): "вечер"}
             time_label = next((v for (a,b), v in time_labels.items() if a <= hour < b), "ночь")
-            hints.append(f"⏰ Время суток: {time_label}")
+            hints.append(f"⏰ {time_label}")
 
-            # ЗАГРУЖЕННОСТЬ
-            if not tasks:
-                hints.append("📋 Нет активных задач — можно предложить что-то полезное")
-            else:
-                if overdue:
-                    hints.append(f"🚨 Просроченных задач: {overdue}")
-                if today:
-                    hints.append(f"📅 Задач на сегодня: {today}")
-                if total_tasks > 3:
-                    hints.append(f"⚡ Загружен: {total_tasks} активных задач")
-
-            # РЕЛЕВАНТНЫЕ ЗАДАЧИ ДРУГИХ ПОЛЬЗОВАТЕЛЕЙ (возможности для коллаборации)
-            try:
-                # Собираем расширенный набор ключевых слов пользователя
-                match_keywords = set()
-                if profile and profile.interests:
-                    match_keywords.update(i.strip().lower() for i in profile.interests.split(',') if len(i.strip()) > 2)
-                # LTM interests (топ по весу)
-                try:
-                    ltm_data = json.loads(user.long_term_memory) if user.long_term_memory else {}
-                    for topic, weight in sorted(ltm_data.get('interests', {}).items(), key=lambda x: x[1], reverse=True)[:8]:
-                        if weight >= 2 and len(topic) >= 3:
-                            match_keywords.add(topic.lower().strip())
-                except Exception:
-                    pass
-                # Goal categories
-                try:
-                    user_goals = session.query(Goal).filter(
-                        Goal.user_id == user.id, Goal.status.in_(['active', 'in_progress'])
-                    ).all()
-                    for g in user_goals:
-                        if g.category and len(g.category) >= 3:
-                            match_keywords.add(g.category.lower().strip())
-                        if g.title:
-                            match_keywords.update(w.lower() for w in g.title.split() if len(w) >= 4)
-                except Exception:
-                    pass
-                
-                if match_keywords:
-                    yesterday = datetime.now(timezone.utc) - timedelta(days=3)
-                    other_tasks = session.query(Task).filter(
-                        Task.user_id != user.id,
-                        Task.created_at >= yesterday,
-                        Task.status.in_(['pending', 'in_progress', 'active'])
-                    ).order_by(Task.created_at.desc()).limit(20).all()
-                    
-                    relevant_tasks = []
-                    for t in other_tasks:
-                        task_text = (t.title + ' ' + (t.description or '')).lower()
-                        if any(kw in task_text for kw in match_keywords):
-                            task_owner = session.query(User).filter_by(id=t.user_id).first()
-                            if task_owner and task_owner.username:
-                                relevant_tasks.append(f"@{task_owner.username}: \"{t.title}\"")
-                    if relevant_tasks:
-                        hints.append(f"🔗 РЕЛЕВАНТНЫЕ ЗАДАЧИ ДРУГИХ ПОЛЬЗОВАТЕЛЕЙ:\n" + "\n".join(f"  {rt}" for rt in relevant_tasks[:3]))
-            except Exception:
-                pass
+            # PREMIUM АЛЕРТЫ (если есть)
+            alert_hints = self.build_premium_alerts_context(user_id, session)
+            if alert_hints:
+                hints.extend(alert_hints[:2])
 
             if hints:
-                return "\n\nУМНЫЙ КОНТЕКСТ:\n" + "\n".join(hints)
+                return "\n\nФОКУС:\n" + "\n".join(hints)
 
             return ""
 
