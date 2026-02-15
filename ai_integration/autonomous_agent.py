@@ -108,6 +108,56 @@ class HybridAutonomousAgent:
                     error_text = await response.text()
                     raise Exception(f"AI call failed: {response.status} {error_text}")
 
+    # ===== КЛАССИФИКАТОР СЛОЖНОСТИ ЗАПРОСА =====
+
+    def _classify_complexity(self, user_message):
+        """
+        Классифицирует сложность запроса БЕЗ API-вызова (нулевая стоимость).
+        
+        Возвращает: 'simple', 'medium', 'complex', 'deep'
+        
+        simple  → 0 агентов, прямой AI (привет, ок, спасибо)
+        medium  → 0 агентов, AI + tools (создай задачу, покажи цели)
+        complex → 2 агента (аналитик + критик) + AI + tools
+        deep    → полный pipeline (все агенты по тарифу)
+        """
+        import re
+        msg = user_message.lower().strip()
+        words = msg.split()
+        word_count = len(words)
+        
+        # SIMPLE: приветствия, подтверждения, короткие реплики
+        # Используем \b для точного совпадения слов (иначе "да" матчит "удали")
+        simple_words = r'\b(привет|здравствуй|хай|hi|hello|добрый|ок|ладно|хорошо|понятно|ясно|спасибо|да|нет|угу|ага|пока|bye|здорово)\b'
+        simple_phrases = ['как дела', 'что умеешь', 'кто ты']
+        is_simple_word = bool(re.search(simple_words, msg))
+        is_simple_phrase = any(p in msg for p in simple_phrases)
+        if word_count <= 4 and (is_simple_word or is_simple_phrase):
+            return 'simple'
+        if word_count <= 2:
+            return 'simple'
+        
+        # DEEP: аналитика, стратегия, исследование, прогнозы
+        # Требуем минимум 7 слов, чтобы "оцени задачу" не стало deep
+        deep_patterns = [
+            'стратег', 'исследу', 'прогноз', 'тренд',
+            'рынок', 'конкурент', 'инвест', 'масштабир', 'оптимиз',
+            'план развития', 'бизнес-план', 'маркетинг',
+            'что думаешь о', 'помоги разобраться',
+            'в чём разница', 'сравни',
+        ]
+        if any(p in msg for p in deep_patterns) and word_count >= 7:
+            return 'deep'
+        
+        # COMPLEX: длинные сообщения, вопросы, несколько предложений
+        has_question = '?' in user_message
+        has_multiple_sentences = user_message.count('.') >= 2 or user_message.count('!') >= 2
+        if word_count >= 12 or (has_question and word_count >= 8) or has_multiple_sentences:
+            return 'complex'
+        
+        # MEDIUM: всё остальное (команды, средние запросы)
+        return 'medium'
+
     # ===== МУЛЬТИ-АГЕНТНЫЙ КОНВЕЙЕР МЫШЛЕНИЯ =====
 
     async def _run_thinking_pipeline(self, user_message, context_summary, subscription_tier='LIGHT', progress_callback=None):
@@ -507,13 +557,35 @@ class HybridAutonomousAgent:
         finally:
             session.close()
 
-        # --- МУЛЬТИ-АГЕНТНЫЙ КОНВЕЙЕР МЫШЛЕНИЯ ---
-        thinking_results = await self._run_thinking_pipeline(
-            user_message, context_summary, subscription_tier=user_sub_tier,
-            progress_callback=progress_callback
-        )
-        thinking_section = self._format_thinking_for_prompt(thinking_results)
-        logger.info(f"[AGENT] Thinking pipeline: {len(thinking_results)} agents, section={len(thinking_section)} chars")
+        # --- УМНАЯ МАРШРУТИЗАЦИЯ ПО СЛОЖНОСТИ ---
+        complexity = self._classify_complexity(user_message)
+        logger.info(f"[AGENT] Message complexity: {complexity} ('{user_message[:40]}...')")
+        
+        thinking_results = {}
+        thinking_section = ""
+        
+        if complexity == 'simple':
+            # Простые сообщения — без агентов, прямой AI
+            logger.info(f"[AGENT] Skipping thinking pipeline for simple message")
+        elif complexity == 'medium':
+            # Средние — без агентов, AI сам разберётся с tools
+            logger.info(f"[AGENT] Skipping thinking pipeline for medium message")
+        elif complexity == 'complex':
+            # Сложные — только Аналитик + Критик (2 вызова)
+            thinking_results = await self._run_thinking_pipeline(
+                user_message, context_summary, subscription_tier='LIGHT',  # LIGHT = analyst + critic only
+                progress_callback=progress_callback
+            )
+            thinking_section = self._format_thinking_for_prompt(thinking_results)
+            logger.info(f"[AGENT] Complex: 2 agents, section={len(thinking_section)} chars")
+        else:  # deep
+            # Глубокие — полный pipeline по тарифу
+            thinking_results = await self._run_thinking_pipeline(
+                user_message, context_summary, subscription_tier=user_sub_tier,
+                progress_callback=progress_callback
+            )
+            thinking_section = self._format_thinking_for_prompt(thinking_results)
+            logger.info(f"[AGENT] Deep: full pipeline ({len(thinking_results)} agents), section={len(thinking_section)} chars")
 
         system_prompt = f"{base_prompt}{thinking_section}\n\n" + """ГИБРИДНЫЙ ПОДХОД — ты САМ решаешь когда нужны инструменты.
 
