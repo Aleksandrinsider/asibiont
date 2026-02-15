@@ -36,6 +36,9 @@ from models import Session, User, Task, UserProfile, Goal
 from .prompts import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
 from .tools import get_available_tools
+from .vector_memory import store_conversation_turn, build_memory_context, search_memory
+from .multi_agent import get_orchestrator
+from .self_learning import get_learner
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +409,7 @@ class HybridAutonomousAgent:
             cognitive_hints = CognitiveEngine.build_cognitive_hints(user_message)
             
             # Планирование стратегии ответа
-            profile_data = ctx.get('profile', {})
+            profile_data = ctx.get('profile_data', {})
             tasks_data = ctx.get('tasks', [])
             strategy = CognitiveEngine.plan_response_strategy(user_message, profile_data, tasks_data)
             if strategy:
@@ -414,6 +417,61 @@ class HybridAutonomousAgent:
             
             if cognitive_hints:
                 base_prompt += cognitive_hints
+
+            # ═══ МУЛЬТИАГЕНТНЫЙ АНАЛИЗ ═══
+            try:
+                emotion = CognitiveEngine.detect_emotion(user_message)
+                intent = CognitiveEngine.classify_intent(user_message)
+                
+                # Семантическая память из Pinecone
+                memory_context = ""
+                try:
+                    memory_context = build_memory_context(user_id, user_message, max_chars=600)
+                    if memory_context:
+                        base_prompt += memory_context
+                except Exception as e:
+                    logger.warning(f"[VECTOR] Memory search failed: {e}")
+                
+                orchestrator = get_orchestrator()
+                user_now = ctx.get('user_now')
+                time_of_day = "день"
+                if user_now:
+                    h = user_now.hour
+                    if 6 <= h < 12: time_of_day = "утро"
+                    elif 12 <= h < 18: time_of_day = "день"
+                    elif 18 <= h < 23: time_of_day = "вечер"
+                    else: time_of_day = "ночь"
+                
+                multi_context = orchestrator.build_multi_agent_context(
+                    user_message=user_message,
+                    profile_data=profile_data,
+                    tasks_data=tasks_data,
+                    memory_context=memory_context,
+                    emotion=emotion,
+                    intent=intent,
+                    time_of_day=time_of_day
+                )
+                if multi_context:
+                    base_prompt += multi_context
+            except Exception as e:
+                logger.warning(f"[MULTI-AGENT] Context build failed: {e}")
+            
+            # ═══ САМООБУЧЕНИЕ — ПРЕДПОЧТЕНИЯ ПОЛЬЗОВАТЕЛЯ ═══
+            try:
+                learner = get_learner()
+                user_prefs = learner.get_user_preferences(user_id)
+                if user_prefs:
+                    base_prompt += user_prefs
+                
+                emotional_trend = learner.get_emotional_trend(user_id)
+                if emotional_trend:
+                    base_prompt += f"\n{emotional_trend}"
+                
+                proactive_hint = learner.suggest_proactive_action(user_id, profile_data)
+                if proactive_hint:
+                    base_prompt += f"\n{proactive_hint}"
+            except Exception as e:
+                logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
 
             # Собираем историю с учётом старого контекста
             from .conversation_history import get_conversation_history
@@ -569,7 +627,8 @@ class HybridAutonomousAgent:
             logger.info(f"[COGNITIVE] Response fixed: {issues}")
 
         # Рефлексия для обучения
-        CognitiveEngine.reflect_on_response(user_message, final, all_execution_results)
+        tools_used = [r['tool'] for r in execution_results if r.get('success')]
+        CognitiveEngine.reflect_on_response(user_message, final, tools_used)
 
         self._save_and_learn(user_message, user_id, execution_results, final)
         return final
@@ -613,6 +672,41 @@ class HybridAutonomousAgent:
             })
             if len(self.context_memory) > 100:
                 self.context_memory = self.context_memory[-100:]
+
+        # === Семантическая память (Pinecone) ===
+        try:
+            from .cognitive import CognitiveEngine
+            emotion = CognitiveEngine.detect_emotion(user_message)
+            intent = CognitiveEngine.classify_intent(user_message)
+            store_conversation_turn(
+                user_id=user_id,
+                user_message=user_message,
+                bot_response=response,
+                emotion=emotion,
+                intent=intent
+            )
+        except Exception as e:
+            logger.warning(f"[VECTOR] Store failed: {e}")
+
+        # === Self-learning feedback loop ===
+        try:
+            from .cognitive import CognitiveEngine
+            emotion = CognitiveEngine.detect_emotion(user_message)
+            intent = CognitiveEngine.classify_intent(user_message)
+            _, issues = CognitiveEngine.validate_response(response, user_message)
+            
+            learner = get_learner()
+            learner.record_turn(
+                user_id=user_id,
+                user_message=user_message,
+                response=response,
+                tools_used=tools_used,
+                emotion=emotion,
+                intent=intent,
+                issues=issues if issues else None
+            )
+        except Exception as e:
+            logger.warning(f"[SELF-LEARN] Record failed: {e}")
 
         # === Долгосрочная память — только значимые факты ===
         # НЕ сохраняем CRUD-операции (задачи уже в БД)
