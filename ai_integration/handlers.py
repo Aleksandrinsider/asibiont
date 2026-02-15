@@ -5384,7 +5384,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
         if close_session:
             session.close()
 
-async def research_topic(query: str, depth: str, user_id: int, session):
+async def research_topic(query: str, depth: str = 'full', user_id: int = None, session=None):
     """
     🔍 ПОИСК И АНАЛИЗ актуальной информации по теме
     Доступно для ВСЕХ тарифов с одинаковым качеством

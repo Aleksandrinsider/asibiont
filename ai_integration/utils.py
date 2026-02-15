@@ -448,6 +448,19 @@ def clean_technical_details(text):
     text = re.sub(r'</\|DSML\|[^>]*>', "", text, flags=re.DOTALL)
     text = re.sub(r'DSML.*?>', "", text, flags=re.DOTALL)
     
+    # Удаляем XML-подобные вызовы функций (DeepSeek иногда генерирует их)
+    text = re.sub(r'<function_calls>.*?</function_calls>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<function_call>.*?</function_call>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<invoke\s+name="[^"]*">.*?</invoke>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<call\s+function="[^"]*">.*?</call>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<arg\s+name="[^"]*">[^<]*</arg>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<parameter\s+name="[^"]*">[^<]*</parameter>', '', text, flags=re.DOTALL)
+    
+    # Удаляем <thinking> блоки
+    text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL)
+    # Удаляем незакрытые <thinking> теги
+    text = re.sub(r'<thinking>.*', '', text, flags=re.DOTALL)
+    
     # Удаляем вызовы функций в квадратных скобках: [add_task(...)]
     before = text
     text = re.sub(r"\[[\w_]+\([^]]*\)\]", "", text)
@@ -510,10 +523,10 @@ def clean_technical_details(text):
     for emoji in technical_emojis:
         text = text.replace(emoji, '')
     # КРИТИЧЕСКАЯ ПРОВЕРКА: если после очистки ничего не осталось,
-    # значит AI вернул только технические детали, вернуть оригинал
+    # значит AI вернул ТОЛЬКО технические детали — НЕ возвращать оригинал!
     if not text.strip():
-        logger.warning(f"[CLEAN] Content was completely cleaned, returning original: '{original_text}'")
-        return original_text.strip()
+        logger.warning(f"[CLEAN] Content was completely cleaned, returning fallback. Original: '{original_text[:200]}'")
+        return ""
     if original_text != text:
         logger.warning(f"[CLEAN] Original: '{original_text[:100]}...' -> Cleaned: '{text[:100]}...'")
     return text.strip()
