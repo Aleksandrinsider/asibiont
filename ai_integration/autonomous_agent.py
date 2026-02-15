@@ -52,6 +52,14 @@ TOOL_REQUIRED_KEYWORDS = {
                  'разберись в', 'проанализируй'],
 }
 
+# Слова, означающие что пользователь ЯВНО просит создать задачу
+# Без этих слов add_task блокируется — чтобы агент не плодил задачи из вопросов
+TASK_CREATION_SIGNALS = [
+    'создай', 'добавь', 'запланируй', 'напомни', 'поставь задачу',
+    'создать', 'добавить', 'запланировать', 'напомнить',
+    'задачу на', 'задачу к', 'новую задачу', 'ещё задачу', 'еще задачу',
+]
+
 
 class HybridAutonomousAgent:
     """
@@ -98,7 +106,7 @@ class HybridAutonomousAgent:
             "model": DEEPSEEK_MODEL,
             "messages": messages,
             "temperature": kwargs.pop("temperature", 0.7),
-            "max_tokens": kwargs.pop("max_tokens", 2000),
+            "max_tokens": kwargs.pop("max_tokens", 3000),
             **kwargs
         }
 
@@ -454,6 +462,19 @@ class HybridAutonomousAgent:
                         })
                         continue
                     seen_tools.add(dedup_key)
+
+                    # GUARD: блокируем add_task если пользователь НЕ просил создать задачу
+                    # Решает баг: AI создаёт задачи из вопросов/ответов
+                    if name == 'add_task':
+                        msg_lower = user_message.lower()
+                        if not any(sig in msg_lower for sig in TASK_CREATION_SIGNALS):
+                            logger.info(f"[GUARD] Blocked add_task — no creation signal in: '{user_message[:60]}'")
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc_item['id'],
+                                "content": '{"status": "blocked: user did not ask to create a task. Answer with text instead."}'
+                            })
+                            continue
 
                     # Execute single tool
                     action = [{"tool": name, "params": args,

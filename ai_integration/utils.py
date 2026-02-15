@@ -313,9 +313,10 @@ def clean_technical_details(text):
     )
     if before != text:
         pass
-    # Удаляем оставшиеся ТЕХНИЧЕСКИЕ вызовы функций (только snake_case паттерн)
+    # Удаляем оставшиеся ТЕХНИЧЕСКИЕ вызовы функций (только snake_case с минимум 2 частями)
+    # НЕ трогаем обычный текст вроде "Python (язык)" или "AI (artificial intelligence)"
     before = text
-    text = re.sub(r'\b[a-z_]+\([^)]+\)', '', text)
+    text = re.sub(r'\b[a-z]+_[a-z_]+\([^)]*\)', '', text)
     if before != text:
         pass
     # Удаляем фразы о вызове функций
