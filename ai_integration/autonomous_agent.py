@@ -384,15 +384,8 @@ class HybridAutonomousAgent:
                                                      "error": "no result"}
                     all_execution_results.append(r)
 
-                    # NEED_TIME shortcut
-                    if (r.get('success') and name == 'add_task'
-                            and 'NEED_TIME_FOR_TASK:' in str(r.get('result', ''))):
-                        msg_text = str(r['result']).split(
-                            'NEED_TIME_FOR_TASK:', 1)[1].strip()
-                        return (f"Чтобы создать задачу, нужно указать время. "
-                                f"{msg_text}")
-
                     # Добавляем tool result в messages
+                    # NEED_TIME — НЕ shortcut, пусть AI сам сформулирует вопрос
                     if r.get('success'):
                         rc = json.dumps(r['result'], ensure_ascii=False,
                                         default=str)[:2000]
