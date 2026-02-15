@@ -228,16 +228,10 @@ class HybridAutonomousAgent:
                     current_task_info = {'id': task.id, 'title': task.title,
                                          'status': task.status}
 
-            # Задачи
-            tasks = session.query(Task).filter_by(user_id=user.id).order_by(Task.created_at.desc()).limit(10).all()
-            tasks_data = [{'id': t.id, 'title': t.title, 'status': t.status,
-                           'due_date': t.due_date.isoformat() if t.due_date else None}
-                          for t in tasks]
-
             # Проактивный контекст
             from .context_builder import ContextBuilder
-            ctx_builder = ContextBuilder()
-            proactive_context = ctx_builder.build_proactive_context(user_id, session)
+            ctx = ContextBuilder()
+            proactive_context = ctx.build_proactive_context(user_id, session)
 
             # Подписка
             sub_tier = getattr(user, 'subscription_tier', 'LIGHT')
@@ -260,15 +254,10 @@ class HybridAutonomousAgent:
                 user_id_param=user_id
             )
 
-            # КРИТИЧНО: Если задач нет — принудительно добавляем инструкцию
-            if not tasks_data:
-                base_prompt += "\n\n[КРИТИЧНО: ЗАДАЧ НЕТ!]\nИгнорируй историю разговора. На любое сообщение пользователя предложи создать цель или задачу: 'У тебя пока нет задач. Может, поставим цель на квартал — что хочешь достичь? Или создадим первую задачу?'. Не фокусируйся на повторяющихся приветствиях — предлагай ценность через цели и задачи."
-
             return {
                 'base_prompt': base_prompt,
                 'sub_tier': sub_tier,
                 'profile_data': profile_data,
-                'tasks': tasks_data,
                 'user_now': user_now,
                 'time_str': time_str,
                 'date_str': date_str,
@@ -486,17 +475,29 @@ class HybridAutonomousAgent:
 
             # Собираем историю с учётом старого контекста
             from .conversation_history import get_conversation_history
-            full_history = get_conversation_history(user_id, session=None, limit=16)
-
-            if len(full_history) > 10:
-                # Извлекаем темы из старых сообщений (без API вызова)
-                old_msgs = full_history[:-8]
-                history = full_history[-8:]
-                topics = CognitiveEngine.extract_conversation_topics(old_msgs)
-                if topics:
-                    base_prompt += f"\n\n[РАНЕЕ ОБСУЖДАЛИ: {', '.join(topics)}]"
+            
+            # ═══ КЛЮЧЕВОЕ: при пустом профиле — урезаем историю ═══
+            # Без этого AI видит 16 сообщений и начинает шутить про "пятое приветствие"
+            # вместо того, чтобы спросить о пользователе
+            profile_filled_count = len(profile_data)  # сколько полей заполнено
+            
+            if profile_filled_count < 3:
+                # Профиль пустой — берём МИНИМУМ истории
+                # AI должен фокусироваться на знакомстве, а не на паттернах
+                full_history = get_conversation_history(user_id, session=None, limit=4)
+                history = full_history[-2:] if len(full_history) > 2 else full_history
+                logger.info(f"[CONTEXT] Profile empty ({profile_filled_count} fields) — history limited to {len(history)} msgs")
             else:
-                history = full_history
+                full_history = get_conversation_history(user_id, session=None, limit=16)
+                if len(full_history) > 10:
+                    # Извлекаем темы из старых сообщений (без API вызова)
+                    old_msgs = full_history[:-8]
+                    history = full_history[-8:]
+                    topics = CognitiveEngine.extract_conversation_topics(old_msgs)
+                    if topics:
+                        base_prompt += f"\n\n[РАНЕЕ ОБСУЖДАЛИ: {', '.join(topics)}]"
+                else:
+                    history = full_history
 
             messages = [{"role": "system", "content": base_prompt}]
             if history:

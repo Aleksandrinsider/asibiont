@@ -108,6 +108,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 Ты НЕ ЗНАЕШЬ кому помогаешь. Это ГЛАВНАЯ проблема.
 ПЕРВЫЙ ответ = познакомиться. Спроси кто человек, чем занимается, что важного.
 Один тёплый вопрос, не список. Не давай советов вслепую. Не вываливай погоду и задачи.
+ЗАПРЕЩЕНО при пустом профиле: шутки про историю диалога, подсчёт приветствий, предложение задач, паттерны поведения.
+Просто спроси: "Расскажи о себе — чем занимаешься, что тебе интересно?"
 """
         else:
             profile_instruction = f"""
@@ -136,8 +138,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         task_section=task_section
     )
 
-    # Добавляем инструкцию по профилю если нужно
-    if profile_instruction:
+    # Добавляем инструкцию по профилю ПЕРЕД основным промптом — она должна перебивать всё
+    if profile_instruction and len(profile_missing) >= 3:
+        prompt = profile_instruction + "\n" + prompt
+    elif profile_instruction:
         prompt += profile_instruction
 
     return prompt
