@@ -685,14 +685,16 @@ class HybridAutonomousAgent:
             thinking_section = self._format_thinking_for_prompt(thinking_results)
             logger.info(f"[AGENT] Deep: full pipeline ({len(thinking_results)} agents), section={len(thinking_section)} chars")
 
-        system_prompt = f"{base_prompt}{thinking_section}\n\n" + """ГИБРИДНЫЙ ПОДХОД — ты САМ решаешь когда нужны инструменты.
+        system_prompt = f"{base_prompt}{thinking_section}\n\n" + """ФАЗА: ПЛАНИРОВАНИЕ ДЕЙСТВИЙ
+Ты САМ решаешь какие инструменты вызвать (или не вызывать).
 
-ВАЖНО:
+ОПЕРАЦИОННЫЕ ПРАВИЛА (только для этой фазы):
 - Упоминания о себе (навыки, работа, город, интересы) → update_profile
 - Вопросы типа «как создать задачу?» → просто объясни, НЕ вызывай инструмент
 - Длинное сообщение с вопросами → НЕ парси как команду
-- Не извлекай весь текст сообщения как title задачи — только СУТЬ
-- Для переноса задач используй edit_task(reminder_time=...), НЕ add_task"""
+- В title задачи — только СУТЬ (2-5 слов), не весь текст сообщения
+- Перенос задач → edit_task(reminder_time=...), НЕ add_task
+- ОДИН add_task = ОДНА задача. Не дублируй."""
 
         # Загружаем историю диалога (session уже закрыта выше — передаём None, чтобы функция создала свою)
         from .conversation_history import get_conversation_history
@@ -749,6 +751,20 @@ class HybridAutonomousAgent:
                     "reason": f"AI решил вызвать {tool_name}"
                 })
                 logger.info(f"[AGENT] AI called tool: {tool_name} with params {arguments}")
+            
+            # ДЕДУПЛИКАЦИЯ: если AI вызвал add_task несколько раз — оставляем только первый
+            seen_add_task = False
+            deduped_actions = []
+            for action in actions:
+                if action['tool'] == 'add_task':
+                    if seen_add_task:
+                        logger.warning(f"[DEDUP] Skipping duplicate add_task: {action['params']}")
+                        continue
+                    seen_add_task = True
+                deduped_actions.append(action)
+            if len(deduped_actions) < len(actions):
+                logger.info(f"[DEDUP] Removed {len(actions) - len(deduped_actions)} duplicate add_task calls")
+                actions = deduped_actions
             
             return {
                 "intent": "ai_tool_call",
@@ -890,25 +906,10 @@ class HybridAutonomousAgent:
                         "reason": reason
                     })
                     
-                    # ⚡ АВТОМАТИЧЕСКИЙ ТРИГГЕР: после check_time_conflicts → add_task
-                    if tool_name == 'check_time_conflicts' and result:
-                        logger.info(f"[AUTO_TRIGGER] check_time_conflicts succeeded, auto-triggering add_task")
-                        # Извлекаем информацию о задаче из исходного сообщения
-                        task_title, task_time = self._extract_task_info(user_message)
-                        if task_title:
-                            auto_add_action = {
-                                'tool': 'add_task',
-                                'params': {'title': task_title, 'reminder_time': task_time},
-                                'reason': f'Автоматически после проверки конфликтов времени'
-                            }
-                            # Выполняем add_task
-                            add_result = await self.execute_actions([auto_add_action], user_id, session)
-                            results.extend(add_result)
-                            logger.info(f"[AUTO_TRIGGER] Auto-executed add_task for '{task_title}'")
-                    
-                    # Проактивный анализ после list_tasks убран:
-                    # авто-поиск партнёров по ключевым словам задач был слишком агрессивным
-                    # и вызывал непредсказуемые tool calls. AI сам предложит это в ответе.
+                    # Авто-триггеры удалены:
+                    # check_time_conflicts → add_task вызывал дубликаты (AI уже сам вызывает add_task)
+                    # list_tasks → find_partners был слишком агрессивным
+                    # AI сам решает цепочку инструментов через reflect_and_respond
                 
                 except Exception as e:
                     logger.error(f"[AGENT] Error executing {tool_name}: {e}")
@@ -1110,36 +1111,20 @@ class HybridAutonomousAgent:
         
         system_prompt = f"{base_prompt}{profile_section}{profile_instruction}{thinking_section}\n\n" + f"""\n---
 
-РЕЖИМ: ФОРМИРОВАНИЕ ОТВЕТА
+ФАЗА: ФОРМИРОВАНИЕ ОТВЕТА
 
 ЗАПРОС ПОЛЬЗОВАТЕЛЯ: {user_message}
 
 ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ И РЕЗУЛЬТАТЫ:
 {results_text}
 
-ЗАДАЧА — сформируй ПРАКТИЧЕСКИ ПОЛЕЗНЫЙ ответ:
+Синтезируй результаты в ПРАКТИЧЕСКИ ПОЛЕЗНЫЙ ответ:
+- Начни с ИНСАЙТА или ВЫВОДА (не с пересказа действия)
+- Предложи конкретный следующий шаг
+- Если видишь риск или альтернативу — назови
+- Если данные из research_topic — синтезируй ВЫВОДЫ, не пересказывай сырые данные
 
-1. НАЧНИ С ИНСАЙТА, АНАЛИЗА или ВЫВОДА — что это значит для пользователя. Факт о выполненном действии упомяни ВНУТРИ ответа, НЕ в начале.
-2. КОНКРЕТНЫЙ следующий шаг с ДАТОЙ/ВРЕМЕНЕМ: "Завтра в 10:00 сделай X, потому что Y"
-3. Если видишь РИСК, СЛАБОЕ МЕСТО или АЛЬТЕРНАТИВУ — назови прямо, но тактично
-4. Если запрос неоднозначный — задай 1 уточняющий вопрос
-
-ЗАПРЕЩЕНО:
-- НАЧИНАТЬ со слов "Отлично", "Отличное", "Отличный" (даже с эмодзи: 🚀 Отлично — ЗАПРЕЩЕНО) — сразу давай суть
-- Пересказывать слова пользователя — добавляй НОВУЮ информацию
-- Давать ОБЩИЕ советы без цифр, дат, конкретных инструментов, платформ
-- Соглашаться со всем — если идея слабая, предложи альтернативу
-
-ЭКСПЕРТИЗА:
-- Каждый совет ОБЯЗАН содержать ЦИФРЫ, МЕТРИКИ или КОНКРЕТНЫЕ инструменты
-- Плохо: "Попробуй соцсети" → Хорошо: "LinkedIn Ads для B2B дают CAC $80-120, бюджет $30/день, таргетинг по должности"
-- Плохо: "Изучи конкурентов" → Хорошо: "Зарегистрируйся на триал [X], зафиксируй 5 UX-проблем — это твоё преимущество"
-- Если data из research_topic — синтезируй ВЫВОДЫ, не пересказывай сырые данные
-
-ФОРМАТ: от 3 до 15 предложений, количество определяется СЛОЖНОСТЬЮ темы. Живой тон.
-НЕ используй **жирный** или *курсив* — Telegram не рендерит markdown. Эмодзи ОБЯЗАТЕЛЬНЫ — минимум 1-2 в каждом ответе.
-Списки (• или 1. 2. 3.) — когда сравниваешь варианты или даёшь пошаговый план.
-Варьируй начало: факт из данных → предупреждение → вопрос → инсайт. НЕ начинай каждый ответ с одного и того же эмодзи.
+Все остальные правила (формат, экспертиза, стиль) — следуй основным инструкциям выше.
 Верни ТОЛЬКО текст ответа пользователю.
 """
 
@@ -1246,7 +1231,7 @@ class HybridAutonomousAgent:
 - Упомяни выполненные действия ВНУТРИ ответа, НЕ в первом предложении
 - Дай 1 следующий шаг с датой/временем
 - Если есть риск, альтернатива или нюанс — назови его
-- НЕ начинай со слов "Отлично"/"Отличное"/"Отличный" (даже с эмодзи перед ними) — сразу давай суть
+- НЕ начинай со слов "Отлично"/"Отличное"/"Отличный"/"Супер"/"Класс" (даже с эмодзи перед ними) — сразу давай суть
 
 Верни ТОЛЬКО текст ответа пользователю."""
             

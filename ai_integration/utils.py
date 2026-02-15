@@ -349,9 +349,13 @@ def clean_technical_details(text):
     # Удаляем любые оставшиеся ```json блоки
     text = re.sub(r"```json[\s\S]*?```", "", text, flags=re.IGNORECASE)
     # Удаляем эмодзи - ТОЛЬКО технические, оставляем подходящие для общения и форматирования
-    # Удаляем markdown-форматирование (**жирный**, *курсив*) — Telegram не рендерит
+    # Удаляем markdown-форматирование (**жирный**, *курсив*, ### заголовки) — Telegram не рендерит
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **bold** → bold
     text = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', text)  # *italic* → italic
+    text = re.sub(r'^#{1,3}\s+', '', text, flags=re.MULTILINE)  # ### Header → Header
+    
+    # Удаляем «Отлично» в начале ответа (AI упорно начинает с него несмотря на запрет)
+    text = re.sub(r'^\s*(?:🚀|🎯|✅|💡|📊|⚡|🔥)?\s*Отлично[еый!,.]?\s*', '', text, flags=re.IGNORECASE).strip()
     
     # AI теперь может использовать эмодзи для структуры
     technical_emojis = ['🔧', '⚙️', '🛠️']
