@@ -64,8 +64,8 @@ class AgentDialogTester:
     def _setup(self):
         old = self.db.query(User).filter_by(telegram_id=TEST_TG_ID).first()
         if old:
-            from models import Interaction, Post, Subscription, Goal
-            for model in [Task, UserProfile, Interaction, Post, Subscription, Goal]:
+            from models import Interaction, Post, Subscription, Goal, ContactAlert, ActivityAlert
+            for model in [ContactAlert, ActivityAlert, Task, UserProfile, Interaction, Post, Subscription, Goal]:
                 try:
                     self.db.query(model).filter_by(user_id=old.id).delete()
                 except Exception:
