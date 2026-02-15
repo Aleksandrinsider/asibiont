@@ -517,6 +517,10 @@ def clean_technical_details(text):
     # Удаляем любые оставшиеся ```json блоки
     text = re.sub(r"```json[\s\S]*?```", "", text, flags=re.IGNORECASE)
     # Удаляем эмодзи - ТОЛЬКО технические, оставляем подходящие для общения и форматирования
+    # Удаляем markdown-форматирование (**жирный**, *курсив*) — Telegram не рендерит
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **bold** → bold
+    text = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', text)  # *italic* → italic
+    
     # AI теперь может использовать эмодзи для структуры (📊⚡🎯💡⚠️✅ и т.д.)
     technical_emojis = ['🔧', '⚙️', '🛠️']
     for emoji in technical_emojis:
