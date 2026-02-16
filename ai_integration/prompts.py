@@ -103,21 +103,9 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     if not profile_complete and profile_missing:
         missing_str = ', '.join(profile_missing)
         if len(profile_missing) >= 3:
-            # Профиль практически пустой — это ПРИОРИТЕТ №1
-            profile_instruction = f"""
-
-⚠️ КРИТИЧНО: ПРОФИЛЬ ПУСТОЙ (нет: {missing_str}).
-Ты НЕ ЗНАЕШЬ кому помогаешь. Это ГЛАВНАЯ проблема.
-Ответь как хочешь (шутки, юмор — ок), но ОБЯЗАТЕЛЬНО заверши вопросом о человеке.
-Не давай советов вслепую. Не предлагай задачи/цели.
-ГЛАВНОЕ: в конце ответа ВСЕГДА спроси кто он, чем занимается, что интересно.
-"""
+            profile_instruction = f"\n\nПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). Узнай о человеке естественно через живой разговор.\n"
         else:
-            profile_instruction = f"""
-
-ПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}).
-При случае узнай — вплети в разговор естественно, не допрашивай.
-"""
+            profile_instruction = f"\n\nПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). При случае узнай естественно.\n"
 
     # Выбираем версию промпта
     complexity = "medium"  # Можно определить на основе контекста
