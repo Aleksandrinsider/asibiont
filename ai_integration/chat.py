@@ -284,6 +284,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 except Exception as e:
                     logger.error(f"Error loading current task: {e}")
 
+            # Собираем profile_data для системного промпта
+            profile_data = None
+            if profile:
+                profile_data = {
+                    'city': profile.city or '',
+                    'company': profile.company or '',
+                    'position': profile.position or '',
+                    'goals': profile.goals or '',
+                    'skills': profile.skills or '',
+                    'interests': profile.interests or '',
+                    'telegram_channel': getattr(profile, 'telegram_channel', '') or '',
+                }
+                filled = [k for k, v in profile_data.items() if v]
+                logger.info(f"[PROFILE_DATA] Passing to prompt: filled={filled}")
+
             # Получаем системный промпт с проактивным контекстом
             system_prompt = get_extended_system_prompt(
                 user_now=user_now,
@@ -298,6 +313,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 message_type=message_type,
                 weather_info=weather_info,
                 news_info=news_info,
+                profile_data=profile_data,
                 proactive_context=proactive_context,
                 current_task_info=current_task_info,
                 user_id_param=user_id

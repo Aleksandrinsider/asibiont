@@ -128,7 +128,7 @@ class HybridAutonomousAgent:
             "model": DEEPSEEK_MODEL,
             "messages": messages,
             "temperature": kwargs.pop("temperature", 0.7),
-            "max_tokens": kwargs.pop("max_tokens", 2000),
+            "max_tokens": kwargs.pop("max_tokens", 1200),
             **kwargs
         }
 
@@ -572,9 +572,9 @@ class HybridAutonomousAgent:
             # Адаптивный tool_choice
             initial_tool_choice = self._determine_tool_choice(user_message)
 
-            # ===== Tool calling loop (max 5 итераций) =====
+            # ===== Tool calling loop (max 4 итераций) =====
             all_execution_results = []
-            MAX_ITERATIONS = 5
+            MAX_ITERATIONS = 4
             seen_tools = set()  # Для предотвращения дублей
 
             for iteration in range(MAX_ITERATIONS):

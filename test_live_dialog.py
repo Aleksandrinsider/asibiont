@@ -258,10 +258,20 @@ class LiveDialogTester:
 
         # ═══ 4. АНТИГАЛЛЮЦИНАЦИЯ ═══
         print(f'\n  🛡️ АНТИГАЛЛЮЦИНАЦИЯ')
-        # Ложные @username
+        # Ложные @username (исключаем реальных контактов из БД)
+        from models import User as UserModel
+        db_usernames = set()
+        try:
+            all_users = self.db.query(UserModel).all()
+            for u in all_users:
+                if u.username:
+                    db_usernames.add(f'@{u.username}'.lower())
+        except Exception:
+            pass
+        allowed_usernames = db_usernames | {'@denis_dev', '@channel'}
         fake_users = sum(1 for m in agent_msgs
             for u in re.findall(r'@\w+', m['content'])
-            if u.lower() not in ('@denis_dev', '@channel'))
+            if u.lower() not in allowed_usernames)
         print(f'     Ложные @username:   {fake_users} {"✅" if fake_users == 0 else "❌"}')
 
         # Технические утечки
