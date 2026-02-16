@@ -231,22 +231,34 @@ class ContextBuilder:
                     goal_lines.append(line)
                 hints.append("🎯 Цели: " + "; ".join(goal_lines))
 
-            # ═══ КОНТАКТЫ (минимально) ═══
+            # ═══ КОНТАКТЫ (с деталями для связывания с темой разговора) ═══
             real_contacts = []
-            if profile and profile.interests and profile_complete:
+            if profile and profile_complete:
                 try:
                     from .handlers import get_partners_list
                     partners = get_partners_list(user.id, session)
                     if partners:
-                        for p in partners[:3]:
+                        for p in partners[:5]:
                             partner_user = session.query(User).filter_by(id=p.user_id).first()
                             if partner_user and partner_user.username:
-                                real_contacts.append(f"@{partner_user.username}")
+                                # Собираем детали контакта
+                                details = []
+                                if p.skills:
+                                    details.append(p.skills[:60])
+                                if p.interests:
+                                    details.append(p.interests[:60])
+                                if p.city:
+                                    details.append(p.city)
+                                if p.position:
+                                    details.append(p.position[:40])
+                                detail_str = " | ".join(details) if details else "профиль заполнен"
+                                real_contacts.append(f"@{partner_user.username} ({detail_str})")
                 except Exception:
                     pass
 
             if real_contacts:
-                hints.append(f"🤝 Контакты: {', '.join(real_contacts)}")
+                hints.append("🤝 КОНТАКТЫ В СЕТИ:\n" + "\n".join(f"  {c}" for c in real_contacts))
+                hints.append("→ Используй find_relevant_contacts_for_task когда тема разговора совпадает с навыками/интересами контактов. Предлагай связаться.")
             else:
                 hints.append("🤝 Контактов нет. НЕ выдумывай @username!")
 
