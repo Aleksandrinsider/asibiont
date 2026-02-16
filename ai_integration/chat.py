@@ -14,7 +14,7 @@ import time
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from .memory import encrypt_data, decrypt_data
 from .utils import (
-    replace_placeholders, clean_technical_details,
+    replace_placeholders, clean_technical_details, sanitize_fake_mentions,
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
@@ -316,6 +316,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             
             # ПОСТ-ОБРАБОТКА: минимальная очистка (агент сам формирует проактивный язык через промпт)
             if response_data and 'response' in response_data:
+                # Фильтруем ложные @username
+                response_data['response'] = sanitize_fake_mentions(
+                    response_data['response'], user_id, session
+                )
                 logger.info(f"[POST_PROCESS] Response length: {len(response_data['response'])} chars")
             
             # Отмечаем что Premium рекомендации были показаны (если были в промпте)
