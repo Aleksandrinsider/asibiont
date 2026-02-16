@@ -4736,6 +4736,21 @@ async def on_startup(app):
     except Exception as e:
         logger.error(f"❌ Error syncing subscription tiers on startup: {e}")
 
+    # Очищаем накопленную историю диалогов (содержит галлюцинации)
+    try:
+        session_db = Session()
+        users_with_history = session_db.query(User).filter(User.conversation_context.isnot(None)).all()
+        cleared = 0
+        for user in users_with_history:
+            user.conversation_context = None
+            cleared += 1
+        if cleared:
+            session_db.commit()
+            logger.info(f"✅ Cleared conversation history for {cleared} users (anti-hallucination reset)")
+        session_db.close()
+    except Exception as e:
+        logger.error(f"❌ Error clearing conversation history: {e}")
+
     # Set webhook for production mode
     if bot and not LOCAL:
         webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.ru/webhook')

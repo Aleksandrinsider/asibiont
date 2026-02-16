@@ -4,12 +4,54 @@ Conversation history management for context-aware AI responses
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from models import Session, User
 
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_MESSAGES = 24  # Keep last 24 messages (12 exchanges) for topic extraction
+
+# Паттерны фраз, которые могут содержать галлюцинированные данные о задачах
+# Эти фразы в сообщениях ассистента будут удалены при загрузке истории
+_HALLUCINATION_PATTERNS = [
+    r'[уУ] тебя есть задач[аи].*?(?:в \d{1,2}:\d{2}|на завтра|на сегодня|на \d)',
+    r'[вВ]ижу,? что (?:у тебя|ты).*?задач[аи]',
+    r'[нН]е забудь (?:про|о) задач[уе]',
+    r'[зЗ]адача.*?по (?:поиску|созданию|разработке|написанию)',
+    r'[тТ]вой план на (?:завтра|сегодня|неделю).*?задач',
+]
+
+
+def _sanitize_assistant_message(content):
+    """Убирает из ответов ассистента ложные утверждения о задачах.
+    
+    Предложения, совпадающие с паттернами галлюцинаций, удаляются.
+    """
+    if not content:
+        return content
+    
+    # Разбиваем на предложения
+    sentences = re.split(r'(?<=[.!?])\s+', content)
+    cleaned = []
+    removed = False
+    
+    for sentence in sentences:
+        is_hallucination = False
+        for pattern in _HALLUCINATION_PATTERNS:
+            if re.search(pattern, sentence, re.IGNORECASE):
+                is_hallucination = True
+                removed = True
+                break
+        if not is_hallucination:
+            cleaned.append(sentence)
+    
+    if removed:
+        result = ' '.join(cleaned).strip()
+        logger.info(f"[HISTORY] Sanitized assistant message, removed hallucinated task references")
+        return result if result else "Привет!"
+    
+    return content
 
 
 def save_message_to_history(user_id, role, content, session=None):
@@ -105,8 +147,16 @@ def get_conversation_history(user_id, session=None, limit=None):
             if limit and len(history) > limit:
                 history = history[-limit:]
             
-            # Return only role and content for AI
-            return [{"role": msg["role"], "content": msg["content"]} for msg in history]
+            # Return only role and content for AI (with sanitization)
+            result = []
+            for msg in history:
+                content = msg["content"]
+                role = msg["role"]
+                # Санитизируем ответы ассистента — убираем галлюцинации о задачах
+                if role == "assistant":
+                    content = _sanitize_assistant_message(content)
+                result.append({"role": role, "content": content})
+            return result
             
         except json.JSONDecodeError:
             logger.error(f"[HISTORY] Failed to parse conversation_context for user {user_id}")
