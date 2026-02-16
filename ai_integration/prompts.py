@@ -85,7 +85,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 АКТИВНАЯ ЗАДАЧА: "{current_task_info['title']}" (ID: {current_task_info['id']})
 Если пользователь говорит "сделал/готово/выполнил" → complete_task()"""
     else:
-        task_section = "\nАКТИВНАЯ ЗАДАЧА: НЕТ. Не упоминай задачи, которых нет. Цель ≠ задача."
+        task_section = "\nАКТИВНАЯ ЗАДАЧА: нет"
 
     # Proactive context - теперь из context_builder
     if proactive_context is None and user_id_param:

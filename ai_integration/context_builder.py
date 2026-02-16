@@ -167,8 +167,7 @@ class ContextBuilder:
                         profile_fields_filled += 1
 
             if profile_fields_filled < 2:
-                hints.append("⚠️ ПРИОРИТЕТ: Профиль почти пустой. Без профиля ты слепой — не знаешь кому помогаешь. Начни разговор с узнавания пользователя.")
-                # При пустом профиле не добавляем ничего лишнего
+                hints.append("👤 Профиль почти пустой — узнай о человеке через живой разговор.")
                 if hints:
                     return "\n\nФОКУС:\n" + "\n".join(hints)
 
@@ -204,12 +203,11 @@ class ContextBuilder:
                 if tomorrow_tasks and not today_tasks:
                     hints.append(f"🔮 Завтра: {', '.join(tomorrow_tasks[:2])}")
             else:
-                # Нет задач — ЧЁТКО сказать что задач НЕТ
-                hints.append("📋 ЗАДАЧ В СИСТЕМЕ: 0. Не выдумывай задачи.")
+                hints.append("📋 Задач нет")
                 if profile and profile.interests:
-                    hints.append(f"💡 Можешь: research_topic/get_news_trends по интересам ({profile.interests[:60]})")
+                    hints.append(f"💡 Интересы: {profile.interests[:60]}")
                 elif profile and profile.goals:
-                    hints.append(f"💡 Можешь: предложить шаг к цели ({profile.goals[:60]})")
+                    hints.append(f"💡 Цели: {profile.goals[:60]}")
 
             # ═══ ПРИОРИТЕТ 3: ЦЕЛИ ═══
             from models import Goal
@@ -258,9 +256,8 @@ class ContextBuilder:
 
             if real_contacts:
                 hints.append("🤝 КОНТАКТЫ В СЕТИ:\n" + "\n".join(f"  {c}" for c in real_contacts))
-                hints.append("→ Используй find_relevant_contacts_for_task когда тема разговора совпадает с навыками/интересами контактов. Предлагай связаться.")
             else:
-                hints.append("🤝 Контактов нет. НЕ выдумывай @username!")
+                hints.append("🤝 Контактов пока нет")
 
             # ═══ ВРЕМЯ СУТОК (одна строка) ═══
             time_labels = {(6,12): "утро", (12,18): "день", (18,23): "вечер"}
