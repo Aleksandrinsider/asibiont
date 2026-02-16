@@ -15,7 +15,7 @@ DELEGATION_SEND_FUNCTIONS = {
 # Все функции делегирования
 DELEGATION_FUNCTIONS = DELEGATION_RECEIVE_FUNCTIONS | DELEGATION_SEND_FUNCTIONS
 
-# Фоновые алерты — STANDARD и PREMIUM (автоматические уведомления о контактах)
+# Фоновые алерты — доступны ВСЕМ тарифам (автоматические уведомления о контактах)
 ALERT_FUNCTIONS = {
     'set_contact_alert',
 }
@@ -43,8 +43,8 @@ PREMIUM_AUTOPILOT_FUNCTIONS = {
 }
 
 # Ограниченные функции для каждого тарифа (что БЛОКИРУЕТСЯ)
-# LIGHT: не может делегировать, нет алертов и автопилота (но может получать делегированные)
-LIGHT_RESTRICTED = DELEGATION_SEND_FUNCTIONS | ALERT_FUNCTIONS | PREMIUM_AUTOPILOT_FUNCTIONS
+# LIGHT: не может делегировать, нет автопилота (но может получать делегированные + алерты)
+LIGHT_RESTRICTED = DELEGATION_SEND_FUNCTIONS | PREMIUM_AUTOPILOT_FUNCTIONS
 
 # STANDARD: может делегировать + алерты, но нет автопилота канала
 STANDARD_RESTRICTED = PREMIUM_AUTOPILOT_FUNCTIONS
@@ -381,7 +381,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "set_contact_alert",
-            "description": "Мониторинг контактов (СТАНДАРТ+). Уведомит когда появится пользователь с нужными навыками/интересами.",
+            "description": "Мониторинг контактов (все тарифы). Уведомит когда появится пользователь с нужными навыками/интересами.",
             "parameters": {
                 "type": "object",
                 "properties": {

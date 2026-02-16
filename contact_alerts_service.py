@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Contact Online Alerts Service для Premium пользователей
+Contact Online Alerts Service для всех пользователей
 
 Активно мониторит онлайн-статус контактов и отправляет алерты типа "@dima онлайн"
 Запускается как фоновый процесс вместе с ботом.
+Доступен на всех тарифах (LIGHT, STANDARD, PREMIUM).
 """
 
 import asyncio
@@ -18,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 class ContactAlertsService:
     """
-    Сервис для активных алертов о контактах онлайн
+    Сервис для активных алертов о контактах онлайн (все тарифы)
 
     Работа:
-    - Проверяет Premium пользователей каждые 30 минут
+    - Проверяет пользователей всех тарифов каждые 30 минут
     - Для каждого contact alert проверяет онлайн-статус контакта
     - Отправляет уведомление "@username онлайн" если контакт активен
     """
@@ -46,10 +47,10 @@ class ContactAlertsService:
         """
         session = Session()
         try:
-            # Получаем STANDARD+ пользователей с активными contact alerts
+            # Получаем пользователей ВСЕХ тарифов с активными contact alerts
             alerts = session.query(ContactAlert).join(User).filter(
                 ContactAlert.enabled == True,
-                User.subscription_tier.in_([SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM])
+                User.subscription_tier.in_([SubscriptionTier.LIGHT, SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM])
             ).all()
 
             result = []

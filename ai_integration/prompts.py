@@ -19,11 +19,11 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     # Subscription info
     tier_value = subscription_tier.value if hasattr(subscription_tier, 'value') else str(subscription_tier)
     if tier_value == 'LIGHT':
-        tier_info = "\nТариф LIGHT: базовые функции, задачи, поиск партнеров, research_topic"
+        tier_info = "\nТариф LIGHT: базовые функции, задачи, поиск партнеров, research_topic, алерты контактов"
     elif tier_value == 'STANDARD':
-        tier_info = "\nТариф STANDARD: +marketing, delegation, полный research_topic"
+        tier_info = "\nТариф STANDARD: +marketing, delegation, полный research_topic, алерты"
     elif tier_value == 'PREMIUM':
-        tier_info = "\nТариф PREMIUM: все функции, алерты, автономность"
+        tier_info = "\nТариф PREMIUM: все функции, алерты, автопилот, автономность"
     else:
         tier_info = f"\nТариф: {tier_value}"
 

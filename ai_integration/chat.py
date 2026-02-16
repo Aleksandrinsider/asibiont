@@ -467,6 +467,9 @@ def _analyze_proactive_engagement(user_db_id, session):
                             'трен': 'тренды',
                             'здоров': 'здоровье',
                             'финанс': 'финансы',
+                            'дедлайн': 'дедлайны',
+                            'застой': 'ревизия_задач',
+                            'просроч': 'алерты',
                         }
                         for keyword, topic in topic_map.items():
                             if keyword in content_lower:
@@ -686,6 +689,51 @@ async def _build_proactive_context(user_id):
         ctx['overdue_titles'] = [t.title for t in overdue]
         if overdue:
             user_memory += f"\nПРОСРОЧЕННЫЕ: {', '.join(ctx['overdue_titles'])}"
+        
+        # === АЛЕРТЫ: задачи с приближающимся дедлайном (в ближайшие 24 часа) ===
+        deadline_soon = db_session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == "pending",
+            Task.reminder_time.isnot(None),
+            Task.reminder_time >= base_now,
+            Task.reminder_time <= base_now + timedelta(hours=24)
+        ).order_by(Task.reminder_time).limit(5).all()
+        ctx['deadline_soon'] = deadline_soon
+        if deadline_soon:
+            titles = [f"{t.title} (через {max(1, int((t.reminder_time.replace(tzinfo=pytz.UTC) - base_now).total_seconds() / 3600))}ч)" for t in deadline_soon]
+            user_memory += f"\n⏰ СКОРО ДЕДЛАЙН: {', '.join(titles)}"
+        
+        # === АЛЕРТЫ: цели с приближающейся датой или высоким прогрессом ===
+        ctx['goals_alert'] = []
+        if active_goals:
+            for g in active_goals:
+                days = g.days_until_target()
+                if days is not None and 0 < days <= 3:
+                    ctx['goals_alert'].append({'goal': g.title, 'type': 'deadline_close', 'days': days, 'progress': g.progress_percentage})
+                elif g.progress_percentage >= 80 and g.progress_percentage < 100:
+                    ctx['goals_alert'].append({'goal': g.title, 'type': 'almost_done', 'progress': g.progress_percentage})
+                elif g.progress_percentage == 0 and g.created_at and (base_now - g.created_at.replace(tzinfo=pytz.UTC)).days > 3:
+                    ctx['goals_alert'].append({'goal': g.title, 'type': 'stagnant', 'days_old': (base_now - g.created_at.replace(tzinfo=pytz.UTC)).days})
+            if ctx['goals_alert']:
+                alert_strs = []
+                for a in ctx['goals_alert']:
+                    if a['type'] == 'deadline_close':
+                        alert_strs.append(f"{a['goal']} — дедлайн через {a['days']}дн ({a['progress']}%)")
+                    elif a['type'] == 'almost_done':
+                        alert_strs.append(f"{a['goal']} — почти готово ({a['progress']}%)")
+                    elif a['type'] == 'stagnant':
+                        alert_strs.append(f"{a['goal']} — нет прогресса {a['days_old']}дн")
+                user_memory += f"\n🎯 АЛЕРТЫ ЦЕЛЕЙ: {'; '.join(alert_strs)}"
+        
+        # === АЛЕРТЫ: застой задач (много pending без движения) ===
+        stale_tasks = db_session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == "pending",
+            Task.created_at < base_now - timedelta(days=7)
+        ).count()
+        ctx['stale_task_count'] = stale_tasks
+        if stale_tasks >= 3:
+            user_memory += f"\n📋 ЗАСТОЙ: {stale_tasks} задач висят больше недели без выполнения"
         
         # Поведенческий анализ
         insights = []
@@ -1010,6 +1058,48 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
         message_types.append({
             'type': 'tasks',
             'instruction': 'Напомни о текущих задачах. Какая самая важная? Что стоит сделать первым? Конкретный совет по приоритизации. Не перечисляй все — выдели 1 главную.'
+        })
+    
+    # Тип 8: Алерт приближающегося дедлайна (если есть задачи в ближайшие 24ч)
+    if ctx.get('deadline_soon'):
+        tasks_soon = ctx['deadline_soon']
+        task_names = ', '.join(t.title for t in tasks_soon[:3])
+        message_types.append({
+            'type': 'deadline_alert',
+            'instruction': f'АЛЕРТ ДЕДЛАЙНА: скоро срок у задач: {task_names}. Напомни конкретно — что по ним нужно сделать, предложи помощь (разбить, перенести, доделать). Тон мягкий но конкретный.'
+        })
+    
+    # Тип 9: Алерт прогресса целей (если цели почти готовы или застряли)
+    if ctx.get('goals_alert'):
+        alerts = ctx['goals_alert']
+        almost_done = [a for a in alerts if a['type'] == 'almost_done']
+        stagnant = [a for a in alerts if a['type'] == 'stagnant']
+        deadline_close = [a for a in alerts if a['type'] == 'deadline_close']
+        
+        if almost_done:
+            goal_name = almost_done[0]['goal']
+            message_types.append({
+                'type': 'goal_milestone',
+                'instruction': f'АЛЕРТ ПРОГРЕССА: цель "{goal_name}" на {almost_done[0]["progress"]}%! Поздравь с прогрессом, спроси что осталось до 100%, предложи конкретный следующий шаг чтобы добить цель.'
+            })
+        if stagnant:
+            goal_name = stagnant[0]['goal']
+            message_types.append({
+                'type': 'goal_stagnation',
+                'instruction': f'АЛЕРТ ЗАСТОЯ: цель "{goal_name}" создана {stagnant[0]["days_old"]} дней назад, но прогресс 0%. Мягко спроси — актуальна ли ещё? Может разбить на шаги? Или пересмотреть формулировку?'
+            })
+        if deadline_close:
+            goal_name = deadline_close[0]['goal']
+            message_types.append({
+                'type': 'goal_deadline',
+                'instruction': f'АЛЕРТ: цель "{goal_name}" — дедлайн через {deadline_close[0]["days"]} дн, прогресс {deadline_close[0]["progress"]}%. Помоги спланировать финишный рывок — что конкретно остаётся сделать?'
+            })
+    
+    # Тип 10: Алерт застоя задач (много старых pending задач)
+    if ctx.get('stale_task_count', 0) >= 3:
+        message_types.append({
+            'type': 'task_cleanup',
+            'instruction': f'АЛЕРТ ЗАСТОЯ: {ctx["stale_task_count"]} задач висят больше недели. Предложи разобрать — что ещё актуально, что отменить, что перенести. Конкретно: "Давай разберём старые задачи? Некоторые уже неделю без движения."'
         })
     
     # Выбираем тип по ротации (детерминированно, не случайно — чтобы не повторялся)

@@ -5205,7 +5205,7 @@ def set_activity_alert(activity_type=None, keywords=None, location=None, frequen
             session.close()
 
 def set_contact_alert(skill=None, interest=None, city=None, position=None, enabled=True, user_id=None, session=None):
-    """🌟 PREMIUM: Set up automatic alerts for new users with specific skills/interests
+    """Set up automatic alerts for new users with specific skills/interests (all tiers)
     
     Monitors new user registrations and profile updates, automatically adds information to your next conversation.
     When someone with matching skills/interests joins, AI will naturally mention them in dialogue.
@@ -5237,9 +5237,7 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
         if not user:
             return "Пользователь не найден."
         
-        # Check premium status
-        if user.subscription_tier == SubscriptionTier.LIGHT:
-            return "⭐ Автоматические уведомления о новых пользователях доступны только Premium пользователям. Оформи подписку Premium, чтобы автоматически узнавать о появлении нужных специалистов!"
+        # Алерты доступны всем тарифам
         
         if not skill and not interest:
             return "Укажи навык или интерес для поиска. Например: 'скажи когда появится специалист по продажам' или 'предупреди о программистах на Python'"
