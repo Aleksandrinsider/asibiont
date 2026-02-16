@@ -128,7 +128,7 @@ class HybridAutonomousAgent:
             "model": DEEPSEEK_MODEL,
             "messages": messages,
             "temperature": kwargs.pop("temperature", 0.7),
-            "max_tokens": kwargs.pop("max_tokens", 1200),
+            "max_tokens": kwargs.pop("max_tokens", 2000),
             **kwargs
         }
 
