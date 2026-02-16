@@ -140,7 +140,7 @@ class ContextBuilder:
         return hints
 
     def build_proactive_context(self, user_id, session, profile_complete=True):
-        """ФОКУСНЫЙ КОНТЕКСТ: только то, что сейчас важно. Не вываливай всё."""
+        """АНАЛИТИЧЕСКИЙ КОНТЕКСТ: что есть, чего нет, что делать."""
         from models import User, UserProfile, Task
 
         try:
@@ -158,20 +158,33 @@ class ContextBuilder:
 
             hints = []
 
-            # ═══ ПРИОРИТЕТ 1: ПРОФИЛЬ ═══
-            # Если профиль пустой — это ГЛАВНАЯ проблема. Всё остальное вторично.
-            profile_fields_filled = 0
+            # ═══ АНАЛИЗ ПРОФИЛЯ: что есть и чего нет ═══
+            profile_has = []
+            profile_missing = []
+            ALL_FIELDS = {
+                'city': 'город', 'company': 'компания', 'position': 'должность',
+                'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы'
+            }
             if profile:
-                for f in ['interests', 'skills', 'goals', 'city', 'company', 'position']:
-                    if getattr(profile, f, None):
-                        profile_fields_filled += 1
+                for field, label in ALL_FIELDS.items():
+                    val = getattr(profile, field, None)
+                    if val:
+                        profile_has.append(f"{label}: {val[:50]}")
+                    else:
+                        profile_missing.append(label)
+            else:
+                profile_missing = list(ALL_FIELDS.values())
 
-            if profile_fields_filled < 2:
-                hints.append("👤 Профиль почти пустой — узнай о человеке через живой разговор.")
-                if hints:
-                    return "\n\nФОКУС:\n" + "\n".join(hints)
+            if profile_missing:
+                hints.append(f"👤 ПРОФИЛЬ — не заполнено: {', '.join(profile_missing)}")
+            if profile_has:
+                hints.append(f"👤 ПРОФИЛЬ — есть: {'; '.join(profile_has)}")
 
-            # ═══ ПРИОРИТЕТ 2: ЗАДАЧИ ═══
+            # Если профиль совсем пустой — это приоритет, но НЕ блокирует остальной контекст
+            if len(profile_missing) >= 5:
+                hints.append("⚡ ДЕЙСТВИЕ: узнай о человеке через живой разговор, не допрашивай")
+
+            # ═══ ЗАДАЧИ: точки контроля ═══
             tasks = session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status.in_(['pending', 'active', 'in_progress'])
@@ -180,6 +193,7 @@ class ContextBuilder:
             overdue = []
             today_tasks = []
             tomorrow_tasks = []
+            future_tasks = []
 
             if tasks:
                 for t in tasks:
@@ -192,30 +206,53 @@ class ContextBuilder:
                                 today_tasks.append(f"{t.title} ({dt.strftime('%H:%M')})")
                             elif dt.date() == (user_now.date() + timedelta(days=1)):
                                 tomorrow_tasks.append(t.title)
+                            else:
+                                future_tasks.append(t.title)
                         except:
-                            pass
+                            future_tasks.append(t.title)
+                    else:
+                        future_tasks.append(t.title)
 
-                # Просроченные — критично
                 if overdue:
-                    hints.append(f"🚨 Просрочено: {', '.join(overdue[:3])}")
+                    hints.append(f"🚨 ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])}")
                 if today_tasks:
-                    hints.append(f"📅 Сегодня: {', '.join(today_tasks[:3])}")
-                if tomorrow_tasks and not today_tasks:
-                    hints.append(f"🔮 Завтра: {', '.join(tomorrow_tasks[:2])}")
-            else:
-                hints.append("📋 Задач нет")
-                if profile and profile.interests:
-                    hints.append(f"💡 Интересы: {profile.interests[:60]}")
-                elif profile and profile.goals:
-                    hints.append(f"💡 Цели: {profile.goals[:60]}")
+                    hints.append(f"📅 СЕГОДНЯ ({len(today_tasks)}): {', '.join(today_tasks[:3])}")
+                if tomorrow_tasks:
+                    hints.append(f"🔮 ЗАВТРА ({len(tomorrow_tasks)}): {', '.join(tomorrow_tasks[:2])}")
+                if future_tasks and not today_tasks and not overdue:
+                    hints.append(f"📋 БУДУЩИЕ ({len(future_tasks)}): {', '.join(future_tasks[:2])}")
 
-            # ═══ ПРИОРИТЕТ 3: ЦЕЛИ ═══
+                # Аналитика задач
+                total = len(tasks)
+                hints.append(f"📊 Всего активных задач: {total}")
+                if overdue and len(overdue) > 1:
+                    hints.append("⚡ ДЕЙСТВИЕ: много просроченного — помоги разобраться, предложи удалить или перенести")
+            else:
+                # НЕТ ЗАДАЧ — это важный сигнал для агента
+                hints.append("📋 ЗАДАЧ НЕТ — расписание пустое")
+                # Даём агенту контекст для умного предложения
+                suggestions = []
+                if profile:
+                    if profile.goals:
+                        suggestions.append(f"есть цель '{profile.goals[:40]}' — предложи конкретный шаг как задачу")
+                    if profile.skills:
+                        suggestions.append(f"навыки: {profile.skills[:40]} — предложи задачу на развитие")
+                    if profile.company:
+                        suggestions.append(f"работает в {profile.company} — предложи рабочую задачу")
+                    if profile.interests and not profile.goals:
+                        suggestions.append(f"интересы: {profile.interests[:40]} — можно предложить что-то по интересам")
+                if suggestions:
+                    hints.append("⚡ ДЕЙСТВИЕ: " + "; ".join(suggestions[:2]))
+                else:
+                    hints.append("⚡ ДЕЙСТВИЕ: предложи создать первую задачу на основе разговора")
+
+            # ═══ ЦЕЛИ ═══
             from models import Goal
             active_goals = session.query(Goal).filter(
                 Goal.user_id == user.id,
                 Goal.status == 'active'
             ).order_by(Goal.priority.desc()).limit(3).all()
-            
+
             if active_goals:
                 goal_lines = []
                 for g in active_goals:
@@ -228,10 +265,36 @@ class ContextBuilder:
                             line += f" осталось {days}дн"
                     goal_lines.append(line)
                 hints.append("🎯 Цели: " + "; ".join(goal_lines))
+                # Связь задач и целей
+                if not tasks:
+                    hints.append("⚠️ Есть цели, но нет задач — предложи декомпозировать цель на шаги")
+            else:
+                hints.append("🎯 Целей нет")
+                if profile and profile.goals:
+                    hints.append(f"⚡ ДЕЙСТВИЕ: в профиле указана цель '{profile.goals[:50]}' — предложи создать через create_goal")
 
-            # ═══ КОНТАКТЫ (с деталями для связывания с темой разговора) ═══
+            # ═══ СИТУАЦИОННЫЙ АНАЛИЗ ═══
+            # Агент должен понимать полную картину
+            situation_parts = []
+            has_profile = len(profile_missing) <= 2
+            has_tasks = bool(tasks)
+            has_goals = bool(active_goals)
+
+            if has_profile and not has_tasks and not has_goals:
+                situation_parts.append("Профиль заполнен, но нет ни задач, ни целей — человек пока не вовлечён")
+            elif has_profile and has_goals and not has_tasks:
+                situation_parts.append("Цели есть, задач нет — нужна декомпозиция целей в конкретные шаги")
+            elif has_profile and has_tasks and not has_goals:
+                situation_parts.append("Задачи есть, целей нет — предложи объединить задачи в цель")
+            elif not has_profile:
+                situation_parts.append("Профиль не заполнен — узнай о человеке, но не навязывай заполнение")
+
+            if situation_parts:
+                hints.append("📍 СИТУАЦИЯ: " + "; ".join(situation_parts))
+
+            # ═══ КОНТАКТЫ ═══
             real_contacts = []
-            if profile and profile_complete:
+            if profile and len(profile_missing) <= 2:
                 try:
                     from .handlers import get_partners_list
                     partners = get_partners_list(user.id, session)
@@ -239,7 +302,6 @@ class ContextBuilder:
                         for p in partners[:5]:
                             partner_user = session.query(User).filter_by(id=p.user_id).first()
                             if partner_user and partner_user.username:
-                                # Собираем детали контакта
                                 details = []
                                 if p.skills:
                                     details.append(p.skills[:60])
@@ -259,12 +321,12 @@ class ContextBuilder:
             else:
                 hints.append("🤝 Контактов пока нет")
 
-            # ═══ ВРЕМЯ СУТОК (одна строка) ═══
+            # ═══ ВРЕМЯ СУТОК ═══
             time_labels = {(6,12): "утро", (12,18): "день", (18,23): "вечер"}
             time_label = next((v for (a,b), v in time_labels.items() if a <= hour < b), "ночь")
             hints.append(f"⏰ {time_label}")
 
-            # PREMIUM АЛЕРТЫ (если есть)
+            # PREMIUM АЛЕРТЫ
             alert_hints = self.build_premium_alerts_context(user_id, session)
             if alert_hints:
                 hints.extend(alert_hints[:2])

@@ -46,16 +46,27 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     else:
         profile_missing = ['цели', 'навыки', 'интересы']
 
-    # Profile
+    # Profile — с аналитикой что есть и чего нет
     profile = ""
     if profile_data:
-        parts = []
-        for k in ['city', 'company', 'position', 'goals', 'skills', 'interests', 'telegram_channel']:
+        FIELD_LABELS = {
+            'city': 'Город', 'company': 'Компания', 'position': 'Должность',
+            'goals': 'Цели', 'skills': 'Навыки', 'interests': 'Интересы',
+            'telegram_channel': 'Telegram'
+        }
+        filled_parts = []
+        empty_fields = []
+        for k, label in FIELD_LABELS.items():
             if profile_data.get(k):
-                label = 'Telegram' if k == 'telegram_channel' else k.title()
-                parts.append(f"{label}: {profile_data[k]}")
-        if parts:
-            profile = "\nПРОФИЛЬ:\n" + "\n".join(parts[:7])
+                filled_parts.append(f"{label}: {profile_data[k]}")
+            elif k != 'telegram_channel':  # telegram_channel необязателен
+                empty_fields.append(label.lower())
+        if filled_parts:
+            profile = "\nПРОФИЛЬ (заполнено):\n" + "\n".join(filled_parts[:7])
+        if empty_fields:
+            profile += f"\nПРОФИЛЬ (не заполнено): {', '.join(empty_fields)}"
+    else:
+        profile = "\nПРОФИЛЬ: пустой (ничего не известно о пользователе)"
 
     # Search history
     search_context = ""
