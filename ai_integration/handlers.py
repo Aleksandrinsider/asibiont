@@ -3155,6 +3155,20 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         session.add(goal)
         session.commit()
         
+        # Синхронизируем profile.goals
+        try:
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile:
+                existing = profile.goals or ""
+                if existing and title not in existing:
+                    profile.goals = f"{existing}; {title}"
+                elif not existing:
+                    profile.goals = title
+                session.commit()
+                logger.info(f"[CREATE_GOAL] Synced profile.goals: {profile.goals}")
+        except Exception as e:
+            logger.warning(f"[CREATE_GOAL] Failed to sync profile.goals: {e}")
+        
         result = f"🎯 Цель создана: **{goal.title}**"
         if goal.category:
             result += f"\n📂 Категория: {goal.category}"
