@@ -368,20 +368,21 @@ async def check_and_create_posts():
                 # Only create if user has tasks and hasn't posted today
                 current_hour = user_now.hour
                 
-                # Post between 12:00 and 22:00
-                if 12 <= current_hour <= 22:
+                # Post between 10:00 and 23:00
+                if 10 <= current_hour <= 23:
                     today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
                     
-                    # Check if already posted today
-                    existing_post = session.query(Post).filter(
+                    # Check how many posts already created today (allow up to 2 per day)
+                    posts_today = session.query(Post).filter(
                         Post.user_id == user.id,
                         Post.created_at >= today_start
-                    ).first()
+                    ).count()
                     
-                    if not existing_post:
-                        # Random chance to post (20% chance per check)
-                        if random.random() < 0.2:
-                            logger.info(f"Creating progress post for user {user.telegram_id}")
+                    if posts_today < 2:
+                        # Lower probability for more random timing (8% chance per check)
+                        # This creates more varied posting times throughout the day
+                        if random.random() < 0.08:
+                            logger.info(f"Creating progress post for user {user.telegram_id} (post #{posts_today + 1} today)")
                             content = await generate_progress_post(user.telegram_id, session)
                             if content:
                                 await create_auto_post(user.telegram_id, content, session)
@@ -406,8 +407,8 @@ async def run_service():
         except Exception as e:
             logger.error(f"Error in service loop: {e}")
         
-        # Check every hour
-        await asyncio.sleep(3600)
+        # Check every 2 hours for more varied timing
+        await asyncio.sleep(7200)
 
 
 if __name__ == "__main__":
