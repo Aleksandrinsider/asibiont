@@ -966,20 +966,10 @@ class ReminderService:
                             
                             logger.debug(f"Scheduled pre-deadline checkpoint for task {task.id} at {check_time} (user {user.telegram_id})")
             
-            # Также запланировать общий чекпоинт для случаев без задач (раз в час)
-            no_tasks_job_id = f"no_tasks_checkpoint_{user.telegram_id}"
-            if not self.scheduler.get_job(no_tasks_job_id):
-                next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-                self.scheduler.add_job(
-                    _check_and_send_proactive_job,
-                    trigger="date", 
-                    run_date=next_hour,
-                    args=[user.telegram_id],
-                    id=no_tasks_job_id,
-                    replace_existing=True,
-                    max_instances=1
-                )
-                logger.debug(f"Scheduled no-tasks checkpoint for user {user.telegram_id} at {next_hour}")
+            # НЕ создаём дублирующий no_tasks_checkpoint — проактивные сообщения
+            # уже планируются через _reschedule_proactive_check (job_id=proactive_{user_id}).
+            # Два джоба на одно время = два сообщения одновременно.
+            logger.debug(f"Skipping no-tasks checkpoint for user {user.telegram_id} — handled by proactive scheduler")
                 
         finally:
             db.close()
