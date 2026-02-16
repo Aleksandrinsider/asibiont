@@ -215,6 +215,7 @@ class ContextBuilder:
 
                 if overdue:
                     hints.append(f"🚨 ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])}")
+                    hints.append("⚡ ОБРАТНАЯ СВЯЗЬ: спроси — выполнена ли задача, какой результат, если нет — что помешало")
                 if today_tasks:
                     hints.append(f"📅 СЕГОДНЯ ({len(today_tasks)}): {', '.join(today_tasks[:3])}")
                 if tomorrow_tasks:
@@ -227,7 +228,38 @@ class ContextBuilder:
                 hints.append(f"📊 Всего активных задач: {total}")
                 if overdue and len(overdue) > 1:
                     hints.append("⚡ ДЕЙСТВИЕ: много просроченного — помоги разобраться, предложи удалить или перенести")
-            else:
+
+            # ═══ СТАТИСТИКА ЗАВЕРШЁННЫХ ЗАДАЧ ═══
+            completed_tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status == 'completed'
+            ).order_by(Task.actual_completion_time.desc()).limit(5).all()
+
+            if completed_tasks:
+                recent_completed = []
+                for ct in completed_tasks[:3]:
+                    note = ""
+                    if ct.completion_notes:
+                        try:
+                            from .memory import decrypt_data
+                            note = f" — {decrypt_data(ct.completion_notes)[:50]}"
+                        except:
+                            pass
+                    recent_completed.append(f"✅ {ct.title}{note}")
+                if recent_completed:
+                    hints.append("📈 НЕДАВНО ЗАВЕРШЕНО:\n" + "\n".join(f"  {c}" for c in recent_completed))
+
+                # Считаем completion rate
+                total_all = session.query(Task).filter(Task.user_id == user.id).count()
+                completed_count = len(completed_tasks)
+                if total_all > 3:
+                    rate = round(completed_count / total_all * 100)
+                    if rate < 30:
+                        hints.append(f"📉 Выполненность задач: {rate}% — задачи часто не выполняются, разберись почему")
+                    elif rate > 70:
+                        hints.append(f"📈 Выполненность задач: {rate}% — отличный темп!")
+
+            if not tasks:
                 # НЕТ ЗАДАЧ — это важный сигнал для агента
                 hints.append("📋 ЗАДАЧ НЕТ — расписание пустое")
                 # Даём агенту контекст для умного предложения

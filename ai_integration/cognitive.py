@@ -131,13 +131,13 @@ class CognitiveEngine:
 
         # Анализ намерения
         intent_hints = {
-            'greeting': '🎯 ПРИВЕТСТВИЕ: Профиль пустой? → Заполнить. Задач нет? → Проактивность с research.',
+            'greeting': '🎯 ПРИВЕТСТВИЕ: Есть просроченные задачи? → Собери обратную связь. Профиль пустой? → Заполнить. Задач нет? → Предложи.',
             'farewell': '🎯 ПРОЩАНИЕ: Коротко, тепло. Напомнить о планах.',
             'task_management': '🎯 ЗАДАЧИ: Только предлагать, не создавать. Проверить конфликты.',
-            'information_request': '🎯 ИНФОРМАЦИЯ: Research + анализ, не сырые факты. Понять ПОЧЕМУ спрашивает.',
-            'advice_seeking': '🎯 СОВЕТ: Моё мнение с аргументами. Не варианты, а выбор.',
+            'information_request': '🎯 ИНФОРМАЦИЯ: Research + анализ, но ОДИН раз за 3-4 сообщения. Не сырые факты.',
+            'advice_seeking': '🎯 СОВЕТ: Дай СВОЁ мнение с аргументами. НЕ используй research_topic — ты эксперт, не поисковик.',
             'emotional_sharing': '🎯 ЭМОЦИИ: Эмпатия ПЕРВАЯ. Слушать, не решать. Один вопрос.',
-            'general': '🎯 ОБЩЕЕ: Профиль? Задачи? Проактивность по интересам.'
+            'general': '🎯 ОБЩЕЕ: Профиль? Задачи? Проактивность по интересам. Тихо обновляй профиль если узнал новое.'
         }
         if intent in intent_hints:
             hints.append(intent_hints[intent])
@@ -217,7 +217,17 @@ class CognitiveEngine:
             text = re.sub(r'\.\s*\.', '.', text)
             issues.append('list_converted')
 
-        # 5. Убираем множественные пустые строки (оставляем максимум одну)
+        # 5. Убираем пустые секции ("Вот почему:" без содержимого)
+        # Паттерн: заголовок с двоеточием, за которым сразу следующий заголовок или конец
+        empty_section_pattern = re.compile(
+            r'([^\n]*:\s*)\n\s*\n\s*(?=[А-ЯA-Z])', re.MULTILINE
+        )
+        prev = text
+        text = empty_section_pattern.sub('', text)
+        if text != prev:
+            issues.append('empty_sections_removed')
+
+        # 5b. Убираем множественные пустые строки (оставляем максимум одну)
         text = re.sub(r'\n{3,}', '\n\n', text)
 
         # 6. Обрезаем если слишком длинный (>1200 символов)
@@ -366,12 +376,49 @@ class CognitiveEngine:
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
         
+        # Определяем приоритет действия
+        if not profile_data:
+            priority = 'profile'
+            action = 'ask_profile'
+            why = 'Заполнить профиль для персонализации'
+        elif intent == 'information_request':
+            priority = 'research'
+            action = 'research_topic'
+            why = 'Пользователь явно запрашивает информацию'
+        elif intent == 'advice_seeking':
+            priority = 'opinion'
+            action = 'give_opinion'
+            why = 'Дай СВОЁ мнение, НЕ делай research — ты эксперт'
+        elif not tasks_data:
+            priority = 'tasks'
+            action = 'suggest_task'
+            why = 'Предложи задачу на основе контекста'
+        else:
+            priority = 'proactive'
+            action = 'chat'
+            why = 'Дай ценность из контекста'
+        
+        # Определяем тон
+        if emotion in ['tired', 'sad', 'anxious']:
+            tone = 'empathetic'
+        elif emotion == 'excited':
+            tone = 'enthusiastic'
+        elif emotion == 'frustrated':
+            tone = 'calm_supportive'
+        else:
+            tone = 'normal'
+        
         strategy = {
-            'priority': 'profile' if not profile_data else ('tasks' if not tasks_data else 'proactive'),
-            'tone': 'empathetic' if emotion in ['tired', 'sad', 'anxious'] else 'enthusiastic' if emotion == 'excited' else 'normal',
-            'action': 'ask_profile' if not profile_data else ('research_topic' if intent == 'information_request' else 'chat'),
-            'why': 'Заполнить профиль для персонализации' if not profile_data else 'Дать ценность без задач'
+            'priority': priority,
+            'tone': tone,
+            'action': action,
+            'why': why,
+            'extract_profile': intent == 'general' and not all(profile_data.get(k) for k in ['goals', 'skills', 'interests', 'position'])
         }
+        
+        # Добавляем hint про извлечение данных в профиль
+        if strategy['extract_profile']:
+            strategy['why'] += '. ВАЖНО: если пользователь рассказывает о себе — тихо обновляй профиль через update_profile'
         
         return strategy
 
