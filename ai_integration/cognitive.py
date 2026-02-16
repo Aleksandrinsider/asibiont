@@ -217,7 +217,10 @@ class CognitiveEngine:
             text = re.sub(r'\.\s*\.', '.', text)
             issues.append('list_converted')
 
-        # 5. Обрезаем если слишком длинный (>1200 символов)
+        # 5. Убираем множественные пустые строки (оставляем максимум одну)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+
+        # 6. Обрезаем если слишком длинный (>1200 символов)
         if len(text) > 1200:
             cut = text[:1000]
             last_end = max(cut.rfind('.'), cut.rfind('!'), cut.rfind('?'))
