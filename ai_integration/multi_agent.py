@@ -73,7 +73,57 @@ class Analyst(AgentRole):
         elif msg_len > 100:
             analysis.append("РАЗВЁРНУТОЕ сообщение → можно ответить подробнее (3-5 предложений).")
         
+        # Свободный анализ возможностей по ситуации
+        opportunity_hint = self._detect_situation_signals(profile_data, tasks_data, user_message)
+        if opportunity_hint:
+            analysis.append(opportunity_hint)
+        
         return "\n".join(analysis)
+    
+    def _detect_situation_signals(self, profile_data, tasks_data, user_message):
+        """Обнаруживает структурные сигналы в данных пользователя.
+        
+        Не подсказывает ЧТО говорить — подсказывает ГДЕ ДУМАТЬ.
+        Находит противоречия, разрывы, пересечения в данных,
+        а агент сам решает что с этим делать.
+        """
+        if not profile_data:
+            return None
+        
+        signals = []
+        
+        # --- Структурные разрывы в данных ---
+        
+        # Цель есть, задач нет → разрыв между намерением и действием
+        goals = profile_data.get('goals', '')
+        if goals and not tasks_data:
+            signals.append(f"РАЗРЫВ: цель [{goals[:60]}] без задач — намерение без действия")
+        
+        # Много задач → перегрузка, возможно нет фокуса
+        if tasks_data and len(tasks_data) > 5:
+            signals.append(f"ПЕРЕГРУЗКА: {len(tasks_data)} задач — ищи что лишнее")
+        
+        # Задачи есть, но цели нет → действия без направления
+        if tasks_data and not goals:
+            signals.append("РАЗРЫВ: задачи без цели — действия без направления")
+        
+        # --- Пересечения данных ---
+        
+        # Собираем всю информацию о человеке
+        skills = profile_data.get('skills', '')
+        interests = profile_data.get('interests', '')
+        position = profile_data.get('position', '')
+        
+        # Если много полей заполнено — есть богатый контекст для анализа
+        filled = sum(1 for f in [goals, skills, interests, position] if f)
+        if filled >= 3:
+            signals.append(f"БОГАТЫЙ ПРОФИЛЬ: [{position}|{skills[:40]}|{interests[:40]}] — ищи неочевидные пересечения между навыками, интересами и целями")
+        
+        # Есть навыки/интересы, но нет целей → потенциал без вектора
+        if (skills or interests) and not goals:
+            signals.append("ПОТЕНЦИАЛ БЕЗ ВЕКТОРА: навыки/интересы есть, цели нет — помоги найти направление")
+        
+        return ' | '.join(signals) if signals else None
 
 
 class Strategist(AgentRole):
