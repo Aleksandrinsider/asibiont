@@ -185,13 +185,13 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         
         # Если анализ — dict, форматируем красиво
         if isinstance(analysis, dict):
-            summary = f"🔍 Анализ по теме: {query}\n\n"
+            summary = f"🔍 Анализ: {query}\n\n"
             
             if analysis.get('summary'):
-                summary += f"📊 Резюме:\n{analysis['summary']}\n\n"
+                summary += f"{analysis['summary']}\n\n"
             
             if analysis.get('key_insights'):
-                summary += "💡 Ключевые инсайты:\n"
+                summary += "💡 Ключевые выводы:\n"
                 for insight in analysis['key_insights'][:3]:
                     summary += f"• {insight}\n"
                 summary += "\n"
@@ -207,6 +207,14 @@ async def research_topic(query, depth="full", user_id=None, session=None):
                 summary += "✅ Рекомендации:\n"
                 for i, step in enumerate(steps[:3], 1):
                     summary += f"{i}. {step}\n"
+                summary += "\n"
+            
+            # Добавляем ссылки на источники
+            search_results = result.get('results', [])
+            if search_results:
+                summary += "📎 Источники:\n"
+                for r in search_results[:5]:
+                    summary += f"• {r.get('title', '')} — {r.get('link', '')}\n"
             
             result['message'] = summary
         

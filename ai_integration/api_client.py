@@ -836,13 +836,13 @@ class ExternalAPIClient:
         return text
     
     def _format_analysis(self, query: str, analysis, results: list) -> str:
-        """Форматирует AI-анализ"""
+        """Форматирует AI-анализ с источниками"""
         if isinstance(analysis, dict):
-            summary = f"🔍 Анализ по теме: {query}\n\n"
+            summary = f"🔍 Анализ: {query}\n\n"
             if analysis.get('summary'):
-                summary += f"📊 Резюме:\n{analysis['summary']}\n\n"
+                summary += f"{analysis['summary']}\n\n"
             if analysis.get('key_insights'):
-                summary += "💡 Ключевые инсайты:\n"
+                summary += "💡 Ключевые выводы:\n"
                 for insight in analysis['key_insights'][:4]:
                     summary += f"• {insight}\n"
                 summary += "\n"
@@ -856,9 +856,20 @@ class ExternalAPIClient:
                 summary += "✅ Рекомендации:\n"
                 for i, step in enumerate(steps[:3], 1):
                     summary += f"{i}. {step}\n"
+                summary += "\n"
+            # Добавляем ссылки на источники
+            if results:
+                summary += "📎 Источники:\n"
+                for r in results[:5]:
+                    summary += f"• {r['title']} — {r['link']}\n"
             return summary
         elif isinstance(analysis, str):
-            return f"🔍 Анализ: {query}\n\n{analysis}"
+            text = f"🔍 Анализ: {query}\n\n{analysis}"
+            if results:
+                text += "\n\n📎 Источники:\n"
+                for r in results[:5]:
+                    text += f"• {r['title']} — {r['link']}\n"
+            return text
         else:
             return self._format_search_results(query, results[:5])
 
