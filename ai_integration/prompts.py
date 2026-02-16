@@ -114,9 +114,9 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     if not profile_complete and profile_missing:
         missing_str = ', '.join(profile_missing)
         if len(profile_missing) >= 3:
-            profile_instruction = f"\n\nПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). Узнай о человеке естественно через живой разговор.\n"
+            profile_instruction = f"\n\n⚠️ ПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). ЭТО ПРИОРИТЕТ №1 — узнай о человеке через живой вопрос. Не \"заполни профиль\", а естественный вопрос: \"Чем занимаешься?\", \"Какие планы сейчас?\" Каждый ответ сохраняй через update_profile.\n"
         else:
-            profile_instruction = f"\n\nПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). При случае узнай естественно.\n"
+            profile_instruction = f"\n\n⚠️ ПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"
 
     # Выбираем версию промпта
     complexity = "medium"  # Можно определить на основе контекста
