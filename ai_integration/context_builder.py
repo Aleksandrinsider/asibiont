@@ -260,23 +260,23 @@ class ContextBuilder:
                         hints.append(f"📈 Выполненность задач: {rate}% — отличный темп!")
 
             if not tasks:
-                # НЕТ ЗАДАЧ — это важный сигнал для агента
-                hints.append("📋 ЗАДАЧ НЕТ — расписание пустое")
-                # Даём агенту контекст для умного предложения
+                # НЕТ ЗАДАЧ — фокус на текущем моменте, НЕ на завтра
+                hints.append("📋 ЗАДАЧ НЕТ — спроси чем занят СЕЙЧАС, не предлагай откладывать на завтра")
+                # Даём агенту контекст для НЕМЕДЛЕННОГО действия
                 suggestions = []
                 if profile:
                     if profile.goals:
-                        suggestions.append(f"есть цель '{profile.goals[:40]}' — предложи конкретный шаг как задачу")
-                    if profile.skills:
-                        suggestions.append(f"навыки: {profile.skills[:40]} — предложи задачу на развитие")
+                        suggestions.append(f"есть цель '{profile.goals[:40]}' — спроси как продвигается СЕЙЧАС, предложи конкретный шаг")
                     if profile.company:
-                        suggestions.append(f"работает в {profile.company} — предложи рабочую задачу")
+                        suggestions.append(f"работает в {profile.company} — спроси над чем работает СЕГОДНЯ")
+                    if profile.skills:
+                        suggestions.append(f"навыки: {profile.skills[:40]} — чем может помочь ПРЯМО СЕЙЧАС")
                     if profile.interests and not profile.goals:
-                        suggestions.append(f"интересы: {profile.interests[:40]} — можно предложить что-то по интересам")
+                        suggestions.append(f"интересы: {profile.interests[:40]} — обсуди актуальное по теме")
                 if suggestions:
-                    hints.append("⚡ ДЕЙСТВИЕ: " + "; ".join(suggestions[:2]))
+                    hints.append("⚡ ДЕЙСТВИЕ СЕЙЧАС: " + "; ".join(suggestions[:2]))
                 else:
-                    hints.append("⚡ ДЕЙСТВИЕ: предложи создать первую задачу на основе разговора")
+                    hints.append("⚡ ДЕЙСТВИЕ: спроси чем занят, будь полезен СЕЙЧАС — не откладывай на потом")
 
             # ═══ ЦЕЛИ ═══
             from models import Goal
@@ -313,9 +313,9 @@ class ContextBuilder:
             has_goals = bool(active_goals)
 
             if has_profile and not has_tasks and not has_goals:
-                situation_parts.append("Профиль заполнен, но нет ни задач, ни целей — человек пока не вовлечён")
+                situation_parts.append("Профиль заполнен, но нет задач/целей — спроси над чем работает СЕЙЧАС, помоги в текущем моменте")
             elif has_profile and has_goals and not has_tasks:
-                situation_parts.append("Цели есть, задач нет — нужна декомпозиция целей в конкретные шаги")
+                situation_parts.append("Цели есть, задач нет — спроси как продвигается цель, предложи шаг на СЕГОДНЯ")
             elif has_profile and has_tasks and not has_goals:
                 situation_parts.append("Задачи есть, целей нет — предложи объединить задачи в цель")
             elif not has_profile:
