@@ -38,7 +38,6 @@ from .dynamic_tools import tool_discovery
 from .tools import get_available_tools
 from .vector_memory import store_conversation_turn, build_memory_context, search_memory
 from .multi_agent import get_orchestrator
-from .utils import redis_client
 from .self_learning import get_learner
 
 logger = logging.getLogger(__name__)
@@ -78,7 +77,7 @@ class HybridAutonomousAgent:
         self.active_sessions = 0
 
         # === Адаптивные фичи (из 73dc138) ===
-        # self.context_memory = []          # Краткосрочная память контекста (теперь в Redis)
+        self.context_memory = []          # Краткосрочная память контекста
         self.success_patterns = {}        # Паттерны успешных действий
         self.user_preferences = {}        # Предпочтения пользователей
         self._progress_callback = None
@@ -94,51 +93,6 @@ class HybridAutonomousAgent:
             logger.info(f"[AGENT] Initialized {len(self.tool_discovery.discovered_tools)} dynamic tools")
         except Exception as e:
             logger.error(f"[AGENT] Failed to initialize tools: {e}")
-
-    # ===== REDIS CONTEXT MEMORY =====
-
-    def _get_context_memory_key(self):
-        """Ключ для хранения контекстной памяти в Redis."""
-        return "agent:context_memory"
-
-    def _load_context_memory(self):
-        """Загружает контекстную память из Redis."""
-        if not redis_client:
-            return []
-        try:
-            data = redis_client.get(self._get_context_memory_key())
-            if data:
-                return json.loads(data)
-            return []
-        except Exception as e:
-            logger.warning(f"[REDIS] Failed to load context memory: {e}")
-            return []
-
-    def _save_context_memory(self, memory):
-        """Сохраняет контекстную память в Redis."""
-        if not redis_client:
-            return
-        try:
-            redis_client.set(self._get_context_memory_key(), json.dumps(memory), ex=86400)  # 24 часа
-        except Exception as e:
-            logger.warning(f"[REDIS] Failed to save context memory: {e}")
-
-    def _add_to_context_memory(self, entry):
-        """Добавляет запись в контекстную память через Redis."""
-        memory = self._load_context_memory()
-        memory.append(entry)
-        if len(memory) > 100:
-            memory = memory[-100:]
-        self._save_context_memory(memory)
-
-    def clear_context_memory(self):
-        """Очищает контекстную память в Redis (для отладки)."""
-        if redis_client:
-            try:
-                redis_client.delete(self._get_context_memory_key())
-                logger.info("[REDIS] Context memory cleared")
-            except Exception as e:
-                logger.warning(f"[REDIS] Failed to clear context memory: {e}")
 
     # ===== AI API =====
 
@@ -709,12 +663,14 @@ class HybridAutonomousAgent:
 
         # === Контекстная память ===
         if tools_used:
-            self._add_to_context_memory({
+            self.context_memory.append({
                 'user_id': user_id,
                 'tools': tools_used,
                 'message_hint': user_message[:50],
                 'timestamp': datetime.now(timezone.utc).isoformat()
             })
+            if len(self.context_memory) > 100:
+                self.context_memory = self.context_memory[-100:]
 
         # === Семантическая память (Pinecone) ===
         try:
