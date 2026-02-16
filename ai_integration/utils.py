@@ -210,49 +210,6 @@ def parse_time_to_datetime(time_text, user_id):
     return None
 
 
-def sanitize_fake_mentions(text, user_id, session):
-    """Удаляет ложные @username из ответа агента.
-    
-    Проверяет все @username в тексте — если такого пользователя нет в БД,
-    удаляет упоминание (заменяет на просто имя без @).
-    Сохраняет @username самого пользователя и реальных пользователей из БД.
-    """
-    import re
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    mentions = re.findall(r'@(\w+)', text)
-    if not mentions:
-        return text
-    
-    try:
-        from models import User
-        
-        # Получаем username текущего пользователя
-        current_user = session.query(User).filter_by(telegram_id=user_id).first()
-        current_username = current_user.username.lower() if current_user and current_user.username else ''
-        
-        # Получаем всех реальных пользователей из БД
-        all_users = session.query(User.username).filter(User.username.isnot(None)).all()
-        valid_usernames = {u.username.lower() for u in all_users if u.username}
-        
-        for mention in mentions:
-            if mention.lower() == current_username:
-                continue  # свой username — ок
-            if mention.lower() in valid_usernames:
-                continue  # реальный пользователь в БД — ок
-            if mention.lower() in ('channel', 'bot', 'here', 'everyone'):
-                continue  # служебные
-            
-            # Ложный @username — удаляем @
-            text = text.replace(f'@{mention}', mention)
-            logger.info(f"[SANITIZE] Removed fake mention @{mention}")
-    except Exception as e:
-        logger.warning(f"[SANITIZE] Error checking mentions: {e}")
-    
-    return text
-
-
 def replace_placeholders(content, user_now=None, current_time_str=None):
     """Заменяет плейсхолдеры типа {{current_time}} на реальные значения"""
     if content is None:
