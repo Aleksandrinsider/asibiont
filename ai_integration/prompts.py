@@ -41,14 +41,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
             profile_missing.append('навыки')
         if not profile_data.get('interests'):
             profile_missing.append('интересы')
-        if not profile_data.get('position'):
-            profile_missing.append('должность')
-        if not profile_data.get('company'):
-            profile_missing.append('компания')
         if len(profile_missing) <= 1:  # If only one thing missing, consider complete
             profile_complete = True
     else:
-        profile_missing = ['цели', 'навыки', 'интересы', 'должность', 'компания']
+        profile_missing = ['цели', 'навыки', 'интересы']
 
     # Profile — с аналитикой что есть и чего нет
     profile = ""
@@ -68,7 +64,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         if filled_parts:
             profile = "\nПРОФИЛЬ (заполнено):\n" + "\n".join(filled_parts[:7])
         if empty_fields:
-            profile += f"\nПРОФИЛЬ (НЕ ЗНАЕШЬ — узнай!): {', '.join(empty_fields)}"
+            profile += f"\nПРОФИЛЬ (не заполнено): {', '.join(empty_fields)}"
     else:
         profile = "\nПРОФИЛЬ: пустой (ничего не известно о пользователе)"
 

@@ -176,27 +176,13 @@ class ContextBuilder:
                 profile_missing = list(ALL_FIELDS.values())
 
             if profile_missing:
-                hints.append(f"👤 ПРОФИЛЬ — НЕ ЗНАЕШЬ: {', '.join(profile_missing)}")
-                # Приоритетный вопрос для заполнения
-                priority_questions = {
-                    'цели': 'Спроси о планах/целях естественно ("Какие планы сейчас?", "К чему идёшь?")',
-                    'навыки': 'Спроси о сфере/навыках ("Чем занимаешься?", "Над чем работаешь?")',
-                    'должность': 'Спроси о работе ("Чем занимаешься?", "Где работаешь?")',
-                    'интересы': 'Спроси об интересах ("Что сейчас занимает?", "Чем увлекаешься?")',
-                }
-                # Выдаём самый приоритетный пустой фильд
-                for field_priority in ['цели', 'навыки', 'должность', 'интересы']:
-                    if field_priority in profile_missing and field_priority in priority_questions:
-                        hints.append(f"❗ ПРИОРИТЕТ: {priority_questions[field_priority]} → сохрани через update_profile")
-                        break
+                hints.append(f"👤 ПРОФИЛЬ — не заполнено: {', '.join(profile_missing)}")
             if profile_has:
                 hints.append(f"👤 ПРОФИЛЬ — есть: {'; '.join(profile_has)}")
 
             # Если профиль совсем пустой — это приоритет, но НЕ блокирует остальной контекст
             if len(profile_missing) >= 5:
-                hints.append("⚠️ ВНИМАНИЕ: Профиль почти пустой — ты НЕ ЗНАЕШЬ человека. Нельзя давать советы в пустоту. Сначала узнай о нём живым вопросом.")
-            elif len(profile_missing) >= 3:
-                hints.append(f"⚠️ ПРОФИЛЬ НЕПОЛНЫЙ — не хватает: {', '.join(profile_missing[:3])}. Узнай естественно при случае.")
+                hints.append("⚡ ДЕЙСТВИЕ: узнай о человеке через живой разговор, не допрашивай")
 
             # ═══ ЗАДАЧИ: точки контроля ═══
             tasks = session.query(Task).filter(
@@ -327,13 +313,13 @@ class ContextBuilder:
             has_goals = bool(active_goals)
 
             if has_profile and not has_tasks and not has_goals:
-                situation_parts.append("Профиль заполнен, но нет задач/целей — спроси над чем работает СЕЙЧАС")
+                situation_parts.append("Профиль заполнен, но нет задач/целей — спроси над чем работает СЕЙЧАС, помоги в текущем моменте")
             elif has_profile and has_goals and not has_tasks:
-                situation_parts.append("Цели есть, задач нет — ПРОТИВОРЕЧИЕ: цель не декомпозирована. Предложи конкретный шаг на СЕГОДНЯ")
+                situation_parts.append("Цели есть, задач нет — спроси как продвигается цель, предложи шаг на СЕГОДНЯ")
             elif has_profile and has_tasks and not has_goals:
-                situation_parts.append("Задачи есть, целей нет — человек действует без вектора. Предложи объединить в цель")
+                situation_parts.append("Задачи есть, целей нет — предложи объединить задачи в цель")
             elif not has_profile:
-                situation_parts.append("ПРОФИЛЬ НЕ ЗАПОЛНЕН — ты не знаешь человека. Узнай о нём прежде чем советовать")
+                situation_parts.append("Профиль не заполнен — узнай о человеке, но не навязывай заполнение")
 
             if situation_parts:
                 hints.append("📍 СИТУАЦИЯ: " + "; ".join(situation_parts))
