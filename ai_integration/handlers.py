@@ -19,6 +19,20 @@ from config import OPENWEATHERMAP_API_KEY, ALPHA_VANTAGE_API_KEY, NEWSAPI_API_KE
 
 logger = logging.getLogger(__name__)
 
+
+def _utc_to_local(dt_naive, user_tz):
+    """Конвертирует naive UTC datetime в локальный timezone пользователя.
+    
+    Исправляет баг: Python astimezone() на naive datetime использует 
+    системный timezone машины, а не UTC. Эта функция всегда трактует
+    входное время как UTC.
+    """
+    if dt_naive is None:
+        return None
+    if dt_naive.tzinfo is not None:
+        return dt_naive.astimezone(user_tz)
+    return dt_naive.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+
 def get_tier_priority(profile, session=None):
     """Get tier priority for sorting (PREMIUM=3, STANDARD=2, LIGHT=1)"""
     if not profile or not hasattr(profile, 'user_id'):
@@ -181,12 +195,12 @@ def check_time_conflicts_sync(user_db_id, parsed_time, session):
             # Находим ближайшее свободное время
             suggested_time = find_nearest_free_slot(user_db_id, parsed_time, session)
             
-            task_list = "\n".join([f"• {task.title} ({task.reminder_time.astimezone(user_tz).strftime('%H:%M')})" for task in conflicting_tasks])
+            task_list = "\n".join([f"• {task.title} ({_utc_to_local(task.reminder_time, user_tz).strftime('%H:%M')})" for task in conflicting_tasks])
             
             conflict_message = f"В это время у тебя уже запланированы задачи:\n{task_list}"
             
             if suggested_time:
-                suggested_str = suggested_time.astimezone(user_tz).strftime('%H:%M')
+                suggested_str = _utc_to_local(suggested_time, user_tz).strftime('%H:%M')
                 return conflict_message, suggested_str
             else:
                 return conflict_message, "укажи другое время"
@@ -228,8 +242,8 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
         ).order_by(Task.reminder_time).all()
         
         # Конвертируем все времена в локальный timezone
-        existing_times = [task.reminder_time.astimezone(user_tz) for task in existing_tasks]
-        target_local = target_time.astimezone(user_tz)
+        existing_times = [_utc_to_local(task.reminder_time, user_tz) for task in existing_tasks]
+        target_local = _utc_to_local(target_time, user_tz)
         
         # Ищем свободные слоты по 30 минут
         current_time = datetime.now(user_tz)
@@ -601,7 +615,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     result_msg = f"Добавлена задача '{title}'"
     if task.reminder_time:
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
-        local_time = task.reminder_time.astimezone(user_tz)
+        local_time = _utc_to_local(task.reminder_time, user_tz)
         time_str = local_time.strftime('%H:%M')
         date_str = local_time.strftime('%d.%m.%Y')
         result_msg += f" с напоминанием на {date_str} в {time_str}"
@@ -4432,11 +4446,11 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
             details += f"📊 Статус: {task.status}\n"
             
             if task.reminder_time:
-                local_time = task.reminder_time.astimezone(user_tz)
+                local_time = _utc_to_local(task.reminder_time, user_tz)
                 details += f"⏰ Время напоминания: {local_time.strftime('%d.%m.%Y %H:%M')} ({user_tz.zone})\n"
             
             if task.due_date:
-                local_due = task.due_date.astimezone(user_tz)
+                local_due = _utc_to_local(task.due_date, user_tz)
                 details += f"📅 Дедлайн: {local_due.strftime('%d.%m.%Y %H:%M')}\n"
             
             if task.delegated_to_username:
@@ -4449,7 +4463,7 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
                 details += f"✅ Заметки о выполнении: {decrypt_data(task.completion_notes)}\n"
             
             if task.actual_completion_time:
-                local_completion = task.actual_completion_time.astimezone(user_tz)
+                local_completion = _utc_to_local(task.actual_completion_time, user_tz)
                 details += f"✅ Фактическое время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
             
             if task.recommendations:
@@ -4463,7 +4477,7 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
                 except Exception as e:
                     logger.warning(f"[TASKDETAILS] Error parsing recommendations: {e}")
             
-            details += f"🕒 Создана: {task.created_at.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}\n"
+            details += f"🕒 Создана: {_utc_to_local(task.created_at, user_tz).strftime('%d.%m.%Y %H:%M')}\n"
             
             if close_session:
                 session.close()
