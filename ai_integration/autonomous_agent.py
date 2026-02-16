@@ -181,8 +181,51 @@ class HybridAutonomousAgent:
 
     # ===== КОНТЕКСТ =====
 
-    def _build_context(self, user_id):
+    # Кэш контекста погоды/новостей: {user_id: {'weather': ..., 'news': ..., 'expires': float}}
+    _weather_news_cache = {}
+    _WEATHER_NEWS_TTL = 900  # 15 мин — не перезапрашиваем API на каждое сообщение
+
+    async def _get_weather_news_cached(self, city):
+        """Получить погоду/новости через async api_client с per-user TTL кэшем.
+        Избегает блокировки event loop (в отличие от старых sync utils).
+        """
+        import time as _time
+        cache_key = city.lower().strip() if city else "__no_city__"
+        cached = self._weather_news_cache.get(cache_key)
+        if cached and cached['expires'] > _time.time():
+            logger.debug(f"[CTX_CACHE] Using cached weather/news for {city}")
+            return cached['weather'], cached['news']
+
+        weather_info = None
+        news_info = None
+        try:
+            from .api_client import get_api_client
+            api = get_api_client()
+            weather_data = await api.get_weather(city, cache_ttl=1800) if city else None
+            if weather_data:
+                weather_info = (
+                    f"{weather_data['city_name']}: {weather_data['temp']:.0f}°C, "
+                    f"{weather_data['description']}, влажность {weather_data['humidity']}%, "
+                    f"ветер {weather_data['wind_speed']} м/с"
+                )
+            news_articles = await api.get_news(topic=city, page_size=3, cache_ttl=900) if city else None
+            if news_articles:
+                titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
+                if titles:
+                    news_info = f"Новости {city}:\n" + "\n".join(titles)
+        except Exception as e:
+            logger.warning(f"[CTX_CACHE] Failed to load weather/news via api_client: {e}")
+
+        self._weather_news_cache[cache_key] = {
+            'weather': weather_info,
+            'news': news_info,
+            'expires': _time.time() + self._WEATHER_NEWS_TTL,
+        }
+        return weather_info, news_info
+
+    async def _build_context(self, user_id):
         """Собирает весь контекст пользователя за 1 сессию БД.
+        Async: погода/новости загружаются через api_client (не блокируют event loop).
         Returns: dict с полями для промпта + метаданные.
         """
         session = Session()
@@ -224,11 +267,26 @@ class HybridAutonomousAgent:
                     if val:
                         profile_data[field] = val
                 if profile.city:
-                    from .utils import get_weather_info, get_news_info
-                    weather_info = get_weather_info(profile.city)
-                    news_info = get_news_info(profile.city)
+                    # Async weather/news через api_client (не блокирует event loop)
+                    weather_info, news_info = await self._get_weather_news_cached(profile.city)
             if user.telegram_channel:
                 profile_data['telegram_channel'] = user.telegram_channel
+
+            # Задачи пользователя (для CognitiveEngine strategy)
+            tasks_data = []
+            try:
+                user_tasks = session.query(Task).filter_by(
+                    user_id=user.id
+                ).filter(
+                    Task.status.in_(['pending', 'in_progress'])
+                ).order_by(Task.due_date.asc().nullslast()).limit(20).all()
+                for t in user_tasks:
+                    task_info = {'id': t.id, 'title': t.title, 'status': t.status}
+                    if t.due_date:
+                        task_info['deadline'] = t.due_date.isoformat()
+                    tasks_data.append(task_info)
+            except Exception as e:
+                logger.warning(f"[CTX] Failed to load tasks: {e}")
 
             # Память
             decrypted_memory = ""
@@ -277,6 +335,7 @@ class HybridAutonomousAgent:
                 'base_prompt': base_prompt,
                 'sub_tier': sub_tier,
                 'profile_data': profile_data,
+                'tasks': tasks_data,
                 'user_now': user_now,
                 'time_str': time_str,
                 'date_str': date_str,
@@ -415,8 +474,8 @@ class HybridAutonomousAgent:
             from .conversation_history import save_message_to_history
             save_message_to_history(user_id, "user", user_message)
 
-            # Контекст
-            ctx = self._build_context(user_id)
+            # Контекст (async — погода/новости через api_client)
+            ctx = await self._build_context(user_id)
             if not ctx:
                 return "Не удалось загрузить профиль. Попробуй ещё раз."
 
@@ -575,7 +634,7 @@ class HybridAutonomousAgent:
                     action = [{"tool": name, "params": args,
                                "reason": f"AI iter {iteration+1}: {name}"}]
                     results = await self.execute_actions(
-                        action, user_id, session=None,
+                        action, user_id, session=session,
                         user_message=user_message,
                         progress_callback=progress_callback)
 
@@ -768,8 +827,8 @@ class HybridAutonomousAgent:
             str — готовый текст сообщения
         """
         try:
-            # Контекст — тот же что и для обычного чата
-            ctx = self._build_context(user_id)
+            # Контекст — тот же что и для обычного чата (async)
+            ctx = await self._build_context(user_id)
             if not ctx:
                 return self._system_message_fallback(mode, instruction)
 

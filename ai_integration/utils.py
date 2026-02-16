@@ -423,7 +423,17 @@ def get_context_from_db(user_id, limit=10):
 
 
 def get_weather_info(city, cache_ttl_minutes=30):
-    """Get weather information for a city with caching"""
+    """Get weather information for a city with caching.
+    
+    DEPRECATED: Используйте api_client.get_weather() (async) — не блокирует event loop,
+    единый кэш, rate-limiting. Эта функция оставлена для обратной совместимости.
+    """
+    import warnings
+    warnings.warn(
+        "get_weather_info() is sync and blocks event loop. "
+        "Use api_client.get_api_client().get_weather() instead.",
+        DeprecationWarning, stacklevel=2
+    )
     # Нормализуем город
     city = city.strip()
     if not city:
@@ -483,7 +493,17 @@ def _load_weather_sync(city):
 
 
 def get_news_info(city=None, cache_ttl_minutes=120):
-    """Get news information with caching"""
+    """Get news information with caching.
+    
+    DEPRECATED: Используйте api_client.get_news() (async) — не блокирует event loop,
+    единый кэш, rate-limiting. Эта функция оставлена для обратной совместимости.
+    """
+    import warnings
+    warnings.warn(
+        "get_news_info() is sync and blocks event loop. "
+        "Use api_client.get_api_client().get_news() instead.",
+        DeprecationWarning, stacklevel=2
+    )
     # Ключ кеша зависит от города
     if city and city.strip():
         cache_key = f"news_{city.lower().strip()}"
@@ -562,7 +582,10 @@ def _load_news_sync(city=None):
 
 
 def get_finance_info(symbol, asset_type='stock', cache_ttl_minutes=15):
-    """Get finance information with caching"""
+    """Get finance information with caching.
+    
+    DEPRECATED: Используйте api_client.get_stock() (async).
+    """
     cache_key = f"{asset_type}_{symbol.lower()}"
     ttl_seconds = cache_ttl_minutes * 60
     # Проверяем Redis кеш

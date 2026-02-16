@@ -15,8 +15,6 @@ from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from .memory import encrypt_data, decrypt_data
 from .utils import (
     replace_placeholders, clean_technical_details,
-    get_news_info,
-    get_weather_info
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
@@ -175,11 +173,35 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             proactive_context = context_builder.build_proactive_context(user_id, session, profile_complete=profile_complete)
             logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
 
-            # Получаем погоду и новости для контекста
+            # Получаем погоду и новости для контекста (async через api_client)
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
             user_city = profile.city if profile and profile.city else None
-            weather_info = get_weather_info(user_city) if user_city else None
-            news_info = get_news_info(user_city) if user_city else get_news_info()
+            weather_info = None
+            news_info = None
+            try:
+                from .api_client import get_api_client
+                api = get_api_client()
+                if user_city:
+                    weather_data = await api.get_weather(user_city, cache_ttl=1800)
+                    if weather_data:
+                        weather_info = (
+                            f"{weather_data['city_name']}: {weather_data['temp']:.0f}°C, "
+                            f"{weather_data['description']}, влажность {weather_data['humidity']}%, "
+                            f"ветер {weather_data['wind_speed']} м/с"
+                        )
+                    news_articles = await api.get_news(topic=user_city, page_size=3, cache_ttl=900)
+                    if news_articles:
+                        titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
+                        if titles:
+                            news_info = f"Новости {user_city}:\n" + "\n".join(titles)
+                if not news_info:
+                    news_articles = await api.get_news(page_size=3, cache_ttl=900)
+                    if news_articles:
+                        titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
+                        if titles:
+                            news_info = "Свежие новости России:\n" + "\n".join(titles)
+            except Exception as e:
+                logger.warning(f"[CONTEXT] Failed to load weather/news via api_client: {e}")
             logger.info(f"[CONTEXT] Weather: {bool(weather_info)}, News: {bool(news_info)}")
 
             # Расшифровываем память пользователя
@@ -578,16 +600,31 @@ async def _build_proactive_context(user_id):
             except Exception as e:
                 logger.warning(f"[PROACTIVE] Could not parse long_term_memory: {e}")
         
-        # Погода и новости
+        # Погода и новости (async через api_client — не блокирует event loop)
         ctx['weather'] = None
         ctx['news'] = None
         try:
-            from .utils import get_weather_info as _get_weather, get_news_info
+            from .api_client import get_api_client
+            api = get_api_client()
             if profile and profile.city:
-                ctx['weather'] = _get_weather(profile.city)
-                ctx['news'] = get_news_info(profile.city)
+                weather_data = await api.get_weather(profile.city, cache_ttl=1800)
+                if weather_data:
+                    ctx['weather'] = (
+                        f"{weather_data['city_name']}: {weather_data['temp']:.0f}°C, "
+                        f"{weather_data['description']}, влажность {weather_data['humidity']}%, "
+                        f"ветер {weather_data['wind_speed']} м/с"
+                    )
+                news_articles = await api.get_news(topic=profile.city, page_size=3, cache_ttl=900)
+                if news_articles:
+                    titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
+                    if titles:
+                        ctx['news'] = f"Новости {profile.city}:\n" + "\n".join(titles)
             if not ctx['news']:
-                ctx['news'] = get_news_info()
+                news_articles = await api.get_news(page_size=3, cache_ttl=900)
+                if news_articles:
+                    titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
+                    if titles:
+                        ctx['news'] = "Свежие новости России:\n" + "\n".join(titles)
             
             if ctx['weather']:
                 user_memory += f"\n\n🌤 ПОГОДА: {ctx['weather']}"
