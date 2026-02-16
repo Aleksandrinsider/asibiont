@@ -370,7 +370,11 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             f"{f' (ID: {task_id})' if task_id else ''}.\n"
             f"Тон: {tone}.\n"
             f"Уровень эскалации: {escalation_level}/3.\n"
-            "Используй get_task_details если нужен контекст задачи.\n"
+            "Проанализируй задачу — можешь ли ты ПОМОЧЬ её решить?\n"
+            "Если задача требует информации (рецепт, исследование, поиск людей, план) — "
+            "ИСПОЛЬЗУЙ инструменты (research_topic, find_relevant_contacts_for_task, get_news_trends) "
+            "и дай КОНКРЕТНЫЙ результат вместе с напоминанием.\n"
+            "Если задача простая (позвонить, сходить, сделать зарядку) — просто напомни кратко.\n"
             "ОБЯЗАТЕЛЬНО заверши вопросом: «Задача выполнена?» или «Как продвигается?»"
         )
 
@@ -378,8 +382,8 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             user_id=user_id,
             mode='reminder',
             instruction=instruction,
-            max_tokens=300,
-            max_iterations=2
+            max_tokens=600,
+            max_iterations=3
         )
         
         logger.info(f"[REMINDER] Generated via agent brain: {result[:100]}...")
@@ -679,6 +683,13 @@ async def _build_proactive_context(user_id):
         if pending_count:
             user_memory += f"\nАктивных задач: {pending_count}"
         
+        # Задачи с деталями для автономной помощи
+        pending_tasks_full = db_session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == "pending"
+        ).order_by(Task.reminder_time).limit(10).all()
+        ctx['pending_tasks_full'] = pending_tasks_full
+        
         # Просроченные задачи
         overdue = db_session.query(Task).filter(
             Task.user_id == user.id,
@@ -814,7 +825,11 @@ async def _build_proactive_context(user_id):
 
 
 def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_list=None):
-    """Формирует умный промпт с ФРЕЙМВОРКОМ МЫШЛЕНИЯ — AI анализирует ситуацию и действует."""
+    """Формирует умный промпт с ФРЕЙМВОРКОМ МЫШЛЕНИЯ — AI анализирует ситуацию и действует.
+    
+    Returns:
+        tuple: (prompt_text, selected_message_type) — промпт и выбранный тип сообщения
+    """
     import random
     
     parts = []
@@ -1102,6 +1117,27 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
             'instruction': f'АЛЕРТ ЗАСТОЯ: {ctx["stale_task_count"]} задач висят больше недели. Предложи разобрать — что ещё актуально, что отменить, что перенести. Конкретно: "Давай разберём старые задачи? Некоторые уже неделю без движения."'
         })
     
+    # Тип 11: Автономная помощь с задачей (если есть задачи, где агент может помочь)
+    if ctx.get('pending_tasks_full'):
+        # Выбираем задачу по ротации — не одну и ту же каждый раз
+        tasks = ctx['pending_tasks_full']
+        task_idx = rotation_hash % len(tasks)
+        task = tasks[task_idx]
+        task_desc = f" — {task.description[:100]}" if task.description else ""
+        message_types.append({
+            'type': 'task_help',
+            'instruction': (
+                f'АВТОНОМНАЯ ПОМОЩЬ: задача "{task.title}"{task_desc}.\n'
+                'Твоя цель — ПОМОЧЬ РЕШИТЬ эту задачу прямо сейчас. '
+                'ИСПОЛЬЗУЙ инструменты:\n'
+                '- research_topic — если нужна информация, рецепты, инструкции, лучшие практики\n'
+                '- find_relevant_contacts_for_task — если нужны люди/специалисты\n'
+                '- get_news_trends — если нужны тренды/новости по теме\n'
+                'Дай КОНКРЕТНЫЙ результат: не "я могу найти", а найди и покажи.\n'
+                'Если задача слишком простая для инструментов (позвонить, купить) — предложи конкретный первый шаг.'
+            )
+        })
+    
     # Выбираем тип по ротации (детерминированно, не случайно — чтобы не повторялся)
     selected = message_types[rotation_hash % len(message_types)]
     
@@ -1149,7 +1185,7 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
 - Предлагать ЛОКАЛЬНЫЕ мероприятия/сообщества если бизнес ОНЛАЙН
 - Повторять формулировки и темы предыдущих сообщений""")
     
-    return "\n".join(parts)
+    return "\n".join(parts), selected['type']
 
 
 async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
@@ -1176,7 +1212,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             intent = 'evening'
         
         # 3. Формируем ситуационный промпт (красные флаги, доступные данные, правила)
-        situation_prompt = _build_situation_prompt(ctx, intent=intent, tasks_list=tasks_list)
+        situation_prompt, selected_type = _build_situation_prompt(ctx, intent=intent, tasks_list=tasks_list)
         
         # 4. Антиповтор — запрещаем повторять последние ответы
         anti_repeat = ""
@@ -1194,13 +1230,28 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             "Используй инструменты если нужны актуальные данные (задачи, новости, погода)."
         )
 
+        # Для task_help используем режим task_assist с увеличенными лимитами
+        if selected_type == 'task_help':
+            mode = 'task_assist'
+            max_tokens = 800
+            max_iterations = 3
+            instruction = (
+                "Помоги пользователю решить задачу из контекста выше. "
+                "ОБЯЗАТЕЛЬНО используй инструменты (research_topic, find_relevant_contacts_for_task, get_news_trends) "
+                "чтобы дать КОНКРЕТНЫЙ результат. Не предлагай помощь — СДЕЛАЙ работу."
+            )
+        else:
+            mode = 'proactive'
+            max_tokens = 600
+            max_iterations = 2
+
         result = await agent.generate_system_message(
             user_id=user_id,
-            mode='proactive',
+            mode=mode,
             instruction=instruction,
             extra_context=situation_prompt + anti_repeat,
-            max_tokens=600,
-            max_iterations=2
+            max_tokens=max_tokens,
+            max_iterations=max_iterations
         )
 
         logger.info(f"[PROACTIVE] Generated via agent brain: {result[:100]}...")
