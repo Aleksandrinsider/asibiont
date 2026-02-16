@@ -4067,19 +4067,24 @@ async def get_feed_handler(request):
             logger.info(f"Feed: final favorite_user_ids: {favorite_user_ids}")
 
             # Get users who blocked current user (exclude their posts)
+            # Only check profiles that actually have blocked_contacts with our user
             blocked_by_users = set()
-            all_profiles = session_db.query(UserProfile).filter(
-                UserProfile.blocked_contacts.isnot(None)
-            ).all()
-            
-            import json
-            for profile in all_profiles:
-                try:
-                    blocked_list = json.loads(profile.blocked_contacts)
-                    if user.id in blocked_list:
-                        blocked_by_users.add(profile.user_id)
-                except Exception as e:
-                    logger.warning(f"[FEED] Failed to parse blocked_contacts: {e}")
+            try:
+                from sqlalchemy import text
+                # Use SQL LIKE to pre-filter, avoiding loading all profiles
+                blocking_profiles = session_db.query(UserProfile.user_id, UserProfile.blocked_contacts).filter(
+                    UserProfile.blocked_contacts.isnot(None),
+                    UserProfile.blocked_contacts.contains(str(user.id))
+                ).all()
+                for profile_uid, blocked_json in blocking_profiles:
+                    try:
+                        blocked_list = json.loads(blocked_json)
+                        if user.id in blocked_list:
+                            blocked_by_users.add(profile_uid)
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"[FEED] Failed to check blocked_contacts: {e}")
 
             logger.info(f"Feed: blocked_by_users: {blocked_by_users}")
 
@@ -4969,11 +4974,13 @@ async def api_interactions_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
 
+        # Only load last 100 interactions (not ALL) for performance
         interactions = session_db.query(Interaction).filter_by(
             user_id=user.id).order_by(
-            Interaction.created_at.asc()).all()
+            Interaction.created_at.desc()).limit(100).all()
+        interactions.reverse()  # Back to chronological order
         
-        logger.info(f"Found {len(interactions)} total interactions for user {user.id}")
+        logger.info(f"Loaded last {len(interactions)} interactions for user {user.id}")
 
         # Get history cleared timestamp from DB
         history_cleared_timestamp = 0

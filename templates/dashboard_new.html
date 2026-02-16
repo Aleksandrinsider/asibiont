@@ -5669,7 +5669,7 @@
             loadInitialMessages();
             updateProfile();
             
-            // Auto-update every 5 seconds (оптимизировано для снижения нагрузки)
+            // Auto-update every 30 seconds (reduced from 5s to lower DB load)
             setInterval(() => {
                 const feedView = document.getElementById('feed-view');
                 const chatView = document.getElementById('chat-view');
@@ -5683,13 +5683,13 @@
                 }
                 // Проверяем наличие новых постов, но НЕ перезагружаем ленту полностью
                 checkNewPosts();
-            }, 5000);
+            }, 30000);
             
             // Отдельный интервал для проверки новых сообщений из Telegram независимо от активного view
             // Это гарантирует, что сообщения от бота и пользователя всегда синхронизируются
             setInterval(() => {
                 updateChat();
-            }, 3000); // Проверяем каждые 3 секунды
+            }, 15000); // Проверяем каждые 15 секунд
         }
 
         async function checkNewPosts() {
