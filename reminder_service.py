@@ -404,14 +404,9 @@ class ReminderService:
             logger.warning(f"Task {task_id} NOT marked as result_check_sent due to delivery failure")
 
     async def send_followup_reminder(self, user_id: int, task_title: str, task_id: int):
-        """Отправка повторного напоминания (эскалация)"""
+        """Отправка повторного напоминания (эскалация) — ВСЕГДА отправляется"""
         logger = logging.getLogger(__name__)
         logger.info(f"=== FOLLOWUP REMINDER for task {task_id}, user {user_id} ===")
-        from subscription_service import check_subscription
-        
-        if not check_subscription(user_id):
-            logger.info(f"Subscription check failed for user {user_id}, skipping followup")
-            return
         
         try:
             # Генерируем текст с эскалацией (более настойчивый тон)
@@ -477,10 +472,8 @@ class ReminderService:
                     logger.info(f"Task {task_id} has status '{task.status}' - skipping reminder")
                     return
                 
-                # Проверяем режим 'не беспокоить' для пользователя
-                if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
-                    logger.info(f"User {user_id} in DND until {user.do_not_disturb_until}, skipping reminder for task {task_id}")
-                    return
+                # Напоминания = жёсткий контроль, отправляем ВСЕГДА
+                # DND НЕ блокирует напоминания о задачах
             finally:
                 db.close()
 
