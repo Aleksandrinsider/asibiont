@@ -18,6 +18,7 @@ message_cache = {}
 message_cache_lock = threading.Lock()
 from ai_integration import chat_with_ai
 from models import Session, User, Subscription, Task
+from sqlalchemy import func
 from payments import create_payment
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
@@ -792,18 +793,95 @@ async def process_other_message(user_id, message, state):
     if message.location:
         lat = message.location.latitude
         lon = message.location.longitude
+        
+        # 1. Определяем часовой пояс
         tf = TimezoneFinder()
         timezone_str = tf.timezone_at(lng=lon, lat=lat)
-        if timezone_str:
-            session = Session()
+        
+        # 2. Обратный геокодинг: координаты → город (Nominatim, бесплатно)
+        city_name = None
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as geo_session:
+                url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=ru"
+                headers = {"User-Agent": "ASIBiont/1.0"}
+                async with geo_session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        address = data.get("address", {})
+                        city_name = address.get("city") or address.get("town") or address.get("village") or address.get("state")
+                        logger.info(f"[GEO] Reverse geocoded ({lat}, {lon}) → {city_name}")
+        except Exception as e:
+            logger.warning(f"[GEO] Reverse geocoding failed: {e}")
+        
+        # 3. Сохраняем: часовой пояс + город в профиле
+        session = Session()
+        try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user:
-                user.timezone = timezone_str
+                if timezone_str:
+                    user.timezone = timezone_str
+                
+                # Обновляем город в профиле
+                if city_name:
+                    from models import UserProfile
+                    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                    if profile:
+                        old_city = profile.city
+                        profile.city = city_name
+                        logger.info(f"[GEO] Updated city for user {user_id}: {old_city} → {city_name}")
+                    else:
+                        profile = UserProfile(user_id=user.id, city=city_name)
+                        session.add(profile)
+                
                 session.commit()
-                await message.bot.send_message(message.chat.id, f"Ваш часовой пояс установлен на {timezone_str}. Теперь время будет рассчитываться автоматически!")
+                
+                # 4. Формируем ответ
+                response_parts = []
+                if timezone_str:
+                    response_parts.append(f"🕐 Часовой пояс: {timezone_str}")
+                if city_name:
+                    response_parts.append(f"📍 Город: {city_name}")
+                
+                response_text = "\n".join(response_parts)
+                
+                # 5. Ищем партнёров в этом городе
+                nearby_text = ""
+                if city_name:
+                    from models import UserProfile as UP
+                    nearby_profiles = session.query(UP).filter(
+                        UP.user_id != user.id,
+                        func.lower(UP.city) == city_name.lower()
+                    ).limit(5).all()
+                    
+                    if nearby_profiles:
+                        nearby_lines = []
+                        for p in nearby_profiles:
+                            partner_user = session.query(User).filter_by(id=p.user_id).first()
+                            if partner_user and partner_user.username:
+                                info = []
+                                if p.skills:
+                                    info.append(p.skills[:50])
+                                if p.interests:
+                                    info.append(p.interests[:50])
+                                detail = f" — {', '.join(info)}" if info else ""
+                                nearby_lines.append(f"• @{partner_user.username}{detail}")
+                        
+                        if nearby_lines:
+                            nearby_text = f"\n\n👥 Люди рядом ({city_name}):\n" + "\n".join(nearby_lines)
+                            nearby_text += "\n\n💡 Напиши «найди партнёра для [задача]» — подберу лучших."
+                
+                await message.bot.send_message(
+                    message.chat.id, 
+                    f"📍 Локация обновлена!\n{response_text}{nearby_text}"
+                )
+            else:
+                await message.bot.send_message(message.chat.id, "Пользователь не найден.")
+        except Exception as e:
+            logger.error(f"[GEO] Error processing location: {e}", exc_info=True)
+            await message.bot.send_message(message.chat.id, "Ошибка при обработке геолокации. Попробуйте позже.")
+        finally:
             session.close()
-        else:
-            await message.bot.send_message(message.chat.id, "Не удалось определить часовой пояс по вашим координатам. Попробуйте указать его вручную через диалог.")
         return
 
 
