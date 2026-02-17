@@ -223,9 +223,9 @@ class HybridAutonomousAgent:
         
         return "auto"
 
-    # ===== DEEP REASONING (R1) =====
+    # ===== DEEP REASONING (R1) — MULTI-SIGNAL SCORING =====
 
-    # Ключевые слова для глубокого анализа через R1
+    # Сигналы для глубокого анализа (weight +1.5 каждый)
     DEEP_REASONING_SIGNALS = [
         'проанализируй', 'разбери', 'сравни', 'оцени стратегию',
         'составь план', 'стратегия', 'глубокий анализ', 'подробно разбери',
@@ -234,31 +234,106 @@ class HybridAutonomousAgent:
         'детальный план', 'пошаговый план', 'исследуй глубоко',
     ]
 
+    # Негативные сигналы — CRUD, простые запросы (weight -2 каждый)
+    DEEP_REASONING_ANTI_SIGNALS = [
+        'создай задачу', 'добавь задачу', 'удали задачу', 'мои задачи',
+        'список задач', 'привет', 'пока', 'погода', 'новости',
+        'который час', 'напомни', 'сделал', 'готово',
+    ]
+
+    # Структурные маркеры аналитического мышления (weight +1 каждый)
+    STRUCTURAL_MARKERS = [
+        r'или\s+.+\s+или',         # альтернативы: "или X или Y"
+        r'с одной стороны',          # взвешивание
+        r'с другой стороны',
+        r'\bплюс\w*\b.*\bминус',   # плюсы/минусы
+        r'как\s+(?:лучше|правильн)', # поиск оптимума
+        r'почему\s+(?:так|не|именно)',# причинно-следственные
+        r'в\s+чём\s+(?:разница|отличие|причина)',  # сравнение/анализ
+        r'стоит\s+ли',              # оценка целесообразности
+        r'что\s+(?:выбрать|предпочесть)', # выбор
+    ]
+
+    # Порог для включения R1
+    DEEP_REASONING_THRESHOLD = 3.0
+
     def _needs_deep_reasoning(self, user_message):
-        """Определяет нужен ли R1 для глубокого анализа.
+        """Определяет нужен ли R1 через multi-signal scoring.
         
-        R1 включается для:
-        - Сложных аналитических вопросов
-        - Запросов на стратегическое планирование
-        - Глубокого сравнительного анализа
+        Суммирует баллы по нескольким независимым сигналам:
+        - Ключевые слова глубокого анализа (+1.5)
+        - Анти-сигналы CRUD/простые (-2.0)
+        - Intent из CognitiveEngine (+2 advice/info, -2 greeting/task)
+        - Длина сообщения (+1 за >15 слов, +1 за >30)
+        - Структурные маркеры (+1 каждый, max +2)
+        - Количество вопросов (+1 за >=2)
         
-        НЕ включается для:
-        - Обычных CRUD-операций (задачи, профиль)
-        - Приветствий и коротких вопросов
-        - Запросов новостей/погоды
+        R1 включается при score >= DEEP_REASONING_THRESHOLD (3.0).
         """
         msg_lower = user_message.lower()
+        words = msg_lower.split()
+        score = 0.0
+        signals = []  # для логирования
         
-        # Короткие сообщения — точно не deep
-        if len(msg_lower.split()) < 5:
-            return False
+        # 1. Анти-сигналы CRUD — быстрый выход
+        anti_count = sum(1 for s in self.DEEP_REASONING_ANTI_SIGNALS if s in msg_lower)
+        if anti_count:
+            score -= anti_count * 2.0
+            signals.append(f'anti:{-anti_count * 2.0}')
         
-        # Проверяем сигналы глубокого анализа
-        if any(sig in msg_lower for sig in self.DEEP_REASONING_SIGNALS):
-            logger.info(f"[R1] Deep reasoning triggered for: '{user_message[:60]}'")
-            return True
+        # 2. Ключевые слова глубокого анализа (+1.5, max +3.0)
+        deep_count = sum(1 for s in self.DEEP_REASONING_SIGNALS if s in msg_lower)
+        deep_bonus = min(deep_count * 1.5, 3.0)
+        if deep_bonus:
+            score += deep_bonus
+            signals.append(f'keywords:+{deep_bonus}')
         
-        return False
+        # 3. Intent из CognitiveEngine
+        from .cognitive import CognitiveEngine
+        intent = CognitiveEngine.classify_intent(user_message)
+        intent_weights = {
+            'advice_seeking': 2.0,
+            'information_request': 1.5,
+            'emotional_sharing': 0.5,
+            'general': 0.0,
+            'task_management': -2.0,
+            'greeting': -2.0,
+            'farewell': -2.0,
+        }
+        intent_w = intent_weights.get(intent, 0.0)
+        if intent_w:
+            score += intent_w
+            signals.append(f'intent({intent}):{intent_w:+.1f}')
+        
+        # 4. Длина сообщения — длинные = сложнее
+        if len(words) > 30:
+            score += 2.0
+            signals.append('len>30:+2')
+        elif len(words) > 15:
+            score += 1.0
+            signals.append('len>15:+1')
+        elif len(words) < 5:
+            score -= 1.0
+            signals.append('len<5:-1')
+        
+        # 5. Структурные маркеры аналитического мышления (+1, max +2)
+        struct_count = sum(1 for p in self.STRUCTURAL_MARKERS if re.search(p, msg_lower))
+        struct_bonus = min(struct_count * 1.0, 2.0)
+        if struct_bonus:
+            score += struct_bonus
+            signals.append(f'struct:+{struct_bonus}')
+        
+        # 6. Количество вопросов (? в тексте)
+        question_count = msg_lower.count('?')
+        if question_count >= 2:
+            score += 1.0
+            signals.append(f'questions({question_count}):+1')
+        
+        triggered = score >= self.DEEP_REASONING_THRESHOLD
+        logger.info(f"[R1] Score={score:.1f} (threshold={self.DEEP_REASONING_THRESHOLD}) "
+                    f"signals=[{', '.join(signals)}] → {'R1' if triggered else 'V3'} "
+                    f"for: '{user_message[:60]}'")
+        return triggered
 
     _TOOL_PROGRESS_MAP = {
         'get_tasks': 'Смотрю задачи...',

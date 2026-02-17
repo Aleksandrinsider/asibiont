@@ -61,74 +61,248 @@ class CognitiveEngine:
         ),
     }
 
+    # Модификаторы усиливающие эмоцию (weight +1.0 к близким эмоциям)
+    EMOTION_INTENSIFIERS = [
+        'очень', 'сильно', 'ужасно', 'невероятно', 'капец', 'жесть',
+        'реально', 'прям', 'вообще', 'полностью', 'максимально',
+    ]
+    # Негативные маркеры (повышают вес tired/frustrated/sad/anxious)
+    NEGATIVE_MARKERS = ['не могу', 'не получается', 'не выходит', 'сломалось', 'упало', 'всё плохо']
+    # Позитивные маркеры (повышают вес excited)
+    POSITIVE_MARKERS = ['наконец-то', 'ура', 'получилось', 'сработало', 'вышло', 'удалось']
+
     @staticmethod
     def detect_emotion(message):
-        """Определяет эмоциональное состояние пользователя."""
+        """Определяет эмоцию через multi-signal scoring.
+        
+        Вместо first-match по ключевым словам — считает score
+        для КАЖДОЙ эмоции и возвращает ту, что набрала больше.
+        Учитывает: keywords (1.5), intensifiers (+1.0), 
+        neg/pos markers (+1.0), пунктуацию (+0.5), caps (+0.5).
+        """
         msg = message.lower()
+        original = message  # для проверки CAPS
+        
+        scores = {}  # emotion -> score
+        
         for emotion, (keywords, _) in CognitiveEngine.EMOTIONS.items():
-            if any(kw in msg for kw in keywords):
-                return emotion
+            score = 0.0
+            
+            # Ключевые слова: +1.5 каждое (max +3.0)
+            kw_matches = sum(1 for kw in keywords if kw in msg)
+            score += min(kw_matches * 1.5, 3.0)
+            
+            if score == 0:
+                continue  # Нет ни одного ключевого слова — пропускаем
+            
+            # Интенсификаторы: +1.0 если есть хотя бы один
+            if any(w in msg for w in CognitiveEngine.EMOTION_INTENSIFIERS):
+                score += 1.0
+            
+            # Негативные маркеры → усиливают negative emotions
+            if emotion in ('tired', 'frustrated', 'sad', 'anxious', 'confused'):
+                neg_count = sum(1 for m in CognitiveEngine.NEGATIVE_MARKERS if m in msg)
+                score += min(neg_count * 1.0, 2.0)
+            
+            # Позитивные маркеры → усиливают excited
+            if emotion == 'excited':
+                pos_count = sum(1 for m in CognitiveEngine.POSITIVE_MARKERS if m in msg)
+                score += min(pos_count * 1.0, 2.0)
+            
+            # Пунктуация: !!! → усиливает excited/frustrated (+0.5)
+            if emotion in ('excited', 'frustrated') and original.count('!') >= 2:
+                score += 0.5
+            
+            # CAPS слова → усиливают frustrated (+0.5)
+            if emotion == 'frustrated':
+                caps_words = sum(1 for w in original.split() if w.isupper() and len(w) > 2)
+                if caps_words >= 1:
+                    score += 0.5
+            
+            # Длина сообщения: длинное эмоциональное → +0.5
+            if len(msg.split()) > 15:
+                score += 0.5
+            
+            scores[emotion] = score
+        
+        if not scores:
+            return 'neutral'
+        
+        # Побеждает эмоция с максимальным score (порог >= 1.5)
+        best_emotion = max(scores, key=scores.get)
+        if scores[best_emotion] >= 1.5:
+            return best_emotion
         return 'neutral'
 
     # ═══════════════════════════════════════════════════════════════
     # КЛАССИФИКАЦИЯ НАМЕРЕНИЙ
     # ═══════════════════════════════════════════════════════════════
 
+    # Веса ключевых слов для classify_intent
+    INTENT_DEFINITIONS = {
+        'greeting': {
+            'keywords': ['привет', 'здравствуй', 'здорово', 'хай',
+                          'доброе утро', 'добрый день', 'добрый вечер',
+                          'ку', 'хеллоу', 'hello', 'hi'],
+            'weight': 2.0,  # приветствия однозначны
+            'exact_match': True,  # только начало/полное совпадение
+        },
+        'farewell': {
+            'keywords': ['пока', 'до свидания', 'спокойной', 'пойду спать',
+                          'до завтра', 'удачи'],
+            'weight': 2.0,
+            'exact_match': False,
+        },
+        'task_management': {
+            'keywords': ['задач', 'создай задачу', 'добавь задачу',
+                          'запланируй', 'напомни', 'что по делам',
+                          'мои задачи', 'список задач', 'удали задачу',
+                          'перенеси', 'сделал', 'готово', 'выполнил'],
+            'weight': 1.5,
+            'exact_match': False,
+        },
+        'information_request': {
+            'keywords': ['что такое', 'как работает', 'расскажи про',
+                          'тренды', 'новости', 'исследуй',
+                          'найди информацию', 'что известно',
+                          'какие сейчас', 'что нового'],
+            'weight': 1.5,
+            'exact_match': False,
+        },
+        'advice_seeking': {
+            'keywords': ['что думаешь', 'стоит ли', 'как лучше',
+                          'посоветуй', 'что делать', 'как быть',
+                          'как считаешь', 'твоё мнение', 'что выбрать',
+                          'подскажи', 'порекомендуй',
+                          'помоги понять', 'помоги разобраться',
+                          'как устроен', 'как работает'],
+            'weight': 1.5,
+            'exact_match': False,
+        },
+        'emotional_sharing': {
+            'keywords': ['устал', 'грустно', 'рад', 'злюсь',
+                          'боюсь', 'переживаю', 'счастлив',
+                          'бесит', 'достало', 'выгорел'],
+            'weight': 1.5,
+            'exact_match': False,
+        },
+    }
+
+    # Структурные паттерны усиливающие intent (+1.0)
+    INTENT_STRUCTURAL_SIGNALS = {
+        'information_request': [r'\?$', r'расскаж', r'объясни', r'покажи'],
+        'advice_seeking': [r'или\s', r'\bлучше\b', r'стоит\b', r'\?.*\?'],
+        'task_management': [r'к\s+\d', r'на\s+(?:завтра|понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)', r'в\s+\d{1,2}[:\.]\d{2}'],
+        'emotional_sharing': [r'!{2,}', r'\.{3,}', r'(?:не могу|не хочу|надоело)'],
+    }
+
     @staticmethod
     def classify_intent(message):
-        """Быстрая классификация намерения пользователя."""
+        """Классификация намерения через multi-signal scoring.
+        
+        Вместо first-match — считает score для каждого intent.
+        Учитывает: keywords (weight), structural signals (+1.0),
+        длину сообщения, пунктуацию.
+        Побеждает intent с max score (порог >= 1.5).
+        """
         msg = message.lower().strip()
-
-        intents = [
-            ('greeting', ['привет', 'здравствуй', 'здорово', 'хай',
-                           'доброе утро', 'добрый день', 'добрый вечер',
-                           'ку', 'хеллоу', 'hello', 'hi']),
-            ('farewell', ['пока', 'до свидания', 'спокойной', 'пойду спать',
-                           'до завтра', 'удачи']),
-            ('task_management', ['задач', 'создай задачу', 'добавь задачу',
-                                  'запланируй', 'напомни', 'что по делам',
-                                  'мои задачи', 'список задач']),
-            ('information_request', ['что такое', 'как работает', 'расскажи про',
-                                      'тренды', 'новости', 'исследуй',
-                                      'найди информацию', 'что известно',
-                                      'какие сейчас', 'что нового']),
-            ('advice_seeking', ['что думаешь', 'стоит ли', 'как лучше',
-                                 'посоветуй', 'что делать', 'как быть',
-                                 'как считаешь', 'твоё мнение']),
-            ('emotional_sharing', ['устал', 'грустно', 'рад', 'злюсь',
-                                    'боюсь', 'переживаю', 'счастлив',
-                                    'бесит', 'достало', 'выгорел']),
-        ]
-
-        for intent, keywords in intents:
-            if intent == 'greeting':
-                if msg in keywords or any(msg.startswith(g) for g in keywords):
-                    return intent
+        words = msg.split()
+        scores = {}  # intent -> score
+        
+        for intent, cfg in CognitiveEngine.INTENT_DEFINITIONS.items():
+            score = 0.0
+            kw_weight = cfg['weight']
+            
+            if cfg.get('exact_match'):
+                # Greeting: полное совпадение или начало
+                if msg in cfg['keywords'] or any(msg.startswith(g) for g in cfg['keywords']):
+                    score += kw_weight * 2  # Сильный сигнал
             else:
-                if any(kw in msg for kw in keywords):
-                    return intent
-
+                # Совпадение ключевых слов: weight за каждое (max weight*2)
+                kw_count = sum(1 for kw in cfg['keywords'] if kw in msg)
+                score += min(kw_count * kw_weight, kw_weight * 2)
+            
+            if score == 0:
+                continue
+            
+            # Структурные паттерны: +1.0 за каждый (max +2.0)
+            struct_patterns = CognitiveEngine.INTENT_STRUCTURAL_SIGNALS.get(intent, [])
+            struct_hits = sum(1 for p in struct_patterns if re.search(p, msg))
+            score += min(struct_hits * 1.0, 2.0)
+            
+            # Длина сообщения: advice_seeking/information_request усиливаются длиной
+            if intent in ('advice_seeking', 'information_request') and len(words) > 10:
+                score += 0.5
+            
+            # Короткое сообщение: greeting/farewell усиливаются краткостью
+            if intent in ('greeting', 'farewell') and len(words) <= 3:
+                score += 1.0
+            
+            scores[intent] = score
+        
+        if not scores:
+            return 'general'
+        
+        best_intent = max(scores, key=scores.get)
+        if scores[best_intent] >= 1.5:
+            return best_intent
         return 'general'
 
     # ═══════════════════════════════════════════════════════════════
     # ДЕТЕКТОР ТЕКУЩЕЙ ДЕЯТЕЛЬНОСТИ
     # ═══════════════════════════════════════════════════════════════
 
+    # Паттерны активной работы (weight +1.5 phrase, +1.0 single verb)
+    ACTIVE_WORK_PHRASES = [
+        'работаю над', 'работаю с', 'сейчас делаю', 'прямо сейчас',
+        'в процессе', 'сижу над', 'вожусь с', 'мучаюсь с',
+        'готовлюсь к', 'сейчас работаю', 'сейчас занят',
+    ]
+    ACTIVE_WORK_VERBS = [
+        'делаю', 'готовлю', 'пишу', 'занимаюсь',
+        'запускаю', 'настраиваю', 'тестирую', 'отлаживаю',
+        'разрабатываю', 'собираю', 'верстаю', 'кодирую', 'кодю',
+        'допиливаю', 'доделываю', 'переделываю', 'чиню', 'фикшу',
+        'рефакторю', 'оптимизирую', 'деплою', 'катаю', 'ковыряю',
+    ]
+    # Контекстные усилители: "сейчас", "прямо", "в данный момент" (+1.0)
+    ACTIVE_CONTEXT_WORDS = ['сейчас', 'прямо', 'в данный момент', 'щас', 'ща']
+
+    # Порог для detect_active_work
+    ACTIVE_WORK_THRESHOLD = 1.5
+
     @staticmethod
     def detect_active_work(message):
-        """Определяет, что пользователь СЕЙЧАС чем-то занят и пришёл за помощью."""
+        """Определяет активную работу через multi-signal scoring.
+        
+        Суммирует: фразы (+2.0), глаголы (+1.0), контекст (+1.0),
+        первое лицо (+0.5), объект деятельности (+0.5). Порог >= 1.5.
+        """
         msg = message.lower()
-        active_patterns = [
-            'работаю над', 'работаю с', 'делаю', 'готовлю', 'пишу',
-            'занимаюсь', 'сейчас делаю', 'прямо сейчас', 'в процессе',
-            'запускаю', 'настраиваю', 'тестирую', 'отлаживаю',
-            'разрабатываю', 'собираю', 'верстаю', 'кодирую', 'кодю',
-            'допиливаю', 'доделываю', 'переделываю', 'чиню', 'фикшу',
-            'рефакторю', 'оптимизирую', 'деплою', 'катаю',
-            'сижу над', 'вожусь с', 'ковыряю', 'мучаюсь с',
-            'готовлюсь к', 'сейчас работаю', 'сейчас занят',
-        ]
-        return any(p in msg for p in active_patterns)
+        words = msg.split()
+        score = 0.0
+
+        # Фразы (сильный сигнал): +2.0 каждая (max +3.0)
+        phrase_hits = sum(1 for p in CognitiveEngine.ACTIVE_WORK_PHRASES if p in msg)
+        score += min(phrase_hits * 2.0, 3.0)
+
+        # Глаголы деятельности: +1.0 каждый (max +2.0)
+        verb_hits = sum(1 for v in CognitiveEngine.ACTIVE_WORK_VERBS if v in msg)
+        score += min(verb_hits * 1.0, 2.0)
+
+        # Контекстные слова "сейчас/прямо": +1.0
+        if any(w in msg for w in CognitiveEngine.ACTIVE_CONTEXT_WORDS):
+            score += 1.0
+
+        # Первое лицо ("я ..."): +0.5
+        if re.search(r'\bя\s+\w+[юу]\b', msg):  # я делаю, я пишу
+            score += 0.5
+
+        # Объект деятельности (глагол + существительное): +0.5
+        if verb_hits > 0 and len(words) >= 2:
+            score += 0.5
+
+        return score >= CognitiveEngine.ACTIVE_WORK_THRESHOLD
 
     # ═══════════════════════════════════════════════════════════════
     # КОГНИТИВНЫЕ ПОДСКАЗКИ ДЛЯ СИСТЕМНОГО ПРОМПТА
