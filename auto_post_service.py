@@ -13,7 +13,7 @@ import aiohttp
 
 from models import Session, User, UserProfile, Task, Post
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-from ai_integration.utils import decrypt_data
+from ai_integration.memory import decrypt_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
