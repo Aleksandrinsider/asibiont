@@ -722,7 +722,7 @@ class ReminderService:
                 # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 30 минут)
                 last_proactive = db.query(Interaction).filter(
                     Interaction.user_id == user.id,
-                    Interaction.message_type.in_(["ai", "proactive"]),
+                    Interaction.message_type.in_(["proactive", "reminder"]),
                     Interaction.created_at > now_utc - timedelta(minutes=30)
                 ).order_by(Interaction.created_at.desc()).first()
                 
@@ -830,15 +830,15 @@ class ReminderService:
                 await self._reschedule_proactive_check(user_id, task_count=total_active)
                 return
             
-            # Anti-spam: не чаще 1 раза в час
+            # Anti-spam: не чаще 1 раза в 2 часа (только проактивные/напоминания, НЕ обычные ai-ответы)
             recent_proactive = db.query(Interaction).filter(
                 Interaction.user_id == user.id,
-                Interaction.message_type.in_(['ai', 'proactive']),
-                Interaction.created_at >= now_utc - timedelta(hours=1)
+                Interaction.message_type.in_(['proactive', 'reminder']),
+                Interaction.created_at >= now_utc - timedelta(hours=2)
             ).first()
             
             if recent_proactive:
-                logger.debug(f"Proactive already sent in last hour for user {user_id}")
+                logger.debug(f"Proactive already sent in last 2h for user {user_id}")
                 await self._reschedule_proactive_check(user_id, task_count=total_active)
                 return
             
@@ -1041,7 +1041,11 @@ class ReminderService:
                 next_check_local = (next_check_local + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
             
             if next_check_local <= datetime.now(user_tz):
-                next_check_local = (datetime.now(user_tz) + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
+                # Время в прошлом — запланировать через base_hours от текущего момента
+                next_check_local = datetime.now(user_tz) + timedelta(hours=hours_with_variance)
+                # Если новое время за пределами разрешённого диапазона — перенести на утро
+                if next_check_local.hour >= PROACTIVE_NO_SEND_START_HOUR or next_check_local.hour < PROACTIVE_SEND_START_HOUR:
+                    next_check_local = (datetime.now(user_tz) + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
             
             self.scheduler.add_job(
                 _check_and_send_proactive_job,
@@ -1051,7 +1055,7 @@ class ReminderService:
                 replace_existing=True,
                 max_instances=1
             )
-            logger.debug(f"Rescheduled proactive for user {user.telegram_id} at {next_check_local} ({base_hours}h base + {random_offset_minutes}m, {task_count} tasks)")
+            logger.info(f"Rescheduled proactive for user {user.telegram_id} at {next_check_local} ({base_hours}h base + {random_offset_minutes}m, {task_count} tasks)")
         finally:
             db.close()
 
@@ -1230,14 +1234,15 @@ class ReminderService:
                 all_tasks = all_active_tasks + overdue_tasks
                 
                 # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 2 часа)
+                # Проверяем ТОЛЬКО proactive/reminder, НЕ обычные ai-ответы на диалог
                 last_proactive = db.query(Interaction).filter(
                     Interaction.user_id == user.id,
-                    Interaction.message_type.in_(["proactive", "ai"]),
+                    Interaction.message_type.in_(["proactive", "reminder"]),
                     Interaction.created_at > now_utc - timedelta(hours=2)
                 ).order_by(Interaction.created_at.desc()).first()
                 
                 if last_proactive:
-                    logger.info(f"Skipping proactive message for user {user_id} - last proactive/ai message was {last_proactive.created_at}")
+                    logger.info(f"Skipping proactive message for user {user_id} - last proactive/reminder was {last_proactive.created_at}")
                     return
                 
                 # Отправить проактивное сообщение с номером для разнообразия
