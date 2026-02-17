@@ -310,85 +310,58 @@ class CognitiveEngine:
 
     @staticmethod
     def build_cognitive_hints(user_message, profile_data=None, conversation_history=None):
-        """Строит рабочий контекст: что знаешь, чего не хватает, какие задачи.
+        """Строит карту ситуации — целостную картину для AI.
         
-        Включает anti-repetition анализ и конкретные вопросы для заполнения профиля.
-        conversation_history — список {role, content} для анализа предыдущих ответов.
+        Не шаблонные команды, а контекст: что известно, что происходит,
+        что стоит учесть. AI сам решит что с этим делать.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
         is_active = CognitiveEngine.detect_active_work(user_message)
 
-        observations = []
+        signals = []
 
-        # --- Эмоциональный сигнал ---
-        emotion_actions = {
-            'tired': 'Усталость — предложи конкретную помощь: перенести задачи, расставить приоритеты, снять нагрузку',
-            'excited': 'Подъём — зафиксируй энергию: предложи конкретный следующий шаг или задачу',
-            'frustrated': 'Раздражение — помоги решить проблему, не сочувствуй пустыми словами',
-            'anxious': 'Тревога — разложи ситуацию по шагам, дай план действий',
-            'sad': 'Тяжело — будь мягче, но предложи конкретное действие для улучшения',
-            'confused': 'Растерянность — структурируй информацию, дай ясный план',
-        }
-        if emotion != 'neutral' and emotion in emotion_actions:
-            observations.append(emotion_actions[emotion])
+        # --- Эмоциональный фон ---
+        if emotion != 'neutral':
+            signals.append(f"Эмоция: {emotion}")
 
-        # --- Текущая деятельность ---
+        # --- Активность ---
         if is_active:
-            observations.append("Пользователь СЕЙЧАС работает — помогай в моменте, не планируй на завтра")
+            signals.append("Работает прямо сейчас")
 
-        # --- Anti-repetition: анализ предыдущих ответов ---
+        # --- Anti-repetition ---
         anti_rep = CognitiveEngine._build_anti_repetition(conversation_history)
         if anti_rep:
-            observations.append(anti_rep)
+            signals.append(anti_rep)
 
-        # --- Профиль: что знаешь и чего не знаешь ---
-        field_labels = {
-            'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы',
-            'position': 'сфера/роль', 'city': 'город'
-        }
-        known = []
-        unknown = []
+        # --- Карта профиля: что знаешь целиком ---
         if profile_data:
-            for k, label in field_labels.items():
-                if profile_data.get(k):
-                    known.append(f"{label}: {str(profile_data[k])[:40]}")
-                else:
-                    unknown.append(label)
+            known_parts = []
+            gaps = []
+            field_map = {
+                'position': 'роль', 'company': 'компания', 'city': 'город',
+                'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы'
+            }
+            for k, label in field_map.items():
+                val = profile_data.get(k)
+                if val:
+                    known_parts.append(f"{label}: {str(val)[:50]}")
+                elif k in ('goals', 'skills', 'interests', 'position', 'city'):
+                    gaps.append(label)
+            
+            if gaps:
+                signals.append(f"Неизвестно: {', '.join(gaps)}")
         else:
-            unknown = list(field_labels.values())
+            signals.append("Профиль пуст — узнай кто этот человек")
 
-        if unknown:
-            missing_str = ', '.join(unknown)
-            specific_q = CognitiveEngine._suggest_profile_question(unknown, conversation_history)
-            if len(unknown) >= 3:
-                observations.append(
-                    f"КРИТИЧНО: профиль почти пуст (нет: {missing_str}). "
-                    f"{specific_q}"
-                )
-            else:
-                observations.append(
-                    f"Не заполнено: {missing_str}. {specific_q}"
-                )
+        # --- Намерение (только если не очевидно) ---
+        if intent not in ('general', 'greeting', 'farewell'):
+            signals.append(f"Намерение: {intent}")
 
-        # --- Намерение ---
-        intent_context = {
-            'greeting': 'Приветствие — отчитайся: проверь задачи, сообщи статус, предложи пользу. Не просто "привет"',
-            'farewell': 'Прощание — кратко подведи итог что сделано',
-            'task_management': 'Работа с задачами — ДЕЙСТВУЙ инструментом, потом отчёт',
-            'information_request': 'Запрос информации — НАЙДИ данные через research_topic, дай конкретику',
-            'advice_seeking': 'Просит совета — сформируй СВОЁ мнение с аргументами, предложи план',
-            'emotional_sharing': 'Делится эмоциями — пойми контекст, предложи конкретную помощь',
-        }
-        if intent in intent_context:
-            observations.append(intent_context[intent])
-
-        if not observations:
+        if not signals:
             return ""
 
-        result = "\n\n[РАБОЧИЙ КОНТЕКСТ — что учесть в ответе]\n"
-        result += "\n".join(f"• {o}" for o in observations)
-        return result
+        return "\n\n[СИТУАЦИЯ]\n" + " | ".join(signals)
 
     # ═══════════════════════════════════════════════════════════════
     # ANTI-REPETITION & TARGETED PROFILE QUESTIONS
@@ -453,44 +426,10 @@ class CognitiveEngine:
 
     @staticmethod
     def _suggest_profile_question(missing_labels, conversation_history=None):
-        """Генерирует конкретный вопрос для пустого поля профиля, избегая повторов."""
-        field_questions = {
-            'цели': 'Спроси КОНКРЕТНО: "К какой цели сейчас идёшь? Что хочешь достичь в ближайшие месяцы?"',
-            'навыки': 'Спроси КОНКРЕТНО: "Какие технологии/навыки считаешь своими сильными сторонами?"',
-            'интересы': 'Спроси КОНКРЕТНО: "Что интересно помимо работы? Какие темы отслеживаешь?"',
-            'сфера/роль': 'Спроси КОНКРЕТНО: "В какой сфере работаешь? Кем?"',
-            'город': 'Спроси КОНКРЕТНО: "В каком городе? Смогу находить людей рядом и давать погоду"',
-        }
-
-        already_asked = set()
-        if conversation_history:
-            last_bot_msgs = [m.get('content', '') for m in conversation_history
-                             if m.get('role') == 'assistant'][-2:]
-            combined = ' '.join(last_bot_msgs).lower()
-
-            asked_patterns = {
-                'цели': ['цел', 'достичь', 'хочешь', 'стремишься', 'планируешь'],
-                'навыки': ['навык', 'технолог', 'умеешь', 'владеешь', 'стек', 'сильные стороны'],
-                'интересы': ['интерес', 'увлечен', 'хобби', 'отслеживаешь', 'помимо работы'],
-                'сфера/роль': ['сфер', 'работаешь', 'роль', 'должность', 'чем занимаешься', 'работаете'],
-                'город': ['город', 'живёшь', 'живешь', 'откуда'],
-            }
-
-            for label, patterns in asked_patterns.items():
-                if any(p in combined for p in patterns):
-                    already_asked.add(label)
-
-        # Выбираем первое незаданное
-        for label in missing_labels:
-            if label not in already_asked and label in field_questions:
-                return field_questions[label]
-
-        # Все уже спрашивали — попроси по-другому
-        for label in missing_labels:
-            if label in field_questions:
-                return f"Уточни {label} — задай вопрос ИНАЧЕ, не повторяй формулировку"
-
-        return "Уточни недостающие данные профиля при удобном случае"
+        """Returns a brief hint about what to ask. No templates — AI decides how."""
+        if not missing_labels:
+            return ""
+        return f"Узнай: {', '.join(missing_labels[:2])}"
 
     # ═══════════════════════════════════════════════════════════════
     # ПРОГРАММНАЯ ВАЛИДАЦИЯ ОТВЕТА (Quality Gate)
@@ -727,89 +666,51 @@ class CognitiveEngine:
 
     @staticmethod
     def plan_response_strategy(user_message, profile_data, tasks_data):
-        """Рабочая оценка ситуации — определяет приоритет, тон и задачу для ответа.
+        """Оценка ситуации — целостная картина, не шаблон.
         
-        Формирует конкретную рабочую стратегию: что делать, какие инструменты применить,
-        какие данные собрать, какие вопросы задать.
+        Собирает контекст для AI: кто человек, что происходит, что важно.
+        AI сам решает что делать на основе этой картины.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
-        intent = CognitiveEngine.classify_intent(user_message)
         is_active = CognitiveEngine.detect_active_work(user_message)
         
-        # Определяем что знаем о человеке
-        missing_fields = []
-        known_topics = []
-        if profile_data:
-            for k in ['goals', 'skills', 'interests', 'position', 'city']:
-                if profile_data.get(k):
-                    known_topics.append(str(profile_data[k])[:30])
-                else:
-                    missing_fields.append(k)
-        else:
-            missing_fields = ['goals', 'skills', 'interests', 'position', 'city']
-        
-        profile_blind = len(missing_fields) >= 3
-        
-        # Определяем тон — деловой с поправкой на эмоции
+        # --- Тон ---
         if emotion in ('tired', 'sad', 'anxious'):
-            tone = 'мягкий но деловой — пойми ситуацию, предложи конкретную помощь'
-        elif emotion == 'excited':
-            tone = 'энергичный — зафиксируй успех, предложи следующий шаг'
+            tone = 'мягкий но деловой'
         elif emotion == 'frustrated':
-            tone = 'конструктивный — помоги решить проблему'
+            tone = 'конструктивный — помоги решить'
+        elif emotion == 'excited':
+            tone = 'энергичный'
         else:
-            tone = 'деловой, компетентный помощник'
+            tone = 'деловой'
         
-        # Формируем рабочую задачу
-        situation_parts = []
+        # --- Собираем факты о ситуации ---
+        facts = []
         
-        if profile_blind:
-            situation_parts.append(f"КРИТИЧНО: профиль пуст (нет: {', '.join(missing_fields[:3])}). Задай 1-2 вопроса для заполнения")
-        elif missing_fields:
-            field_labels = {'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы', 'position': 'сфера', 'city': 'город'}
-            labels = [field_labels.get(f, f) for f in missing_fields]
-            situation_parts.append(f"Уточни: {', '.join(labels)}")
+        # Что знаем
+        if profile_data:
+            known = {k: v for k, v in profile_data.items() 
+                     if v and k in ('position', 'company', 'city', 'goals', 'skills', 'interests')}
+            missing = [k for k in ('position', 'goals', 'skills') if k not in known]
+            if missing:
+                facts.append(f"Неизвестно: {', '.join(missing)}")
+        else:
+            facts.append("Профиль пуст")
         
-        if is_active:
-            situation_parts.append("Пользователь работает — помогай в моменте")
-        
+        # Задачи
         if tasks_data:
-            situation_parts.append(f"Активных задач: {len(tasks_data)} — проверь статус, сообщи о просроченных")
-        else:
-            situation_parts.append("Задач нет — предложи структурировать текущую работу")
+            facts.append(f"Задач: {len(tasks_data)}")
         
-        if known_topics:
-            situation_parts.append(f"Известно: {', '.join(known_topics[:3])}")
+        # Активная работа
+        if is_active:
+            facts.append("Работает сейчас")
         
-        # Формируем конкретную рабочую задачу для ответа
-        if profile_blind:
-            work_task = "Заполни профиль: задай 1-2 конкретных вопроса (сфера, навыки, цели). Объясни зачем — точные рекомендации, поиск людей"
-        elif is_active:
-            work_task = "Помоги в текущей задаче: уточни детали, предложи ресурсы, используй инструменты"
-        elif intent == 'greeting':
-            if known_topics:
-                work_task = "Отчитайся: проверь задачи (list_tasks), сообщи статус, предложи актуальную пользу по интересам/целям"
-            else:
-                work_task = "Представься как помощник, покажи чем полезен, задай профильные вопросы"
-        elif intent == 'advice_seeking':
-            work_task = "Сформируй аргументированное мнение. Если нужны данные — используй research_topic"
-        elif intent == 'information_request':
-            work_task = "НАЙДИ данные через research_topic/get_news_trends, дай конкретный ответ с фактами"
-        elif not tasks_data and not profile_blind:
-            work_task = "Спроси над чем пользователь работает, предложи создать задачи/цели для структуры"
-        else:
-            work_task = "Дай максимально полезный ответ: факты, рекомендации, конкретные предложения"
+        situation = '; '.join(facts) if facts else 'обычный разговор'
         
-        strategy = {
-            'priority': 'profile' if profile_blind else ('help_now' if is_active else 'deliver_value'),
+        return {
             'tone': tone,
-            'action': 'work',  # AI работает, не размышляет
-            'why': f"Задача: {work_task}. Контекст: {'; '.join(situation_parts)}",
-            'missing_fields': missing_fields,
-            'extract_profile': bool(missing_fields)
+            'why': situation,
         }
-        
-        return strategy
 
     @staticmethod
     def reflect_on_response(user_message, response, tools_used):
