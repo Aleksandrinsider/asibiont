@@ -201,6 +201,153 @@ class HybridAutonomousAgent:
         
         return "auto"
 
+    # ===== AGENTIC WORKFLOW ENGINE =====
+    # OODA Loop: Observe → Orient → Decide → Act
+    # Автономный цикл принятия решений — агент сам решает что исследовать,
+    # какие данные принести, и обогащает контекст ДО основного ответа.
+
+    _agentic_cache = {}      # {user_id: {'data': str, 'tools': set, 'expires': float}}
+    _AGENTIC_CACHE_TTL = 900  # 15 мин — не перезапрашиваем
+
+    async def _agentic_workflow(self, user_message, profile_data, tasks_data,
+                                 strategy, user_id, sub_tier, session=None):
+        """
+        Agentic Workflow Engine — автономный цикл OODA.
+        
+        1. OBSERVE: профиль, задачи, намерение, пустые поля
+        2. ORIENT: какие инструменты обогатят ответ
+        3. DECIDE: план из 1-2 проактивных действий
+        4. ACT: выполнение + кэширование + форматирование
+        
+        Returns: (enriched_context: str, prefetched_tools: set)
+        """
+        import time as _time
+
+        # Skip trivial messages — не тратим API на "ок" и "да"
+        trivial = {'ок', 'окей', 'да', 'нет', 'ладно', 'хорошо', 'спасибо', 'спс',
+                   'пока', 'до свидания', 'ага', 'угу', 'понял', 'ясно', 'благодарю'}
+        if user_message.lower().strip() in trivial or len(user_message.strip()) <= 3:
+            return "", set()
+
+        # Check cache — не дублируем запросы за 15 мин
+        cached = self._agentic_cache.get(user_id)
+        if cached and cached['expires'] > _time.time():
+            logger.debug(f"[AGENTIC] Cache hit for user {user_id}")
+            return cached['data'], cached['tools']
+
+        # ═══ OBSERVE & ORIENT ═══
+        priority = strategy.get('priority', '')
+        missing_fields = strategy.get('missing_fields', [])
+
+        # ═══ DECIDE: формируем план проактивных действий ═══
+        plan = []
+
+        # Rule 1: Новости/тренды по интересам пользователя
+        topic_source = (
+            profile_data.get('interests') or
+            profile_data.get('goals') or
+            profile_data.get('skills')
+        ) if profile_data else None
+
+        if topic_source:
+            # Берём первый/главный интерес
+            first_topic = topic_source.split(',')[0].strip() if ',' in topic_source else topic_source
+            if first_topic and len(first_topic) > 2:
+                plan.append({
+                    'tool': 'get_news_trends',
+                    'params': {
+                        'topic': first_topic,
+                        'period': 'week',
+                        'focus': 'opportunities'
+                    },
+                    'reason': f'Тренды: {first_topic}'
+                })
+
+        # Rule 2: Задачи — проверка статуса
+        if tasks_data and priority in ('tasks_review', 'proactive_enrich', 'proactive'):
+            plan.append({
+                'tool': 'list_tasks',
+                'params': {},
+                'reason': 'Статус задач'
+            })
+
+        # Rule 3: Контакты — при нетворкинг-контексте
+        if topic_source:
+            msg_lower = user_message.lower()
+            networking_signals = ['партнёр', 'партнер', 'коллег', 'знакомств',
+                                  'нетворк', 'помощь', 'команд', 'найти людей',
+                                  'кто может', 'единомышленник']
+            if any(w in msg_lower for w in networking_signals):
+                plan.append({
+                    'tool': 'find_relevant_contacts_for_task',
+                    'params': {'task_description': topic_source[:200]},
+                    'reason': 'Поиск релевантных контактов'
+                })
+
+        if not plan:
+            return "", set()
+
+        # ═══ ACT: выполняем план (max 2 действия, timeout 15 сек каждое) ═══
+        results = []
+        prefetched_tools = set()
+
+        for spec in plan[:2]:
+            try:
+                action = [{
+                    'tool': spec['tool'],
+                    'params': spec['params'],
+                    'reason': f"agentic: {spec['reason']}"
+                }]
+
+                result = await asyncio.wait_for(
+                    self.execute_actions(
+                        action, user_id, session=session,
+                        user_message=user_message
+                    ),
+                    timeout=15.0
+                )
+
+                if result and result[0].get('success'):
+                    from .cognitive import CognitiveEngine
+                    raw = json.dumps(result[0]['result'], ensure_ascii=False, default=str)
+                    compressed = CognitiveEngine.compress_tool_result(raw)
+                    results.append(f"[{spec['tool']}] {spec['reason']}:\n{compressed}")
+                    prefetched_tools.add(spec['tool'])
+                    logger.info(f"[AGENTIC] ✓ {spec['tool']}: {spec['reason']}")
+                else:
+                    error = result[0].get('error', 'unknown') if result else 'no result'
+                    logger.warning(f"[AGENTIC] ✗ {spec['tool']}: {error}")
+
+            except asyncio.TimeoutError:
+                logger.warning(f"[AGENTIC] ✗ {spec['tool']} — timeout 15s")
+            except Exception as e:
+                logger.warning(f"[AGENTIC] ✗ {spec['tool']}: {e}")
+
+        if not results:
+            return "", set()
+
+        # ═══ Форматируем обогащённый контекст ═══
+        enriched = "\n\n[AGENTIC RESEARCH — ты ПРОАКТИВНО нашёл эту информацию]\n"
+        enriched += "\n".join(results)
+        enriched += (
+            "\n\n⚡ КАК ИСПОЛЬЗОВАТЬ ДАННЫЕ: "
+            "Выбери ОДНУ самую интересную находку. "
+            "Встрой в ответ ЕСТЕСТВЕННО — как друг: 'кстати, нашёл интересное по твоей теме'. "
+            "Предложи конкретное ДЕЙСТВИЕ на основе находки (задачу, обсуждение, шаг). "
+            "НЕ выгружай сырые данные — интерпретируй и дай свою мысль."
+        )
+
+        # Кэш на 15 мин
+        self._agentic_cache[user_id] = {
+            'data': enriched,
+            'tools': prefetched_tools,
+            'expires': _time.time() + self._AGENTIC_CACHE_TTL,
+        }
+
+        logger.info(f"[AGENTIC] ✓ Workflow complete: {len(results)} results, "
+                     f"tools={prefetched_tools}")
+        return enriched, prefetched_tools
+
     # ===== КОНТЕКСТ =====
 
     # Кэш контекста погоды/новостей: {user_id: {'weather': ..., 'news': ..., 'expires': float}}
@@ -506,11 +653,11 @@ class HybridAutonomousAgent:
 
             # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
             from .cognitive import CognitiveEngine
-            cognitive_hints = CognitiveEngine.build_cognitive_hints(user_message)
-            
-            # Планирование стратегии ответа
             profile_data = ctx.get('profile_data', {})
             tasks_data = ctx.get('tasks', [])
+            cognitive_hints = CognitiveEngine.build_cognitive_hints(user_message, profile_data=profile_data)
+            
+            # Планирование стратегии ответа
             strategy = CognitiveEngine.plan_response_strategy(user_message, profile_data, tasks_data)
             if strategy:
                 cognitive_hints += f"\n\n[СТРАТЕГИЯ ОТВЕТА]\nПриоритет: {strategy['priority']}\nТон: {strategy['tone']}\nДействие: {strategy['action']}\nПочему: {strategy['why']}"
@@ -573,6 +720,19 @@ class HybridAutonomousAgent:
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
 
+            # ═══ AGENTIC WORKFLOW: OBSERVE → ORIENT → DECIDE → ACT ═══
+            prefetched_tools = set()
+            try:
+                agentic_data, prefetched_tools = await self._agentic_workflow(
+                    user_message, profile_data, tasks_data,
+                    strategy, user_id, sub_tier, session
+                )
+                if agentic_data:
+                    base_prompt += agentic_data
+                    logger.info(f"[AGENTIC] Enriched prompt with proactive data")
+            except Exception as e:
+                logger.warning(f"[AGENTIC] Workflow failed: {e}")
+
             # Собираем историю с учётом старого контекста
             from .conversation_history import get_conversation_history
             full_history = get_conversation_history(user_id, session=None, limit=16)
@@ -607,7 +767,8 @@ class HybridAutonomousAgent:
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc)
+                    tool_choice=tc,
+                    exclude_tools=prefetched_tools if prefetched_tools else None)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')

@@ -135,7 +135,7 @@ class CognitiveEngine:
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def build_cognitive_hints(user_message):
+    def build_cognitive_hints(user_message, profile_data=None):
         """Строит глубокий когнитивный анализ для инъекции в системный промпт.
         
         Добавляет внутренний монолог: эмоции, намерение, стратегия ответа.
@@ -153,6 +153,35 @@ class CognitiveEngine:
         # Детектор текущей деятельности
         if is_active:
             hints.append("🔥 АКТИВНАЯ РАБОТА: Пользователь СЕЙЧАС чем-то занят. Он пришёл за ПОМОЩЬЮ, а не за напоминанием. НЕ предлагай задачу на завтра. Включайся: спроси что конкретно нужно, предложи помощь, разбери задачу на шаги.")
+
+        # ═══ ПУСТЫЕ ПОЛЯ ПРОФИЛЯ — ВСЕГДА НАПОМИНАЕМ ═══
+        field_labels = {
+            'goals': 'цели',
+            'skills': 'навыки',
+            'interests': 'интересы',
+            'position': 'должность/сфера',
+            'city': 'город'
+        }
+        missing = []
+        if profile_data:
+            for k in ['goals', 'skills', 'interests', 'position', 'city']:
+                if not profile_data.get(k):
+                    missing.append(field_labels[k])
+        else:
+            missing = list(field_labels.values())
+        
+        if missing:
+            top_field = missing[0]
+            hints.append(
+                f"❗ ПРОФИЛЬ НЕ ПОЛНЫЙ (не заполнено: {', '.join(missing)}). "
+                f"В ЭТОМ ОТВЕТЕ естественно узнай про '{top_field}' — "
+                f"задай ОДИН живой вопрос в контексте разговора. "
+                f"НЕ 'заполни профиль', а живой вопрос: "
+                f"для целей → 'К чему стремишься сейчас?', "
+                f"для навыков → 'Что умеешь лучше всего?', "
+                f"для интересов → 'Что тебя сейчас увлекает?'. "
+                f"Когда ответит — СРАЗУ update_profile."
+            )
 
         # Анализ намерения
         intent_hints = {
@@ -443,16 +472,16 @@ class CognitiveEngine:
                 action = 'research_and_ask'
                 why = (f'Приветствие + незаполнен: {field_hint}. '
                        f'ОБЯЗАТЕЛЬНО ВЫЗОВИ get_news_trends(topic="{research_topic_str}") '
-                       'чтобы найти актуальную новость/тренд по теме пользователя. '
-                       'Поделись находкой + естественно узнай о {field_hint}. '
-                       'НЕ пересказывай профиль.')
+                       f'чтобы найти актуальную новость/тренд по теме пользователя. '
+                       f'Поделись находкой + ОБЯЗАТЕЛЬНО задай живой вопрос про {field_hint}. '
+                       f'НЕ пересказывай профиль.')
             else:
                 priority = 'engage_and_profile'
                 action = 'engage_then_ask'
                 why = (f'Приветствие + незаполнен: {field_hint}. '
-                       'Вызови list_tasks чтобы увидеть задачи, или '
-                       'задай живой вопрос о {field_hint}. '
-                       'НЕ пересказывай профиль.')
+                       f'Вызови list_tasks чтобы увидеть задачи, или '
+                       f'задай живой вопрос о {field_hint}. '
+                       f'НЕ пересказывай профиль.')
         elif intent == 'information_request':
             priority = 'research'
             action = 'research_topic'
@@ -526,12 +555,21 @@ class CognitiveEngine:
             'tone': tone,
             'action': action,
             'why': why,
-            'extract_profile': intent == 'general' and not all(profile_data.get(k) for k in ['goals', 'skills', 'interests', 'position'])
+            'missing_fields': missing_fields,
+            'extract_profile': not all(profile_data.get(k) for k in ['goals', 'skills', 'interests', 'position']) if profile_data else True
         }
+        
+        # ВСЕГДА добавляем hint про пустые поля — в КАЖДУЮ стратегию
+        if missing_fields:
+            field_labels = {'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы', 'position': 'должность/сфера', 'city': 'город'}
+            top_missing = field_labels.get(missing_fields[0], missing_fields[0])
+            strategy['why'] += (f'. ПРОФИЛЬ НЕ ПОЛОН (нет: {top_missing}). '
+                                f'ОБЯЗАТЕЛЬНО задай ОДИН живой вопрос про {top_missing} '
+                                f'естественно в разговоре. Когда ответит — update_profile.')
         
         # Добавляем hint про извлечение данных в профиль
         if strategy['extract_profile']:
-            strategy['why'] += '. ВАЖНО: если пользователь рассказывает о себе — тихо обновляй профиль через update_profile'
+            strategy['why'] += ' ВАЖНО: если пользователь рассказывает о себе — тихо обновляй профиль через update_profile'
         
         return strategy
 
