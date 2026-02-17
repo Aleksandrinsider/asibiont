@@ -4081,7 +4081,7 @@ async def generate_delegation_notification_async(delegator_username, recipient_u
 
 async def generate_delegation_notification(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, user_id):
     import aiohttp
-    from config import DEEPSEEK_API_KEY
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
     from .prompts import get_extended_system_prompt
     from .utils import clean_technical_details
 
@@ -4117,7 +4117,7 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
             {"role": "user", "content": prompt}
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages, "temperature": 0.8, "max_tokens": 200}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.8, "max_tokens": 200}
 
         async with aiohttp.ClientSession() as aio_session:
             async with aio_session.post(
@@ -4138,7 +4138,7 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
 
 async def generate_progress_request(task_title, delegator_username, time_remaining, user_id):
     import aiohttp
-    from config import DEEPSEEK_API_KEY
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
     from .prompts import get_extended_system_prompt
     from .utils import clean_technical_details
 
@@ -4170,7 +4170,7 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
             {"role": "user", "content": prompt}
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages, "temperature": 0.7, "max_tokens": 150}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.7, "max_tokens": 150}
 
         async with aiohttp.ClientSession() as aio_session:
             async with aio_session.post(
