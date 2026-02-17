@@ -415,6 +415,36 @@ async def health_handler(request):
     return web.Response(text='OK', status=200)
 
 
+# ═══ IndexNow: мгновенное уведомление поисковиков ═══
+INDEXNOW_KEY = 'd6193b04262141bba808b1279123715b'
+
+async def notify_indexnow(urls: list):
+    """Отправить URL-ы в IndexNow для мгновенной индексации Bing/Yandex"""
+    if LOCAL:
+        return
+    try:
+        import aiohttp
+        payload = {
+            "host": "asibiont.ru",
+            "key": INDEXNOW_KEY,
+            "keyLocation": f"https://asibiont.ru/{INDEXNOW_KEY}.txt",
+            "urlList": urls
+        }
+        async with aiohttp.ClientSession() as session:
+            # Bing/Yandex оба поддерживают IndexNow
+            for endpoint in ['https://api.indexnow.org/indexnow',
+                             'https://yandex.com/indexnow']:
+                try:
+                    async with session.post(endpoint, json=payload,
+                                           headers={'Content-Type': 'application/json'},
+                                           timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        logger.info(f"[IndexNow] {endpoint} -> {resp.status}")
+                except Exception as e:
+                    logger.warning(f"[IndexNow] {endpoint} error: {e}")
+    except Exception as e:
+        logger.warning(f"[IndexNow] Failed: {e}")
+
+
 async def login_handler(request):
     """Страца аторизации"""
     session = await get_session(request)
@@ -5622,8 +5652,14 @@ app.router.add_post('/apply_promo_code', apply_promo_code_handler)
 app.router.add_get('/create_payment', create_payment_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
+# SEO: verification files
 app.router.add_get('/yandex_48ffa2026650f03f.html', lambda r: web.FileResponse('static/yandex_48ffa2026650f03f.html'))
 app.router.add_get('/BingSiteAuth.xml', lambda r: web.FileResponse('static/BingSiteAuth.xml'))
+# SEO: robots.txt и sitemap.xml в корне (поисковые ищут именно тут)
+app.router.add_get('/robots.txt', lambda r: web.FileResponse('static/robots.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
+app.router.add_get('/sitemap.xml', lambda r: web.FileResponse('static/sitemap.xml', headers={'Content-Type': 'application/xml; charset=utf-8'}))
+# SEO: IndexNow key file
+app.router.add_get('/d6193b04262141bba808b1279123715b.txt', lambda r: web.FileResponse('static/d6193b04262141bba808b1279123715b.txt'))
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # API routes for dynamic updates
@@ -5738,6 +5774,17 @@ async def start_reminder_service(app):
     logger.info("Starting ReminderService...")
     await reminder_service.start()
     logger.info("ReminderService started successfully")
+
+    # Пинг IndexNow при старте — уведомляем поисковики о всех страницах
+    try:
+        await notify_indexnow([
+            "https://asibiont.ru/",
+            "https://asibiont.ru/subscription-tiers",
+            "https://asibiont.ru/dashboard"
+        ])
+        logger.info("[IndexNow] Pinged search engines about all pages")
+    except Exception as e:
+        logger.warning(f"[IndexNow] Startup ping failed: {e}")
 
     # Log existing jobs
     jobs = reminder_service.scheduler.get_jobs()
