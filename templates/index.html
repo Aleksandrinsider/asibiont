@@ -17,6 +17,7 @@
     <meta property="og:url" content="https://asibiont.ru">
     <meta property="og:title" content="ASI Biont — Соцсеть, где ИИ работает за вас">
     <meta property="og:description" content="AI-партнёр в Telegram: задачи, поиск людей, делегирование, автопостинг и точечные возможности. Не помощник — партнёр.">
+    <meta property="og:image" content="https://asibiont.ru/static/asibiont.svg">
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://asibiont.ru">
@@ -25,6 +26,38 @@
     <meta property="twitter:image" content="https://asibiont.ru/static/asibiont.svg">
     <link rel="canonical" href="https://asibiont.ru">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "ASI Biont",
+        "url": "https://asibiont.ru",
+        "description": "AI-партнёр в Telegram: управляет задачами, находит партнёров и исполнителей, делегирует задачи, постит контент по расписанию и присылает точечные возможности для роста.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, Telegram",
+        "offers": {
+            "@type": "AggregateOffer",
+            "lowPrice": "3000",
+            "highPrice": "27000",
+            "priceCurrency": "RUB",
+            "offerCount": "3"
+        },
+        "featureList": [
+            "Управление задачами через естественный диалог",
+            "Поиск партнёров и исполнителей по навыкам",
+            "Делегирование задач внутри сети",
+            "Автопостинг контента по расписанию",
+            "Проактивные предложения и алерты контактов",
+            "Веб-дашборд с графом связей и аналитикой"
+        ],
+        "creator": {
+            "@type": "Organization",
+            "name": "ASI Biont"
+        }
+    }
+    </script>
     <style>
         * {
             margin: 0;
@@ -216,40 +249,46 @@
                 <!-- Ряд 1 -->
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="/static/svg/alarm-clock-svgrepo-com.svg" alt="Управление задачами">
+                        <img src="/static/svg/alarm-clock-svgrepo-com.svg" alt="AI управляет задачами — напоминания, дедлайны, контроль">
                     </div>
+                    <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Задачи без стресса</h2>
                     <div class="feature-description">«Завтра в 9 созвон с инвестором» — он помнит. «Через час пост в канал» — он напомнит. Вы говорите, он делает. Без списков и стресса.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="/static/svg/office-svgrepo-com.svg" alt="Поиск партнёров">
+                        <img src="/static/svg/office-svgrepo-com.svg" alt="AI находит партнёров и исполнителей по навыкам">
                     </div>
+                    <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Готовые связи</h2>
                     <div class="feature-description">Говорите: «Ищу дизайнера для стартапа». Получаете: @anna, 5 лет в дизайне, живёт рядом, открыта к проектам. Не поиск. Готовые связи.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="/static/svg/avatar-svgrepo-com.svg" alt="Делегирование задач">
+                        <img src="/static/svg/avatar-svgrepo-com.svg" alt="AI делегирует задачи исполнителям из вашей сети">
                     </div>
+                    <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Делегирование</h2>
                     <div class="feature-description">«Кто может написать статью за 3 дня?» — AI находит исполнителя из сети, передаёт задачу, следит за сроками. Вы даёте команду, он собирает команду.</div>
                 </div>
 
                 <!-- Ряд 2 -->
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="/static/svg/globe-svgrepo-com.svg" alt="AI-исполнение задач">
+                        <img src="/static/svg/globe-svgrepo-com.svg" alt="AI автономно постит контент и работает 24/7">
                     </div>
+                    <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Автопилот 24/7</h2>
                     <div class="feature-description">Вы спите — он постит в канал каждый день в указанное время. Вы на встрече — он делегирует задачи. Вы заняты — он шлёт алерт: «Важный контакт онлайн».</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="/static/svg/reagent-bottle-svgrepo-com.svg" alt="Проактивные предложения">
+                        <img src="/static/svg/reagent-bottle-svgrepo-com.svg" alt="AI присылает проактивные предложения и возможности">
                     </div>
+                    <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Точечные возможности</h2>
                     <div class="feature-description">Утро, +15°, вы идёте в парк. Он: «@dima тоже бегает по утрам, тема для коллаба?» Не уведомления. Точечные возможности в нужный момент.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="/static/svg/computer-svgrepo-com.svg" alt="Telegram-бот + веб-дашборд">
+                        <img src="/static/svg/computer-svgrepo-com.svg" alt="Telegram бот и веб-дашборд с графом связей">
                     </div>
+                    <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Бот + дашборд</h2>
                     <div class="feature-description">В кармане — бот для команд на ходу. На экране — дашборд с графом связей и аналитикой. Где удобно, там и работает. Два интерфейса, одна сила.</div>
                 </div>
             </div>
