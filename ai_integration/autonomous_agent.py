@@ -690,7 +690,7 @@ class HybridAutonomousAgent:
                 # Семантическая память из Pinecone
                 memory_context = ""
                 try:
-                    memory_context = build_memory_context(user_id, user_message, max_chars=600)
+                    memory_context = await build_memory_context(user_id, user_message, max_chars=600)
                     if memory_context:
                         base_prompt += memory_context
                 except Exception as e:
@@ -968,17 +968,19 @@ class HybridAutonomousAgent:
             if len(self.context_memory) > 100:
                 self.context_memory = self.context_memory[-100:]
 
-        # === Семантическая память (Pinecone) ===
+        # === Семантическая память (Pinecone) — fire-and-forget ===
         try:
             from .cognitive import CognitiveEngine
             emotion = CognitiveEngine.detect_emotion(user_message)
             intent = CognitiveEngine.classify_intent(user_message)
-            store_conversation_turn(
-                user_id=user_id,
-                user_message=user_message,
-                bot_response=response,
-                emotion=emotion,
-                intent=intent
+            asyncio.get_event_loop().create_task(
+                store_conversation_turn(
+                    user_id=user_id,
+                    user_message=user_message,
+                    bot_response=response,
+                    emotion=emotion,
+                    intent=intent
+                )
             )
         except Exception as e:
             logger.warning(f"[VECTOR] Store failed: {e}")

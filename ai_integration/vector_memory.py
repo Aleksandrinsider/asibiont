@@ -11,10 +11,14 @@
 - При каждом сообщении — upsert embedding в Pinecone
 - При генерации ответа — semantic search по контексту
 - Результат вставляется в системный промпт как [СЕМАНТИЧЕСКАЯ ПАМЯТЬ]
+
+ВАЖНО: Все Pinecone-операции (upsert, query) — синхронные HTTP-вызовы.
+Публичные async-обёртки используют asyncio.to_thread() чтобы не блокировать event loop.
 """
 
 import os
 import json
+import asyncio
 import hashlib
 import logging
 import re
@@ -136,14 +140,8 @@ def _text_to_embedding(text):
 # ПУБЛИЧНЫЙ API
 # ═══════════════════════════════════════════════════════════════
 
-def store_memory(user_id, text, metadata=None):
-    """Сохраняет текст в векторную память пользователя.
-    
-    Args:
-        user_id: Telegram ID
-        text: Текст для сохранения (сообщение, факт, инсайт)
-        metadata: Дополнительные метаданные (тип, эмоция, intent и т.д.)
-    """
+def _store_memory_sync(user_id, text, metadata=None):
+    """Синхронная внутренняя версия — НЕ вызывать из async кода напрямую."""
     index = _get_pinecone()
     if not index:
         logger.debug("[VECTOR] Pinecone unavailable, skipping store")
@@ -179,17 +177,17 @@ def store_memory(user_id, text, metadata=None):
         return False
 
 
-def search_memory(user_id, query, top_k=5):
-    """Семантический поиск по памяти пользователя.
-    
-    Args:
-        user_id: Telegram ID
-        query: Поисковый запрос (сообщение пользователя)
-        top_k: Количество результатов
-    
-    Returns:
-        list of dicts с полями: text, score, timestamp, type
-    """
+async def store_memory(user_id, text, metadata=None):
+    """Async-обёртка: сохраняет текст в векторную память без блокировки event loop."""
+    try:
+        return await asyncio.to_thread(_store_memory_sync, user_id, text, metadata)
+    except Exception as e:
+        logger.warning(f"[VECTOR] Async store failed: {e}")
+        return False
+
+
+def _search_memory_sync(user_id, query, top_k=5):
+    """Синхронная внутренняя версия — НЕ вызывать из async кода напрямую."""
     index = _get_pinecone()
     if not index:
         return []
@@ -223,12 +221,18 @@ def search_memory(user_id, query, top_k=5):
         return []
 
 
-def build_memory_context(user_id, current_message, max_chars=800):
-    """Строит контекст семантической памяти для системного промпта.
-    
-    Находит релевантные воспоминания и форматирует для инъекции.
-    """
-    memories = search_memory(user_id, current_message, top_k=5)
+async def search_memory(user_id, query, top_k=5):
+    """Async-обёртка: семантический поиск без блокировки event loop."""
+    try:
+        return await asyncio.to_thread(_search_memory_sync, user_id, query, top_k)
+    except Exception as e:
+        logger.warning(f"[VECTOR] Async search failed: {e}")
+        return []
+
+
+def build_memory_context_sync(user_id, current_message, max_chars=800):
+    """Синхронная версия — для вызова через to_thread."""
+    memories = _search_memory_sync(user_id, current_message, top_k=5)
     
     if not memories:
         return ""
@@ -253,8 +257,17 @@ def build_memory_context(user_id, current_message, max_chars=800):
     return "\n\n[СЕМАНТИЧЕСКАЯ ПАМЯТЬ — что я помню о тебе]\n" + "\n".join(lines)
 
 
-def store_conversation_turn(user_id, user_message, bot_response, emotion=None, intent=None):
-    """Сохраняет значимый обмен (не каждое сообщение).
+async def build_memory_context(user_id, current_message, max_chars=800):
+    """Async-обёртка: строит контекст памяти без блокировки event loop."""
+    try:
+        return await asyncio.to_thread(build_memory_context_sync, user_id, current_message, max_chars)
+    except Exception as e:
+        logger.warning(f"[VECTOR] Async memory context failed: {e}")
+        return ""
+
+
+def _store_conversation_turn_sync(user_id, user_message, bot_response, emotion=None, intent=None):
+    """Синхронная внутренняя версия — сохраняет значимый обмен (не каждое сообщение).
     
     Фильтрует:
     - Слишком короткие сообщения (< 10 символов)
@@ -287,4 +300,15 @@ def store_conversation_turn(user_id, user_message, bot_response, emotion=None, i
         "response_preview": bot_response[:100] if bot_response else "",
     }
     
-    return store_memory(user_id, user_message, metadata)
+    return _store_memory_sync(user_id, user_message, metadata)
+
+
+async def store_conversation_turn(user_id, user_message, bot_response, emotion=None, intent=None):
+    """Async-обёртка: сохраняет обмен без блокировки event loop."""
+    try:
+        return await asyncio.to_thread(
+            _store_conversation_turn_sync, user_id, user_message, bot_response, emotion, intent
+        )
+    except Exception as e:
+        logger.warning(f"[VECTOR] Async store turn failed: {e}")
+        return False
