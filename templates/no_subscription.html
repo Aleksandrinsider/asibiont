@@ -238,41 +238,19 @@
         }
     </script>
     </div>
-</body>
-</html>
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        'promo_code': promoCode
-                    })
-                });
+<!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+    (function(m,e,t,r,i,k,a){
+        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=106862663', 'ym');
 
-                const result = await response.json();
-
-                if (result.success) {
-                    showMessage(result.message, 'success');
-                    // Redirect to dashboard after successful activation
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    showMessage(result.message, 'error');
-                }
-            } catch (error) {
-                showMessage('Ошибка сети. Попробуйте еще раз.', 'error');
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Применить';
-            }
-        }
-
-        function showMessage(message, type) {
-            const messageDiv = document.getElementById('promo_message');
-            messageDiv.textContent = message;
-            messageDiv.style.display = 'block';
-            messageDiv.style.color = type === 'success' ? '#059669' : '#DC2626';
-        }
-    </script>
+    ym(106862663, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/106862663" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
 </body>
 </html>
 
