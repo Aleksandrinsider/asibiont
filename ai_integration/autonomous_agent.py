@@ -31,7 +31,7 @@ import traceback
 import pytz
 from datetime import datetime, timezone
 
-from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_REASONER_MODEL
 from models import Session, User, Task, UserProfile, Goal
 from .prompts import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
@@ -116,21 +116,36 @@ class HybridAutonomousAgent:
     # ===== AI API =====
 
     async def call_ai(self, messages, use_tools=False, subscription_tier=None,
-                      tool_choice=None, exclude_tools=None, **kwargs):
-        """Универсальный вызов DeepSeek API."""
+                      tool_choice=None, exclude_tools=None, model=None, **kwargs):
+        """Универсальный вызов DeepSeek API.
+        
+        Args:
+            model: Модель для вызова. По умолчанию DEEPSEEK_MODEL.
+                   Передать DEEPSEEK_REASONER_MODEL для R1 (глубокий анализ).
+                   R1 НЕ поддерживает tools и temperature — автоматически отключаются.
+        """
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
 
+        chosen_model = model or DEEPSEEK_MODEL
+        is_reasoner = chosen_model == DEEPSEEK_REASONER_MODEL
+
         data = {
-            "model": DEEPSEEK_MODEL,
+            "model": chosen_model,
             "messages": messages,
-            "temperature": kwargs.pop("temperature", 0.7),
             "max_tokens": kwargs.pop("max_tokens", 1800),
             **kwargs
         }
+
+        # R1 не поддерживает temperature — убираем
+        if not is_reasoner:
+            data["temperature"] = kwargs.pop("temperature", 0.7)
+        else:
+            kwargs.pop("temperature", None)
+            use_tools = False  # R1 не поддерживает function calling
 
         if use_tools:
             available_tools = get_available_tools(subscription_tier)
@@ -142,13 +157,20 @@ class HybridAutonomousAgent:
             logger.info(f"[AI] {len(available_tools)} tools, tier={subscription_tier}, "
                         f"tool_choice={data['tool_choice']}")
 
+        logger.info(f"[AI] Calling model={chosen_model}, tokens={data.get('max_tokens')}")
+
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=data,
                                     timeout=aiohttp.ClientTimeout(total=120)) as resp:
                 if resp.status == 200:
                     result = await resp.json()
-                    # Логируем результат для tools
-                    if use_tools:
+                    # Логируем результат
+                    if is_reasoner:
+                        msg = result.get('choices', [{}])[0].get('message', {})
+                        reasoning = msg.get('reasoning_content', '')
+                        logger.info(f"[AI:R1] Reasoning {len(reasoning)} chars, "
+                                    f"content {len(msg.get('content', ''))} chars")
+                    elif use_tools:
                         msg = result.get('choices', [{}])[0].get('message', {})
                         tcs = msg.get('tool_calls', [])
                         if tcs:
@@ -201,152 +223,199 @@ class HybridAutonomousAgent:
         
         return "auto"
 
-    # ===== AGENTIC WORKFLOW ENGINE =====
-    # OODA Loop: Observe → Orient → Decide → Act
-    # Автономный цикл принятия решений — агент сам решает что исследовать,
-    # какие данные принести, и обогащает контекст ДО основного ответа.
+    # ===== DEEP REASONING (R1) =====
 
-    _agentic_cache = {}      # {user_id: {'data': str, 'tools': set, 'expires': float}}
-    _AGENTIC_CACHE_TTL = 900  # 15 мин — не перезапрашиваем
+    # Ключевые слова для глубокого анализа через R1
+    DEEP_REASONING_SIGNALS = [
+        'проанализируй', 'разбери', 'сравни', 'оцени стратегию',
+        'составь план', 'стратегия', 'глубокий анализ', 'подробно разбери',
+        'помоги разобраться', 'почему так', 'в чём причина', 'как лучше всего',
+        'оптимальный вариант', 'плюсы и минусы', 'за и против',
+        'детальный план', 'пошаговый план', 'исследуй глубоко',
+    ]
 
-    async def _agentic_workflow(self, user_message, profile_data, tasks_data,
-                                 strategy, user_id, sub_tier, session=None):
-        """
-        Agentic Workflow Engine — автономный цикл OODA.
+    def _needs_deep_reasoning(self, user_message):
+        """Определяет нужен ли R1 для глубокого анализа.
         
-        1. OBSERVE: профиль, задачи, намерение, пустые поля
-        2. ORIENT: какие инструменты обогатят ответ
-        3. DECIDE: план из 1-2 проактивных действий
-        4. ACT: выполнение + кэширование + форматирование
+        R1 включается для:
+        - Сложных аналитических вопросов
+        - Запросов на стратегическое планирование
+        - Глубокого сравнительного анализа
         
-        Returns: (enriched_context: str, prefetched_tools: set)
+        НЕ включается для:
+        - Обычных CRUD-операций (задачи, профиль)
+        - Приветствий и коротких вопросов
+        - Запросов новостей/погоды
         """
-        import time as _time
+        msg_lower = user_message.lower()
+        
+        # Короткие сообщения — точно не deep
+        if len(msg_lower.split()) < 5:
+            return False
+        
+        # Проверяем сигналы глубокого анализа
+        if any(sig in msg_lower for sig in self.DEEP_REASONING_SIGNALS):
+            logger.info(f"[R1] Deep reasoning triggered for: '{user_message[:60]}'")
+            return True
+        
+        return False
 
-        # Skip trivial messages — не тратим API на "ок" и "да"
-        trivial = {'ок', 'окей', 'да', 'нет', 'ладно', 'хорошо', 'спасибо', 'спс',
-                   'пока', 'до свидания', 'ага', 'угу', 'понял', 'ясно', 'благодарю'}
-        if user_message.lower().strip() in trivial or len(user_message.strip()) <= 3:
-            return "", set()
+    _TOOL_PROGRESS_MAP = {
+        'get_tasks': 'Смотрю задачи...',
+        'add_task': 'Создаю задачу...',
+        'complete_task': 'Завершаю задачу...',
+        'edit_task': 'Обновляю задачу...',
+        'delete_task': 'Удаляю задачу...',
+        'reschedule_task': 'Переношу задачу...',
+        'quick_topic_search': 'Ищу информацию...',
+        'research_topic': 'Исследую тему...',
+        'get_news_trends': 'Ищу новости...',
+        'find_relevant_contacts_for_task': 'Ищу контакты...',
+        'get_stock_price': 'Проверяю котировки...',
+        'get_weather': 'Смотрю погоду...',
+        'update_profile': 'Обновляю профиль...',
+        'get_user_goals': 'Проверяю цели...',
+        'create_goal': 'Создаю цель...',
+        'generate_post': 'Пишу пост...',
+    }
 
-        # Check cache — не дублируем запросы за 15 мин
-        cached = self._agentic_cache.get(user_id)
-        if cached and cached['expires'] > _time.time():
-            logger.debug(f"[AGENTIC] Cache hit for user {user_id}")
-            return cached['data'], cached['tools']
+    def _tool_progress_text(self, tool_name, iteration):
+        """Генерирует текст прогресса для Telegram по имени инструмента."""
+        text = self._TOOL_PROGRESS_MAP.get(tool_name, '⚙️ Работаю...')
+        if iteration > 1:
+            text = '⚙️ Углубляюсь...'
+        return text
 
-        # ═══ OBSERVE & ORIENT ═══
-        priority = strategy.get('priority', '')
-        missing_fields = strategy.get('missing_fields', [])
+    # ===== TOKEN BUDGET =====
 
-        # ═══ DECIDE: формируем план проактивных действий ═══
-        plan = []
+    # Максимальный бюджет в символах (~12000 токенов для рус. текста, ratio ~3 chars/token)
+    MAX_PROMPT_CHARS = 36000  # ~12000 tokens
+    MAX_HISTORY_CHARS = 12000  # ~4000 tokens для истории
 
-        # Rule 1: Новости/тренды по интересам пользователя
-        topic_source = (
-            profile_data.get('interests') or
-            profile_data.get('goals') or
-            profile_data.get('skills')
-        ) if profile_data else None
+    @staticmethod
+    def _estimate_tokens(text):
+        """Грубая оценка кол-ва токенов для русского текста (~3 chars/token)."""
+        return len(text) // 3 if text else 0
 
-        if topic_source:
-            # Берём первый/главный интерес
-            first_topic = topic_source.split(',')[0].strip() if ',' in topic_source else topic_source
-            if first_topic and len(first_topic) > 2:
-                plan.append({
-                    'tool': 'get_news_trends',
-                    'params': {
-                        'topic': first_topic,
-                        'period': 'week',
-                        'focus': 'opportunities'
-                    },
-                    'reason': f'Тренды: {first_topic}'
-                })
+    def _trim_prompt_to_budget(self, base_prompt, history):
+        """Обрезает системный промпт и историю до бюджета токенов.
+        
+        Приоритет сохранения (от высшего к низшему):
+        1. Базовый системный промпт (ядро — неприкосновенно)
+        2. Последние 4 сообщения истории
+        3. Когнитивные подсказки
+        4. Мультиагентный контекст
+        5. Самообучение / preferences
+        6. Старые сообщения истории
+        7. Ранее обсуждали / memory
+        
+        Returns:
+            (trimmed_prompt: str, trimmed_history: list)
+        """
+        prompt_chars = len(base_prompt)
+        history_chars = sum(len(m.get('content', '')) for m in history)
+        total = prompt_chars + history_chars
+        
+        if total <= self.MAX_PROMPT_CHARS:
+            return base_prompt, history  # Всё влезает
+        
+        overflow = total - self.MAX_PROMPT_CHARS
+        trimmed = 0
+        logger.info(f"[TOKEN_BUDGET] Over budget by ~{overflow // 3} tokens "
+                    f"({prompt_chars} prompt + {history_chars} history chars)")
+        
+        # 1. Обрезаем историю — оставляем последние 4 сообщения
+        if len(history) > 4 and history_chars > self.MAX_HISTORY_CHARS:
+            old_len = len(history)
+            # Сжимаем старые сообщения: оставляем последние 4
+            keep = history[-4:]
+            removed_chars = sum(len(m.get('content', '')) for m in history[:-4])
+            history = keep
+            trimmed += removed_chars
+            logger.info(f"[TOKEN_BUDGET] Trimmed history: {old_len} → {len(history)} msgs, "
+                       f"freed ~{removed_chars // 3} tokens")
+        
+        if trimmed >= overflow:
+            return base_prompt, history
+        
+        # 2. Обрезаем секции промпта по приоритету (от наименее важных)
+        sections_to_trim = [
+            '[РАНЕЕ ОБСУЖДАЛИ:',
+            '[ЭМОЦИОНАЛЬНЫЙ ТРЕНД',
+            '[ПРОАКТИВНОЕ ДЕЙСТВИЕ',
+            '[ПРЕДПОЧТЕНИЯ ПОЛЬЗОВАТЕЛЯ',
+            '[MULTI-AGENT',
+            '[ГЛУБОКИЙ АНАЛИЗ R1]',
+        ]
+        
+        for marker in sections_to_trim:
+            if trimmed >= overflow:
+                break
+            idx = base_prompt.find(marker)
+            if idx == -1:
+                continue
+            # Ищем конец секции (следующая секция или конец строки)
+            next_section = len(base_prompt)
+            for other in ['[РАНЕЕ', '[ЭМОЦ', '[ПРОАК', '[ПРЕД', '[MULTI', '[ГЛУБ',
+                          '[СТРАТЕГИЯ', '[КОГНИТИВНЫЕ', '\n\n[']:
+                pos = base_prompt.find(other, idx + len(marker))
+                if pos != -1 and pos < next_section:
+                    next_section = pos
+            
+            removed = base_prompt[idx:next_section]
+            base_prompt = base_prompt[:idx] + base_prompt[next_section:]
+            trimmed += len(removed)
+            logger.info(f"[TOKEN_BUDGET] Trimmed section '{marker[:20]}', "
+                       f"freed ~{len(removed) // 3} tokens")
+        
+        return base_prompt, history
 
-        # Rule 2: Задачи — проверка статуса
-        if tasks_data and priority in ('tasks_review', 'proactive_enrich', 'proactive'):
-            plan.append({
-                'tool': 'list_tasks',
-                'params': {},
-                'reason': 'Статус задач'
-            })
-
-        # Rule 3: Контакты — при нетворкинг-контексте
-        if topic_source:
-            msg_lower = user_message.lower()
-            networking_signals = ['партнёр', 'партнер', 'коллег', 'знакомств',
-                                  'нетворк', 'помощь', 'команд', 'найти людей',
-                                  'кто может', 'единомышленник']
-            if any(w in msg_lower for w in networking_signals):
-                plan.append({
-                    'tool': 'find_relevant_contacts_for_task',
-                    'params': {'task_description': topic_source[:200]},
-                    'reason': 'Поиск релевантных контактов'
-                })
-
-        if not plan:
-            return "", set()
-
-        # ═══ ACT: выполняем план (max 2 действия, timeout 15 сек каждое) ═══
-        results = []
-        prefetched_tools = set()
-
-        for spec in plan[:2]:
-            try:
-                action = [{
-                    'tool': spec['tool'],
-                    'params': spec['params'],
-                    'reason': f"agentic: {spec['reason']}"
-                }]
-
-                result = await asyncio.wait_for(
-                    self.execute_actions(
-                        action, user_id, session=session,
-                        user_message=user_message
-                    ),
-                    timeout=15.0
-                )
-
-                if result and result[0].get('success'):
-                    from .cognitive import CognitiveEngine
-                    raw = json.dumps(result[0]['result'], ensure_ascii=False, default=str)
-                    compressed = CognitiveEngine.compress_tool_result(raw)
-                    results.append(f"[{spec['tool']}] {spec['reason']}:\n{compressed}")
-                    prefetched_tools.add(spec['tool'])
-                    logger.info(f"[AGENTIC] ✓ {spec['tool']}: {spec['reason']}")
-                else:
-                    error = result[0].get('error', 'unknown') if result else 'no result'
-                    logger.warning(f"[AGENTIC] ✗ {spec['tool']}: {error}")
-
-            except asyncio.TimeoutError:
-                logger.warning(f"[AGENTIC] ✗ {spec['tool']} — timeout 15s")
-            except Exception as e:
-                logger.warning(f"[AGENTIC] ✗ {spec['tool']}: {e}")
-
-        if not results:
-            return "", set()
-
-        # ═══ Форматируем обогащённый контекст ═══
-        enriched = "\n\n[AGENTIC RESEARCH — ты ПРОАКТИВНО нашёл эту информацию]\n"
-        enriched += "\n".join(results)
-        enriched += (
-            "\n\n⚡ КАК ИСПОЛЬЗОВАТЬ ДАННЫЕ: "
-            "Выбери ОДНУ самую интересную находку. "
-            "Встрой в ответ ЕСТЕСТВЕННО — как друг: 'кстати, нашёл интересное по твоей теме'. "
-            "Предложи конкретное ДЕЙСТВИЕ на основе находки (задачу, обсуждение, шаг). "
-            "НЕ выгружай сырые данные — интерпретируй и дай свою мысль."
-        )
-
-        # Кэш на 15 мин
-        self._agentic_cache[user_id] = {
-            'data': enriched,
-            'tools': prefetched_tools,
-            'expires': _time.time() + self._AGENTIC_CACHE_TTL,
-        }
-
-        logger.info(f"[AGENTIC] ✓ Workflow complete: {len(results)} results, "
-                     f"tools={prefetched_tools}")
-        return enriched, prefetched_tools
+    async def _deep_analysis(self, user_message, context_prompt, max_tokens=2000):
+        """Вызывает DeepSeek R1 для глубокого анализа перед основным ответом.
+        
+        R1 думает медленнее, но глубже — reasoning_content содержит
+        цепочку рассуждений. Результат вставляется как контекст
+        для основной модели (V3), которая формирует финальный ответ с tools.
+        
+        Returns:
+            str — аналитический результат R1 для вставки в контекст
+        """
+        try:
+            messages = [
+                {"role": "system", "content": (
+                    "Ты аналитический движок. Твоя задача — ГЛУБОКО проанализировать "
+                    "запрос пользователя и дать структурированный анализ.\n\n"
+                    f"КОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{context_prompt[:2000]}\n\n"
+                    "Формат ответа:\n"
+                    "1. Суть запроса (1 предложение)\n"
+                    "2. Ключевые факторы (3-5 пунктов)\n"
+                    "3. Рекомендации (конкретные шаги)\n"
+                    "4. Возможные риски (если есть)\n"
+                    "Отвечай на русском, кратко и по делу."
+                )},
+                {"role": "user", "content": user_message}
+            ]
+            
+            # Отправляем прогресс
+            if self._progress_callback:
+                await self._progress_callback("🧠 Глубокий анализ...")
+            
+            result = await self.call_ai(
+                messages, model=DEEPSEEK_REASONER_MODEL,
+                max_tokens=max_tokens, use_tools=False)
+            
+            msg = result['choices'][0]['message']
+            content = msg.get('content', '')
+            reasoning = msg.get('reasoning_content', '')
+            
+            logger.info(f"[R1] Analysis done: {len(content)} chars content, "
+                       f"{len(reasoning)} chars reasoning")
+            
+            return content if content else ''
+            
+        except Exception as e:
+            logger.warning(f"[R1] Deep analysis failed, falling back: {e}")
+            return ''
 
     # ===== КОНТЕКСТ =====
 
@@ -654,10 +723,10 @@ class HybridAutonomousAgent:
             # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
             from .cognitive import CognitiveEngine
             profile_data = ctx.get('profile_data', {})
-            tasks_data = ctx.get('tasks', [])
             cognitive_hints = CognitiveEngine.build_cognitive_hints(user_message, profile_data=profile_data)
             
             # Планирование стратегии ответа
+            tasks_data = ctx.get('tasks', [])
             strategy = CognitiveEngine.plan_response_strategy(user_message, profile_data, tasks_data)
             if strategy:
                 cognitive_hints += f"\n\n[СТРАТЕГИЯ ОТВЕТА]\nПриоритет: {strategy['priority']}\nТон: {strategy['tone']}\nДействие: {strategy['action']}\nПочему: {strategy['why']}"
@@ -720,19 +789,6 @@ class HybridAutonomousAgent:
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
 
-            # ═══ AGENTIC WORKFLOW: OBSERVE → ORIENT → DECIDE → ACT ═══
-            prefetched_tools = set()
-            try:
-                agentic_data, prefetched_tools = await self._agentic_workflow(
-                    user_message, profile_data, tasks_data,
-                    strategy, user_id, sub_tier, session
-                )
-                if agentic_data:
-                    base_prompt += agentic_data
-                    logger.info(f"[AGENTIC] Enriched prompt with proactive data")
-            except Exception as e:
-                logger.warning(f"[AGENTIC] Workflow failed: {e}")
-
             # Собираем историю с учётом старого контекста
             from .conversation_history import get_conversation_history
             full_history = get_conversation_history(user_id, session=None, limit=16)
@@ -746,10 +802,22 @@ class HybridAutonomousAgent:
             else:
                 history = full_history
 
+            # ═══ TOKEN BUDGET — обрезаем если превышен лимит ═══
+            base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
+
             messages = [{"role": "system", "content": base_prompt}]
             if history:
                 messages.extend(history)
             messages.append({"role": "user", "content": user_message})
+
+            # ═══ DEEP REASONING (R1) ДЛЯ СЛОЖНЫХ ЗАДАЧ ═══
+            if self._needs_deep_reasoning(user_message):
+                r1_analysis = await self._deep_analysis(
+                    user_message, base_prompt[:2000], max_tokens=2000)
+                if r1_analysis:
+                    # Вставляем анализ R1 как системный контекст для V3
+                    base_prompt += f"\n\n[ГЛУБОКИЙ АНАЛИЗ R1]\n{r1_analysis}"
+                    messages[0] = {"role": "system", "content": base_prompt}
 
             # Адаптивный tool_choice (с учётом профиля и задач)
             initial_tool_choice = self._determine_tool_choice(
@@ -761,14 +829,20 @@ class HybridAutonomousAgent:
             MAX_ITERATIONS = 4
             seen_tools = set()  # Для предотвращения дублей
 
+            # Прогресс в Telegram — "думаю..."
+            if self._progress_callback:
+                try:
+                    await self._progress_callback('💭 Думаю...')
+                except Exception:
+                    pass
+
             for iteration in range(MAX_ITERATIONS):
                 # Первая итерация может быть "required", остальные "auto"
                 tc = initial_tool_choice if iteration == 0 else "auto"
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc,
-                    exclude_tools=prefetched_tools if prefetched_tools else None)
+                    tool_choice=tc)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')
@@ -815,7 +889,27 @@ class HybridAutonomousAgent:
                             })
                             continue
 
-                    # Execute single tool
+                    # GUARD: блокируем complete_task если пользователь просил УДАЛИТЬ задачу
+                    # Решает баг: AI путает "удали" с "сделал" когда оба слова в тексте
+                    if name == 'complete_task':
+                        msg_lower = user_message.lower()
+                        if any(sig in msg_lower for sig in TASK_DELETION_SIGNALS):
+                            logger.info(f"[GUARD] Blocked complete_task → user wants delete_task: '{user_message[:60]}'")
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc_item['id'],
+                                "content": '{"status": "blocked: user asked to DELETE, not complete. Use delete_task instead."}'
+                            })
+                            continue
+
+                    # Execute single tool — с прогрессом в Telegram
+                    if self._progress_callback:
+                        status = self._tool_progress_text(name, iteration + 1)
+                        try:
+                            await self._progress_callback(status)
+                        except Exception:
+                            pass
+
                     action = [{"tool": name, "params": args,
                                "reason": f"AI iter {iteration+1}: {name}"}]
                     results = await self.execute_actions(
@@ -1087,6 +1181,13 @@ class HybridAutonomousAgent:
             }
 
             system_prompt = base_prompt + mode_instructions.get(mode, '')
+
+            # R1 для task_assist — глубокий анализ перед помощью
+            if mode == 'task_assist':
+                r1_analysis = await self._deep_analysis(
+                    instruction, system_prompt[:2000], max_tokens=1500)
+                if r1_analysis:
+                    system_prompt += f"\n\n[ГЛУБОКИЙ АНАЛИЗ R1]\n{r1_analysis}"
 
             # Собираем messages — БЕЗ истории диалога (это системное сообщение)
             messages = [{"role": "system", "content": system_prompt}]
