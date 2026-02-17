@@ -69,7 +69,7 @@ if not TELEGRAM_BOT_USERNAME:
 # Developer notifications
 # Set DEVELOPER_CHAT_ID to your Telegram user ID to receive error notifications
 # You can find your user ID by messaging @userinfobot in Telegram
-DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID", "123456789")  # Replace with actual developer telegram_id
+DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID", "")  # Set your Telegram user ID via env var
 
 # WEBHOOK_URL теперь хардкодится в main.py для Railway subdomain
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://asibiont.ru/webhook")
@@ -88,8 +88,10 @@ if not LOCAL and (not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY):
 # Security - no encryption needed (backward compatibility)
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "dummy_key_not_used")  # Legacy compatibility
 SESSION_SECRET = os.getenv("SESSION_SECRET")
-if not SESSION_SECRET:
+if not SESSION_SECRET and not LOCAL:
     raise ValueError("SESSION_SECRET is required for production")
+if not SESSION_SECRET:
+    SESSION_SECRET = "local-dev-secret-key-not-for-production"
 
 # Reminder settings
 DAILY_REPORT_HOUR = int(os.getenv("DAILY_REPORT_HOUR", 22))
@@ -178,10 +180,10 @@ if REDIS_ENABLED:
                 REDIS_ENABLED = False
         else:
             # Use external Redis variables
-            REDIS_HOST = os.getenv("REDIS_HOST", "redis-18169.c300.eu-central-1-1.ec2.cloud.redislabs.com")
-            REDIS_PORT = int(os.getenv("REDIS_PORT", 18169))
+            REDIS_HOST = os.getenv("REDIS_HOST", "")
+            REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
             REDIS_USERNAME = os.getenv("REDIS_USERNAME", "default")
-            REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "LnTts6f2dnlRVOf1tvwahzXZcun60kO8")
+            REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
             logger.info("[CONFIG] Using external Redis")
 else:
     REDIS_HOST = REDIS_PORT = REDIS_USERNAME = REDIS_PASSWORD = None

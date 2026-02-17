@@ -170,10 +170,10 @@ def parse_time_to_datetime(time_text, user_id):
         day_word = time_match.group(1).lower()
         hour = int(time_match.group(2))
         minute = int(time_match.group(3))
-        if "завтра" in day_word:
-            target_date = (now + timedelta(days=1)).date()
-        elif "послезавтра" in day_word:
+        if day_word == "послезавтра":
             target_date = (now + timedelta(days=2)).date()
+        elif day_word == "завтра":
+            target_date = (now + timedelta(days=1)).date()
         else:
             target_date = now.date()
         target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))

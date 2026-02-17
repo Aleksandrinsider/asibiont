@@ -168,95 +168,92 @@ async def subscription_handler(message: Message):
     
     user_id = message.from_user.id
     session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        logger.info(f"TELEGRAM: Creating new user for {user_id}")
-        user = User(telegram_id=user_id, username=message.from_user.username)
-        session.add(user)
-        session.commit()
-    else:
-        logger.info(f"TELEGRAM: Found existing user {user_id}")
-    
-    # Check for promo code in message
-    promo_code = None
-    text_parts = message.text.split()
-    if len(text_parts) > 1:
-        promo_code = text_parts[1].upper()
-        logger.info(f"TELEGRAM: Promo code detected: {promo_code}")
-    else:
-        logger.info(f"TELEGRAM: No promo code in message")
-    
-    # Handle promo code activation if 100% discount
-    if promo_code:
-        from models import PromoCode, Subscription, SubscriptionTier, PaymentHistory
-        promo = session.query(PromoCode).filter_by(code=promo_code).first()
-        if promo and promo.discount_percent == 100:
-            # Check if user already used this promo code
-            used_by_users = json.loads(promo.used_by_users or '[]')
-            if user_id in used_by_users:
-                await message.bot.send_message(message.chat.id, "Вы уже использовали этот промокод!")
-                session.close()
-                return
-            
-            # Check max uses
-            if promo.max_uses and promo.used_count >= promo.max_uses:
-                await message.bot.send_message(message.chat.id, "Промокод уже исчерпан!")
-                session.close()
-                return
-            
-            # Check expiration
-            if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
-                await message.bot.send_message(message.chat.id, "Промокод истек!")
-                session.close()
-                return
-            
-            # Activate subscription directly
-            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-            if not subscription:
-                subscription = Subscription(user_id=user.id, telegram_username=user.username)
-                session.add(subscription)
-            
-            subscription.status = 'active'
-            subscription.start_date = datetime.now(timezone.utc)
-            subscription.tier = promo.tier
-            user.subscription_tier = promo.tier
-            
-            # Set end date
-            now = datetime.now(timezone.utc)
-            if subscription.end_date and subscription.end_date > now:
-                subscription.end_date = subscription.end_date + timedelta(days=promo.duration_days)
-            else:
-                subscription.end_date = now + timedelta(days=promo.duration_days)
-            
-            # Mark promo code as used
-            used_by_users.append(user_id)
-            promo.used_by_users = json.dumps(used_by_users)
-            promo.used_count += 1
-            
-            # Log to payment history
-            payment_history = PaymentHistory(
-                user_id=user.id,
-                telegram_username=user.username,
-                action='promo_used',
-                tier=promo.tier,
-                amount='0',
-                duration_days=promo.duration_days,
-                start_date=subscription.start_date,
-                end_date=subscription.end_date,
-                details=json.dumps({'promo_code': promo_code, 'discount_percent': 100})
-            )
-            session.add(payment_history)
-            
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            logger.info(f"TELEGRAM: Creating new user for {user_id}")
+            user = User(telegram_id=user_id, username=message.from_user.username)
+            session.add(user)
             session.commit()
-            
-            from payments import get_tier_name
-            tier_name = get_tier_name(promo.tier.value.lower())
-            await message.bot.send_message(message.chat.id, f"🎉 Промокод {promo_code} активирован! Подписка {tier_name} активирована бесплатно на {promo.duration_days} дней!")
-            session.close()
-            return
+        else:
+            logger.info(f"TELEGRAM: Found existing user {user_id}")
     
-    # Описание тарифов
-    tiers_description = """Выберите свой тариф:
+        # Check for promo code in message
+        promo_code = None
+        text_parts = message.text.split()
+        if len(text_parts) > 1:
+            promo_code = text_parts[1].upper()
+            logger.info(f"TELEGRAM: Promo code detected: {promo_code}")
+        else:
+            logger.info(f"TELEGRAM: No promo code in message")
+    
+        # Handle promo code activation if 100% discount
+        if promo_code:
+            from models import PromoCode, Subscription, SubscriptionTier, PaymentHistory
+            promo = session.query(PromoCode).filter_by(code=promo_code).first()
+            if promo and promo.discount_percent == 100:
+                # Check if user already used this promo code
+                used_by_users = json.loads(promo.used_by_users or '[]')
+                if str(user_id) in [str(u) for u in used_by_users]:
+                    await message.bot.send_message(message.chat.id, "Вы уже использовали этот промокод!")
+                    return
+            
+                # Check max uses
+                if promo.max_uses and promo.used_count >= promo.max_uses:
+                    await message.bot.send_message(message.chat.id, "Промокод уже исчерпан!")
+                    return
+            
+                # Check expiration
+                if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
+                    await message.bot.send_message(message.chat.id, "Промокод истек!")
+                    return
+            
+                # Activate subscription directly
+                subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+                if not subscription:
+                    subscription = Subscription(user_id=user.id, telegram_username=user.username)
+                    session.add(subscription)
+            
+                subscription.status = 'active'
+                subscription.start_date = datetime.now(timezone.utc)
+                subscription.tier = promo.tier
+                user.subscription_tier = promo.tier
+            
+                # Set end date
+                now = datetime.now(timezone.utc)
+                if subscription.end_date and subscription.end_date > now:
+                    subscription.end_date = subscription.end_date + timedelta(days=promo.duration_days)
+                else:
+                    subscription.end_date = now + timedelta(days=promo.duration_days)
+            
+                # Mark promo code as used
+                used_by_users.append(str(user_id))
+                promo.used_by_users = json.dumps(used_by_users)
+                promo.used_count += 1
+            
+                # Log to payment history
+                payment_history = PaymentHistory(
+                    user_id=user.id,
+                    telegram_username=user.username,
+                    action='promo_used',
+                    tier=promo.tier,
+                    amount='0',
+                    duration_days=promo.duration_days,
+                    start_date=subscription.start_date,
+                    end_date=subscription.end_date,
+                    details=json.dumps({'promo_code': promo_code, 'discount_percent': 100})
+                )
+                session.add(payment_history)
+            
+                session.commit()
+            
+                from payments import get_tier_name
+                tier_name = get_tier_name(promo.tier.value.lower())
+                await message.bot.send_message(message.chat.id, f"🎉 Промокод {promo_code} активирован! Подписка {tier_name} активирована бесплатно на {promo.duration_days} дней!")
+                return
+    
+        # Описание тарифов
+        tiers_description = """Выберите свой тариф:
 
 🟢 ЛАЙТ — 3 000₽/мес
 Все инструменты: задачи, партнёры, исследования, котировки, погода, новости, маркетинг, публикации, проактивные рекомендации.
@@ -271,27 +268,27 @@ async def subscription_handler(message: Message):
 
 Выберите тариф для оплаты через ЮКАССА:"""
     
-    logger.info(f"TELEGRAM: Sending tariffs description to user {user_id}")
-    await message.bot.send_message(message.chat.id, tiers_description)
-    logger.info(f"TELEGRAM: Tariffs description sent, starting payment creation process...")
+        logger.info(f"TELEGRAM: Sending tariffs description to user {user_id}")
+        await message.bot.send_message(message.chat.id, tiers_description)
+        logger.info(f"TELEGRAM: Tariffs description sent, starting payment creation process...")
     
-    # Создать платежи для всех тарифов
-    logger.info(f"TELEGRAM: Starting payment creation for user {user_id}, promo_code: {promo_code}")
-    try:
-        logger.info("TELEGRAM: Creating LIGHT payment...")
-        light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', promo_code)
-        logger.info(f"TELEGRAM: LIGHT payment created: {light_url[:60]}...")
+        # Создать платежи для всех тарифов
+        logger.info(f"TELEGRAM: Starting payment creation for user {user_id}, promo_code: {promo_code}")
+        try:
+            logger.info("TELEGRAM: Creating LIGHT payment...")
+            light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', promo_code)
+            logger.info(f"TELEGRAM: LIGHT payment created: {light_url[:60]}...")
         
-        logger.info("TELEGRAM: Creating STANDARD payment...")
-        standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', promo_code)
-        logger.info(f"TELEGRAM: STANDARD payment created: {standard_url[:60]}...")
+            logger.info("TELEGRAM: Creating STANDARD payment...")
+            standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', promo_code)
+            logger.info(f"TELEGRAM: STANDARD payment created: {standard_url[:60]}...")
         
-        logger.info("TELEGRAM: Creating PREMIUM payment...")
-        premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', promo_code)
-        logger.info(f"TELEGRAM: PREMIUM payment created: {premium_url[:60]}...")
+            logger.info("TELEGRAM: Creating PREMIUM payment...")
+            premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', promo_code)
+            logger.info(f"TELEGRAM: PREMIUM payment created: {premium_url[:60]}...")
         
-        logger.info("TELEGRAM: All payments created successfully, sending message...")
-        payment_message = f"""LIGHT (3000₽/мес):
+            logger.info("TELEGRAM: All payments created successfully, sending message...")
+            payment_message = f"""LIGHT (3000₽/мес):
 {light_url}
 
 STANDARD (9000₽/мес):
@@ -300,18 +297,19 @@ STANDARD (9000₽/мес):
 PREMIUM (27000₽/мес):
 {premium_url}"""
         
-        await message.bot.send_message(message.chat.id, payment_message)
-        logger.info("TELEGRAM: Payment message sent successfully")
-    except ValueError as e:
-        logger.error(f"TELEGRAM: ValueError during payment creation: {e}")
-        await message.bot.send_message(message.chat.id, f"Ошибка с промокодом: {str(e)}")
-    except Exception as e:
-        logger.error(f"TELEGRAM: Exception during payment creation: {type(e).__name__}: {e}")
-        logger.error(f"TELEGRAM: Full traceback: {traceback.format_exc()}")
-        await message.bot.send_message(message.chat.id, "Ошибка при создании платежей. Попробуйте позже.")
+            await message.bot.send_message(message.chat.id, payment_message)
+            logger.info("TELEGRAM: Payment message sent successfully")
+        except ValueError as e:
+            logger.error(f"TELEGRAM: ValueError during payment creation: {e}")
+            await message.bot.send_message(message.chat.id, f"Ошибка с промокодом: {str(e)}")
+        except Exception as e:
+            logger.error(f"TELEGRAM: Exception during payment creation: {type(e).__name__}: {e}")
+            logger.error(f"TELEGRAM: Full traceback: {traceback.format_exc()}")
+            await message.bot.send_message(message.chat.id, "Ошибка при создании платежей. Попробуйте позже.")
     
-    logger.info(f"TELEGRAM: subscription_handler completed for user {user_id}")
-    session.close()
+        logger.info(f"TELEGRAM: subscription_handler completed for user {user_id}")
+    finally:
+        session.close()
 
 
 @router.message(Command("update_profile"))
@@ -413,7 +411,7 @@ async def promo_handler(message: Message):
         
         # Проверка на использование
         used_by_users = json.loads(promo.used_by_users or '[]')
-        if user.id in used_by_users:
+        if str(user_id) in [str(u) for u in used_by_users]:
             await message.answer("❌ Вы уже использовали этот промокод.")
             return
         
@@ -457,7 +455,7 @@ async def promo_handler(message: Message):
         user.subscription_tier = promo.tier
         
         # Отметить использование промокода
-        used_by_users.append(user.id)
+        used_by_users.append(str(user_id))
         promo.used_by_users = json.dumps(used_by_users)
         promo.used_count += 1
         
@@ -502,16 +500,18 @@ async def promo_handler(message: Message):
 async def subscribe_handler(message: Message):
     user_id = message.from_user.id
     session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username)
-        session.add(user)
-        session.commit()
-    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-    if subscription and subscription.status == 'active':
-        await message.bot.send_message(message.chat.id, "У вас уже активная подписка!")
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            user = User(telegram_id=user_id, username=message.from_user.username)
+            session.add(user)
+            session.commit()
+        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        if subscription and subscription.status == 'active':
+            await message.bot.send_message(message.chat.id, "У вас уже активная подписка!")
+            return
+    finally:
         session.close()
-        return
     
     # Описание тарифов
     tiers_description = """Выберите свой тариф:
@@ -533,11 +533,12 @@ async def subscribe_handler(message: Message):
     await message.bot.send_message(message.chat.id, tiers_description)
     
     # Создать платежи для всех тарифов
-    light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', None)
-    standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', None)
-    premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', None)
-    
-    payment_message = f"""LIGHT (3000₽/мес):
+    try:
+        light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', None)
+        standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', None)
+        premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', None)
+        
+        payment_message = f"""LIGHT (3000₽/мес):
 {light_url}
 
 STANDARD (9000₽/мес):
@@ -545,9 +546,11 @@ STANDARD (9000₽/мес):
 
 PREMIUM (27000₽/мес):
 {premium_url}"""
-    
-    await message.bot.send_message(message.chat.id, payment_message)
-    session.close()
+        
+        await message.bot.send_message(message.chat.id, payment_message)
+    except Exception as e:
+        logger.error(f"Error creating payment for user {user_id}: {e}")
+        await message.bot.send_message(message.chat.id, "Ошибка создания платежа. Попробуйте позже.")
 
 
 @router.message()
@@ -707,13 +710,15 @@ async def process_text_message(user_id, text, message, state):
 
         # СОХРАНЯЕМ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ СРАЗУ
         session = Session()
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if user:
-            from models import Interaction
-            interaction = Interaction(user_id=user.id, message_type='user', content=text)
-            session.add(interaction)
-            session.commit()
-        session.close()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                from models import Interaction
+                interaction = Interaction(user_id=user.id, message_type='user', content=text)
+                session.add(interaction)
+                session.commit()
+        finally:
+            session.close()
         
         context = []  # Simplified: no context in bot
         
@@ -768,21 +773,23 @@ async def process_text_message(user_id, text, message, state):
         
         # СОХРАНЯЕМ ОТВЕТ AI
         session = Session()
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if user:
-            from models import Interaction
-            if response_text and response_text.strip():
-                interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                from models import Interaction
+                if response_text and response_text.strip():
+                    interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
+                else:
+                    interaction = Interaction(
+                        user_id=user.id,
+                        message_type='ai',
+                        content="Извините, не удалось сгенерировать ответ.")
+                session.add(interaction)
+                session.commit()
             else:
-                interaction = Interaction(
-                    user_id=user.id,
-                    message_type='ai',
-                    content="Извините, не удалось сгенерировать ответ.")
-            session.add(interaction)
-            session.commit()
-        else:
-            logger.warning(f"User not found for telegram_id {user_id}, cannot save interactions")
-        session.close()
+                logger.warning(f"User not found for telegram_id {user_id}, cannot save interactions")
+        finally:
+            session.close()
     except Exception as e:
         logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
         await message.bot.send_message(message.chat.id, "Извините, произошла ошибка. Попробуйте позже.")

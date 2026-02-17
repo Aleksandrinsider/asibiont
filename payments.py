@@ -46,7 +46,7 @@ def create_payment(amount, description, user_id, tier='light', promo_code=None):
         logger.error("Cannot create payment: Yookassa credentials not configured")
         raise ValueError("Payment system not configured")
     
-    logger.info(f"Yookassa configured: SHOP_ID={YOOKASSA_SHOP_ID}, SECRET_KEY=***{YOOKASSA_SECRET_KEY[-4:] if YOOKASSA_SECRET_KEY else 'None'}")
+    logger.info(f"Yookassa configured: SHOP_ID={YOOKASSA_SHOP_ID}, SECRET_KEY=***")
     
     # Apply promo code discount if provided
     final_amount = amount

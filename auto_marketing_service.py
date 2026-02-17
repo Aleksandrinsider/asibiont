@@ -134,8 +134,8 @@ class AutoMarketingService:
                     product_name = strategy.get('product', product_name)
                     target_audience = strategy.get('audience', target_audience)
                     platform = strategy.get('platform', platform)
-                except:
-                    pass
+                except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                    logger.debug(f"Failed to parse content_strategy: {e}")
             
             # Генерируем контент
             marketing_content = await generate_marketing_content(

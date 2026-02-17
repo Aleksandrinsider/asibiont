@@ -229,7 +229,10 @@ class ReminderService:
             tasks = db.query(Task).filter(Task.reminder_time.isnot(None), Task.reminder_sent == False).all()
             logger.info(f"Found {len(tasks)} tasks with reminders to schedule")
             for task in tasks:
-                if task.reminder_time > datetime.now(pytz.UTC).replace(tzinfo=None):
+                reminder_time = task.reminder_time
+                if reminder_time.tzinfo is None:
+                    reminder_time = reminder_time.replace(tzinfo=pytz.UTC)
+                if reminder_time > datetime.now(pytz.UTC):
                     # Безопасная проверка наличия user
                     if task.user and task.user.telegram_id:
                         logger.info(f"Scheduling reminder for task {task.id} at {task.reminder_time}")
@@ -250,7 +253,9 @@ class ReminderService:
             for task in result_tasks:
                 if task.user and task.user.telegram_id:
                     result_check_time = task.reminder_time + timedelta(minutes=task.estimated_duration)
-                    if result_check_time > datetime.now(pytz.UTC).replace(tzinfo=None):
+                    if result_check_time.tzinfo is None:
+                        result_check_time = result_check_time.replace(tzinfo=pytz.UTC)
+                    if result_check_time > datetime.now(pytz.UTC):
                         self.schedule_result_check(task.id, result_check_time, task.user.telegram_id, task.title)
         finally:
             db.close()

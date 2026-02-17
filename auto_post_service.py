@@ -13,6 +13,7 @@ import aiohttp
 
 from models import Session, User, UserProfile, Task, Post
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from ai_integration.utils import decrypt_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,17 +99,20 @@ async def generate_progress_post(user_id, session):
         if completed_tasks:
             context += f"\nВыполнено ({len(completed_tasks)}):\n"
             for task in completed_tasks[:5]:  # Показываем до 5 задач
-                context += f"- {task.description}\n"
+                desc = decrypt_data(task.description) if task.description else task.title
+                context += f"- {desc}\n"
         
         if pending_tasks:
             context += f"\nВ работе ({len(pending_tasks)}):\n"
             for task in pending_tasks[:3]:
-                context += f"- {task.description}\n"
+                desc = decrypt_data(task.description) if task.description else task.title
+                context += f"- {desc}\n"
         
         if overdue_tasks:
             context += f"\nПросрочено ({len(overdue_tasks)}):\n"
             for task in overdue_tasks[:2]:
-                context += f"- {task.description}\n"
+                desc = decrypt_data(task.description) if task.description else task.title
+                context += f"- {desc}\n"
         
         if not tasks_today:
             context += "\nСегодня задач не создавалось и ничего не было выполнено.\n"
@@ -171,7 +175,8 @@ def generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks):
         if len(completed_tasks) >= 3:
             return f"Сегодня продуктивный день выдался - закрыл {len(completed_tasks)} задач. Приятно видеть прогресс!"
         else:
-            task_desc = completed_tasks[0].description[:50] + "..." if len(completed_tasks[0].description) > 50 else completed_tasks[0].description
+            raw_desc = decrypt_data(completed_tasks[0].description) if completed_tasks[0].description else completed_tasks[0].title
+            task_desc = raw_desc[:50] + "..." if len(raw_desc) > 50 else raw_desc
             return f"Сегодня справился с '{task_desc}'. Маленькие шаги к большим целям."
     elif pending_tasks:
         return f"Сегодня в работе {len(pending_tasks)} задач. Шаг за шагом продвигаюсь вперед."

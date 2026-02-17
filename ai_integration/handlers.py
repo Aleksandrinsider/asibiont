@@ -262,7 +262,7 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
                     break
             
             if not conflict:
-                return check_time.replace(tzinfo=user_tz)
+                return check_time
         
         # Проверяем слоты до target_time
         for minutes_offset in range(30, search_range_hours * 60, 30):
@@ -278,7 +278,7 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
                     break
             
             if not conflict:
-                return check_time.replace(tzinfo=user_tz)
+                return check_time
                 
     except Exception as e:
         logger.warning(f"Error finding free slot: {e}")
@@ -528,7 +528,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         logging.warning(f"Could not generate recommendations for task {title}: {e}")
         import traceback
         traceback.print_exc()
-        session.rollback()
+        # НЕ делаем rollback — задача уже добавлена в сессию и должна быть сохранена
 
     session.commit()
     task_id = task.id
@@ -716,15 +716,24 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
 
     # Если задача не найдена через контекст, используем обычный поиск
     if task is None:
-        # ПРИОРИТЕТ: Если task_title не указан, но у пользователя есть current_task_id - используем его!  
-        if (not task_title or not task_title.strip()) and user.current_task_id:
+        # ПРИОРИТЕТ 0: Если передан task_id — ищем напрямую по ID
+        if task_id_int is not None:
+            task = session.query(Task).filter(
+                Task.id == task_id_int,
+                (Task.user_id == user.id) | (Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
+            ).first()
+            if task:
+                logger.info(f"[COMPLETE_TASK] Found task by ID: '{task.title}' (ID: {task.id})")
+        
+        # ПРИОРИТЕТ 1: Если task_title не указан, но у пользователя есть current_task_id - используем его!  
+        if task is None and (not task_title or not task_title.strip()) and user.current_task_id:
             logger.info(f"[COMPLETE_TASK] Using user's current_task_id: {user.current_task_id}")
             task = session.query(Task).filter_by(id=user.current_task_id).first()
             if task:
                 logger.info(f"[COMPLETE_TASK] Found current task: '{task.title}' (ID: {task.id})")
         
         # Если task_title не указан, завершаем последнюю активную задачу
-        elif not task_title or not task_title.strip():
+        elif task is None and (not task_title or not task_title.strip()):
             logger.info("[COMPLETE_TASK] No task_title provided, completing the nearest active task")
             
             # Найти ближайшую по времени активную задачу пользователя
@@ -1538,45 +1547,51 @@ def accept_delegated_task(task_id=None, task_title=None, user_id=None):
         if not task:
             return "Задача не найдена или уже обработана."
 
+        # Сохраняем данные до коммита/rollback, чтобы избежать DetachedInstanceError
+        task_title = task.title
+        task_id = task.id
+        task_reminder_time = task.reminder_time
+        task_delegated_by = task.delegated_by
+
         # Update delegation status and task status
         task.delegation_status = "accepted"
         task.status = "in_progress"  # Задача теперь в работе
         session.commit()
 
         # Schedule reminder
-        if task.reminder_time:
+        if task_reminder_time:
             try:
                 from reminder_service import REMINDER_SERVICE
                 if REMINDER_SERVICE:
                     REMINDER_SERVICE.schedule_reminder(
-                        task_id=task.id,
-                        reminder_time=task.reminder_time,
+                        task_id=task_id,
+                        reminder_time=task_reminder_time,
                         user_id=user.telegram_id,
-                        task_title=task.title,
+                        task_title=task_title,
                     )
             except Exception as e:
                 logging.error(f"Failed to schedule reminder: {e}")
                 import traceback
                 traceback.print_exc()
-                session.rollback()
 
+        # Save username for notification before potential session issues
+        user_username = user.username
+        
         # Notify delegator
         try:
-            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            delegator = session.query(User).filter_by(id=task_delegated_by).first()
             if delegator and delegator.telegram_id != user_id:
                 from main import bot
                 if bot:
-                    message = f"@{user.username} принял задачу: {task.title}"
+                    message = f"@{user_username} принял задачу: {task_title}"
                     import asyncio
                     asyncio.create_task(bot.send_message(delegator.telegram_id, message))
         except Exception as e:
             logging.error(f"Failed to notify delegator: {e}")
             import traceback
             traceback.print_exc()
-            session.rollback()
 
-        session.close()
-        return f"Вы приняли задачу '{task.title}'. Она добавлена в ваш список задач."
+        return f"Вы приняли задачу '{task_title}'. Она добавлена в ваш список задач."
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -1625,6 +1640,11 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
         if not task:
             return "Задача не найдена или уже обработана."
 
+        # Сохраняем данные до коммита/rollback, чтобы избежать DetachedInstanceError
+        task_title = task.title
+        task_id = task.id
+        task_delegated_by = task.delegated_by
+
         # Update delegation status
         task.delegation_status = "rejected"
         task.status = "rejected"
@@ -1635,52 +1655,52 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
             from reminder_service import REMINDER_SERVICE
             if REMINDER_SERVICE and REMINDER_SERVICE.scheduler:
                 # Отменяем напоминание
-                reminder_job_id = f"reminder_{task.id}"
+                reminder_job_id = f"reminder_{task_id}"
                 if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
                     REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
-                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled reminder job for task {task.id}")
+                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled reminder job for task {task_id}")
                 
                 # Отменяем проверку результата
-                result_check_job_id = f"result_check_{task.id}"
+                result_check_job_id = f"result_check_{task_id}"
                 if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
                     REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
-                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled result check job for task {task.id}")
+                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled result check job for task {task_id}")
                 
                 # Отменяем чекпоинты задач
                 for checkpoint_type in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
-                    checkpoint_job_id = f"task_overdue_{task.id}_{checkpoint_type}_{user.telegram_id}"
+                    checkpoint_job_id = f"task_overdue_{task_id}_{checkpoint_type}_{user.telegram_id}"
                     if REMINDER_SERVICE.scheduler.get_job(checkpoint_job_id):
                         REMINDER_SERVICE.scheduler.remove_job(checkpoint_job_id)
-                        logger.info(f"[REJECT_DELEGATED_TASK] Cancelled checkpoint job {checkpoint_type} for task {task.id}")
+                        logger.info(f"[REJECT_DELEGATED_TASK] Cancelled checkpoint job {checkpoint_type} for task {task_id}")
                 
                 # Отменяем чекпоинт 1/3
-                checkpoint_1_3_job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
+                checkpoint_1_3_job_id = f"task_checkpoint_{task_id}_1_3_{user.telegram_id}"
                 if REMINDER_SERVICE.scheduler.get_job(checkpoint_1_3_job_id):
                     REMINDER_SERVICE.scheduler.remove_job(checkpoint_1_3_job_id)
-                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
+                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled 1/3 checkpoint job for task {task_id}")
         except Exception as e:
-            logger.warning(f"[REJECT_DELEGATED_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
+            logger.warning(f"[REJECT_DELEGATED_TASK] Could not cancel scheduled jobs for task {task_id}: {e}")
             import traceback
             traceback.print_exc()
-            session.rollback()
 
+        # Save data for notification before closing session
+        user_username = user.username
+        
         # Notify delegator
         try:
-            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            delegator = session.query(User).filter_by(id=task_delegated_by).first()
             if delegator and delegator.telegram_id != user_id:
                 from main import bot
                 if bot:
-                    message = f"@{user.username} отклонил задачу: {task.title}"
+                    message = f"@{user_username} отклонил задачу: {task_title}"
                     import asyncio
                     asyncio.create_task(bot.send_message(delegator.telegram_id, message))
         except Exception as e:
             logging.error(f"Failed to notify delegator: {e}")
             import traceback
             traceback.print_exc()
-            session.rollback()
 
-        session.close()
-        return f"Вы отклонили задачу '{task.title}'."
+        return f"Вы отклонили задачу '{task_title}'."
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -1901,7 +1921,8 @@ async def edit_task(
                 has_access = True
 
         if not has_access:
-            session.close()
+            if close_session:
+                session.close()
             return "У вас нет прав на редактирование этой задачи."
 
         if title:
@@ -1999,8 +2020,11 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         # Для больших объемов данных ограничиваем количество загружаемых задач
         MAX_TASKS_TO_LOAD = 500  # Максимум задач для загрузки в память
         
-        # Сначала получаем только активные задачи с лимитом
-        active_tasks_query = base_query.filter(Task.status != 'completed').limit(MAX_TASKS_TO_LOAD)
+        # Получаем задачи: если запрошены завершённые - загружаем все, иначе только активные
+        if include_completed:
+            active_tasks_query = base_query.order_by(Task.created_at.desc()).limit(MAX_TASKS_TO_LOAD)
+        else:
+            active_tasks_query = base_query.filter(Task.status != 'completed').limit(MAX_TASKS_TO_LOAD)
         
         # Получаем делегированные задачи отдельно
         if user.username and user.username.strip():
@@ -2082,9 +2106,6 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         overdue_count += 1
                 except Exception as e:
                     logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    session.rollback()
                     pass
 
         # Format brief response
@@ -2622,8 +2643,8 @@ def get_partners_list(user_id=None, session=None):
                 u_cats = set(g.category.lower().strip() for g in user_goals_db if g.category)
                 p_cats = set(g.category.lower().strip() for g in partner_goals_db if g.category)
                 relevance_score += len(u_cats & p_cats) * 5
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to compare goal categories: {e}")
 
         # Бонус за тот же город (но не блокировка)
         city_bonus = 0
@@ -2728,8 +2749,8 @@ def get_partners_list(user_id=None, session=None):
                 user_task_keywords.add(g.category.lower().strip())
         if user_goals_db:
             logger.info(f"[PARTNERS] Added {len(user_goals_db)} goal keywords")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to extract goal keywords: {e}")
     
     # Добавляем информацию об общих интересах, навыках, целях и задачах
     user_interests = set(i.strip().lower() for i in user_profile.interests.split(',')) if user_profile.interests else set()
@@ -2831,8 +2852,8 @@ def get_partners_list(user_id=None, session=None):
                     for topic, weight in p_ltm_interests.items():
                         if weight >= 2 and len(topic) >= 3:
                             partner_task_keywords.add(topic.lower().strip())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to parse partner LTM interests: {e}")
                 
                 common_task_words = user_task_keywords & partner_task_keywords
                 if common_task_words and not partner.task_relevance:
@@ -3170,8 +3191,8 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
                                 m = _re.search(r'(\d+)\s*(?:год|лет)', td_lower)
                                 if m:
                                     parsed_date = datetime.now() + timedelta(days=int(m.group(1)) * 365)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to parse goal target_date: {e}")
         
         goal = Goal(
             user_id=user.id,
@@ -3771,8 +3792,8 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
             for topic in entry.get('topics', []):
                 if len(topic) >= 3:
                     task_keywords.add(topic.lower().strip())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to parse LTM for task keywords: {e}")
     
     # Получить город пользователя для приоритизации
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -3858,8 +3879,8 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                         relevance_score += len(goal_kw_match) * 5
                         match_reasons.append(f"цель «{pg.title[:30]}»")
                         break  # Одного совпадения достаточно
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to compare partner goals: {e}")
         
         # Используем уже вычисленную релевантность из get_partners_list
         if hasattr(partner, 'task_relevance_score') and partner.task_relevance_score > 0:
@@ -4378,8 +4399,8 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
                 try:
                     REMINDER_SERVICE.scheduler.remove_job(job_id)
                     logger.info(f"[DELETE_TASK] Removed reminder job {job_id}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Reminder job {job_id} not found or already removed: {e}")
         except ImportError:
             pass
         
@@ -6130,8 +6151,8 @@ async def get_news_info(topic: str = None, user_id: int = None, session=None) ->
             )
             if summary:
                 result += f"📝 **Главное:** {summary}\n\n"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to summarize news: {e}")
         
         for i, article in enumerate(articles[:5], 1):
             title = article.get('title', 'Без заголовка')

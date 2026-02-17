@@ -48,7 +48,7 @@ def check_subscription(user_id):
 def create_subscription_payment(user_id, tier='light'):
     """Создает платеж для месячной подписки"""
     from payments import get_tier_price
-    amount = f"{get_tier_price(tier)}.00"
+    amount = get_tier_price(tier)
     description = f"Подписка ASI Biont на месяц - {tier.capitalize()}"
     return create_payment(amount, description, user_id, tier)
 
@@ -108,9 +108,8 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
             sub.telegram_id = user.telegram_id  # Update telegram_id
             sub.username = user.username  # Update username
             user.subscription_tier = tier_enum
-            session.commit()
             
-            # Log to payment_history
+            # Log to payment_history in same transaction
             try:
                 payment_history = PaymentHistory(
                     user_id=user.id,
@@ -123,11 +122,11 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
                     details=json.dumps({'plan': plan, 'method': 'activate_subscription'})
                 )
                 session.add(payment_history)
-                session.commit()
-                logger.info(f"💾 Subscription activation logged: user={user.username}, tier={tier}")
             except Exception as e:
-                logger.error(f"❌ Failed to log subscription activation: {e}")
-                session.rollback()
+                logger.error(f"❌ Failed to create payment history record: {e}")
+            
+            session.commit()
+            logger.info(f"💾 Subscription activated: user={user.username}, tier={tier}")
             
             return True, f"Подписка обновлена до {sub.end_date.strftime('%d.%m.%Y')}"
         else:

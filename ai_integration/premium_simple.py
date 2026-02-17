@@ -970,15 +970,15 @@ def _get_cached_heavy_insights(user_id: int, session: SessionType) -> List[Dict[
         import asyncio
         market = asyncio.create_task(find_market_opportunities(user_id, session))
         # Не ждём результат, но можем попробовать быстро
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to create market opportunities task: {e}")
     
     # Reverse matching (средний - поиск по недавним задачам)
     try:
         import asyncio  
         reverse = asyncio.create_task(find_reverse_matching(user_id, session))
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to create reverse matching task: {e}")
     
     # Пока не блокируем — в следующий раз будет в кэше
     # Для первого вызова возвращаем пустой список, кэшируем на будущее
@@ -1235,8 +1235,8 @@ async def check_deadlines_and_stuck_tasks(premium_user_id: int, session: Optiona
         
         for task in active_tasks:
             # Проверяем дедлайны
-            if task.deadline:
-                deadline_dt = task.deadline
+            if task.due_date:
+                deadline_dt = task.due_date
                 if not deadline_dt.tzinfo:
                     deadline_dt = pytz.UTC.localize(deadline_dt)
                 
@@ -1258,8 +1258,8 @@ async def check_deadlines_and_stuck_tasks(premium_user_id: int, session: Optiona
             # Проверяем застопоренные (без created_at изменений, так как updated_at нет)
             if task.created_at:
                 created_dt = task.created_at
-                if not updated_dt.tzinfo:
-                    updated_dt = pytz.UTC.localize(updated_dt)
+                if not created_dt.tzinfo:
+                    created_dt = pytz.UTC.localize(created_dt)
                 
                 days_stuck = (now - created_dt).days
                 

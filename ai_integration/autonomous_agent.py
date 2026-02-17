@@ -294,8 +294,8 @@ class HybridAutonomousAgent:
                 try:
                     from .memory import decrypt_data
                     decrypted_memory = decrypt_data(user.memory)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to decrypt user memory: {e}")
 
             # Текущая задача
             current_task_info = None
@@ -411,8 +411,8 @@ class HybridAutonomousAgent:
             if close_session:
                 try:
                     session.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Session close error: {e}")
                 self.active_sessions = max(0, self.active_sessions - 1)
 
         return results

@@ -92,9 +92,10 @@ def get_available_tools(subscription_tier):
         else:  # LIGHT
             restricted = LIGHT_RESTRICTED
         
-        # Filter out restricted functions
+        # Filter out restricted functions and excluded tools
         return [tool for tool in TOOLS 
-               if tool['function']['name'] not in restricted]
+               if tool['function']['name'] not in restricted
+               and tool['function']['name'] not in EXCLUDED_TOOLS]
 
 TOOLS = [
     {

@@ -139,41 +139,100 @@ EDGE CASES (особые случаи):
 def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetime | None:
     """
     Простой fallback для базовых форматов если AI не доступен.
-    Парсит HH:MM, "через N минут/часов/дней".
+    Парсит: "завтра в HH:MM", "сегодня в HH:MM", "послезавтра в HH:MM",
+            "через N минут/часов/дней", "HH:MM".
     """
     import re
     try:
         time_str = time_str.lower().strip()
         
-        # "через N минут/часов/дней"
-        через_match = re.match(r'через (\d+) (минут|час|часа|часов|дней|дня)', time_str)
+        # Helper: extract HH:MM from string
+        def _extract_hhmm(s):
+            m = re.search(r'(\d{1,2}):(\d{2})', s)
+            if m:
+                h, mi = int(m.group(1)), int(m.group(2))
+                if 0 <= h <= 23 and 0 <= mi <= 59:
+                    return h, mi
+            return None, None
+        
+        # "через N минут/часов/дней/недель"
+        через_match = re.match(r'через\s+(\d+)\s+(минут|мин|час|часа|часов|дней|дня|день|недел|нед)', time_str)
         if через_match:
             num = int(через_match.group(1))
             unit = через_match.group(2)
-            if 'минут' in unit:
+            if 'минут' in unit or 'мин' in unit:
                 delta = timedelta(minutes=num)
             elif 'час' in unit:
                 delta = timedelta(hours=num)
-            elif 'дней' in unit or 'дня' in unit:
+            elif 'недел' in unit or 'нед' in unit:
+                delta = timedelta(weeks=num)
+            else:
                 delta = timedelta(days=num)
             result = current_time + delta
             logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
             return result
         
+        # "завтра [в] HH:MM"
+        if time_str.startswith('завтра'):
+            h, mi = _extract_hhmm(time_str)
+            if h is not None:
+                result = (current_time + timedelta(days=1)).replace(hour=h, minute=mi, second=0, microsecond=0)
+                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+                return result
+            else:
+                # "завтра" without time → 09:00
+                result = (current_time + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+                return result
+        
+        # "послезавтра [в] HH:MM"
+        if time_str.startswith('послезавтра'):
+            h, mi = _extract_hhmm(time_str)
+            if h is not None:
+                result = (current_time + timedelta(days=2)).replace(hour=h, minute=mi, second=0, microsecond=0)
+                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+                return result
+            else:
+                result = (current_time + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
+                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+                return result
+        
+        # "сегодня [в] HH:MM"
+        if time_str.startswith('сегодня'):
+            h, mi = _extract_hhmm(time_str)
+            if h is not None:
+                result = current_time.replace(hour=h, minute=mi, second=0, microsecond=0)
+                if result <= current_time:
+                    result += timedelta(days=1)
+                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+                return result
+        
+        # "утром/днём/вечером/ночью"
+        time_of_day = {
+            'утром': 9, 'утро': 9,
+            'днём': 14, 'днем': 14,
+            'вечером': 19, 'вечер': 19,
+            'ночью': 23, 'ночь': 23,
+            'в обед': 13, 'после обеда': 15,
+        }
+        for keyword, hour in time_of_day.items():
+            if keyword in time_str:
+                result = current_time.replace(hour=hour, minute=0, second=0, microsecond=0)
+                if result <= current_time:
+                    result += timedelta(days=1)
+                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+                return result
+        
         # Only HH:MM format
         if ':' in time_str:
-            time_part = time_str.strip()
-            parts = time_part.split(':')
-            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                hour = int(parts[0])
-                minute = int(parts[1])
-                if 0 <= hour <= 23 and 0 <= minute <= 59:
-                    result = current_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                    # If time passed, schedule for tomorrow
-                    if result <= current_time:
-                        result += timedelta(days=1)
-                    logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
-                    return result
+            h, mi = _extract_hhmm(time_str)
+            if h is not None:
+                result = current_time.replace(hour=h, minute=mi, second=0, microsecond=0)
+                # If time passed, schedule for tomorrow
+                if result <= current_time:
+                    result += timedelta(days=1)
+                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+                return result
     except Exception as e:
         logger.error(f"❌ Simple fallback failed: {e}")
     
@@ -194,12 +253,7 @@ def parse_time(time_str: str, timezone_str: str = 'UTC') -> datetime | None:
         
         current_time = datetime.now(tz)
         
-        # Try AI parsing first
-        result = parse_time_with_ai(time_str, current_time)
-        if result:
-            return result
-        
-        # Fallback to simple parsing
+        # Try simple parsing (AI parsing is async and cannot be called from sync)
         return parse_time_simple_fallback(time_str, current_time)
         
     except Exception as e:

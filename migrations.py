@@ -164,7 +164,7 @@ def _migrate_subscriptions(session, inspector):
             CREATE TABLE subscriptions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                tier TEXT DEFAULT 'FREE',
+                tier TEXT DEFAULT 'LIGHT',
                 expires_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -176,7 +176,7 @@ def _migrate_subscriptions(session, inspector):
             CREATE TABLE subscriptions (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL REFERENCES users(id),
-                tier subscription_tier_enum DEFAULT 'FREE',
+                tier subscription_tier_enum DEFAULT 'LIGHT',
                 expires_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

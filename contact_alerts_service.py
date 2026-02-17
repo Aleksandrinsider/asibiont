@@ -63,7 +63,7 @@ class ContactAlertsService:
                     'interest': alert.interest,
                     'city': alert.city,
                     'position': alert.position,
-                    'last_notified': alert.last_notified
+                    'last_notified': alert.last_triggered_at
                 })
 
             logger.info(f"[CONTACT_ALERTS] Found {len(result)} active contact alerts")
@@ -197,9 +197,9 @@ class ContactAlertsService:
         try:
             alert = session.query(ContactAlert).filter_by(id=alert_id).first()
             if alert:
-                alert.last_notified = datetime.now(pytz.UTC)
+                alert.last_triggered_at = datetime.now(pytz.UTC)
                 session.commit()
-                logger.info(f"[CONTACT_ALERTS] Updated last_notified for alert {alert_id}")
+                logger.info(f"[CONTACT_ALERTS] Updated last_triggered_at for alert {alert_id}")
         except Exception as e:
             logger.error(f"[CONTACT_ALERTS] Error updating alert timestamp: {e}")
             session.rollback()

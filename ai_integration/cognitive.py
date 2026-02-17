@@ -335,8 +335,8 @@ class CognitiveEngine:
                         compressed[k] = v
                 return json.dumps(compressed, ensure_ascii=False)[:max_length]
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"JSON compression fallback: {e}")
 
         return result_json[:max_length]
 

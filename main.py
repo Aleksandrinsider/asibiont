@@ -314,20 +314,20 @@ async def get_timezone_from_ip(ip_address):
         'Tolyatti': 'Тольятти',
         'Izhevsk': 'Ижевск',
         'Barnaul': 'Барнаул',
-        'Ulyanovsk': 'Ульяск',
-        'Irkutsk': 'ркутск',
-        'Khabarovsk': 'Хабароск',
+        'Ulyanovsk': 'Ульяновск',
+        'Irkutsk': 'Иркутск',
+        'Khabarovsk': 'Хабаровск',
         'Vladivostok': 'Владивосток',
-        'Yaroslavl': 'Ярослаль',
+        'Yaroslavl': 'Ярославль',
         'Vladimir': 'Владимир',
-        'Ivanovo': 'ао',
+        'Ivanovo': 'Иваново',
         'Bryansk': 'Брянск',
         'Smolensk': 'Смоленск',
         'Kaluga': 'Калуга',
         'Tula': 'Тула',
         'Ryazan': 'Рязань',
-        'Moscow Oblast': 'Москоская область',
-        'Leningrad Oblast': 'Лерадская область'
+        'Moscow Oblast': 'Московская область',
+        'Leningrad Oblast': 'Ленинградская область'
     }
 
     try:
@@ -844,18 +844,18 @@ async def dashboard_handler(request):
                 for partner in all_partners:
                     partner_user = session_db.query(User).filter_by(id=partner.user_id).first()
                     if partner_user and partner_user.id not in existing_contact_ids and partner_user.id != user.id:
-                        # Определяем причину рекомеации
+                        # Определяем причину рекомендации
                         reason_parts = []
                         if hasattr(partner, 'common_interests') and partner.common_interests:
                             reason_parts.append(f"общие интересы: {partner.common_interests}")
                         if hasattr(partner, 'common_skills') and partner.common_skills:
-                            reason_parts.append(f"общие ыки: {partner.common_skills}")
+                            reason_parts.append(f"общие навыки: {partner.common_skills}")
                         if hasattr(partner, 'common_goals') and partner.common_goals:
                             reason_parts.append(f"общие цели: {partner.common_goals}")
                         if hasattr(partner, 'task_relevance') and partner.task_relevance:
                             reason_parts.append(partner.task_relevance)
                         
-                        reason = ', '.join(reason_parts) if reason_parts else 'рекомеоан системой'
+                        reason = ', '.join(reason_parts) if reason_parts else 'рекомендован системой'
                         
                         # Добавляем в delegating_to_me как рекомендованный контакт
                         delegating_to_me.append({
@@ -979,13 +979,13 @@ async def dashboard_handler(request):
                     if username in contacted_usernames:
                         reasons.append('уже общались')
                 if p.common_skills:
-                    reasons.append('общие ыки')
+                    reasons.append('общие навыки')
                 if p.common_interests:
                     reasons.append('общие интересы')
                 if p.common_goals:
                     reasons.append('общие цели')
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
-                    reasons.append('из ашего города')
+                    reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
         # Add photo_url to partners
@@ -1014,17 +1014,17 @@ async def dashboard_handler(request):
         current_time = user_now.strftime('%H:%M')
 
         months = [
-            'яаря',
-            'фераля',
+            'января',
+            'февраля',
             'марта',
             'апреля',
             'мая',
             'июня',
             'июля',
-            'агуста',
+            'августа',
             'сентября',
             'октября',
-            'ября',
+            'ноября',
             'декабря']
         current_date = user_now.strftime('%d.%m.%Y')
 
@@ -1119,10 +1119,16 @@ async def dashboard_handler(request):
             try:
                 updated_avatar_url = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
                 if updated_avatar_url and updated_avatar_url != user.photo_url:
-                    user.photo_url = updated_avatar_url
-                    session_db.commit()
-                    logger.info(f"Updated avatar URL for user {user_id}")
-                    user_avatar_url = updated_avatar_url
+                    avatar_session = Session()
+                    try:
+                        avatar_user = avatar_session.query(User).filter_by(telegram_id=user_id).first()
+                        if avatar_user:
+                            avatar_user.photo_url = updated_avatar_url
+                            avatar_session.commit()
+                            logger.info(f"Updated avatar URL for user {user_id}")
+                            user_avatar_url = updated_avatar_url
+                    finally:
+                        avatar_session.close()
             except Exception as e:
                 logger.error(f"Error updating avatar for user {user_id}: {e}")
 
@@ -1335,11 +1341,11 @@ async def api_send_message_handler(request):
                 return web.json_response({'error': 'AI service error'}, status=500)
 
             # Check if response contains tier restriction error
-            if "Делегироае задач доступ только  тарифах" in response:
+            if "Делегирование задач доступно только на тарифах" in response:
                 logger.info(f"[API_SEND_MESSAGE] Tier restriction detected for user {user_id}")
                 return web.json_response({
                     'error': 'tier_restriction',
-                    'message': '🥉 Делегироае задач доступ только  тарифах Стаарт и Премиум',
+                    'message': '🥉 Делегирование задач доступно только на тарифах Стандарт и Премиум',
                     'tier': 'LIGHT',
                     'upgrade_url': '/subscription_tiers'
                 }, status=403)
@@ -1449,12 +1455,15 @@ async def clear_single_task_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
 
-        # щем задачу либо среди соих, либо среди делегироаых м
-        query_conditions = [Task.id == task_id, Task.user_id == user.id]
+        # Ищем задачу: ID должен совпадать И пользователь должен быть владельцем или делегатом
+        ownership_conditions = [Task.user_id == user.id]
         if user.username:
-            query_conditions.append(Task.delegated_to_username.ilike(user.username))
+            ownership_conditions.append(Task.delegated_to_username.ilike(user.username))
         
-        task = session_db.query(Task).filter(or_(*query_conditions)).first()
+        task = session_db.query(Task).filter(
+            Task.id == task_id,
+            or_(*ownership_conditions)
+        ).first()
         logger.info(f"Task found: {task is not None}")
         if not task:
             return web.json_response({'error': 'Task not found'}, status=404)
@@ -1824,7 +1833,8 @@ async def cors_middleware(request, handler):
         else:
             response = await handler(request)
         
-        response.headers['Access-Control-Allow-Origin'] = '*'
+        origin = request.headers.get('Origin', 'http://localhost:8080')
+        response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -1832,6 +1842,10 @@ async def cors_middleware(request, handler):
     return await handler(request)
 
 # app.middlewares.append(security_middleware)
+# NOTE: rate_limit_middleware is defined below but referenced here.
+# Python evaluates middleware list at request time, not at definition time,
+# so this works because the function exists by the time the first request arrives.
+app.middlewares.append(rate_limit_middleware)
 app.middlewares.append(cors_middleware)
 app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(session_error_middleware)
@@ -1860,7 +1874,99 @@ jinja_env.filters['unique_interests'] = unique_interests
 jinja_env.filters['strptime'] = strptime_filter
 
 
+# ═══════════════════════════════════════════════════════════════
+# RATE LIMITING
+# ═══════════════════════════════════════════════════════════════
+import time as _time_module
+from collections import defaultdict
+
+_rate_limit_store = defaultdict(list)  # ip -> [timestamp, ...]
+_RATE_LIMIT_WINDOW = 60   # секунд
+_RATE_LIMIT_MAX = 60      # запросов в окне (для API)
+_RATE_LIMIT_AUTH_MAX = 10  # запросов на аутентификацию
+
+
+@web.middleware
+async def rate_limit_middleware(request, handler):
+    """Rate limiting для API endpoints"""
+    path = request.path
+    
+    # Rate limiting только для API и аутентификации
+    if not (path.startswith('/api/') or path.startswith('/webhook/') or path == '/auth'):
+        return await handler(request)
+    
+    client_ip = request.headers.get('X-Forwarded-For', request.remote or '0.0.0.0')
+    if ',' in client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    
+    now = _time_module.time()
+    key = f"{client_ip}:{path.split('/')[1]}"  # group by IP + first path segment
+    
+    # Очищаем старые записи
+    _rate_limit_store[key] = [ts for ts in _rate_limit_store[key] if now - ts < _RATE_LIMIT_WINDOW]
+    
+    max_requests = _RATE_LIMIT_AUTH_MAX if path == '/auth' else _RATE_LIMIT_MAX
+    
+    if len(_rate_limit_store[key]) >= max_requests:
+        logger.warning(f"[RATE_LIMIT] {client_ip} exceeded {max_requests} req/{_RATE_LIMIT_WINDOW}s on {path}")
+        return web.json_response(
+            {'error': 'Too many requests. Please try again later.'},
+            status=429,
+            headers={'Retry-After': str(_RATE_LIMIT_WINDOW)}
+        )
+    
+    _rate_limit_store[key].append(now)
+    return await handler(request)
+
+
+# ═══════════════════════════════════════════════════════════════
+# YOOKASSA WEBHOOK IP VERIFICATION
+# ═══════════════════════════════════════════════════════════════
+# Официальные IP-адреса Yookassa для вебхуков
+# https://yookassa.ru/developers/using-api/webhooks
+YOOKASSA_ALLOWED_IPS = {
+    '185.71.76.0/27', '185.71.77.0/27', '77.75.153.0/25',
+    '77.75.156.11', '77.75.156.35', '77.75.154.128/25',
+    '2a02:5180::/32'
+}
+
+import ipaddress
+
+def _build_yookassa_networks():
+    """Pre-build IP networks for fast checking"""
+    networks = []
+    for ip_str in YOOKASSA_ALLOWED_IPS:
+        try:
+            networks.append(ipaddress.ip_network(ip_str, strict=False))
+        except ValueError:
+            try:
+                networks.append(ipaddress.ip_network(f"{ip_str}/32", strict=False))
+            except ValueError:
+                logger.warning(f"Invalid Yookassa IP: {ip_str}")
+    return networks
+
+_yookassa_networks = _build_yookassa_networks()
+
+
+def is_yookassa_ip(ip_str):
+    """Check if IP belongs to Yookassa"""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        return any(ip in network for network in _yookassa_networks)
+    except ValueError:
+        return False
+
+
 async def yookassa_webhook(request):
+    # Верификация IP-адреса отправителя
+    if not LOCAL:
+        client_ip = request.headers.get('X-Forwarded-For', request.remote or '')
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        if not is_yookassa_ip(client_ip):
+            logger.warning(f"[YOOKASSA] Rejected webhook from unauthorized IP: {client_ip}")
+            return web.Response(text="Forbidden", status=403)
+
     data = await request.json()
     if data.get('event') == 'payment.succeeded':
         payment = data['object']
@@ -1869,107 +1975,118 @@ async def yookassa_webhook(request):
         promo_code = payment['metadata'].get('promo_code')  # Get promo code if used
 
         session = Session()
-        user = session.query(User).filter_by(telegram_id=int(user_id)).first()
-        if user:
-            # Handle promo code if provided
-            if promo_code:
-                promo = session.query(PromoCode).filter_by(code=promo_code.upper()).first()
-                if promo:
-                    # Mark promo code as used by this user
-                    used_by_users = json.loads(promo.used_by_users or '[]')
-                    if user_id not in used_by_users:
-                        used_by_users.append(user_id)
-                        promo.used_by_users = json.dumps(used_by_users)
-                        promo.used_count += 1
-                        logger.info(f"Promo code {promo_code} used by user {user.username} (user_id: {user_id})")
-                    else:
-                        logger.warning(f"User {user.username} already used promo code {promo_code}")
+        try:
+            user = session.query(User).filter_by(telegram_id=int(user_id)).first()
+            if user:
+                # Handle promo code if provided
+                if promo_code:
+                    promo = session.query(PromoCode).filter_by(code=promo_code.upper()).first()
+                    if promo:
+                        # Mark promo code as used by this user
+                        used_by_users = json.loads(promo.used_by_users or '[]')
+                        if str(user_id) not in [str(u) for u in used_by_users]:
+                            used_by_users.append(str(user_id))
+                            promo.used_by_users = json.dumps(used_by_users)
+                            promo.used_count += 1
+                            logger.info(f"Promo code {promo_code} used by user {user.username} (user_id: {user_id})")
+                        else:
+                            logger.warning(f"User {user.username} already used promo code {promo_code}")
 
-            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-            if not subscription:
-                subscription = Subscription(user_id=user.id, telegram_username=user.username)
-                session.add(subscription)
-            else:
-                # Update telegram_username if not set
-                if not subscription.telegram_username:
-                    subscription.telegram_username = user.username
+                subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+                if not subscription:
+                    subscription = Subscription(user_id=user.id, telegram_username=user.username)
+                    session.add(subscription)
+                else:
+                    # Update telegram_username if not set
+                    if not subscription.telegram_username:
+                        subscription.telegram_username = user.username
 
-            subscription.status = 'active'
-            subscription.start_date = datetime.now(pytz.UTC)
+                subscription.status = 'active'
+                subscription.start_date = datetime.now(pytz.UTC)
 
-            # Update tier
-            tier_mapping = {
-                'light': SubscriptionTier.LIGHT,
-                'standard': SubscriptionTier.STANDARD,
-                'premium': SubscriptionTier.PREMIUM
-            }
-            tier_enum = tier_mapping.get(tier, SubscriptionTier.LIGHT)
-            subscription.tier = tier_enum
-            user.subscription_tier = tier_enum
+                # Update tier
+                tier_mapping = {
+                    'light': SubscriptionTier.LIGHT,
+                    'standard': SubscriptionTier.STANDARD,
+                    'premium': SubscriptionTier.PREMIUM
+                }
+                tier_enum = tier_mapping.get(tier, SubscriptionTier.LIGHT)
+                subscription.tier = tier_enum
+                user.subscription_tier = tier_enum
 
-            # Если подписка еще акти, продлеаем от end_date, иче от текущей даты
-            now = datetime.now(pytz.UTC)
-            if subscription.end_date and subscription.end_date > now:
-                subscription.end_date = subscription.end_date + timedelta(days=30)
-            else:
-                subscription.end_date = now + timedelta(days=30)
+                # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
+                now = datetime.now(pytz.UTC)
+                if subscription.end_date and subscription.end_date > now:
+                    subscription.end_date = subscription.end_date + timedelta(days=30)
+                else:
+                    subscription.end_date = now + timedelta(days=30)
 
-            session.commit()
-
-            # Логируем платеж в payment_history для защиты от потери данных
-            try:
-                payment_history = PaymentHistory(
-                    user_id=user.id,
-                    telegram_username=user.username,
-                    action='payment',
-                    tier=tier_enum,
-                    amount=payment['amount']['value'],
-                    payment_id=payment['id'],
-                    duration_days=30,
-                    start_date=subscription.start_date,
-                    end_date=subscription.end_date,
-                    details=json.dumps({
-                        'payment_method': payment.get('payment_method', {}).get('type'), 
-                        'status': payment.get('status'),
-                        'promo_code': promo_code
-                    })
-                )
-                session.add(payment_history)
                 session.commit()
-                logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}, promo_code={promo_code}")
-            except Exception as e:
-                logger.error(f"❌ Failed to log payment to history: {e}")
-                # Не падаем, платеж уже обработан
 
-            from payments import get_tier_name, TIER_PRICES
-            tier_name = get_tier_name(tier)
-            promo_msg = f" с промокодом {promo_code}" if promo_code else ""
-            await bot.send_message(int(user_id), f"Подписка {tier_name} актиироа{promo_msg}! Теперь у ас доступ ко сем премиум-фуциям.")
-
-            # Handle referral commission (20% of payment amount)
-            if user.referrer_id:
+                # Логируем платеж в payment_history для защиты от потери данных
                 try:
-                    referrer = session.query(User).filter_by(id=user.referrer_id).first()
-                    if referrer:
-                        # Calculate commission from actual payment amount
-                        payment_amount = float(payment['amount']['value'])
-                        commission_amount = int(payment_amount * 0.20)
-                        referrer.referral_balance += commission_amount
-                        session.commit()
-                        logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance}) from payment amount {payment_amount} RUB")
-                        
-                        # Notify referrer about commission
-                        try:
-                            await bot.send_message(
-                                int(referrer.telegram_id), 
-                                f"💰 Ваш реферал оплатил подписку! Вы получили {commission_amount} рублей комиссии. Текущий баланс: {referrer.referral_balance} рублей."
-                            )
-                        except Exception as e:
-                            logger.error(f"Failed to notify referrer {referrer.telegram_id} about commission: {e}")
+                    payment_history = PaymentHistory(
+                        user_id=user.id,
+                        telegram_username=user.username,
+                        action='payment',
+                        tier=tier_enum,
+                        amount=payment['amount']['value'],
+                        payment_id=payment['id'],
+                        duration_days=30,
+                        start_date=subscription.start_date,
+                        end_date=subscription.end_date,
+                        details=json.dumps({
+                            'payment_method': payment.get('payment_method', {}).get('type'), 
+                            'status': payment.get('status'),
+                            'promo_code': promo_code
+                        })
+                    )
+                    session.add(payment_history)
+                    session.commit()
+                    logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}, promo_code={promo_code}")
                 except Exception as e:
-                    logger.error(f"Error processing referral commission: {e}")
-                    session.rollback()
-        session.close()
+                    logger.error(f"❌ Failed to log payment to history: {e}")
+                    # Не падаем, платеж уже обработан
+
+                # Отправляем уведомление пользователю
+                if bot:
+                    try:
+                        from payments import get_tier_name, TIER_PRICES
+                        tier_name = get_tier_name(tier)
+                        promo_msg = f" с промокодом {promo_code}" if promo_code else ""
+                        await bot.send_message(int(user_id), f"Подписка {tier_name} активирована{promo_msg}! Теперь у вас доступ ко всем премиум-функциям.")
+                    except Exception as e:
+                        logger.error(f"Failed to notify user {user_id} about subscription: {e}")
+
+                # Handle referral commission (20% of payment amount)
+                if user.referrer_id:
+                    try:
+                        referrer = session.query(User).filter_by(id=user.referrer_id).first()
+                        if referrer:
+                            # Calculate commission from actual payment amount
+                            payment_amount = float(payment['amount']['value'])
+                            commission_amount = int(payment_amount * 0.20)
+                            referrer.referral_balance += commission_amount
+                            session.commit()
+                            logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance}) from payment amount {payment_amount} RUB")
+                            
+                            # Notify referrer about commission
+                            if bot:
+                                try:
+                                    await bot.send_message(
+                                        int(referrer.telegram_id), 
+                                        f"💰 Ваш реферал оплатил подписку! Вы получили {commission_amount} рублей комиссии. Текущий баланс: {referrer.referral_balance} рублей."
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Failed to notify referrer {referrer.telegram_id} about commission: {e}")
+                    except Exception as e:
+                        logger.error(f"Error processing referral commission: {e}")
+                        session.rollback()
+        except Exception as e:
+            logger.error(f"Error processing yookassa webhook: {e}", exc_info=True)
+            session.rollback()
+        finally:
+            session.close()
     return web.Response(text="OK")
 
 
@@ -1979,10 +2096,10 @@ async def get_user_id_from_request(request):
     user_id = session_req.get('user_id')
     logger.info(f"Session keys: {list(session_req.keys())}, user_id: {user_id}")
     
-    # Check for telegram_id in query parameters (for local testing)
+    # Check for telegram_id in query parameters (for local testing ONLY)
     if not user_id:
         telegram_id_param = request.query.get('telegram_id')
-        if telegram_id_param:
+        if telegram_id_param and LOCAL:
             try:
                 user_id = int(telegram_id_param)
                 logger.info(f"Set user_id from query parameter: {user_id}")
@@ -1997,7 +2114,7 @@ async def get_user_id_from_request(request):
 
 async def api_partners_handler(request):
     def pluralize_task(count):
-        """Склое слоа 'задача' по числу"""
+        """Склонение слова 'задача' по числу"""
         last_digit = count % 10
         last_two_digits = count % 100
 
@@ -2214,13 +2331,13 @@ async def api_partners_handler(request):
                     if username in contacted_usernames:
                         reasons.append('уже общались')
                 if p.common_skills:
-                    reasons.append('общие ыки')
+                    reasons.append('общие навыки')
                 if p.common_interests:
                     reasons.append('общие интересы')
                 if p.common_goals:
                     reasons.append('общие цели')
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
-                    reasons.append('из ашего города')
+                    reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
         # Calculate common_tasks for regular partners - улучшенная логика с частичным совпадением
@@ -2835,8 +2952,8 @@ async def api_partners_handler(request):
         try:
             if 'session_db' in locals():
                 session_db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Session cleanup error: {e}")
 
 
 async def api_elite_partners_handler(request):
@@ -3910,13 +4027,12 @@ async def api_accept_delegated_task_handler(request):
             # Accept task: status -> in_progress, delegation_status -> accepted
             task.status = 'in_progress'
             task.delegation_status = 'accepted'
-            task.updated_at = datetime.now(pytz.UTC)
 
             # Create interaction record
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
-                content=f'Задача "{task.title}" принята и зята  работу'
+                content=f'Задача "{task.title}" принята и взята в работу'
             )
             session_db.add(interaction)
 
@@ -3972,13 +4088,12 @@ async def api_reject_delegated_task_handler(request):
             # Update task status to rejected
             task.status = 'rejected'
             task.delegation_status = 'rejected'
-            task.updated_at = datetime.now(pytz.UTC)
 
             # Create interaction record
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
-                content=f'Задача "{task.title}" откло'
+                content=f'Задача "{task.title}" отклонена'
             )
             session_db.add(interaction)
 
@@ -3986,7 +4101,7 @@ async def api_reject_delegated_task_handler(request):
 
             return web.json_response({
                 'success': True,
-                'message': f'Задача "{task.title}" откло'
+                'message': f'Задача "{task.title}" отклонена'
             })
 
         finally:
@@ -4031,7 +4146,7 @@ async def api_update_profile_handler(request):
 
             return web.json_response({
                 'success': True,
-                'message': 'Профиль облен'
+                'message': 'Профиль обновлён'
             })
 
         finally:
@@ -4111,8 +4226,8 @@ async def get_feed_handler(request):
                         blocked_list = json.loads(blocked_json)
                         if user.id in blocked_list:
                             blocked_by_users.add(profile_uid)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Failed to parse blocked_contacts for user {profile_uid}: {e}")
             except Exception as e:
                 logger.warning(f"[FEED] Failed to check blocked_contacts: {e}")
 
@@ -4660,6 +4775,8 @@ async def api_reminders_handler(request):
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found', 'reminders': []}, status=404)
         tasks = session_db.query(Task).filter_by(user_id=user.id).all()
     finally:
         session_db.close()
@@ -4709,6 +4826,7 @@ async def on_startup(app):
     logger.info("Session middleware set up")
     
     # Синхрозируем users.subscription_tier с subscriptions.tier при старте
+    session_db = None
     try:
         from datetime import datetime
         import pytz
@@ -4761,12 +4879,14 @@ async def on_startup(app):
         if rating_synced_count > 0:
             session_db.commit()
             logger.info(f"✅ Synced {rating_synced_count} user ratings with profiles on startup")
-        
-        session_db.close()
     except Exception as e:
         logger.error(f"❌ Error syncing subscription tiers on startup: {e}")
+    finally:
+        if session_db:
+            session_db.close()
 
     # Очищаем накопленную историю диалогов (содержит галлюцинации)
+    session_db = None
     try:
         session_db = Session()
         users_with_history = session_db.query(User).filter(User.conversation_context.isnot(None)).all()
@@ -4777,9 +4897,11 @@ async def on_startup(app):
         if cleared:
             session_db.commit()
             logger.info(f"✅ Cleared conversation history for {cleared} users (anti-hallucination reset)")
-        session_db.close()
     except Exception as e:
         logger.error(f"❌ Error clearing conversation history: {e}")
+    finally:
+        if session_db:
+            session_db.close()
 
     # Set webhook for production mode
     if bot and not LOCAL:
@@ -5159,11 +5281,14 @@ async def update_timezone_handler(request):
 
         session_db = Session()
         try:
-            user = session_db.query(User).filter_by(id=user_id).first()
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if user:
                 user.timezone = timezone
                 session_db.commit()
                 logger.info(f"Updated timezone for user {user_id} to {timezone}")
+            else:
+                logger.warning(f"User not found for telegram_id={user_id} in update_timezone")
+                return web.json_response({'status': 'error', 'message': 'User not found'}, status=404)
         finally:
             session_db.close()
 
@@ -5280,8 +5405,8 @@ async def api_profile_handler(request):
         user_now = base_now.astimezone(user_tz)
 
         months = [
-            'яаря', 'фераля', 'марта', 'апреля', 'мая', 'июня',
-            'июля', 'агуста', 'сентября', 'октября', 'ября', 'декабря'
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
         ]
         current_time = user_now.strftime('%H:%M')
         current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
@@ -5339,13 +5464,13 @@ async def apply_promo_code_handler(request):
     user_id = session_obj.get('user_id')
 
     if not user_id:
-        return web.json_response({'success': False, 'message': 'Не аторизоан'}, status=401)
+        return web.json_response({'success': False, 'message': 'Не авторизован'}, status=401)
 
     data = await request.post()
     promo_code = data.get('promo_code', '').strip().upper()
 
     if not promo_code:
-        return web.json_response({'success': False, 'message': 'Ведите промокод'})
+        return web.json_response({'success': False, 'message': 'Введите промокод'})
 
     session = Session()
     try:
@@ -5356,13 +5481,13 @@ async def apply_promo_code_handler(request):
         # Проеряем промокод
         promo = session.query(PromoCode).filter_by(code=promo_code).first()
         if not promo:
-            return web.json_response({'success': False, 'message': 'Неерный промокод'})
+            return web.json_response({'success': False, 'message': 'Неверный промокод'})
 
         # Проеряем срок дейстия - приодим обе даты к одму формату
         now = datetime.now(dt_timezone.utc)
         expires_at = promo.expires_at.replace(tzinfo=dt_timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
         if expires_at < now:
-            return web.json_response({'success': False, 'message': 'Срок дейстия промокода истек'})
+            return web.json_response({'success': False, 'message': 'Срок действия промокода истёк'})
 
         # Проверяем лимит использований
         if promo.max_uses is not None and promo.used_count >= promo.max_uses:
@@ -5371,7 +5496,7 @@ async def apply_promo_code_handler(request):
         # Проверяем, использовал ли уже этот пользователь этот промокод
         import json
         used_by_users = json.loads(promo.used_by_users or '[]')
-        if user.id in used_by_users:
+        if str(user.telegram_id) in [str(u) for u in used_by_users]:
             return web.json_response({'success': False, 'message': 'Вы уже использовали этот промокод'})
 
         # Актиируем подписку
@@ -5411,8 +5536,8 @@ async def apply_promo_code_handler(request):
         # Добавляем пользователя в список использовавших
         import json
         used_by_users = json.loads(promo.used_by_users or '[]')
-        if user.id not in used_by_users:
-            used_by_users.append(user.id)
+        if str(user.telegram_id) not in [str(u) for u in used_by_users]:
+            used_by_users.append(str(user.telegram_id))
         promo.used_by_users = json.dumps(used_by_users)
 
         # Устарешие поля для соместимости

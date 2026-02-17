@@ -551,8 +551,8 @@ async def _build_proactive_context(user_id):
             try:
                 user_tz = pytz.timezone(user.timezone)
                 user_now = base_now.astimezone(user_tz)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Invalid user timezone '{user.timezone}': {e}")
         
         ctx['user_tz'] = user_tz
         ctx['user_now'] = user_now
@@ -565,8 +565,8 @@ async def _build_proactive_context(user_id):
             try:
                 decrypted = decrypt_data(user.memory)
                 user_memory = f"\nИнформация о пользователе: {decrypted}"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to decrypt user memory for user {user.id}: {e}")
         
         # Профиль
         profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -998,8 +998,8 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
                         overdue_found.append(t.title)
                         continue
                     time_str = f" (на {rt.astimezone(user_tz).strftime('%H:%M')})"
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to format reminder time for task '{t.title}': {e}")
             desc = f" — {t.description[:80]}" if t.description else ""
             upcoming.append(f"• {t.title}{time_str}{desc}")
         

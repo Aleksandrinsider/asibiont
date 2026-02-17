@@ -67,8 +67,8 @@ class ContextBuilder:
                                             user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
                                             task_time = task.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_tz)
                                             time_str = f" в {task_time.strftime('%H:%M')}"
-                                        except:
-                                            pass
+                                        except Exception as e:
+                                            logger.debug(f"Failed to format task time: {e}")
 
                                     hints.append(f"🔔 @{username} планирует: {task.title}{time_str}")
 
@@ -130,9 +130,12 @@ class ContextBuilder:
                         logger.error(f"[ALERT] Contact alert error: {e}")
                         continue
 
-            # Commit updates to last_triggered_at
+            # Flush updates to last_triggered_at (don't commit - caller owns the session)
             if hints:
-                session.commit()
+                try:
+                    session.flush()
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"[PREMIUM_ALERTS] Error: {e}")
@@ -208,7 +211,7 @@ class ContextBuilder:
                                 tomorrow_tasks.append(t.title)
                             else:
                                 future_tasks.append(t.title)
-                        except:
+                        except Exception:
                             future_tasks.append(t.title)
                     else:
                         future_tasks.append(t.title)
@@ -243,8 +246,8 @@ class ContextBuilder:
                         try:
                             from .memory import decrypt_data
                             note = f" — {decrypt_data(ct.completion_notes)[:50]}"
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Failed to decrypt completion notes: {e}")
                     recent_completed.append(f"✅ {ct.title}{note}")
                 if recent_completed:
                     hints.append("📈 НЕДАВНО ЗАВЕРШЕНО:\n" + "\n".join(f"  {c}" for c in recent_completed))
