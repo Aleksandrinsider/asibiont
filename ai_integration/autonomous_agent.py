@@ -162,19 +162,41 @@ class HybridAutonomousAgent:
 
     # ===== ADAPTIVE TOOL CHOICE =====
 
-    def _determine_tool_choice(self, user_message):
+    def _determine_tool_choice(self, user_message, profile_data=None, tasks_data=None):
         """Определяет нужно ли принудительно требовать tool calls.
         
-        Для явных запросов данных (задачи, новости, партнёры) — required,
-        чтобы AI гарантированно использовал инструменты.
-        Для остального — auto.
+        Философия: агент — ПРОАКТИВНЫЙ партнёр. Инструменты нужны
+        не только по запросу, но и для обогащения ЛЮБОГО ответа.
+        Если есть данные профиля — всегда есть повод использовать инструменты.
         """
         msg_lower = user_message.lower()
         
+        # 1. Явные запросы данных — всегда required
         for category, keywords in TOOL_REQUIRED_KEYWORDS.items():
             if any(kw in msg_lower for kw in keywords):
                 logger.info(f"[ADAPTIVE] force_tool_choice=required for '{category}' "
                             f"keywords in: '{user_message[:50]}'")
+                return "required"
+        
+        # 2. Есть профиль с данными — ПРОАКТИВНОСТЬ
+        # Партнёр всегда приходит с информацией, находит возможности, проверяет задачи
+        if profile_data:
+            has_context = (
+                profile_data.get('interests') or
+                profile_data.get('goals') or
+                profile_data.get('skills') or
+                profile_data.get('position')
+            )
+            if has_context or tasks_data:
+                # Короткие подтверждения (ок, да, нет, ага) — не заставляем
+                trivial_words = ['ок', 'окей', 'ладно', 'хорошо', 'да', 'нет',
+                                 'ага', 'угу', 'понял', 'ясно', 'спасибо',
+                                 'спс', 'благодарю', 'пока', 'до свидания']
+                if msg_lower.strip() in trivial_words or len(msg_lower.strip()) <= 3:
+                    return "auto"
+                
+                logger.info(f"[ADAPTIVE] force_tool_choice=required — "
+                            f"proactive partner mode (profile+context exists)")
                 return "required"
         
         return "auto"
@@ -569,8 +591,10 @@ class HybridAutonomousAgent:
                 messages.extend(history)
             messages.append({"role": "user", "content": user_message})
 
-            # Адаптивный tool_choice
-            initial_tool_choice = self._determine_tool_choice(user_message)
+            # Адаптивный tool_choice (с учётом профиля и задач)
+            initial_tool_choice = self._determine_tool_choice(
+                user_message, profile_data=profile_data, tasks_data=tasks_data
+            )
 
             # ===== Tool calling loop (max 4 итераций) =====
             all_execution_results = []

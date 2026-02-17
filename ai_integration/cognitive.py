@@ -156,19 +156,19 @@ class CognitiveEngine:
 
         # Анализ намерения
         intent_hints = {
-            'greeting': '🎯 ПРИВЕТСТВИЕ: 3-5 предложений минимум. Поздоровайся + поделись мыслью/наблюдением + задай содержательный вопрос. ЗАПРЕЩЕНО пересказывать профиль. Если ПРОФИЛЬ ПУСТОЙ — спроси о человеке естественно. Есть задачи/цели → спроси о прогрессе. НЕ предлагай задачу на завтра — человек здесь СЕЙЧАС.',
+            'greeting': '🎯 ПРИВЕТСТВИЕ: ОБЯЗАТЕЛЬНО используй инструменты! Если есть интересы/цели → вызови get_news_trends(topic=тема). Есть задачи → list_tasks. Профиль пустой → спроси о человеке. ПРИНЕСИ ценность С ПЕРВОГО сообщения.',
             'farewell': '🎯 ПРОЩАНИЕ: Коротко, тепло. Напомнить о планах.',
-            'task_management': '🎯 ЗАДАЧИ: Только предлагать, не создавать. Проверить конфликты.',
-            'information_request': '🎯 ИНФОРМАЦИЯ: Research + анализ, но ОДИН раз за 3-4 сообщения. Не сырые факты.',
-            'advice_seeking': '🎯 СОВЕТ: Задай 1-2 уточняющих вопроса естественно в тексте (НЕ списком). Потом дай ОДНУ рекомендацию с аргументами. 3-5 предложений.',
-            'emotional_sharing': '🎯 ЭМОЦИИ: Эмпатия ПЕРВАЯ. Слушать, не решать. Один вопрос.',
-            'general': '🎯 ОБЩЕЕ: Если пользователь описывает проблему — СНАЧАЛА задай уточняющие вопросы, потом советуй. Тихо обновляй профиль если узнал новое. Если говорит чем ЗАНЯТ СЕЙЧАС — помогай, а не предлагай записать на завтра.'
+            'task_management': '🎯 ЗАДАЧИ: Выполни действие с задачей. Проверь конфликты.',
+            'information_request': '🎯 ИНФОРМАЦИЯ: Вызови research_topic или get_news_trends. Дай факты + свой анализ.',
+            'advice_seeking': '🎯 СОВЕТ: Вызови research_topic если нужны свежие данные по теме. Задай 1-2 уточняющих вопроса. Дай ОДНУ конкретную рекомендацию с аргументами. Если тема касается интересов/целей пользователя — подкрепи фактами через инструменты.',
+            'emotional_sharing': '🎯 ЭМОЦИИ: Эмпатия ПЕРВАЯ. Слушать, не решать. Можешь вызвать list_tasks чтобы понять нагрузку.',
+            'general': '🎯 ОБЩЕЕ: ДУМАЙ какой инструмент ОБОГАТИТ ответ. Пользователь рассказывает о сфере → get_news_trends по этой сфере. Описывает проблему → research_topic для поиска решений. Есть задачи → list_tasks для контекста. Тихо обновляй профиль через update_profile. НЕ отвечай пустым текстом когда можешь ПРИНЕСТИ данные.'
         }
         if intent in intent_hints:
             hints.append(intent_hints[intent])
 
-        # Стратегия ответа
-        hints.append("🧠 СТРАТЕГИЯ: Вовлекай. Каждый ответ = мысль + вопрос или предложение. Короткий ответ = плохой ответ. Тебе ВСЕГДА есть чем заняться: профиль, задачи, цели, контакты, темы.")
+        # Стратегия ответа — ПРОАКТИВНЫЙ подход
+        hints.append("🧠 СТРАТЕГИЯ: Ты ПРОАКТИВНЫЙ ПАРТНЁР. Перед каждым ответом спроси себя: какой инструмент ОБОГАТИТ этот ответ? get_news_trends — для актуальных новостей по теме. research_topic — для глубокого анализа. list_tasks — для контекста задач. find_relevant_contacts_for_task — для нетворкинга. Текстовый ответ без инструмента = УПУЩЕННАЯ возможность. Ищи возможности для роста, риски, релевантные связи. ВЕДИ пользователя, не жди запросов.")
 
         if not hints:
             return ""
@@ -434,13 +434,25 @@ class CognitiveEngine:
                    'НЕ пересказывай то что уже знаешь из профиля. '
                    'Обязательно update_profile когда ответит.')
         elif is_greeting and missing_fields:
-            priority = 'engage_and_profile'
-            action = 'engage_then_ask'
+            # Есть профиль, но не полный — дай ценность + узнай пустое поле
             field_hint = missing_fields[0]
-            why = (f'Приветствие + незаполнен: {field_hint}. '
-                   'Дай ценность (мысль/наблюдение по теме пользователя) + '
-                   'естественно узнай о {field_hint}. '
-                   'НЕ пересказывай профиль.')
+            # Если есть интересы/цели — сначала research, потом вопрос
+            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills')
+            if research_topic_str:
+                priority = 'proactive_research'
+                action = 'research_and_ask'
+                why = (f'Приветствие + незаполнен: {field_hint}. '
+                       f'ОБЯЗАТЕЛЬНО ВЫЗОВИ get_news_trends(topic="{research_topic_str}") '
+                       'чтобы найти актуальную новость/тренд по теме пользователя. '
+                       'Поделись находкой + естественно узнай о {field_hint}. '
+                       'НЕ пересказывай профиль.')
+            else:
+                priority = 'engage_and_profile'
+                action = 'engage_then_ask'
+                why = (f'Приветствие + незаполнен: {field_hint}. '
+                       'Вызови list_tasks чтобы увидеть задачи, или '
+                       'задай живой вопрос о {field_hint}. '
+                       'НЕ пересказывай профиль.')
         elif intent == 'information_request':
             priority = 'research'
             action = 'research_topic'
@@ -450,19 +462,54 @@ class CognitiveEngine:
             action = 'give_opinion'
             why = 'Дай СВОЁ мнение, НЕ делай research — ты эксперт'
         elif is_greeting:
-            priority = 'engage'
-            action = 'share_value'
-            why = ('Приветствие. НЕ задавай пустой вопрос "чем занят?". '
-                   'Поделись ценностью: мыслью по теме пользователя, наблюдением по задачам/целям, '
-                   'или полезным фактом. НЕ пересказывай профиль.')
+            # Полный профиль + приветствие — проактивное исследование
+            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills')
+            if research_topic_str and profile_data:
+                priority = 'proactive_research'
+                action = 'research_and_share'
+                why = (f'Приветствие + полный профиль. '
+                       f'ОБЯЗАТЕЛЬНО ВЫЗОВИ get_news_trends(topic="{research_topic_str}") '
+                       'или research_topic(query="актуальное в сфере {research_topic_str}"). '
+                       'Найди КОНКРЕТНЫЙ факт, новость, обновление по теме пользователя. '
+                       'Поделись находкой и предложи конкретное ДЕЙСТВИЕ: задачу, обсуждение, шаг. '
+                       'Будь партнёром который ПРИНЁС ценность, а не спросил "чем занят?".')
+            elif tasks_data:
+                priority = 'tasks_review'
+                action = 'review_tasks'
+                why = ('Приветствие + есть задачи. Вызови list_tasks чтобы увидеть текущие задачи. '
+                       'Спроси о прогрессе по самой важной или просроченной.')
+            else:
+                priority = 'engage'
+                action = 'share_value'
+                why = ('Приветствие без данных для research. '
+                       'Поделись полезной МЫСЛЬЮ или наблюдением. '
+                       'НЕ задавай пустой вопрос "чем занят?".')
         elif not tasks_data:
-            priority = 'tasks'
-            action = 'suggest_task'
-            why = 'Предложи задачу на основе контекста'
+            # Нет задач — нужна проактивность
+            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills') if profile_data else None
+            if research_topic_str:
+                priority = 'proactive_explore'
+                action = 'research_and_suggest'
+                why = (f'Нет задач. Вызови get_news_trends(topic="{research_topic_str}") '
+                       'чтобы найти возможность/тренд/новость. '
+                       'На основе находки предложи конкретное действие или задачу.')
+            else:
+                priority = 'tasks'
+                action = 'suggest_task'
+                why = 'Нет задач и нет данных для research. Предложи задачу или узнай о человеке.'
         else:
-            priority = 'proactive'
-            action = 'chat'
-            why = 'Дай ценность из контекста'
+            # Есть задачи — проактивный анализ
+            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills') if profile_data else None
+            if research_topic_str:
+                priority = 'proactive_enrich'
+                action = 'enrich_and_engage'
+                why = (f'Вызови get_news_trends(topic="{research_topic_str}") или list_tasks. '
+                       'Найди свежую новость/тренд и свяжи с задачами или целями пользователя. '
+                       'ВЕДИ пользователя — покажи возможности, предупреди о рисках.')
+            else:
+                priority = 'proactive'
+                action = 'review_tasks'
+                why = 'Вызови list_tasks чтобы проверить статус задач. Спроси о прогрессе.'
         
         # Определяем тон
         if emotion in ['tired', 'sad', 'anxious']:
