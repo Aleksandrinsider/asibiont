@@ -31,7 +31,7 @@ import traceback
 import pytz
 from datetime import datetime, timezone
 
-from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_REASONER_MODEL
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Goal
 from .prompts import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
@@ -121,8 +121,6 @@ class HybridAutonomousAgent:
         
         Args:
             model: Модель для вызова. По умолчанию DEEPSEEK_MODEL.
-                   Передать DEEPSEEK_REASONER_MODEL для R1 (глубокий анализ).
-                   R1 НЕ поддерживает tools и temperature — автоматически отключаются.
         """
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
@@ -131,21 +129,14 @@ class HybridAutonomousAgent:
         }
 
         chosen_model = model or DEEPSEEK_MODEL
-        is_reasoner = chosen_model == DEEPSEEK_REASONER_MODEL
 
         data = {
             "model": chosen_model,
             "messages": messages,
             "max_tokens": kwargs.pop("max_tokens", 1800),
+            "temperature": kwargs.pop("temperature", 0.7),
             **kwargs
         }
-
-        # R1 не поддерживает temperature — убираем
-        if not is_reasoner:
-            data["temperature"] = kwargs.pop("temperature", 0.7)
-        else:
-            kwargs.pop("temperature", None)
-            use_tools = False  # R1 не поддерживает function calling
 
         if use_tools:
             available_tools = get_available_tools(subscription_tier)
@@ -165,12 +156,7 @@ class HybridAutonomousAgent:
                 if resp.status == 200:
                     result = await resp.json()
                     # Логируем результат
-                    if is_reasoner:
-                        msg = result.get('choices', [{}])[0].get('message', {})
-                        reasoning = msg.get('reasoning_content', '')
-                        logger.info(f"[AI:R1] Reasoning {len(reasoning)} chars, "
-                                    f"content {len(msg.get('content', ''))} chars")
-                    elif use_tools:
+                    if use_tools:
                         msg = result.get('choices', [{}])[0].get('message', {})
                         tcs = msg.get('tool_calls', [])
                         if tcs:
@@ -184,156 +170,90 @@ class HybridAutonomousAgent:
 
     # ===== ADAPTIVE TOOL CHOICE =====
 
+    # Тривиальные сообщения — tool_choice=auto (не заставляем)
+    TRIVIAL_MESSAGES = [
+        'ок', 'окей', 'ладно', 'хорошо', 'да', 'нет',
+        'ага', 'угу', 'понял', 'ясно', 'спасибо',
+        'спс', 'благодарю', 'пока', 'до свидания', 'кек', 'лол',
+    ]
+
     def _determine_tool_choice(self, user_message, profile_data=None, tasks_data=None):
-        """Определяет нужно ли принудительно требовать tool calls.
+        """Определяет tool_choice через multi-signal scoring.
         
-        Философия: агент — ПРОАКТИВНЫЙ партнёр. Инструменты нужны
-        не только по запросу, но и для обогащения ЛЮБОГО ответа.
-        Если есть данные профиля — всегда есть повод использовать инструменты.
+        Суммирует баллы из нескольких независимых сигналов:
+        - Явные keyword-запросы данных (+3.0)
+        - Intent: greeting/task_management/info_request (+2.0)
+        - Наличие профиля с данными (+1.5)
+        - Наличие задач (+1.0)
+        - Длина сообщения > 5 слов (+0.5)
+        - Тривиальные/прощальные сообщения (-3.0)
+        
+        required при score >= 2.0, иначе auto.
         """
-        msg_lower = user_message.lower()
-        
-        # 1. Явные запросы данных — всегда required
-        for category, keywords in TOOL_REQUIRED_KEYWORDS.items():
-            if any(kw in msg_lower for kw in keywords):
-                logger.info(f"[ADAPTIVE] force_tool_choice=required for '{category}' "
-                            f"keywords in: '{user_message[:50]}'")
-                return "required"
-        
-        # 2. Есть профиль с данными — ПРОАКТИВНОСТЬ
-        # Партнёр всегда приходит с информацией, находит возможности, проверяет задачи
-        if profile_data:
-            has_context = (
-                profile_data.get('interests') or
-                profile_data.get('goals') or
-                profile_data.get('skills') or
-                profile_data.get('position')
-            )
-            if has_context or tasks_data:
-                # Короткие подтверждения (ок, да, нет, ага) — не заставляем
-                trivial_words = ['ок', 'окей', 'ладно', 'хорошо', 'да', 'нет',
-                                 'ага', 'угу', 'понял', 'ясно', 'спасибо',
-                                 'спс', 'благодарю', 'пока', 'до свидания']
-                if msg_lower.strip() in trivial_words or len(msg_lower.strip()) <= 3:
-                    return "auto"
-                
-                logger.info(f"[ADAPTIVE] force_tool_choice=required — "
-                            f"proactive partner mode (profile+context exists)")
-                return "required"
-        
-        return "auto"
-
-    # ===== DEEP REASONING (R1) — MULTI-SIGNAL SCORING =====
-
-    # Сигналы для глубокого анализа (weight +1.5 каждый)
-    DEEP_REASONING_SIGNALS = [
-        'проанализируй', 'разбери', 'сравни', 'оцени стратегию',
-        'составь план', 'стратегия', 'глубокий анализ', 'подробно разбери',
-        'помоги разобраться', 'почему так', 'в чём причина', 'как лучше всего',
-        'оптимальный вариант', 'плюсы и минусы', 'за и против',
-        'детальный план', 'пошаговый план', 'исследуй глубоко',
-    ]
-
-    # Негативные сигналы — CRUD, простые запросы (weight -2 каждый)
-    DEEP_REASONING_ANTI_SIGNALS = [
-        'создай задачу', 'добавь задачу', 'удали задачу', 'мои задачи',
-        'список задач', 'привет', 'пока', 'погода', 'новости',
-        'который час', 'напомни', 'сделал', 'готово',
-    ]
-
-    # Структурные маркеры аналитического мышления (weight +1 каждый)
-    STRUCTURAL_MARKERS = [
-        r'или\s+.+\s+или',         # альтернативы: "или X или Y"
-        r'с одной стороны',          # взвешивание
-        r'с другой стороны',
-        r'\bплюс\w*\b.*\bминус',   # плюсы/минусы
-        r'как\s+(?:лучше|правильн)', # поиск оптимума
-        r'почему\s+(?:так|не|именно)',# причинно-следственные
-        r'в\s+чём\s+(?:разница|отличие|причина)',  # сравнение/анализ
-        r'стоит\s+ли',              # оценка целесообразности
-        r'что\s+(?:выбрать|предпочесть)', # выбор
-    ]
-
-    # Порог для включения R1
-    DEEP_REASONING_THRESHOLD = 3.0
-
-    def _needs_deep_reasoning(self, user_message):
-        """Определяет нужен ли R1 через multi-signal scoring.
-        
-        Суммирует баллы по нескольким независимым сигналам:
-        - Ключевые слова глубокого анализа (+1.5)
-        - Анти-сигналы CRUD/простые (-2.0)
-        - Intent из CognitiveEngine (+2 advice/info, -2 greeting/task)
-        - Длина сообщения (+1 за >15 слов, +1 за >30)
-        - Структурные маркеры (+1 каждый, max +2)
-        - Количество вопросов (+1 за >=2)
-        
-        R1 включается при score >= DEEP_REASONING_THRESHOLD (3.0).
-        """
-        msg_lower = user_message.lower()
+        msg_lower = user_message.lower().strip()
         words = msg_lower.split()
         score = 0.0
-        signals = []  # для логирования
-        
-        # 1. Анти-сигналы CRUD — быстрый выход
-        anti_count = sum(1 for s in self.DEEP_REASONING_ANTI_SIGNALS if s in msg_lower)
-        if anti_count:
-            score -= anti_count * 2.0
-            signals.append(f'anti:{-anti_count * 2.0}')
-        
-        # 2. Ключевые слова глубокого анализа (+1.5, max +3.0)
-        deep_count = sum(1 for s in self.DEEP_REASONING_SIGNALS if s in msg_lower)
-        deep_bonus = min(deep_count * 1.5, 3.0)
-        if deep_bonus:
-            score += deep_bonus
-            signals.append(f'keywords:+{deep_bonus}')
-        
-        # 3. Intent из CognitiveEngine
+        signals = []
+
+        # 0. Тривиальные — быстрый выход
+        if msg_lower in self.TRIVIAL_MESSAGES or len(msg_lower) <= 3:
+            logger.info(f"[TOOL_CHOICE] Score=trivial → auto for: '{user_message[:40]}'")
+            return "auto"
+
+        # 1. Явные keyword-запросы данных (+3.0 за категорию)
+        for category, keywords in TOOL_REQUIRED_KEYWORDS.items():
+            if any(kw in msg_lower for kw in keywords):
+                score += 3.0
+                signals.append(f'keyword({category}):+3')
+                break  # одной категории достаточно
+
+        # 2. Intent из CognitiveEngine (+2.0 для greeting/task/info/advice)
         from .cognitive import CognitiveEngine
         intent = CognitiveEngine.classify_intent(user_message)
-        intent_weights = {
-            'advice_seeking': 2.0,
-            'information_request': 1.5,
-            'emotional_sharing': 0.5,
-            'general': 0.0,
-            'task_management': -2.0,
-            'greeting': -2.0,
-            'farewell': -2.0,
+        intent_tool_weights = {
+            'greeting': 2.0,       # первое впечатление — ВСЕГДА с инструментами
+            'task_management': 2.0,
+            'information_request': 2.0,
+            'advice_seeking': 1.5,
+            'emotional_sharing': 1.0,
+            'general': 0.5,
+            'farewell': -1.0,      # прощание — не нужны инструменты
         }
-        intent_w = intent_weights.get(intent, 0.0)
-        if intent_w:
-            score += intent_w
-            signals.append(f'intent({intent}):{intent_w:+.1f}')
-        
-        # 4. Длина сообщения — длинные = сложнее
-        if len(words) > 30:
-            score += 2.0
-            signals.append('len>30:+2')
-        elif len(words) > 15:
+        iw = intent_tool_weights.get(intent, 0.0)
+        if iw:
+            score += iw
+            signals.append(f'intent({intent}):{iw:+.1f}')
+
+        # 3. Профиль: любые данные = контекст для проактивности (+1.5)
+        if profile_data:
+            has_any = any(profile_data.get(f) for f in 
+                         ['city', 'interests', 'goals', 'skills', 'position', 'company'])
+            if has_any:
+                score += 1.5
+                signals.append('profile:+1.5')
+
+        # 4. Есть задачи — можно проверить статус (+1.0)
+        if tasks_data:
             score += 1.0
-            signals.append('len>15:+1')
-        elif len(words) < 5:
-            score -= 1.0
-            signals.append('len<5:-1')
-        
-        # 5. Структурные маркеры аналитического мышления (+1, max +2)
-        struct_count = sum(1 for p in self.STRUCTURAL_MARKERS if re.search(p, msg_lower))
-        struct_bonus = min(struct_count * 1.0, 2.0)
-        if struct_bonus:
-            score += struct_bonus
-            signals.append(f'struct:+{struct_bonus}')
-        
-        # 6. Количество вопросов (? в тексте)
-        question_count = msg_lower.count('?')
-        if question_count >= 2:
-            score += 1.0
-            signals.append(f'questions({question_count}):+1')
-        
-        triggered = score >= self.DEEP_REASONING_THRESHOLD
-        logger.info(f"[R1] Score={score:.1f} (threshold={self.DEEP_REASONING_THRESHOLD}) "
-                    f"signals=[{', '.join(signals)}] → {'R1' if triggered else 'V3'} "
-                    f"for: '{user_message[:60]}'")
-        return triggered
+            signals.append('tasks:+1.0')
+
+        # 5. Длина сообщения > 5 слов — вероятно содержательный запрос (+0.5)
+        if len(words) > 5:
+            score += 0.5
+            signals.append('len>5:+0.5')
+
+        # 6. Прощальные маркеры — не надо инструменты (-2.0)
+        farewell_words = ['пока', 'до свидания', 'спокойной', 'до завтра']
+        if any(fw in msg_lower for fw in farewell_words):
+            score -= 2.0
+            signals.append('farewell:-2.0')
+
+        THRESHOLD = 2.0
+        result = "required" if score >= THRESHOLD else "auto"
+        logger.info(f"[TOOL_CHOICE] Score={score:.1f} (threshold={THRESHOLD}) "
+                    f"signals=[{', '.join(signals)}] → {result} "
+                    f"for: '{user_message[:50]}'")
+        return result
 
     _TOOL_PROGRESS_MAP = {
         'get_tasks': 'Смотрю задачи...',
@@ -444,53 +364,6 @@ class HybridAutonomousAgent:
                        f"freed ~{len(removed) // 3} tokens")
         
         return base_prompt, history
-
-    async def _deep_analysis(self, user_message, context_prompt, max_tokens=2000):
-        """Вызывает DeepSeek R1 для глубокого анализа перед основным ответом.
-        
-        R1 думает медленнее, но глубже — reasoning_content содержит
-        цепочку рассуждений. Результат вставляется как контекст
-        для основной модели (V3), которая формирует финальный ответ с tools.
-        
-        Returns:
-            str — аналитический результат R1 для вставки в контекст
-        """
-        try:
-            messages = [
-                {"role": "system", "content": (
-                    "Ты аналитический движок. Твоя задача — ГЛУБОКО проанализировать "
-                    "запрос пользователя и дать структурированный анализ.\n\n"
-                    f"КОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{context_prompt[:2000]}\n\n"
-                    "Формат ответа:\n"
-                    "1. Суть запроса (1 предложение)\n"
-                    "2. Ключевые факторы (3-5 пунктов)\n"
-                    "3. Рекомендации (конкретные шаги)\n"
-                    "4. Возможные риски (если есть)\n"
-                    "Отвечай на русском, кратко и по делу."
-                )},
-                {"role": "user", "content": user_message}
-            ]
-            
-            # Отправляем прогресс
-            if self._progress_callback:
-                await self._progress_callback("🧠 Глубокий анализ...")
-            
-            result = await self.call_ai(
-                messages, model=DEEPSEEK_REASONER_MODEL,
-                max_tokens=max_tokens, use_tools=False)
-            
-            msg = result['choices'][0]['message']
-            content = msg.get('content', '')
-            reasoning = msg.get('reasoning_content', '')
-            
-            logger.info(f"[R1] Analysis done: {len(content)} chars content, "
-                       f"{len(reasoning)} chars reasoning")
-            
-            return content if content else ''
-            
-        except Exception as e:
-            logger.warning(f"[R1] Deep analysis failed, falling back: {e}")
-            return ''
 
     # ===== КОНТЕКСТ =====
 
@@ -885,15 +758,6 @@ class HybridAutonomousAgent:
                 messages.extend(history)
             messages.append({"role": "user", "content": user_message})
 
-            # ═══ DEEP REASONING (R1) ДЛЯ СЛОЖНЫХ ЗАДАЧ ═══
-            if self._needs_deep_reasoning(user_message):
-                r1_analysis = await self._deep_analysis(
-                    user_message, base_prompt[:2000], max_tokens=2000)
-                if r1_analysis:
-                    # Вставляем анализ R1 как системный контекст для V3
-                    base_prompt += f"\n\n[ГЛУБОКИЙ АНАЛИЗ R1]\n{r1_analysis}"
-                    messages[0] = {"role": "system", "content": base_prompt}
-
             # Адаптивный tool_choice (с учётом профиля и задач)
             initial_tool_choice = self._determine_tool_choice(
                 user_message, profile_data=profile_data, tasks_data=tasks_data
@@ -1256,13 +1120,6 @@ class HybridAutonomousAgent:
             }
 
             system_prompt = base_prompt + mode_instructions.get(mode, '')
-
-            # R1 для task_assist — глубокий анализ перед помощью
-            if mode == 'task_assist':
-                r1_analysis = await self._deep_analysis(
-                    instruction, system_prompt[:2000], max_tokens=1500)
-                if r1_analysis:
-                    system_prompt += f"\n\n[ГЛУБОКИЙ АНАЛИЗ R1]\n{r1_analysis}"
 
             # Собираем messages — БЕЗ истории диалога (это системное сообщение)
             messages = [{"role": "system", "content": system_prompt}]

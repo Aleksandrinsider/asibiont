@@ -601,7 +601,7 @@
                         </div>
                         {% if logged_in %}
                         <div class="chat-input">
-                            <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
+                            <input type="text" id="message-input" placeholder="Сообщение...">
                             <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
                             <div style="display: flex; gap: 4px; flex-direction: row;">
                                 <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn">
@@ -1140,6 +1140,12 @@
                 sendChatMessage();
             }
         }
+
+        // Bind after DOM is ready — avoids "handleKeyPress is not defined" error
+        (function() {
+            var input = document.getElementById('message-input');
+            if (input) input.addEventListener('keypress', handleKeyPress);
+        })();
 
         function login() {
             // Открываем Telegram бота для авторизации
