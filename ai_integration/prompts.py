@@ -49,24 +49,25 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     # Profile — с аналитикой что есть и чего нет
     profile = ""
     if profile_data:
-        FIELD_LABELS = {
-            'city': 'Город', 'company': 'Компания', 'position': 'Должность',
-            'goals': 'Цели', 'skills': 'Навыки', 'interests': 'Интересы',
-            'telegram_channel': 'Telegram'
+        # Формат профиля как внутренние заметки — не для пересказа пользователю
+        FIELD_KEYS = {
+            'city': 'geo', 'company': 'org', 'position': 'role',
+            'goals': 'aim', 'skills': 'can', 'interests': 'into',
+            'telegram_channel': 'tg'
         }
         filled_parts = []
         empty_fields = []
-        for k, label in FIELD_LABELS.items():
+        for k, short in FIELD_KEYS.items():
             if profile_data.get(k):
-                filled_parts.append(f"{label}: {profile_data[k]}")
+                filled_parts.append(f"{short}={profile_data[k]}")
             elif k != 'telegram_channel':  # telegram_channel необязателен
-                empty_fields.append(label.lower())
+                empty_fields.append(short)
         if filled_parts:
-            profile = "\nПРОФИЛЬ (заполнено):\n" + "\n".join(filled_parts[:7])
+            profile = "\n[internal_notes: " + " | ".join(filled_parts[:7]) + "]"
         if empty_fields:
-            profile += f"\nПРОФИЛЬ (не заполнено): {', '.join(empty_fields)}"
+            profile += f"\n[❓ не знаешь: {', '.join(empty_fields)} — узнай через живой вопрос]"
     else:
-        profile = "\nПРОФИЛЬ: пустой (ничего не известно о пользователе)"
+        profile = "\n[❗ профиль пуст: НИЧЕГО не знаешь о человеке — узнай через живой разговор]"
 
     # Search history
     search_context = ""

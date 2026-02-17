@@ -165,27 +165,27 @@ class ContextBuilder:
             profile_has = []
             profile_missing = []
             ALL_FIELDS = {
-                'city': 'город', 'company': 'компания', 'position': 'должность',
-                'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы'
+                'city': 'geo', 'company': 'org', 'position': 'role',
+                'goals': 'aim', 'skills': 'can', 'interests': 'into'
             }
             if profile:
-                for field, label in ALL_FIELDS.items():
+                for field, short in ALL_FIELDS.items():
                     val = getattr(profile, field, None)
                     if val:
-                        profile_has.append(f"{label}: {val[:50]}")
+                        profile_has.append(f"{short}={val[:50]}")
                     else:
-                        profile_missing.append(label)
+                        profile_missing.append(short)
             else:
                 profile_missing = list(ALL_FIELDS.values())
 
             if profile_missing:
-                hints.append(f"👤 ПРОФИЛЬ — не заполнено: {', '.join(profile_missing)}")
-            if profile_has:
-                hints.append(f"👤 ПРОФИЛЬ — есть: {'; '.join(profile_has)}")
+                hints.append(f"\u2753 не знаешь: {', '.join(profile_missing)} — узнай ЕСТЕСТВЕННО через живой вопрос")
 
             # Если профиль совсем пустой — это приоритет, но НЕ блокирует остальной контекст
-            if len(profile_missing) >= 5:
-                hints.append("⚡ ДЕЙСТВИЕ: узнай о человеке через живой разговор, не допрашивай")
+            if len(profile_missing) >= 4:
+                hints.append("⚡ ПРИОРИТЕТ: профиль почти пуст — БЕЗ него ты работаешь ВСЛЕПУЮ. Задай 1 конкретный вопрос о человеке")
+            elif len(profile_missing) >= 2:
+                hints.append(f"⚡ Узнай о {profile_missing[0]} через живой разговор")
 
             # ═══ ЗАДАЧИ: точки контроля ═══
             tasks = session.query(Task).filter(
@@ -367,7 +367,7 @@ class ContextBuilder:
                 hints.extend(alert_hints[:2])
 
             if hints:
-                return "\n\nФОКУС:\n" + "\n".join(hints)
+                return "\n\n[internal_context]\n" + "\n".join(hints)
 
             return ""
 

@@ -218,6 +218,29 @@ class CognitiveEngine:
                     text = ' '.join(cleaned)
                     issues.append(f'autoresponder:{phrase}')
 
+        # 3b. Пересказ профиля — критическая ошибка
+        profile_leak_patterns = [
+            r'вижу[,.]?\s*(?:что\s+)?ты\s+',
+            r'ты\s+основател',
+            r'судя\s+по\s+профил',
+            r'из\s+твоего\s+профил',
+            r'в\s+тво[еём]\s+профил',
+            r'у\s+тебя\s+(?:есть\s+)?интерес',
+            r'интересное\s+направление',
+            r'мощное\s+сочетание',
+            r'на\s+стыке\s+',
+        ]
+        for pattern in profile_leak_patterns:
+            match = re.search(pattern, text.lower())
+            if match:
+                # Удаляем предложение с утечкой
+                sentences = re.split(r'(?<=[.!?])\s+', text)
+                cleaned = [s for s in sentences if not re.search(pattern, s.lower())]
+                if cleaned:
+                    text = ' '.join(cleaned)
+                    issues.append(f'profile_leak:{pattern[:20]}')
+                break
+
         # 4. Убираем нумерованные списки (конвертируем в текст)
         # "1. Сделай X\n2. Потом Y" → "Сначала сделай X. Потом Y."
         numbered_pattern = re.findall(r'^\d+[\.\)]\s+(.+)$', text, re.MULTILINE)
@@ -392,10 +415,32 @@ class CognitiveEngine:
         intent = CognitiveEngine.classify_intent(user_message)
         
         # Определяем приоритет действия
-        if not profile_data:
+        # Определяем пустые поля
+        missing_fields = []
+        if profile_data:
+            for k in ['goals', 'skills', 'interests', 'position', 'city']:
+                if not profile_data.get(k):
+                    missing_fields.append(k)
+        else:
+            missing_fields = ['goals', 'skills', 'interests', 'position', 'city']
+        
+        is_greeting = intent == 'greeting' or any(w in user_message.lower() for w in ['привет', 'хай', 'здравству', 'доброе', 'добрый'])
+        
+        if not profile_data or len(missing_fields) >= 3:
             priority = 'profile'
             action = 'ask_profile'
-            why = 'Заполнить профиль для персонализации'
+            why = ('ПРОФИЛЬ ПУСТОЙ! Без него ты бесполезен. '
+                   'Задай КОНКРЕТНЫЙ живой вопрос: "Чем сейчас занимаешься?", "Над чем работаешь?". '
+                   'НЕ пересказывай то что уже знаешь из профиля. '
+                   'Обязательно update_profile когда ответит.')
+        elif is_greeting and missing_fields:
+            priority = 'engage_and_profile'
+            action = 'engage_then_ask'
+            field_hint = missing_fields[0]
+            why = (f'Приветствие + незаполнен: {field_hint}. '
+                   'Дай ценность (мысль/наблюдение по теме пользователя) + '
+                   'естественно узнай о {field_hint}. '
+                   'НЕ пересказывай профиль.')
         elif intent == 'information_request':
             priority = 'research'
             action = 'research_topic'
@@ -404,6 +449,12 @@ class CognitiveEngine:
             priority = 'opinion'
             action = 'give_opinion'
             why = 'Дай СВОЁ мнение, НЕ делай research — ты эксперт'
+        elif is_greeting:
+            priority = 'engage'
+            action = 'share_value'
+            why = ('Приветствие. НЕ задавай пустой вопрос "чем занят?". '
+                   'Поделись ценностью: мыслью по теме пользователя, наблюдением по задачам/целям, '
+                   'или полезным фактом. НЕ пересказывай профиль.')
         elif not tasks_data:
             priority = 'tasks'
             action = 'suggest_task'
