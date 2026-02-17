@@ -310,9 +310,9 @@ class CognitiveEngine:
 
     @staticmethod
     def build_cognitive_hints(user_message, profile_data=None):
-        """Строит контекст для мышления: наблюдения + вопросы, не команды.
+        """Строит рабочий контекст: что знаешь, чего не хватает, какие задачи.
         
-        Предоставляет AI сигналы для рассуждения, а не предписания что делать.
+        Предоставляет AI сигналы для деловой работы — не философию, а конкретику.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
@@ -321,20 +321,20 @@ class CognitiveEngine:
         observations = []
 
         # --- Эмоциональный сигнал ---
-        emotion_labels = {
-            'tired': 'усталость/выгорание',
-            'excited': 'подъём/энтузиазм',
-            'frustrated': 'раздражение',
-            'anxious': 'тревога',
-            'sad': 'грусть/тяжесть',
-            'confused': 'растерянность',
+        emotion_actions = {
+            'tired': 'Усталость — предложи конкретную помощь: перенести задачи, расставить приоритеты, снять нагрузку',
+            'excited': 'Подъём — зафиксируй энергию: предложи конкретный следующий шаг или задачу',
+            'frustrated': 'Раздражение — помоги решить проблему, не сочувствуй пустыми словами',
+            'anxious': 'Тревога — разложи ситуацию по шагам, дай план действий',
+            'sad': 'Тяжело — будь мягче, но предложи конкретное действие для улучшения',
+            'confused': 'Растерянность — структурируй информацию, дай ясный план',
         }
-        if emotion != 'neutral' and emotion in emotion_labels:
-            observations.append(f"Эмоция: {emotion_labels[emotion]} — что стоит за этим?")
+        if emotion != 'neutral' and emotion in emotion_actions:
+            observations.append(emotion_actions[emotion])
 
         # --- Текущая деятельность ---
         if is_active:
-            observations.append("Человек СЕЙЧАС занят делом — пришёл за помощью в текущем, не за планированием")
+            observations.append("Пользователь СЕЙЧАС работает — помогай в моменте, не планируй на завтра")
 
         # --- Профиль: что знаешь и чего не знаешь ---
         field_labels = {
@@ -353,20 +353,25 @@ class CognitiveEngine:
             unknown = list(field_labels.values())
 
         if unknown:
-            blind_level = "слеп" if len(unknown) >= 3 else "частично слеп"
-            observations.append(
-                f"Профиль: {blind_level} (не знаешь: {', '.join(unknown)}). "
-                f"Без этих данных твои советы — общие фразы, а не живая помощь"
-            )
+            missing_str = ', '.join(unknown)
+            if len(unknown) >= 3:
+                observations.append(
+                    f"КРИТИЧНО: профиль почти пуст (нет: {missing_str}). "
+                    f"ОБЯЗАТЕЛЬНО задай 1-2 вопроса для заполнения. Объясни зачем: точные рекомендации, поиск людей, релевантные тренды"
+                )
+            else:
+                observations.append(
+                    f"Не заполнено: {missing_str}. Уточни при удобном случае"
+                )
 
         # --- Намерение ---
         intent_context = {
-            'greeting': 'Приветствие — первое впечатление, покажи что ты не просто бот',
-            'farewell': 'Прощание — кратко, тепло',
-            'task_management': 'Работа с задачами — действуй инструментом',
-            'information_request': 'Запрос информации — нужны данные',
-            'advice_seeking': 'Просит совета — сформируй СВОЁ мнение',
-            'emotional_sharing': 'Делится эмоциями — сначала услышь, потом помогай',
+            'greeting': 'Приветствие — отчитайся: проверь задачи, сообщи статус, предложи пользу. Не просто "привет"',
+            'farewell': 'Прощание — кратко подведи итог что сделано',
+            'task_management': 'Работа с задачами — ДЕЙСТВУЙ инструментом, потом отчёт',
+            'information_request': 'Запрос информации — НАЙДИ данные через research_topic, дай конкретику',
+            'advice_seeking': 'Просит совета — сформируй СВОЁ мнение с аргументами, предложи план',
+            'emotional_sharing': 'Делится эмоциями — пойми контекст, предложи конкретную помощь',
         }
         if intent in intent_context:
             observations.append(intent_context[intent])
@@ -374,7 +379,7 @@ class CognitiveEngine:
         if not observations:
             return ""
 
-        result = "\n\n[НАБЛЮДЕНИЯ — подумай что это значит для ЭТОГО человека СЕЙЧАС]\n"
+        result = "\n\n[РАБОЧИЙ КОНТЕКСТ — что учесть в ответе]\n"
         result += "\n".join(f"• {o}" for o in observations)
         return result
 
@@ -471,14 +476,14 @@ class CognitiveEngine:
         # 5b. Убираем множественные пустые строки (оставляем максимум одну)
         text = re.sub(r'\n{3,}', '\n\n', text)
 
-        # 6. Обрезаем ТОЛЬКО если ответ неоправданно огромный (>2000 символов)
-        if len(text) > 2000:
-            cut = text[:1800]
+        # 6. Обрезаем ТОЛЬКО если ответ неоправданно огромный (>3000 символов)
+        if len(text) > 3000:
+            cut = text[:2800]
             last_end = max(cut.rfind('.'), cut.rfind('!'), cut.rfind('?'))
-            if last_end > 800:
+            if last_end > 1200:
                 text = cut[:last_end + 1]
             else:
-                text = cut[:1500]
+                text = cut[:2500]
             issues.append('truncated')
 
         return text.strip(), issues
@@ -610,10 +615,10 @@ class CognitiveEngine:
 
     @staticmethod
     def plan_response_strategy(user_message, profile_data, tasks_data):
-        """Компактная оценка ситуации — даёт AI контекст для САМОСТОЯТЕЛЬНОГО решения.
+        """Рабочая оценка ситуации — определяет приоритет, тон и задачу для ответа.
         
-        Вместо предписаний "ВЫЗОВИ X" — предоставляет наблюдения о ситуации,
-        чтобы AI мог рассуждать и сам решить что делать.
+        Формирует конкретную рабочую стратегию: что делать, какие инструменты применить,
+        какие данные собрать, какие вопросы задать.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
@@ -633,56 +638,61 @@ class CognitiveEngine:
         
         profile_blind = len(missing_fields) >= 3
         
-        # Определяем тон
+        # Определяем тон — деловой с поправкой на эмоции
         if emotion in ('tired', 'sad', 'anxious'):
-            tone = 'мягкий, с эмпатией'
+            tone = 'мягкий но деловой — пойми ситуацию, предложи конкретную помощь'
         elif emotion == 'excited':
-            tone = 'энергичный, поддерживающий'
+            tone = 'энергичный — зафиксируй успех, предложи следующий шаг'
         elif emotion == 'frustrated':
-            tone = 'спокойный, конструктивный'
+            tone = 'конструктивный — помоги решить проблему'
         else:
-            tone = 'живой, как партнёр'
+            tone = 'деловой, компетентный помощник'
         
-        # Формируем ситуацию — что видишь
+        # Формируем рабочую задачу
         situation_parts = []
         
         if profile_blind:
-            situation_parts.append(f"Почти НИЧЕГО не знаешь о человеке (нет: {', '.join(missing_fields[:3])})")
+            situation_parts.append(f"КРИТИЧНО: профиль пуст (нет: {', '.join(missing_fields[:3])}). Задай 1-2 вопроса для заполнения")
         elif missing_fields:
             field_labels = {'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы', 'position': 'сфера', 'city': 'город'}
             labels = [field_labels.get(f, f) for f in missing_fields]
-            situation_parts.append(f"Не знаешь: {', '.join(labels)}")
+            situation_parts.append(f"Уточни: {', '.join(labels)}")
         
         if is_active:
-            situation_parts.append("Человек СЕЙЧАС работает — помогай в моменте")
+            situation_parts.append("Пользователь работает — помогай в моменте")
         
         if tasks_data:
-            situation_parts.append(f"Активных задач: {len(tasks_data)}")
+            situation_parts.append(f"Активных задач: {len(tasks_data)} — проверь статус, сообщи о просроченных")
         else:
-            situation_parts.append("Задач нет")
+            situation_parts.append("Задач нет — предложи структурировать текущую работу")
         
         if known_topics:
-            situation_parts.append(f"Известные темы: {', '.join(known_topics[:3])}")
+            situation_parts.append(f"Известно: {', '.join(known_topics[:3])}")
         
-        # Формируем вопрос для размышления
+        # Формируем конкретную рабочую задачу для ответа
         if profile_blind:
-            thinking_q = "Что ты можешь узнать о человеке ЕСТЕСТВЕННО в этом разговоре?"
+            work_task = "Заполни профиль: задай 1-2 конкретных вопроса (сфера, навыки, цели). Объясни зачем — точные рекомендации, поиск людей"
         elif is_active:
-            thinking_q = "Чем конкретно ты можешь помочь ПРЯМО СЕЙЧАС?"
-        elif intent == 'greeting' and known_topics:
-            thinking_q = "Что из того что ты знаешь о человеке позволяет ОБОГАТИТЬ ответ свежими данными?"
+            work_task = "Помоги в текущей задаче: уточни детали, предложи ресурсы, используй инструменты"
+        elif intent == 'greeting':
+            if known_topics:
+                work_task = "Отчитайся: проверь задачи (list_tasks), сообщи статус, предложи актуальную пользу по интересам/целям"
+            else:
+                work_task = "Представься как помощник, покажи чем полезен, задай профильные вопросы"
         elif intent == 'advice_seeking':
-            thinking_q = "Какое СВОЁ мнение ты можешь сформировать, и нужны ли тебе дополнительные данные?"
+            work_task = "Сформируй аргументированное мнение. Если нужны данные — используй research_topic"
+        elif intent == 'information_request':
+            work_task = "НАЙДИ данные через research_topic/get_news_trends, дай конкретный ответ с фактами"
         elif not tasks_data and not profile_blind:
-            thinking_q = "Чем человек занят СЕЙЧАС и как ты можешь быть полезен?"
+            work_task = "Спроси над чем пользователь работает, предложи создать задачи/цели для структуры"
         else:
-            thinking_q = "Что ОДНО самое ценное ты можешь дать в этом ответе?"
+            work_task = "Дай максимально полезный ответ: факты, рекомендации, конкретные предложения"
         
         strategy = {
-            'priority': 'profile' if profile_blind else ('help_now' if is_active else 'engage'),
+            'priority': 'profile' if profile_blind else ('help_now' if is_active else 'deliver_value'),
             'tone': tone,
-            'action': 'think',  # AI сам решает
-            'why': f"Ситуация: {'; '.join(situation_parts)}. Подумай: {thinking_q}",
+            'action': 'work',  # AI работает, не размышляет
+            'why': f"Задача: {work_task}. Контекст: {'; '.join(situation_parts)}",
             'missing_fields': missing_fields,
             'extract_profile': bool(missing_fields)
         }
@@ -700,7 +710,7 @@ class CognitiveEngine:
             'quality': 'good' if not issues else 'needs_improvement',
             'issues': issues,
             'tools_effective': len(tools_used) > 0,
-            'human_like': 'high' if len(response.split()) < 50 else 'medium'
+            'human_like': 'high' if len(response.split()) < 100 else 'medium'
         }
         
         logger.info(f"[REFLECTION] {reflection}")

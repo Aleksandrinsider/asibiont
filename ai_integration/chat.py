@@ -1128,10 +1128,11 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
     if engagement.get('ignored_count', 0) > engagement.get('total_proactive', 0) * 0.6:
         parts.append("Часто игнорирует — пиши только с реальной пользой")
     
-    # === КАК ДУМАТЬ ===
+    # === КАК РАБОТАТЬ ===
     parts.append("""
-Посмотри на ВСЕ данные. Найди ОДНУ мысль ценную именно ЭТОМУ человеку СЕЙЧАС.
-3-6 предложений. Живой тон. Конкретика. Не придумывай данные. Не перечисляй функции.""")
+Ты — помощник, который отчитывается. Посмотри на ВСЕ данные.
+Ответ должен содержать: что ты проверил/нашёл + конкретное предложение + вопрос для уточнения.
+5-10 предложений. Деловой тон. Конкретика. Не придумывай данные. Не перечисляй функции.""")
     
     return "\n".join(parts), selected['type']
 
@@ -1181,7 +1182,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         # Для task_help используем режим task_assist с увеличенными лимитами
         if selected_type == 'task_help':
             mode = 'task_assist'
-            max_tokens = 1200
+            max_tokens = 1500
             max_iterations = 3
             instruction = (
                 "Помоги пользователю решить задачу из контекста выше. "
@@ -1190,7 +1191,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             )
         else:
             mode = 'proactive'
-            max_tokens = 800
+            max_tokens = 1200
             max_iterations = 2
 
         result = await agent.generate_system_message(
