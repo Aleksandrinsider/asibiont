@@ -668,10 +668,17 @@ class HybridAutonomousAgent:
             base_prompt = ctx['base_prompt']
             sub_tier = ctx['sub_tier']
 
+            # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
+            from .conversation_history import get_conversation_history
+            full_history = get_conversation_history(user_id, session=None, limit=16)
+
             # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
             from .cognitive import CognitiveEngine
             profile_data = ctx.get('profile_data', {})
-            cognitive_hints = CognitiveEngine.build_cognitive_hints(user_message, profile_data=profile_data)
+            cognitive_hints = CognitiveEngine.build_cognitive_hints(
+                user_message, profile_data=profile_data,
+                conversation_history=full_history
+            )
             
             # Оценка ситуации — контекст для самостоятельного рассуждения AI
             tasks_data = ctx.get('tasks', [])
@@ -736,10 +743,6 @@ class HybridAutonomousAgent:
                     base_prompt += f"\n{proactive_hint}"
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
-
-            # Собираем историю с учётом старого контекста
-            from .conversation_history import get_conversation_history
-            full_history = get_conversation_history(user_id, session=None, limit=16)
 
             if len(full_history) > 10:
                 old_msgs = full_history[:-8]

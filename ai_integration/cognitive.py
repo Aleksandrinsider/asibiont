@@ -309,10 +309,11 @@ class CognitiveEngine:
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def build_cognitive_hints(user_message, profile_data=None):
+    def build_cognitive_hints(user_message, profile_data=None, conversation_history=None):
         """Строит рабочий контекст: что знаешь, чего не хватает, какие задачи.
         
-        Предоставляет AI сигналы для деловой работы — не философию, а конкретику.
+        Включает anti-repetition анализ и конкретные вопросы для заполнения профиля.
+        conversation_history — список {role, content} для анализа предыдущих ответов.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
@@ -336,6 +337,11 @@ class CognitiveEngine:
         if is_active:
             observations.append("Пользователь СЕЙЧАС работает — помогай в моменте, не планируй на завтра")
 
+        # --- Anti-repetition: анализ предыдущих ответов ---
+        anti_rep = CognitiveEngine._build_anti_repetition(conversation_history)
+        if anti_rep:
+            observations.append(anti_rep)
+
         # --- Профиль: что знаешь и чего не знаешь ---
         field_labels = {
             'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы',
@@ -354,14 +360,15 @@ class CognitiveEngine:
 
         if unknown:
             missing_str = ', '.join(unknown)
+            specific_q = CognitiveEngine._suggest_profile_question(unknown, conversation_history)
             if len(unknown) >= 3:
                 observations.append(
                     f"КРИТИЧНО: профиль почти пуст (нет: {missing_str}). "
-                    f"ОБЯЗАТЕЛЬНО задай 1-2 вопроса для заполнения. Объясни зачем: точные рекомендации, поиск людей, релевантные тренды"
+                    f"{specific_q}"
                 )
             else:
                 observations.append(
-                    f"Не заполнено: {missing_str}. Уточни при удобном случае"
+                    f"Не заполнено: {missing_str}. {specific_q}"
                 )
 
         # --- Намерение ---
@@ -382,6 +389,108 @@ class CognitiveEngine:
         result = "\n\n[РАБОЧИЙ КОНТЕКСТ — что учесть в ответе]\n"
         result += "\n".join(f"• {o}" for o in observations)
         return result
+
+    # ═══════════════════════════════════════════════════════════════
+    # ANTI-REPETITION & TARGETED PROFILE QUESTIONS
+    # ═══════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _build_anti_repetition(conversation_history):
+        """Анализирует последний ответ бота и возвращает антиповтор-подсказку."""
+        if not conversation_history:
+            return None
+
+        last_bot_msgs = [m for m in conversation_history if m.get('role') == 'assistant']
+        if not last_bot_msgs:
+            return None
+
+        last_response = last_bot_msgs[-1].get('content', '').lower()
+        if not last_response:
+            return None
+
+        repeated_patterns = []
+
+        if 'проверил задачи' in last_response or 'у вас пока нет' in last_response or 'нет активных' in last_response:
+            repeated_patterns.append('"проверил задачи / нет задач"')
+
+        if 'вижу, что вы' in last_response or 'вижу что вы' in last_response or 'вижу, что ты' in last_response:
+            repeated_patterns.append('"вижу что вы..."')
+
+        if 'интересуетесь' in last_response or 'интересуешься' in last_response:
+            repeated_patterns.append('пересказ интересов')
+
+        if 'работаете в' in last_response or 'работаешь в' in last_response:
+            repeated_patterns.append('пересказ сферы работы')
+
+        if 'могу помочь с' in last_response or 'чем могу помочь' in last_response:
+            repeated_patterns.append('"могу помочь с..."')
+
+        if ('над чем' in last_response and 
+            ('работаете' in last_response or 'сосредоточен' in last_response or 'работаешь' in last_response)):
+            repeated_patterns.append('"над чем работаете?"')
+
+        if 'анализ' in last_response and 'поиск' in last_response and ('структурирован' in last_response or 'структурировани' in last_response):
+            repeated_patterns.append('перечисление своих возможностей')
+
+        # Повтор фраз: если >50% слов первого предложения совпадают
+        if len(last_bot_msgs) >= 2:
+            prev = last_bot_msgs[-2].get('content', '').lower()
+            curr = last_response
+            prev_start = set(prev.split()[:12])
+            curr_start = set(curr.split()[:12])
+            if prev_start and curr_start:
+                overlap = len(prev_start & curr_start) / max(len(prev_start), len(curr_start))
+                if overlap > 0.5:
+                    repeated_patterns.append('начало ответа повторяет предыдущее из предыдущих ответов')
+
+        if repeated_patterns:
+            return (
+                f"⚠️ АНТИПОВТОР: в прошлом ответе ты УЖЕ говорил: {', '.join(repeated_patterns)}. "
+                f"НЕ ПОВТОРЯЙ. Другая структура, другой вопрос, другое начало. Дай НОВУЮ ценность"
+            )
+
+        return None
+
+    @staticmethod
+    def _suggest_profile_question(missing_labels, conversation_history=None):
+        """Генерирует конкретный вопрос для пустого поля профиля, избегая повторов."""
+        field_questions = {
+            'цели': 'Спроси КОНКРЕТНО: "К какой цели сейчас идёшь? Что хочешь достичь в ближайшие месяцы?"',
+            'навыки': 'Спроси КОНКРЕТНО: "Какие технологии/навыки считаешь своими сильными сторонами?"',
+            'интересы': 'Спроси КОНКРЕТНО: "Что интересно помимо работы? Какие темы отслеживаешь?"',
+            'сфера/роль': 'Спроси КОНКРЕТНО: "В какой сфере работаешь? Кем?"',
+            'город': 'Спроси КОНКРЕТНО: "В каком городе? Смогу находить людей рядом и давать погоду"',
+        }
+
+        already_asked = set()
+        if conversation_history:
+            last_bot_msgs = [m.get('content', '') for m in conversation_history
+                             if m.get('role') == 'assistant'][-2:]
+            combined = ' '.join(last_bot_msgs).lower()
+
+            asked_patterns = {
+                'цели': ['цел', 'достичь', 'хочешь', 'стремишься', 'планируешь'],
+                'навыки': ['навык', 'технолог', 'умеешь', 'владеешь', 'стек', 'сильные стороны'],
+                'интересы': ['интерес', 'увлечен', 'хобби', 'отслеживаешь', 'помимо работы'],
+                'сфера/роль': ['сфер', 'работаешь', 'роль', 'должность', 'чем занимаешься', 'работаете'],
+                'город': ['город', 'живёшь', 'живешь', 'откуда'],
+            }
+
+            for label, patterns in asked_patterns.items():
+                if any(p in combined for p in patterns):
+                    already_asked.add(label)
+
+        # Выбираем первое незаданное
+        for label in missing_labels:
+            if label not in already_asked and label in field_questions:
+                return field_questions[label]
+
+        # Все уже спрашивали — попроси по-другому
+        for label in missing_labels:
+            if label in field_questions:
+                return f"Уточни {label} — задай вопрос ИНАЧЕ, не повторяй формулировку"
+
+        return "Уточни недостающие данные профиля при удобном случае"
 
     # ═══════════════════════════════════════════════════════════════
     # ПРОГРАММНАЯ ВАЛИДАЦИЯ ОТВЕТА (Quality Gate)
@@ -428,15 +537,18 @@ class CognitiveEngine:
 
         # 3b. Пересказ профиля — критическая ошибка
         profile_leak_patterns = [
-            r'вижу[,.]?\s*(?:что\s+)?ты\s+',
-            r'ты\s+основател',
+            r'вижу[,.]?\s*(?:что\s+)?(?:ты|вы)\s+',
+            r'(?:ты|вы)\s+основател',
             r'судя\s+по\s+профил',
-            r'из\s+твоего\s+профил',
-            r'в\s+тво[еём]\s+профил',
-            r'у\s+тебя\s+(?:есть\s+)?интерес',
+            r'из\s+(?:твоего|вашего)\s+профил',
+            r'в\s+(?:тво[еём]|вашем)\s+профил',
+            r'у\s+(?:тебя|вас)\s+(?:есть\s+)?интерес',
             r'интересное\s+направление',
             r'мощное\s+сочетание',
             r'на\s+стыке\s+',
+            r'знаю,?\s+что\s+(?:ты|вы)',
+            r'(?:ты|вы)\s+(?:интересуетесь|интересуешься|увлекаешься|увлекаетесь)',
+            r'(?:твой|ваш)\s+профиль\s+(?:говорит|показывает|содержит)',
         ]
         for pattern in profile_leak_patterns:
             match = re.search(pattern, text.lower())
