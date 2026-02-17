@@ -115,9 +115,22 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     if not profile_complete and profile_missing:
         missing_str = ', '.join(profile_missing)
         if len(profile_missing) >= 3:
-            profile_instruction = f"\n\n⚠️ ПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). ЭТО ПРИОРИТЕТ №1 — узнай о человеке через живой вопрос. Не \"заполни профиль\", а естественный вопрос: \"Чем занимаешься?\", \"Какие планы сейчас?\" Каждый ответ сохраняй через update_profile.\n"
+            profile_instruction = (
+                f"\n\n🚨 КРИТИЧНО — ПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). "
+                f"Ты НЕ МОЖЕШЬ давать качественные советы вслепую. "
+                f"ОБЯЗАТЕЛЬНО задай ОДИН живой вопрос в этом ответе. "
+                f"Примеры: 'Чем занимаешься?', 'Какая главная цель сейчас?', 'Над чем работаешь?' "
+                f"Когда пользователь ответит — сразу update_profile. "
+                f"НЕ ищи новости пока не знаешь человека — сначала УЗНАЙ.\n"
+            )
+        elif len(profile_missing) >= 2:
+            profile_instruction = (
+                f"\n\n⚠️ ПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). "
+                f"ОБЯЗАТЕЛЬНО В КОНЦЕ ОТВЕТА задай живой вопрос о недостающем. "
+                f"Можешь дать ценность по теме + вопрос. Когда ответит — update_profile.\n"
+            )
         else:
-            profile_instruction = f"\n\n⚠️ ПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"
+            profile_instruction = f"\n\n💡 Профиль почти полный (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"
 
     # Выбираем версию промпта
     complexity = "medium"  # Можно определить на основе контекста
@@ -139,8 +152,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         task_section=task_section
     )
 
-    # Добавляем инструкцию по профилю ПЕРЕД основным промптом — она должна перебивать всё
-    if profile_instruction and len(profile_missing) >= 3:
+    # Добавляем инструкцию по профилю — ПЕРЕД промптом для 2+ пустых полей (чтобы перебивала всё)
+    if profile_instruction and len(profile_missing) >= 2:
         prompt = profile_instruction + "\n" + prompt
     elif profile_instruction:
         prompt += profile_instruction

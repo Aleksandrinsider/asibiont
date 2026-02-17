@@ -310,73 +310,73 @@ class CognitiveEngine:
 
     @staticmethod
     def build_cognitive_hints(user_message, profile_data=None):
-        """Строит глубокий когнитивный анализ для инъекции в системный промпт.
+        """Строит контекст для мышления: наблюдения + вопросы, не команды.
         
-        Добавляет внутренний монолог: эмоции, намерение, стратегия ответа.
+        Предоставляет AI сигналы для рассуждения, а не предписания что делать.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
         is_active = CognitiveEngine.detect_active_work(user_message)
 
-        hints = []
+        observations = []
 
-        # Эмоциональный анализ
-        if emotion != 'neutral' and emotion in CognitiveEngine.EMOTIONS:
-            hints.append(f"⚡ ЭМОЦИЯ: {CognitiveEngine.EMOTIONS[emotion][1]}")
-
-        # Детектор текущей деятельности
-        if is_active:
-            hints.append("🔥 АКТИВНАЯ РАБОТА: Пользователь СЕЙЧАС чем-то занят. Он пришёл за ПОМОЩЬЮ, а не за напоминанием. НЕ предлагай задачу на завтра. Включайся: спроси что конкретно нужно, предложи помощь, разбери задачу на шаги.")
-
-        # ═══ ПУСТЫЕ ПОЛЯ ПРОФИЛЯ — ВСЕГДА НАПОМИНАЕМ ═══
-        field_labels = {
-            'goals': 'цели',
-            'skills': 'навыки',
-            'interests': 'интересы',
-            'position': 'должность/сфера',
-            'city': 'город'
+        # --- Эмоциональный сигнал ---
+        emotion_labels = {
+            'tired': 'усталость/выгорание',
+            'excited': 'подъём/энтузиазм',
+            'frustrated': 'раздражение',
+            'anxious': 'тревога',
+            'sad': 'грусть/тяжесть',
+            'confused': 'растерянность',
         }
-        missing = []
+        if emotion != 'neutral' and emotion in emotion_labels:
+            observations.append(f"Эмоция: {emotion_labels[emotion]} — что стоит за этим?")
+
+        # --- Текущая деятельность ---
+        if is_active:
+            observations.append("Человек СЕЙЧАС занят делом — пришёл за помощью в текущем, не за планированием")
+
+        # --- Профиль: что знаешь и чего не знаешь ---
+        field_labels = {
+            'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы',
+            'position': 'сфера/роль', 'city': 'город'
+        }
+        known = []
+        unknown = []
         if profile_data:
-            for k in ['goals', 'skills', 'interests', 'position', 'city']:
-                if not profile_data.get(k):
-                    missing.append(field_labels[k])
+            for k, label in field_labels.items():
+                if profile_data.get(k):
+                    known.append(f"{label}: {str(profile_data[k])[:40]}")
+                else:
+                    unknown.append(label)
         else:
-            missing = list(field_labels.values())
-        
-        if missing:
-            top_field = missing[0]
-            hints.append(
-                f"❗ ПРОФИЛЬ НЕ ПОЛНЫЙ (не заполнено: {', '.join(missing)}). "
-                f"В ЭТОМ ОТВЕТЕ естественно узнай про '{top_field}' — "
-                f"задай ОДИН живой вопрос в контексте разговора. "
-                f"НЕ 'заполни профиль', а живой вопрос: "
-                f"для целей → 'К чему стремишься сейчас?', "
-                f"для навыков → 'Что умеешь лучше всего?', "
-                f"для интересов → 'Что тебя сейчас увлекает?'. "
-                f"Когда ответит — СРАЗУ update_profile."
+            unknown = list(field_labels.values())
+
+        if unknown:
+            blind_level = "слеп" if len(unknown) >= 3 else "частично слеп"
+            observations.append(
+                f"Профиль: {blind_level} (не знаешь: {', '.join(unknown)}). "
+                f"Без этих данных твои советы — общие фразы, а не живая помощь"
             )
 
-        # Анализ намерения
-        intent_hints = {
-            'greeting': '🎯 ПРИВЕТСТВИЕ: ОБЯЗАТЕЛЬНО используй инструменты! Если есть интересы/цели → вызови get_news_trends(topic=тема). Есть задачи → list_tasks. Профиль пустой → спроси о человеке. ПРИНЕСИ ценность С ПЕРВОГО сообщения.',
-            'farewell': '🎯 ПРОЩАНИЕ: Коротко, тепло. Напомнить о планах.',
-            'task_management': '🎯 ЗАДАЧИ: Выполни действие с задачей. Проверь конфликты.',
-            'information_request': '🎯 ИНФОРМАЦИЯ: Вызови research_topic или get_news_trends. Дай факты + свой анализ.',
-            'advice_seeking': '🎯 СОВЕТ: Вызови research_topic если нужны свежие данные по теме. Задай 1-2 уточняющих вопроса. Дай ОДНУ конкретную рекомендацию с аргументами. Если тема касается интересов/целей пользователя — подкрепи фактами через инструменты.',
-            'emotional_sharing': '🎯 ЭМОЦИИ: Эмпатия ПЕРВАЯ. Слушать, не решать. Можешь вызвать list_tasks чтобы понять нагрузку.',
-            'general': '🎯 ОБЩЕЕ: ДУМАЙ какой инструмент ОБОГАТИТ ответ. Пользователь рассказывает о сфере → get_news_trends по этой сфере. Описывает проблему → research_topic для поиска решений. Есть задачи → list_tasks для контекста. Тихо обновляй профиль через update_profile. НЕ отвечай пустым текстом когда можешь ПРИНЕСТИ данные.'
+        # --- Намерение ---
+        intent_context = {
+            'greeting': 'Приветствие — первое впечатление, покажи что ты не просто бот',
+            'farewell': 'Прощание — кратко, тепло',
+            'task_management': 'Работа с задачами — действуй инструментом',
+            'information_request': 'Запрос информации — нужны данные',
+            'advice_seeking': 'Просит совета — сформируй СВОЁ мнение',
+            'emotional_sharing': 'Делится эмоциями — сначала услышь, потом помогай',
         }
-        if intent in intent_hints:
-            hints.append(intent_hints[intent])
+        if intent in intent_context:
+            observations.append(intent_context[intent])
 
-        # Стратегия ответа — ПРОАКТИВНЫЙ подход
-        hints.append("🧠 СТРАТЕГИЯ: Ты ПРОАКТИВНЫЙ ПАРТНЁР. Перед каждым ответом спроси себя: какой инструмент ОБОГАТИТ этот ответ? get_news_trends — для актуальных новостей по теме. research_topic — для глубокого анализа. list_tasks — для контекста задач. find_relevant_contacts_for_task — для нетворкинга. Текстовый ответ без инструмента = УПУЩЕННАЯ возможность. Ищи возможности для роста, риски, релевантные связи. ВЕДИ пользователя, не жди запросов.")
-
-        if not hints:
+        if not observations:
             return ""
 
-        return "\n\n[КОГНИТИВНЫЙ АНАЛИЗ — ДУМАЙ ГЛУБОКО]\n" + "\n".join(hints)
+        result = "\n\n[НАБЛЮДЕНИЯ — подумай что это значит для ЭТОГО человека СЕЙЧАС]\n"
+        result += "\n".join(f"• {o}" for o in observations)
+        return result
 
     # ═══════════════════════════════════════════════════════════════
     # ПРОГРАММНАЯ ВАЛИДАЦИЯ ОТВЕТА (Quality Gate)
@@ -610,140 +610,82 @@ class CognitiveEngine:
 
     @staticmethod
     def plan_response_strategy(user_message, profile_data, tasks_data):
-        """Планирует стратегию ответа: что сказать, какие инструменты, почему.
+        """Компактная оценка ситуации — даёт AI контекст для САМОСТОЯТЕЛЬНОГО решения.
         
-        Returns: dict with strategy hints.
+        Вместо предписаний "ВЫЗОВИ X" — предоставляет наблюдения о ситуации,
+        чтобы AI мог рассуждать и сам решить что делать.
         """
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
+        is_active = CognitiveEngine.detect_active_work(user_message)
         
-        # Определяем приоритет действия
-        # Определяем пустые поля
+        # Определяем что знаем о человеке
         missing_fields = []
+        known_topics = []
         if profile_data:
             for k in ['goals', 'skills', 'interests', 'position', 'city']:
-                if not profile_data.get(k):
+                if profile_data.get(k):
+                    known_topics.append(str(profile_data[k])[:30])
+                else:
                     missing_fields.append(k)
         else:
             missing_fields = ['goals', 'skills', 'interests', 'position', 'city']
         
-        is_greeting = intent == 'greeting' or any(w in user_message.lower() for w in ['привет', 'хай', 'здравству', 'доброе', 'добрый'])
-        
-        if not profile_data or len(missing_fields) >= 3:
-            priority = 'profile'
-            action = 'ask_profile'
-            why = ('ПРОФИЛЬ ПУСТОЙ! Без него ты бесполезен. '
-                   'Задай КОНКРЕТНЫЙ живой вопрос: "Чем сейчас занимаешься?", "Над чем работаешь?". '
-                   'НЕ пересказывай то что уже знаешь из профиля. '
-                   'Обязательно update_profile когда ответит.')
-        elif is_greeting and missing_fields:
-            # Есть профиль, но не полный — дай ценность + узнай пустое поле
-            field_hint = missing_fields[0]
-            # Если есть интересы/цели — сначала research, потом вопрос
-            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills')
-            if research_topic_str:
-                priority = 'proactive_research'
-                action = 'research_and_ask'
-                why = (f'Приветствие + незаполнен: {field_hint}. '
-                       f'ОБЯЗАТЕЛЬНО ВЫЗОВИ get_news_trends(topic="{research_topic_str}") '
-                       f'чтобы найти актуальную новость/тренд по теме пользователя. '
-                       f'Поделись находкой + ОБЯЗАТЕЛЬНО задай живой вопрос про {field_hint}. '
-                       f'НЕ пересказывай профиль.')
-            else:
-                priority = 'engage_and_profile'
-                action = 'engage_then_ask'
-                why = (f'Приветствие + незаполнен: {field_hint}. '
-                       f'Вызови list_tasks чтобы увидеть задачи, или '
-                       f'задай живой вопрос о {field_hint}. '
-                       f'НЕ пересказывай профиль.')
-        elif intent == 'information_request':
-            priority = 'research'
-            action = 'research_topic'
-            why = 'Пользователь явно запрашивает информацию'
-        elif intent == 'advice_seeking':
-            priority = 'opinion'
-            action = 'give_opinion'
-            why = 'Дай СВОЁ мнение, НЕ делай research — ты эксперт'
-        elif is_greeting:
-            # Полный профиль + приветствие — проактивное исследование
-            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills')
-            if research_topic_str and profile_data:
-                priority = 'proactive_research'
-                action = 'research_and_share'
-                why = (f'Приветствие + полный профиль. '
-                       f'ОБЯЗАТЕЛЬНО ВЫЗОВИ get_news_trends(topic="{research_topic_str}") '
-                       'или research_topic(query="актуальное в сфере {research_topic_str}"). '
-                       'Найди КОНКРЕТНЫЙ факт, новость, обновление по теме пользователя. '
-                       'Поделись находкой и предложи конкретное ДЕЙСТВИЕ: задачу, обсуждение, шаг. '
-                       'Будь партнёром который ПРИНЁС ценность, а не спросил "чем занят?".')
-            elif tasks_data:
-                priority = 'tasks_review'
-                action = 'review_tasks'
-                why = ('Приветствие + есть задачи. Вызови list_tasks чтобы увидеть текущие задачи. '
-                       'Спроси о прогрессе по самой важной или просроченной.')
-            else:
-                priority = 'engage'
-                action = 'share_value'
-                why = ('Приветствие без данных для research. '
-                       'Поделись полезной МЫСЛЬЮ или наблюдением. '
-                       'НЕ задавай пустой вопрос "чем занят?".')
-        elif not tasks_data:
-            # Нет задач — нужна проактивность
-            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills') if profile_data else None
-            if research_topic_str:
-                priority = 'proactive_explore'
-                action = 'research_and_suggest'
-                why = (f'Нет задач. Вызови get_news_trends(topic="{research_topic_str}") '
-                       'чтобы найти возможность/тренд/новость. '
-                       'На основе находки предложи конкретное действие или задачу.')
-            else:
-                priority = 'tasks'
-                action = 'suggest_task'
-                why = 'Нет задач и нет данных для research. Предложи задачу или узнай о человеке.'
-        else:
-            # Есть задачи — проактивный анализ
-            research_topic_str = profile_data.get('interests') or profile_data.get('goals') or profile_data.get('skills') if profile_data else None
-            if research_topic_str:
-                priority = 'proactive_enrich'
-                action = 'enrich_and_engage'
-                why = (f'Вызови get_news_trends(topic="{research_topic_str}") или list_tasks. '
-                       'Найди свежую новость/тренд и свяжи с задачами или целями пользователя. '
-                       'ВЕДИ пользователя — покажи возможности, предупреди о рисках.')
-            else:
-                priority = 'proactive'
-                action = 'review_tasks'
-                why = 'Вызови list_tasks чтобы проверить статус задач. Спроси о прогрессе.'
+        profile_blind = len(missing_fields) >= 3
         
         # Определяем тон
-        if emotion in ['tired', 'sad', 'anxious']:
-            tone = 'empathetic'
+        if emotion in ('tired', 'sad', 'anxious'):
+            tone = 'мягкий, с эмпатией'
         elif emotion == 'excited':
-            tone = 'enthusiastic'
+            tone = 'энергичный, поддерживающий'
         elif emotion == 'frustrated':
-            tone = 'calm_supportive'
+            tone = 'спокойный, конструктивный'
         else:
-            tone = 'normal'
+            tone = 'живой, как партнёр'
+        
+        # Формируем ситуацию — что видишь
+        situation_parts = []
+        
+        if profile_blind:
+            situation_parts.append(f"Почти НИЧЕГО не знаешь о человеке (нет: {', '.join(missing_fields[:3])})")
+        elif missing_fields:
+            field_labels = {'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы', 'position': 'сфера', 'city': 'город'}
+            labels = [field_labels.get(f, f) for f in missing_fields]
+            situation_parts.append(f"Не знаешь: {', '.join(labels)}")
+        
+        if is_active:
+            situation_parts.append("Человек СЕЙЧАС работает — помогай в моменте")
+        
+        if tasks_data:
+            situation_parts.append(f"Активных задач: {len(tasks_data)}")
+        else:
+            situation_parts.append("Задач нет")
+        
+        if known_topics:
+            situation_parts.append(f"Известные темы: {', '.join(known_topics[:3])}")
+        
+        # Формируем вопрос для размышления
+        if profile_blind:
+            thinking_q = "Что ты можешь узнать о человеке ЕСТЕСТВЕННО в этом разговоре?"
+        elif is_active:
+            thinking_q = "Чем конкретно ты можешь помочь ПРЯМО СЕЙЧАС?"
+        elif intent == 'greeting' and known_topics:
+            thinking_q = "Что из того что ты знаешь о человеке позволяет ОБОГАТИТЬ ответ свежими данными?"
+        elif intent == 'advice_seeking':
+            thinking_q = "Какое СВОЁ мнение ты можешь сформировать, и нужны ли тебе дополнительные данные?"
+        elif not tasks_data and not profile_blind:
+            thinking_q = "Чем человек занят СЕЙЧАС и как ты можешь быть полезен?"
+        else:
+            thinking_q = "Что ОДНО самое ценное ты можешь дать в этом ответе?"
         
         strategy = {
-            'priority': priority,
+            'priority': 'profile' if profile_blind else ('help_now' if is_active else 'engage'),
             'tone': tone,
-            'action': action,
-            'why': why,
+            'action': 'think',  # AI сам решает
+            'why': f"Ситуация: {'; '.join(situation_parts)}. Подумай: {thinking_q}",
             'missing_fields': missing_fields,
-            'extract_profile': not all(profile_data.get(k) for k in ['goals', 'skills', 'interests', 'position']) if profile_data else True
+            'extract_profile': bool(missing_fields)
         }
-        
-        # ВСЕГДА добавляем hint про пустые поля — в КАЖДУЮ стратегию
-        if missing_fields:
-            field_labels = {'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы', 'position': 'должность/сфера', 'city': 'город'}
-            top_missing = field_labels.get(missing_fields[0], missing_fields[0])
-            strategy['why'] += (f'. ПРОФИЛЬ НЕ ПОЛОН (нет: {top_missing}). '
-                                f'ОБЯЗАТЕЛЬНО задай ОДИН живой вопрос про {top_missing} '
-                                f'естественно в разговоре. Когда ответит — update_profile.')
-        
-        # Добавляем hint про извлечение данных в профиль
-        if strategy['extract_profile']:
-            strategy['why'] += ' ВАЖНО: если пользователь рассказывает о себе — тихо обновляй профиль через update_profile'
         
         return strategy
 

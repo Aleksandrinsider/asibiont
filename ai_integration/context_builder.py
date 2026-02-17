@@ -143,7 +143,10 @@ class ContextBuilder:
         return hints
 
     def build_proactive_context(self, user_id, session, profile_complete=True):
-        """АНАЛИТИЧЕСКИЙ КОНТЕКСТ: что есть, чего нет, что делать."""
+        """Контекст для мышления: чистые данные о ситуации человека.
+        
+        Предоставляет факты без предписаний — AI сам рассуждает что делать.
+        """
         from models import User, UserProfile, Task
 
         try:
@@ -161,33 +164,7 @@ class ContextBuilder:
 
             hints = []
 
-            # ═══ АНАЛИЗ ПРОФИЛЯ: что есть и чего нет ═══
-            profile_has = []
-            profile_missing = []
-            ALL_FIELDS = {
-                'city': 'geo', 'company': 'org', 'position': 'role',
-                'goals': 'aim', 'skills': 'can', 'interests': 'into'
-            }
-            if profile:
-                for field, short in ALL_FIELDS.items():
-                    val = getattr(profile, field, None)
-                    if val:
-                        profile_has.append(f"{short}={val[:50]}")
-                    else:
-                        profile_missing.append(short)
-            else:
-                profile_missing = list(ALL_FIELDS.values())
-
-            if profile_missing:
-                hints.append(f"\u2753 не знаешь: {', '.join(profile_missing)} — узнай ЕСТЕСТВЕННО через живой вопрос")
-
-            # Если профиль совсем пустой — это приоритет, но НЕ блокирует остальной контекст
-            if len(profile_missing) >= 4:
-                hints.append("⚡ ПРИОРИТЕТ: профиль почти пуст — БЕЗ него ты работаешь ВСЛЕПУЮ. Задай 1 конкретный вопрос о человеке")
-            elif len(profile_missing) >= 2:
-                hints.append(f"⚡ Узнай о {profile_missing[0]} через живой разговор")
-
-            # ═══ ЗАДАЧИ: точки контроля ═══
+            # ═══ ЗАДАЧИ: что на контроле ═══
             tasks = session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status.in_(['pending', 'active', 'in_progress'])
@@ -218,7 +195,6 @@ class ContextBuilder:
 
                 if overdue:
                     hints.append(f"🚨 ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])}")
-                    hints.append("⚡ ОБРАТНАЯ СВЯЗЬ: спроси — выполнена ли задача, какой результат, если нет — что помешало")
                 if today_tasks:
                     hints.append(f"📅 СЕГОДНЯ ({len(today_tasks)}): {', '.join(today_tasks[:3])}")
                 if tomorrow_tasks:
@@ -226,13 +202,9 @@ class ContextBuilder:
                 if future_tasks and not today_tasks and not overdue:
                     hints.append(f"📋 БУДУЩИЕ ({len(future_tasks)}): {', '.join(future_tasks[:2])}")
 
-                # Аналитика задач
-                total = len(tasks)
-                hints.append(f"📊 Всего активных задач: {total}")
-                if overdue and len(overdue) > 1:
-                    hints.append("⚡ ДЕЙСТВИЕ: много просроченного — помоги разобраться, предложи удалить или перенести")
+                hints.append(f"📊 Всего активных задач: {len(tasks)}")
 
-            # ═══ СТАТИСТИКА ЗАВЕРШЁННЫХ ЗАДАЧ ═══
+            # ═══ СТАТИСТИКА ЗАВЕРШЁННЫХ ═══
             completed_tasks = session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status == 'completed'
@@ -252,34 +224,15 @@ class ContextBuilder:
                 if recent_completed:
                     hints.append("📈 НЕДАВНО ЗАВЕРШЕНО:\n" + "\n".join(f"  {c}" for c in recent_completed))
 
-                # Считаем completion rate
+                # Completion rate
                 total_all = session.query(Task).filter(Task.user_id == user.id).count()
                 completed_count = len(completed_tasks)
                 if total_all > 3:
                     rate = round(completed_count / total_all * 100)
-                    if rate < 30:
-                        hints.append(f"📉 Выполненность задач: {rate}% — задачи часто не выполняются, разберись почему")
-                    elif rate > 70:
-                        hints.append(f"📈 Выполненность задач: {rate}% — отличный темп!")
+                    hints.append(f"📊 Выполненность задач: {rate}%")
 
             if not tasks:
-                # НЕТ ЗАДАЧ — фокус на текущем моменте, НЕ на завтра
-                hints.append("📋 ЗАДАЧ НЕТ — спроси чем занят СЕЙЧАС, не предлагай откладывать на завтра")
-                # Даём агенту контекст для НЕМЕДЛЕННОГО действия
-                suggestions = []
-                if profile:
-                    if profile.goals:
-                        suggestions.append(f"есть цель '{profile.goals[:40]}' — спроси как продвигается СЕЙЧАС, предложи конкретный шаг")
-                    if profile.company:
-                        suggestions.append(f"работает в {profile.company} — спроси над чем работает СЕГОДНЯ")
-                    if profile.skills:
-                        suggestions.append(f"навыки: {profile.skills[:40]} — чем может помочь ПРЯМО СЕЙЧАС")
-                    if profile.interests and not profile.goals:
-                        suggestions.append(f"интересы: {profile.interests[:40]} — обсуди актуальное по теме")
-                if suggestions:
-                    hints.append("⚡ ДЕЙСТВИЕ СЕЙЧАС: " + "; ".join(suggestions[:2]))
-                else:
-                    hints.append("⚡ ДЕЙСТВИЕ: спроси чем занят, будь полезен СЕЙЧАС — не откладывай на потом")
+                hints.append("📋 ЗАДАЧ НЕТ")
 
             # ═══ ЦЕЛИ ═══
             from models import Goal
@@ -300,36 +253,12 @@ class ContextBuilder:
                             line += f" осталось {days}дн"
                     goal_lines.append(line)
                 hints.append("🎯 Цели: " + "; ".join(goal_lines))
-                # Связь задач и целей
-                if not tasks:
-                    hints.append("⚠️ Есть цели, но нет задач — предложи декомпозировать цель на шаги")
             else:
                 hints.append("🎯 Целей нет")
-                if profile and profile.goals:
-                    hints.append(f"⚡ ДЕЙСТВИЕ: в профиле указана цель '{profile.goals[:50]}' — предложи создать через create_goal")
-
-            # ═══ СИТУАЦИОННЫЙ АНАЛИЗ ═══
-            # Агент должен понимать полную картину
-            situation_parts = []
-            has_profile = len(profile_missing) <= 2
-            has_tasks = bool(tasks)
-            has_goals = bool(active_goals)
-
-            if has_profile and not has_tasks and not has_goals:
-                situation_parts.append("Профиль заполнен, но нет задач/целей — спроси над чем работает СЕЙЧАС, помоги в текущем моменте")
-            elif has_profile and has_goals and not has_tasks:
-                situation_parts.append("Цели есть, задач нет — спроси как продвигается цель, предложи шаг на СЕГОДНЯ")
-            elif has_profile and has_tasks and not has_goals:
-                situation_parts.append("Задачи есть, целей нет — предложи объединить задачи в цель")
-            elif not has_profile:
-                situation_parts.append("Профиль не заполнен — узнай о человеке, но не навязывай заполнение")
-
-            if situation_parts:
-                hints.append("📍 СИТУАЦИЯ: " + "; ".join(situation_parts))
 
             # ═══ КОНТАКТЫ ═══
             real_contacts = []
-            if profile and len(profile_missing) <= 2:
+            if profile:
                 try:
                     from .handlers import get_partners_list
                     partners = get_partners_list(user.id, session)
