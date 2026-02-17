@@ -398,7 +398,7 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             user_id=user_id,
             mode='reminder',
             instruction=instruction,
-            max_tokens=600,
+            max_tokens=800,
             max_iterations=3
         )
         
@@ -1188,7 +1188,7 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
 Если есть красные флаги — они ПРИОРИТЕТ.
 
 ОБЯЗАТЕЛЬНО:
-- 2-5 предложений, живой тон, конкретика
+- 3-6 предложений, живой тон, конкретика, глубина мысли
 - Минимум 1 КОНКРЕТНОЕ действие (не "могу помочь", а конкретика)
 - Привязывай к профилю/целям/интересам пользователя
 - Если предлагаешь задачу — указывай ТОЧНОЕ ВРЕМЯ
@@ -1250,7 +1250,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         # Для task_help используем режим task_assist с увеличенными лимитами
         if selected_type == 'task_help':
             mode = 'task_assist'
-            max_tokens = 800
+            max_tokens = 1200
             max_iterations = 3
             instruction = (
                 "Помоги пользователю решить задачу из контекста выше. "
@@ -1259,7 +1259,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             )
         else:
             mode = 'proactive'
-            max_tokens = 600
+            max_tokens = 800
             max_iterations = 2
 
         result = await agent.generate_system_message(
@@ -1309,7 +1309,7 @@ def validate_response_compliance(content, msg_type):
     issues = []
     
     # Общие правила (смягчённые для трёхэтапного подхода)
-    if word_count > 150:  # Слишком длинный (увеличено со 100 до 150)
+    if word_count > 200:  # Слишком длинный
         issues.append("Too long")
     if word_count < 3:  # Слишком короткий (уменьшено с 5 до 3)
         issues.append("Too short")
@@ -1319,13 +1319,13 @@ def validate_response_compliance(content, msg_type):
     if msg_type in ["reminder", "overdue"]:
         if "?" not in content:  # Должен быть вопрос
             issues.append("No question")
-        if word_count > 40:  # Слишком длинный
+        if word_count > 60:  # Слишком длинный
             issues.append("Too long for type")
         if word_count < 10:  # Слишком короткий
             issues.append("Too short for type")
     
     if msg_type == "proactive":
-        if word_count > 50:  # Разрешить до 50
+        if word_count > 80:  # Разрешить до 80
             issues.append("Too long for proactive")
         if word_count < 10:  # Минимум 10
             issues.append("Too short for proactive")
