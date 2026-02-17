@@ -722,7 +722,7 @@ class ReminderService:
                 # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 30 минут)
                 last_proactive = db.query(Interaction).filter(
                     Interaction.user_id == user.id,
-                    Interaction.message_type == "ai",
+                    Interaction.message_type.in_(["ai", "proactive"]),
                     Interaction.created_at > now_utc - timedelta(minutes=30)
                 ).order_by(Interaction.created_at.desc()).first()
                 
@@ -833,7 +833,7 @@ class ReminderService:
             # Anti-spam: не чаще 1 раза в час
             recent_proactive = db.query(Interaction).filter(
                 Interaction.user_id == user.id,
-                Interaction.message_type == 'ai',
+                Interaction.message_type.in_(['ai', 'proactive']),
                 Interaction.created_at >= now_utc - timedelta(hours=1)
             ).first()
             
@@ -1229,15 +1229,15 @@ class ReminderService:
                 
                 all_tasks = all_active_tasks + overdue_tasks
                 
-                # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 30 минут)
+                # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 2 часа)
                 last_proactive = db.query(Interaction).filter(
                     Interaction.user_id == user.id,
-                    Interaction.message_type == "ai",
-                    Interaction.created_at > now_utc - timedelta(minutes=30)
+                    Interaction.message_type.in_(["proactive", "ai"]),
+                    Interaction.created_at > now_utc - timedelta(hours=2)
                 ).order_by(Interaction.created_at.desc()).first()
                 
                 if last_proactive:
-                    logger.info(f"Skipping proactive message for user {user_id} - last proactive message was {last_proactive.created_at}")
+                    logger.info(f"Skipping proactive message for user {user_id} - last proactive/ai message was {last_proactive.created_at}")
                     return
                 
                 # Отправить проактивное сообщение с номером для разнообразия
@@ -1246,7 +1246,7 @@ class ReminderService:
                 # Сохранить проактивное сообщение в таблицу Interaction
                 interaction = Interaction(
                     user_id=user.id,
-                    message_type="ai",  # Изменено с "proactive" на "ai" для правильного форматирования
+                    message_type="proactive",
                     content=proactive_text
                 )
                 db.add(interaction)

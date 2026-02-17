@@ -243,9 +243,25 @@ def get_context_from_db(user_id, limit=10):
             
             # If it's a standalone AI message (reminder), add it as system context
             elif msg.message_type == 'ai':
-                # Add reminder as a synthetic userai pair for context continuity
+                # Add reminder as a synthetic user-ai pair for context continuity
                 context.append({
-                    'user': '[  ]',
+                    'user': '[напоминание]',
+                    'agent': msg.content
+                })
+                i += 1
+            
+            # Proactive messages from the bot — include so AI knows what it already sent
+            elif msg.message_type == 'proactive':
+                context.append({
+                    'user': '[проактивное сообщение]',
+                    'agent': msg.content
+                })
+                i += 1
+            
+            # Reminder messages — include for full context
+            elif msg.message_type == 'reminder':
+                context.append({
+                    'user': '[напоминание о задаче]',
                     'agent': msg.content
                 })
                 i += 1
