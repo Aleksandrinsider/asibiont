@@ -1842,41 +1842,7 @@ async def cors_middleware(request, handler):
     return await handler(request)
 
 # app.middlewares.append(security_middleware)
-# NOTE: rate_limit_middleware is defined below but referenced here.
-# Python evaluates middleware list at request time, not at definition time,
-# so this works because the function exists by the time the first request arrives.
-app.middlewares.append(rate_limit_middleware)
-app.middlewares.append(cors_middleware)
-app.middlewares.append(redirect_to_root_middleware)
-app.middlewares.append(session_error_middleware)
-app.middlewares.append(logging_middleware)
-app.middlewares.append(csp_middleware)
 
-# Setup Jinja2 with custom filters
-def unique_interests(value):
-    """Remove duplicate interests (case-insensitive)"""
-    if not value:
-        return value
-    interests = [i.strip() for i in value.split(',') if i.strip()]
-    seen = set()
-    unique = []
-    for i in interests:
-        if i.lower() not in seen:
-            unique.append(i)
-            seen.add(i.lower())
-    return ', '.join(unique)
-
-def strptime_filter(value, format_string):
-    return datetime.strptime(value, format_string)
-
-jinja_env = aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-jinja_env.filters['unique_interests'] = unique_interests
-jinja_env.filters['strptime'] = strptime_filter
-
-
-# ═══════════════════════════════════════════════════════════════
-# RATE LIMITING
-# ═══════════════════════════════════════════════════════════════
 import time as _time_module
 from collections import defaultdict
 
@@ -1919,6 +1885,38 @@ async def rate_limit_middleware(request, handler):
     return await handler(request)
 
 
+app.middlewares.append(rate_limit_middleware)
+app.middlewares.append(cors_middleware)
+app.middlewares.append(redirect_to_root_middleware)
+app.middlewares.append(session_error_middleware)
+app.middlewares.append(logging_middleware)
+app.middlewares.append(csp_middleware)
+
+# Setup Jinja2 with custom filters
+def unique_interests(value):
+    """Remove duplicate interests (case-insensitive)"""
+    if not value:
+        return value
+    interests = [i.strip() for i in value.split(',') if i.strip()]
+    seen = set()
+    unique = []
+    for i in interests:
+        if i.lower() not in seen:
+            unique.append(i)
+            seen.add(i.lower())
+    return ', '.join(unique)
+
+def strptime_filter(value, format_string):
+    return datetime.strptime(value, format_string)
+
+jinja_env = aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+jinja_env.filters['unique_interests'] = unique_interests
+jinja_env.filters['strptime'] = strptime_filter
+
+
+# ═══════════════════════════════════════════════════════════════
+# RATE LIMITING
+# ═══════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════
 # YOOKASSA WEBHOOK IP VERIFICATION
 # ═══════════════════════════════════════════════════════════════
