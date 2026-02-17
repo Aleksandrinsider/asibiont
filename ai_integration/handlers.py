@@ -498,6 +498,22 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     else:
         logger.info(f"[ADD_TASK] is_recurring is falsy: {is_recurring} (type: {type(is_recurring)})")
     
+    # АВТОМАТИЧЕСКАЯ ПРОВЕРКА КОНФЛИКТОВ ВРЕМЕНИ
+    time_adjustment_note = ""
+    if task.reminder_time and not ignore_conflicts:
+        try:
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
+            local_parsed = _utc_to_local(task.reminder_time, user_tz)
+            conflicts = check_time_conflicts_sync(user.id, local_parsed, session)
+            if conflicts:
+                conflict_msg, suggested_time_str = conflicts
+                # НЕ сдвигаем — создаём на запрошенное время, но предупреждаем о конфликте
+                original_str = local_parsed.strftime('%H:%M')
+                time_adjustment_note = f"\n⚠️ На {original_str} уже есть задачи:\n{conflict_msg}\n💡 Ближайшее свободное время: {suggested_time_str}. Хочешь перенести?"
+                logger.info(f"[ADD_TASK] Time conflict detected at {original_str}, suggested free slot: {suggested_time_str}")
+        except Exception as e:
+            logger.warning(f"[ADD_TASK] Error checking time conflicts: {e}")
+
     session.add(task)
 
     # Generate recommendations
@@ -619,6 +635,8 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         time_str = local_time.strftime('%H:%M')
         date_str = local_time.strftime('%d.%m.%Y')
         result_msg += f" с напоминанием на {date_str} в {time_str}"
+    if time_adjustment_note:
+        result_msg += time_adjustment_note
 
     # Обновляем контекст диалога для последующих местоимений
     if user_id:
