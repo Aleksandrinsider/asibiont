@@ -6004,6 +6004,16 @@ if __name__ == "__main__":
                 except Exception as e:
                     logger.error(f"Failed to start contact alerts service: {e}")
 
+                # Start AnchorEngine — unified event-driven autonomous system
+                anchor_engine_task = None
+                try:
+                    from anchor_engine import start_anchor_engine
+                    logger.info("Starting AnchorEngine in background...")
+                    anchor_engine_task = asyncio.create_task(start_anchor_engine(bot))
+                    logger.info("AnchorEngine task created")
+                except Exception as e:
+                    logger.error(f"Failed to start AnchorEngine: {e}")
+
                 # Start polling for bot ONLY in local mode
                 polling_task = None
                 if LOCAL and bot and dp:
@@ -6039,6 +6049,9 @@ if __name__ == "__main__":
                     if contact_alerts_task and not contact_alerts_task.done():
                         logger.info("Cancelling contact alerts service...")
                         contact_alerts_task.cancel()
+                    if anchor_engine_task and not anchor_engine_task.done():
+                        logger.info("Cancelling AnchorEngine...")
+                        anchor_engine_task.cancel()
                     await runner.cleanup()
                     logger.info("Server shut down")
 

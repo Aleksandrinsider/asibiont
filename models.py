@@ -1,6 +1,7 @@
 import datetime
 import logging
 import enum
+import json
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -345,6 +346,111 @@ class ContactAlert(Base):
     last_triggered_at = Column(DateTime)  # Last time alert was triggered
 
     user = relationship("User", backref="contact_alerts")
+
+
+class AnchorPriority(enum.Enum):
+    CRITICAL = 'CRITICAL'    # Просроченные задачи, горящие дедлайны — доставка в течение 30 мин
+    HIGH = 'HIGH'            # Дедлайн <24ч, обновления делегирования — батч каждые 2ч
+    MEDIUM = 'MEDIUM'        # Инсайты, контакты, мониторинг рынка — батч каждые 4ч
+    LOW = 'LOW'              # Погода, контент-идеи, общая вовлечённость — макс 1/день
+
+
+class Anchor(Base):
+    """
+    Якорь — событие или факт, обнаруженный AnchorEngine.
+    
+    Заменяет: проактивные сообщения (15+ типов), contact_alerts, auto_post triggers.
+    AI получает все сработавшие якоря + полный контекст и САМИ РЕШАЕТ писать или нет.
+    """
+    __tablename__ = 'anchors'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Что за якорь
+    anchor_type = Column(String(50), nullable=False, index=True)
+    # Типы: task_overdue, task_deadline_soon, task_stale, task_completed_streak,
+    #        goal_progress, goal_stagnation, goal_deadline,
+    #        contact_match, contact_online,
+    #        profile_gap, dialog_followup,
+    #        delegation_pending, delegation_update,
+    #        market_insight, content_opportunity,
+    #        weather_activity, morning_plan, evening_review
+
+    source = Column(String(100))       # Откуда: 'task:42', 'goal:7', 'contact:@username', 'ltm', 'api:weather'
+    topic = Column(String(500))        # Человекочитаемое описание: "Задача 'Звонок клиенту' просрочена на 2ч"
+    priority = Column(Enum(AnchorPriority), default=AnchorPriority.MEDIUM, index=True)
+    data = Column(Text)                # JSON с деталями для AI: {task_id, hours_overdue, ...}
+
+    # Жизненный цикл
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+    triggered_at = Column(DateTime)     # Когда сработал (факт подтвердился)
+    delivered_at = Column(DateTime)     # Когда был доставлен пользователю
+    expires_at = Column(DateTime)       # Когда якорь теряет актуальность
+
+    # Реакция пользователя (feedback loop)
+    user_reaction = Column(String(20))  # responded, ignored, dismissed
+    reaction_at = Column(DateTime)
+
+    # Антиспам
+    cooldown_hours = Column(Integer, default=4)    # Минимум часов между повторными якорями этого типа
+    suppress_until = Column(DateTime)              # Подавлен до (если пользователь отклонил)
+    batch_group = Column(String(50))               # Группа для батчинга: 'tasks', 'contacts', 'insights'
+
+    user = relationship("User", backref="anchors")
+
+    def is_expired(self):
+        if self.expires_at:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            exp = self.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=datetime.timezone.utc)
+            return now > exp
+        return False
+
+    def is_deliverable(self):
+        """Можно ли доставить - не доставлен, не истёк, не подавлен"""
+        if self.delivered_at:
+            return False
+        if self.is_expired():
+            return False
+        if self.suppress_until:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            sup = self.suppress_until
+            if sup.tzinfo is None:
+                sup = sup.replace(tzinfo=datetime.timezone.utc)
+            if now < sup:
+                return False
+        return True
+
+    def to_ai_context(self):
+        """Сериализация для передачи в AI контекст"""
+        return {
+            'type': self.anchor_type,
+            'topic': self.topic,
+            'priority': self.priority.value if self.priority else 'MEDIUM',
+            'source': self.source,
+            'data': json.loads(self.data) if self.data else {},
+            'age_minutes': int((datetime.datetime.now(datetime.timezone.utc) - 
+                               (self.created_at.replace(tzinfo=datetime.timezone.utc) if self.created_at.tzinfo is None else self.created_at)
+                               ).total_seconds() / 60) if self.created_at else 0
+        }
+
+
+class AnchorDeliveryLog(Base):
+    """Лог доставок — для аналитики и антиспама"""
+    __tablename__ = 'anchor_delivery_log'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    anchor_ids = Column(Text)          # JSON array: [1, 5, 12] — какие якоря вошли в сообщение
+    message_text = Column(Text)        # Что отправили
+    anchor_types = Column(Text)        # JSON: ['task_overdue', 'goal_progress'] — для статистики
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+    user_responded = Column(Boolean)   # True если пользователь ответил в течение часа
+    response_time_seconds = Column(Integer)  # Время до ответа
+
+    user = relationship("User", backref="anchor_logs")
 
 
 # Fix DATABASE_URL for psycopg2 compatibility

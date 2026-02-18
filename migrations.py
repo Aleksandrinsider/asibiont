@@ -271,6 +271,23 @@ def _migrate_promo_codes(session, inspector):
         })
 
 
+def _migrate_anchors(session, inspector):
+    """Миграции таблиц anchors и anchor_delivery_log"""
+    # Таблица anchors — создаётся автоматически через Base.metadata.create_all
+    # но добавляем миграцию на случай нового поля в будущем
+    if inspector.has_table('anchors'):
+        cols = [col['name'] for col in inspector.get_columns('anchors')]
+        _add_columns(session, 'anchors', cols, {
+            # Будущие миграции сюда
+        })
+
+    if inspector.has_table('anchor_delivery_log'):
+        cols = [col['name'] for col in inspector.get_columns('anchor_delivery_log')]
+        _add_columns(session, 'anchor_delivery_log', cols, {
+            # Будущие миграции сюда
+        })
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -285,6 +302,7 @@ def run_migrations():
         _migrate_subscriptions(session, inspector)
         _migrate_payments(session, inspector)
         _migrate_promo_codes(session, inspector)
+        _migrate_anchors(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

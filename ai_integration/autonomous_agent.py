@@ -1082,6 +1082,16 @@ class HybridAutonomousAgent:
                     "\n\n[РЕЖИМ: ПОЗДРАВЛЕНИЕ]\n"
                     "Задача выполнена — поздравь кратко. 1-2 предложения."
                 ),
+                'anchor': (
+                    "\n\n[РЕЖИМ: ANCHOR ENGINE]\n"
+                    "Ты — мозг AnchorEngine. Тебе переданы ЯКОРЯ (события/факты) + полный контекст.\n"
+                    "РЕШЕНИЕ 1: Если якоря не стоят сообщения — верни ровно слово SKIP.\n"
+                    "РЕШЕНИЕ 2: Если стоит написать — напиши ОДНО связное сообщение.\n"
+                    "Принцип: СДЕЛАЛ → ПОКАЗАЛ → ПРЕДЛОЖИЛ. Покажи что проверил/нашёл.\n"
+                    "3-8 предложений. Деловой тон. НЕ создавай задачи. Не придумывай данные.\n"
+                    "Если можешь помочь — используй инструменты (research_topic, find_contacts).\n"
+                    "Объединяй несколько якорей в одно естественное сообщение."
+                ),
             }
 
             system_prompt = base_prompt + mode_instructions.get(mode, '')
@@ -1109,6 +1119,8 @@ class HybridAutonomousAgent:
                                  'edit_task', 'reschedule_task'}
             elif mode == 'proactive':
                 exclude_tools = {'delegate_task'}
+            elif mode == 'anchor':
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'}
 
             # ===== Tool calling loop (облегчённый) =====
             all_execution_results = []

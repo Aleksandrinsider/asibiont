@@ -719,6 +719,15 @@ async def process_text_message(user_id, text, message, state):
                 session.commit()
         finally:
             session.close()
+
+        # FEEDBACK LOOP: отмечаем что пользователь ответил на якорное сообщение
+        try:
+            from anchor_engine import get_anchor_engine
+            ae = get_anchor_engine()
+            if ae:
+                asyncio.create_task(ae.record_user_response(user_id))
+        except Exception:
+            pass
         
         context = []  # Simplified: no context in bot
         
