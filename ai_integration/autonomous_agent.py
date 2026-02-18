@@ -256,29 +256,29 @@ class HybridAutonomousAgent:
         return result
 
     _TOOL_PROGRESS_MAP = {
-        'get_tasks': 'Смотрю задачи...',
-        'add_task': 'Создаю задачу...',
-        'complete_task': 'Завершаю задачу...',
-        'edit_task': 'Обновляю задачу...',
-        'delete_task': 'Удаляю задачу...',
-        'reschedule_task': 'Переношу задачу...',
-        'quick_topic_search': 'Ищу информацию...',
-        'research_topic': 'Исследую тему...',
-        'get_news_trends': 'Ищу новости...',
-        'find_relevant_contacts_for_task': 'Ищу контакты...',
-        'get_stock_price': 'Проверяю котировки...',
-        'get_weather': 'Смотрю погоду...',
-        'update_profile': 'Обновляю профиль...',
-        'get_user_goals': 'Проверяю цели...',
-        'create_goal': 'Создаю цель...',
-        'generate_post': 'Пишу пост...',
+        'get_tasks': 'Смотрю задачи',
+        'add_task': 'Создаю задачу',
+        'complete_task': 'Завершаю задачу',
+        'edit_task': 'Обновляю задачу',
+        'delete_task': 'Удаляю задачу',
+        'reschedule_task': 'Переношу задачу',
+        'quick_topic_search': 'Ищу информацию',
+        'research_topic': 'Исследую тему',
+        'get_news_trends': 'Ищу новости',
+        'find_relevant_contacts_for_task': 'Ищу контакты',
+        'get_stock_price': 'Проверяю котировки',
+        'get_weather': 'Смотрю погоду',
+        'update_profile': 'Обновляю профиль',
+        'get_user_goals': 'Проверяю цели',
+        'create_goal': 'Создаю цель',
+        'generate_post': 'Пишу пост',
     }
 
     def _tool_progress_text(self, tool_name, iteration):
         """Генерирует текст прогресса для Telegram по имени инструмента."""
-        text = self._TOOL_PROGRESS_MAP.get(tool_name, '⚙️ Работаю...')
+        text = self._TOOL_PROGRESS_MAP.get(tool_name, 'Работаю')
         if iteration > 1:
-            text = '⚙️ Углубляюсь...'
+            text = 'Углубляюсь'
         return text
 
     # ===== TOKEN BUDGET =====
@@ -783,10 +783,10 @@ class HybridAutonomousAgent:
             MAX_ITERATIONS = 4
             seen_tools = set()  # Для предотвращения дублей
 
-            # Прогресс в Telegram — "думаю..."
+            # Прогресс в Telegram — "Думаю"
             if self._progress_callback:
                 try:
-                    await self._progress_callback('💭 Думаю...')
+                    await self._progress_callback('Думаю')
                 except Exception:
                     pass
 
