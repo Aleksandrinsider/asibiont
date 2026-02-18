@@ -421,8 +421,8 @@
                 </span>
                 
                 <div style="display: flex; align-items: center; margin-left: 12px; margin-right: 30px;">
-                    <button onclick="window.location.href='/subscription-tiers'" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; margin-right: 8px; white-space: nowrap;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Текущий тариф">
-                        {% if subscription_tier == 'LIGHT' %}Лайт{% elif subscription_tier == 'STANDARD' %}Стандарт{% elif subscription_tier == 'PREMIUM' %}Премиум{% else %}Тариф{% endif %}
+                    <button onclick="window.location.href='/subscription-tiers'" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; margin-right: 8px; white-space: nowrap;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Баланс токенов">
+                        💰 {{ token_balance or 0 }} ток.
                     </button>
                     
                     <button onclick="window.open('https://t.me/{{ bot_username }}', '_blank')" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Открыть Telegram бота">
@@ -493,12 +493,7 @@
                                 <!-- Основной аватар -->
                                 <div style="position: relative; margin-bottom: 8px; display: flex; align-items: center; justify-content: center;">
                                     <div>
-                                        {% set tier_glow = '#CD7F32' %}
-                                        {% if subscription_tier.lower() == 'standard' %}
-                                            {% set tier_glow = '#C0C0C0' %}
-                                        {% elif subscription_tier.lower() == 'premium' %}
-                                            {% set tier_glow = '#FFD700' %}
-                                        {% endif %}
+                                        {% set tier_glow = '#D1D9E0' %}
                                         {% if user_avatar_url %}
                                         <img src="{{ user_avatar_url }}" alt="Аватар" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                                         <div onclick="openContactProfileModal('{{ user.username }}')" style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
@@ -529,20 +524,13 @@
                             {% else %}
                             <p>Нет рекомендаций</p>
                             {% endif %}
-                            {% if formatted_end_date %}
-                            <p style="margin: 0; margin-bottom: 4px;">Подписка: активна до {{ formatted_end_date }} 
-                                <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">продлить</a>
-                            </p>
-                            <p style="margin: 0; margin-bottom: 4px;">Баланс: {{ referral_balance or 0 }} рублей
-                                <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">вывести</a>
+                            <p style="margin: 0; margin-bottom: 4px;">Токены: {{ token_balance or 0 }}
+                                <a href="/subscription-tiers" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">пополнить</a>
                             </p>
                             <p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: 
                                 <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">копировать</a>
                             </p>
-                            <p style="margin: 0; color: #6C727F; font-size: 12px;">20% с каждого платежа привлеченного пользователя</p>
-                            {% else %}
-                            <p style="margin: 0;">Подписка: информация загружается...</p>
-                            {% endif %}
+                            <p style="margin: 0; color: #6C727F; font-size: 12px;">20% токенов с каждого пополнения привлечённого пользователя</p>
                         </div>
                     </div>
                 </div>
@@ -562,7 +550,7 @@
                                 <option value="favorite">Избранное</option>
                                 <option value="recommended" selected>Рекомендуемые</option>
                                 <option value="delegating_to_me">Поручают мне</option>
-                                <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                                <option value="delegating_by_me">Поручаю я</option>
                                 <option value="blocked">Заблокировано</option>
                             </select>
                         </div>
@@ -694,7 +682,7 @@
                                 <option value="all" selected>Все</option>
                                 <option value="my">Личные</option>
                                 <option value="assigned-to-me">Поручили мне</option>
-                                <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                                <option value="assigned-by-me">Поручил я</option>
                                 <option value="overdue">Просрочено</option>
                                 <option value="completed">Выполнено</option>
                             </select>
@@ -916,14 +904,11 @@
     <script>
 
         // Version: 2026-01-14 fix overlay errors - timestamp: 1768857743
-        const userSubscriptionTier = '{{ subscription_tier }}'; // LIGHT/STANDARD/PREMIUM
+        const userTokenBalance = {{ token_balance or 0 }};
 
-        // Функция для создания единообразного значка тарифа
+        // Функция для создания значка (оставлено для совместимости)
         function createTierBadge(tier) {
-            if (!tier) return '';
-            const tierLower = tier.toLowerCase();
-            const tierClass = `tier-badge tier-badge-${tierLower}`;
-            return `<a href="/subscription_tiers" class="${tierClass}" onclick="event.stopPropagation();">${tierLower}</a>`;
+            return '';
         }
 
         // Функция склонения слова "задача"
@@ -4302,17 +4287,9 @@
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
                     
-                    // Тариф контакта
-                    if (partner.subscription_tier) {
-                        const tierNames = {
-                            'light': 'Лайт',
-                            'standard': 'Стандарт',
-                            'premium': 'Премиум'
-                        };
-                        const tierName = tierNames[partner.subscription_tier.toLowerCase()] || partner.subscription_tier;
-                        html += `<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">${tierName}</p>`;
-                    } else {
-                        html += `<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">Лайт</p>`;
+                    // Город контакта
+                    if (partner.city) {
+                        html += `<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">${partner.city}</p>`;
                     }
                     
                     html += '</div>';
@@ -4789,10 +4766,9 @@
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                 
                                 if (partner.type === 'recommended' && partner.contact_info) {
-                                    const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     // Добавляем класс contact-favorite если контакт в избранном
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
@@ -4811,25 +4787,15 @@
                                     }
                                     html += '<div style="flex: 1;">';
                                     
-                                    // Show username or tier requirement
-                                    if (canAccess) {
+                                    // Display first_name and username
+                                    {
                                         let nameStyle = 'cursor: pointer; color: #068487;';
-                                        if (partner.subscription_tier === 'STANDARD') {
-                                            nameStyle = 'cursor: pointer; color: #068487;';
-                                        } else if (partner.subscription_tier === 'PREMIUM') {
-                                            nameStyle = 'cursor: pointer; color: #068487;';
-                                        }
-                                        // Display first_name and username separately like in news feed
                                         html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
                                         if (partner.first_name) {
                                             html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
                                         }
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
-                                    } else {
-                                        const tierNames = {'light': '🟢 Лайт', 'standard': '🔵 Стандарт', 'premium': '🟡 Премиум'};
-                                        const requiredTierName = tierNames[partner.required_tier] || '🔵 Стандарт';
-                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
                                     // Количество делегированных задач сразу под ником
@@ -4902,8 +4868,7 @@
                                     html += '</li>';
                                 } else if (partner.type === 'favorite') {
                                     // Favorite contacts - same formatting as recommended
-                                    const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
-                                    html += '<li class="task-item contact-favorite" data-username="' + contactInfoEscaped + '" data-type="favorite"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-favorite" data-username="' + contactInfoEscaped + '" data-type="favorite" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const clickHandler = `onclick="openContactProfileModal('${contactInfoEscaped}', true)"`;
                                     const cursorStyle = 'cursor: pointer;';
@@ -5087,9 +5052,8 @@
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                 
                                 if (partner.type === 'delegating_to_me') {
-                                    const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    html += '<li class="task-item contact-delegating-to-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-delegating-to-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
@@ -5107,8 +5071,8 @@
                                     }
                                     html += '<div style="flex: 1;">';
                                     
-                                    // Show username or tier requirement
-                                    if (canAccess) {
+                                    // Show username
+                                    {
                                         let nameStyle = 'cursor: pointer; color: #068487;';
                                         html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
                                         if (partner.first_name) {
@@ -5116,10 +5080,6 @@
                                         }
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
-                                    } else {
-                                        const tierNames = {'light': 'Лайт', 'standard': 'Стандарт', 'premium': 'Премиум'};
-                                        const requiredTierName = tierNames[partner.required_tier] || 'Стандарт';
-                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
                                     // Количество делегированных задач
@@ -5184,9 +5144,8 @@
                                     html += '</div>';
                                     html += '</li>';
                                 } else if (partner.type === 'delegating_by_me') {
-                                    const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
@@ -5204,8 +5163,8 @@
                                     }
                                     html += '<div style="flex: 1;">';
                                     
-                                    // Show username or tier requirement
-                                    if (canAccess) {
+                                    // Display username
+                                    {
                                         let nameStyle = 'cursor: pointer; color: #068487;';
                                         html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
                                         if (partner.first_name) {
@@ -5213,10 +5172,6 @@
                                         }
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
-                                    } else {
-                                        const tierNames = {'light': 'Лайт', 'standard': 'Стандарт', 'premium': 'Премиум'};
-                                        const requiredTierName = tierNames[partner.required_tier] || 'Стандарт';
-                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
                                     // Количество делегированных задач
