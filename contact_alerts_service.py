@@ -47,10 +47,10 @@ class ContactAlertsService:
         """
         session = Session()
         try:
-            # Получаем пользователей ВСЕХ тарифов с активными contact alerts
+            # Получаем пользователей с активными contact alerts и положительным балансом
             alerts = session.query(ContactAlert).join(User).filter(
                 ContactAlert.enabled == True,
-                User.subscription_tier.in_([SubscriptionTier.LIGHT, SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM])
+                User.token_balance > 0
             ).all()
 
             result = []

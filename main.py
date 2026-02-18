@@ -1985,111 +1985,152 @@ async def yookassa_webhook(request):
     if data.get('event') == 'payment.succeeded':
         payment = data['object']
         user_id = payment['metadata']['user_id']
-        tier = payment['metadata'].get('tier', 'light')  # Get tier from payment metadata
-        promo_code = payment['metadata'].get('promo_code')  # Get promo code if used
+        tier = payment['metadata'].get('tier', 'light')  # tier or tokens_small/medium/large
+        promo_code = payment['metadata'].get('promo_code')
 
         session = Session()
         try:
             user = session.query(User).filter_by(telegram_id=int(user_id)).first()
             if user:
-                # Handle promo code if provided
-                if promo_code:
-                    promo = session.query(PromoCode).filter_by(code=promo_code.upper()).first()
-                    if promo:
-                        # Mark promo code as used by this user
-                        used_by_users = json.loads(promo.used_by_users or '[]')
-                        if str(user_id) not in [str(u) for u in used_by_users]:
-                            used_by_users.append(str(user_id))
-                            promo.used_by_users = json.dumps(used_by_users)
-                            promo.used_count += 1
-                            logger.info(f"Promo code {promo_code} used by user {user.username} (user_id: {user_id})")
-                        else:
-                            logger.warning(f"User {user.username} already used promo code {promo_code}")
+                # ═══ TOKEN PACK PURCHASE ═══
+                if tier.startswith('tokens_'):
+                    from token_service import add_tokens, TOKEN_PACKAGES
+                    from payments import TOKEN_PACK_PRICES
+                    pack_key = tier.replace('tokens_', '')  # small / medium / large
+                    pack_info = TOKEN_PACKAGES.get(pack_key) or TOKEN_PACK_PRICES.get(tier)
+                    tokens_to_add = pack_info['tokens'] if pack_info else int(float(payment['amount']['value']))
 
-                subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-                if not subscription:
-                    subscription = Subscription(user_id=user.id, telegram_username=user.username)
-                    session.add(subscription)
-                else:
-                    # Update telegram_username if not set
-                    if not subscription.telegram_username:
-                        subscription.telegram_username = user.username
+                    result = add_tokens(int(user_id), tokens_to_add, reason='purchase', session=session)
+                    logger.info(f"💰 Token purchase: user={user.username}, pack={pack_key}, tokens={tokens_to_add}, result={result}")
 
-                subscription.status = 'active'
-                subscription.start_date = datetime.now(pytz.UTC)
-
-                # Update tier
-                tier_mapping = {
-                    'light': SubscriptionTier.LIGHT,
-                    'standard': SubscriptionTier.STANDARD,
-                    'premium': SubscriptionTier.PREMIUM
-                }
-                tier_enum = tier_mapping.get(tier, SubscriptionTier.LIGHT)
-                subscription.tier = tier_enum
-                user.subscription_tier = tier_enum
-
-                # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
-                now = datetime.now(pytz.UTC)
-                if subscription.end_date and subscription.end_date > now:
-                    subscription.end_date = subscription.end_date + timedelta(days=30)
-                else:
-                    subscription.end_date = now + timedelta(days=30)
-
-                session.commit()
-
-                # Логируем платеж в payment_history для защиты от потери данных
-                try:
-                    payment_history = PaymentHistory(
-                        user_id=user.id,
-                        telegram_username=user.username,
-                        action='payment',
-                        tier=tier_enum,
-                        amount=payment['amount']['value'],
-                        payment_id=payment['id'],
-                        duration_days=30,
-                        start_date=subscription.start_date,
-                        end_date=subscription.end_date,
-                        details=json.dumps({
-                            'payment_method': payment.get('payment_method', {}).get('type'), 
-                            'status': payment.get('status'),
-                            'promo_code': promo_code
-                        })
-                    )
-                    session.add(payment_history)
-                    session.commit()
-                    logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}, promo_code={promo_code}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to log payment to history: {e}")
-                    # Не падаем, платеж уже обработан
-
-                # Отправляем уведомление пользователю
-                if bot:
+                    # Log to payment history
                     try:
-                        from payments import get_tier_name, TIER_PRICES
-                        tier_name = get_tier_name(tier)
-                        promo_msg = f" с промокодом {promo_code}" if promo_code else ""
-                        await bot.send_message(int(user_id), f"Подписка {tier_name} активирована{promo_msg}! Теперь у вас доступ ко всем премиум-функциям.")
+                        payment_history = PaymentHistory(
+                            user_id=user.id,
+                            telegram_username=user.username,
+                            action='token_purchase',
+                            tier=SubscriptionTier.LIGHT,  # placeholder
+                            amount=payment['amount']['value'],
+                            payment_id=payment['id'],
+                            duration_days=0,
+                            start_date=datetime.now(pytz.UTC),
+                            end_date=datetime.now(pytz.UTC),
+                            details=json.dumps({
+                                'type': 'token_purchase',
+                                'pack': pack_key,
+                                'tokens_added': tokens_to_add,
+                                'balance_after': result.get('balance', 0),
+                                'payment_method': payment.get('payment_method', {}).get('type'),
+                                'status': payment.get('status')
+                            })
+                        )
+                        session.add(payment_history)
+                        session.commit()
                     except Exception as e:
-                        logger.error(f"Failed to notify user {user_id} about subscription: {e}")
+                        logger.error(f"❌ Failed to log token payment to history: {e}")
 
-                # Handle referral commission (20% of payment amount)
+                    # Notify user
+                    if bot:
+                        try:
+                            await bot.send_message(
+                                int(user_id),
+                                f"✅ Пополнение успешно!\n\n"
+                                f"➕ Начислено: {tokens_to_add} токенов\n"
+                                f"💰 Баланс: {result.get('balance', 0)} токенов\n\n"
+                                f"Проверить баланс: /balance"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify user {user_id} about token purchase: {e}")
+
+                # ═══ LEGACY TIER SUBSCRIPTION (backward compat) ═══
+                else:
+                    # Handle promo code if provided
+                    if promo_code:
+                        promo = session.query(PromoCode).filter_by(code=promo_code.upper()).first()
+                        if promo:
+                            used_by_users = json.loads(promo.used_by_users or '[]')
+                            if str(user_id) not in [str(u) for u in used_by_users]:
+                                used_by_users.append(str(user_id))
+                                promo.used_by_users = json.dumps(used_by_users)
+                                promo.used_count += 1
+                                logger.info(f"Promo code {promo_code} used by user {user.username} (user_id: {user_id})")
+
+                    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+                    if not subscription:
+                        subscription = Subscription(user_id=user.id, telegram_username=user.username)
+                        session.add(subscription)
+                    else:
+                        if not subscription.telegram_username:
+                            subscription.telegram_username = user.username
+
+                    subscription.status = 'active'
+                    subscription.start_date = datetime.now(pytz.UTC)
+
+                    tier_mapping = {
+                        'light': SubscriptionTier.LIGHT,
+                        'standard': SubscriptionTier.STANDARD,
+                        'premium': SubscriptionTier.PREMIUM
+                    }
+                    tier_enum = tier_mapping.get(tier, SubscriptionTier.LIGHT)
+                    subscription.tier = tier_enum
+                    user.subscription_tier = tier_enum
+
+                    now = datetime.now(pytz.UTC)
+                    if subscription.end_date and subscription.end_date > now:
+                        subscription.end_date = subscription.end_date + timedelta(days=30)
+                    else:
+                        subscription.end_date = now + timedelta(days=30)
+
+                    session.commit()
+
+                    try:
+                        payment_history = PaymentHistory(
+                            user_id=user.id,
+                            telegram_username=user.username,
+                            action='payment',
+                            tier=tier_enum,
+                            amount=payment['amount']['value'],
+                            payment_id=payment['id'],
+                            duration_days=30,
+                            start_date=subscription.start_date,
+                            end_date=subscription.end_date,
+                            details=json.dumps({
+                                'payment_method': payment.get('payment_method', {}).get('type'),
+                                'status': payment.get('status'),
+                                'promo_code': promo_code
+                            })
+                        )
+                        session.add(payment_history)
+                        session.commit()
+                        logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to log payment to history: {e}")
+
+                    if bot:
+                        try:
+                            from payments import get_tier_name
+                            tier_name = get_tier_name(tier)
+                            promo_msg = f" с промокодом {promo_code}" if promo_code else ""
+                            await bot.send_message(int(user_id), f"Подписка {tier_name} активирована{promo_msg}! Теперь у вас доступ ко всем премиум-функциям.")
+                        except Exception as e:
+                            logger.error(f"Failed to notify user {user_id} about subscription: {e}")
+
+                # Handle referral commission (20% of payment amount) — works for both token and legacy payments
                 if user.referrer_id:
                     try:
                         referrer = session.query(User).filter_by(id=user.referrer_id).first()
                         if referrer:
-                            # Calculate commission from actual payment amount
                             payment_amount = float(payment['amount']['value'])
                             commission_amount = int(payment_amount * 0.20)
                             referrer.referral_balance += commission_amount
                             session.commit()
-                            logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance}) from payment amount {payment_amount} RUB")
+                            logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} from payment {payment_amount} RUB")
                             
-                            # Notify referrer about commission
                             if bot:
                                 try:
                                     await bot.send_message(
-                                        int(referrer.telegram_id), 
-                                        f"💰 Ваш реферал оплатил подписку! Вы получили {commission_amount} рублей комиссии. Текущий баланс: {referrer.referral_balance} рублей."
+                                        int(referrer.telegram_id),
+                                        f"💰 Ваш реферал пополнил баланс! Вы получили {commission_amount} рублей комиссии. Текущий баланс: {referrer.referral_balance} рублей."
                                     )
                                 except Exception as e:
                                     logger.error(f"Failed to notify referrer {referrer.telegram_id} about commission: {e}")

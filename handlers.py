@@ -22,6 +22,11 @@ from sqlalchemy import func
 from payments import create_payment
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
+from token_service import (
+    get_balance, has_enough_tokens, spend_tokens, add_tokens,
+    grant_signup_tokens, get_balance_info, insufficient_balance_message,
+    TOKEN_PACKAGES, FREE_TOKENS_ON_SIGNUP
+)
 from timezonefinder import TimezoneFinder
 
 logger = logging.getLogger(__name__)
@@ -145,188 +150,92 @@ async def start_handler(message: Message):
     user = session.query(User).filter_by(telegram_id=user_id).first()
     is_new_user = False
     if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username)
+        user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
         session.add(user)
         session.commit()
         logger.info(f"Created new user {user_id}")
         is_new_user = True
+        # Начисляем бесплатные токены
+        grant_signup_tokens(user_id, session=session)
     
+    balance = user.token_balance or 0
     session.close()
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
     
-    welcome_text = PREMIUM_DESCRIPTION + "\n\n💡 Есть промокод? Используйте команду /promo <КОД>"
+    if is_new_user:
+        welcome_text = PREMIUM_DESCRIPTION + f"\n\n🎁 Тебе начислено {FREE_TOKENS_ON_SIGNUP} бесплатных токенов! Просто напиши мне."
+    else:
+        welcome_text = PREMIUM_DESCRIPTION + f"\n\n💰 Твой баланс: {balance} токенов"
     await message.bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
+
+
+@router.message(Command("balance"))
+async def balance_handler(message: Message):
+    """Показать баланс токенов"""
+    user_id = message.from_user.id
+    info = get_balance_info(user_id)
+    await message.bot.send_message(message.chat.id, info)
+
+
+@router.message(Command("buy"))
+async def buy_handler(message: Message):
+    """Покупка пакетов токенов"""
+    user_id = message.from_user.id
+    
+    text = "📦 Пакеты токенов (1 токен = 1₽):\n\n"
+    for key, pkg in TOKEN_PACKAGES.items():
+        text += f"• {pkg['label']}\n"
+    text += "\nВыберите пакет:"
+    
+    try:
+        urls = {}
+        for key, pkg in TOKEN_PACKAGES.items():
+            url = create_payment(
+                pkg['price'],
+                f"Пополнение {pkg['tokens']} токенов",
+                user_id,
+                f'tokens_{key}',
+                None
+            )
+            urls[key] = url
+        
+        payment_text = ""
+        for key, pkg in TOKEN_PACKAGES.items():
+            payment_text += f"\n{pkg['label']}:\n{urls[key]}\n"
+        
+        await message.bot.send_message(message.chat.id, text + "\n" + payment_text)
+    except Exception as e:
+        logger.error(f"Error creating token payment for user {user_id}: {e}")
+        await message.bot.send_message(message.chat.id, text + "\n\n⚠️ Ошибка создания платежа. Попробуйте позже.\nПоддержка: @aleksandrinsider")
 
 
 @router.message(Command("subscription"))
 async def subscription_handler(message: Message):
-    """Handle subscription command - show tariffs and payment links"""
-    logger.info(f"TELEGRAM: subscription_handler called by user {message.from_user.id} ({message.from_user.username})")
-    
+    """Handle subscription command — redirect to token-based billing"""
     user_id = message.from_user.id
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            logger.info(f"TELEGRAM: Creating new user for {user_id}")
-            user = User(telegram_id=user_id, username=message.from_user.username)
-            session.add(user)
-            session.commit()
-        else:
-            logger.info(f"TELEGRAM: Found existing user {user_id}")
     
-        # Check for promo code in message
-        promo_code = None
-        text_parts = message.text.split()
-        if len(text_parts) > 1:
-            promo_code = text_parts[1].upper()
-            logger.info(f"TELEGRAM: Promo code detected: {promo_code}")
-        else:
-            logger.info(f"TELEGRAM: No promo code in message")
+    # Check for promo code in message
+    text_parts = message.text.split()
+    if len(text_parts) > 1:
+        promo_code = text_parts[1].upper()
+        # Delegate to /promo handler
+        message.text = f"/promo {promo_code}"
+        await promo_handler(message)
+        return
     
-        # Handle promo code activation if 100% discount
-        if promo_code:
-            from models import PromoCode, Subscription, SubscriptionTier, PaymentHistory
-            promo = session.query(PromoCode).filter_by(code=promo_code).first()
-            if promo and promo.discount_percent == 100:
-                # Check if user already used this promo code
-                used_by_users = json.loads(promo.used_by_users or '[]')
-                if str(user_id) in [str(u) for u in used_by_users]:
-                    await message.bot.send_message(message.chat.id, "Вы уже использовали этот промокод!")
-                    return
-            
-                # Check max uses
-                if promo.max_uses and promo.used_count >= promo.max_uses:
-                    await message.bot.send_message(message.chat.id, "Промокод уже исчерпан!")
-                    return
-            
-                # Check expiration
-                if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
-                    await message.bot.send_message(message.chat.id, "Промокод истек!")
-                    return
-            
-                # Activate subscription directly
-                subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-                if not subscription:
-                    subscription = Subscription(user_id=user.id, telegram_username=user.username)
-                    session.add(subscription)
-            
-                subscription.status = 'active'
-                subscription.start_date = datetime.now(timezone.utc)
-                subscription.tier = promo.tier
-                user.subscription_tier = promo.tier
-            
-                # Set end date
-                now = datetime.now(timezone.utc)
-                if subscription.end_date and subscription.end_date > now:
-                    subscription.end_date = subscription.end_date + timedelta(days=promo.duration_days)
-                else:
-                    subscription.end_date = now + timedelta(days=promo.duration_days)
-            
-                # Mark promo code as used
-                used_by_users.append(str(user_id))
-                promo.used_by_users = json.dumps(used_by_users)
-                promo.used_count += 1
-            
-                # Log to payment history
-                payment_history = PaymentHistory(
-                    user_id=user.id,
-                    telegram_username=user.username,
-                    action='promo_used',
-                    tier=promo.tier,
-                    amount='0',
-                    duration_days=promo.duration_days,
-                    start_date=subscription.start_date,
-                    end_date=subscription.end_date,
-                    details=json.dumps({'promo_code': promo_code, 'discount_percent': 100})
-                )
-                session.add(payment_history)
-            
-                session.commit()
-            
-                from payments import get_tier_name
-                tier_name = get_tier_name(promo.tier.value.lower())
-                await message.bot.send_message(message.chat.id, f"🎉 Промокод {promo_code} активирован! Подписка {tier_name} активирована бесплатно на {promo.duration_days} дней!")
-                return
-    
-        # Описание тарифов
-        tiers_description = """Выберите свой тариф:
-
-🟢 ЛАЙТ — 3 000₽/мес
-Все инструменты: задачи, партнёры, исследования, котировки, погода, новости, маркетинг, публикации, проактивные рекомендации.
-
-🔵 СТАНДАРТ — 9 000₽/мес (ПОПУЛЯРНЫЙ)
-Всё из Лайт + делегирование задач. AI находит исполнителя из сети, передаёт задачу, следит за дедлайнами.
-
-🟡 ПРЕМИУМ — 27 000₽/мес
-Всё из Стандарт + автономное ведение канала: автопостинг + контент-стратегия.
-
-Есть промокод? Введите его на сайте https://asibiont.ru
-
-Выберите тариф для оплаты через ЮКАССА:"""
-    
-        logger.info(f"TELEGRAM: Sending tariffs description to user {user_id}")
-        await message.bot.send_message(message.chat.id, tiers_description)
-        logger.info(f"TELEGRAM: Tariffs description sent, starting payment creation process...")
-    
-        # Создать платежи для всех тарифов
-        logger.info(f"TELEGRAM: Starting payment creation for user {user_id}, promo_code: {promo_code}")
-        try:
-            logger.info("TELEGRAM: Creating LIGHT payment...")
-            light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', promo_code)
-            logger.info(f"TELEGRAM: LIGHT payment created: {light_url[:60]}...")
-        
-            logger.info("TELEGRAM: Creating STANDARD payment...")
-            standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', promo_code)
-            logger.info(f"TELEGRAM: STANDARD payment created: {standard_url[:60]}...")
-        
-            logger.info("TELEGRAM: Creating PREMIUM payment...")
-            premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', promo_code)
-            logger.info(f"TELEGRAM: PREMIUM payment created: {premium_url[:60]}...")
-        
-            logger.info("TELEGRAM: All payments created successfully, sending message...")
-            payment_message = f"""LIGHT (3000₽/мес):
-{light_url}
-
-STANDARD (9000₽/мес):
-{standard_url}
-
-PREMIUM (27000₽/мес):
-{premium_url}"""
-        
-            await message.bot.send_message(message.chat.id, payment_message)
-            logger.info("TELEGRAM: Payment message sent successfully")
-        except ValueError as e:
-            logger.error(f"TELEGRAM: ValueError during payment creation: {e}")
-            await message.bot.send_message(message.chat.id, f"Ошибка с промокодом: {str(e)}")
-        except Exception as e:
-            logger.error(f"TELEGRAM: Exception during payment creation: {type(e).__name__}: {e}")
-            logger.error(f"TELEGRAM: Full traceback: {traceback.format_exc()}")
-            await message.bot.send_message(message.chat.id, "Ошибка при создании платежей. Попробуйте позже.")
-    
-        logger.info(f"TELEGRAM: subscription_handler completed for user {user_id}")
-    finally:
-        session.close()
+    # Redirect to /buy
+    await buy_handler(message)
 
 
 @router.message(Command("update_profile"))
 async def update_profile_handler(message: Message):
     user_id = message.from_user.id
-    session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username)
-        session.add(user)
-        session.commit()
-    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-    if not subscription or subscription.status != 'active':
-        await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
-        session.close()
+    if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
+        await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
         return
-    session.close()
     # Отправить запрос в ИИ
     text = message.text.replace("/update_profile", "").strip()
     if text:
@@ -343,18 +252,9 @@ async def update_profile_handler(message: Message):
 @router.message(Command("find_partners"))
 async def find_partners_handler(message: Message):
     user_id = message.from_user.id
-    session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username)
-        session.add(user)
-        session.commit()
-    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-    if not subscription or subscription.status != 'active':
-        await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
-        session.close()
+    if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
+        await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
         return
-    session.close()
     # Отправить запрос в ИИ
     try:
         from ai_integration.utils import get_context_from_db
@@ -369,7 +269,7 @@ async def find_partners_handler(message: Message):
 
 @router.message(Command("promo"))
 async def promo_handler(message: Message):
-    """Активация промокода"""
+    """Активация промокода — начисление бонусных токенов"""
     user_id = message.from_user.id
     
     # Извлекаем промокод из команды
@@ -377,12 +277,8 @@ async def promo_handler(message: Message):
     if len(args) < 2:
         await message.answer(
             "📝 Использование: /promo <КОД>\n\n"
-            "Например: /promo LIGHT1\n\n"
-            "Доступные промокоды:\n"
-            "• LIGHT1 - месяц подписки LIGHT\n"
-            "• STD2026XPRO - месяц подписки STANDARD\n"
-            "• PREM2026ELITE - месяц подписки PREMIUM\n"
-            "• VIPACCESS2026 - год подписки PREMIUM (одноразовый)"
+            "Например: /promo BONUS500\n\n"
+            "Промокод начисляет бонусные токены на баланс."
         )
         return
     
@@ -396,7 +292,8 @@ async def promo_handler(message: Message):
             user = User(
                 telegram_id=user_id,
                 username=message.from_user.username,
-                first_name=message.from_user.first_name
+                first_name=message.from_user.first_name,
+                token_balance=0
             )
             session.add(user)
             session.commit()
@@ -425,34 +322,11 @@ async def promo_handler(message: Message):
             await message.answer("❌ Срок действия промокода истек.")
             return
         
-        # Активировать подписку
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        # Начисляем токены вместо подписки
+        # Конвертация: days * 450 средний расход = количество токенов
+        bonus_tokens = promo.duration_days * 450
         
-        start_date = datetime.now(timezone.utc)
-        end_date = start_date + timedelta(days=promo.duration_days)
-        
-        if not subscription:
-            # Создать новую подписку
-            subscription = Subscription(
-                user_id=user.id,
-                telegram_id=user_id,
-                telegram_username=user.username,
-                username=user.username,
-                status='active',
-                tier=promo.tier,
-                start_date=start_date,
-                end_date=end_date
-            )
-            session.add(subscription)
-        else:
-            # Обновить существующую подписку
-            subscription.status = 'active'
-            subscription.tier = promo.tier
-            subscription.start_date = start_date
-            subscription.end_date = end_date
-        
-        # Обновить тариф в User
-        user.subscription_tier = promo.tier
+        result = add_tokens(user_id, bonus_tokens, reason='promo', session=session)
         
         # Отметить использование промокода
         used_by_users.append(str(user_id))
@@ -464,28 +338,22 @@ async def promo_handler(message: Message):
             user_id=user.id,
             telegram_username=user.username,
             action='promo_activated',
-            tier=promo.tier,
+            tier=SubscriptionTier.LIGHT,  # placeholder
             amount='0',
             duration_days=promo.duration_days,
-            start_date=start_date,
-            end_date=end_date,
-            details=json.dumps({'promo_code': promo_code})
+            start_date=datetime.now(timezone.utc),
+            end_date=datetime.now(timezone.utc),
+            details=json.dumps({'promo_code': promo_code, 'tokens_added': bonus_tokens})
         )
         session.add(payment_history)
         
         session.commit()
         
-        tier_names = {
-            SubscriptionTier.LIGHT: '🟢 Лайт',
-            SubscriptionTier.STANDARD: '🔵 Стандарт',
-            SubscriptionTier.PREMIUM: '🟡 Премиум'
-        }
-        
         await message.answer(
             f"✅ Промокод активирован!\n\n"
-            f"🎁 Тариф: {tier_names.get(promo.tier, promo.tier.value)}\n"
-            f"📅 Действует до: {end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
-            f"Используйте /dashboard для просмотра подписки"
+            f"🎁 Начислено: {bonus_tokens} токенов (~{promo.duration_days} дней)\n"
+            f"💰 Баланс: {result.get('balance', 0)} токенов\n\n"
+            f"Проверить баланс: /balance"
         )
         
     except Exception as e:
@@ -498,59 +366,8 @@ async def promo_handler(message: Message):
 
 @router.message(Command("subscribe"))
 async def subscribe_handler(message: Message):
-    user_id = message.from_user.id
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            user = User(telegram_id=user_id, username=message.from_user.username)
-            session.add(user)
-            session.commit()
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if subscription and subscription.status == 'active':
-            await message.bot.send_message(message.chat.id, "У вас уже активная подписка!")
-            return
-    finally:
-        session.close()
-    
-    # Описание тарифов
-    tiers_description = """Выберите свой тариф:
-
-🟢 ЛАЙТ — 3 000₽/мес
-Все инструменты: задачи, партнёры, исследования, котировки, погода, новости, маркетинг, публикации, проактивные рекомендации.
-
-🔵 СТАНДАРТ — 9 000₽/мес (ПОПУЛЯРНЫЙ)
-Всё из Лайт + делегирование задач. AI находит исполнителя из сети, передаёт задачу, следит за дедлайнами.
-
-🟡 ПРЕМИУМ — 27 000₽/мес
-Всё из Стандарт + автономное ведение канала: автопостинг + контент-стратегия.
-
-Подробнее о тарифах: https://asibiont.ru/subscription-tiers
-Есть промокод? Используйте команду /promo <КОД>
-
-Выберите тариф для оплаты через ЮКАССА:"""
-    
-    await message.bot.send_message(message.chat.id, tiers_description)
-    
-    # Создать платежи для всех тарифов
-    try:
-        light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', None)
-        standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', None)
-        premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', None)
-        
-        payment_message = f"""LIGHT (3000₽/мес):
-{light_url}
-
-STANDARD (9000₽/мес):
-{standard_url}
-
-PREMIUM (27000₽/мес):
-{premium_url}"""
-        
-        await message.bot.send_message(message.chat.id, payment_message)
-    except Exception as e:
-        logger.error(f"Error creating payment for user {user_id}: {e}")
-        await message.bot.send_message(message.chat.id, "Ошибка создания платежа. Попробуйте позже.")
+    """Legacy /subscribe — redirect to token-based /buy"""
+    await buy_handler(message)
 
 
 @router.message()
@@ -566,18 +383,18 @@ async def chat_handler(message: Message):
         logger.info(f"[VOICE] Received voice message from user {user_id}")
 
         try:
-            # Проверка подписки
+            # Проверка баланса токенов
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if not user:
-                user = User(telegram_id=user_id, username=message.from_user.username)
+                user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
                 session.add(user)
                 session.commit()
-            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+                grant_signup_tokens(user_id, session=session)
             session.close()
 
-            if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
-                await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
+            if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
+                await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
                 return
 
             # Скачиваем голосовое сообщение
@@ -666,13 +483,15 @@ async def process_text_message(user_id, text, message, state):
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            user = User(telegram_id=user_id, username=message.from_user.username)
+            user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
             session.add(user)
             session.commit()
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+            grant_signup_tokens(user_id, session=session)
         session.close()
-        if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
-            await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
+
+        # Проверка баланса токенов
+        if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
+            await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
             return
 
         # Handle delegation commands
@@ -773,6 +592,10 @@ async def process_text_message(user_id, text, message, state):
                     pass
             
             await message.bot.send_message(message.chat.id, response_text)
+            
+            # Списываем токены за сообщение
+            if not FREE_ACCESS_MODE:
+                spend_tokens(user_id, 'message', description=text[:100])
         except Exception as e:
             logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)
             await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке сообщения.")

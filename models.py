@@ -47,6 +47,8 @@ class User(Base):
     referral_balance = Column(Integer, default=0)  # Referral earnings in kopecks
     referrer_id = Column(Integer, ForeignKey('users.id'))  # User who referred this user
     telegram_channel = Column(String(255))  # Telegram channel username or ID for auto-posting (e.g., @my_channel or -1001234567890)
+    token_balance = Column(Integer, default=0)  # Баланс токенов (1 токен = 1 рубль)
+    tokens_spent = Column(Integer, default=0)  # Всего потрачено токенов
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 
@@ -435,6 +437,21 @@ class Anchor(Base):
                                (self.created_at.replace(tzinfo=datetime.timezone.utc) if self.created_at.tzinfo is None else self.created_at)
                                ).total_seconds() / 60) if self.created_at else 0
         }
+
+
+class TokenTransaction(Base):
+    """Транзакции токенов — полная история начислений и списаний"""
+    __tablename__ = 'token_transactions'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    amount = Column(Integer, nullable=False)       # + начисление, - списание
+    action = Column(String(100), nullable=False)   # Тип действия (message, add_task, purchase, signup...) 
+    description = Column(Text)                     # Описание
+    balance_after = Column(Integer)                 # Баланс после транзакции
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+
+    user = relationship("User", backref="token_transactions")
 
 
 class AnchorDeliveryLog(Base):

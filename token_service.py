@@ -1,0 +1,296 @@
+"""
+Token Service — система токенов (1 токен = 1 рубль).
+
+Все функции открыты для всех пользователей.
+Вместо тарифных замков — расход токенов за каждое действие.
+Продвинутые фичи стоят дороже.
+
+Целевое потребление: ~300-600₽/день → ~9 000-18 000₽/мес.
+Бесплатно: 1 500 токенов при регистрации (~3 дня).
+
+Пакеты покупки:
+  1 500 ₽ — 1 500 токенов
+  5 000 ₽ — 5 500 токенов (10% бонус)
+ 15 000 ₽ — 18 000 токенов (20% бонус)
+"""
+
+import logging
+import json
+import datetime
+from models import Session, User
+
+logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════
+# СТОИМОСТЬ ДЕЙСТВИЙ (1 токен = 1 рубль)
+# ═══════════════════════════════════════════════════════
+
+ACTION_COSTS = {
+    # ── Базовые ──
+    'message':           20,   # Чат с AI (один раунд: запрос + ответ)
+    'voice_message':     25,   # Голосовое сообщение (транскрипция + AI)
+
+    # ── Задачи ──
+    'add_task':          15,   # Создание задачи
+    'edit_task':         10,   # Редактирование задачи
+    'complete_task':      5,   # Завершение задачи
+    'delete_task':        5,   # Удаление задачи
+    'reschedule_task':   10,   # Перенос задачи
+    'restore_task':       5,   # Восстановление задачи
+    'list_tasks':         5,   # Просмотр списка задач
+    'get_task_details':   5,   # Детали задачи
+
+    # ── Цели ──
+    'create_goal':       20,   # Создание цели
+    'update_goal':       15,   # Обновление цели
+    'complete_goal':      5,   # Завершение цели
+    'list_goals':         5,   # Список целей
+
+    # ── Делегирование ──
+    'delegate_task':     40,   # Делегирование задачи
+    'get_delegation_progress': 10,  # Проверка статуса
+    'cancel_delegation': 10,   # Отмена делегирования
+
+    # ── Аналитика ──
+    'analyze_situation_and_suggest_tasks': 30,   # Полный анализ
+    'research_and_plan':  30,   # Исследование и планирование
+    'analyze_group_opportunities': 25,  # Анализ групповых возможностей
+
+    # ── Маркетинг ──
+    'generate_marketing_content': 60,  # Генерация маркетинг-контента
+    'set_content_strategy':       30,  # Настройка стратегии контента
+    'publish_to_telegram':        60,  # Публикация в канал
+
+    # ── Автономные функции ──
+    'toggle_autonomous_feature':  10,  # Вкл/выкл автономной функции
+
+    # ── Контакты / профиль ──
+    'find_partners':     15,   # Поиск партнёров
+    'update_profile':    10,   # Обновление профиля
+    'smart_update_profile': 10,
+
+    # ── Напоминания ──
+    'set_reminder':      10,   # Установка напоминания
+
+    # ── Утилиты ──
+    'get_weather_info':  10,   # Погода
+    'get_news_trends':   10,   # Новости
+    'quick_topic_search': 10,  # Быстрый поиск
+    'research_topic':    20,   # Глубокое исследование
+    'get_crypto_price':  5,    # Котировки
+
+    # ── Проактивные (от агента) ──
+    'proactive_message': 15,   # Проактивное сообщение
+    'proactive_post':    20,   # Проактивный пост в ленту
+    'proactive_channel': 30,   # Проактивный пост в канал
+}
+
+# Стоимость по умолчанию для неизвестных инструментов
+DEFAULT_TOOL_COST = 10
+
+# Токены при регистрации — хватит на ~3 дня активного использования
+FREE_TOKENS_ON_SIGNUP = 1500
+
+# ═══════════════════════════════════════════════════════
+# ПАКЕТЫ ПОКУПКИ
+# ═══════════════════════════════════════════════════════
+
+TOKEN_PACKAGES = {
+    'small':  {'price': 1500,  'tokens': 1500,  'label': '1 500 ₽ — 1 500 токенов'},
+    'medium': {'price': 5000,  'tokens': 5500,  'label': '5 000 ₽ — 5 500 токенов (+10%)'},
+    'large':  {'price': 15000, 'tokens': 18000, 'label': '15 000 ₽ — 18 000 токенов (+20%)'},
+}
+
+# ═══════════════════════════════════════════════════════
+# ОСНОВНЫЕ ФУНКЦИИ
+# ═══════════════════════════════════════════════════════
+
+
+def get_balance(user_id: int, session=None) -> int:
+    """Возвращает текущий баланс токенов пользователя."""
+    close = False
+    if session is None:
+        session = Session()
+        close = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return 0
+        return user.token_balance or 0
+    finally:
+        if close:
+            session.close()
+
+
+def has_enough_tokens(user_id: int, action: str, session=None) -> bool:
+    """Проверяет, хватает ли токенов для действия."""
+    cost = ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
+    balance = get_balance(user_id, session)
+    return balance >= cost
+
+
+def spend_tokens(user_id: int, action: str, description: str = '', session=None) -> dict:
+    """
+    Списывает токены за действие.
+    
+    Returns: {'success': True/False, 'balance': int, 'spent': int, 'error': str}
+    """
+    cost = ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
+    
+    close = False
+    if session is None:
+        session = Session()
+        close = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return {'success': False, 'balance': 0, 'spent': 0, 'error': 'Пользователь не найден'}
+        
+        balance = user.token_balance or 0
+        if balance < cost:
+            return {
+                'success': False,
+                'balance': balance,
+                'spent': 0,
+                'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
+            }
+        
+        # Списываем
+        user.token_balance = balance - cost
+        user.tokens_spent = (user.tokens_spent or 0) + cost
+        
+        # Записываем транзакцию
+        from models import TokenTransaction
+        tx = TokenTransaction(
+            user_id=user.id,
+            amount=-cost,
+            action=action,
+            description=description or action,
+            balance_after=user.token_balance
+        )
+        session.add(tx)
+        session.commit()
+        
+        logger.debug(f"[TOKEN] User {user_id}: -{cost} за {action} (баланс: {user.token_balance})")
+        
+        return {
+            'success': True,
+            'balance': user.token_balance,
+            'spent': cost,
+        }
+        
+    except Exception as e:
+        logger.error(f"[TOKEN] spend_tokens error: {e}")
+        session.rollback()
+        return {'success': False, 'balance': 0, 'spent': 0, 'error': str(e)}
+    finally:
+        if close:
+            session.close()
+
+
+def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None) -> dict:
+    """
+    Начисляет токены.
+    
+    Args:
+        user_id: telegram_id
+        amount: количество токенов
+        reason: причина ('signup', 'purchase', 'bonus', 'refund')
+    
+    Returns: {'success': True/False, 'balance': int}
+    """
+    close = False
+    if session is None:
+        session = Session()
+        close = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
+        
+        user.token_balance = (user.token_balance or 0) + amount
+        
+        from models import TokenTransaction
+        tx = TokenTransaction(
+            user_id=user.id,
+            amount=amount,
+            action=reason,
+            description=f'+{amount} токенов ({reason})',
+            balance_after=user.token_balance
+        )
+        session.add(tx)
+        session.commit()
+        
+        logger.info(f"[TOKEN] User {user_id}: +{amount} ({reason}) → баланс: {user.token_balance}")
+        
+        return {'success': True, 'balance': user.token_balance}
+        
+    except Exception as e:
+        logger.error(f"[TOKEN] add_tokens error: {e}")
+        session.rollback()
+        return {'success': False, 'balance': 0, 'error': str(e)}
+    finally:
+        if close:
+            session.close()
+
+
+def grant_signup_tokens(user_id: int, session=None) -> dict:
+    """Начисляет бесплатные токены при регистрации."""
+    return add_tokens(user_id, FREE_TOKENS_ON_SIGNUP, reason='signup', session=session)
+
+
+def get_action_cost(action: str) -> int:
+    """Возвращает стоимость действия."""
+    return ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
+
+
+def get_balance_info(user_id: int, session=None) -> str:
+    """Форматированная информация о балансе."""
+    close = False
+    if session is None:
+        session = Session()
+        close = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        balance = user.token_balance or 0
+        spent = user.tokens_spent or 0
+        
+        # Оценка на сколько дней хватит (средний расход ~450/день)
+        days_left = round(balance / 450, 1) if balance > 0 else 0
+        
+        text = f"💰 Баланс: {balance} токенов (~{days_left} дней)\n"
+        text += f"📊 Потрачено всего: {spent} токенов\n\n"
+        
+        if balance < 100:
+            text += "⚠️ Токены заканчиваются! Пополни: /buy\n\n"
+        
+        text += "📋 Стоимость действий:\n"
+        text += "• Сообщение: 20 ₽\n"
+        text += "• Создание задачи: 15 ₽\n"
+        text += "• Делегирование: 40 ₽\n"
+        text += "• Маркетинг-контент: 60 ₽\n"
+        text += "• Проактивное сообщение: 15 ₽\n"
+        text += f"\nПополнить: /buy"
+        
+        return text
+    finally:
+        if close:
+            session.close()
+
+
+def insufficient_balance_message(user_id: int, action: str, session=None) -> str:
+    """Сообщение о недостатке токенов."""
+    cost = ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
+    balance = get_balance(user_id, session)
+    
+    return (
+        f"⚠️ Недостаточно токенов для этого действия.\n\n"
+        f"Нужно: {cost} токенов\n"
+        f"Баланс: {balance} токенов\n\n"
+        f"Пополнить баланс: /buy"
+    )

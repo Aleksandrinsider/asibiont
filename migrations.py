@@ -72,6 +72,8 @@ def _migrate_users(session, inspector):
         'referrer_id': 'ALTER TABLE users ADD COLUMN referrer_id INTEGER REFERENCES users(id)',
         'telegram_channel': 'ALTER TABLE users ADD COLUMN telegram_channel VARCHAR(255)',
         'current_task_id': 'ALTER TABLE users ADD COLUMN current_task_id INTEGER REFERENCES tasks(id)',
+        'token_balance': 'ALTER TABLE users ADD COLUMN token_balance INTEGER DEFAULT 0',
+        'tokens_spent': 'ALTER TABLE users ADD COLUMN tokens_spent INTEGER DEFAULT 0',
     })
 
 
@@ -288,6 +290,17 @@ def _migrate_anchors(session, inspector):
         })
 
 
+def _migrate_token_transactions(session, inspector):
+    """Создание таблицы token_transactions"""
+    # Создаётся автоматически через Base.metadata.create_all
+    # Миграции для будущих полей:
+    if inspector.has_table('token_transactions'):
+        cols = [col['name'] for col in inspector.get_columns('token_transactions')]
+        _add_columns(session, 'token_transactions', cols, {
+            # Будущие миграции сюда
+        })
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -303,6 +316,7 @@ def run_migrations():
         _migrate_payments(session, inspector)
         _migrate_promo_codes(session, inspector)
         _migrate_anchors(session, inspector)
+        _migrate_token_transactions(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

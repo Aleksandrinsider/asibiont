@@ -16,46 +16,37 @@ logger = logging.getLogger(__name__)
 def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None, user_id_param=None):
     """Упрощенный промпт - использует отдельные модули"""
 
-    # Subscription info
+    # Token system — все функции открыты, ограничение только баланс
     tier_value = subscription_tier.value if hasattr(subscription_tier, 'value') else str(subscription_tier)
-    if tier_value == 'LIGHT':
-        tier_info = """\n## ТАРИФ: LITE — Личная работа
-Твои возможности на этом тарифе:
-- Задачи: создание, редактирование, напоминания, повторяющиеся задачи
-- Цели: создание, отслеживание прогресса
-- Исследования: research_topic, get_news_trends, get_weather_info
-- Контакты: find_relevant_contacts_for_task (показывай кто из сети подходит для задачи/активности)
-- Профиль: update_profile, show_profile
-- Маркетинг: generate_marketing_content, publish_to_telegram (вручную через диалог)
+    
+    # Получаем баланс токенов для контекста AI
+    token_balance_info = ""
+    if user_id_param:
+        try:
+            from token_service import get_balance
+            balance = get_balance(user_id_param)
+            token_balance_info = f"\nБаланс токенов: {balance} (1 токен = 1₽). Каждое действие стоит токены."
+            if balance < 100:
+                token_balance_info += " ⚠️ У пользователя мало токенов — будь лаконичен, экономь ресурс."
+        except Exception:
+            pass
 
-НЕДОСТУПНО на этом тарифе: делегирование задач, автономное ведение канала.
-Не упоминай делегирование и автопостинг — пользователь не может их использовать.
+    tier_info = f"""\n## СИСТЕМА ТОКЕНОВ
+Все функции открыты. Пользователь платит токенами за каждое действие.{token_balance_info}
 
-Инструменты: list_tasks, add_task, complete_task, edit_task, delete_task, check_time_conflicts, create_goal, update_goal_progress, list_goals, update_profile, show_profile, find_relevant_contacts_for_task, research_topic, get_news_trends, get_weather_info, generate_marketing_content, publish_to_telegram"""
-    elif tier_value == 'STANDARD':
-        tier_info = """\n## ТАРИФ: STANDARD — Управление командой
-Всё из Lite плюс:
+Доступные инструменты:
+- Задачи: list_tasks, add_task, complete_task, edit_task, delete_task, check_time_conflicts, reschedule_task, restore_task
+- Цели: create_goal, update_goal_progress, list_goals
 - Делегирование: delegate_task, get_delegation_progress
-- Когда находишь подходящего человека для задачи — ПРЕДЛОЖИ делегировать: "нашёл @dima, он разбирается в этом. Делегировать ему?"
-- Следи за статусом делегированных задач и сообщай пользователю
-- Если делегированная задача не принята — предложи альтернативного кандидата
+- Контакты: find_relevant_contacts_for_task
+- Профиль: update_profile, show_profile
+- Исследования: research_topic, get_news_trends, get_weather_info, quick_topic_search
+- Маркетинг: generate_marketing_content, publish_to_telegram, set_content_strategy
+- Автономность: set_auto_post_time, toggle_autonomous_feature
 
-НЕДОСТУПНО: автономное ведение канала. Не предлагай автопостинг.
-
-Инструменты: все из Lite + delegate_task, get_delegation_progress"""
-    elif tier_value == 'PREMIUM':
-        tier_info = """\n## ТАРИФ: PREMIUM — Продвижение и рост
-Всё из Standard плюс:
-- Автономное ведение канала: set_auto_post_time, set_content_strategy
-- Пользователь говорит "веди канал" → уточни тему, стиль, частоту, аудиторию → генерируй контент → предлагай: "вот пост, публикуем?"
-- Мониторинг рынка/ниши: сам исследуй тренды в сфере пользователя и приходи с инсайтами (новый конкурент, сдвиг спроса, регуляции)
-- Контент привязанный к целям: предлагай посты которые продвигают цель (привлекают партнёров, клиентов, внимание)
-- Отчитывайся о публикациях: что вышло, как зашло
-- Автоматический поиск партнёров для целей
-
-Инструменты: все из Standard + set_auto_post_time, set_content_strategy"""
-    else:
-        tier_info = f"\nТариф: {tier_value}"
+Стоимость действий для пользователя:
+• Сообщение: 20₽ • Задача: 5-15₽ • Делегирование: 40₽ • Маркетинг: 60₽
+Если баланс низкий — предупреди и предложи /buy."""
 
     # Context data
     weather = f"\nПогода: {weather_info}" if weather_info else ""

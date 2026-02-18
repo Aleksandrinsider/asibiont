@@ -17,11 +17,18 @@ else:
     else:
         logger.warning("Yookassa credentials not configured (local mode)")
 
-# Pricing for subscription tiers (RUB/month)
+# Pricing for subscription tiers (RUB/month) — legacy, kept for compatibility
 TIER_PRICES = {
     'light': 3000,
     'standard': 9000,
     'premium': 27000
+}
+
+# Token packages (new primary monetization)
+TOKEN_PACK_PRICES = {
+    'tokens_small':  {'price': 1500,  'tokens': 1500},
+    'tokens_medium': {'price': 5000,  'tokens': 5500},
+    'tokens_large':  {'price': 15000, 'tokens': 18000},
 }
 
 TIER_NAMES = {

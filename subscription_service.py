@@ -9,34 +9,30 @@ import json
 logger = logging.getLogger(__name__)
 
 def check_subscription(user_id):
+    """Проверяет доступ: FREE_ACCESS_MODE, активная подписка, или баланс токенов > 0."""
     if FREE_ACCESS_MODE:
         return True
     session = Session()
     try:
-        # First find the user by telegram_id
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return False
         
-        # Then find subscription by user.id
+        # Новая проверка: есть токены — есть доступ
+        if (user.token_balance or 0) > 0:
+            return True
+        
+        # Fallback: старые подписки (для обратной совместимости)
         sub = session.query(Subscription).filter_by(user_id=user.id).first()
         if sub and sub.status == 'active':
             if sub.end_date is None:
                 return True
-            # Handle both offset-naive and offset-aware datetimes
             now = datetime.datetime.now(pytz.UTC)
             if sub.end_date.tzinfo is None:
-                # end_date is offset-naive, make now offset-naive too
                 now_naive = now.replace(tzinfo=None)
                 return sub.end_date > now_naive
             else:
-                # end_date is offset-aware
                 return sub.end_date > now
-        
-        # Если нет активной подписки в таблице Subscription, проверим subscription_tier
-        if user.subscription_tier and user.subscription_tier != SubscriptionTier.LIGHT:
-            logger.info(f"User {user_id} has subscription_tier {user.subscription_tier.value}, granting access")
-            return True
             
         return False
     except Exception as e:

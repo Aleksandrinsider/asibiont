@@ -32,43 +32,16 @@ class DynamicToolDiscovery:
         
     def filter_tools_by_tier(self, subscription_tier: str) -> Dict[str, Any]:
         """
-        Фильтрует доступные инструменты на основе тарифа пользователя
-        
-        Args:
-            subscription_tier: Тариф пользователя ('LIGHT', 'STANDARD', 'PREMIUM')
-            
-        Returns:
-            Словарь с доступными инструментами для данного тарифа
+        Возвращает все инструменты — тарифные ограничения убраны.
+        Оплата через токены за каждое действие.
         """
         if not self.discovered_tools:
             logger.warning("[TOOL FILTER] No tools discovered yet")
             return {}
         
-        # Import tier restrictions from tools.py (single source of truth)
-        try:
-            from .tools import LIGHT_RESTRICTED, STANDARD_RESTRICTED, PREMIUM_RESTRICTED
-        except ImportError:
-            logger.error("[TOOL FILTER] Could not import tier restrictions")
-            return self.discovered_tools.copy()
-        
-        tier_value = subscription_tier.upper() if subscription_tier else 'LIGHT'
-        
-        # Determine which functions are restricted for this tier
-        if tier_value == 'PREMIUM':
-            restricted = PREMIUM_RESTRICTED
-        elif tier_value == 'STANDARD':
-            restricted = STANDARD_RESTRICTED
-        else:  # LIGHT
-            restricted = LIGHT_RESTRICTED
-        
-        # Filter out restricted functions
-        filtered_tools = {}
-        for tool_name, tool_data in self.discovered_tools.items():
-            if tool_name not in restricted:
-                filtered_tools[tool_name] = tool_data
-        
-        logger.info(f"[TOOL FILTER] {tier_value} tier - {len(filtered_tools)}/{len(self.discovered_tools)} tools available")
-        return filtered_tools
+        # Все функции открыты — ограничение только баланс токенов
+        logger.info(f"[TOOL FILTER] All {len(self.discovered_tools)} tools available (token-based billing)")
+        return self.discovered_tools.copy()
     
     def get_available_tools_for_tier(self, subscription_tier: str) -> List[Dict[str, Any]]:
         """

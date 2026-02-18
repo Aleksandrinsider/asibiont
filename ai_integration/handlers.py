@@ -5418,10 +5418,10 @@ async def generate_marketing_content(product_name, target_audience, platform, go
         close_session = True
     
     try:
-        # Проверка subscription tier (STANDARD или PREMIUM)
+        # Все функции открыты — оплата токенами
         user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
-            return "⭐ Генерация маркетингового контента доступна с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        if not user:
+            return "Пользователь не найден. Напишите /start."
         
         result = await gen_content(
             product_name=product_name,
@@ -5521,10 +5521,10 @@ async def set_content_strategy(strategy: str, user_id: int, session):
         close_session = True
     
     try:
-        # Проверка subscription tier (STANDARD или PREMIUM)
+        # Все функции открыты — оплата токенами
         user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
-            return "🎯 Настройка стратегии контента доступна с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        if not user:
+            return "Пользователь не найден. Напишите /start."
         
         logger.info(f"[CONTENT_STRATEGY] Saving for user {user_id}")
         
@@ -5567,10 +5567,10 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
         close_session = True
     
     try:
-        # Проверка subscription tier (только PREMIUM)
+        # Все функции открыты — оплата токенами
         user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user or not user.subscription_tier or user.subscription_tier.value != 'PREMIUM':
-            return "⚙️ Управление автономными функциями доступно только на тарифе PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        if not user:
+            return "Пользователь не найден. Напишите /start."
         
         logger.info(f"[AUTONOMOUS_TOGGLE] User {user_id}: {feature} = {enabled}")
         
@@ -5634,10 +5634,10 @@ async def publish_to_telegram(content: str, user_id: int, session):
         close_session = True
     
     try:
-        # Проверка subscription tier (STANDARD или PREMIUM)
+        # Все функции открыты — оплата токенами
         user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user or not user.subscription_tier or user.subscription_tier.value == 'LIGHT':
-            return "📢 Публикация в Telegram канал доступна с тарифом STANDARD (9000₽/мес) или PREMIUM (27000₽/мес).\n\nИспользуйте /premium для подключения."
+        if not user:
+            return "Пользователь не найден. Напишите /start."
         
         logger.info(f"[PUBLISH] Starting for user {user_id}")
         

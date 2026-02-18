@@ -573,6 +573,18 @@ class HybridAutonomousAgent:
                 params = self._fix_tool_params(tool_name, params, user_message)
 
                 try:
+                    # Списываем токены за инструмент (если стоимость > 0)
+                    from token_service import spend_tokens, ACTION_COSTS, DEFAULT_TOOL_COST
+                    from config import FREE_ACCESS_MODE
+                    tool_cost = ACTION_COSTS.get(tool_name, DEFAULT_TOOL_COST)
+                    if not FREE_ACCESS_MODE and tool_cost > 0:
+                        token_result = spend_tokens(user_id, tool_name, description=reason)
+                        if not token_result['success']:
+                            results.append({"tool": tool_name, "success": False,
+                                            "error": token_result['error'], "reason": reason})
+                            logger.info(f"[EXEC] {tool_name} — недостаточно токенов")
+                            continue
+
                     if asyncio.iscoroutinefunction(handler_func):
                         result = await handler_func(**params)
                     else:

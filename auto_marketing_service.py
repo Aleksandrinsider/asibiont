@@ -38,12 +38,11 @@ class AutoMarketingService:
     
     async def get_premium_users_for_marketing(self):
         """
-        Получает список Premium пользователей готовых для автомаркетинга
+        Получает список пользователей готовых для автомаркетинга
         
         Критерии:
-        - Подписка PREMIUM
         - Настроен telegram_channel
-        - Активная подписка
+        - Достаточно токенов для proactive_channel (30 токенов)
         
         Returns:
             List[dict]: Список словарей с информацией о пользователях
@@ -51,20 +50,21 @@ class AutoMarketingService:
         session = Session()
         try:
             from models import Subscription, UserProfile
+            from token_service import has_enough_tokens
             
-            now = datetime.utcnow()
-            
-            # Находим активных Premium пользователей с telegram_channel
-            premium_users = session.query(User).join(Subscription).outerjoin(UserProfile).filter(
-                User.subscription_tier == SubscriptionTier.PREMIUM,
+            # Находим пользователей с telegram_channel и положительным балансом
+            users_with_channel = session.query(User).outerjoin(UserProfile).filter(
                 User.telegram_channel.isnot(None),
                 User.telegram_channel != '',
-                Subscription.tier == SubscriptionTier.PREMIUM,
-                Subscription.end_date > now
+                User.token_balance > 0
             ).all()
             
             users_data = []
-            for user in premium_users:
+            for user in users_with_channel:
+                # Дополнительная проверка баланса для конкретного действия
+                if not has_enough_tokens(user.telegram_id, 'proactive_channel', session=session):
+                    continue
+                    
                 # Получаем предпочтительное время постинга
                 post_time = '12:00'  # По умолчанию 12:00
                 if user.profile and user.profile.auto_post_time:
@@ -78,7 +78,7 @@ class AutoMarketingService:
                     'channel': user.telegram_channel
                 })
             
-            logger.info(f"[AUTO_MARKETING_SERVICE] Found {len(users_data)} Premium users ready for auto-marketing")
+            logger.info(f"[AUTO_MARKETING_SERVICE] Found {len(users_data)} users ready for auto-marketing")
             return users_data
             
         except Exception as e:

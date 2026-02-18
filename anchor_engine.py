@@ -48,12 +48,11 @@ logger = logging.getLogger(__name__)
 # CONSTANTS
 # ═══════════════════════════════════════════════════════
 
-# ── Лимиты доставок (раздельные, по тарифам) ──
-TIER_LIMITS = {
-    SubscriptionTier.LIGHT: {'dialog': 4, 'feed': 1, 'channel': 0},
-    SubscriptionTier.STANDARD: {'dialog': 6, 'feed': 2, 'channel': 0},
-    SubscriptionTier.PREMIUM: {'dialog': 8, 'feed': 2, 'channel': 1},
-}
+# ── Лимиты доставок (единые, контроль расхода через токены) ──
+# Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
+MAX_DIALOG_PER_DAY = 8
+MAX_FEED_PER_DAY = 2
+MAX_CHANNEL_PER_DAY = 1
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
@@ -165,9 +164,10 @@ class AnchorEngine:
             if not user:
                 return
 
-            # Проверка подписки
-            from subscription_service import check_subscription
-            if not check_subscription(user_id):
+            # Проверка баланса токенов (минимум на 1 проактивное сообщение)
+            from token_service import has_enough_tokens
+            from config import FREE_ACCESS_MODE
+            if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'proactive_message'):
                 return
 
             # Проверка DND
@@ -185,8 +185,6 @@ class AnchorEngine:
                 return
 
             # ── Подсчёт доставок за сегодня (раздельно) ──
-            tier = user.subscription_tier or SubscriptionTier.LIGHT
-            limits = TIER_LIMITS.get(tier, TIER_LIMITS[SubscriptionTier.LIGHT])
             today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
             today_start_utc = today_start.astimezone(pytz.UTC)
 
@@ -264,7 +262,7 @@ class AnchorEngine:
                     logger.info(f"[ANCHOR] User {user_id}: CRITICAL/HIGH delivered ({len(critical_anchors)} anchors)")
 
             # ── 3b. REGULAR — с проверкой лимита + gap ──
-            if regular_anchors and dialog_count < limits['dialog'] and proactive_gap_ok:
+            if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
                 message = await self._ai_decide_and_compose(user, regular_anchors, session)
                 if message:
                     await self._deliver(user, regular_anchors, message, session)
@@ -273,13 +271,13 @@ class AnchorEngine:
 
             # ── 3c. FEED POSTS — отдельный лимит ──
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
-            if feed_posts and post_count < limits['feed']:
+            if feed_posts and post_count < MAX_FEED_PER_DAY:
                 for pa in feed_posts[:1]:  # Максимум 1 за цикл
                     await self._process_post_anchor(user, pa, session)
 
             # ── 3d. CHANNEL POSTS — отдельный лимит ──
             channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
-            if channel_posts and channel_count < limits['channel']:
+            if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
                 for pa in channel_posts[:1]:
                     await self._process_post_anchor(user, pa, session)
 
@@ -300,9 +298,8 @@ class AnchorEngine:
         """
         anchors = []
 
-        # Получаем профиль и тариф
+        # Получаем профиль
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        tier = user.subscription_tier or SubscriptionTier.LIGHT
 
         user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
         user_now = datetime.now(user_tz)
@@ -317,9 +314,8 @@ class AnchorEngine:
         # --- ПРОФИЛЬ ---
         anchors.extend(self._scan_profile(user, profile, session))
 
-        # --- ДЕЛЕГИРОВАНИЕ (STANDARD+) ---
-        if tier in (SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM):
-            anchors.extend(self._scan_delegation(user, session, now_utc))
+        # --- ДЕЛЕГИРОВАНИЕ (открыто всем — оплата токенами) ---
+        anchors.extend(self._scan_delegation(user, session, now_utc))
 
         # --- КОНТАКТЫ ---
         anchors.extend(self._scan_contacts(user, session, now_utc))
@@ -330,15 +326,14 @@ class AnchorEngine:
         # --- УТРО/ВЕЧЕР ---
         anchors.extend(self._scan_daily_rhythm(user, session, user_now))
 
-        # --- РЫНОК/КОНТЕНТ (PREMIUM) ---
-        if tier == SubscriptionTier.PREMIUM:
-            anchors.extend(self._scan_premium_insights(user, profile, session, now_utc))
+        # --- РЫНОК/КОНТЕНТ (открыто всем) ---
+        anchors.extend(self._scan_premium_insights(user, profile, session, now_utc))
 
-        # --- ПОСТЫ В ЛЕНТУ (все тарифы) ---
-        anchors.extend(self._scan_post_opportunities(user, profile, session, now_utc, tier))
+        # --- ПОСТЫ В ЛЕНТУ (все) ---
+        anchors.extend(self._scan_post_opportunities(user, profile, session, now_utc))
 
-        # --- ПОСТЫ В КАНАЛ (PREMIUM, заменяет AutoMarketingService) ---
-        if tier == SubscriptionTier.PREMIUM:
+        # --- ПОСТЫ В КАНАЛ (если указан канал) ---
+        if user.telegram_channel:
             anchors.extend(self._scan_channel_post(user, profile, session, now_utc))
 
         # Дедупликация: не создаём якорь если уже есть недоставленный с тем же type+source
@@ -808,7 +803,7 @@ class AnchorEngine:
     # POST SCANNERS — ленточный автопостинг + канал
     # ═══════════════════════════════════════════════════════
 
-    def _scan_post_opportunities(self, user, profile, session, now_utc, tier) -> list:
+    def _scan_post_opportunities(self, user, profile, session, now_utc) -> list:
         """Сканирует ВСЕ данные пользователя и создаёт якорь post_opportunity.
 
         AI потом сам решит, стоит ли делать пост и О ЧЁМ.
@@ -827,7 +822,7 @@ class AnchorEngine:
             Post.created_at >= today_start_utc
         ).count()
 
-        feed_limit = TIER_LIMITS.get(tier, TIER_LIMITS[SubscriptionTier.LIGHT])['feed']
+        feed_limit = MAX_FEED_PER_DAY
         if posts_today >= feed_limit:
             return anchors
 
@@ -948,7 +943,7 @@ class AnchorEngine:
             AnchorDeliveryLog.anchor_types.contains('channel_post')
         ).count()
 
-        if channel_posts_today >= TIER_LIMITS[SubscriptionTier.PREMIUM]['channel']:
+        if channel_posts_today >= MAX_CHANNEL_PER_DAY:
             return anchors
 
         # Проверяем предпочтительное время для постинга
@@ -1042,6 +1037,16 @@ class AnchorEngine:
     async def _process_post_anchor(self, user, anchor, session):
         """Обрабатывает постовый якорь: AI создаёт пост, публикует в ленту/канал."""
         try:
+            # Проверяем и списываем токены
+            from token_service import spend_tokens, has_enough_tokens
+            from config import FREE_ACCESS_MODE
+            action = 'proactive_channel' if anchor.anchor_type == 'channel_post' else 'proactive_post'
+            if not FREE_ACCESS_MODE:
+                if not has_enough_tokens(user.telegram_id, action):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск поста — нет токенов")
+                    return
+                spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}')
+
             anchor_data = json.loads(anchor.data) if anchor.data else {}
 
             if anchor.anchor_type == 'post_opportunity':
@@ -1254,7 +1259,6 @@ class AnchorEngine:
         try:
             # Собираем контекст
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-            tier = user.subscription_tier or SubscriptionTier.LIGHT
 
             user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
             user_now = datetime.now(user_tz)
@@ -1332,38 +1336,18 @@ class AnchorEngine:
                 delivery_stats += f", последнее {int(hours_since_last)}ч назад"
 
             # Собираем промпт для AI
-            # Тарифные инструкции — AI знает что доступно пользователю
-            tier_instructions = {
-                SubscriptionTier.LIGHT: (
-                    "ТАРИФ LITE (3000₽/мес):\n"
-                    "- Базовое управление задачами и целями\n"
-                    "- НЕТ делегирования, НЕТ маркетинга, НЕТ канала\n"
-                    "- Короткие, конкретные сообщения (3-5 предложений)\n"
-                    "- Фокус: задачи, дедлайны, простые рекомендации"
-                ),
-                SubscriptionTier.STANDARD: (
-                    "ТАРИФ STANDARD (9000₽/мес):\n"
-                    "- Полное управление задачами, целями, делегирование\n"
-                    "- Поиск контактов, аналитика продуктивности\n"
-                    "- НЕТ маркетинга, НЕТ канала\n"
-                    "- Средняя глубина (4-7 предложений)\n"
-                    "- Фокус: задачи + делегирование + аналитика"
-                ),
-                SubscriptionTier.PREMIUM: (
-                    "ТАРИФ PREMIUM (27000₽/мес):\n"
-                    "- ВСЁ: задачи, цели, делегирование, маркетинг, канал, исследования рынка\n"
-                    "- Глубокие инсайты, контент-стратегия, конкурентный анализ\n"
-                    "- Развёрнутые сообщения (5-10 предложений)\n"
-                    "- Фокус: полный бизнес-ассистент, проактивные идеи"
-                ),
-            }
+            # Баланс токенов — AI знает контекст пользователя
+            from token_service import get_balance
+            token_balance = get_balance(user.telegram_id)
 
             prompt_parts = [
                 "Ты — AnchorEngine, мозг автономного агента ASI Biont.",
                 "Ниже — сработавшие ЯКОРЯ (события/факты) + полный контекст пользователя.",
                 "Твоя задача: РЕШИТЬ, стоит ли сейчас написать пользователю, и если да — НАПИСАТЬ сообщение.",
                 "",
-                tier_instructions.get(tier, tier_instructions[SubscriptionTier.LIGHT]),
+                f"БАЛАНС ТОКЕНОВ: {token_balance} (каждое проактивное сообщение = 15 токенов).",
+                "Если у пользователя мало токенов — пиши только КРИТИЧНЫЕ вещи, экономь ресурс.",
+                "Все функции открыты — ограничитель только баланс токенов.",
                 "",
                 "ПРАВИЛА:",
                 "1. Если якорей мало и они неважные — НЕ ПИШИ. Верни ровно слово: SKIP",
@@ -1373,11 +1357,10 @@ class AnchorEngine:
                 "5. Не создавай и не меняй задачи без просьбы пользователя.",
                 "6. Если несколько якорей — объедини в ОДНО связное сообщение, а не список",
                 "7. На основе данных профиля и истории — персонализируй, не будь роботом",
-                "8. НЕ предлагай функции, недоступные на тарифе пользователя!",
                 "",
                 f"=== ВРЕМЯ ===",
                 f"{user_now.strftime('%H:%M %d.%m.%Y')} ({user.timezone or 'Europe/Moscow'})",
-                f"Тариф: {tier.value}",
+                f"Баланс: {token_balance} токенов",
                 f"{delivery_stats}",
             ]
 
@@ -1437,8 +1420,17 @@ class AnchorEngine:
     # ═══════════════════════════════════════════════════════
 
     async def _deliver(self, user, anchors: list, message: str, session):
-        """Отправляет сообщение и записывает лог"""
+        """Отправляет сообщение и записывает лог. Списывает токены."""
         try:
+            # Проверяем и списываем токены за проактивное сообщение
+            from token_service import spend_tokens, has_enough_tokens
+            from config import FREE_ACCESS_MODE
+            if not FREE_ACCESS_MODE:
+                if not has_enough_tokens(user.telegram_id, 'proactive_message'):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск доставки — нет токенов")
+                    return
+                spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor')
+
             now_utc = datetime.now(timezone.utc)
 
             # Помечаем якоря как доставленные
