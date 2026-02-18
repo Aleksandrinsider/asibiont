@@ -1408,11 +1408,17 @@ class HybridAutonomousAgent:
             import re
             match = re.search(r"[«'](.+?)[»']", instruction)
             task_name = match.group(1) if match else "задача"
-            return f"Напоминаю о задаче: {task_name}. Как продвигается?"
+            return (f"Время задачи «{task_name}» пришло. "
+                    f"Расскажи, как продвигается — сделал, в процессе или нужно перенести? "
+                    f"Если нужна помощь, могу подключиться.")
         elif mode == 'result_check':
             return "Отлично, задача выполнена! 👍"
+        elif mode == 'anchor':
+            return None  # лучше промолчать чем отправить мусор
+        elif mode == 'proactive':
+            return None  # не отправляем генерик-мусор
         else:
-            return "Привет! Готов помочь с задачами и целями."
+            return None  # если AI недоступен — не отправляем ничего
 
     def _learn_from_success(self, message, user_id, tools_used):
         """Обучение на успешных паттернах.

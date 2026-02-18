@@ -1749,7 +1749,7 @@ from collections import defaultdict
 
 _rate_limit_store = defaultdict(list)  # ip -> [timestamp, ...]
 _RATE_LIMIT_WINDOW = 60   # секунд
-_RATE_LIMIT_MAX = 60      # запросов в окне (для API)
+_RATE_LIMIT_MAX = 200     # запросов в окне (для API) — увеличено, т.к. дашборд опрашивает ~8 эндпоинтов каждые 30сек
 _RATE_LIMIT_AUTH_MAX = 10  # запросов на аутентификацию
 
 
@@ -1767,7 +1767,7 @@ async def rate_limit_middleware(request, handler):
         client_ip = client_ip.split(',')[0].strip()
     
     now = _time_module.time()
-    key = f"{client_ip}:{path.split('/')[1]}"  # group by IP + first path segment
+    key = f"{client_ip}:api"  # group all API by IP
     
     # Очищаем старые записи
     _rate_limit_store[key] = [ts for ts in _rate_limit_store[key] if now - ts < _RATE_LIMIT_WINDOW]

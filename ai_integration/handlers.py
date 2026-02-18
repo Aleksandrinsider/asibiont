@@ -4337,6 +4337,12 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         except ImportError:
             pass
         
+        # Сбрасываем current_task_id у пользователя если он указывает на эту задачу
+        # (иначе FK constraint не даст удалить)
+        if user.current_task_id == task_db_id:
+            user.current_task_id = None
+            logger.info(f"[DELETE_TASK] Reset current_task_id for user {user.telegram_id}")
+        
         # Удаляем задачу
         session.delete(task)
         session.commit()
