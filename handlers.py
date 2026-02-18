@@ -17,7 +17,7 @@ router = Router()
 message_cache = {}
 message_cache_lock = threading.Lock()
 from ai_integration import chat_with_ai
-from models import Session, User, Subscription, Task
+from models import Session, User, Subscription, Task, Interaction
 from sqlalchemy import func
 from payments import create_payment
 from config import WEBHOOK_URL
@@ -398,12 +398,25 @@ async def process_text_message(user_id, text, message, state):
     try:
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
+        is_first_message = False
         if not user:
             user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
             session.add(user)
             session.commit()
             grant_signup_tokens(user_id, session=session)
+            is_first_message = True
+        elif not session.query(Interaction).filter_by(user_id=user.id).first():
+            is_first_message = True
         session.close()
+
+        # Новый пользователь — сначала показываем описание и тарифы
+        if is_first_message:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
+            ])
+            balance = get_balance(user_id)
+            welcome_text = PREMIUM_DESCRIPTION + f"\n\n1 500 бесплатных токенов начислено. Просто напиши мне."
+            await message.bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
 
         # Проверка баланса токенов
         if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
