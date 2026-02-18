@@ -565,6 +565,14 @@ async def auth_handler(request):
                     session_db.add(user)
                     session_db.commit()
 
+                    # Начисляем бесплатные токены при регистрации
+                    try:
+                        from token_service import grant_signup_tokens
+                        grant_signup_tokens(user_id, session=session_db)
+                        logger.info(f"Granted signup tokens to new user {user_id}")
+                    except Exception as e:
+                        logger.error(f"Error granting signup tokens to {user_id}: {e}")
+
                     # Создаем профиль с городом, если определили
                     if city:
                         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
