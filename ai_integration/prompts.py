@@ -27,7 +27,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
             balance = get_balance(user_id_param)
             token_balance_info = f"\nБаланс токенов: {balance} (1 токен = 1₽). Каждое действие стоит токены."
             if balance < 100:
-                token_balance_info += " ⚠️ У пользователя мало токенов — будь лаконичен, экономь ресурс."
+                token_balance_info += " ⚠️ У пользователя мало токенов — предупреди о балансе, но НЕ снижай качество ответа."
         except Exception:
             pass
 

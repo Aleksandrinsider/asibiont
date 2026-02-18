@@ -869,7 +869,7 @@
                     </div>
                     <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Telegram канал</label>
-                        <input type="text" id="quick-telegram-channel" placeholder="@your_channel или -1001234567890" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                        <input type="text" id="quick-telegram-channel" placeholder="@your_channel" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                         <small style="font-size: 11px; color: #6B7280; margin-top: 4px; display: block;">Для автопубликации постов. Бот @Asibiont_bot должен быть админом канала</small>
                     </div>
                 </form>
@@ -4473,12 +4473,10 @@
                 }
             }, 10000);
             
-            // Проверять новые сообщения каждые 30 секунд
+            // Проверять новые сообщения каждые 15 секунд (всегда, даже если не в чате — чтобы напоминания и проактивные сообщения появлялись сразу)
             setInterval(() => {
-                if (currentView === 'chat') {
-                    checkForNewMessages();
-                }
-            }, 30000);
+                checkForNewMessages();
+            }, 15000);
             
             // Проверять новые посты каждые 30 секунд
             setInterval(() => {
