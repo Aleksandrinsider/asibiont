@@ -1993,7 +1993,6 @@ async def yookassa_webhook(request):
         payment = data['object']
         user_id = payment['metadata']['user_id']
         tier = payment['metadata'].get('tier', 'light')  # tier or tokens_small/medium/large
-        promo_code = payment['metadata'].get('promo_code')
 
         session = Session()
         try:
