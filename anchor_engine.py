@@ -15,13 +15,15 @@ AnchorEngine — единая событийная система автоном
 3. DELIVER — отправляет ОДНО сообщение (не шаблон — AI пишет с нуля)
 4. FEEDBACK — отслеживает реакцию пользователя, адаптирует частоту
 
-Антиспам:
-- CRITICAL: доставка в течение 30 мин
-- HIGH: батч каждые 2ч
-- MEDIUM: батч каждые 4ч
-- LOW: макс 1/день
-- DND, ночные часы, cooldown по типу, адаптация по игнорам
-- Макс 4 доставки/день (не считая ответов на запросы)
+Антиспам (живая динамика, НЕ блокировка):
+- CRITICAL/HIGH: доставляются ВСЕГДА (кроме DND/ночь), не считаются в лимите
+- MEDIUM: обычный cooldown 3ч, лимит 6 диалогов/день
+- LOW: cooldown 8ч, отключаются при ignore rate >70%
+- Посты в ленту: отдельный лимит 2/день
+- Посты в канал: отдельный лимит 1/день
+- Min gap 10 мин между проактивными (но не для CRITICAL)
+- DND, ночные часы — единственный полный блок
+- Макс 6 диалоговых + 2 feed + 1 channel = 9 касаний/день
 """
 
 import asyncio
@@ -46,18 +48,33 @@ logger = logging.getLogger(__name__)
 # CONSTANTS
 # ═══════════════════════════════════════════════════════
 
-MAX_DELIVERIES_PER_DAY = 4
+# ── Лимиты доставок (раздельные) ──
+MAX_DIALOG_PER_DAY = 6        # Диалоговые сообщения (якоря → личное сообщение)
+MAX_POSTS_PER_DAY = 2         # Посты в ленту
+MAX_CHANNEL_PER_DAY = 1       # Посты в канал (PREMIUM)
+# CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
+
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
 MORNING_START_HOUR = PROACTIVE_SEND_START_HOUR   # Общая настройка: 10
-SCAN_INTERVAL_MINUTES = 20 # Интервал между сканированиями
-MIN_INTERACTION_GAP_MINUTES = 15  # Не писать если пользователь общался < 15 мин назад
+SCAN_INTERVAL_MINUTES = 20
+
+# Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
+MIN_PROACTIVE_GAP_MINUTES = 10
 
 # Cooldown по приоритету (часы)
 PRIORITY_COOLDOWN = {
     AnchorPriority.CRITICAL: 0.5,   # 30 мин
-    AnchorPriority.HIGH: 2,
-    AnchorPriority.MEDIUM: 4,
-    AnchorPriority.LOW: 12,
+    AnchorPriority.HIGH: 1.5,
+    AnchorPriority.MEDIUM: 3,
+    AnchorPriority.LOW: 8,
+}
+
+# Якоря, которые ВСЕГДА доставляются (кроме DND/ночь)
+ALWAYS_DELIVER_TYPES = {
+    'task_overdue',           # Просроченная задача — критично
+    'task_deadline_soon',     # Дедлайн скоро — критично
+    'delegation_update',      # Результат делегирования — пользователь ждёт
+    'goal_deadline',          # Горящий дедлайн цели
 }
 
 # Группы батчинга
@@ -83,11 +100,6 @@ BATCH_GROUPS = {
     'post_opportunity': 'posting',
     'channel_post': 'posting',
 }
-
-# Макс постов в ленту за 24ч на пользователя
-MAX_FEED_POSTS_PER_DAY = 2
-# Макс постов в канал за 24ч (PREMIUM)
-MAX_CHANNEL_POSTS_PER_DAY = 1
 
 
 class AnchorEngine:
@@ -170,30 +182,44 @@ class AnchorEngine:
             if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
                 return
 
-            # Проверка лимита доставок за день
+            # ── Подсчёт доставок за сегодня (раздельно) ──
             today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
             today_start_utc = today_start.astimezone(pytz.UTC)
-            deliveries_today = session.query(AnchorDeliveryLog).filter(
+
+            today_logs = session.query(AnchorDeliveryLog).filter(
                 AnchorDeliveryLog.user_id == user.id,
                 AnchorDeliveryLog.created_at >= today_start_utc
-            ).count()
+            ).all()
 
-            if deliveries_today >= MAX_DELIVERIES_PER_DAY:
-                logger.debug(f"[ANCHOR] User {user_id}: daily limit reached ({deliveries_today})")
-                return
+            dialog_count = 0
+            post_count = 0
+            channel_count = 0
+            for log in today_logs:
+                try:
+                    types = json.loads(log.anchor_types) if log.anchor_types else []
+                except (json.JSONDecodeError, TypeError):
+                    types = []
+                if 'channel_post' in types:
+                    channel_count += 1
+                elif 'post_opportunity' in types:
+                    post_count += 1
+                else:
+                    dialog_count += 1
 
-            # Проверка недавнего взаимодействия
-            last_interaction = session.query(Interaction).filter(
-                Interaction.user_id == user.id
+            # ── Последнее проактивное сообщение (gap между ними, но НЕ блокирует CRITICAL) ──
+            last_proactive = session.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type == 'proactive'
             ).order_by(Interaction.created_at.desc()).first()
 
-            if last_interaction:
-                li_time = last_interaction.created_at
-                if li_time.tzinfo is None:
-                    li_time = li_time.replace(tzinfo=timezone.utc)
-                gap = datetime.now(timezone.utc) - li_time
-                if gap < timedelta(minutes=MIN_INTERACTION_GAP_MINUTES):
-                    return
+            proactive_gap_ok = True
+            if last_proactive:
+                lp_time = last_proactive.created_at
+                if lp_time.tzinfo is None:
+                    lp_time = lp_time.replace(tzinfo=timezone.utc)
+                gap = datetime.now(timezone.utc) - lp_time
+                if gap < timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES):
+                    proactive_gap_ok = False
 
             # 1. SCAN — обнаружить новые якоря
             new_anchors = await self._scan_anchors(user, session)
@@ -210,34 +236,48 @@ class AnchorEngine:
             ).order_by(
                 Anchor.priority.asc(),  # CRITICAL first (enum order)
                 Anchor.created_at.asc()
-            ).limit(10).all()
+            ).limit(15).all()
 
-            # Фильтруем: не истёкшие, не подавленные
+            # Фильтруем: не истёкшие + cooldown
             ready = [a for a in deliverable if a.is_deliverable()]
-
             if not ready:
                 return
-
-            # Проверяем cooldown по приоритету
             ready = self._apply_cooldowns(ready, user, session)
             if not ready:
                 return
 
-            # Разделяем: обычные якоря vs постовые
+            # ── Разделяем потоки ──
+            critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
+                                or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
             post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
-            dialog_anchors = [a for a in ready if a.anchor_type not in ('post_opportunity', 'channel_post')]
+            regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors]
 
-            # 3a. DIALOG ANCHORS — сообщение пользователю
-            if dialog_anchors:
-                message = await self._ai_decide_and_compose(user, dialog_anchors, session)
+            # ── 3a. CRITICAL/HIGH — доставка ВСЕГДА (кроме DND/ночь, которые уже проверены) ──
+            if critical_anchors:
+                message = await self._ai_decide_and_compose(user, critical_anchors, session)
                 if message:
-                    await self._deliver(user, dialog_anchors, message, session)
-                else:
-                    logger.debug(f"[ANCHOR] User {user_id}: AI decided not to write (dialog)")
+                    await self._deliver(user, critical_anchors, message, session)
+                    logger.info(f"[ANCHOR] User {user_id}: CRITICAL/HIGH delivered ({len(critical_anchors)} anchors)")
 
-            # 3b. POST ANCHORS — публикация в ленту/канал
-            for post_anchor in post_anchors:
-                await self._process_post_anchor(user, post_anchor, session)
+            # ── 3b. REGULAR — с проверкой лимита + gap ──
+            if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
+                message = await self._ai_decide_and_compose(user, regular_anchors, session)
+                if message:
+                    await self._deliver(user, regular_anchors, message, session)
+                else:
+                    logger.debug(f"[ANCHOR] User {user_id}: AI decided SKIP for regular anchors")
+
+            # ── 3c. FEED POSTS — отдельный лимит ──
+            feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
+            if feed_posts and post_count < MAX_POSTS_PER_DAY:
+                for pa in feed_posts[:1]:  # Максимум 1 за цикл
+                    await self._process_post_anchor(user, pa, session)
+
+            # ── 3d. CHANNEL POSTS — отдельный лимит ──
+            channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
+            if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
+                for pa in channel_posts[:1]:
+                    await self._process_post_anchor(user, pa, session)
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
@@ -783,7 +823,7 @@ class AnchorEngine:
             Post.created_at >= today_start_utc
         ).count()
 
-        if posts_today >= MAX_FEED_POSTS_PER_DAY:
+        if posts_today >= MAX_POSTS_PER_DAY:
             return anchors
 
         # Собираем «материал» для AI:
@@ -903,7 +943,7 @@ class AnchorEngine:
             AnchorDeliveryLog.anchor_types.contains('channel_post')
         ).count()
 
-        if channel_posts_today >= MAX_CHANNEL_POSTS_PER_DAY:
+        if channel_posts_today >= MAX_CHANNEL_PER_DAY:
             return anchors
 
         # Проверяем предпочтительное время для постинга
@@ -973,7 +1013,8 @@ class AnchorEngine:
 
             result.append(anchor)
 
-        # Адаптация: если пользователь игнорирует > 60% — оставляем только CRITICAL/HIGH
+        # Адаптация: если пользователь игнорирует > 70% — понижаем частоту LOW
+        # НО НЕ блокируем MEDIUM, чтобы пользователь видел работу агента
         recent_logs = session.query(AnchorDeliveryLog).filter(
             AnchorDeliveryLog.user_id == user.id,
             AnchorDeliveryLog.created_at >= now_utc - timedelta(days=7)
@@ -982,10 +1023,10 @@ class AnchorEngine:
         if len(recent_logs) >= 5:
             ignored = sum(1 for log in recent_logs if not log.user_responded)
             ignore_rate = ignored / len(recent_logs)
-            if ignore_rate > 0.6:
-                # Пользователь часто игнорирует — только важные
-                result = [a for a in result if a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
-                logger.info(f"[ANCHOR] User {user.telegram_id}: high ignore rate ({ignore_rate:.0%}), filtered to CRITICAL/HIGH only")
+            if ignore_rate > 0.7:
+                # Убираем LOW — но MEDIUM/HIGH/CRITICAL остаются
+                result = [a for a in result if a.priority != AnchorPriority.LOW]
+                logger.info(f"[ANCHOR] User {user.telegram_id}: high ignore rate ({ignore_rate:.0%}), filtered out LOW")
 
         return result
 
