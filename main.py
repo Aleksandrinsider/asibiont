@@ -684,11 +684,8 @@ async def dashboard_handler(request):
             logger.info(
                 f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}, tier: {subscription.tier if subscription else None}, user_tier: {user.subscription_tier.value if user.subscription_tier else None}")
 
-            # В FREE_ACCESS_MODE  требуется актия подписка
-            from config import FREE_ACCESS_MODE
-            if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
-                logger.info("No active subscription, redirecting to subscription_tiers")
-                return web.HTTPFound('/subscription_tiers')
+            # Токенная модель — подписка не требуется, доступ всегда открыт
+            # (старый код проверки подписки удалён)
 
             tasks = session_db.query(Task).filter(
                 or_(
@@ -5492,6 +5489,7 @@ async def api_profile_handler(request):
             'user_avatar_url': user_avatar_url,
             'first_name': user.first_name,
             'telegram_id': user.telegram_id,
+            'token_balance': user.token_balance or 0,
             'referral_balance': user.referral_balance,
             'timezone': user.timezone or 'UTC'
         }
@@ -5505,8 +5503,8 @@ async def api_profile_handler(request):
 
 
 async def extend_subscription_handler(request):
-    """Перепралее  страцу ыбора тарифа"""
-    return web.HTTPFound('/subscription_tiers')
+    """Перенаправление на страницу пополнения токенов"""
+    return web.HTTPFound('/subscription-tiers')
 
 
 @aiohttp_jinja2.template('subscription_tiers.html')
