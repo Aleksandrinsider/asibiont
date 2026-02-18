@@ -216,8 +216,9 @@ class ReminderService:
             self.scheduler.start()
         self.schedule_existing_reminders()
         self.schedule_daily_reports()
-        self.schedule_proactive_checks()
-        self.schedule_overdue_checks()
+        # Проактивные и overdue проверки ОТКЛЮЧЕНЫ — переданы AnchorEngine
+        # self.schedule_proactive_checks()  # -> AnchorEngine: morning_plan, evening_review, dialog_followup, etc.
+        # self.schedule_overdue_checks()     # -> AnchorEngine: task_overdue (CRITICAL)
         self.schedule_delegation_checks()
         self.schedule_avatar_updates()
         self.schedule_recurring_task_checks()
@@ -618,24 +619,13 @@ class ReminderService:
         finally:
             db.close()
     def schedule_proactive_checks(self):
-        """Планирование начальных проактивных проверок для всех пользователей"""
+        """ОТКЛЮЧЕНО — проактивные сообщения переданы AnchorEngine.
         
-        db = Session()
-        try:
-            users = db.query(User).all()
-            logger.info(f"Scheduling initial proactive checks for {len(users)} users")
-            for user in users:
-                # Получить количество активных задач для пользователя
-                task_count = db.query(Task).filter(
-                    Task.user_id == user.id,
-                    Task.status.in_(['pending', 'in_progress'])
-                ).count()
-                
-                # Запланировать начальную проактивную проверку
-                import asyncio
-                asyncio.create_task(self._reschedule_proactive_check(user.telegram_id, task_count))
-        finally:
-            db.close()
+        AnchorEngine сканирует каждые 20 мин, создаёт якоря (morning_plan, evening_review,
+        dialog_followup, task_help, etc.) и AI сам решает — писать или нет.
+        """
+        logger.info("Proactive checks DISABLED — handled by AnchorEngine")
+        return
 
     async def send_task_checkpoint_message(self, user_id: int, checkpoint_type: str = "general"):
         """Отправка сообщения для чекпоинта задачи (1/3, 2/3, overdue)"""
@@ -1053,53 +1043,13 @@ class ReminderService:
             db.close()
 
     def schedule_overdue_checks(self):
-        """Планирование проверок просроченных задач каждые 15 минут"""
-        from apscheduler.triggers.interval import IntervalTrigger
+        """ОТКЛЮЧЕНО — просроченные задачи обрабатываются AnchorEngine.
         
-        db = Session()
-        try:
-            users = db.query(User).all()
-            logger.info(f"Scheduling overdue checks for {len(users)} users")
-            for user in users:
-                job_id = f"overdue_{user.telegram_id}"
-                
-                # Проверяем, существует ли уже такой джоб
-                if self.scheduler.get_job(job_id):
-                    logger.debug(f"Overdue check job {job_id} already exists, skipping")
-                    continue
-                
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
-                
-                # Планируем проверки просроченных задач
-                # Если интервал >= 60 минут, используем часовой триггер
-                if OVERDUE_CHECK_INTERVAL_MINUTES >= 60:
-                    hours_interval = OVERDUE_CHECK_INTERVAL_MINUTES // 60
-                    self.scheduler.add_job(
-                        _check_and_send_overdue_reminder_job,
-                        trigger="cron",
-                        hour=f"*/{hours_interval}",
-                        minute="0",
-                        timezone=user_tz,
-                        args=[user.telegram_id],
-                        id=job_id,
-                        replace_existing=True,
-                        misfire_grace_time=30
-                    )
-                else:
-                    # Для интервалов < 60 минут используем минутный триггер
-                    self.scheduler.add_job(
-                        _check_and_send_overdue_reminder_job,
-                        trigger="cron",
-                        minute=f"*/{OVERDUE_CHECK_INTERVAL_MINUTES}",
-                        timezone=user_tz,
-                        args=[user.telegram_id],
-                        id=job_id,
-                        replace_existing=True,
-                        misfire_grace_time=30
-                    )
-                logger.debug(f"Scheduled overdue check for user {user.telegram_id}")
-        finally:
-            db.close()
+        AnchorEngine создаёт якорь task_overdue (CRITICAL) с cooldown 2ч.
+        AI решает формат сообщения на основе полного контекста.
+        """
+        logger.info("Overdue checks DISABLED — handled by AnchorEngine (task_overdue anchor)")
+        return
 
     async def send_proactive_message(self, user_id: int, context: str = "general", task_count: int = 0, overdue_count: int = 0):
         """Отправка проактивного сообщения пользователю с проверками условий

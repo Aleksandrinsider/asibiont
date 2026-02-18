@@ -38,7 +38,7 @@ from models import (
     Anchor, AnchorDeliveryLog, AnchorPriority,
     ActivityAlert, ContactAlert, SubscriptionTier,
 )
-from config import DEEPSEEK_API_KEY
+from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,8 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════
 
 MAX_DELIVERIES_PER_DAY = 4
-NIGHT_START_HOUR = 22      # Не беспокоить после 22:00
-MORNING_START_HOUR = 9     # Не беспокоить до 9:00 (было 10, сделано 9 для утреннего плана)
+NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
+MORNING_START_HOUR = PROACTIVE_SEND_START_HOUR   # Общая настройка: 10
 SCAN_INTERVAL_MINUTES = 20 # Интервал между сканированиями
 MIN_INTERACTION_GAP_MINUTES = 15  # Не писать если пользователь общался < 15 мин назад
 

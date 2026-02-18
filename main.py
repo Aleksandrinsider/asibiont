@@ -5994,15 +5994,11 @@ if __name__ == "__main__":
                 except Exception as e:
                     logger.error(f"Failed to start auto-marketing service: {e}")
 
-                # Start contact alerts service for Premium users (every 30 minutes)
+                # Start contact alerts service — DISABLED, handled by AnchorEngine (contact_match anchors)
                 contact_alerts_task = None
-                try:
-                    from contact_alerts_service import start_contact_alerts_service
-                    logger.info("Starting contact alerts service in background...")
-                    contact_alerts_task = asyncio.create_task(start_contact_alerts_service(bot, check_interval_minutes=30))
-                    logger.info("Contact alerts service task created")
-                except Exception as e:
-                    logger.error(f"Failed to start contact alerts service: {e}")
+                # ContactAlertsService дублирует AnchorEngine._scan_contacts()
+                # AnchorEngine проверяет ContactAlert каждые 20 мин с DND, ночными часами, cooldown
+                logger.info("Contact alerts service DISABLED — handled by AnchorEngine")
 
                 # Start AnchorEngine — unified event-driven autonomous system
                 anchor_engine_task = None
