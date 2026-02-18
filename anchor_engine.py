@@ -48,10 +48,12 @@ logger = logging.getLogger(__name__)
 # CONSTANTS
 # ═══════════════════════════════════════════════════════
 
-# ── Лимиты доставок (раздельные) ──
-MAX_DIALOG_PER_DAY = 6        # Диалоговые сообщения (якоря → личное сообщение)
-MAX_POSTS_PER_DAY = 2         # Посты в ленту
-MAX_CHANNEL_PER_DAY = 1       # Посты в канал (PREMIUM)
+# ── Лимиты доставок (раздельные, по тарифам) ──
+TIER_LIMITS = {
+    SubscriptionTier.LIGHT: {'dialog': 4, 'feed': 1, 'channel': 0},
+    SubscriptionTier.STANDARD: {'dialog': 6, 'feed': 2, 'channel': 0},
+    SubscriptionTier.PREMIUM: {'dialog': 8, 'feed': 2, 'channel': 1},
+}
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
@@ -183,6 +185,8 @@ class AnchorEngine:
                 return
 
             # ── Подсчёт доставок за сегодня (раздельно) ──
+            tier = user.subscription_tier or SubscriptionTier.LIGHT
+            limits = TIER_LIMITS.get(tier, TIER_LIMITS[SubscriptionTier.LIGHT])
             today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
             today_start_utc = today_start.astimezone(pytz.UTC)
 
@@ -260,7 +264,7 @@ class AnchorEngine:
                     logger.info(f"[ANCHOR] User {user_id}: CRITICAL/HIGH delivered ({len(critical_anchors)} anchors)")
 
             # ── 3b. REGULAR — с проверкой лимита + gap ──
-            if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
+            if regular_anchors and dialog_count < limits['dialog'] and proactive_gap_ok:
                 message = await self._ai_decide_and_compose(user, regular_anchors, session)
                 if message:
                     await self._deliver(user, regular_anchors, message, session)
@@ -269,13 +273,13 @@ class AnchorEngine:
 
             # ── 3c. FEED POSTS — отдельный лимит ──
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
-            if feed_posts and post_count < MAX_POSTS_PER_DAY:
+            if feed_posts and post_count < limits['feed']:
                 for pa in feed_posts[:1]:  # Максимум 1 за цикл
                     await self._process_post_anchor(user, pa, session)
 
             # ── 3d. CHANNEL POSTS — отдельный лимит ──
             channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
-            if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
+            if channel_posts and channel_count < limits['channel']:
                 for pa in channel_posts[:1]:
                     await self._process_post_anchor(user, pa, session)
 
@@ -823,7 +827,8 @@ class AnchorEngine:
             Post.created_at >= today_start_utc
         ).count()
 
-        if posts_today >= MAX_POSTS_PER_DAY:
+        feed_limit = TIER_LIMITS.get(tier, TIER_LIMITS[SubscriptionTier.LIGHT])['feed']
+        if posts_today >= feed_limit:
             return anchors
 
         # Собираем «материал» для AI:
@@ -943,7 +948,7 @@ class AnchorEngine:
             AnchorDeliveryLog.anchor_types.contains('channel_post')
         ).count()
 
-        if channel_posts_today >= MAX_CHANNEL_PER_DAY:
+        if channel_posts_today >= TIER_LIMITS[SubscriptionTier.PREMIUM]['channel']:
             return anchors
 
         # Проверяем предпочтительное время для постинга
@@ -1327,10 +1332,38 @@ class AnchorEngine:
                 delivery_stats += f", последнее {int(hours_since_last)}ч назад"
 
             # Собираем промпт для AI
+            # Тарифные инструкции — AI знает что доступно пользователю
+            tier_instructions = {
+                SubscriptionTier.LIGHT: (
+                    "ТАРИФ LITE (3000₽/мес):\n"
+                    "- Базовое управление задачами и целями\n"
+                    "- НЕТ делегирования, НЕТ маркетинга, НЕТ канала\n"
+                    "- Короткие, конкретные сообщения (3-5 предложений)\n"
+                    "- Фокус: задачи, дедлайны, простые рекомендации"
+                ),
+                SubscriptionTier.STANDARD: (
+                    "ТАРИФ STANDARD (9000₽/мес):\n"
+                    "- Полное управление задачами, целями, делегирование\n"
+                    "- Поиск контактов, аналитика продуктивности\n"
+                    "- НЕТ маркетинга, НЕТ канала\n"
+                    "- Средняя глубина (4-7 предложений)\n"
+                    "- Фокус: задачи + делегирование + аналитика"
+                ),
+                SubscriptionTier.PREMIUM: (
+                    "ТАРИФ PREMIUM (27000₽/мес):\n"
+                    "- ВСЁ: задачи, цели, делегирование, маркетинг, канал, исследования рынка\n"
+                    "- Глубокие инсайты, контент-стратегия, конкурентный анализ\n"
+                    "- Развёрнутые сообщения (5-10 предложений)\n"
+                    "- Фокус: полный бизнес-ассистент, проактивные идеи"
+                ),
+            }
+
             prompt_parts = [
                 "Ты — AnchorEngine, мозг автономного агента ASI Biont.",
                 "Ниже — сработавшие ЯКОРЯ (события/факты) + полный контекст пользователя.",
                 "Твоя задача: РЕШИТЬ, стоит ли сейчас написать пользователю, и если да — НАПИСАТЬ сообщение.",
+                "",
+                tier_instructions.get(tier, tier_instructions[SubscriptionTier.LIGHT]),
                 "",
                 "ПРАВИЛА:",
                 "1. Если якорей мало и они неважные — НЕ ПИШИ. Верни ровно слово: SKIP",
@@ -1338,9 +1371,9 @@ class AnchorEngine:
                 "3. Покажи РАБОТУ: что ты проверил, нашёл, проанализировал. Потом предложи действие.",
                 "4. Принцип: СДЕЛАЛ → ПОКАЗАЛ → ПРЕДЛОЖИЛ.",
                 "5. Не создавай и не меняй задачи без просьбы пользователя.",
-                "6. 3-8 предложений. Деловой тон без излишней вежливости.",
-                "7. Если несколько якорей — объедини в ОДНО связное сообщение, а не список",
-                "8. На основе данных профиля и истории — персонализируй, не будь роботом",
+                "6. Если несколько якорей — объедини в ОДНО связное сообщение, а не список",
+                "7. На основе данных профиля и истории — персонализируй, не будь роботом",
+                "8. НЕ предлагай функции, недоступные на тарифе пользователя!",
                 "",
                 f"=== ВРЕМЯ ===",
                 f"{user_now.strftime('%H:%M %d.%m.%Y')} ({user.timezone or 'Europe/Moscow'})",
