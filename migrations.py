@@ -226,53 +226,6 @@ def _migrate_payments(session, inspector):
     logger.info("Migration: payments table created")
 
 
-def _migrate_promo_codes(session, inspector):
-    """Создание и миграции таблицы promo_codes"""
-    if not inspector.has_table('promo_codes'):
-        logger.info("Creating promo_codes table")
-        if LOCAL:
-            session.execute(text('''
-                CREATE TABLE promo_codes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    code VARCHAR(50) UNIQUE NOT NULL,
-                    tier TEXT DEFAULT 'LIGHT',
-                    duration_days INTEGER DEFAULT 30,
-                    expires_at TIMESTAMP NOT NULL,
-                    is_used BOOLEAN DEFAULT FALSE,
-                    used_by_user_id INTEGER,
-                    used_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (used_by_user_id) REFERENCES users (id)
-                )
-            '''))
-        else:
-            session.execute(text('''
-                CREATE TABLE promo_codes (
-                    id SERIAL PRIMARY KEY,
-                    code VARCHAR(50) UNIQUE NOT NULL,
-                    tier subscription_tier_enum DEFAULT 'LIGHT',
-                    duration_days INTEGER DEFAULT 30,
-                    expires_at TIMESTAMP NOT NULL,
-                    is_used BOOLEAN DEFAULT FALSE,
-                    used_by_user_id INTEGER REFERENCES users(id),
-                    used_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            '''))
-        session.commit()
-        logger.info("Migration: promo_codes table created")
-    else:
-        cols = [col['name'] for col in inspector.get_columns('promo_codes')]
-        _add_columns(session, 'promo_codes', cols, {
-            'discount_percent': 'ALTER TABLE promo_codes ADD COLUMN discount_percent INTEGER DEFAULT 0',
-            'max_uses': 'ALTER TABLE promo_codes ADD COLUMN max_uses INTEGER',
-            'used_count': 'ALTER TABLE promo_codes ADD COLUMN used_count INTEGER DEFAULT 0',
-            'used_by_users': "ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'",
-            'used_by_user_id': 'ALTER TABLE promo_codes ADD COLUMN used_by_user_id INTEGER',
-            'used_at': 'ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP',
-        })
-
-
 def _migrate_anchors(session, inspector):
     """Миграции таблиц anchors и anchor_delivery_log"""
     # Таблица anchors — создаётся автоматически через Base.metadata.create_all
@@ -314,7 +267,6 @@ def run_migrations():
         _migrate_posts(session, inspector)
         _migrate_subscriptions(session, inspector)
         _migrate_payments(session, inspector)
-        _migrate_promo_codes(session, inspector)
         _migrate_anchors(session, inspector)
         _migrate_token_transactions(session, inspector)
         logger.info("✅ Database migrations completed")

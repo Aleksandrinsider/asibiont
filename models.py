@@ -214,24 +214,6 @@ class Subscription(Base):
     user = relationship("User", backref="subscription")
 
 
-class PromoCode(Base):
-    __tablename__ = 'promo_codes'
-
-    id = Column(Integer, primary_key=True)
-    code = Column(String(50), unique=True, nullable=False)  # Promo code string
-    tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # Tier to grant
-    discount_percent = Column(Integer, default=0)  # Discount percentage (0-100)
-    max_uses = Column(Integer, nullable=True)  # Maximum uses (None = unlimited)
-    duration_days = Column(Integer, default=30)  # Duration in days
-    expires_at = Column(DateTime, nullable=False)  # Expiration date
-    is_used = Column(Boolean, default=False)  # Whether the code has been used (for single-use codes)
-    used_count = Column(Integer, default=0)  # Number of times used
-    used_by_users = Column(Text, default='[]')  # JSON list of user IDs who used this code
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
-
-    # Removed deprecated fields: used_by_user_id, used_at (use used_by_users instead)
-
-
 class PaymentHistory(Base):
     """История всех изменений подписок и платежей для защиты от потери данных"""
     __tablename__ = 'payment_history'

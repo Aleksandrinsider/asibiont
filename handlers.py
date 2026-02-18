@@ -55,21 +55,14 @@ async def send_delegation_notification_async(chat_id, message_text):
         logger.warning(f"Error sending delegation notification: {e}")
 
 PREMIUM_DESCRIPTION = """
-ASI Biont — AI-ассистент для всех сфер жизни
+ASI Biont — AI-агент в Telegram
 
-🟢 ЛАЙТ — 3 000 ₽/мес
-Все инструменты: задачи, поиск партнёров, исследования, котировки, погода, новости, маркетинг-контент, публикации, проактивные рекомендации.
+Все функции доступны сразу: задачи, поиск исполнителей, делегирование, автопостинг, аналитика, напоминания.
 
-🔵 СТАНДАРТ — 9 000 ₽/мес
-Всё из Лайт + делегирование задач. AI находит исполнителя из сети, передаёт задачу, следит за дедлайнами.
+Оплата за действия — пополняйте баланс когда нужно.
 
-🟡 ПРЕМИУМ — 27 000 ₽/мес
-Всё из Стандарт + автономное ведение канала: автопостинг каждый день + контент-стратегия.
-
-Для доступа нужна активная подписка.
-Выберите тариф: /subscription
-
-Есть промокод? /promo <КОД>
+📦 Пакеты токенов: /buy
+💰 Баланс: /balance
 Поддержка: @aleksandrinsider
 """""
 
@@ -215,18 +208,6 @@ async def buy_handler(message: Message):
 @router.message(Command("subscription"))
 async def subscription_handler(message: Message):
     """Handle subscription command — redirect to token-based billing"""
-    user_id = message.from_user.id
-    
-    # Check for promo code in message
-    text_parts = message.text.split()
-    if len(text_parts) > 1:
-        promo_code = text_parts[1].upper()
-        # Delegate to /promo handler
-        message.text = f"/promo {promo_code}"
-        await promo_handler(message)
-        return
-    
-    # Redirect to /buy
     await buy_handler(message)
 
 
@@ -265,103 +246,6 @@ async def find_partners_handler(message: Message):
     except Exception as e:
         logger.error(f"Error in find_partners_handler: {e}")
         await message.bot.send_message(message.chat.id, "Произошла ошибка при поиске партнеров.")
-
-
-@router.message(Command("promo"))
-async def promo_handler(message: Message):
-    """Активация промокода — начисление бонусных токенов"""
-    user_id = message.from_user.id
-    
-    # Извлекаем промокод из команды
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer(
-            "📝 Использование: /promo <КОД>\n\n"
-            "Например: /promo BONUS500\n\n"
-            "Промокод начисляет бонусные токены на баланс."
-        )
-        return
-    
-    promo_code = args[1].upper()
-    
-    session = Session()
-    try:
-        # Найти или создать пользователя
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            user = User(
-                telegram_id=user_id,
-                username=message.from_user.username,
-                first_name=message.from_user.first_name,
-                token_balance=0
-            )
-            session.add(user)
-            session.commit()
-        
-        # Проверить промокод
-        from models import PromoCode, SubscriptionTier, PaymentHistory
-        promo = session.query(PromoCode).filter_by(code=promo_code).first()
-        
-        if not promo:
-            await message.answer("❌ Промокод не найден. Проверьте правильность ввода.")
-            return
-        
-        # Проверка на использование
-        used_by_users = json.loads(promo.used_by_users or '[]')
-        if str(user_id) in [str(u) for u in used_by_users]:
-            await message.answer("❌ Вы уже использовали этот промокод.")
-            return
-        
-        # Проверка лимита использований
-        if promo.max_uses and promo.used_count >= promo.max_uses:
-            await message.answer("❌ Промокод уже исчерпан.")
-            return
-        
-        # Проверка срока действия
-        if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
-            await message.answer("❌ Срок действия промокода истек.")
-            return
-        
-        # Начисляем токены вместо подписки
-        # Конвертация: days * 450 средний расход = количество токенов
-        bonus_tokens = promo.duration_days * 450
-        
-        result = add_tokens(user_id, bonus_tokens, reason='promo', session=session)
-        
-        # Отметить использование промокода
-        used_by_users.append(str(user_id))
-        promo.used_by_users = json.dumps(used_by_users)
-        promo.used_count += 1
-        
-        # Записать в историю платежей
-        payment_history = PaymentHistory(
-            user_id=user.id,
-            telegram_username=user.username,
-            action='promo_activated',
-            tier=SubscriptionTier.LIGHT,  # placeholder
-            amount='0',
-            duration_days=promo.duration_days,
-            start_date=datetime.now(timezone.utc),
-            end_date=datetime.now(timezone.utc),
-            details=json.dumps({'promo_code': promo_code, 'tokens_added': bonus_tokens})
-        )
-        session.add(payment_history)
-        
-        session.commit()
-        
-        await message.answer(
-            f"✅ Промокод активирован!\n\n"
-            f"🎁 Начислено: {bonus_tokens} токенов (~{promo.duration_days} дней)\n"
-            f"💰 Баланс: {result.get('balance', 0)} токенов\n\n"
-            f"Проверить баланс: /balance"
-        )
-        
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Error activating promo code: {e}")
-        await message.answer("❌ Ошибка при активации промокода. Попробуйте позже.")
-    finally:
-        session.close()
 
 
 @router.message(Command("subscribe"))
