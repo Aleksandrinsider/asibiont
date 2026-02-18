@@ -272,6 +272,9 @@ class HybridAutonomousAgent:
         'get_user_goals': 'Проверяю цели ...',
         'create_goal': 'Создаю цель ...',
         'generate_post': 'Пишу пост ...',
+        'create_post': 'Публикую пост ...',
+        'edit_post': 'Редактирую пост ...',
+        'get_posts': 'Смотрю посты ...',
         'delete_post': 'Удаляю пост ...',
     }
 
@@ -989,6 +992,25 @@ class HybridAutonomousAgent:
                                 "role": "tool",
                                 "tool_call_id": tc_item['id'],
                                 "content": '{"status": "blocked: user asked to DELETE, not complete. Use delete_task instead."}'
+                            })
+                            continue
+
+                    # GUARD: блокируем create_post если пользователь НЕ давал согласия на публикацию
+                    # Пост публикуется ТОЛЬКО по прямой просьбе или подтверждению
+                    if name == 'create_post':
+                        msg_lower = user_message.lower()
+                        post_approval_signals = [
+                            'опубликуй', 'запости', 'публикуй', 'постни',
+                            'да, публикуй', 'ок, давай', 'давай', 'да',
+                            'ок', 'запость', 'пост в ленту', 'опубликуй пост',
+                            'сделай пост', 'напиши пост', 'пост',
+                        ]
+                        if not any(sig in msg_lower for sig in post_approval_signals):
+                            logger.info(f"[GUARD] Blocked create_post — no approval signal in: '{user_message[:60]}'")
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc_item['id'],
+                                "content": '{"status": "blocked: user did not approve publishing. First SUGGEST the post topic, then wait for user OK before calling create_post."}'
                             })
                             continue
 

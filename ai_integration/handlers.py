@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 import aiohttp
-from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView
+from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
@@ -5528,6 +5528,160 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
         logger.error(f"[AUTONOMOUS_TOGGLE] Error: {e}", exc_info=True)
         session.rollback()
         return f"Ошибка обновления настроек: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def create_post(content: str, user_id: int, session=None):
+    """
+    📝 ПУБЛИКАЦИЯ ПОСТА В ЛЕНТУ НОВОСТЕЙ
+    
+    Создаёт пост от имени пользователя в общую ленту новостей,
+    которую видят все пользователи платформы.
+    
+    Args:
+        content: Текст поста
+        user_id: Telegram ID пользователя
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        if not content or not content.strip():
+            return "Текст поста не может быть пустым."
+        
+        import datetime as dt
+        post = Post(
+            user_id=user.id,
+            username=user.username or user.first_name or f"user_{user.telegram_id}",
+            content=content.strip(),
+            created_at=dt.datetime.now(dt.timezone.utc)
+        )
+        
+        session.add(post)
+        session.commit()
+        
+        post_preview = content[:80] + '...' if len(content) > 80 else content
+        logger.info(f"[CREATE_POST] User {user_id} published post #{post.id}: '{post_preview}'")
+        return f"✅ Пост #{post.id} опубликован в ленту новостей!\n\n«{post_preview}»\n\nТеперь все пользователи его увидят."
+        
+    except Exception as e:
+        logger.error(f"[CREATE_POST] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка публикации поста: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def edit_post(new_content: str, user_id: int, post_id: int = None, session=None):
+    """
+    ✏️ РЕДАКТИРОВАНИЕ ПОСТА В ЛЕНТЕ
+    
+    Изменяет текст существующего поста. Если post_id не указан — редактирует последний.
+    
+    Args:
+        new_content: Новый текст поста
+        user_id: Telegram ID пользователя
+        post_id: ID поста (опционально)
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        if not new_content or not new_content.strip():
+            return "Новый текст поста не может быть пустым."
+        
+        if post_id:
+            post = session.query(Post).filter_by(id=post_id, user_id=user.id).first()
+            if not post:
+                return f"Пост #{post_id} не найден или не принадлежит тебе."
+        else:
+            post = session.query(Post).filter_by(user_id=user.id).order_by(Post.created_at.desc()).first()
+            if not post:
+                return "У тебя нет постов для редактирования."
+        
+        old_preview = post.content[:40] + '...' if len(post.content) > 40 else post.content
+        post.content = new_content.strip()
+        session.commit()
+        
+        new_preview = new_content[:80] + '...' if len(new_content) > 80 else new_content
+        logger.info(f"[EDIT_POST] User {user_id} edited post #{post.id}")
+        return f"✅ Пост #{post.id} обновлён!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»"
+        
+    except Exception as e:
+        logger.error(f"[EDIT_POST] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка редактирования поста: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def get_posts(user_id: int, limit: int = 5, session=None):
+    """
+    📋 СПИСОК ПОСТОВ ПОЛЬЗОВАТЕЛЯ
+    
+    Возвращает посты пользователя с датами, лайками и просмотрами.
+    
+    Args:
+        user_id: Telegram ID пользователя
+        limit: Количество постов (макс 20)
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        limit = min(max(1, limit or 5), 20)
+        
+        posts = session.query(Post).filter_by(user_id=user.id).order_by(Post.created_at.desc()).limit(limit).all()
+        
+        if not posts:
+            return "У тебя пока нет постов в ленте. Хочешь, напишу пост от твоего имени?"
+        
+        result_lines = [f"📋 Твои посты ({len(posts)} из последних):\n"]
+        
+        for post in posts:
+            likes_count = session.query(PostLike).filter_by(post_id=post.id).count()
+            views_count = session.query(PostView).filter_by(post_id=post.id).count()
+            comments_count = session.query(Comment).filter_by(post_id=post.id).count()
+            
+            preview = post.content[:60] + '...' if len(post.content) > 60 else post.content
+            # Формат даты
+            date_str = post.created_at.strftime('%d.%m.%Y %H:%M') if post.created_at else '?'
+            
+            result_lines.append(
+                f"#{post.id} ({date_str}) — 👁 {views_count} | ❤ {likes_count} | 💬 {comments_count}\n«{preview}»\n"
+            )
+        
+        logger.info(f"[GET_POSTS] User {user_id} listed {len(posts)} posts")
+        return '\n'.join(result_lines)
+        
+    except Exception as e:
+        logger.error(f"[GET_POSTS] Error: {e}", exc_info=True)
+        return f"❌ Ошибка получения постов: {str(e)}"
     finally:
         if close_session:
             session.close()
