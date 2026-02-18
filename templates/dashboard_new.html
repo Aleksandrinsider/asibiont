@@ -990,8 +990,8 @@
                 return;
             }
             
-            // Normalize sender: 'agent' -> 'ai' for consistent styling
-            const normalizedSender = sender === 'agent' ? 'ai' : sender;
+            // Normalize sender: 'agent', 'proactive', 'reminder' -> 'ai' for consistent styling
+            const normalizedSender = ['agent', 'ai', 'proactive', 'reminder'].includes(sender) ? 'ai' : sender;
             
             let date;
             if (timestamp) {
