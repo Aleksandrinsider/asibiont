@@ -156,7 +156,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
                 f"Можешь дать ценность по теме + вопрос. Когда ответит — сразу update_profile.\n"
             )
         else:
-            profile_instruction = f"\n\n💡 Профиль почти полный (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"
+            profile_instruction = f"\n\nПрофиль почти полный (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"
 
     # Выбираем версию промпта
     complexity = "medium"  # Можно определить на основе контекста

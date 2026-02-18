@@ -152,6 +152,14 @@ async def research_topic(query, depth="full", user_id=None, session=None):
     try:
         api = get_api_client()
         
+        # Настройки по depth
+        depth_config = {
+            'basic': {'num_results': 3, 'max_tokens': 300, 'cache_ttl': 1800},
+            'full': {'num_results': 10, 'max_tokens': 600, 'cache_ttl': 3600},
+            'deep': {'num_results': 15, 'max_tokens': 1000, 'cache_ttl': 7200},
+        }
+        config = depth_config.get(depth, depth_config['full'])
+        
         # Поиск + AI-анализ через единый клиент
         prompt = f"""Комплексный анализ темы: "{{query}}"
 
@@ -175,10 +183,10 @@ async def research_topic(query, depth="full", user_id=None, session=None):
 
         result = await api.search_and_analyze(
             query=query,
-            num_results=10,
+            num_results=config['num_results'],
             analysis_prompt=prompt,
-            max_tokens=600,
-            cache_ttl=3600
+            max_tokens=config['max_tokens'],
+            cache_ttl=config['cache_ttl']
         )
         
         analysis = result.get('analysis')

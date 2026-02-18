@@ -43,52 +43,10 @@ from .self_learning import get_learner
 logger = logging.getLogger(__name__)
 
 
-# ===== KEYWORDS для force_tool_choice =====
-TOOL_REQUIRED_KEYWORDS = {
-    'news': ['что нового', 'что посоветуешь', 'расскажи новости', 'новости',
-             'что происходит', 'тренды'],
-    'tasks': ['задачи', 'что по задачам', 'мои задачи', 'список задач',
-              'покажи задачи', 'что делать'],
-    'contacts': ['партнеры', 'найти людей', 'единомышленники', 'контакты',
-                 'кто может помочь'],
-    'research': ['исследуй', 'найди информацию', 'что известно о',
-                 'разберись в', 'проанализируй'],
-    'complete': ['сделал', 'готово', 'выполнил', 'завершил', 'закончил',
-                 'сделала', 'выполнила', 'завершила', 'закрыть задачу'],
-    'delete': ['удали задачу', 'убери задачу', 'удалить задачу', 'сотри задачу',
-               'отмени задачу', 'удали ', 'убери '],
-    'edit': ['перенеси', 'переназначь', 'измени задачу', 'обнови задачу',
-             'перенести задачу'],
-    'profile': ['я работаю', 'я маркетолог', 'я разработчик', 'я дизайнер',
-                'живу в', 'увлекаюсь', 'я фронтендер', 'мой навык'],
-}
-
-# Слова, означающие что пользователь просит или намеревается создать задачу
-# Включают как прямые команды, так и сигналы намерения/планов
-TASK_CREATION_SIGNALS = [
-    # Прямые команды
-    'создай', 'добавь', 'запланируй', 'напомни', 'поставь задачу',
-    'создать', 'добавить', 'запланировать', 'напомнить',
-    'задачу на', 'задачу к', 'новую задачу', 'ещё задачу', 'еще задачу',
-    # Сигналы намерения — пользователь говорит о планах/действиях
-    'хочу', 'планирую', 'собираюсь', 'надо', 'нужно',
-    'буду', 'пора', 'завтра', 'сегодня', 'на неделе',
-    'встреча', 'встречусь', 'созвон', 'дедлайн', 'к утру',
-    'подготовлю', 'сделаю', 'допишу', 'доделаю', 'начну',
-    'закончу', 'проверю', 'отправлю', 'позвоню', 'напишу',
-    'да', 'давай', 'ок', 'окей', 'хорошо', 'согласен',
-]
-
-# Сигналы завершения задачи — чтобы не блокировать complete_task
-TASK_COMPLETION_SIGNALS = [
-    'сделал', 'готово', 'выполнил', 'завершил', 'закончил',
-    'сделала', 'выполнила', 'завершила', 'закрыть',
-]
-
-# Сигналы удаления
-TASK_DELETION_SIGNALS = [
-    'удали', 'убери', 'сотри', 'отмени задачу', 'удалить',
-]
+# ===== ЧИСТЫЙ ГИБРИДНЫЙ ПОДХОД =====
+# AI с tools решает ВСЁ самостоятельно.
+# Никаких keyword guards — DeepSeek сам определяет когда вызывать инструменты.
+# tool_choice = "auto" всегда — модель решает.
 
 
 class HybridAutonomousAgent:
@@ -179,89 +137,15 @@ class HybridAutonomousAgent:
     # ===== ADAPTIVE TOOL CHOICE =====
 
     # Тривиальные сообщения — tool_choice=auto (не заставляем)
-    TRIVIAL_MESSAGES = [
-        'ок', 'окей', 'ладно', 'хорошо', 'да', 'нет',
-        'ага', 'угу', 'понял', 'ясно', 'спасибо',
-        'спс', 'благодарю', 'пока', 'до свидания', 'кек', 'лол',
-    ]
-
     def _determine_tool_choice(self, user_message, profile_data=None, tasks_data=None):
-        """Определяет tool_choice через multi-signal scoring.
+        """ГИБРИДНЫЙ ПОДХОД: всегда 'auto' — DeepSeek сам решает.
         
-        Суммирует баллы из нескольких независимых сигналов:
-        - Явные keyword-запросы данных (+3.0)
-        - Intent: greeting/task_management/info_request (+2.0)
-        - Наличие профиля с данными (+1.5)
-        - Наличие задач (+1.0)
-        - Длина сообщения > 5 слов (+0.5)
-        - Тривиальные/прощальные сообщения (-3.0)
-        
-        required при score >= 2.0, иначе auto.
+        Модель получает полный контекст (профиль, задачи, цели, время суток)
+        и сама определяет, нужно ли вызывать инструменты.
+        Никаких keyword-правил — AI гибче любых regex.
         """
-        msg_lower = user_message.lower().strip()
-        words = msg_lower.split()
-        score = 0.0
-        signals = []
-
-        # 0. Тривиальные — быстрый выход
-        if msg_lower in self.TRIVIAL_MESSAGES or len(msg_lower) <= 3:
-            logger.info(f"[TOOL_CHOICE] Score=trivial → auto for: '{user_message[:40]}'")
-            return "auto"
-
-        # 1. Явные keyword-запросы данных (+3.0 за категорию)
-        for category, keywords in TOOL_REQUIRED_KEYWORDS.items():
-            if any(kw in msg_lower for kw in keywords):
-                score += 3.0
-                signals.append(f'keyword({category}):+3')
-                break  # одной категории достаточно
-
-        # 2. Intent из CognitiveEngine (+2.0 для greeting/task/info/advice)
-        from .cognitive import CognitiveEngine
-        intent = CognitiveEngine.classify_intent(user_message)
-        intent_tool_weights = {
-            'greeting': 2.0,       # первое впечатление — ВСЕГДА с инструментами
-            'task_management': 2.0,
-            'information_request': 2.0,
-            'advice_seeking': 1.5,
-            'emotional_sharing': 1.0,
-            'general': 0.5,
-            'farewell': -1.0,      # прощание — не нужны инструменты
-        }
-        iw = intent_tool_weights.get(intent, 0.0)
-        if iw:
-            score += iw
-            signals.append(f'intent({intent}):{iw:+.1f}')
-
-        # 3. Профиль: любые данные = контекст для проактивности (+1.5)
-        if profile_data:
-            has_any = any(profile_data.get(f) for f in 
-                         ['city', 'interests', 'goals', 'skills', 'position', 'company'])
-            if has_any:
-                score += 1.5
-                signals.append('profile:+1.5')
-
-        # 4. Есть задачи — можно проверить статус (+1.0)
-        if tasks_data:
-            score += 1.0
-            signals.append('tasks:+1.0')
-
-        # 5. Длина сообщения > 5 слов — вероятно содержательный запрос (+0.5)
-        if len(words) > 5:
-            score += 0.5
-            signals.append('len>5:+0.5')
-
-        # 6. Прощальные маркеры — не надо инструменты (-2.0)
-        farewell_words = ['пока', 'до свидания', 'спокойной', 'до завтра']
-        if any(fw in msg_lower for fw in farewell_words):
-            score -= 2.0
-            signals.append('farewell:-2.0')
-
-        THRESHOLD = 2.0
-        result = "required" if score >= THRESHOLD else "auto"
-        logger.info(f"[TOOL_CHOICE] Score={score:.1f} (threshold={THRESHOLD}) "
-                    f"signals=[{', '.join(signals)}] → {result} "
-                    f"for: '{user_message[:50]}'")
-        return result
+        logger.info(f"[HYBRID] tool_choice=auto for: '{user_message[:50]}'")
+        return "auto"
 
     _TOOL_PROGRESS_MAP = {
         'list_tasks': 'Смотрю задачи ...',
@@ -988,52 +872,9 @@ class HybridAutonomousAgent:
                         continue
                     seen_tools.add(dedup_key)
 
-                    # GUARD: блокируем add_task только для явно НЕ-задачных сообщений
-                    # Пропускаем если: есть сигнал намерения ИЛИ это 2+ итерация (агент уже в контексте)
-                    if name == 'add_task':
-                        msg_lower = user_message.lower()
-                        has_signal = any(sig in msg_lower for sig in TASK_CREATION_SIGNALS)
-                        is_followup = iteration > 0  # агент уже делал tool call → контекст ясен
-                        if not has_signal and not is_followup:
-                            logger.info(f"[GUARD] Blocked add_task — no creation signal in: '{user_message[:60]}'")
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc_item['id'],
-                                "content": '{"status": "blocked: user did not ask to create a task. Answer with text instead."}'
-                            })
-                            continue
-
-                    # GUARD: блокируем complete_task если пользователь просил УДАЛИТЬ задачу
-                    # Решает баг: AI путает "удали" с "сделал" когда оба слова в тексте
-                    if name == 'complete_task':
-                        msg_lower = user_message.lower()
-                        if any(sig in msg_lower for sig in TASK_DELETION_SIGNALS):
-                            logger.info(f"[GUARD] Blocked complete_task → user wants delete_task: '{user_message[:60]}'")
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc_item['id'],
-                                "content": '{"status": "blocked: user asked to DELETE, not complete. Use delete_task instead."}'
-                            })
-                            continue
-
-                    # GUARD: блокируем create_post если пользователь НЕ давал согласия на публикацию
-                    # Пост публикуется ТОЛЬКО по прямой просьбе или подтверждению
-                    if name == 'create_post':
-                        msg_lower = user_message.lower()
-                        post_approval_signals = [
-                            'опубликуй', 'запости', 'публикуй', 'постни',
-                            'да, публикуй', 'ок, давай', 'давай', 'да',
-                            'ок', 'запость', 'пост в ленту', 'опубликуй пост',
-                            'сделай пост', 'напиши пост', 'пост',
-                        ]
-                        if not any(sig in msg_lower for sig in post_approval_signals):
-                            logger.info(f"[GUARD] Blocked create_post — no approval signal in: '{user_message[:60]}'")
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc_item['id'],
-                                "content": '{"status": "blocked: user did not approve publishing. First SUGGEST the post topic, then wait for user OK before calling create_post."}'
-                            })
-                            continue
+                    # ГИБРИДНЫЙ ПОДХОД: никаких keyword guards.
+                    # AI сам решает какие инструменты вызывать.
+                    # Промпт содержит чёткие инструкции когда создавать/завершать/удалять.
 
                     # Execute single tool — с прогрессом в Telegram
                     if _cb:

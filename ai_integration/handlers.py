@@ -383,13 +383,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     # Это позволяет создавать несколько задач подряд без конфликтов
     # Если пользователь действительно хочет обновить задачу - он может использовать edit_task
     
-    # Create new task - ОБЯЗАТЕЛЬНО требуется время
-    if not reminder_time:
-        if close_session:
-            session.close()
-        logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
-        return "NEED_TIME_FOR_TASK: Когда напомнить? Укажи время: завтра в 10:00, через час, сегодня в 15:00"
-    
+    # Create new task — время ОПЦИОНАЛЬНО
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
     if reminder_time:
         try:
@@ -492,12 +486,17 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             if conflicts:
                 conflict_msg, suggested_time_str = conflicts
                 original_str = local_parsed.strftime('%H:%M')
-                logger.info(f"[ADD_TASK] Time conflict at {original_str}, NOT creating task. Suggested: {suggested_time_str}")
-                if close_session:
-                    session.close()
-                return (f"TIME_CONFLICT: На {original_str} уже запланировано:\n{conflict_msg}\n"
-                        f"Ближайшее свободное время: {suggested_time_str}. "
-                        f"Уточни у пользователя: создать на {suggested_time_str} или выбрать другое время?")
+                logger.info(f"[ADD_TASK] Time conflict at {original_str}. Suggested: {suggested_time_str}")
+                # Пытаемся предложить другое время, но НЕ блокируем полностью.
+                # При 2+ конфликтов подряд (ignore_conflicts) — просто создаём.
+                if not ignore_conflicts:
+                    if close_session:
+                        session.close()
+                    return (f"TIME_CONFLICT: На {original_str} уже запланировано:\n{conflict_msg}\n"
+                            f"Ближайшее свободное время: {suggested_time_str}. "
+                            f"Уточни у пользователя: создать на {suggested_time_str} или выбрать другое время?")
+                else:
+                    logger.info(f"[ADD_TASK] ignore_conflicts=True, creating despite conflict")
         except Exception as e:
             logger.warning(f"[ADD_TASK] Error checking time conflicts: {e}")
 
@@ -943,7 +942,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         session.close()
     return result
 
-async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
+async def skip_task(task_id=None, task_title=None, reason=None, user_id=None, session=None):
     if session is None:
         session = Session()
         close_session = True
@@ -993,6 +992,9 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
 
     if task:
         task.status = "skipped"
+        if reason:
+            from .memory import encrypt_data
+            task.skipped_reason = encrypt_data(reason)
         session.commit()
 
         # Отменяем все запланированные джобы для этой задачи
@@ -1089,7 +1091,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
             session.query(Task)
             .filter(
                 Task.id == task_id_int,
-                Task.status == "completed",  # Only restore completed tasks
+                Task.status.in_(["completed", "skipped"]),  # Restore completed or skipped tasks
                 or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
             .first()
@@ -1100,10 +1102,10 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
         conditions = [Task.title.ilike(f"%{word}%") for word in words]
         task = session.query(Task).filter(
             or_(
-                and_(Task.user_id == user.id, Task.status == "completed", or_(*conditions)),
+                and_(Task.user_id == user.id, Task.status.in_(["completed", "skipped"]), or_(*conditions)),
                 and_(
                     Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
-                    Task.status == "completed",
+                    Task.status.in_(["completed", "skipped"]),
                     or_(*conditions)
                 )
             )
@@ -4323,16 +4325,32 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         task_name = task.title
         task_db_id = task.id
         
-        # Отменяем напоминание если есть
+        # Отменяем ВСЕ запланированные джобы для этой задачи
         try:
             from reminder_service import REMINDER_SERVICE
             if REMINDER_SERVICE and hasattr(REMINDER_SERVICE, 'scheduler'):
-                job_id = f"reminder_{task_db_id}"
+                for prefix in [f"reminder_{task_db_id}", f"followup_{task_db_id}", f"result_check_{task_db_id}"]:
+                    try:
+                        if REMINDER_SERVICE.scheduler.get_job(prefix):
+                            REMINDER_SERVICE.scheduler.remove_job(prefix)
+                            logger.info(f"[DELETE_TASK] Removed job {prefix}")
+                    except Exception:
+                        pass
+                # Чекпоинты
+                for ctype in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
+                    cjob = f"task_overdue_{task_db_id}_{ctype}_{user_id}"
+                    try:
+                        if REMINDER_SERVICE.scheduler.get_job(cjob):
+                            REMINDER_SERVICE.scheduler.remove_job(cjob)
+                            logger.info(f"[DELETE_TASK] Removed checkpoint job {cjob}")
+                    except Exception:
+                        pass
+                cp13 = f"task_checkpoint_{task_db_id}_1_3_{user_id}"
                 try:
-                    REMINDER_SERVICE.scheduler.remove_job(job_id)
-                    logger.info(f"[DELETE_TASK] Removed reminder job {job_id}")
-                except Exception as e:
-                    logger.debug(f"Reminder job {job_id} not found or already removed: {e}")
+                    if REMINDER_SERVICE.scheduler.get_job(cp13):
+                        REMINDER_SERVICE.scheduler.remove_job(cp13)
+                except Exception:
+                    pass
         except ImportError:
             pass
         
