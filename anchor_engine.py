@@ -124,7 +124,9 @@ class AnchorEngine:
         logger.info(f"[ANCHOR] 🚀 Starting scan loop (every {SCAN_INTERVAL_MINUTES}min)")
         while self.running:
             try:
+                logger.info(f"[ANCHOR] 🔄 Starting scan cycle (interval: {SCAN_INTERVAL_MINUTES}min)")
                 await self._scan_all_users()
+                logger.info(f"[ANCHOR] ✅ Scan cycle complete, sleeping {SCAN_INTERVAL_MINUTES}min")
                 await asyncio.sleep(SCAN_INTERVAL_MINUTES * 60)
             except Exception as e:
                 logger.error(f"[ANCHOR] Loop error: {e}\n{traceback.format_exc()}")
@@ -162,12 +164,15 @@ class AnchorEngine:
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if not user:
+                logger.debug(f"[ANCHOR] User {user_id}: не найден в БД, пропуск")
                 return
 
             # Проверка баланса токенов (минимум на 1 проактивное сообщение)
-            from token_service import has_enough_tokens
+            from token_service import has_enough_tokens, get_balance
             from config import FREE_ACCESS_MODE
             if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'proactive_message'):
+                balance = get_balance(user_id)
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ недостаточно токенов (баланс: {balance}, нужно: 15), пропуск")
                 return
 
             # Проверка DND
@@ -176,12 +181,14 @@ class AnchorEngine:
                 if dnd.tzinfo is None:
                     dnd = dnd.replace(tzinfo=timezone.utc)
                 if datetime.now(timezone.utc) < dnd:
+                    logger.info(f"[ANCHOR] User {user_id}: ⛔ DND до {dnd}, пропуск")
                     return
 
             # Проверка ночных часов
             user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
             user_now = datetime.now(user_tz)
             if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00), пропуск")
                 return
 
             # ── Подсчёт доставок за сегодня (раздельно) ──
@@ -240,12 +247,16 @@ class AnchorEngine:
                 Anchor.created_at.asc()
             ).limit(15).all()
 
+            logger.info(f"[ANCHOR] User {user_id}: найдено {len(deliverable)} deliverable якорей")
+
             # Фильтруем: не истёкшие + cooldown
             ready = [a for a in deliverable if a.is_deliverable()]
             if not ready:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ после is_deliverable() — 0 ready (expired/suppressed)")
                 return
             ready = self._apply_cooldowns(ready, user, session)
             if not ready:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ после _apply_cooldowns — 0 ready")
                 return
 
             # ── Разделяем потоки ──
@@ -254,20 +265,29 @@ class AnchorEngine:
             post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
             regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors]
 
+            logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
+
             # ── 3a. CRITICAL/HIGH — доставка ВСЕГДА (кроме DND/ночь, которые уже проверены) ──
             if critical_anchors:
+                logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(critical_anchors)} CRITICAL anchors...")
                 message = await self._ai_decide_and_compose(user, critical_anchors, session)
                 if message:
                     await self._deliver(user, critical_anchors, message, session)
-                    logger.info(f"[ANCHOR] User {user_id}: CRITICAL/HIGH delivered ({len(critical_anchors)} anchors)")
+                    logger.info(f"[ANCHOR] User {user_id}: ✅ CRITICAL/HIGH delivered ({len(critical_anchors)} anchors)")
+                else:
+                    logger.warning(f"[ANCHOR] User {user_id}: ❌ AI returned SKIP/None for CRITICAL anchors")
 
             # ── 3b. REGULAR — с проверкой лимита + gap ──
             if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
+                logger.info(f"[ANCHOR] User {user_id}: 💬 AI deciding for {len(regular_anchors)} regular anchors...")
                 message = await self._ai_decide_and_compose(user, regular_anchors, session)
                 if message:
                     await self._deliver(user, regular_anchors, message, session)
+                    logger.info(f"[ANCHOR] User {user_id}: ✅ Regular delivered ({len(regular_anchors)} anchors)")
                 else:
-                    logger.debug(f"[ANCHOR] User {user_id}: AI decided SKIP for regular anchors")
+                    logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for regular anchors")
+            elif regular_anchors:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok})")
 
             # ── 3c. FEED POSTS — отдельный лимит ──
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
@@ -1393,6 +1413,8 @@ class AnchorEngine:
             from ai_integration.autonomous_agent import get_autonomous_agent
             agent = get_autonomous_agent()
 
+            logger.info(f"[ANCHOR] AI call for user {user.telegram_id}: {len(anchors)} anchors, prompt {len(full_prompt)} chars")
+
             result = await agent.generate_system_message(
                 user_id=user.telegram_id,
                 mode='anchor',
@@ -1401,6 +1423,8 @@ class AnchorEngine:
                 max_tokens=1500,
                 max_iterations=3
             )
+
+            logger.info(f"[ANCHOR] AI result for user {user.telegram_id}: {'SKIP/None' if not result else result[:100]}")
 
             if not result or result.strip().upper() == 'SKIP':
                 return None
