@@ -28,6 +28,27 @@ EXCLUDED_TOOLS = {
     'reschedule_task',                   # покрывается edit_task(reminder_time)
     'set_activity_alert',                # объединяется в set_contact_alert
     'analyze_situation_and_suggest_tasks', # AI собирает сам из контекста
+    # Внутренние функции (не должны быть прямыми инструментами)
+    'delegate_task_with_session',        # внутренняя обёртка delegate_task
+    'get_tier_priority',                 # служебная
+    'check_time_conflicts_sync',         # служебная
+    'find_nearest_free_slot',            # служебная
+    'generate_delegation_notification_async', # внутренняя
+    'generate_delegation_notification',  # внутренняя
+    'generate_progress_request',         # внутренняя
+    'generate_delegation_response_notification_async', # внутренняя
+    'schedule_delegation_monitoring',    # внутренняя
+    'check_delegation_deadlines',        # внутренняя
+    'check_subscription_status',         # служебная
+    'create_subscription_payment',       # служебная (оплата через /buy)
+    'cancel_subscription',               # служебная
+    'suggest_trends_and_opportunities',  # дубль AI-анализа через research_topic
+    'generate_marketing_content',        # прямой вызов через research_topic + create_post
+    'show_profile',                      # профиль в контексте, не нужно вызывать как инструмент
+    'analyze_group_opportunities',       # внутренняя
+    'set_auto_post_time',                # покрывается set_content_strategy
+    'publish_to_telegram',               # внутренняя (вызывается через create_post)
+    'get_weather_info',                  # дубль встроенного контекста погоды
 }
 
 def get_available_tools(subscription_tier=None):
@@ -311,7 +332,17 @@ TOOLS = [
             "description": "Показать все активные задачи пользователя. Вызывай ТОЛЬКО когда спрашивают о задачах ('мои задачи', 'список', 'что запланировано'). НЕ вызывай для создания, завершения или других операций с задачами.",
             "parameters": {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                    "include_completed": {
+                        "type": "boolean",
+                        "description": "true — показать в том числе завершённые"
+                    },
+                    "filter_type": {
+                        "type": "string",
+                        "description": "Фильтр: 'today' (на сегодня), 'overdue' (просроченные), 'delegated' (делегированные)",
+                        "enum": ["today", "overdue", "delegated"]
+                    }
+                }
             }
         }
     },
@@ -664,7 +695,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "set_content_strategy",
-            "description": "🎯 НАСТРОИТЬ СТРАТЕГИЮ КОНТЕНТА (ТОЛЬКО ПРЕМИУМ): Сохраняет стратегию контента для автономного ведения канала. AI будет автоматически генерировать и публиковать контент по этой стратегии. Примеры: 'хочу постить про свой бизнес', 'буду публиковать кейсы по дизайну'. ВАЖНО: Спроси детали — что постить, для кого, цель. [ТОЛЬКО ПРЕМИУМ]",
+            "description": "🎯 НАСТРОИТЬ СТРАТЕГИЮ КОНТЕНТА: Сохраняет стратегию контента для автономного ведения канала. AI будет автоматически генерировать и публиковать контент по этой стратегии. Примеры: 'хочу постить про свой бизнес', 'буду публиковать кейсы по дизайну'. ВАЖНО: Спроси детали — что постить, для кого, цель.",
             "parameters": {
                 "type": "object",
                 "properties": {

@@ -468,7 +468,7 @@
                             var profileBtn = document.getElementById('profile-toggle-btn');
                             var svg = profileBtn ? profileBtn.querySelector('svg') : null;
                             
-                            if (isCollapsed === 'true') {
+                            if (isCollapsed) {
                                 if (profileEl) profileEl.style.display = 'none';
                                 if (svg) svg.style.transform = 'rotate(-90deg)';
                             } else {
@@ -477,7 +477,7 @@
                             }
                             var profileSection = document.querySelector('.context-section');
                             var peopleSection = document.querySelector('.people-section');
-                            if (isCollapsed === 'true') {
+                            if (isCollapsed) {
                                 if (profileSection) profileSection.style.flex = '0 0 auto';
                                 if (peopleSection) peopleSection.style.flex = '1 1 auto';
                             } else {

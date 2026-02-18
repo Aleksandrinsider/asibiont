@@ -13,6 +13,5 @@ aiohttp-session==2.12.0
 pytz==2025.2
 SpeechRecognition==3.10.0
 pydub==0.25.1
-standard-aifc==3.13.0
 redis==5.0.1
 pinecone>=8.0.0

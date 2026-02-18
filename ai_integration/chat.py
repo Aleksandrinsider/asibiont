@@ -102,7 +102,7 @@ def _build_session_summary(user_db_id, session):
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
-    """Функция чата с использованием tools-based подхода"""
+    """Функция чата — делегирует в автономный агент (единая точка входа)."""
 
     logger.info(f"[CHAT_WITH_AI] START - user_id={user_id}, message='{message[:50]}...'")
 
@@ -111,243 +111,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
 
     try:
-        # Получаем информацию о пользователе
-        session = Session() if db_session is None else db_session
-        try:
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                logger.error(f"[CHAT_WITH_AI] User not found: {user_id}")
-                return {'response': "Пользователь не найден", 'tool_calls': []}
-
-            # Получаем профиль пользователя
-            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-
-            # Вычисляем полноту профиля
-            profile_complete = False
-            if profile:
-                profile_missing = []
-                if not profile.goals or not profile.goals.strip():
-                    profile_missing.append('цели')
-                if not profile.skills or not profile.skills.strip():
-                    profile_missing.append('навыки')
-                if not profile.interests or not profile.interests.strip():
-                    profile_missing.append('интересы')
-                if len(profile_missing) <= 1:  # Если отсутствует не более одного поля
-                    profile_complete = True
-            logger.info(f"[PROFILE] Profile complete: {profile_complete}, missing: {profile_missing if 'profile_missing' in locals() else []}")
-
-            # Определяем текущее время пользователя
-            base_now = datetime.now(pytz.UTC)
-            user_now = base_now
-            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-            current_date_str = user_now.strftime("%Y-%m-%d")
-            
-            months = [
-                'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-            ]
-            
-            # Получаем timezone пользователя, по умолчанию Москва
-            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
-            try:
-                user_tz = pytz.timezone(user_timezone)
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                logger.info(f"[DATETIME] User timezone: {user_timezone}, current_time_str: {current_time_str}, current_date_str: {current_date_str}")
-            except Exception as e:
-                logger.error(f"Error setting user timezone: {e}")
-                # Fallback на московское время
-                try:
-                    moscow_tz = pytz.timezone('Europe/Moscow')
-                    user_now = base_now.astimezone(moscow_tz)
-                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                    logger.info(f"[DATETIME] Fallback to Moscow: {current_time_str}, {current_date_str}")
-                except Exception as e:
-                    logger.warning(f"[DATETIME] Error in Moscow fallback: {e}")
-
-            # Генерируем проактивный контекст
-            from .context_builder import ContextBuilder
-            context_builder = ContextBuilder()
-            proactive_context = context_builder.build_proactive_context(user_id, session, profile_complete=profile_complete)
-            logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
-
-            # Получаем погоду и новости для контекста (async через api_client)
-            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-            user_city = profile.city if profile and profile.city else None
-            weather_info = None
-            news_info = None
-            try:
-                from .api_client import get_api_client
-                api = get_api_client()
-                if user_city:
-                    weather_data = await api.get_weather(user_city, cache_ttl=1800)
-                    if weather_data:
-                        weather_info = (
-                            f"{weather_data['city_name']}: {weather_data['temp']:.0f}°C, "
-                            f"{weather_data['description']}, влажность {weather_data['humidity']}%, "
-                            f"ветер {weather_data['wind_speed']} м/с"
-                        )
-                    news_articles = await api.get_news(topic=user_city, page_size=3, cache_ttl=900)
-                    if news_articles:
-                        titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
-                        if titles:
-                            news_info = f"Новости {user_city}:\n" + "\n".join(titles)
-                if not news_info:
-                    news_articles = await api.get_news(page_size=3, cache_ttl=900)
-                    if news_articles:
-                        titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
-                        if titles:
-                            news_info = "Свежие новости России:\n" + "\n".join(titles)
-            except Exception as e:
-                logger.warning(f"[CONTEXT] Failed to load weather/news via api_client: {e}")
-            logger.info(f"[CONTEXT] Weather: {bool(weather_info)}, News: {bool(news_info)}")
-
-            # Расшифровываем память пользователя
-            decrypted_memory = ""
-            if user.memory:
-                try:
-                    decrypted_memory = decrypt_data(user.memory)
-                except Exception as e:
-                    logger.error(f"Error decrypting user memory: {e}")
-            
-            # Дополняем контекст данными из long_term_memory
-            if user.long_term_memory:
-                try:
-                    ltm = json.loads(decrypt_data(user.long_term_memory))
-                    interests = ltm.get('interests', {})
-                    if interests:
-                        sorted_interests = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:5]
-                        interest_str = ", ".join(f"{topic} ({count})" for topic, count in sorted_interests)
-                        decrypted_memory += f"\n🎯 Устойчивые интересы: {interest_str}"
-                    searches = ltm.get('search_history', [])
-                    if searches:
-                        recent_queries = [s['query'] for s in searches[-5:]]
-                        decrypted_memory += f"\n🔍 Недавно искал: {', '.join(recent_queries)}"
-                    projects = ltm.get('projects', {})
-                    if projects:
-                        project_names = list(projects.keys())[-3:]
-                        decrypted_memory += f"\n📁 Проекты: {', '.join(project_names)}"
-                except Exception as e:
-                    logger.warning(f"[CHAT] Could not parse long_term_memory: {e}")
-            
-            # Дополняем контекст статистикой продуктивности
-            if profile:
-                stats_parts = []
-                if profile.total_tasks_created:
-                    stats_parts.append(f"создано задач: {profile.total_tasks_created}")
-                if profile.completed_tasks:
-                    stats_parts.append(f"завершено: {profile.completed_tasks}")
-                if profile.skipped_tasks:
-                    stats_parts.append(f"пропущено: {profile.skipped_tasks}")
-                if profile.average_completion_time:
-                    stats_parts.append(f"ср. время: {profile.average_completion_time}")
-                if stats_parts:
-                    decrypted_memory += f"\n📊 Статистика: {', '.join(stats_parts)}"
-            
-            # Цели пользователя
-            active_goals = session.query(Goal).filter_by(user_id=user.id, status='active').order_by(Goal.priority.desc()).limit(5).all()
-            if active_goals:
-                goal_lines = []
-                for g in active_goals:
-                    line = f"{g.title} ({g.progress_percentage}%)"
-                    if g.target_date:
-                        days = g.days_until_target()
-                        if days is not None and days < 0:
-                            line += " ⚠️ПРОСРОЧЕНО"
-                        elif days is not None and days <= 7:
-                            line += f" ⏳{days}дн"
-                    goal_lines.append(line)
-                decrypted_memory += f"\n🎯 ЦЕЛИ:\n" + "\n".join(f"- {l}" for l in goal_lines)
-            
-            # Сводка предыдущих сессий (контекстное окно)
-            try:
-                session_summary = _build_session_summary(user.id, session)
-                if session_summary:
-                    decrypted_memory += f"\n\n📝 ПРЕДЫДУЩИЕ СЕССИИ:\n{session_summary}"
-            except Exception as e:
-                logger.warning(f"[CHAT] Could not build session summary: {e}")
-
-            # Получаем информацию о текущей задаче если есть
-            current_task_info = None
-            if user.current_task_id:
-                try:
-                    task = session.query(Task).filter_by(id=user.current_task_id).first()
-                    if task:
-                        current_task_info = {
-                            'id': task.id,
-                            'title': task.title,
-                            'status': task.status
-                        }
-                        logger.info(f"[CONTEXT] Current task in focus: '{task.title}' (ID: {task.id})")
-                except Exception as e:
-                    logger.error(f"Error loading current task: {e}")
-
-            # Собираем profile_data для системного промпта
-            profile_data = None
-            if profile:
-                profile_data = {
-                    'city': profile.city or '',
-                    'company': profile.company or '',
-                    'position': profile.position or '',
-                    'goals': profile.goals or '',
-                    'skills': profile.skills or '',
-                    'interests': profile.interests or '',
-                    'telegram_channel': getattr(profile, 'telegram_channel', '') or '',
-                }
-                filled = [k for k, v in profile_data.items() if v]
-                logger.info(f"[PROFILE_DATA] Passing to prompt: filled={filled}")
-
-            # Получаем системный промпт с проактивным контекстом
-            system_prompt = get_extended_system_prompt(
-                user_now=user_now,
-                current_time_str=current_time_str,
-                current_date_str=current_date_str,
-                user_username=user.username or "пользователь",
-                mentions_str="",
-                user_memory=decrypted_memory,
-                context=context,
-                intent=None,
-                subscription_tier=None,
-                message_type=message_type,
-                weather_info=weather_info,
-                news_info=news_info,
-                profile_data=profile_data,
-                proactive_context=proactive_context,
-                current_task_info=current_task_info,
-                user_id_param=user_id
-            )
-
-            # Используем улучшенный гибридный автономный агент (трёхэтапный подход)
-            response_data = await autonomous_chat_with_ai(
-                message=message,
-                context=context,
-                user_id=user_id,
-                file_content=file_content,
-                db_session=session,
-                message_type=message_type,
-                subscription_tier=None
-            )
-            
-            # ПОСТ-ОБРАБОТКА: минимальная очистка (агент сам формирует проактивный язык через промпт)
-            if response_data and 'response' in response_data:
-                logger.info(f"[POST_PROCESS] Response length: {len(response_data['response'])} chars")
-            
-            # Отмечаем что Premium рекомендации были показаны (если были в промпте)
-            if proactive_context and "ПРЕМИУМ РЕКОМЕНДАЦИИ" in proactive_context:
-                try:
-                    from ai_integration.premium_simple import manage_recommendations
-                    manage_recommendations(user_id, 'mark_shown', session=session)
-                    logger.info(f"[PREMIUM] Marked recommendations as shown for user {user_id}")
-                except Exception as e:
-                    logger.warning(f"[PREMIUM] Failed to mark recommendations: {e}")
-
-            return response_data
-
-        finally:
-            if db_session is None:
-                session.close()
+        # Делегируем в автономный агент — он сам строит контекст,
+        # загружает профиль, погоду, новости, историю и т.д.
+        response_data = await autonomous_chat_with_ai(
+            message=message,
+            context=context,
+            user_id=user_id,
+            file_content=file_content,
+            db_session=db_session,
+            message_type=message_type,
+            subscription_tier=None
+        )
+        
+        if response_data and 'response' in response_data:
+            logger.info(f"[CHAT_WITH_AI] Response length: {len(response_data['response'])} chars")
 
         return response_data
 
@@ -356,7 +133,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         import traceback
         traceback.print_exc()
         return {
-            'response': f"Извините, произошла ошибка при обработке запроса: {str(e)}",
+            'response': "Извините, произошла ошибка при обработке запроса. Попробуйте ещё раз.",
             'tool_calls': []
         }
 

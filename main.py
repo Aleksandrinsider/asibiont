@@ -101,15 +101,7 @@ init_db()
 from migrations import run_migrations
 run_migrations()
 
-# Test database connection before starting
-try:
-    test_session = Session()
-    test_session.execute(text('SELECT 1'))
-    test_session.close()
-    logger.info("✅ Database connection successful")
-except Exception as e:
-    logger.error(f"❌ CRITICAL: Cannot connect to database: {e}", exc_info=True)
-    logger.error(f"DATABASE_URL: {DATABASE_URL[:50]}..." if DATABASE_URL else "DATABASE_URL not set")
+# Database connection already verified above
 
 # Helper functions for context management
 def get_context_from_db(user_id, limit=10):
@@ -404,7 +396,7 @@ async def login_handler(request):
         'current_date': '',
         'current_time': '',
         'formatted_end_date': None,
-        'timestamp': 1769939740,
+        'timestamp': int(time.time()),
         'user_timezone': 'UTC',
         'user': None,
         'profile': None,
@@ -1069,8 +1061,7 @@ async def dashboard_handler(request):
             'user_timezone': user.timezone if user and user.timezone else 'UTC',
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': 1769939740,
-            'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
+            'timestamp': int(time.time()),
             'user_avatar_url': user_avatar_url,
             'referral_balance': user.referral_balance
         })
@@ -1085,7 +1076,7 @@ async def dashboard_handler(request):
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
-            'timestamp': 1738138953
+            'timestamp': int(time.time())
         })
 
 
@@ -1244,7 +1235,7 @@ async def api_send_message_handler(request):
                     logger.info(f"[API_SEND_MESSAGE] No tool calls to execute")
                 if response is None or response == '':
                     logger.error("[API_SEND_MESSAGE] AI response is empty!")
-                    response = "зите, произошла ошибка при обработке ашего запроса. Попробуйте еще раз."
+                    response = "Извините, произошла ошибка при обработке вашего запроса. Попробуйте ещё раз."
             except Exception as e:
                 logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
                 return web.json_response({'error': 'AI service error'}, status=500)
@@ -1253,7 +1244,7 @@ async def api_send_message_handler(request):
 
             # Check for duplicate message before saving
             # Duplicate check removed - always save
-                logger.info(f"[API_SEND_MESSAGE] Context saved to DB: user_msg='{message[:50]}...', ai_response='{response[:50]}...'")
+            logger.info(f"[API_SEND_MESSAGE] Context saved to DB: user_msg='{message[:50]}...', ai_response='{response[:50]}...'")
         finally:
             session_db.close()
             logger.info(f"[API_SEND_MESSAGE] DB session closed for user {user_id}")
@@ -1262,11 +1253,8 @@ async def api_send_message_handler(request):
         return web.json_response({'response': response, 'success': True})
     except Exception as e:
         logger.error(f"Unexpected error in api_send_message_handler: {e}", exc_info=True)
-        # Return detailed error for debugging
         return web.json_response({
-            'error': 'Internal server error',
-            'details': str(e),
-            'type': type(e).__name__
+            'error': 'Внутренняя ошибка сервера. Попробуйте ещё раз.'
         }, status=500)
 
 
@@ -5285,20 +5273,20 @@ async def create_payment_handler(request):
                 tier=pack_key
             )
         else:
-            # Legacy tier payment (backward compat)
-            from payments import get_tier_price, get_tier_name
-            if tier not in ['light', 'standard', 'premium']:
-                tier = 'light'
-            amount = get_tier_price(tier)
-            tier_name = get_tier_name(tier)
-
-            logger.info(f"Creating legacy payment: amount={amount}, tier={tier}, user_id={user_id}")
+            # Legacy tier payments removed — only token packs supported
+            logger.warning(f"Legacy tier payment attempted: tier={tier}, user_id={user_id}. Redirecting to tokens.")
+            # Fallback to small token pack
+            pack_key = 'tokens_small'
+            pack_info = TOKEN_PACK_PRICES[pack_key]
+            amount = pack_info['price']
+            tokens = pack_info['tokens']
+            description = f"Пополнение ASI Biont — {tokens} токенов"
 
             payment_url = create_payment(
                 amount=str(amount),
-                description=f"Подписка ASI Biont - {tier_name}  30 дй",
+                description=description,
                 user_id=user_id,
-                tier=tier
+                tier=pack_key
             )
 
         logger.info(f"Payment URL created: {payment_url}")

@@ -132,3 +132,8 @@ quick_function_test.py
 *test_results.json
 *_results.json
 *REPORT.md
+
+# Diagnostic scripts with credentials
+check_db.py
+debug_*.py
+debug_*.log

@@ -69,7 +69,6 @@ CITY_TIMEZONE_MAP = {
     'орёл': 'Europe/Moscow',
     'тула': 'Europe/Moscow',
     'калуга': 'Europe/Moscow',
-    'москва': 'Europe/Moscow',
     
     # Россия - Уральский регион (YEKT, UTC+5)
     'пермь': 'Asia/Yekaterinburg',
@@ -88,7 +87,7 @@ CITY_TIMEZONE_MAP = {
     'новосибирск': 'Asia/Novosibirsk',
     'томск': 'Asia/Novosibirsk',
     'барнаул': 'Asia/Novosibirsk',
-    'ке мерово': 'Asia/Novosibirsk',
+    'кемерово': 'Asia/Novosibirsk',
     'новокузнецк': 'Asia/Novosibirsk',
     'прокопьевск': 'Asia/Novosibirsk',
     'ленск': 'Asia/Novosibirsk',

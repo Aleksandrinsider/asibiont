@@ -493,6 +493,5 @@ def init_db():
         logger.error(f"Failed to create database tables: {e}")
         raise
 
-# Create sessionmaker with proper autocommit/autoflush settings
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Create sessionmaker
 Session = sessionmaker(bind=engine)

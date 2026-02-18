@@ -31,21 +31,22 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         except Exception:
             pass
 
+    # Динамическая стоимость из token_service
+    try:
+        from token_service import ACTION_COSTS
+        msg_cost = ACTION_COSTS.get('message', 20)
+        task_cost_min = min(ACTION_COSTS.get('complete_task', 5), ACTION_COSTS.get('delete_task', 5))
+        task_cost_max = max(ACTION_COSTS.get('add_task', 15), ACTION_COSTS.get('edit_task', 10))
+        delegate_cost = ACTION_COSTS.get('delegate_task', 40)
+        research_cost = ACTION_COSTS.get('research_topic', 20)
+    except Exception:
+        msg_cost, task_cost_min, task_cost_max, delegate_cost, research_cost = 20, 5, 15, 40, 20
+
     tier_info = f"""\n## СИСТЕМА ТОКЕНОВ
 Все функции открыты. Пользователь платит токенами за каждое действие.{token_balance_info}
 
-Доступные инструменты:
-- Задачи: list_tasks, add_task, complete_task, edit_task, delete_task, check_time_conflicts, reschedule_task, restore_task
-- Цели: create_goal, update_goal_progress, list_goals
-- Делегирование: delegate_task, get_delegation_progress
-- Контакты: find_relevant_contacts_for_task
-- Профиль: update_profile, show_profile
-- Исследования: research_topic, get_news_trends, get_weather_info, quick_topic_search
-- Маркетинг: generate_marketing_content, publish_to_telegram, set_content_strategy
-- Автономность: set_auto_post_time, toggle_autonomous_feature
-
-Стоимость действий для пользователя:
-• Сообщение: 20₽ • Задача: 5-15₽ • Делегирование: 40₽ • Маркетинг: 60₽
+Стоимость (1 токен = 1₽):
+• Сообщение: {msg_cost}₽ • Задача: {task_cost_min}-{task_cost_max}₽ • Делегирование: {delegate_cost}₽ • Исследование: {research_cost}₽
 Если баланс низкий — предупреди и предложи /buy."""
 
     # Context data

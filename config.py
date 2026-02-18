@@ -86,8 +86,7 @@ YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 if not LOCAL and (not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY):
     raise ValueError("YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY are required in production mode")
 
-# Security - no encryption needed (backward compatibility)
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "dummy_key_not_used")  # Legacy compatibility
+# Security
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 if not SESSION_SECRET and not LOCAL:
     raise ValueError("SESSION_SECRET is required for production")

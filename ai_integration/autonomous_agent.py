@@ -256,18 +256,18 @@ class HybridAutonomousAgent:
         return result
 
     _TOOL_PROGRESS_MAP = {
-        'get_tasks': 'Смотрю задачи ...',
+        'list_tasks': 'Смотрю задачи ...',
         'add_task': 'Создаю задачу ...',
         'complete_task': 'Завершаю задачу ...',
         'edit_task': 'Обновляю задачу ...',
         'delete_task': 'Удаляю задачу ...',
-        'reschedule_task': 'Переношу задачу ...',
-        'quick_topic_search': 'Ищу информацию ...',
+        'skip_task': 'Пропускаю задачу ...',
+        'restore_task': 'Восстанавливаю задачу ...',
+        'quick_topic_search': 'Быстрый поиск ...',
         'research_topic': 'Исследую тему ...',
         'get_news_trends': 'Ищу новости ...',
         'find_relevant_contacts_for_task': 'Ищу контакты ...',
-        'get_stock_price': 'Проверяю котировки ...',
-        'get_weather': 'Смотрю погоду ...',
+        'get_stock_info': 'Проверяю котировки ...',
         'update_profile': 'Обновляю профиль ...',
         'get_user_goals': 'Проверяю цели ...',
         'create_goal': 'Создаю цель ...',
@@ -276,6 +276,10 @@ class HybridAutonomousAgent:
         'edit_post': 'Редактирую пост ...',
         'get_posts': 'Смотрю посты ...',
         'delete_post': 'Удаляю пост ...',
+        'delegate_task': 'Делегирую ...',
+        'set_contact_alert': 'Настраиваю мониторинг ...',
+        'set_content_strategy': 'Сохраняю стратегию ...',
+        'toggle_autonomous_feature': 'Настраиваю автономность ...',
     }
 
     def _tool_progress_text(self, tool_name, iteration):
@@ -795,7 +799,8 @@ class HybridAutonomousAgent:
         3. Tool calling loop (max 5 итераций)
         4. Обучение + сохранение
         """
-        self._progress_callback = progress_callback
+        # progress_callback хранится локально (не на self) для thread-safety
+        _cb = progress_callback
 
         try:
             # Тариф
@@ -923,9 +928,9 @@ class HybridAutonomousAgent:
             seen_tools = set()  # Для предотвращения дублей
 
             # Прогресс в Telegram — "Думаю ..."
-            if self._progress_callback:
+            if _cb:
                 try:
-                    await self._progress_callback('Думаю ...')
+                    await _cb('Думаю ...')
                 except Exception:
                     pass
 
@@ -1015,10 +1020,10 @@ class HybridAutonomousAgent:
                             continue
 
                     # Execute single tool — с прогрессом в Telegram
-                    if self._progress_callback:
+                    if _cb:
                         status = self._tool_progress_text(name, iteration + 1)
                         try:
-                            await self._progress_callback(status)
+                            await _cb(status)
                         except Exception:
                             pass
 

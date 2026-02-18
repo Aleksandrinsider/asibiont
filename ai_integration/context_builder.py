@@ -226,7 +226,10 @@ class ContextBuilder:
 
                 # Completion rate
                 total_all = session.query(Task).filter(Task.user_id == user.id).count()
-                completed_count = len(completed_tasks)
+                completed_count = session.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status == 'completed'
+                ).count()
                 if total_all > 3:
                     rate = round(completed_count / total_all * 100)
                     hints.append(f"📊 Выполненность задач: {rate}%")
