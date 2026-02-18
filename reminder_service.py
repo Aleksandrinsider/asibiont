@@ -424,17 +424,34 @@ class ReminderService:
                         user.current_task_id = task_id
                     interaction = Interaction(
                         user_id=user.id,
-                        message_type="ai",
+                        message_type="reminder",
                         content=reminder_text
                     )
                     db.add(interaction)
                     db.commit()
+                    logger.info(f"Followup reminder saved to interaction history for user {user_id}")
             finally:
                 db.close()
             
             if self.bot:
-                await self.bot.send_message(user_id, reminder_text)
-                logger.info(f"✅ Followup reminder sent to user {user_id}")
+                try:
+                    await self.bot.send_message(user_id, reminder_text)
+                    logger.info(f"Followup reminder sent to user {user_id}")
+                except Exception as send_err:
+                    error_code = getattr(send_err, 'status_code', None) or getattr(getattr(send_err, 'response', None), 'status_code', 0)
+                    if 500 <= error_code < 600:
+                        logger.warning(f"Telegram 5xx error on followup, will retry in 10min: {send_err}")
+                        self.scheduler.add_job(
+                            self.send_followup_reminder,
+                            trigger=DateTrigger(run_date=datetime.now(pytz.UTC) + timedelta(minutes=10)),
+                            args=[user_id, task_title, task_id],
+                            id=f"followup_retry_{task_id}",
+                            replace_existing=True
+                        )
+                    else:
+                        logger.error(f"Failed to send followup: {send_err}")
+            else:
+                logger.info(f"[FOLLOWUP SENT] (no bot) user={user_id} task={task_title}")
         except Exception as e:
             logger.error(f"Failed to send followup reminder: {e}", exc_info=True)
 
@@ -497,7 +514,7 @@ class ReminderService:
                     
                     interaction = Interaction(
                         user_id=user.id,
-                        message_type="ai",
+                        message_type="reminder",
                         content=reminder_text
                     )
                     db.add(interaction)
@@ -724,7 +741,7 @@ class ReminderService:
                 # Сохранить в таблицу Interaction
                 interaction = Interaction(
                     user_id=user.id,
-                    message_type="ai",
+                    message_type="reminder",
                     content=proactive_text
                 )
                 db.add(interaction)

@@ -5524,9 +5524,9 @@ app.router.add_get('/api/balance', api_balance_handler)
 
 # Initialize ReminderService
 import reminder_service as reminder_service_module
-reminder_service = ReminderService(bot=bot if not LOCAL else None)
+reminder_service = ReminderService(bot=bot)
 reminder_service_module.REMINDER_SERVICE = reminder_service  # Set global variable for use in handlers
-logger.info("ReminderService initialized and set as global REMINDER_SERVICE")
+logger.info(f"ReminderService initialized with bot={'present' if bot else 'None'} and set as global REMINDER_SERVICE")
 
 #      
 try:
