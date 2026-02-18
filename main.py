@@ -5070,6 +5070,25 @@ async def update_timezone_handler(request):
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
 
+async def api_balance_handler(request):
+    """API для получения баланса токенов"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            balance = user.token_balance if user else 0
+            return web.json_response({'balance': balance or 0})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_balance: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_profile_handler(request):
     """API для получения и обновления профиля пользователя"""
     try:
@@ -5504,6 +5523,7 @@ app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)
 app.router.add_get('/api/search_contacts', api_search_contacts_handler)
+app.router.add_get('/api/balance', api_balance_handler)
 
 
 # Setup for production
