@@ -527,7 +527,7 @@ async def auth_handler(request):
             return web.Response(text='Authentication failed', status=401)
     except Exception as e:
         logger.error(f"CRITICAL ERROR in auth_handler: {e}", exc_info=True)
-        return web.Response(text=f'Internal server error: {str(e)}', status=500)
+        return web.Response(text='Internal server error', status=500)
 
 
 async def logout_handler(request):
@@ -1135,7 +1135,7 @@ async def chat_handler(request):
                 logger.info("AI response: %s...", response[:100])
             except Exception as e:
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
-                response = f"Ошибка: {str(e)}"
+                response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
 
             # Save agent response to Interaction table
             if user:
@@ -1318,7 +1318,7 @@ async def clear_user_tasks_handler(request):
     except Exception as e:
         session_db.rollback()
         logger.error(f"Error clearing user tasks: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
 
@@ -1364,7 +1364,7 @@ async def clear_single_task_handler(request):
     except Exception as e:
         session_db.rollback()
         logger.error(f"Error deleting task: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
 
@@ -1456,7 +1456,7 @@ async def complete_task_handler(request):
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error completing task {task_id}: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def restore_task_handler(request):
@@ -1478,7 +1478,7 @@ async def restore_task_handler(request):
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error restoring task {task_id}: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def skip_task_handler(request):
@@ -1500,7 +1500,7 @@ async def skip_task_handler(request):
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error skipping task {task_id}: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def delete_task_handler(request):
@@ -1557,7 +1557,7 @@ async def delete_task_handler(request):
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error deleting task {task_id}: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def cancel_delegation_handler(request):
@@ -1579,7 +1579,7 @@ async def cancel_delegation_handler(request):
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error cancelling delegation for task {task_id}: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def reschedule_task_handler(request):
@@ -1602,7 +1602,7 @@ async def reschedule_task_handler(request):
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error rescheduling task '{task_title}': {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 
@@ -3243,7 +3243,7 @@ async def api_contact_profile_handler(request):
 
         except Exception as e:
             logger.error(f"Error getting contact profile for username '{username}': {e}", exc_info=True)
-            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
+            return web.json_response({'error': 'Internal server error'}, status=500)
         finally:
             session_db.close()
 
@@ -3495,7 +3495,7 @@ async def rate_user_handler(request):
 
     except Exception as e:
         logger.error(f"Error rating user: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def hide_contact_handler(request):
@@ -3571,7 +3571,7 @@ async def hide_contact_handler(request):
 
     except Exception as e:
         logger.error(f"Error hiding contact: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def get_user_rating_handler(request):
@@ -3608,7 +3608,7 @@ async def get_user_rating_handler(request):
 
     except Exception as e:
         logger.error(f"Error getting rating: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def set_user_rating_handler(request):
@@ -3682,7 +3682,7 @@ async def set_user_rating_handler(request):
 
     except Exception as e:
         logger.error(f"Error setting rating: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def create_post_handler(request):
@@ -3747,7 +3747,7 @@ async def create_post_handler(request):
 
     except Exception as e:
         logger.error(f"Error creating post: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def api_accept_delegated_task_handler(request):
@@ -3808,7 +3808,7 @@ async def api_accept_delegated_task_handler(request):
 
     except Exception as e:
         logger.error(f"Error accepting delegated task: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def api_reject_delegated_task_handler(request):
@@ -3869,7 +3869,7 @@ async def api_reject_delegated_task_handler(request):
 
     except Exception as e:
         logger.error(f"Error rejecting delegated task: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def api_update_profile_handler(request):
@@ -3914,7 +3914,7 @@ async def api_update_profile_handler(request):
 
     except Exception as e:
         logger.error(f"Error updating profile: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def get_feed_handler(request):
@@ -4106,7 +4106,7 @@ async def get_feed_handler(request):
 
     except Exception as e:
         logger.error(f"Error getting feed: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def mark_posts_viewed_handler(request):
@@ -4162,7 +4162,7 @@ async def mark_posts_viewed_handler(request):
 
     except Exception as e:
         logger.error(f"Error marking posts as viewed: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def delete_post_handler(request):
@@ -4218,7 +4218,7 @@ async def delete_post_handler(request):
 
     except Exception as e:
         logger.error(f"Error deleting post: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def create_comment_handler(request):
@@ -4293,7 +4293,7 @@ async def create_comment_handler(request):
 
     except Exception as e:
         logger.error(f"Error creating comment: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def get_comments_handler(request):
@@ -4369,7 +4369,7 @@ async def get_comments_handler(request):
 
     except Exception as e:
         logger.error(f"Error getting comments: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def delete_comment_handler(request):
@@ -4421,7 +4421,7 @@ async def delete_comment_handler(request):
         if db_session:
             db_session.rollback()
         logger.error(f"Error deleting comment: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         if db_session:
             db_session.close()
@@ -4489,7 +4489,7 @@ async def toggle_like_handler(request):
         if db_session:
             db_session.rollback()
         logger.error(f"Error toggling like: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         if db_session:
             db_session.close()
@@ -4813,7 +4813,7 @@ async def api_tasks_handler(request):
         return web.json_response({'tasks': tasks_data})
     except Exception as e:
         logger.error(f"Error fetching tasks: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
 
@@ -4881,7 +4881,7 @@ async def api_delegations_handler(request):
         })
     except Exception as e:
         logger.error(f"Error fetching delegations: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
 
@@ -4954,7 +4954,7 @@ async def api_interactions_handler(request):
         return web.json_response({'interactions': interactions_data})
     except Exception as e:
         logger.error(f"Error fetching interactions: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
 
@@ -5016,7 +5016,7 @@ async def api_search_contacts_handler(request):
             session_db.close()
     except Exception as e:
         logger.error(f"Error searching contacts: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def update_timezone_handler(request):
@@ -5055,7 +5055,7 @@ async def update_timezone_handler(request):
         return web.json_response({'status': 'ok'})
     except Exception as e:
         logger.error(f"Error updating timezone: {e}")
-        return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+        return web.json_response({'status': 'error', 'detail': 'Internal server error'}, status=500)
 
 
 async def api_balance_handler(request):
@@ -5074,7 +5074,7 @@ async def api_balance_handler(request):
             session_db.close()
     except Exception as e:
         logger.error(f"Error in api_balance: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def api_profile_handler(request):
@@ -5141,7 +5141,7 @@ async def api_profile_handler(request):
                 session_db.close()
         except Exception as e:
             logger.error(f"Error updating profile: {e}", exc_info=True)
-            return web.json_response({'error': str(e)}, status=500)
+            return web.json_response({'error': 'Internal server error'}, status=500)
 
     # Get fresh data from database (убрали кеширование для мгновенного обновления)
     session_db = Session()
@@ -5222,7 +5222,7 @@ async def api_profile_handler(request):
         return web.json_response(response_data)
     except Exception as e:
         logger.error(f"Error fetching profile: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
 
@@ -5293,7 +5293,7 @@ async def create_payment_handler(request):
         return web.HTTPFound(payment_url)
     except Exception as e:
         logger.error(f"Error creating payment: {e}")
-        return web.Response(text=f'Ошибка создая платежа: {str(e)}', status=500)
+        return web.Response(text='Ошибка создания платежа. Попробуйте позже.', status=500)
 
 
 async def clear_database_handler(request):
@@ -5318,7 +5318,7 @@ async def clear_database_handler(request):
         
     except Exception as e:
         logger.error(f"Error clearing database: {e}")
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def add_test_users_handler(request):
@@ -5436,7 +5436,7 @@ async def add_test_users_handler(request):
         if 'session' in locals():
             session.rollback()
             session.close()
-        return web.json_response({'error': str(e)}, status=500)
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 # Routes

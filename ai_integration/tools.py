@@ -241,17 +241,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "show_profile",
-            "description": "Показать профиль пользователя. Ключевые слова: 'покажи профиль', 'мой профиль'. Для обновления — update_profile.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "delegate_task",
             "description": "Делегировать задачу другому пользователю. Используй когда видишь 'делегируй', 'поручи', 'передай'. Примеры: 'делегируй Ивану X', 'поручи @maria X завтра в 10:00'.",
             "parameters": {
@@ -414,55 +403,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "set_auto_post_time",
-            "description": "Время автопостинга. AI постит ежедневно в указанное время.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "post_time": {
-                        "type": "string",
-                        "description": "Время постинга в формате HH:MM (24-часовой формат). Примеры: '14:30', '09:15', '18:00'"
-                    }
-                },
-                "required": ["post_time"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "generate_marketing_content",
-            "description": "Генерация маркетингового контента: заголовок, пост, хэштеги, CTA. Генерируй сразу, не спрашивай детали.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "product_name": {
-                        "type": "string",
-                        "description": "Название продукта/услуги/проекта. Примеры: 'AI-бот для задач', 'Курсы по Python', 'Консалтинговые услуги'"
-                    },
-                    "target_audience": {
-                        "type": "string",
-                        "description": "Целевая аудитория продукта. Примеры: 'предприниматели 25-40 лет', 'студенты IT', 'владельцы малого бизнеса', 'стартаперы'"
-                    },
-                    "platform": {
-                        "type": "string",
-                        "description": "Платформа для публикации. Варианты: 'telegram', 'vk', 'instagram', 'twitter', 'linkedin'",
-                        "enum": ["telegram", "vk", "instagram", "twitter", "linkedin"]
-                    },
-                    "goal": {
-                        "type": "string",
-                        "description": "Цель контента: 'привлечение' (новых клиентов), 'продажа' (закрыть сделку), 'удержание' (engagement), 'бренд' (узнаваемость)",
-                        "enum": ["привлечение", "продажа", "удержание", "бренд"],
-                        "default": "привлечение"
-                    }
-                },
-                "required": ["product_name", "target_audience", "platform"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "research_topic",
             "description": "🔍 Глубокое исследование через Google Search + AI-анализ. Вызывай для содержательных вопросов, где нужны актуальные данные и экспертиза: рынок, технологии, конкуренты, стратегии, тренды, бизнес, финансы, здоровье. Не нужен для прямых команд (создай задачу), подтверждений (ок, давай) или данных уже имеющихся в контексте.",
             "parameters": {
@@ -480,23 +420,6 @@ TOOLS = [
                     }
                 },
                 "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_weather_info",
-            "description": "🌤️ Погода для города. Вызывай при вопросах о погоде.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "city": {
-                        "type": "string",
-                        "description": "Название города на русском или английском. Примеры: 'Москва', 'Moscow', 'Санкт-Петербург', 'Yekaterinburg'"
-                    }
-                },
-                "required": ["city"]
             }
         }
     },
@@ -526,23 +449,6 @@ TOOLS = [
                     }
                 },
                 "required": ["topic"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "publish_to_telegram",
-            "description": "📢 ПУБЛИКАЦИЯ В TG-КАНАЛ (НЕ в ленту!): Публикует контент в TELEGRAM КАНАЛ пользователя (внешний маркетинг). Это НЕ лента новостей — это канал в Telegram. Требуется настроенный telegram_channel в профиле. Ключевые слова: 'опубликуй в канал', 'запости в телеграм', 'пост в канал'. Используй ПОСЛЕ generate_marketing_content. Бот должен быть админом канала.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "content": {
-                        "type": "string",
-                        "description": "Текст для публикации. Может быть простая строка или структурированный контент из generate_marketing_content. Поддерживает Markdown."
-                    }
-                },
-                "required": ["content"]
             }
         }
     },
