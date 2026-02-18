@@ -34,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 import pytz
 
 from models import (
-    Session, User, UserProfile, Task, Goal, Interaction,
+    Session, User, UserProfile, Task, Goal, Interaction, Post,
     Anchor, AnchorDeliveryLog, AnchorPriority,
     ActivityAlert, ContactAlert, SubscriptionTier,
 )
@@ -80,7 +80,14 @@ BATCH_GROUPS = {
     'weather_activity': 'misc',
     'morning_plan': 'daily',
     'evening_review': 'daily',
+    'post_opportunity': 'posting',
+    'channel_post': 'posting',
 }
+
+# Макс постов в ленту за 24ч на пользователя
+MAX_FEED_POSTS_PER_DAY = 2
+# Макс постов в канал за 24ч (PREMIUM)
+MAX_CHANNEL_POSTS_PER_DAY = 1
 
 
 class AnchorEngine:
@@ -216,14 +223,21 @@ class AnchorEngine:
             if not ready:
                 return
 
-            # 3. AI DECISION — передаём якоря в AI, он решит писать или нет
-            message = await self._ai_decide_and_compose(user, ready, session)
-            if not message:
-                logger.debug(f"[ANCHOR] User {user_id}: AI decided not to write")
-                return
+            # Разделяем: обычные якоря vs постовые
+            post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
+            dialog_anchors = [a for a in ready if a.anchor_type not in ('post_opportunity', 'channel_post')]
 
-            # 4. DELIVER
-            await self._deliver(user, ready, message, session)
+            # 3a. DIALOG ANCHORS — сообщение пользователю
+            if dialog_anchors:
+                message = await self._ai_decide_and_compose(user, dialog_anchors, session)
+                if message:
+                    await self._deliver(user, dialog_anchors, message, session)
+                else:
+                    logger.debug(f"[ANCHOR] User {user_id}: AI decided not to write (dialog)")
+
+            # 3b. POST ANCHORS — публикация в ленту/канал
+            for post_anchor in post_anchors:
+                await self._process_post_anchor(user, post_anchor, session)
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
@@ -275,6 +289,13 @@ class AnchorEngine:
         # --- РЫНОК/КОНТЕНТ (PREMIUM) ---
         if tier == SubscriptionTier.PREMIUM:
             anchors.extend(self._scan_premium_insights(user, profile, session, now_utc))
+
+        # --- ПОСТЫ В ЛЕНТУ (все тарифы) ---
+        anchors.extend(self._scan_post_opportunities(user, profile, session, now_utc, tier))
+
+        # --- ПОСТЫ В КАНАЛ (PREMIUM, заменяет AutoMarketingService) ---
+        if tier == SubscriptionTier.PREMIUM:
+            anchors.extend(self._scan_channel_post(user, profile, session, now_utc))
 
         # Дедупликация: не создаём якорь если уже есть недоставленный с тем же type+source
         existing = session.query(Anchor).filter(
@@ -740,6 +761,194 @@ class AnchorEngine:
         return anchors
 
     # ═══════════════════════════════════════════════════════
+    # POST SCANNERS — ленточный автопостинг + канал
+    # ═══════════════════════════════════════════════════════
+
+    def _scan_post_opportunities(self, user, profile, session, now_utc, tier) -> list:
+        """Сканирует ВСЕ данные пользователя и создаёт якорь post_opportunity.
+
+        AI потом сам решит, стоит ли делать пост и О ЧЁМ.
+        Мы здесь только проверяем: есть ли вообще о чём писать.
+        """
+        anchors = []
+
+        # Проверяем лимит постов за день
+        user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
+        user_now = datetime.now(user_tz)
+        today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start.astimezone(pytz.UTC)
+
+        posts_today = session.query(Post).filter(
+            Post.user_id == user.id,
+            Post.created_at >= today_start_utc
+        ).count()
+
+        if posts_today >= MAX_FEED_POSTS_PER_DAY:
+            return anchors
+
+        # Собираем «материал» для AI:
+        signals = []
+
+        # 1. Завершённые задачи за 24ч
+        recent_completed = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'completed',
+            Task.actual_completion_time >= now_utc - timedelta(hours=24)
+        ).all()
+        if recent_completed:
+            titles = [t.title for t in recent_completed[:5]]
+            signals.append(f'completed_tasks:{len(recent_completed)}:{",".join(titles)}')
+
+        # 2. Новые цели
+        new_goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status == 'active',
+            Goal.created_at >= now_utc - timedelta(hours=24)
+        ).all()
+        if new_goals:
+            signals.append(f'new_goals:{",".join(g.title for g in new_goals[:3])}')
+
+        # 3. Цель достигнута
+        achieved_goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.progress_percentage >= 100,
+            Goal.status == 'active'
+        ).all()
+        if achieved_goals:
+            signals.append(f'achieved_goals:{",".join(g.title for g in achieved_goals[:3])}')
+
+        # 4. Стрик продуктивности (>=3 за 24ч)
+        if len(recent_completed) >= 3:
+            signals.append(f'productivity_streak:{len(recent_completed)}')
+
+        # 5. Задачи с делегированием (ищет помощь)
+        collab_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.delegated_to_username.isnot(None),
+            Task.delegation_status == 'pending',
+            Task.created_at >= now_utc - timedelta(hours=48)
+        ).all()
+        if collab_tasks:
+            signals.append(f'seeking_help:{",".join(t.title for t in collab_tasks[:3])}')
+
+        # 6. Контент из последнего диалога (интересные темы)
+        recent_interactions = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type == 'user',
+            Interaction.created_at >= now_utc - timedelta(hours=12)
+        ).order_by(Interaction.created_at.desc()).limit(5).all()
+        if recent_interactions:
+            topics = [i.content[:80] for i in recent_interactions if i.content]
+            if topics:
+                signals.append(f'recent_topics:{"||".join(topics[:3])}')
+
+        # 7. Профиль: навыки/интересы (AI может сделать экспертный пост)
+        if profile:
+            if profile.skills:
+                signals.append(f'skills:{profile.skills[:100]}')
+            if profile.interests:
+                signals.append(f'interests:{profile.interests[:100]}')
+
+        # Нет сигналов — нет якоря
+        if not signals:
+            return anchors
+
+        # Создаём один общий якорь — AI решит что с этим делать
+        source_key = f'post:{user_now.strftime("%Y-%m-%d")}:{posts_today}'
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='post_opportunity',
+            source=source_key,
+            topic=f'Есть материал для {len(signals)} потенциальных постов в ленту',
+            priority=AnchorPriority.LOW,
+            data=json.dumps({
+                'signals': signals,
+                'posts_today': posts_today,
+                'user_name': user.first_name or user.username or 'user',
+                'tier': tier.value,
+            }, ensure_ascii=False),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=12),
+            cooldown_hours=8,
+            batch_group='posting',
+        ))
+
+        return anchors
+
+    def _scan_channel_post(self, user, profile, session, now_utc) -> list:
+        """PREMIUM: сканирует возможность постинга в Telegram-канал пользователя.
+
+        Заменяет AutoMarketingService. AI решает контент.
+        """
+        anchors = []
+
+        channel = getattr(user, 'telegram_channel', None)
+        if not channel:
+            return anchors
+
+        # Проверяем auto_marketing_enabled
+        if profile and hasattr(profile, 'auto_marketing_enabled') and not profile.auto_marketing_enabled:
+            return anchors
+
+        # Лимит: 1 пост в канал в день
+        user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
+        user_now = datetime.now(user_tz)
+        today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start.astimezone(pytz.UTC)
+
+        # Проверяем по AnchorDeliveryLog
+        channel_posts_today = session.query(AnchorDeliveryLog).filter(
+            AnchorDeliveryLog.user_id == user.id,
+            AnchorDeliveryLog.created_at >= today_start_utc,
+            AnchorDeliveryLog.anchor_types.contains('channel_post')
+        ).count()
+
+        if channel_posts_today >= MAX_CHANNEL_POSTS_PER_DAY:
+            return anchors
+
+        # Проверяем предпочтительное время для постинга
+        post_time_str = getattr(profile, 'auto_post_time', '12:00') if profile else '12:00'
+        try:
+            post_h, post_m = map(int, (post_time_str or '12:00').split(':'))
+        except (ValueError, AttributeError):
+            post_h, post_m = 12, 0
+
+        current_minutes = user_now.hour * 60 + user_now.minute
+        target_minutes = post_h * 60 + post_m
+
+        # Окно: ±30 мин от предпочтительного времени
+        if abs(current_minutes - target_minutes) > 30:
+            return anchors
+
+        # Собираем контекст для AI
+        content_strategy = getattr(profile, 'content_strategy', '') or '' if profile else ''
+        interests = getattr(profile, 'interests', '') or '' if profile else ''
+        goals = getattr(profile, 'goals', '') or '' if profile else ''
+        skills = getattr(profile, 'skills', '') or '' if profile else ''
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='channel_post',
+            source=f'channel:{user_now.strftime("%Y-%m-%d")}',
+            topic=f'Время для поста в канал {channel}',
+            priority=AnchorPriority.LOW,
+            data=json.dumps({
+                'channel': channel,
+                'content_strategy': content_strategy[:300],
+                'interests': interests[:200],
+                'goals': goals[:200],
+                'skills': skills[:200],
+                'user_name': user.first_name or user.username or 'user',
+            }, ensure_ascii=False),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=4),
+            cooldown_hours=20,
+            batch_group='posting',
+        ))
+
+        return anchors
+
+    # ═══════════════════════════════════════════════════════
     # COOLDOWN & ANTI-SPAM
     # ═══════════════════════════════════════════════════════
 
@@ -783,6 +992,210 @@ class AnchorEngine:
     # ═══════════════════════════════════════════════════════
     # AI DECISION LAYER
     # ═══════════════════════════════════════════════════════
+
+    async def _process_post_anchor(self, user, anchor, session):
+        """Обрабатывает постовый якорь: AI создаёт пост, публикует в ленту/канал."""
+        try:
+            anchor_data = json.loads(anchor.data) if anchor.data else {}
+
+            if anchor.anchor_type == 'post_opportunity':
+                post_text = await self._ai_compose_post(user, anchor_data, session, mode='feed')
+                if not post_text:
+                    logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for feed post")
+                    return
+
+                # Создаём Post в БД
+                post = Post(
+                    user_id=user.id,
+                    username=user.username or user.first_name or f'user_{user.telegram_id}',
+                    content=post_text,
+                    created_at=datetime.now(timezone.utc)
+                )
+                session.add(post)
+
+                # Помечаем якорь как доставленный
+                anchor.delivered_at = datetime.now(timezone.utc)
+
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[FEED POST] {post_text[:200]}',
+                    anchor_types=json.dumps([anchor.anchor_type]),
+                )
+                session.add(log)
+                session.commit()
+
+                # Уведомляем пользователя
+                if self.bot:
+                    notify = (
+                        f"Опубликовал пост в твою ленту:\n\n"
+                        f"{post_text}\n\n"
+                        f"Если не нравится — скажи, удалю."
+                    )
+                    await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+                logger.info(f"[ANCHOR] ✅ Feed post for {user.telegram_id}: {post_text[:80]}...")
+
+            elif anchor.anchor_type == 'channel_post':
+                channel = anchor_data.get('channel', '')
+                if not channel:
+                    return
+
+                post_text = await self._ai_compose_post(user, anchor_data, session, mode='channel')
+                if not post_text:
+                    logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for channel post")
+                    return
+
+                # Публикуем в канал
+                published = False
+                if self.bot:
+                    try:
+                        await self.bot.send_message(chat_id=channel, text=post_text)
+                        published = True
+                    except Exception as pub_err:
+                        logger.error(f"[ANCHOR] Channel publish error ({channel}): {pub_err}")
+
+                # Помечаем якорь
+                anchor.delivered_at = datetime.now(timezone.utc)
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[CHANNEL {channel}] {post_text[:200]}',
+                    anchor_types=json.dumps([anchor.anchor_type]),
+                )
+                session.add(log)
+                session.commit()
+
+                # Уведомляем пользователя
+                if self.bot:
+                    status = "опубликован" if published else "не удалось опубликовать (проверь права бота в канале)"
+                    notify = (
+                        f"Пост в канал {channel} — {status}:\n\n"
+                        f"{post_text[:500]}\n\n"
+                        f"Если нужно поправить — скажи."
+                    )
+                    await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+                status_icon = "✅" if published else "❌"
+                logger.info(f"[ANCHOR] {status_icon} Channel post for {user.telegram_id} -> {channel}: {post_text[:80]}...")
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _process_post_anchor error: {e}\n{traceback.format_exc()}")
+            session.rollback()
+
+    async def _ai_compose_post(self, user, anchor_data: dict, session, mode: str = 'feed') -> str | None:
+        """Просит AI создать пост на основе данных пользователя.
+
+        AI получает ВСЕ сигналы и сам решает:
+        - Стоит ли публиковать вообще (SKIP)
+        - О чём написать
+        - В каком стиле
+
+        Args:
+            mode: 'feed' | 'channel'
+        Returns:
+            str текст поста или None (если SKIP)
+        """
+        try:
+            import aiohttp
+
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            user_name = user.first_name or user.username or 'Пользователь'
+
+            # Профиль
+            profile_info = []
+            if profile:
+                if profile.skills: profile_info.append(f"Навыки: {profile.skills[:100]}")
+                if profile.interests: profile_info.append(f"Интересы: {profile.interests[:100]}")
+                if profile.goals: profile_info.append(f"Цели: {profile.goals[:100]}")
+                if profile.position: profile_info.append(f"Должность: {profile.position}")
+                if profile.city: profile_info.append(f"Город: {profile.city}")
+
+            # Сигналы
+            signals = anchor_data.get('signals', [])
+
+            if mode == 'feed':
+                system_msg = (
+                    "Ты — автономный агент ASI Biont. Твоя задача — решить, стоит ли сделать пост в ленту "
+                    "от лица пользователя.\n\n"
+                    "ПРАВИЛА:\n"
+                    "1. Если материала недостаточно или пост будет неинтересным — верни SKIP\n"
+                    "2. Пиши от ПЕРВОГО лица, как будто сам пользователь делится с миром\n"
+                    "3. Пост может быть О ЧЁМ УГОДНО: достижения, мысли, поиск людей, экспертное мнение, "
+                    "итоги дня, просьба о помощи, инсайты, открытия, планы — выбери самое полезное\n"
+                    "4. Естественный, живой стиль. 3-6 предложений. БЕЗ эмодзи, без хештегов, без призывов к действию\n"
+                    "5. НЕ ВЫДУМЫВАЙ факты. Основывайся ТОЛЬКО на реальных сигналах ниже\n"
+                    "6. Верни ТОЛЬКО текст поста или SKIP. Ничего больше."
+                )
+            else:  # channel
+                content_strategy = anchor_data.get('content_strategy', '')
+                system_msg = (
+                    "Ты — контент-менеджер для Telegram-канала пользователя.\n\n"
+                    "ПРАВИЛА:\n"
+                    "1. Если нет хорошего материала для канала — верни SKIP\n"
+                    "2. Пиши от лица автора канала, экспертно и полезно\n"
+                    "3. Пост должен нести ценность для аудитории канала\n"
+                    f"4. Контент-стратегия: {content_strategy or 'не указана'}\n"
+                    "5. 3-8 предложений, естественный стиль. Можно Markdown.\n"
+                    "6. Верни ТОЛЬКО текст поста или SKIP."
+                )
+
+            # Собираем user prompt
+            user_prompt_parts = [f"Пользователь: {user_name}"]
+
+            if profile_info:
+                user_prompt_parts.append("\nПРОФИЛЬ:")
+                user_prompt_parts.extend(profile_info)
+
+            if signals:
+                user_prompt_parts.append(f"\nСИГНАЛЫ ({len(signals)}):")
+                for s in signals:
+                    user_prompt_parts.append(f"- {s}")
+            elif mode == 'channel':
+                # Для канала сигналов нет, AI пишет на основе профиля/стратегии
+                user_prompt_parts.append("\nСоздай пост на основе профиля и контент-стратегии.")
+
+            user_prompt_parts.append("\nРешение: напиши пост или SKIP.")
+
+            user_prompt = "\n".join(user_prompt_parts)
+
+            # Прямой вызов AI API (без агентского пайплайна — посты не требуют tool calling)
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": 0.8,
+                "max_tokens": 600
+            }
+
+            async with aiohttp.ClientSession() as aio_session:
+                async with aio_session.post(url, headers=headers, json=data, 
+                                           timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status != 200:
+                        error = await response.text()
+                        logger.error(f"[ANCHOR] Post AI API error: {response.status} {error[:200]}")
+                        return None
+                    result_json = await response.json()
+                    text = result_json['choices'][0]['message']['content'].strip()
+
+            if not text or text.upper() == 'SKIP' or text.upper().startswith('SKIP'):
+                return None
+
+            # Очистка: убираем кавычки если AI обернул
+            post_text = text.strip().strip('"').strip("'")
+            if len(post_text) < 20:
+                return None
+
+            return post_text
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _ai_compose_post error: {e}\n{traceback.format_exc()}")
+            return None
 
     async def _ai_decide_and_compose(self, user, anchors: list, session) -> str | None:
         """AI получает все якоря + контекст и РЕШАЕТ: писать или нет + ЧТО писать.

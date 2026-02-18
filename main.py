@@ -5973,26 +5973,17 @@ if __name__ == "__main__":
                 logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
                 logger.info("Server is ready to accept connections")
 
-                # Start auto-post service as background task
+                # Auto-post service — DISABLED, handled by AnchorEngine (post_opportunity anchors)
                 auto_post_task = None
-                if not LOCAL:  # Only in production
-                    try:
-                        from auto_post_service import run_service as run_auto_post_service
-                        logger.info("Starting auto-post service in background...")
-                        auto_post_task = asyncio.create_task(run_auto_post_service())
-                        logger.info("Auto-post service task created")
-                    except Exception as e:
-                        logger.error(f"Failed to start auto-post service: {e}")
+                # AnchorEngine._scan_post_opportunities() создаёт посты в ленту (все тарифы)
+                # AI сам решает что публиковать на основе всех данных пользователя
+                logger.info("Auto-post service DISABLED — handled by AnchorEngine")
 
-                # Start auto-marketing service for Premium users (every 30 minutes)
+                # Auto-marketing service — DISABLED, handled by AnchorEngine (channel_post anchors)
                 auto_marketing_task = None
-                try:
-                    from auto_marketing_service import start_marketing_service
-                    logger.info("Starting auto-marketing service in background...")
-                    auto_marketing_task = asyncio.create_task(start_marketing_service(bot, check_interval_minutes=30))
-                    logger.info("Auto-marketing service task created")
-                except Exception as e:
-                    logger.error(f"Failed to start auto-marketing service: {e}")
+                # AnchorEngine._scan_channel_post() постит в канал PREMIUM пользователей
+                # AI сам генерирует контент на основе профиля и контент-стратегии
+                logger.info("Auto-marketing service DISABLED — handled by AnchorEngine")
 
                 # Start contact alerts service — DISABLED, handled by AnchorEngine (contact_match anchors)
                 contact_alerts_task = None
