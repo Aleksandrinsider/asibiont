@@ -109,7 +109,7 @@ class LiveDialogTester:
 
         u = User(telegram_id=TEST_TG_ID, username='denis_dev',
                  first_name='Денис', timezone='Asia/Yekaterinburg',
-                 subscription_tier='STANDARD', token_balance=50000)
+                 subscription_tier='LIGHT', token_balance=50000)
         self.db.add(u)
         self.db.flush()
         self.db.add(UserProfile(user_id=u.id))

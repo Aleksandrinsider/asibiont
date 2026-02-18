@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 import aiohttp
-from models import Session, User, SubscriptionTier
+from models import Session, User
 
 logger = logging.getLogger(__name__)
 

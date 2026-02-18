@@ -17,7 +17,7 @@ class ContextBuilder:
         pass
 
     def build_premium_alerts_context(self, user_id, session):
-        """Get proactive alerts for Premium users
+        """Get proactive alerts for users
 
         Checks for:
         1. Activity alerts - when other users create matching tasks
@@ -25,7 +25,7 @@ class ContextBuilder:
 
         Returns list of hint strings to add to context
         """
-        from models import User, UserProfile, Task, ActivityAlert, ContactAlert, SubscriptionTier
+        from models import User, UserProfile, Task, ActivityAlert, ContactAlert
 
         hints = []
 

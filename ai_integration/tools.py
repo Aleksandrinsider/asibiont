@@ -1,21 +1,15 @@
 # Enhanced TOOLS with clear, specific descriptions to prevent AI hallucinations
+# Все инструменты доступны всем пользователям — оплата через токены за каждое действие
 
-# Функции для ПОЛУЧЕНИЯ делегированных задач - доступны ВСЕМ (включая LIGHT)
-DELEGATION_RECEIVE_FUNCTIONS = {
+# Функции делегирования
+DELEGATION_FUNCTIONS = {
+    'delegate_task',
+    'get_delegation_progress',
     'accept_delegated_task',
     'reject_delegated_task'
 }
 
-# Функции для ОТПРАВКИ делегирования - доступны только STANDARD и PREMIUM
-DELEGATION_SEND_FUNCTIONS = {
-    'delegate_task',
-    'get_delegation_progress',
-}
-
-# Все функции делегирования
-DELEGATION_FUNCTIONS = DELEGATION_RECEIVE_FUNCTIONS | DELEGATION_SEND_FUNCTIONS
-
-# Фоновые алерты — доступны ВСЕМ тарифам (автоматические уведомления о контактах)
+# Фоновые алерты (автоматические уведомления о контактах)
 ALERT_FUNCTIONS = {
     'set_contact_alert',
 }
@@ -36,66 +30,26 @@ EXCLUDED_TOOLS = {
     'analyze_situation_and_suggest_tasks', # AI собирает сам из контекста
 }
 
-# Автопилот канала — только PREMIUM (автономное ведение)
-PREMIUM_AUTOPILOT_FUNCTIONS = {
-    'set_auto_post_time',
-    'set_content_strategy',
-}
-
-# Ограниченные функции для каждого тарифа (что БЛОКИРУЕТСЯ)
-# LIGHT: не может делегировать, нет автопилота (но может получать делегированные + алерты)
-LIGHT_RESTRICTED = DELEGATION_SEND_FUNCTIONS | PREMIUM_AUTOPILOT_FUNCTIONS
-
-# STANDARD: может делегировать + алерты, но нет автопилота канала
-STANDARD_RESTRICTED = PREMIUM_AUTOPILOT_FUNCTIONS
-
-# PREMIUM: нет ограничений
-PREMIUM_RESTRICTED = set()
-
-def get_available_tools(subscription_tier):
+def get_available_tools(subscription_tier=None):
     """
-    Filter tools based on user's subscription tier using dynamic tool discovery
+    Возвращает все доступные инструменты. Тарифные ограничения убраны — оплата токенами.
     
     Args:
-        subscription_tier: User's subscription tier (LIGHT, STANDARD, PREMIUM) - can be enum, string, or value
+        subscription_tier: Deprecated, игнорируется. Оставлен для совместимости вызовов.
         
     Returns:
-        List of available tools for the tier
+        List of available tools
     """
     from .dynamic_tools import tool_discovery
     
-    # Handle different input types
-    if hasattr(subscription_tier, 'value'):
-        tier_value = subscription_tier.value
-    elif isinstance(subscription_tier, str):
-        # Handle both 'PREMIUM' and 'SubscriptionTier.PREMIUM'
-        if subscription_tier.startswith('SubscriptionTier.'):
-            tier_value = subscription_tier.split('.', 1)[1]
-        else:
-            tier_value = subscription_tier
-    else:
-        tier_value = str(subscription_tier).upper()
-    
     # Check if dynamic tools are discovered
     if tool_discovery.discovered_tools:
-        # Use dynamic tool filtering
-        return tool_discovery.get_available_tools_for_tier(tier_value)
+        # Use dynamic tool filtering (returns all tools)
+        return tool_discovery.get_available_tools_for_tier('ALL')
     else:
-        # Fallback to static TOOLS filtering
-        tier_value = tier_value.upper()
-        
-        # Determine restricted functions based on tier
-        if tier_value == 'PREMIUM':
-            restricted = PREMIUM_RESTRICTED
-        elif tier_value == 'STANDARD':
-            restricted = STANDARD_RESTRICTED
-        else:  # LIGHT
-            restricted = LIGHT_RESTRICTED
-        
-        # Filter out restricted functions and excluded tools
+        # Fallback to static TOOLS — return all except excluded
         return [tool for tool in TOOLS 
-               if tool['function']['name'] not in restricted
-               and tool['function']['name'] not in EXCLUDED_TOOLS]
+               if tool['function']['name'] not in EXCLUDED_TOOLS]
 
 TOOLS = [
     {
@@ -234,17 +188,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "Обновить профиль. ДОБАВЛЯЕТ в skills/interests (не заменяет). Вызывай при явном упоминании личных данных. ЗАПРЕЩЕНО выдумывать данные.",
+            "description": "Сохранить данные о пользователе в профиль. Вызывай когда человек упоминает факты о себе: город, навыки, интересы, работу, цели. Передавай конкретные значения из контекста разговора. ДОБАВЛЯЕТ к существующим данным (не заменяет).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "city": {"type": "string", "description": "Город проживания или работы. Примеры: Москва, Санкт-Петербург, Екатеринбург"},
-                    "birth_date": {"type": "string", "description": "День рождения в формате DD.MM.YYYY. Примеры: 04.06.1985, 15.03.1990"},
-                    "company": {"type": "string", "description": "Название компании работодателя. Примеры: ASI Biont, Яндекс, Google"},
-                    "position": {"type": "string", "description": "Должность, роль в компании. Примеры: Директор, Разработчик, Менеджер"},
-                    "skills": {"type": "string", "description": "Профессиональные навыки через запятую. Примеры: Управление, разработка, Python, дизайн"},
-                    "interests": {"type": "string", "description": "Личные интересы и хобби через запятую. Примеры: ИИ, технологии, бизнес, книги, спорт"},
-                    "goals": {"type": "string", "description": "Цели, планы, желания. Примеры: развивать бизнес, изучить Python, найти партнеров. Функция УМНО объединит похожие цели."},
+                    "city": {"type": "string", "description": "Город проживания. Примеры: Москва, Казань, Санкт-Петербург"},
+                    "birth_date": {"type": "string", "description": "Дата рождения в формате DD.MM.YYYY"},
+                    "company": {"type": "string", "description": "Компания-работодатель. Примеры: Яндекс, Google, ASI Biont"},
+                    "position": {"type": "string", "description": "Должность или роль. Примеры: разработчик, директор, менеджер"},
+                    "skills": {"type": "string", "description": "Навыки и умения через запятую. Примеры: Python, React, управление проектами"},
+                    "interests": {"type": "string", "description": "Интересы и увлечения через запятую. Примеры: ML, робототехника, бизнес"},
+                    "goals": {"type": "string", "description": "Цели и планы. Примеры: запустить MVP, найти инвестора"},
                 },
             },
         },
@@ -264,7 +218,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delegate_task",
-            "description": "Делегировать задачу другому пользователю (STANDARD+). Используй когда видишь 'делегируй', 'поручи', 'передай'. Примеры: 'делегируй Ивану X', 'поручи @maria X завтра в 10:00'. Доступно с STANDARD тарифа.",
+            "description": "Делегировать задачу другому пользователю. Используй когда видишь 'делегируй', 'поручи', 'передай'. Примеры: 'делегируй Ивану X', 'поручи @maria X завтра в 10:00'.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -416,7 +370,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "set_auto_post_time",
-            "description": "Время автопостинга (PREMIUM). AI постит ежедневно в указанное время.",
+            "description": "Время автопостинга. AI постит ежедневно в указанное время.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -534,7 +488,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_telegram",
-            "description": "📢 ПУБЛИКАЦИЯ В TELEGRAM (ВСЕ ТАРИФЫ): Публикует пост в Telegram канал пользователя. Требуется настроенный telegram_channel в профиле. Используй ПОСЛЕ generate_marketing_content или когда пользователь просит 'опубликуй пост', 'запости это'. Бот должен быть админом канала.",
+            "description": "📢 ПУБЛИКАЦИЯ В TELEGRAM: Публикует пост в Telegram канал пользователя. Требуется настроенный telegram_channel в профиле. Используй ПОСЛЕ generate_marketing_content или когда пользователь просит 'опубликуй пост', 'запости это'. Бот должен быть админом канала.",
             "parameters": {
                 "type": "object",
                 "properties": {

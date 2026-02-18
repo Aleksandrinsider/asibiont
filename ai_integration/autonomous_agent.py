@@ -585,6 +585,10 @@ class HybridAutonomousAgent:
                             logger.info(f"[EXEC] {tool_name} — недостаточно токенов")
                             continue
 
+                    # Логируем параметры ДО вызова
+                    safe_params = {k: v for k, v in params.items() if k != 'session'}
+                    logger.info(f"[EXEC] {tool_name} CALL params={safe_params}")
+
                     if asyncio.iscoroutinefunction(handler_func):
                         result = await handler_func(**params)
                     else:
@@ -597,7 +601,7 @@ class HybridAutonomousAgent:
                     results.append({"tool": tool_name, "success": True,
                                     "result": result, "reason": reason})
                     
-                    logger.info(f"[EXEC] {tool_name} ✓ — {reason}")
+                    logger.info(f"[EXEC] {tool_name} ✓ result={str(result)[:200]} — {reason}")
 
                 except Exception as e:
                     logger.error(f"[EXEC] {tool_name} ✗ — {e}")
@@ -641,6 +645,137 @@ class HybridAutonomousAgent:
                 params['query'] = params.pop('topic')
             elif 'query' not in params:
                 params['query'] = user_message[:200] if user_message else 'исследование'
+
+        elif tool_name == 'update_profile' and user_message:
+            # Универсальный fallback: если DeepSeek вызвал update_profile без данных,
+            # извлекаем факты из сообщения пользователя по разным формулировкам.
+            profile_fields = ['city', 'skills', 'interests', 'goals', 'company', 'position', 'birth_date']
+            has_any = any(params.get(f) for f in profile_fields)
+            if not has_any:
+                msg = user_message
+                logger.info(f"[FIX_PARAMS] update_profile empty params — extracting from message")
+                import re as _re
+                
+                # === ГОРОД ===
+                # «живу в Москве», «я из Питера», «город Казань», «переехал в Казань»,
+                # «нахожусь в Перми», «в городе Тула», «город: Казань»
+                city_patterns = [
+                    r'(?:живу|нахожусь|обитаю|базируюсь|переехал[а]?)\s+в\s+([А-ЯЁ][а-яё\-]+(?:[\-\s][А-ЯЁ][а-яё]+)?)',
+                    r'(?:я\s+из|приехал[а]?\s+из|родом\s+из)\s+([А-ЯЁ][а-яё\-]+)',
+                    r'город[уе]?[:\s]+([А-ЯЁ][а-яё\-]+)',
+                    r'в\s+городе\s+([А-ЯЁ][а-яё\-]+)',
+                ]
+                for pat in city_patterns:
+                    m = _re.search(pat, msg, _re.IGNORECASE)
+                    if m:
+                        city_raw = m.group(1).strip()
+                        # Нормализация: «Питере» → «Санкт-Петербург», «Питера» → «Санкт-Петербург» 
+                        if _re.match(r'питер', city_raw, _re.IGNORECASE):
+                            city_raw = 'Санкт-Петербург'
+                        elif _re.match(r'мск|москв', city_raw, _re.IGNORECASE):
+                            city_raw = 'Москва'
+                        elif _re.match(r'спб|петербург', city_raw, _re.IGNORECASE):
+                            city_raw = 'Санкт-Петербург'
+                        elif _re.match(r'нск|новосиб', city_raw, _re.IGNORECASE):
+                            city_raw = 'Новосибирск'
+                        elif _re.match(r'екб|екат', city_raw, _re.IGNORECASE):
+                            city_raw = 'Екатеринбург'
+                        # Убираем падежное окончание: Казани → Казань, Перми → Пермь
+                        city_raw = _re.sub(r'[иеуюя]$', '', city_raw)
+                        if len(city_raw) >= 2:
+                            # Первая буква заглавная
+                            city_raw = city_raw[0].upper() + city_raw[1:]
+                            params['city'] = city_raw
+                        break
+                
+                # === НАВЫКИ ===
+                # «навыки: Python, React», «умею Python и FastAPI», «знаю React»,
+                # «владею Python», «разбираюсь в ML», «специализируюсь на backend»,
+                # «занимаюсь разработкой», «мои скиллы: Python, Go»
+                skills_patterns = [
+                    r'навыки?[:\s]+([^.!?]+)',
+                    r'скилл[ыа]?[:\s]+([^.!?]+)',
+                    r'(?:умею|знаю|владею|освоил[а]?)\s+([^.!?]+)',
+                    r'(?:разбираюсь|специализируюсь)\s+(?:в|на)\s+([^.!?]+)',
+                ]
+                for pat in skills_patterns:
+                    m = _re.search(pat, msg, _re.IGNORECASE)
+                    if m:
+                        val = m.group(1).strip().rstrip(',')
+                        if len(val) > 1:
+                            params['skills'] = val
+                        break
+                
+                # === ИНТЕРЕСЫ ===
+                # «интересуюсь ML», «увлекаюсь спортом», «люблю музыку»,
+                # «интересы: ML, робототехника», «хобби: шахматы»,
+                # «мне интересно AI», «нравится программирование»
+                interests_patterns = [
+                    r'интересы?[:\s]+([^.!?]+)',
+                    r'хобби[:\s]+([^.!?]+)',
+                    r'увлечени[яе][:\s]+([^.!?]+)',
+                    r'(?:интересуюсь|увлекаюсь|люблю|нравится|обожаю)\s+([^.!?]+)',
+                    r'мне\s+интересн[оа]\s+([^.!?]+)',
+                ]
+                for pat in interests_patterns:
+                    m = _re.search(pat, msg, _re.IGNORECASE)
+                    if m:
+                        val = m.group(1).strip().rstrip(',')
+                        if len(val) > 1:
+                            params['interests'] = val
+                        break
+                
+                # === ЦЕЛИ ===
+                # «моя цель — запустить MVP», «хочу выйти на 100 клиентов»,
+                # «планирую переехать», «стремлюсь к 1 млн выручки»,
+                # «цели: запустить MVP, найти инвестора»
+                goals_patterns = [
+                    r'цел[иья][:\s—–-]+([^.!?]+)',
+                    r'(?:хочу|планирую|стремлюсь|мечтаю|собираюсь|намерен[а]?)\s+([^.!?]+)',
+                ]
+                for pat in goals_patterns:
+                    m = _re.search(pat, msg, _re.IGNORECASE)
+                    if m:
+                        val = m.group(1).strip().rstrip(',')
+                        if len(val) > 2:
+                            params['goals'] = val
+                        break
+                
+                # === ДОЛЖНОСТЬ ===
+                # «я разработчик», «работаю программистом», «должность: CTO»,
+                # «я тимлид», «по профессии дизайнер»
+                position_patterns = [
+                    r'(?:должность|позиция|роль)[:\s]+([^,.!?]+)',
+                    r'(?:работаю|тружусь)\s+([а-яёА-ЯЁa-zA-Z\-]+(?:ом|ем|ёром|ером|стом|ком|чиком))',
+                    r'по\s+професси[ию]\s+([^,.!?]+)',
+                    r'я\s+((?:разработчик|программист|дизайнер|менеджер|директор|инженер|аналитик|тимлид|CTO|CEO|COO|CFO|фрилансер|предприниматель|маркетолог|продюсер|консультант)[а-яё]*)',
+                ]
+                for pat in position_patterns:
+                    m = _re.search(pat, msg, _re.IGNORECASE)
+                    if m:
+                        val = m.group(1).strip()
+                        if len(val) > 1:
+                            params['position'] = val
+                        break
+                
+                # === КОМПАНИЯ ===
+                # «работаю в Яндексе», «компания: Google», «я из ASI Biont»,
+                # «сотрудник Сбера», «основатель AI Startup»
+                company_patterns = [
+                    r'(?:компани[яию]|фирм[ауе]|организаци[яию])[:\s]+([^,.!?]+)',
+                    r'работаю\s+в\s+(?:компании\s+)?([A-ZА-ЯЁ][^,.!?]{1,30})',
+                    r'(?:сотрудник|основатель|со-?основатель|партнёр)\s+(?:компании\s+)?([A-ZА-ЯЁ][^,.!?]{1,30})',
+                ]
+                for pat in company_patterns:
+                    m = _re.search(pat, msg, _re.IGNORECASE)
+                    if m:
+                        val = m.group(1).strip()
+                        if len(val) > 1:
+                            params['company'] = val
+                        break
+                
+                extracted = {k: v for k, v in params.items() if k not in ('user_id', 'session')}
+                logger.info(f"[FIX_PARAMS] Extracted: {extracted}")
 
         return params
 

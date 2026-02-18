@@ -17,7 +17,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     """Упрощенный промпт - использует отдельные модули"""
 
     # Token system — все функции открыты, ограничение только баланс
-    tier_value = subscription_tier.value if hasattr(subscription_tier, 'value') else str(subscription_tier)
+    tier_value = 'Токены'  # Унифицированная модель
     
     # Получаем баланс токенов для контекста AI
     token_balance_info = ""

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 import aiohttp
-from models import Session, Task, User, UserProfile, SubscriptionTier, Subscription, Goal
+from models import Session, Task, User, UserProfile, Subscription, Goal
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
@@ -34,24 +34,8 @@ def _utc_to_local(dt_naive, user_tz):
     return dt_naive.replace(tzinfo=pytz.UTC).astimezone(user_tz)
 
 def get_tier_priority(profile, session=None):
-    """Get tier priority for sorting (PREMIUM=3, STANDARD=2, LIGHT=1)"""
-    if not profile or not hasattr(profile, 'user_id'):
-        return 0
-    
-    if session is None:
-        from models import Session
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-    
-    try:
-        partner_subscription = session.query(Subscription).filter_by(user_id=profile.user_id, status='active').first()
-        partner_tier = partner_subscription.tier.value if partner_subscription and partner_subscription.tier else 'LIGHT'
-        return {'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(partner_tier, 0)
-    finally:
-        if close_session:
-            session.close()
+    """Deprecated — все пользователи равны. Возвращает 0."""
+    return 0
 
 # Расширенная карта часовых поясов для городов
 CITY_TIMEZONE_MAP = {
@@ -538,56 +522,48 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     task_id = task.id
     logger.info(f"[ADD_TASK] Task '{title}' created successfully with ID {task_id}, reminder_time: {task.reminder_time}")
 
-    # PREMIUM AUTOMATION: Real-time триггер для Premium пользователей
+    # Automation: Real-time триггер для задач (доступно всем, оплата токенами)
     try:
-        from models import SubscriptionTier
-        if user.subscription_tier == SubscriptionTier.PREMIUM:
-            logger.info(f"[ADD_TASK] Premium user detected, triggering automation for task {task_id}")
-            from ai_integration.premium_simple import trigger_premium_automation_realtime
-            import asyncio
-            
-            # Запускаем в фоне, не блокируем создание задачи
-            asyncio.create_task(
-                trigger_premium_automation_realtime(
-                    premium_user_id=user.telegram_id,
-                    task_id=task_id,
-                    task_description=f"{title}. {description}" if description else title
-                )
+        from ai_integration.premium_simple import trigger_premium_automation_realtime
+        import asyncio
+        
+        logger.info(f"[ADD_TASK] Triggering automation for task {task_id}")
+        asyncio.create_task(
+            trigger_premium_automation_realtime(
+                premium_user_id=user.telegram_id,
+                task_id=task_id,
+                task_description=f"{title}. {description}" if description else title
             )
-            logger.info(f"[ADD_TASK] Premium automation triggered for task {task_id}")
-        else:
-            # Проверяем: если это НЕ Premium, но партнёр с рекомендациями от Premium
-            logger.info(f"[ADD_TASK] Non-Premium user, checking for Premium recommendations")
-            from ai_integration.premium_simple import save_partner_progress_notification
-            
-            # Получаем профиль и проверяем рекомендации
-            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-            if profile and profile.pending_premium_recommendations:
-                try:
-                    recommendations = json.loads(profile.pending_premium_recommendations)
-                    if isinstance(recommendations, list):
-                        # Находим все Premium ID которые отправили рекомендации
-                        premium_ids = set()
-                        for rec in recommendations:
-                            if rec.get('type') == 'task_created' and rec.get('premium_user_id'):
-                                premium_ids.add(rec.get('premium_user_id'))
-                        
-                        # Уведомляем каждого Premium о том что партнёр начал работу
-                        for premium_id in premium_ids:
-                            save_partner_progress_notification(
-                                session=session,
-                                premium_user_id=premium_id,
-                                partner_username=user.username or f"User_{user.telegram_id}",
-                                partner_telegram_id=user.telegram_id,
-                                action_type='started',
-                                task_title=title,
-                                original_goal=None  # TODO: можно добавить связь
-                            )
-                            logger.info(f"[ADD_TASK] Notified Premium {premium_id} about partner {user.telegram_id} starting task")
-                except Exception as e:
-                    logger.warning(f"[ADD_TASK] Failed to notify Premium about partner progress: {e}")
+        )
+        logger.info(f"[ADD_TASK] Automation triggered for task {task_id}")
+        
+        # Проверяем рекомендации от других пользователей
+        from ai_integration.premium_simple import save_partner_progress_notification
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile and profile.pending_premium_recommendations:
+            try:
+                recommendations = json.loads(profile.pending_premium_recommendations)
+                if isinstance(recommendations, list):
+                    recommender_ids = set()
+                    for rec in recommendations:
+                        if rec.get('type') == 'task_created' and rec.get('premium_user_id'):
+                            recommender_ids.add(rec.get('premium_user_id'))
+                    
+                    for recommender_id in recommender_ids:
+                        save_partner_progress_notification(
+                            session=session,
+                            premium_user_id=recommender_id,
+                            partner_username=user.username or f"User_{user.telegram_id}",
+                            partner_telegram_id=user.telegram_id,
+                            action_type='started',
+                            task_title=title,
+                            original_goal=None
+                        )
+                        logger.info(f"[ADD_TASK] Notified {recommender_id} about partner {user.telegram_id} starting task")
+            except Exception as e:
+                logger.warning(f"[ADD_TASK] Failed to notify about partner progress: {e}")
     except Exception as e:
-        logger.warning(f"[ADD_TASK] Failed to trigger Premium automation: {e}")
+        logger.warning(f"[ADD_TASK] Failed to trigger automation: {e}")
 
     # Save to long-term memory for project context
     try:
@@ -806,39 +782,35 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             session.commit()
             logger.info(f"[COMPLETE_TASK] Task {task.id} status set to 'completed', committed to database")
             
-            # Уведомляем Premium пользователей о завершении задачи партнёром
+            # Уведомляем пользователей о завершении задачи партнёром
             try:
                 from ai_integration.premium_simple import save_partner_progress_notification
-                from models import SubscriptionTier
                 
-                # Проверяем: если это НЕ Premium, но партнёр с рекомендациями
-                if user.subscription_tier != SubscriptionTier.PREMIUM:
-                    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-                    if profile and profile.pending_premium_recommendations:
-                        try:
-                            recommendations = json.loads(profile.pending_premium_recommendations)
-                            if isinstance(recommendations, list):
-                                premium_ids = set()
-                                for rec in recommendations:
-                                    if rec.get('type') == 'task_created' and rec.get('premium_user_id'):
-                                        premium_ids.add(rec.get('premium_user_id'))
-                                
-                                # Уведомляем каждого Premium о завершении
-                                for premium_id in premium_ids:
-                                    save_partner_progress_notification(
-                                        session=session,
-                                        premium_user_id=premium_id,
-                                        partner_username=user.username or f"User_{user.telegram_id}",
-                                        partner_telegram_id=user.telegram_id,
-                                        action_type='completed',
-                                        task_title=task.title,
-                                        original_goal=None
-                                    )
-                                    logger.info(f"[COMPLETE_TASK] Notified Premium {premium_id} about partner completing task")
-                        except Exception as e:
-                            logger.warning(f"[COMPLETE_TASK] Failed to notify Premium: {e}")
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile and profile.pending_premium_recommendations:
+                    try:
+                        recommendations = json.loads(profile.pending_premium_recommendations)
+                        if isinstance(recommendations, list):
+                            recommender_ids = set()
+                            for rec in recommendations:
+                                if rec.get('type') == 'task_created' and rec.get('premium_user_id'):
+                                    recommender_ids.add(rec.get('premium_user_id'))
+                            
+                            for recommender_id in recommender_ids:
+                                save_partner_progress_notification(
+                                    session=session,
+                                    premium_user_id=recommender_id,
+                                    partner_username=user.username or f"User_{user.telegram_id}",
+                                    partner_telegram_id=user.telegram_id,
+                                    action_type='completed',
+                                    task_title=task.title,
+                                    original_goal=None
+                                )
+                                logger.info(f"[COMPLETE_TASK] Notified {recommender_id} about partner completing task")
+                    except Exception as e:
+                        logger.warning(f"[COMPLETE_TASK] Failed to notify about completion: {e}")
             except Exception as e:
-                logger.warning(f"[COMPLETE_TASK] Failed Premium notification: {e}")
+                logger.warning(f"[COMPLETE_TASK] Failed notification: {e}")
                 
         except Exception as e:
             logger.error(f"[COMPLETE_TASK] Commit failed: {e}")
@@ -1352,17 +1324,13 @@ def delegate_task(
     
     session = Session()
     try:
-        # Check if delegator has Light tier - Light users can only receive delegated tasks
+        # Делегирование доступно всем (оплата токенами)
         delegator = session.query(User).filter_by(telegram_id=user_id).first()
         if not delegator:
             return "Ошибка: Пользователь не найден."
         
-        # Log tier for debugging
-        logger.info(f"[DELEGATE] User {user_id} tier: {delegator.subscription_tier.value if delegator.subscription_tier else 'None'}")
-        
-        # Skip subscription check in FREE_ACCESS_MODE
-        if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier not in [SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM]:
-            return "DELEGATION_SUBSCRIPTION_REQUIRED: Делегирование задач доступно только на тарифах Standard и Premium. Обновите подписку: https://asibiont.ru/subscription_tiers"
+        # Делегирование доступно всем пользователям (оплата токенами)
+        logger.info(f"[DELEGATE] User {user_id} delegating task")
         
         # Validate reminder_time
         if not reminder_time:
@@ -2046,10 +2014,6 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
 
         # ФИЛЬТРАЦИЯ ЗАДАЧ
         if filter_type == "Автоматические":
-            # Проверяем премиум подписку для фильтра фоновых задач
-            if user.subscription_tier != SubscriptionTier.PREMIUM:
-                return "Фильтр 'Автоматические' доступен только на PREMIUM подписке. Обновите подписку для использования этой возможности."
-            
             # Фильтруем только worker задачи (начинаются с "Worker:")
             tasks = [t for t in tasks if t.title and t.title.startswith("Worker:")]
             
@@ -2567,23 +2531,7 @@ def get_partners_list(user_id=None, session=None):
 
         # ВАЖНО: Всегда показывать избранные и заблокированные контакты
         
-        # Получаем АКТУАЛЬНЫЕ тарифы из таблицы Subscription (не из User.subscription_tier!)
-        profile_user_subscription = session.query(Subscription).filter_by(user_id=profile_user.id, status='active').first()
-        user_subscription = session.query(User).filter_by(id=user.id).first()
-        user_subscription_obj = session.query(Subscription).filter_by(user_id=user.id, status='active').first()
-        
-        profile_user_tier = profile_user_subscription.tier.value if profile_user_subscription and profile_user_subscription.tier else 'LIGHT'
-        user_tier = user_subscription_obj.tier.value if user_subscription_obj and user_subscription_obj.tier else 'LIGHT'
-        
-        logger.info(f"[PARTNERS] Checking {profile_user.username}: profile_tier={profile_user_tier}, user_tier={user_tier}")
-        
-        # НОВАЯ ЛОГИКА: ВСЕ видят ВСЕХ (включая PREMIUM)
-        # PREMIUM получает преимущество через приоритет в сортировке, а не фильтрацию
-        
-        # Специальное правило для PREMIUM: они видят ВСЕХ (даже без совпадений)
-        if user_tier == 'PREMIUM':
-            has_match = True  # PREMIUM видит всех
-            match_reasons.append("premium-sees-all")
+        # Все пользователи видят всех (токенная модель, без тарифных ограничений)
         
         if user_profile.favorite_contacts:
             favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
@@ -2654,9 +2602,7 @@ def get_partners_list(user_id=None, session=None):
         if user_city and partner_city == user_city:
             city_bonus = 1  # Небольшой бонус за локальность
 
-        premium_bonus = get_tier_priority(p, session)
-
-        return (-relevance_score, -city_bonus, -premium_bonus, -(p.average_rating or 0))
+        return (-relevance_score, -city_bonus, -(p.average_rating or 0))
 
     # Сортируем по новой логике
     partners.sort(key=sort_key)
@@ -2885,11 +2831,10 @@ def get_partners_list(user_id=None, session=None):
                         partner.task_relevance_score += 10  # Максимальный приоритет для точных совпадений
                         logger.info(f"[PARTNERS] @{partner_user.username} has exact same active tasks: {exact_task_matches}")
     
-    # Пересортируем ВСЕХ партнеров с учетом релевантности: (1) город, (2) релевантность, (3) Premium, (4) рейтинг
+    # Пересортируем ВСЕХ партнеров: (1) релевантность, (2) город, (3) рейтинг
     partners.sort(key=lambda p: (
-        0 if (user_city and (p.city.lower() if p.city else None) == user_city) else 1,  # город
         -p.task_relevance_score,  # релевантность
-        -get_tier_priority(p, session),  # Premium
+        0 if (user_city and (p.city.lower() if p.city else None) == user_city) else 1,  # город
         -(p.average_rating or 0)  # рейтинг
     ))
     
@@ -3481,13 +3426,9 @@ def show_profile(user_id=None, session=None):
         else:
             result += "\n⚠️ Профиль ещё не заполнен. Расскажи о себе — город, интересы, навыки, цели — и я всё запомню!"
 
-        # Подписка
-        subscription = session.query(Subscription).filter_by(user_id=user.id, status='active').first()
-        if subscription:
-            tier = subscription.tier.value if subscription.tier else 'LIGHT'
-            result += f"\n💎 Тариф: {tier}"
-        else:
-            result += f"\n💎 Тариф: LIGHT"
+        # Подписка / токены
+        token_balance = getattr(user, 'token_balance', 0) or 0
+        result += f"\n💠 Баланс: {token_balance} токенов"
 
         # Timezone
         if user.timezone:
@@ -3893,11 +3834,6 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         if relevance_score > 0:
             partner_user = session.query(User).filter_by(id=partner.user_id).first()
             if partner_user and partner_user.username:
-                # Получаем tier для Premium-приоритета
-                partner_subscription = session.query(Subscription).filter_by(user_id=partner_user.id, status='active').first()
-                partner_tier = partner_subscription.tier.value if partner_subscription and partner_subscription.tier else 'LIGHT'
-                tier_priority = {'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(partner_tier, 0)
-                
                 relevant_contacts.append({
                     'username': partner_user.username,
                     'name': partner_user.username,
@@ -3905,14 +3841,13 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     'skills': partner.skills or '',
                     'city': partner.city or '',
                     'score': relevance_score,
-                    'reasons': match_reasons,
-                    'tier_priority': tier_priority
+                    'reasons': match_reasons
                 })
     
     # НОВАЯ ЛОГИКА СОРТИРОВКИ: способствовать росту через всю базу данных
     # Город - бонус, но не ограничение для максимального развития
 
-    # Сортируем по релевантности: (1) score, (2) город (бонус), (3) Premium
+    # Сортируем по релевантности: (1) score, (2) город (бонус)
     def contact_sort_key(contact):
         # Основной скор релевантности
         base_score = contact['score']
@@ -3926,10 +3861,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
             else:
                 city_bonus = 1  # Маленький бонус для онлайн
 
-        # Premium приоритет
-        premium_bonus = contact.get('tier_priority', 0)
-
-        return (base_score + city_bonus + premium_bonus, base_score, city_bonus)
+        return (base_score + city_bonus, base_score, city_bonus)
 
     sorted_contacts = sorted(relevant_contacts, key=contact_sort_key, reverse=True)
 
@@ -4312,13 +4244,12 @@ def check_delegation_deadlines():
         session.close()
 
 def create_subscription_payment(tier=None, user_id=None, session=None):
-    """Create subscription payment"""
+    """Создать платёж для пополнения токенов (legacy, перенаправляет на токены)"""
     from subscription_service import create_subscription_payment as create_sub_payment
 
     try:
-        tier = tier or 'light'  # Default to light if not specified
-        payment_url = create_sub_payment(user_id, tier)
-        return f"Ссылка на оплату месячной подписки создана: {payment_url}"
+        payment_url = create_sub_payment(user_id, 'light')
+        return f"Ссылка на пополнение токенов: {payment_url}"
     except Exception as e:
         return f"Ошибка создания платежа: {str(e)}"
 
@@ -4944,6 +4875,11 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         close_session = False
 
     try:
+        # Проверяем что хотя бы один параметр передан
+        has_any_data = any(v is not None for v in [city, birth_date, interests, skills, goals, company, position])
+        if not has_any_data:
+            return "Ошибка: не передано ни одного параметра. Укажи что обновить: city, skills, interests, goals, company, position."
+
         # Получаем пользователя по telegram_id
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
@@ -5156,7 +5092,7 @@ def smart_update_profile(user_id: int, field: str, value: str, action: str = 'ad
             session.close()
 
 def set_activity_alert(activity_type=None, keywords=None, location=None, frequency='any', enabled=True, user_id=None, session=None):
-    """🌟 PREMIUM: Set up automatic activity alerts from other users
+    """Настроить автоматические уведомления об активностях других пользователей
     
     Monitors tasks created by other users and automatically adds information to your next conversation.
     When someone creates a matching task (e.g., running, meetup), AI will naturally mention it in dialogue.
@@ -5173,7 +5109,7 @@ def set_activity_alert(activity_type=None, keywords=None, location=None, frequen
     Returns:
         Success message
     """
-    from models import Session, User, ActivityAlert, SubscriptionTier
+    from models import Session, User, ActivityAlert
     import json
     
     logger.info(f"[SET_ACTIVITY_ALERT] user_id={user_id}, type={activity_type}, keywords={keywords}")
@@ -5188,10 +5124,6 @@ def set_activity_alert(activity_type=None, keywords=None, location=None, frequen
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден."
-        
-        # Check premium status
-        if user.subscription_tier == SubscriptionTier.LIGHT:
-            return "⭐ Автоматические уведомления об активностях доступны только Premium пользователям. Оформи подписку Premium, чтобы автоматически узнавать когда кто-то планирует интересные активности!"
         
         if not activity_type or not keywords:
             return "Укажи тип активности и ключевые слова для поиска. Например: 'скажи когда кто-то пойдет на пробежку'"
@@ -5263,7 +5195,7 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
     Returns:
         Success message
     """
-    from models import Session, User, ContactAlert, SubscriptionTier
+    from models import Session, User, ContactAlert
     
     logger.info(f"[SET_CONTACT_ALERT] user_id={user_id}, skill={skill}, interest={interest}")
     
@@ -5338,7 +5270,7 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
 
 async def set_auto_post_time(post_time, user_id=None, session=None):
     """
-    Установить время автоматической публикации контента (только для Premium)
+    Установить время автоматической публикации контента
 
     Args:
         post_time: Время в формате HH:MM (например, '14:30')
@@ -5348,17 +5280,7 @@ async def set_auto_post_time(post_time, user_id=None, session=None):
     Returns:
         Сообщение о настройке времени автопостинга
     """
-    """🌟 PREMIUM: Set preferred time for automatic posting
-    
-    Args:
-        post_time: Time in HH:MM format (e.g., '14:30')
-        user_id: Telegram ID of the user
-        session: Database session
-    
-    Returns:
-        Success message
-    """
-    from models import Session, User, UserProfile, SubscriptionTier
+    from models import Session, User, UserProfile
     
     logger.info(f"[SET_AUTO_POST_TIME] user_id={user_id}, post_time={post_time}")
     
@@ -5372,10 +5294,6 @@ async def set_auto_post_time(post_time, user_id=None, session=None):
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден."
-        
-        # Check premium status
-        if user.subscription_tier != SubscriptionTier.PREMIUM:
-            return "⭐ Настройка времени автопостинга доступна только Premium пользователям. Оформи подписку Premium для персонализированного расписания постинга!"
         
         # Validate time format
         import re

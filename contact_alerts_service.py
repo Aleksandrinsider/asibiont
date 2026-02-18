@@ -12,7 +12,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 import pytz
-from models import Session, User, UserProfile, ContactAlert, SubscriptionTier
+from models import Session, User, UserProfile, ContactAlert
 
 logger = logging.getLogger(__name__)
 

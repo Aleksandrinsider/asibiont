@@ -1,4 +1,4 @@
-from models import Session, Subscription, User, PaymentHistory, SubscriptionTier
+from models import Session, Subscription, User, PaymentHistory
 import datetime
 import pytz
 from config import FREE_ACCESS_MODE
@@ -42,11 +42,12 @@ def check_subscription(user_id):
         session.close()
 
 def create_subscription_payment(user_id, tier='light'):
-    """Создает платеж для месячной подписки"""
-    from payments import get_tier_price
-    amount = get_tier_price(tier)
-    description = f"Подписка ASI Biont на месяц - {tier.capitalize()}"
-    return create_payment(amount, description, user_id, tier)
+    """Создает платеж для покупки токенов (legacy, перенаправляет на токены)"""
+    from payments import TOKEN_PACK_PRICES
+    # Legacy: любой запрос на подписку превращаем в минимальный пакет токенов
+    pack = TOKEN_PACK_PRICES.get('tokens_small', {'price': 1500, 'tokens': 1500})
+    description = f"Пополнение {pack['tokens']} токенов"
+    return create_payment(pack['price'], description, user_id, 'tokens_small')
 
 def cancel_subscription(user_id):
     """Отменяет подписку пользователя"""
@@ -71,20 +72,15 @@ def cancel_subscription(user_id):
         session.close()
 
 def activate_subscription(user_id, plan='monthly', tier='light'):
-    """Активирует подписку для пользователя"""
+    """Активирует подписку для пользователя (legacy, сохранено для обратной совместимости)"""
     session = Session()
     try:
-        # First find the user by telegram_id
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return False, "Пользователь не найден"
         
-        # Определяем tier enum
-        tier_enum = SubscriptionTier.LIGHT
-        if tier == 'standard':
-            tier_enum = SubscriptionTier.STANDARD
-        elif tier == 'premium':
-            tier_enum = SubscriptionTier.PREMIUM
+        # Тарифы убраны, используем токенную модель
+        tier_str = tier.upper() if tier else 'LIGHT'
         
         # Check if subscription already exists
         sub = session.query(Subscription).filter_by(user_id=user.id).first()
@@ -95,15 +91,13 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
         end_date = start_date + datetime.timedelta(days=duration_days)
         
         if sub:
-            # Update existing subscription
             sub.status = 'active'
             sub.plan = plan
-            sub.tier = tier_enum
+            sub.tier = tier_str
             sub.start_date = start_date
             sub.end_date = end_date
-            sub.telegram_id = user.telegram_id  # Update telegram_id
-            sub.username = user.username  # Update username
-            user.subscription_tier = tier_enum
+            sub.telegram_id = user.telegram_id
+            sub.username = user.username
             
             # Log to payment_history in same transaction
             try:
@@ -111,7 +105,7 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
                     user_id=user.id,
                     telegram_username=user.username,
                     action='subscription_activated',
-                    tier=tier_enum,
+                    tier=tier_str,
                     duration_days=duration_days,
                     start_date=start_date,
                     end_date=end_date,
@@ -129,17 +123,16 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
             # Create new subscription
             new_sub = Subscription(
                 user_id=user.id,
-                telegram_id=user.telegram_id,  # Add telegram_id
+                telegram_id=user.telegram_id,
                 telegram_username=user.username,
-                username=user.username,  # Add username
+                username=user.username,
                 status='active',
                 plan=plan,
-                tier=tier_enum,
+                tier=tier_str,
                 start_date=start_date,
                 end_date=end_date,
                 login_count=0
             )
-            user.subscription_tier = tier_enum
             session.add(new_sub)
             session.commit()
             
@@ -149,7 +142,7 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
                     user_id=user.id,
                     telegram_username=user.username,
                     action='subscription_activated',
-                    tier=tier_enum,
+                    tier=tier_str,
                     duration_days=duration_days,
                     start_date=start_date,
                     end_date=end_date,
@@ -192,11 +185,11 @@ def get_subscription_status(user_id):
             }
         else:
             # Если нет записи в Subscription, но есть subscription_tier, используем его
-            if user.subscription_tier and user.subscription_tier != SubscriptionTier.LIGHT:
+            if user.subscription_tier and str(user.subscription_tier) != 'LIGHT':
                 return {
                     'status': 'active',
                     'plan': 'manual',
-                    'tier': user.subscription_tier.value,
+                    'tier': str(user.subscription_tier.value) if hasattr(user.subscription_tier, 'value') else str(user.subscription_tier),
                     'start_date': None,
                     'end_date': None,
                     'login_count': 0

@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 import pytz
-from models import Session, User, SubscriptionTier, UserProfile
+from models import Session, User, UserProfile
 
 logger = logging.getLogger(__name__)
 

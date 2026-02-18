@@ -17,27 +17,14 @@ else:
     else:
         logger.warning("Yookassa credentials not configured (local mode)")
 
-# Pricing for subscription tiers (RUB/month) — legacy, kept for compatibility
-TIER_PRICES = {
-    'light': 3000,
-    'standard': 9000,
-    'premium': 27000
-}
-
-# Token packages (new primary monetization)
+# Token packages (primary monetization)
 TOKEN_PACK_PRICES = {
     'tokens_small':  {'price': 1500,  'tokens': 1500},
     'tokens_medium': {'price': 5000,  'tokens': 5500},
     'tokens_large':  {'price': 15000, 'tokens': 18000},
 }
 
-TIER_NAMES = {
-    'light': '🟢 Лайт',
-    'standard': '🔵 Стандарт',
-    'premium': '🟡 Премиум'
-}
-
-def create_payment(amount, description, user_id, tier='light', promo_code=None):
+def create_payment(amount, description, user_id, tier='tokens_small', promo_code=None):
     """Create payment for token pack
     
     Args:
@@ -87,10 +74,6 @@ def create_payment(amount, description, user_id, tier='light', promo_code=None):
         logger.error(f"Detailed error info: {traceback.format_exc()}")
         raise
 
-def get_tier_price(tier):
-    """Get price for subscription tier"""
-    return TIER_PRICES.get(tier, 3000)
-
-def get_tier_name(tier):
-    """Get display name for subscription tier"""
-    return TIER_NAMES.get(tier, '🟢 Лайт')
+def get_token_pack_info(pack_key):
+    """Get info for a token pack"""
+    return TOKEN_PACK_PRICES.get(pack_key, TOKEN_PACK_PRICES['tokens_small'])

@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PaymentHistory, Post, PostLike, Comment, PostView, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -110,98 +110,6 @@ try:
 except Exception as e:
     logger.error(f"❌ CRITICAL: Cannot connect to database: {e}", exc_info=True)
     logger.error(f"DATABASE_URL: {DATABASE_URL[:50]}..." if DATABASE_URL else "DATABASE_URL not set")
-
-# Create test users ONLY when explicitly enabled with CREATE_TEST_USERS=1
-if os.getenv('CREATE_TEST_USERS') == '1':
-    try:
-        session_db = Session()
-        logger.info("Creating test users with different subscription tiers")
-
-        test_users_data = [
-            # LIGHT tier users
-            {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'Москва', 'username': 'test1'},
-            {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'Санкт-Петербург', 'username': 'test2'},
-            {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Екатеринбург', 'username': 'test3'},
-            {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'Новосибирск', 'username': 'test4'},
-            {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Test User 5', 'city': 'Казань', 'username': 'test5'},
-            {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'Нижний Новгород', 'username': 'test6'},
-            {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Test User 7', 'city': 'Челябинск', 'username': 'test7'},
-            {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Test User 8', 'city': 'Омск', 'username': 'test8'},
-
-            # STANDARD tier users
-            {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Ростов-на-Дону', 'username': 'test9'},
-            {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Test User 10', 'city': 'Уфа', 'username': 'test10'},
-            {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Test User 11', 'city': 'Волгоград', 'username': 'test11'},
-            {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'Красноярск', 'username': 'test12'},
-            {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Воронеж', 'username': 'test13'},
-            {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Test User 14', 'city': 'Пермь', 'username': 'test14'},
-
-            # PREMIUM tier users
-            {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'Краснодар', 'username': 'test15'},
-            {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Test User 16', 'city': 'Тюмень', 'username': 'test16'},
-            {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Барнаул', 'username': 'test17'},
-            {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'Ижевск', 'username': 'test18'},
-            {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Владивосток', 'username': 'test19'},
-            {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'Ярославль', 'username': 'test20'},
-        ]
-
-        now = datetime.now()
-
-        added_count = 0
-        updated_count = 0
-        for user_data in test_users_data:
-            existing_user = session_db.query(User).filter(User.telegram_id == user_data['telegram_id']).first()
-            if existing_user:
-                existing_profile = session_db.query(UserProfile).filter_by(user_id=existing_user.id).first()
-                if existing_profile:
-                    existing_profile.interests = 'спорт'
-                    updated_count += 1
-                continue
-
-            user = User(
-                telegram_id=user_data['telegram_id'],
-                username=user_data['username'],
-                first_name=user_data['name'],
-                photo_url=f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN or 'fake_token'}/photos/file_test_{user_data['telegram_id']}.jpg?r={user_data['telegram_id']}",
-                subscription_tier=user_data['tier'],
-                created_at=now
-            )
-            session_db.add(user)
-            session_db.flush()
-
-            profile = UserProfile(
-                user_id=user.id,
-                interests='спорт',
-                city=user_data['city'],
-                contact_info=f'user{user_data["telegram_id"]}@test.com'
-            )
-            session_db.add(profile)
-
-            subscription = Subscription(
-                user_id=user.id,
-                telegram_id=user.telegram_id,
-                telegram_username=user.username,
-                status='active',
-                tier=user_data['tier'],
-                start_date=now,
-                end_date=now + timedelta(days=30)
-            )
-            session_db.add(subscription)
-            added_count += 1
-
-        if added_count > 0 or updated_count > 0:
-            session_db.commit()
-            logger.info(f"Test users: added={added_count}, updated={updated_count}")
-        else:
-            logger.info("All test users already exist")
-    except Exception as e:
-        logger.error(f"Error creating test users: {e}")
-        if 'session_db' in locals():
-            session_db.rollback()
-    finally:
-        if 'session_db' in locals():
-            session_db.close()
-
 
 # Helper functions for context management
 def get_context_from_db(user_id, limit=10):
@@ -492,7 +400,7 @@ async def login_handler(request):
         'logged_in': False,
         'bot_username': bot_user,
         'auth_url': auth_url,
-        'subscription_tier': 'LIGHT',
+        'subscription_tier': 'Токены',
         'current_date': '',
         'current_time': '',
         'formatted_end_date': None,
@@ -669,28 +577,13 @@ async def dashboard_handler(request):
                     subscription.end_date = subscription.end_date.replace(tzinfo=pytz.UTC)
                 if subscription.end_date < now:
                     subscription.status = 'expired'
-                    # user.subscription_tier = SubscriptionTier.LIGHT  # Сбросить тариф в бронзу при истечении - убрано по просьбе пользователя
                     session_db.commit()
                     logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
 
-            # Синхронизировать тариф пользователя с активной подпиской
-            if subscription and subscription.status == 'active' and subscription.tier:
-                sub_tier = subscription.tier.value if hasattr(subscription.tier, 'value') else str(subscription.tier).upper()
-                user_tier = user.subscription_tier.value if user.subscription_tier else None
-
-                if sub_tier != user_tier:
-                    logger.info(f"Syncing user tier: {user_tier} -> {sub_tier}")
-                    if sub_tier == 'LIGHT':
-                        user.subscription_tier = SubscriptionTier.LIGHT
-                    elif sub_tier == 'STANDARD':
-                        user.subscription_tier = SubscriptionTier.STANDARD
-                    elif sub_tier == 'PREMIUM':
-                        user.subscription_tier = SubscriptionTier.PREMIUM
-                    session_db.commit()
-                    logger.info(f"User {user.username} tier synced to {sub_tier}")
+            # Токенная модель — синхронизация тарифов больше не нужна (все функции открыты)
 
             logger.info(
-                f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}, tier: {subscription.tier if subscription else None}, user_tier: {user.subscription_tier.value if user.subscription_tier else None}")
+                f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
 
             # Токенная модель — подписка не требуется, доступ всегда открыт
             # (старый код проверки подписки удалён)
@@ -752,9 +645,8 @@ async def dashboard_handler(request):
 
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
 
-            # Get user subscription tier
-            user_subscription_tier = user.subscription_tier if user and user.subscription_tier else SubscriptionTier.LIGHT
-            display_tier = user_subscription_tier.value if user_subscription_tier else 'LIGHT'
+            # Get user token balance for display
+            display_tier = 'Токены'  # Унифицированная модель
 
             # Получить контакты по делегироаю
             delegating_to_me = []  # Люди, которые делегироали м задачи
@@ -934,14 +826,8 @@ async def dashboard_handler(request):
             partners = get_partners_list(user_id=user.id)
             session_db.close()
 
-            # Apply subscription-based contact limits
-            if partners and user_subscription_tier:
-                tier = user_subscription_tier.value
-                if tier == 'LIGHT':
-                    partners = partners[:1]  # Light: 1 contact
-                elif tier == 'STANDARD':
-                    partners = partners[:5]  # Standard: 5 contacts
-                # Premium: unlimited (already limited to 20 in get_partners_list)
+            # Контакты доступны всем (оплата токенами)
+            # Ограничение: макс 20 контактов (already limited in get_partners_list)
 
         except Exception as e:
             logger.error(f"Error getting partners: {e}", exc_info=True)
@@ -1158,7 +1044,7 @@ async def dashboard_handler(request):
             import random
             user_avatar_url += f"?r={random.randint(100000, 999999)}"
 
-        logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {display_tier}")
+        logger.info(f"Rendering dashboard for user {user.id}")
 
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
@@ -1194,7 +1080,7 @@ async def dashboard_handler(request):
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': False,
             'bot_username': bot_user,
-            'subscription_tier': 'LIGHT',
+            'subscription_tier': 'Токены',
             'token_balance': 0,
             'current_date': '',
             'current_time': '',
@@ -1363,15 +1249,7 @@ async def api_send_message_handler(request):
                 logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
                 return web.json_response({'error': 'AI service error'}, status=500)
 
-            # Check if response contains tier restriction error
-            if "Делегирование задач доступно только на тарифах" in response:
-                logger.info(f"[API_SEND_MESSAGE] Tier restriction detected for user {user_id}")
-                return web.json_response({
-                    'error': 'tier_restriction',
-                    'message': '🥉 Делегирование задач доступно только на тарифах Стандарт и Премиум',
-                    'tier': 'LIGHT',
-                    'upgrade_url': '/subscription_tiers'
-                }, status=403)
+            # Делегирование доступно всем пользователям (оплата токенами)
 
             # Check for duplicate message before saving
             # Duplicate check removed - always save
@@ -2015,7 +1893,7 @@ async def yookassa_webhook(request):
                             user_id=user.id,
                             telegram_username=user.username,
                             action='token_purchase',
-                            tier=SubscriptionTier.LIGHT,  # placeholder
+                            tier='LIGHT',  # placeholder (legacy column)
                             amount=payment['amount']['value'],
                             payment_id=payment['id'],
                             duration_days=0,
@@ -2048,69 +1926,9 @@ async def yookassa_webhook(request):
                         except Exception as e:
                             logger.error(f"Failed to notify user {user_id} about token purchase: {e}")
 
-                # ═══ LEGACY TIER SUBSCRIPTION (backward compat) ═══
-                else:
-                    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-                    if not subscription:
-                        subscription = Subscription(user_id=user.id, telegram_username=user.username)
-                        session.add(subscription)
-                    else:
-                        if not subscription.telegram_username:
-                            subscription.telegram_username = user.username
+                # Legacy tier subscription removed — only token purchases supported now
 
-                    subscription.status = 'active'
-                    subscription.start_date = datetime.now(pytz.UTC)
-
-                    tier_mapping = {
-                        'light': SubscriptionTier.LIGHT,
-                        'standard': SubscriptionTier.STANDARD,
-                        'premium': SubscriptionTier.PREMIUM
-                    }
-                    tier_enum = tier_mapping.get(tier, SubscriptionTier.LIGHT)
-                    subscription.tier = tier_enum
-                    user.subscription_tier = tier_enum
-
-                    now = datetime.now(pytz.UTC)
-                    if subscription.end_date and subscription.end_date > now:
-                        subscription.end_date = subscription.end_date + timedelta(days=30)
-                    else:
-                        subscription.end_date = now + timedelta(days=30)
-
-                    session.commit()
-
-                    try:
-                        payment_history = PaymentHistory(
-                            user_id=user.id,
-                            telegram_username=user.username,
-                            action='payment',
-                            tier=tier_enum,
-                            amount=payment['amount']['value'],
-                            payment_id=payment['id'],
-                            duration_days=30,
-                            start_date=subscription.start_date,
-                            end_date=subscription.end_date,
-                            details=json.dumps({
-                                'payment_method': payment.get('payment_method', {}).get('type'),
-                                'status': payment.get('status'),
-                                'promo_code': promo_code
-                            })
-                        )
-                        session.add(payment_history)
-                        session.commit()
-                        logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to log payment to history: {e}")
-
-                    if bot:
-                        try:
-                            from payments import get_tier_name
-                            tier_name = get_tier_name(tier)
-                            promo_msg = f" с промокодом {promo_code}" if promo_code else ""
-                            await bot.send_message(int(user_id), f"Подписка {tier_name} активирована{promo_msg}! Теперь у вас доступ ко всем премиум-функциям.")
-                        except Exception as e:
-                            logger.error(f"Failed to notify user {user_id} about subscription: {e}")
-
-                # Handle referral commission (20% of payment amount) — works for both token and legacy payments
+                # Handle referral commission (20% of payment amount)
                 if user.referrer_id:
                     try:
                         referrer = session.query(User).filter_by(id=user.referrer_id).first()
@@ -2455,47 +2273,15 @@ async def api_partners_handler(request):
                 # Use cached avatar from DB (updated daily by scheduler)
                 photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
 
-                # Check tier access - use user.subscription_tier for now since update script uses it
-                user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.LIGHT
-                partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.LIGHT
+                # Все контакты доступны всем (токенная модель)
+                can_access = True
 
-                # Ensure tiers are proper enum values
-                if not hasattr(user_tier, 'value'):
-                    user_tier = SubscriptionTier.LIGHT
-                if not hasattr(partner_tier, 'value'):
-                    partner_tier = SubscriptionTier.LIGHT
-
-                # Convert to string for comparison if needed
-                user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
-                partner_tier_str = partner_tier.value if hasattr(partner_tier, 'value') else str(partner_tier).lower()
-
-                logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
-
-                # Determine if user can access this contact
-                # LIGHT идит LIGHT и STANDARD контакты
-                # STANDARD идит LIGHT и STANDARD контакты
-                # PREMIUM идит се контакты (LIGHT, STANDARD, PREMIUM)
-                can_access = False
-
-                if user_tier_str.lower() == 'light':
-                    # LIGHT идит LIGHT и STANDARD контакты
-                    can_access = (partner_tier_str.lower() in ['light', 'standard'])
-                    logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
-                elif user_tier_str.lower() == 'standard':
-                    # STANDARD идит LIGHT и STANDARD контакты
-                    can_access = (partner_tier_str.lower() in ['light', 'standard'])
-                    logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
-                elif user_tier_str.lower() == 'premium':
-                    # PREMIUM идит сех
-                    can_access = True
-                    logger.info(f"User {user_tier_str} can access all partners")
-
-                # Add only contacts that user can access (hide inaccessible contacts)
+                # Add only contacts that user can access
                 if partner_user and can_access:
                     # Get partner's profile for rating info
                     partner_profile = session_db.query(UserProfile).filter_by(user_id=partner_user.id).first()
                     
-                    logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier_str} for user {user.username} with tier {user_tier_str} (can_access: {can_access})")
+                    logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} for user {user.username}")
                     partners_data.append(
                         {
                             'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
@@ -2503,7 +2289,7 @@ async def api_partners_handler(request):
                             'photo_url': photo_url,
                             'first_name': partner_user.first_name,
                             'can_access': can_access,
-                            'subscription_tier': (partner_tier.value if partner_tier and hasattr(partner_tier, 'value') else 'light').lower(),
+                            'subscription_tier': 'tokens',  # Токенная модель, тарифы убраны
                             'city': getattr(
                                 p,
                                 'city',
@@ -2632,24 +2418,14 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
 
-            #   " "     
-            #         
-            delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.LIGHT
-            
-            # Ensure tier is proper enum value
-            if not hasattr(delegator_tier, 'value'):
-                delegator_tier = SubscriptionTier.LIGHT
-            
-            delegator_tier_str = delegator_tier.value if hasattr(delegator_tier, 'value') else str(delegator_tier).lower()
-            
-            logger.info(f"Adding delegating contact {contact['username']} with tier {delegator_tier_str} for user {user.username} (no tier restrictions)")
+            #   \" \"     \n            #         \n            # \u0422\u0430\u0440\u0438\u0444\u044b \u0443\u0431\u0440\u0430\u043d\u044b, \u0432\u0441\u0435 \u043a\u043e\u043d\u0442\u0430\u043a\u0442\u044b \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\n            \n            logger.info(f\"Adding delegating contact {contact['username']} for user {user.username}\")
             delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first() if delegator else None
             partners_data.append({
                 'contact_info': contact['username'],
                 'telegram_id': delegator.telegram_id if delegator else None,
                 'can_access': True,  # Всегда доступен
                 'required_tier': None,  # Нет ограчей
-                'subscription_tier': delegator_tier.value if delegator_tier else 'light',
+                'subscription_tier': 'tokens',  # Токенная модель
                 'photo_url': photo_url,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
@@ -2761,59 +2537,31 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
 
-            # Check tier access
-            user_tier = user.subscription_tier if user else SubscriptionTier.LIGHT
-            delegatee_tier = delegatee.subscription_tier if delegatee and delegatee.subscription_tier else SubscriptionTier.LIGHT
+            # Все контакты доступны (токенная модель)
+            can_access = True
 
-            # Ensure tiers are proper enum values
-            if not hasattr(user_tier, 'value'):
-                user_tier = SubscriptionTier.LIGHT
-            if not hasattr(delegatee_tier, 'value'):
-                delegatee_tier = SubscriptionTier.LIGHT
-
-            # Convert to string for comparison
-            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
-            delegatee_tier_str = delegatee_tier.value if hasattr(delegatee_tier, 'value') else str(delegatee_tier).lower()
-
-            can_access = False
-
-            if user_tier_str.lower() == 'light':
-                # LIGHT идит LIGHT и STANDARD контакты
-                can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
-                logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
-            elif user_tier_str.lower() == 'standard':
-                # STANDARD идит LIGHT и STANDARD контакты
-                can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
-                logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
-            elif user_tier_str.lower() == 'premium':
-                can_access = True
-                logger.info(f"Delegatee check: User {user_tier_str} can access all delegatees")
-
-            # Only add contact if user can access it
-            if can_access:
-                logger.info(f"Adding delegating_by_me contact {contact['username']} with tier {delegatee_tier_str} for user {user.username} with tier {user_tier_str}")
-                delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first() if delegatee else None
-                partners_data.append({
-                    'contact_info': contact['username'],
-                    'telegram_id': delegatee.telegram_id if delegatee else None,
-                    'can_access': can_access,
-                    'subscription_tier': delegatee_tier.value if delegatee_tier else 'light',
-                    'photo_url': photo_url,
-                    'first_name': contact['first_name'],
-                    'position': contact.get('position'),
-                    'interests': contact.get('interests'),
-                    'city': contact.get('city'),
-                    'company': contact.get('company'),
-                    'common_interests': common_interests,
-                    'common_skills': common_skills,
-                    'common_goals': common_goals,
-                    'common_tasks': common_tasks,
-                    'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
-                    'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
-                    'reason': contact['reason'],
-                    'task_count': contact.get('task_count', 0),
-                    'type': 'delegating_by_me'
-                })
+            logger.info(f"Adding delegating_by_me contact {contact['username']} for user {user.username}")
+            delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first() if delegatee else None
+            partners_data.append({
+                'contact_info': contact['username'],
+                'telegram_id': delegatee.telegram_id if delegatee else None,
+                'can_access': True,
+                'photo_url': photo_url,
+                'first_name': contact['first_name'],
+                'position': contact.get('position'),
+                'interests': contact.get('interests'),
+                'city': contact.get('city'),
+                'company': contact.get('company'),
+                'common_interests': common_interests,
+                'common_skills': common_skills,
+                'common_goals': common_goals,
+                'common_tasks': common_tasks,
+                'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
+                'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
+                'reason': contact['reason'],
+                'task_count': contact.get('task_count', 0),
+                'type': 'delegating_by_me'
+            })
 
         # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
         user_city = profile.city.lower() if profile and profile.city else None
@@ -2823,25 +2571,21 @@ async def api_partners_handler(request):
         def sort_key(partner):
             partner_city = normalize_city(partner.get('city', ''))
             same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
-            
-            # Premium-приоритет (PREMIUM=3, STANDARD=2, LIGHT=1)
-            tier = partner.get('subscription_tier', 'light').upper()
-            tier_priority = -{'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(tier, 1)
 
             rating = partner.get('average_rating', 0) or 0
-            # Группы рейтиа:
-            # 1. Высокий рейти (>= 5): сортируем по убыаю
-            # 2. Нет рейтиа (0): йтраль, ыше плохих
-            # 3. Низкий рейти (< 5): сортируем по убыаю
+            # Группы рейтинга:
+            # 1. Высокий рейтинг (>= 5): сортируем по убыванию
+            # 2. Нет рейтинга (0): нейтраль
+            # 3. Низкий рейтинг (< 5): сортируем по убыванию
             if rating >= 5:
-                rating_group = 0  # Лучшая группа
-                rating_value = -rating  # Внутри группы по убыаю
+                rating_group = 0
+                rating_value = -rating
             elif rating == 0:
-                rating_group = 1  # Средняя группа (нет данных)
+                rating_group = 1
                 rating_value = 0
-            else:  # rating < 5
-                rating_group = 2  # Худшая группа
-                rating_value = -rating  # Внутри группы по убыаю
+            else:
+                rating_group = 2
+                rating_value = -rating
 
             return (same_city, rating_group, rating_value)
 
@@ -2876,19 +2620,7 @@ async def api_partners_handler(request):
                         if favorite_user:
                             favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
 
-                            # Check tier access
-                            user_tier = user.subscription_tier if user else SubscriptionTier.LIGHT
-                            favorite_tier = favorite_user.subscription_tier if favorite_user.subscription_tier else SubscriptionTier.LIGHT
-
-                            # Ensure tiers are proper enum values
-                            if not hasattr(user_tier, 'value'):
-                                user_tier = SubscriptionTier.LIGHT
-                            if not hasattr(favorite_tier, 'value'):
-                                favorite_tier = SubscriptionTier.LIGHT
-
-                            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
-
-                            # збраые контакты сегда доступны заисимо от тарифа
+                            # Тарифы убраны — все контакты доступны
                             can_access = True
                             required_tier = None
 
@@ -2910,7 +2642,7 @@ async def api_partners_handler(request):
                                 'photo_url': photo_url,
                                 'can_access': can_access,
                                 'required_tier': required_tier,
-                                'subscription_tier': favorite_tier.value if favorite_tier else 'light',
+                                'subscription_tier': 'tokens',  # Токенная модель
                                 'first_name': favorite_user.first_name,
                                 'position': favorite_profile.position if favorite_profile else None,
                                 'interests': favorite_profile.interests if favorite_profile else None,
@@ -3034,16 +2766,7 @@ async def api_elite_partners_handler(request):
                 logger.warning(f"User not found for telegram_id: {user_id}")
                 return web.json_response({'error': 'User not found'}, status=404)
 
-            # Check if user has Premium tier
-            user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') else SubscriptionTier.LIGHT
-            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
-            
-            logger.info(f"User {user.username} has tier: {user_tier_str}")
-            
-            if user_tier_str.lower() != 'premium':
-                # Only Premium users can access elite partners
-                logger.info(f"User {user.username} does not have Premium tier, returning empty partners list")
-                return web.json_response({'partners': []})
+            # Тарифы убраны — элитные партнёры доступны всем
 
             # Get user profile for comparison
             user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
@@ -3074,13 +2797,12 @@ async def api_elite_partners_handler(request):
                 except json.JSONDecodeError:
                     pass
 
-            # Get all Premium users (except self)
+            # Получить всех пользователей (кроме себя) — тарифы убраны
             premium_users = session_db.query(User).filter(
-                User.subscription_tier == SubscriptionTier.PREMIUM,
                 User.id != user.id
             ).all()
             
-            logger.info(f"Found {len(premium_users)} other Premium users for user {user.username}")
+            logger.info(f"Found {len(premium_users)} other users for elite partners for user {user.username}")
 
             partners_data = []
             for premium_user in premium_users:
@@ -3164,7 +2886,7 @@ async def api_elite_partners_handler(request):
                     'photo_url': photo_url,
                     'can_access': True,  # Premium users can access all Premium users
                     'required_tier': None,
-                    'subscription_tier': 'premium',
+                    'subscription_tier': 'tokens',  # Токенная модель
                     'first_name': premium_user.first_name,
                     'city': premium_profile.city if premium_profile else None,
                     'company': premium_profile.company if premium_profile else None,
@@ -3239,7 +2961,7 @@ async def api_elite_partners_handler(request):
                                     'photo_url': photo_url,
                                     'can_access': True,
                                     'required_tier': None,
-                                    'subscription_tier': delegator.subscription_tier.value if delegator.subscription_tier else 'light',
+                                    'subscription_tier': 'tokens',  # Токенная модель
                                     'first_name': delegator.first_name,
                                     'city': delegator_profile.city if delegator_profile else None,
                                     'company': delegator_profile.company if delegator_profile else None,
@@ -3313,7 +3035,7 @@ async def api_elite_partners_handler(request):
                                 'photo_url': photo_url,
                                 'can_access': True,
                                 'required_tier': None,
-                                'subscription_tier': delegatee.subscription_tier.value if delegatee.subscription_tier else 'light',
+                                'subscription_tier': 'tokens',  # Токенная модель
                                 'first_name': delegatee.first_name,
                                 'city': delegatee_profile.city if delegatee_profile else None,
                                 'company': delegatee_profile.company if delegatee_profile else None,
@@ -5604,21 +5326,21 @@ async def add_test_users_handler(request):
         
         session = Session()
         
-        # Данные пользователей
+        # Данные пользователей (тарифы убраны, все на токенах)
         sport_users = [
-            {'username': 'sport_alex', 'telegram_id': 1000001, 'interests': 'футбол, баскетбол, олейбол', 'tier': SubscriptionTier.LIGHT},
-            {'username': 'sport_maria', 'telegram_id': 1000002, 'interests': 'бег, йога, пилатес', 'tier': SubscriptionTier.STANDARD},
-            {'username': 'sport_ivan', 'telegram_id': 1000003, 'interests': 'теис, плаае, елоспорт', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'sport_olga', 'telegram_id': 1000004, 'interests': 'фитс, кроссфит, бодибилди', 'tier': SubscriptionTier.LIGHT},
-            {'username': 'sport_dmitry', 'telegram_id': 1000005, 'interests': 'хоккей, биатлон, лыжи', 'tier': SubscriptionTier.STANDARD},
+            {'username': 'sport_alex', 'telegram_id': 1000001, 'interests': 'футбол, баскетбол, олейбол', 'tier': 'LIGHT'},
+            {'username': 'sport_maria', 'telegram_id': 1000002, 'interests': 'бег, йога, пилатес', 'tier': 'LIGHT'},
+            {'username': 'sport_ivan', 'telegram_id': 1000003, 'interests': 'теис, плаае, елоспорт', 'tier': 'LIGHT'},
+            {'username': 'sport_olga', 'telegram_id': 1000004, 'interests': 'фитс, кроссфит, бодибилди', 'tier': 'LIGHT'},
+            {'username': 'sport_dmitry', 'telegram_id': 1000005, 'interests': 'хоккей, биатлон, лыжи', 'tier': 'LIGHT'},
         ]
         
         business_users = [
-            {'username': 'biz_anna', 'telegram_id': 2000001, 'interests': 'стартапы, маркети, продажи', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'biz_sergey', 'telegram_id': 2000002, 'interests': 'иестиции, финсы, криптоалюта', 'tier': SubscriptionTier.LIGHT},
-            {'username': 'biz_elena', 'telegram_id': 2000003, 'interests': 'упралее проектами, agile, scrum', 'tier': SubscriptionTier.STANDARD},
-            {'username': 'biz_maxim', 'telegram_id': 2000004, 'interests': 'e-commerce, оайн-торголя, логистика', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'biz_victoria', 'telegram_id': 2000005, 'interests': 'HR, рекрути, обучее персола', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'biz_anna', 'telegram_id': 2000001, 'interests': 'стартапы, маркети, продажи', 'tier': 'LIGHT'},
+            {'username': 'biz_sergey', 'telegram_id': 2000002, 'interests': 'иестиции, финсы, криптоалюта', 'tier': 'LIGHT'},
+            {'username': 'biz_elena', 'telegram_id': 2000003, 'interests': 'упралее проектами, agile, scrum', 'tier': 'LIGHT'},
+            {'username': 'biz_maxim', 'telegram_id': 2000004, 'interests': 'e-commerce, оайн-торголя, логистика', 'tier': 'LIGHT'},
+            {'username': 'biz_victoria', 'telegram_id': 2000005, 'interests': 'HR, рекрути, обучее персола', 'tier': 'LIGHT'},
         ]
         
         all_users = sport_users + business_users
@@ -5651,7 +5373,7 @@ async def add_test_users_handler(request):
                         created_at=datetime.now(dt_timezone.utc)
                     )
                     session.add(subscription)
-                    added.append(f"@{user_data['username']} (subscription only - {user_data['tier'].value})")
+                    added.append(f"@{user_data['username']} (subscription only - {user_data['tier']})")
                     continue
             
             user = User(
@@ -5687,7 +5409,7 @@ async def add_test_users_handler(request):
             )
             session.add(subscription)
             
-            added.append(f"@{user_data['username']} ({user_data['tier'].value})")
+            added.append(f"@{user_data['username']} ({user_data['tier']})")
         
         session.commit()
         total = session.query(User).count()

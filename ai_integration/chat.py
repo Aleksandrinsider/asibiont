@@ -309,7 +309,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 user_memory=decrypted_memory,
                 context=context,
                 intent=None,
-                subscription_tier=getattr(user, 'subscription_tier', 'LIGHT'),
+                subscription_tier=None,
                 message_type=message_type,
                 weather_info=weather_info,
                 news_info=news_info,
@@ -327,7 +327,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 file_content=file_content,
                 db_session=session,
                 message_type=message_type,
-                subscription_tier=getattr(user, 'subscription_tier', 'LIGHT')
+                subscription_tier=None
             )
             
             # ПОСТ-ОБРАБОТКА: минимальная очистка (агент сам формирует проактивный язык через промпт)
@@ -535,7 +535,7 @@ async def _build_proactive_context(user_id):
         ctx = {
             'user': user,
             'username': f"@{user.username}" if user.username else "@unknown",
-            'subscription_tier': user.subscription_tier.value if user.subscription_tier else None,
+            'subscription_tier': None,  # Тарифы убраны, оплата токенами
         }
         
         # Время пользователя
@@ -652,19 +652,18 @@ async def _build_proactive_context(user_id):
         except Exception as e:
             logger.warning(f"[PROACTIVE] Could not load weather/news: {e}")
         
-        # Партнёры / Premium инсайты
+        # Партнёры / инсайты (доступно всем, оплата токенами)
         ctx['partners'] = ""
         try:
             from .premium_simple import collect_premium_insights, manage_recommendations
-            if ctx['subscription_tier'] == 'PREMIUM':
-                import asyncio
-                try:
-                    premium_ctx = await collect_premium_insights(user_id, mode='prompt', session=db_session)
-                except Exception:
-                    premium_ctx = None
-                if premium_ctx and isinstance(premium_ctx, str) and premium_ctx.strip():
-                    ctx['partners'] = premium_ctx
-                    user_memory += f"\n\n🔥 PREMIUM:\n{premium_ctx}"
+            import asyncio
+            try:
+                insights_ctx = await collect_premium_insights(user_id, mode='prompt', session=db_session)
+            except Exception:
+                insights_ctx = None
+            if insights_ctx and isinstance(insights_ctx, str) and insights_ctx.strip():
+                ctx['partners'] = insights_ctx
+                user_memory += f"\n\n🔥 ИНСАЙТЫ:\n{insights_ctx}"
             else:
                 partner_ctx = manage_recommendations(user_id, 'get', session=db_session)
                 if partner_ctx and partner_ctx.strip():
@@ -1136,11 +1135,10 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
             'instruction': help_variants[rotation_hash % len(help_variants)]
         })
     
-    # === ТАРИФО-ЗАВИСИМЫЕ ТИПЫ ===
-    tier = ctx.get('subscription_tier')
+    # === РАСШИРЕННЫЕ ТИПЫ (доступны всем, оплата токенами) ===
     
-    # STANDARD+: Предложение делегирования (если есть задачи и контакты)
-    if tier in ('STANDARD', 'PREMIUM') and ctx.get('pending_tasks_full') and ctx.get('partners'):
+    # Предложение делегирования (если есть задачи и контакты)
+    if ctx.get('pending_tasks_full') and ctx.get('partners'):
         tasks = ctx['pending_tasks_full']
         task_idx = (rotation_hash + 1) % len(tasks)
         task = tasks[task_idx]
@@ -1149,22 +1147,21 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
             'instruction': f'Задача "{task.title}" — найди подходящего исполнителя среди контактов (используй find_relevant_contacts_for_task). Покажи кого нашёл и предложи делегировать: "Нашёл @username, он разбирается в этом. Делегировать ему?"'
         })
     
-    # STANDARD+: Статус делегированных задач
-    if tier in ('STANDARD', 'PREMIUM'):
-        message_types.append({
-            'type': 'delegation_status',
-            'instruction': 'Проверь статус делегированных задач (get_delegation_progress). Если есть непринятые — предложи альтернативного кандидата. Если есть прогресс — сообщи пользователю.'
-        })
+    # Статус делегированных задач
+    message_types.append({
+        'type': 'delegation_status',
+        'instruction': 'Проверь статус делегированных задач (get_delegation_progress). Если есть непринятые — предложи альтернативного кандидата. Если есть прогресс — сообщи пользователю.'
+    })
     
-    # PREMIUM: Идея для контента на основе трендов
-    if tier == 'PREMIUM' and (ctx.get('news') or ctx.get('long_term_data', {}).get('interests')):
+    # Идея для контента на основе трендов
+    if ctx.get('news') or ctx.get('long_term_data', {}).get('interests'):
         message_types.append({
             'type': 'content_idea',
             'instruction': 'Предложи идею для поста в канал. Исследуй тренд через инструменты (research_topic, get_news_trends). Покажи результат и предложи: "Вот тема для поста — написать и опубликовать?"'
         })
     
-    # PREMIUM: Мониторинг рынка/ниши — инсайты по сфере пользователя
-    if tier == 'PREMIUM' and has_profile:
+    # Мониторинг рынка/ниши — инсайты по сфере пользователя
+    if has_profile:
         prof_interests = getattr(profile_obj, 'interests', '') or ''
         prof_goals_str = getattr(profile_obj, 'goals', '') or ''
         niche = prof_interests[:80] or prof_goals_str[:80] or 'его сфера'
@@ -1173,8 +1170,8 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
             'instruction': f'МОНИТОРИНГ РЫНКА. Исследуй через research_topic и get_news_trends что происходит в нише пользователя ({niche}). Найди конкретный инсайт: новый конкурент, изменение регуляций, сдвиг спроса, новая технология. Покажи что нашёл и объясни как это влияет на пользователя. Предложи действие.'
         })
     
-    # PREMIUM: Контент привязанный к целям — пост который продвигает цель
-    if tier == 'PREMIUM' and ctx.get('goals'):
+    # Контент привязанный к целям — пост который продвигает цель
+    if ctx.get('goals'):
         goal = ctx['goals'][rotation_hash % len(ctx['goals'])]
         message_types.append({
             'type': 'goal_content',

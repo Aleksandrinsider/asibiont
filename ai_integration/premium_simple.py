@@ -1,11 +1,9 @@
 """
-Premium Simple Automation - встраивается в текущую архитектуру
+Smart Automation - встраивается в текущую архитектуру
 
-Логика: AI-агент Premium пользователя отправляет полезные рекомендации 
-релевантным людям, которые косвенно помогают достижению целей Premium.
-
-Пользователи получают естественные советы от AI, не зная что это часть 
-чьей-то стратегии.
+Логика: AI-агент отправляет полезные рекомендации 
+релевантным людям, которые косвенно помогают достижению целей пользователя.
+Доступно всем пользователям, оплата токенами.
 """
 
 import logging
@@ -591,8 +589,8 @@ def manage_recommendations(user_id: int, action: str, recommendation_data: Dict[
                 except:
                     existing = []
 
-            # Добавляем новую (макс 5 для обычных, 20 для Premium)
-            max_recs = 20 if user.subscription_tier.name == 'PREMIUM' else 5
+            # Добавляем новую (макс 20 рекомендаций)
+            max_recs = 20
             existing.append(recommendation_data)
             existing = existing[-max_recs:]
 
@@ -1560,12 +1558,7 @@ async def collect_premium_insights(user_id: int, mode: str = 'collect', session:
         if not user:
             return {"error": "User not found"} if mode == 'collect' else ""
 
-        # Проверяем что это Premium
-        from models import SubscriptionTier
-        if user.subscription_tier != SubscriptionTier.PREMIUM:
-            return {"error": "Not premium user"} if mode == 'collect' else ""
-
-        # Собираем инсайты
+        # Собираем инсайты (доступно всем пользователям, оплата токенами)
         all_insights = []
 
         # Быстрые проверки (всегда актуальные)

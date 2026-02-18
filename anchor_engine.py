@@ -38,7 +38,7 @@ import pytz
 from models import (
     Session, User, UserProfile, Task, Goal, Interaction, Post,
     Anchor, AnchorDeliveryLog, AnchorPriority,
-    ActivityAlert, ContactAlert, SubscriptionTier,
+    ActivityAlert, ContactAlert,
 )
 from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR
 
@@ -905,7 +905,7 @@ class AnchorEngine:
                 'signals': signals,
                 'posts_today': posts_today,
                 'user_name': user.first_name or user.username or 'user',
-                'tier': tier.value,
+                'tier': 'tokens',  # Токенная модель
             }, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=12),
