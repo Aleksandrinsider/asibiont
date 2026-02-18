@@ -10,7 +10,6 @@ from config import (
     DEEPSEEK_API_KEY,
     DEEPSEEK_MODEL,
     OPENWEATHERMAP_API_KEY,
-    ALPHA_VANTAGE_API_KEY,
     NEWSAPI_API_KEY,
     REDIS_HOST,
     REDIS_PORT,
@@ -585,59 +584,17 @@ def _load_news_sync(city=None):
 def get_finance_info(symbol, asset_type='stock', cache_ttl_minutes=15):
     """Get finance information with caching.
     
-    DEPRECATED: Используйте api_client.get_stock() (async).
+    DEPRECATED: Alpha Vantage removed. Use get_stock_info() handler (Serper + AI).
+    Returns None — kept for backward compatibility.
     """
-    cache_key = f"{asset_type}_{symbol.lower()}"
-    ttl_seconds = cache_ttl_minutes * 60
-    # Проверяем Redis кеш
-    cached_data = _redis_get(cache_key)
-    if cached_data:
-        logger.info(f"[FINANCE CACHE] Using Redis cached data for {symbol} ({asset_type})")
-        # Запускаем фоновое обновление если данные старше половины TTL
-        try:
-            if redis_client:
-                ttl_left = redis_client.ttl(cache_key)
-                if ttl_left > 0 and ttl_left < ttl_seconds / 2:  # ttl_left > 0 проверяет что ключ существует
-                    refresh_finance_cache_async(symbol, asset_type, cache_ttl_minutes)
-        except Exception as e:
-            logger.warning(f"[FINANCE CACHE] Failed to check TTL for {cache_key}: {e}")
-        return cached_data
-    # Проверяем in-memory fallback
-    cached_data = _memory_get(finance_cache, cache_key)
-    if cached_data:
-        logger.info(f"[FINANCE CACHE] Using memory cached data for {symbol} ({asset_type})")
-        refresh_finance_cache_async(symbol, asset_type, cache_ttl_minutes)
-        return cached_data
-    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
-    logger.info(f"[FINANCE] No cache for {symbol} ({asset_type}), loading synchronously")
-    return _load_finance_sync(symbol, asset_type)
+    logger.warning(f"[FINANCE] get_finance_info() is deprecated. Use get_stock_info() handler instead.")
+    return None
 
 
 def _load_finance_sync(symbol, asset_type='stock'):
-    """Load finance data synchronously from API"""
-    try:
-        if asset_type == 'stock':
-            api_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
-        elif asset_type == 'crypto':
-            api_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={symbol}&to_currency=USD&apikey={ALPHA_VANTAGE_API_KEY}"
-        else:
-            logger.warning(f"[FINANCE] Unsupported asset type: {asset_type}")
-            return None
-        response = requests.get(api_url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            # Кешируем результат
-            cache_key = f"{asset_type}_{symbol.lower()}"
-            _redis_set(cache_key, data, 15 * 60)  # 15 minutes TTL
-            _memory_set(finance_cache, cache_key, data)
-            logger.info(f"[FINANCE] Fetched data for {symbol} ({asset_type})")
-            return data
-        else:
-            logger.warning(f"[FINANCE] Failed to fetch data for {symbol} ({asset_type}): {response.status_code}")
-            return None
-    except Exception as e:
-        logger.error(f"[FINANCE] Error fetching data for {symbol} ({asset_type}): {e}")
-        return None
+    """DEPRECATED: Alpha Vantage removed. Returns None."""
+    return None
+
 def preload_common_data():
     """
     Предварительно загружает данные для популярных городов и общие новости.

@@ -22,7 +22,6 @@ from typing import Optional, Dict, Any, List
 from config import (
     SERPER_API_KEY,
     OPENWEATHERMAP_API_KEY,
-    ALPHA_VANTAGE_API_KEY,
     NEWSAPI_API_KEY,
     DEEPSEEK_API_KEY,
     DEEPSEEK_MODEL,
@@ -120,7 +119,6 @@ class RateLimiter:
             'serper': (100, 86400),         # 100/день (Serper Free)
             'newsapi': (90, 86400),          # 100/день (NewsAPI Free), оставляем запас
             'openweathermap': (55, 60),      # 60/мин (OWM Free)
-            'alpha_vantage': (4, 60),        # 5/мин (AV Free)
             'deepseek': (50, 60),            # DeepSeek — мягкий лимит
         }
     
@@ -200,7 +198,7 @@ class ExternalAPIClient:
     def get_stats(self) -> dict:
         """Общая статистика по API"""
         stats = {}
-        for api in ['serper', 'newsapi', 'openweathermap', 'alpha_vantage', 'deepseek']:
+        for api in ['serper', 'newsapi', 'openweathermap', 'deepseek']:
             stats[api] = {
                 'total_calls': self._api_call_count.get(api, 0),
                 'rate_limit': self.rate_limiter.get_usage(api)
@@ -480,76 +478,6 @@ class ExternalAPIClient:
                     
         except Exception as e:
             logger.error(f"[NEWS] Error: {e}")
-            return None
-    
-    # ========================================================================
-    # Alpha Vantage
-    # ========================================================================
-    
-    async def get_stock(
-        self,
-        symbol: str,
-        cache_ttl: int = 900  # 15 минут
-    ) -> Optional[dict]:
-        """
-        Получить котировку акции.
-        
-        Returns:
-            {'symbol': ..., 'price': ..., 'change': ..., 
-             'change_percent': ..., 'volume': ..., 'trading_day': ...}
-        """
-        if not ALPHA_VANTAGE_API_KEY:
-            return None
-        
-        symbol = symbol.strip().upper()
-        cache_params = {'symbol': symbol}
-        
-        # Кэш
-        cached = await self.cache.get('stock', cache_params)
-        if cached is not None:
-            return cached
-        
-        # Rate-limit
-        if not await self.rate_limiter.acquire('alpha_vantage'):
-            return None
-        
-        session = await self._get_session()
-        
-        try:
-            url = "https://www.alphavantage.co/query"
-            params = {
-                'function': 'GLOBAL_QUOTE',
-                'symbol': symbol,
-                'apikey': ALPHA_VANTAGE_API_KEY
-            }
-            
-            async with session.get(url, params=params) as response:
-                self._track_call('alpha_vantage')
-                
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if "Global Quote" not in data or not data["Global Quote"]:
-                        return None
-                    
-                    quote = data["Global Quote"]
-                    result = {
-                        'symbol': quote.get("01. symbol", symbol),
-                        'price': quote.get("05. price", "N/A"),
-                        'change': quote.get("09. change", "N/A"),
-                        'change_percent': quote.get("10. change percent", "N/A"),
-                        'volume': quote.get("06. volume", "N/A"),
-                        'trading_day': quote.get("07. latest trading day", "N/A")
-                    }
-                    
-                    await self.cache.set('stock', cache_params, result, cache_ttl)
-                    return result
-                else:
-                    logger.warning(f"[STOCK] API error {response.status} for: {symbol}")
-                    return None
-                    
-        except Exception as e:
-            logger.error(f"[STOCK] Error: {e}")
             return None
     
     # ========================================================================

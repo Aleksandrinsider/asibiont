@@ -302,7 +302,6 @@ python auto_post_service.py
 | `YOOKASSA_SECRET_KEY` | Секретный ключ YooKassa | Да (прод) |
 | `OPENWEATHERMAP_API_KEY` | Ключ OpenWeatherMap API (погода для всех тарифов) | Да |
 | `NEWSAPI_API_KEY` | Ключ NewsAPI (новости по городам для всех тарифов) | Да |
-| `ALPHA_VANTAGE_API_KEY` | Ключ Alpha Vantage (для мониторинга рынков - PREMIUM) | Нет (PREMIUM) |
 | `LOCAL` | Включить режим локальной разработки | Нет |
 
 ### Тарифы Подписок
@@ -332,12 +331,6 @@ OPENWEATHERMAP_API_KEY=ваш_ключ_от_openweathermap.org
 
 # Для новостей по городам (доступно всем)
 NEWSAPI_API_KEY=ваш_ключ_от_newsapi.org
-```
-
-**Дополнительные API ключи для PREMIUM:**
-```bash
-# Для мониторинга золота и рынков (только PREMIUM workers)
-ALPHA_VANTAGE_API_KEY=ваш_ключ_от_alphavantage.co
 ```
 
 **Примеры команд:**

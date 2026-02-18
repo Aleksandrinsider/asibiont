@@ -15,7 +15,7 @@ from .utils import parse_time_to_datetime, generate_unified_recommendations
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
 from . import marketing_agent
-from config import OPENWEATHERMAP_API_KEY, ALPHA_VANTAGE_API_KEY, NEWSAPI_API_KEY, SERPER_API_KEY
+from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, SERPER_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -6220,34 +6220,66 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
         return f"❌ Ошибка получения погоды: {str(e)}"
 
 async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
-    """Получить информацию о котировках акций"""
+    """Получить информацию о котировках акций, сырьевых товаров, криптовалют через Serper + DeepSeek AI"""
     from .api_client import get_api_client
     
     try:
         api = get_api_client()
-        data = await api.get_stock(symbol)
         
-        if not data:
-            return f"❌ Акция '{symbol}' не найдена или данные недоступны"
+        # Формируем поисковые запросы для максимальной точности
+        search_queries = [
+            f"{symbol} stock price today",
+            f"{symbol} котировки цена сегодня",
+        ]
         
-        price = float(data['price'])
-        change = data['change']
-        change_pct = data['change_percent']
+        # Параллельный поиск
+        all_results = await api.serper_multi_search(
+            queries=search_queries,
+            num_per_query=5,
+            gl="us",
+            hl="en"
+        )
         
-        # Определяем направление
-        try:
-            change_val = float(str(change).replace('%', ''))
-            emoji = "📈" if change_val >= 0 else "📉"
-            signal = "рост" if change_val >= 0 else "падение"
-        except (ValueError, TypeError):
-            emoji = "📈"
-            signal = ""
+        if not all_results:
+            return f"❌ Не удалось найти данные по '{symbol}'. Попробуйте уточнить тикер или название актива."
         
-        result = f"{emoji} **{data['symbol']}** — ${price:.2f}\n"
-        result += f"• Изменение: {change} ({change_pct}) {signal}\n"
-        result += f"• Объём торгов: {data['volume']}\n"
-        result += f"• Дата: {data['trading_day']}\n"
-        return result
+        # Собираем контекст из результатов поиска
+        search_context = "\n".join([
+            f"• {r.get('title', '')}: {r.get('snippet', '')}"
+            for r in all_results[:10]
+        ])
+        
+        # AI-анализ через DeepSeek
+        analysis_prompt = f"""На основе свежих данных поиска дай точную информацию по активу "{symbol}".
+
+Данные из поиска:
+{search_context}
+
+ПРАВИЛА:
+1. Укажи ТОЧНУЮ текущую цену из источников (с валютой)
+2. Укажи изменение за день (абсолютное и в процентах)
+3. Укажи ключевые факторы движения цены
+4. Дай краткий экспертный вывод (1-2 предложения)
+5. Если данных недостаточно — честно скажи
+6. НЕ выдумывай цифры — используй ТОЛЬКО данные из источников
+
+Формат ответа — компактный текст без заголовка."""
+
+        analysis = await api.deepseek_analyze(
+            prompt=analysis_prompt,
+            system_prompt="Ты финансовый аналитик-эксперт. Даёшь точные данные по рынкам на основе предоставленных источников. Никогда не выдумываешь цифры.",
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        if analysis:
+            return f"📊 **{symbol.upper()}**\n\n{analysis}"
+        else:
+            # Fallback: просто показываем результаты поиска
+            fallback = f"📊 **{symbol.upper()}** — данные из поиска:\n\n"
+            for r in all_results[:5]:
+                fallback += f"• {r.get('title', '')}\n  {r.get('snippet', '')}\n\n"
+            return fallback
 
     except Exception as e:
         logger.error(f"[STOCK] Error: {e}")
