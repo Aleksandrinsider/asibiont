@@ -359,6 +359,12 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             title = ' '.join(words)
             logger.info(f"[ADD_TASK] Title cleaned: '{original_title}' -> '{title}'")
 
+    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 150 символов
+    if description and len(description) > 150:
+        original_desc = description
+        description = description[:147] + "..."
+        logger.warning(f"[ADD_TASK] Description truncated from {len(original_desc)} to 150 chars")
+
     if session is None:
         session = Session()
         close_session = True
