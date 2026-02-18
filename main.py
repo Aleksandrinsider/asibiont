@@ -5621,7 +5621,7 @@ async def apply_promo_code_handler(request):
 
 
 async def create_payment_handler(request):
-    """Создает платеж для ыбраого тарифа"""
+    """Создает платеж для пакета токенов или тарифа"""
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
 
@@ -5631,27 +5631,45 @@ async def create_payment_handler(request):
         logger.warning("No user_id in session, redirecting to login")
         return web.HTTPFound('/')
 
+    # Support both new token packs (?pack=small) and legacy tiers (?tier=light)
+    pack = request.query.get('pack')
     tier = request.query.get('tier', 'light')
-    logger.info(f"Creating payment for tier: {tier}")
-
-    # Validate tier
-    if tier not in ['light', 'standard', 'premium']:
-        tier = 'light'
 
     try:
-        from payments import create_payment, get_tier_price, get_tier_name
+        from payments import create_payment, TOKEN_PACK_PRICES
 
-        amount = get_tier_price(tier)
-        tier_name = get_tier_name(tier)
+        if pack and pack in ('small', 'medium', 'large'):
+            # Token pack purchase
+            pack_key = f'tokens_{pack}'
+            pack_info = TOKEN_PACK_PRICES[pack_key]
+            amount = pack_info['price']
+            tokens = pack_info['tokens']
+            description = f"Пополнение ASI Biont — {tokens} токенов"
 
-        logger.info(f"Creating payment: amount={amount}, tier={tier}, user_id={user_id}")
+            logger.info(f"Creating token pack payment: pack={pack}, amount={amount}, tokens={tokens}, user_id={user_id}")
 
-        payment_url = create_payment(
-            amount=str(amount),
-            description=f"Подписка ASI Biont - {tier_name}  30 дй",
-            user_id=user_id,
-            tier=tier
-        )
+            payment_url = create_payment(
+                amount=str(amount),
+                description=description,
+                user_id=user_id,
+                tier=pack_key
+            )
+        else:
+            # Legacy tier payment (backward compat)
+            from payments import get_tier_price, get_tier_name
+            if tier not in ['light', 'standard', 'premium']:
+                tier = 'light'
+            amount = get_tier_price(tier)
+            tier_name = get_tier_name(tier)
+
+            logger.info(f"Creating legacy payment: amount={amount}, tier={tier}, user_id={user_id}")
+
+            payment_url = create_payment(
+                amount=str(amount),
+                description=f"Подписка ASI Biont - {tier_name}  30 дй",
+                user_id=user_id,
+                tier=tier
+            )
 
         logger.info(f"Payment URL created: {payment_url}")
         return web.HTTPFound(payment_url)
