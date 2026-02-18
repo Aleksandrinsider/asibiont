@@ -461,29 +461,14 @@
                     </div>
                     <div id="profile-content" class="profile-content" style="display: block; padding: 0 4px;">
                     <script>
-                        // Немедленно устанавливаем правильное состояние профиля (до полной загрузки страницы)
+                        // Профиль всегда развёрнут при загрузке страницы
                         (function() {
-                            var isCollapsed = localStorage.getItem('profileCollapsed') === 'true';
+                            localStorage.removeItem('profileCollapsed');
                             var profileEl = document.getElementById('profile-content');
                             var profileBtn = document.getElementById('profile-toggle-btn');
                             var svg = profileBtn ? profileBtn.querySelector('svg') : null;
-                            
-                            if (isCollapsed) {
-                                if (profileEl) profileEl.style.display = 'none';
-                                if (svg) svg.style.transform = 'rotate(-90deg)';
-                            } else {
-                                if (profileEl) profileEl.style.display = 'block';
-                                if (svg) svg.style.transform = 'rotate(0deg)';
-                            }
-                            var profileSection = document.querySelector('.context-section');
-                            var peopleSection = document.querySelector('.people-section');
-                            if (isCollapsed) {
-                                if (profileSection) profileSection.style.flex = '0 0 auto';
-                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
-                            } else {
-                                if (profileSection) profileSection.style.flex = '0 0 auto';
-                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
-                            }
+                            if (profileEl) profileEl.style.display = 'block';
+                            if (svg) svg.style.transform = 'rotate(0deg)';
                         })();
                     </script>
                         {% if profile %}
@@ -5558,7 +5543,7 @@
                         html += '</button>';
                         html += '</div>';
                         const displayStyle = isCollapsed ? 'none' : 'block';
-                        html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 5px;">';
+                        html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 5px; padding: 0 4px;">';
                         html += '<div class="context-item">';
                         html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; margin-top: 20px;">';
                         if (data.user_avatar_url) {
