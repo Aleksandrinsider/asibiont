@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 import aiohttp
-from models import Session, Task, User, UserProfile, Subscription, Goal
+from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
@@ -5531,6 +5531,64 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
     finally:
         if close_session:
             session.close()
+
+
+async def delete_post(user_id: int, post_id: int = None, session=None):
+    """
+    🗑 УДАЛЕНИЕ ПОСТА из ленты
+    
+    Удаляет пост пользователя. Если post_id не указан — удаляет последний пост.
+    
+    Args:
+        user_id: Telegram ID пользователя
+        post_id: ID поста (опционально, если не указан — последний)
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        if post_id:
+            # Удаляем конкретный пост
+            post = session.query(Post).filter_by(id=post_id, user_id=user.id).first()
+            if not post:
+                return f"Пост #{post_id} не найден или не принадлежит тебе."
+        else:
+            # Удаляем последний пост пользователя
+            post = session.query(Post).filter_by(user_id=user.id).order_by(Post.created_at.desc()).first()
+            if not post:
+                return "У тебя нет постов для удаления."
+        
+        post_preview = post.content[:50] + '...' if len(post.content) > 50 else post.content
+        post_id_deleted = post.id
+        
+        # Удаляем лайки и просмотры (каскадно через FK, но подстраховка)
+        try:
+            session.query(PostLike).filter_by(post_id=post.id).delete()
+            session.query(PostView).filter_by(post_id=post.id).delete()
+        except Exception:
+            pass
+        
+        session.delete(post)
+        session.commit()
+        
+        logger.info(f"[DELETE_POST] User {user_id} deleted post #{post_id_deleted}: '{post_preview}'")
+        return f"✅ Пост #{post_id_deleted} удалён: «{post_preview}»"
+        
+    except Exception as e:
+        logger.error(f"[DELETE_POST] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка удаления поста: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
 
 async def publish_to_telegram(content: str, user_id: int, session):
     """
