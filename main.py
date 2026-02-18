@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, PostView, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PaymentHistory, Post, PostLike, Comment, PostView, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -2051,17 +2051,6 @@ async def yookassa_webhook(request):
 
                 # ═══ LEGACY TIER SUBSCRIPTION (backward compat) ═══
                 else:
-                    # Handle promo code if provided
-                    if promo_code:
-                        promo = session.query(PromoCode).filter_by(code=promo_code.upper()).first()
-                        if promo:
-                            used_by_users = json.loads(promo.used_by_users or '[]')
-                            if str(user_id) not in [str(u) for u in used_by_users]:
-                                used_by_users.append(str(user_id))
-                                promo.used_by_users = json.dumps(used_by_users)
-                                promo.used_count += 1
-                                logger.info(f"Promo code {promo_code} used by user {user.username} (user_id: {user_id})")
-
                     subscription = session.query(Subscription).filter_by(user_id=user.id).first()
                     if not subscription:
                         subscription = Subscription(user_id=user.id, telegram_username=user.username)
@@ -5521,113 +5510,6 @@ async def subscription_tiers_handler(request):
     return {}
 
 
-async def apply_promo_code_handler(request):
-    """Применяет промокод и актиирует подписку"""
-    session_obj = await get_session(request)
-    user_id = session_obj.get('user_id')
-
-    if not user_id:
-        return web.json_response({'success': False, 'message': 'Не авторизован'}, status=401)
-
-    data = await request.post()
-    promo_code = data.get('promo_code', '').strip().upper()
-
-    if not promo_code:
-        return web.json_response({'success': False, 'message': 'Введите промокод'})
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return web.json_response({'success': False, 'message': 'Пользователь не найден'})
-
-        # Проеряем промокод
-        promo = session.query(PromoCode).filter_by(code=promo_code).first()
-        if not promo:
-            return web.json_response({'success': False, 'message': 'Неверный промокод'})
-
-        # Проеряем срок дейстия - приодим обе даты к одму формату
-        now = datetime.now(dt_timezone.utc)
-        expires_at = promo.expires_at.replace(tzinfo=dt_timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
-        if expires_at < now:
-            return web.json_response({'success': False, 'message': 'Срок действия промокода истёк'})
-
-        # Проверяем лимит использований
-        if promo.max_uses is not None and promo.used_count >= promo.max_uses:
-            return web.json_response({'success': False, 'message': 'Промокод достиг лимита использований'})
-
-        # Проверяем, использовал ли уже этот пользователь этот промокод
-        import json
-        used_by_users = json.loads(promo.used_by_users or '[]')
-        if str(user.telegram_id) in [str(u) for u in used_by_users]:
-            return web.json_response({'success': False, 'message': 'Вы уже использовали этот промокод'})
-
-        # Актиируем подписку
-        start_date = now
-        end_date = start_date + timedelta(days=promo.duration_days)
-
-        # щем сущестующую подписку или создаем ую
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if not subscription:
-            subscription = Subscription(
-                user_id=user.id,
-                telegram_id=user.telegram_id,
-                telegram_username=user.username,
-                status='active',
-                tier=promo.tier,
-                start_date=start_date,
-                end_date=end_date
-            )
-            session.add(subscription)
-            logger.info(f"Created new subscription for user {user.id} with tier {promo.tier}")
-        else:
-            old_tier = subscription.tier
-            subscription.status = 'active'
-            subscription.tier = promo.tier
-            subscription.start_date = start_date
-            subscription.end_date = end_date
-            logger.info(f"Updated existing subscription for user {user.id}: tier {old_tier} -> {promo.tier}")
-
-        # Обляем user.subscription_tier для синхрозации
-        user.subscription_tier = promo.tier
-
-        # Обновляем счетчик использований
-        promo.used_count += 1
-        if promo.max_uses is None or promo.used_count >= promo.max_uses:
-            promo.is_used = True
-
-        # Добавляем пользователя в список использовавших
-        import json
-        used_by_users = json.loads(promo.used_by_users or '[]')
-        if str(user.telegram_id) not in [str(u) for u in used_by_users]:
-            used_by_users.append(str(user.telegram_id))
-        promo.used_by_users = json.dumps(used_by_users)
-
-        # Устарешие поля для соместимости
-        promo.used_by_user_id = user.id
-        promo.used_at = now
-
-        session.commit()
-        logger.info(f"Promo code {promo_code} activated for user {user.id}, subscription created/updated with tier {subscription.tier}")
-
-        # Сохраняем зчея до закрытия сессии
-        tier_name = promo.tier.value if hasattr(promo.tier, 'value') else str(promo.tier)
-        duration = promo.duration_days
-        end_date_str = end_date.strftime("%d.%m.%Y")
-
-        return web.json_response({
-            'success': True,
-            'message': f'Промокод актиироан! Подписка {tier_name}  {duration} дй до {end_date_str}'
-        })
-
-    except Exception as e:
-        logger.error(f"Error applying promo code: {e}", exc_info=True)
-        session.rollback()
-        return web.json_response({'success': False, 'message': f'Ошибка актиации промокода: {str(e)}'}, status=500)
-    finally:
-        session.close()
-
-
 async def create_payment_handler(request):
     """Создает платеж для пакета токенов или тарифа"""
     session_obj = await get_session(request)
@@ -5854,7 +5736,6 @@ app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/subscription_tiers', subscription_tiers_handler)
 app.router.add_get('/subscription-tiers', subscription_tiers_handler)  # Alias with dash
-app.router.add_post('/apply_promo_code', apply_promo_code_handler)
 app.router.add_get('/create_payment', create_payment_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)

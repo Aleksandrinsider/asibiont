@@ -38,16 +38,16 @@ TIER_NAMES = {
 }
 
 def create_payment(amount, description, user_id, tier='light', promo_code=None):
-    """Create payment for subscription
+    """Create payment for token pack
     
     Args:
         amount: Payment amount in RUB
         description: Payment description
         user_id: User ID for metadata
-        tier: Subscription tier (light, standard, premium)
-        promo_code: Optional promo code to apply discount
+        tier: Token pack tier (tokens_small, tokens_medium, tokens_large)
+        promo_code: Unused, kept for backward compat
     """
-    logger.info(f"Creating payment: amount={amount}, tier={tier}, user_id={user_id}, promo_code={promo_code}")
+    logger.info(f"Creating payment: amount={amount}, tier={tier}, user_id={user_id}")
     
     if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
         logger.error("Cannot create payment: Yookassa credentials not configured")
@@ -55,40 +55,7 @@ def create_payment(amount, description, user_id, tier='light', promo_code=None):
     
     logger.info(f"Yookassa configured: SHOP_ID={YOOKASSA_SHOP_ID}, SECRET_KEY=***")
     
-    # Apply promo code discount if provided
     final_amount = amount
-    discount_applied = 0
-    if promo_code:
-        logger.info(f"Processing promo code: {promo_code}")
-        from models import Session, PromoCode, SubscriptionTier
-        session = Session()
-        try:
-            promo = session.query(PromoCode).filter_by(code=promo_code.upper()).first()
-            if promo and promo.tier.value.lower() == tier:
-                # Check if user already used this promo code
-                used_by_users = json.loads(promo.used_by_users or '[]')
-                if user_id in used_by_users:
-                    raise ValueError("Вы уже использовали этот промокод")
-                
-                # Check max uses
-                if promo.max_uses and promo.used_count >= promo.max_uses:
-                    raise ValueError("Промокод уже исчерпан")
-                
-                # Check expiration
-                if promo.expires_at and promo.expires_at < datetime.datetime.now(datetime.timezone.utc):
-                    raise ValueError("Промокод истек")
-                
-                # Apply discount
-                discount_applied = int(amount * promo.discount_percent / 100)
-                final_amount = max(1, amount - discount_applied)  # Minimum 1 RUB
-                
-                logger.info(f"Applied promo code {promo_code}: {discount_applied} RUB discount, final amount: {final_amount} RUB")
-            else:
-                raise ValueError("Неверный промокод для этого тарифа")
-        finally:
-            session.close()
-    else:
-        logger.info("No promo code provided, using full amount")
     
     logger.info(f"Final payment amount: {final_amount} RUB")
     
@@ -106,10 +73,7 @@ def create_payment(amount, description, user_id, tier='light', promo_code=None):
             "description": description,
             "metadata": {
                 "user_id": user_id,
-                "tier": tier,
-                "promo_code": promo_code,
-                "original_amount": amount,
-                "discount_applied": discount_applied
+                "tier": tier
             }
         }
         
