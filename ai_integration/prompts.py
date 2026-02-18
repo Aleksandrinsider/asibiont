@@ -19,11 +19,40 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     # Subscription info
     tier_value = subscription_tier.value if hasattr(subscription_tier, 'value') else str(subscription_tier)
     if tier_value == 'LIGHT':
-        tier_info = "\nТариф LIGHT (3000₽): Все инструменты — задачи, поиск партнёров, исследования, котировки, новости, погода, маркетинг, публикации, проактивные рекомендации."
+        tier_info = """\n## ТАРИФ: LITE — Личная работа
+Твои возможности на этом тарифе:
+- Задачи: создание, редактирование, напоминания, повторяющиеся задачи
+- Цели: создание, отслеживание прогресса
+- Исследования: research_topic, get_news_trends, get_weather_info
+- Контакты: find_relevant_contacts_for_task (показывай кто из сети подходит для задачи/активности)
+- Профиль: update_profile, show_profile
+- Маркетинг: generate_marketing_content, publish_to_telegram (вручную через диалог)
+
+НЕДОСТУПНО на этом тарифе: делегирование задач, автономное ведение канала.
+Не упоминай делегирование и автопостинг — пользователь не может их использовать.
+
+Инструменты: list_tasks, add_task, complete_task, edit_task, delete_task, check_time_conflicts, create_goal, update_goal_progress, list_goals, update_profile, show_profile, find_relevant_contacts_for_task, research_topic, get_news_trends, get_weather_info, generate_marketing_content, publish_to_telegram"""
     elif tier_value == 'STANDARD':
-        tier_info = "\nТариф STANDARD (9000₽): Всё из Лайт + делегирование задач. AI находит исполнителя из сети, передаёт задачу, следит за дедлайнами."
+        tier_info = """\n## ТАРИФ: STANDARD — Управление командой
+Всё из Lite плюс:
+- Делегирование: delegate_task, get_delegation_progress
+- Когда находишь подходящего человека для задачи — ПРЕДЛОЖИ делегировать: "нашёл @dima, он разбирается в этом. Делегировать ему?"
+- Следи за статусом делегированных задач и сообщай пользователю
+- Если делегированная задача не принята — предложи альтернативного кандидата
+
+НЕДОСТУПНО: автономное ведение канала. Не предлагай автопостинг.
+
+Инструменты: все из Lite + delegate_task, get_delegation_progress"""
     elif tier_value == 'PREMIUM':
-        tier_info = "\nТариф PREMIUM (27000₽): Всё из Стандарт + автономное ведение канала. Ежедневный автопостинг в указанное время + контент-стратегия."
+        tier_info = """\n## ТАРИФ: PREMIUM — Продвижение и рост
+Всё из Standard плюс:
+- Автономное ведение канала: set_auto_post_time, set_content_strategy
+- Пользователь говорит "веди канал" → уточни тему, стиль, частоту, аудиторию → генерируй контент → предлагай: "вот пост, публикуем?"
+- Проактивно предлагай идеи для контента на основе трендов/новостей/целей
+- Отчитывайся о публикациях: что вышло, как зашло
+- Автоматический поиск партнёров для целей
+
+Инструменты: все из Standard + set_auto_post_time, set_content_strategy"""
     else:
         tier_info = f"\nТариф: {tier_value}"
 

@@ -386,6 +386,7 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             f"{f' (ID: {task_id})' if task_id else ''}.\n"
             f"Тон: {tone}. Эскалация: {escalation_level}/3.\n"
             "Подумай: можешь ли ты ПОМОЧЬ решить эту задачу, а не просто напомнить?\n"
+            "Используй find_relevant_contacts_for_task чтобы проверить, есть ли кто-то из сети кто тоже занимается похожей активностью — и если да, упомяни это.\n"
             "Спроси о статусе."
         )
 
@@ -1106,7 +1107,34 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
         task_desc = f" — {task.description[:100]}" if task.description else ""
         message_types.append({
             'type': 'task_help',
-            'instruction': f'Помоги решить задачу "{task.title}"{task_desc}. Используй инструменты и дай конкретный результат.'
+            'instruction': f'Помоги решить задачу "{task.title}"{task_desc}. Используй инструменты (research_topic, find_relevant_contacts_for_task) и дай конкретный результат. Покажи что нашёл и предложи действие.'
+        })
+    
+    # === ТАРИФО-ЗАВИСИМЫЕ ТИПЫ ===
+    tier = ctx.get('subscription_tier')
+    
+    # STANDARD+: Предложение делегирования (если есть задачи и контакты)
+    if tier in ('STANDARD', 'PREMIUM') and ctx.get('pending_tasks_full') and ctx.get('partners'):
+        tasks = ctx['pending_tasks_full']
+        task_idx = (rotation_hash + 1) % len(tasks)
+        task = tasks[task_idx]
+        message_types.append({
+            'type': 'delegation_suggest',
+            'instruction': f'Задача "{task.title}" — найди подходящего исполнителя среди контактов (используй find_relevant_contacts_for_task). Покажи кого нашёл и предложи делегировать: "Нашёл @username, он разбирается в этом. Делегировать ему?"'
+        })
+    
+    # STANDARD+: Статус делегированных задач
+    if tier in ('STANDARD', 'PREMIUM'):
+        message_types.append({
+            'type': 'delegation_status',
+            'instruction': 'Проверь статус делегированных задач (get_delegation_progress). Если есть непринятые — предложи альтернативного кандидата. Если есть прогресс — сообщи пользователю.'
+        })
+    
+    # PREMIUM: Идея для контента на основе трендов
+    if tier == 'PREMIUM' and (ctx.get('news') or ctx.get('long_term_data', {}).get('interests')):
+        message_types.append({
+            'type': 'content_idea',
+            'instruction': 'Предложи идею для поста в канал. Исследуй тренд через инструменты (research_topic, get_news_trends). Покажи результат и предложи: "Вот тема для поста — написать и опубликовать?"'
         })
     
     # Выбираем тип по ротации (детерминированно, не случайно — чтобы не повторялся)

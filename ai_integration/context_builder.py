@@ -31,10 +31,10 @@ class ContextBuilder:
 
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user or user.subscription_tier == SubscriptionTier.LIGHT:
+            if not user:
                 return hints
 
-            # 1. Activity alerts - check recent tasks from other users
+            # 1. Activity alerts - check recent tasks from other users (ALL tiers)
             activity_alerts = session.query(ActivityAlert).filter_by(
                 user_id=user.id,
                 enabled=True
