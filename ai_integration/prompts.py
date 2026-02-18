@@ -56,6 +56,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     profile_complete = False
     profile_missing = []
     if profile_data:
+        if not profile_data.get('city'):
+            profile_missing.append('город')
         if not profile_data.get('goals'):
             profile_missing.append('цели')
         if not profile_data.get('skills'):
@@ -65,7 +67,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         if len(profile_missing) <= 1:  # If only one thing missing, consider complete
             profile_complete = True
     else:
-        profile_missing = ['цели', 'навыки', 'интересы']
+        profile_missing = ['город', 'цели', 'навыки', 'интересы']
 
     # Profile — с аналитикой что есть и чего нет
     profile = ""
@@ -141,7 +143,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
                 f"Человек пишет из Telegram, у него нет попапа профиля как на сайте. "
                 f"ТЫ — единственный способ узнать о нём. Без профиля ты бесполезен. "
                 f"В КАЖДОМ ответе задавай ОДИН конкретный вопрос пока не заполнишь все поля. "
-                f"Порядок: 1) Чем занимается (сфера/должность) 2) Главная цель сейчас 3) Ключевые навыки/интересы. "
+                f"Порядок: 1) Чем занимается (сфера/должность) 2) Город 3) Главная цель сейчас 4) Ключевые навыки/интересы. "
                 f"Вопрос должен быть естественным, не анкетным. Вплетай в разговор. "
                 f"Каждый ответ пользователя — сразу update_profile. "
                 f"НЕ ВЫЗЫВАЙ research_topic, get_news_trends пока не знаешь хотя бы сферу деятельности.\n"
