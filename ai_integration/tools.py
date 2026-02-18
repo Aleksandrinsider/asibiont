@@ -49,6 +49,20 @@ EXCLUDED_TOOLS = {
     'set_auto_post_time',                # покрывается set_content_strategy
     'publish_to_telegram',               # внутренняя (вызывается через create_post)
     'get_weather_info',                  # дубль встроенного контекста погоды
+    # Внутренние утилиты (не инструменты для AI)
+    'encrypt_data',                      # служебная криптография
+    'decrypt_data',                      # служебная криптография
+    'parse_time_to_datetime',            # внутренний парсер времени
+    'find_task_flexible',                # внутренний поиск задач
+    'resolve_task_reference',            # внутренний резолвер задач
+    'get_user_context',                  # служебная (контекст уже в промпте)
+    'generate_unified_recommendations',  # внутренняя аналитика
+    'quick_topic_search',                # дубль research_topic (лёгкий)
+    'get_partners_list',                 # дубль find_relevant_contacts_for_task
+    'toggle_autonomous_feature',         # внутренняя настройка
+    'cancel_delegation',                 # покрывается reject_delegated_task
+    'and_',                              # SQLAlchemy operator leak
+    'or_',                               # SQLAlchemy operator leak
 }
 
 def get_available_tools(subscription_tier=None):
@@ -688,6 +702,57 @@ TOOLS = [
                     }
                 },
                 "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stock_info",
+            "description": "📈 Котировки акций в реальном времени через Alpha Vantage. Вызывай когда спрашивают про цену акции, биржу, котировки. Возвращает текущую цену, изменение за день, объём торгов. Для рыночного АНАЛИЗА (тренды, прогнозы, стратегии) — используй research_topic.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Тикер акции. Примеры: 'AAPL' (Apple), 'GOOGL' (Google), 'SBER.ME' (Сбербанк), 'TSLA' (Tesla), 'AMZN' (Amazon)"
+                    }
+                },
+                "required": ["symbol"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skip_task",
+            "description": "⏭ ПРОПУСТИТЬ ЗАДАЧУ: Помечает задачу как пропущенную (не выполнена, не удалена). Для случаев когда задача неактуальна но удалять не хочется. Ключевые слова: 'пропустить', 'пропусти задачу', 'неактуально'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи для пропуска"
+                    }
+                },
+                "required": ["task_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "restore_task",
+            "description": "♻️ ВОССТАНОВИТЬ ЗАДАЧУ: Возвращает завершённую или пропущенную задачу обратно в pending. Ключевые: 'верни задачу', 'восстанови', 'задача снова актуальна'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи для восстановления"
+                    }
+                },
+                "required": ["task_id"]
             }
         }
     },
