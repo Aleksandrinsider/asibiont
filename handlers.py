@@ -509,6 +509,7 @@ async def process_text_message(user_id, text, message, state):
         # Use autonomous agent instead of command router
         from ai_integration import chat_with_ai
         db_session = Session()
+        response_text = ""
         try:
             result = await chat_with_ai(text, context=context, user_id=user_id, db_session=db_session, progress_callback=progress_callback)
             response_text = result.get('response', '') if isinstance(result, dict) else str(result)
@@ -519,6 +520,10 @@ async def process_text_message(user_id, text, message, state):
                     await bot.delete_message(chat_id, _progress_state['last_msg_id'])
                 except Exception:
                     pass
+            
+            # Защита от пустого ответа
+            if not response_text or not response_text.strip():
+                response_text = "Готово! Что дальше?"
             
             await message.bot.send_message(message.chat.id, response_text)
             
@@ -553,7 +558,10 @@ async def process_text_message(user_id, text, message, state):
             session.close()
     except Exception as e:
         logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
-        await message.bot.send_message(message.chat.id, "Извините, произошла ошибка. Попробуйте позже.")
+        try:
+            await message.bot.send_message(message.chat.id, "Произошла техническая ошибка. Попробуй написать ещё раз.")
+        except Exception:
+            pass
 
 
 async def process_other_message(user_id, message, state):
