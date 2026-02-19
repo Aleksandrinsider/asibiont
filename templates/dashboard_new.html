@@ -5418,6 +5418,7 @@
 
         // Global variable to store last profile data
         let lastProfileData = null;
+        let profileInitialLoad = true; // Skip innerHTML replacement on first load (server already rendered)
 
         async function detectUserLocation() {
             try {
@@ -5562,6 +5563,12 @@
                     const profileDataChanged = lastProfileData !== currentProfileKey;
                     if (profileDataChanged) {
                         lastProfileData = currentProfileKey;
+                        
+                        // On initial page load, server already rendered the profile — skip DOM replacement
+                        if (profileInitialLoad) {
+                            profileInitialLoad = false;
+                            return; // timezone & avatar already handled above
+                        }
                         
                         // ALWAYS show indicator when profile data changed
                         const indicator = document.getElementById('profile-update-indicator');
