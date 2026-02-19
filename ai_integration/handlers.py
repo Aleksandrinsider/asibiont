@@ -1039,9 +1039,6 @@ async def skip_task(task_id=None, task_title=None, reason=None, user_id=None, se
                     logger.info(f"[SKIP_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
         except Exception as e:
             logger.warning(f"[SKIP_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
-            import traceback
-            traceback.print_exc()
-            session.rollback()
 
         # Update profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -2446,10 +2443,10 @@ def get_partners_list(user_id=None, session=None):
                         for profile_interest in profile_interests:
                             profile_clean = profile_interest.strip().lower()
                             # Проверяем вхождение как подстроки (спорт <-> пляжный спорт)
-                        if user_clean in profile_clean or profile_clean in user_clean:
-                            has_match = True
-                            match_reasons.append(f"interests substring: '{user_clean}' <-> '{profile_clean}'")
-                            break
+                            if user_clean in profile_clean or profile_clean in user_clean:
+                                has_match = True
+                                match_reasons.append(f"interests substring: '{user_clean}' <-> '{profile_clean}'")
+                                break
                     if has_match:
                         break
                 
@@ -3980,9 +3977,6 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
 
     logger.info(f"[FIND_RELEVANT] Total relevant contacts found: {len(sorted_contacts)} (using full database for growth)")
     
-    if close_session:
-        session.close()
-    
     # ДВУСТОРОННИЙ АНАЛИЗ: кому пользователь может помочь
     reverse_matches = []
     if user_profile and user_profile.skills:
@@ -4049,6 +4043,9 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                         'task': task.title,
                         'contacts': task_contacts[:3]  # Максимум 3 контакта на задачу
                     })
+    
+    if close_session:
+        session.close()
     
     # Формирование ответа
     result_lines = []
@@ -6577,9 +6574,6 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
 
         # 2.5. ПОИСК КОНТАКТОВ ПО ПОХОЖИМ ЗАДАЧАМ
         task_based_contacts = []
-        print(f"[DEBUG] analysis_data['active_tasks'] exists: {'active_tasks' in analysis_data}")  # ВРЕМЕННЫЙ ДЕБАГ
-        if 'active_tasks' in analysis_data:
-            print(f"[DEBUG] active_tasks count: {len(analysis_data['active_tasks'])}")  # ВРЕМЕННЫЙ ДЕБАГ
         if analysis_data['active_tasks']:
             logger.info(f"[TASK_CONTACTS] Ищем контакты по задачам. Активных задач: {len(analysis_data['active_tasks'])}")
             # Для каждой активной задачи ищем пользователей с похожими задачами
