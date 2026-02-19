@@ -650,7 +650,6 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user:
-                from models import Interaction
                 interaction = Interaction(user_id=user.id, message_type='user', content=text)
                 session.add(interaction)
                 session.commit()
@@ -751,7 +750,6 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             try:
                 user = session.query(User).filter_by(telegram_id=user_id).first()
                 if user:
-                    from models import Interaction
                     if response_text and response_text.strip():
                         interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
                     else:
