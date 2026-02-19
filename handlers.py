@@ -16,6 +16,17 @@ router = Router()
 # Dedup cache for message processing
 message_cache = {}
 message_cache_lock = threading.Lock()
+
+# Per-user processing lock — prevents duplicate responses
+# when Telegram retries webhook or sends duplicate updates
+_user_processing_locks: dict[int, asyncio.Lock] = {}
+_user_processing_locks_guard = threading.Lock()
+
+def _get_user_lock(user_id: int) -> asyncio.Lock:
+    with _user_processing_locks_guard:
+        if user_id not in _user_processing_locks:
+            _user_processing_locks[user_id] = asyncio.Lock()
+        return _user_processing_locks[user_id]
 from ai_integration import chat_with_ai
 from models import Session, User, Subscription, Task, Interaction
 from sqlalchemy import func
@@ -557,6 +568,17 @@ async def process_text_message(user_id, text, message, state):
         message_cache[message_cache_key] = current_time
         logger.info(f"[DEDUP] Message registered: msg_id={message_id}, user={user_id}, cache_size={len(message_cache)}")
 
+    # Per-user lock — если уже обрабатываем сообщение от этого юзера, пропускаем
+    user_lock = _get_user_lock(user_id)
+    if user_lock.locked():
+        logger.info(f"[DEDUP] User {user_id} already processing, skipping duplicate")
+        return
+
+    await _process_text_message_inner(user_id, text, message, state, user_lock)
+
+
+async def _process_text_message_inner(user_id, text, message, state, user_lock):
+    await user_lock.acquire()
     try:
         logger.info(f"[PTM] Step 1: checking user {user_id}")
         session = Session()
@@ -756,6 +778,8 @@ async def process_text_message(user_id, text, message, state):
             await message.bot.send_message(message.chat.id, f"⚠️ Ошибка: {short_error}\n\nПопробуй написать ещё раз.")
         except Exception:
             pass
+    finally:
+        user_lock.release()
 
 
 async def process_other_message(user_id, message, state):
