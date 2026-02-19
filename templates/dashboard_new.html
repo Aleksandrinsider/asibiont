@@ -1021,7 +1021,8 @@
             // Парсинг @username в ссылки на профили контактов (без обработки markdown)
             let processedText = text;
             
-            // Без форматирования - оставляем текст как его генерирует агент
+            // Экранируем HTML для защиты от XSS
+            processedText = escapeHtml(processedText);
             // Только сохраняем переносы строк как <br>
             processedText = processedText.replace(/\n/g, '<br>');
             // Убираем лишние пробелы в начале и конце
@@ -1180,6 +1181,7 @@
                 return; // Prevent multiple sends
             }
             window.sendingMessage = true;
+            window.lastMessageSent = Date.now();
             
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
@@ -1392,6 +1394,7 @@
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
+                    displayedMessageIds.clear();
                     // Show notification instead of adding to chat
                     showNotification('История чата очищена', 'success');
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
@@ -3766,7 +3769,8 @@
                 const response = await fetch('/api/cancel_delegation', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId })
+                    body: JSON.stringify({ task_id: taskId }),
+                    credentials: 'include'
                 });
                 
                 if (response.ok) {
@@ -4679,6 +4683,11 @@
 
         // Initial update only for logged in users
         
+        async function loadEliteContacts() {
+            // Принудительно обновляем контакты (включая элитные)
+            await updatePeople(true);
+        }
+
         async function updatePeople(force = false) {
             // Проверить, залогинен ли пользователь
             const isLoggedIn = document.querySelector('.main-layout') !== null;

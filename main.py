@@ -3,7 +3,7 @@ from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
 from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL
-from aiohttp_session import SimpleCookieStorage
+from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 import os
@@ -1308,7 +1308,8 @@ async def api_send_message_handler(request):
             # Делегирование доступно всем пользователям (оплата токенами)
 
             # Check for duplicate message before saving
-            # Duplicate check removed - always save
+            # Save to Interaction table (user message + AI response)
+            save_context_to_db(user_id, message, response)
             logger.info(f"[API_SEND_MESSAGE] Context saved to DB: user_msg='{message[:50]}...', ai_response='{response[:50]}...'")
         finally:
             session_db.close()
@@ -1362,20 +1363,21 @@ async def clear_user_tasks_handler(request):
             return web.json_response({'error': 'User not found'}, status=404)
 
         # Count tasks before deletion
+        query_filter = [Task.user_id == user.id]
+        if user.username:
+            query_filter.append(Task.delegated_to_username.ilike(user.username))
         task_count = session_db.query(Task).filter(
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
-            )
+            or_(*query_filter)
         ).count()
         logger.info(f"User {user_id} has {task_count} tasks to clear")
 
         # Clear user's tasks (both created by user and delegated to user)
+        # Clear user's tasks (both created by user and delegated to user)
+        del_filter = [Task.user_id == user.id]
+        if user.username:
+            del_filter.append(Task.delegated_to_username.ilike(user.username))
         session_db.query(Task).filter(
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
-            )
+            or_(*del_filter)
         ).delete()
         session_db.commit()
         logger.info(f"User {user_id} tasks cleared successfully")
@@ -1921,9 +1923,18 @@ async def yookassa_webhook(request):
 
     data = await request.json()
     if data.get('event') == 'payment.succeeded':
-        payment = data['object']
-        user_id = payment['metadata']['user_id']
-        tier = payment['metadata'].get('tier', 'light')  # tier or tokens_small/medium/large
+        payment = data.get('object')
+        if not payment or not isinstance(payment, dict):
+            logger.error("[YOOKASSA] Missing or invalid 'object' in webhook payload")
+            return web.Response(text="OK")
+        
+        metadata = payment.get('metadata') or {}
+        user_id = metadata.get('user_id')
+        if not user_id:
+            logger.error(f"[YOOKASSA] Missing user_id in metadata: {metadata}")
+            return web.Response(text="OK")
+        
+        tier = metadata.get('tier', 'light')  # tier or tokens_small/medium/large
 
         session = Session()
         try:
@@ -4561,7 +4572,9 @@ async def toggle_like_handler(request):
 
 
 async def api_avatar_handler(request):
-    """API endpoint to get user avatar by telegram_id"""
+    """API endpoint to get user avatar by telegram_id.
+    Проксирует аватар через сервер, чтобы не утекал Bot Token в Location header.
+    """
     telegram_id = request.match_info.get('telegram_id')
 
     if not telegram_id:
@@ -4578,8 +4591,23 @@ async def api_avatar_handler(request):
         avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
 
         if avatar_url:
-            # Redirect to the avatar URL
-            return web.Response(status=302, headers={'Location': avatar_url})
+            # Проксируем изображение через сервер, чтобы не раскрывать Bot Token
+            try:
+                async with aiohttp.ClientSession() as proxy_session:
+                    async with proxy_session.get(avatar_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            data = await resp.read()
+                            content_type = resp.headers.get('Content-Type', 'image/jpeg')
+                            return web.Response(
+                                body=data,
+                                content_type=content_type,
+                                headers={'Cache-Control': 'public, max-age=3600'}
+                            )
+                        else:
+                            return web.Response(status=404, text='Avatar not available')
+            except Exception as e:
+                logger.warning(f"Failed to proxy avatar for {telegram_id}: {e}")
+                return web.Response(status=404, text='Avatar not available')
         else:
             # Return 404 if no avatar found
             return web.Response(status=404, text='No avatar found')
@@ -4631,8 +4659,8 @@ async def api_reminders_handler(request):
 
 
 async def on_startup(app):
-    from config import LOCAL
-    # Always use SimpleCookieStorage (no Redis)
+    from config import LOCAL, SESSION_SECRET
+    import hashlib
     
     # Setup session middleware with proper cookie settings
     cookie_params = {'httponly': True}
@@ -4644,8 +4672,11 @@ async def on_startup(app):
     else:
         cookie_params['samesite'] = 'Lax'
     
-    storage = SimpleCookieStorage(**cookie_params)
-    logger.info("Using SimpleCookieStorage for sessions")
+    # Generate 32-byte key from SESSION_SECRET for Fernet encryption
+    secret_key = hashlib.sha256(SESSION_SECRET.encode()).digest()
+    
+    storage = EncryptedCookieStorage(secret_key, **cookie_params)
+    logger.info("Using EncryptedCookieStorage for sessions")
     
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware set up")
@@ -5148,8 +5179,6 @@ async def api_profile_handler(request):
         session = await get_session(request)
         user_id = session.get('user_id') if session else None
         logger.info(f"API profile: session exists={session is not None}, user_id={user_id}")
-        logger.info(f"API profile: session data={dict(session) if session else 'None'}")
-        logger.info(f"API profile: cookies={request.cookies}")
         if not user_id:
             logger.error("No user_id in session for profile API")
             return web.json_response({'error': 'Not authenticated'}, status=401)
