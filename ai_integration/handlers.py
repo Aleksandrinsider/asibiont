@@ -385,9 +385,18 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         session.add(user)
         session.commit()
 
-    # ПРОВЕРКА ДУБЛИКАТОВ ОТКЛЮЧЕНА - создаем задачи даже с одинаковыми названиями
-    # Это позволяет создавать несколько задач подряд без конфликтов
-    # Если пользователь действительно хочет обновить задачу - он может использовать edit_task
+    # ПРОВЕРКА ДУБЛИКАТОВ: если pending задача с ТОЧНО таким же названием уже есть — не создаём
+    from sqlalchemy import func as sa_func
+    existing = session.query(Task).filter(
+        Task.user_id == user.id,
+        Task.status == 'pending',
+        sa_func.lower(Task.title) == title.lower().strip()
+    ).first()
+    if existing:
+        logger.warning(f"[ADD_TASK] Duplicate pending task found: '{existing.title}' (id={existing.id})")
+        if close_session:
+            session.close()
+        return f"Задача '{existing.title}' уже есть в списке (статус: pending). Используй edit_task чтобы изменить её."
     
     # Create new task — время ОПЦИОНАЛЬНО
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
@@ -5089,11 +5098,19 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
                         updates.append(f"интерес '{interests}' уже есть")
         
         if skills is not None:
-            # Валидация (исключаем вредоносный контент, но разрешаем JavaScript)
+            # Валидация (исключаем вредоносный контент и мусорные значения)
+            # Фильтр: мусорные фразы скопированные из контекста (не навыки)
+            garbage_patterns = [
+                'реально востребован', 'нужно', 'хочу', 'планирую', 'думаю',
+                'будет', 'можно', 'стоит', 'важно', 'интересно', 'отлично',
+                'работаю', 'знаю что', 'вижу что', 'понимаю', 'считаю'
+            ]
             if len(skills.strip()) < 2 or len(skills.strip()) > 200:
                 logger.warning(f"Invalid skills length: {len(skills)}")
             elif any(pattern in skills.lower() for pattern in ['<script', 'http://', 'https://', 'onclick', 'onerror']):
                 logger.warning(f"Invalid skills content (suspicious): {skills}")
+            elif any(g in skills.lower() for g in garbage_patterns):
+                logger.warning(f"[UPDATE_PROFILE] Garbage skills rejected: '{skills}' — looks like copied phrase, not a skill")
             else:
                 if replace_mode:
                     profile.skills = skills
