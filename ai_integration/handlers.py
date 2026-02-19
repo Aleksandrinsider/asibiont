@@ -385,13 +385,12 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         session.add(user)
         session.commit()
 
-    # ПРОВЕРКА ДУБЛИКАТОВ: если pending задача с ТОЧНО таким же названием уже есть — не создаём
-    from sqlalchemy import func as sa_func
-    existing = session.query(Task).filter(
+    # ПРОВЕРКА ДУБЛИКАТОВ: если pending задача с таким же названием уже есть — не создаём
+    existing_tasks = session.query(Task).filter(
         Task.user_id == user.id,
-        Task.status == 'pending',
-        sa_func.lower(Task.title) == title.lower().strip()
-    ).first()
+        Task.status == 'pending'
+    ).all()
+    existing = next((t for t in existing_tasks if t.title.lower().strip() == title.lower().strip()), None)
     if existing:
         logger.warning(f"[ADD_TASK] Duplicate pending task found: '{existing.title}' (id={existing.id})")
         if close_session:
