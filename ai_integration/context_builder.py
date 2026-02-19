@@ -164,6 +164,11 @@ class ContextBuilder:
 
             hints = []
 
+            # ═══ НОВЫЙ ПОЛЬЗОВАТЕЛЬ: контекст для агента ═══
+            interaction_cnt = profile.interaction_count if profile and profile.interaction_count else 0
+            if interaction_cnt < 5:
+                hints.append(f"НОВЫЙ ПОЛЬЗОВАТЕЛЬ (взаимодействий: {interaction_cnt}): активно используй инструменты чтобы показать ценность на деле")
+
             # ═══ ЗАДАЧИ: что на контроле ═══
             tasks = session.query(Task).filter(
                 Task.user_id == user.id,
@@ -326,6 +331,42 @@ class ContextBuilder:
             date_hints = self._analyze_upcoming_dates(user, profile, session, user_now)
             if date_hints:
                 hints.extend(date_hints)
+
+            # ═══ ВХОДЯЩИЕ СООБЩЕНИЯ ═══
+            try:
+                from models import UserMessage as UM
+                unread_msgs = session.query(UM).filter(
+                    UM.recipient_id == user.id,
+                    UM.status.in_(['sent', 'delivered'])
+                ).order_by(UM.created_at.desc()).limit(5).all()
+                
+                if unread_msgs:
+                    msg_lines = []
+                    for m in unread_msgs:
+                        s = session.query(User).filter_by(id=m.sender_id).first()
+                        s_name = f"@{s.username}" if s and s.username else "Пользователь"
+                        intent_map = {'meeting': 'встреча', 'collaboration': 'сотрудничество', 'idea': 'идея', 'project_invite': 'проект', 'question': 'вопрос', 'reply': 'ответ'}
+                        intent_str = intent_map.get(m.intent, m.intent or '')
+                        msg_lines.append(f"  {s_name} ({intent_str}): {m.message_text[:80]}...")
+                    hints.append(f"НЕПРОЧИТАННЫХ СООБЩЕНИЙ: {len(unread_msgs)} — вызови get_incoming_messages и расскажи пользователю\n" + "\n".join(msg_lines))
+                
+                # Проверяем ответы на отправленные сообщения
+                new_replies = session.query(UM).filter(
+                    UM.sender_id != user.id,
+                    UM.recipient_id == user.id,
+                    UM.intent == 'reply',
+                    UM.status.in_(['sent', 'delivered'])
+                ).order_by(UM.created_at.desc()).limit(3).all()
+                
+                if new_replies:
+                    reply_lines = []
+                    for r in new_replies:
+                        s = session.query(User).filter_by(id=r.sender_id).first()
+                        s_name = f"@{s.username}" if s and s.username else "Пользователь"
+                        reply_lines.append(f"  {s_name}: {r.message_text[:80]}...")
+                    hints.append(f"НОВЫЕ ОТВЕТЫ ({len(new_replies)}): пользователи ответили на сообщения\n" + "\n".join(reply_lines))
+            except Exception as e:
+                logger.warning(f"[INBOX_CTX] Error: {e}")
 
             # PREMIUM АЛЕРТЫ
             alert_hints = self.build_premium_alerts_context(user_id, session)

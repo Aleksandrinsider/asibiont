@@ -361,6 +361,168 @@ async def chat_handler(message: Message):
             await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке голосового сообщения.")
             return
 
+    # Обработка документов
+    if message.document:
+        logger.info(f"[DOC] Received document from user {user_id}: {message.document.file_name}")
+        try:
+            session = Session()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+                session.add(user)
+                session.commit()
+                grant_signup_tokens(user_id, session=session)
+            session.close()
+
+            if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
+                await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
+                return
+
+            await message.bot.send_chat_action(message.chat.id, "typing")
+
+            file_name = message.document.file_name or "document"
+            file_size = message.document.file_size or 0
+            mime_type = message.document.mime_type or ""
+
+            # Ограничение: файлы до 5 МБ
+            if file_size > 5 * 1024 * 1024:
+                await message.bot.send_message(message.chat.id, "📄 Файл слишком большой (макс 5 МБ). Отправь файл поменьше.")
+                return
+
+            # Поддерживаемые форматы для извлечения текста
+            text_extensions = {'.txt', '.csv', '.json', '.xml', '.html', '.md', '.py', '.js', '.ts', '.yaml', '.yml', '.log', '.cfg', '.ini', '.env'}
+            ext = os.path.splitext(file_name)[1].lower()
+
+            extracted_text = None
+
+            if ext in text_extensions or mime_type.startswith('text/'):
+                # Текстовые файлы — читаем напрямую
+                file = await message.bot.get_file(message.document.file_id)
+                import aiohttp
+                file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
+                async with aiohttp.ClientSession() as session_http:
+                    async with session_http.get(file_url) as resp:
+                        if resp.status == 200:
+                            raw = await resp.read()
+                            for encoding in ['utf-8', 'cp1251', 'latin-1']:
+                                try:
+                                    extracted_text = raw.decode(encoding)
+                                    break
+                                except UnicodeDecodeError:
+                                    continue
+                            if extracted_text and len(extracted_text) > 4000:
+                                extracted_text = extracted_text[:4000] + f"\n\n... (обрезано, всего {len(raw)} байт)"
+
+            elif ext == '.pdf' or mime_type == 'application/pdf':
+                # PDF — извлечение текста через PyPDF2
+                file = await message.bot.get_file(message.document.file_id)
+                import aiohttp
+                file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
+                async with aiohttp.ClientSession() as session_http:
+                    async with session_http.get(file_url) as resp:
+                        if resp.status == 200:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                                tmp.write(await resp.read())
+                                tmp_path = tmp.name
+                            try:
+                                import PyPDF2
+                                with open(tmp_path, 'rb') as f:
+                                    reader = PyPDF2.PdfReader(f)
+                                    pages_text = []
+                                    for i, page in enumerate(reader.pages[:20]):  # макс 20 страниц
+                                        pages_text.append(page.extract_text() or '')
+                                    extracted_text = '\n'.join(pages_text).strip()
+                                    if len(extracted_text) > 4000:
+                                        extracted_text = extracted_text[:4000] + f"\n\n... (обрезано, всего {len(reader.pages)} стр.)"
+                                    if not extracted_text:
+                                        extracted_text = "(PDF без текстового слоя — возможно, сканированный документ)"
+                            except ImportError:
+                                extracted_text = "(PDF-парсер не установлен, но файл получен)"
+                            finally:
+                                os.unlink(tmp_path)
+
+            elif ext in {'.docx'} or mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                # DOCX
+                file = await message.bot.get_file(message.document.file_id)
+                import aiohttp
+                file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
+                async with aiohttp.ClientSession() as session_http:
+                    async with session_http.get(file_url) as resp:
+                        if resp.status == 200:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp:
+                                tmp.write(await resp.read())
+                                tmp_path = tmp.name
+                            try:
+                                import docx
+                                doc = docx.Document(tmp_path)
+                                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                                extracted_text = '\n'.join(paragraphs)
+                                if len(extracted_text) > 4000:
+                                    extracted_text = extracted_text[:4000] + f"\n\n... (обрезано)"
+                                if not extracted_text:
+                                    extracted_text = "(DOCX пуст или содержит только изображения)"
+                            except ImportError:
+                                extracted_text = "(DOCX-парсер не установлен, но файл получен)"
+                            finally:
+                                os.unlink(tmp_path)
+            
+            # Формируем сообщение для AI
+            caption = message.caption or ""
+            if extracted_text:
+                ai_text = f"[Пользователь отправил файл: {file_name}]\n"
+                if caption:
+                    ai_text += f"Комментарий: {caption}\n"
+                ai_text += f"Содержимое файла:\n{extracted_text}"
+            else:
+                ai_text = f"[Пользователь отправил файл: {file_name} ({mime_type}, {file_size} байт)]"
+                if caption:
+                    ai_text += f"\nКомментарий: {caption}"
+                ai_text += "\nФормат не поддерживается для извлечения текста. Подтверди получение и спроси, что сделать с файлом."
+
+            await process_text_message(user_id, ai_text, message, None)
+            return
+
+        except Exception as e:
+            logger.error(f"[DOC] Error processing document: {e}", exc_info=True)
+            await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке файла.")
+            return
+
+    # Обработка фото
+    if message.photo:
+        logger.info(f"[PHOTO] Received photo from user {user_id}")
+        try:
+            session = Session()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+                session.add(user)
+                session.commit()
+                grant_signup_tokens(user_id, session=session)
+            session.close()
+
+            if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
+                await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
+                return
+
+            await message.bot.send_chat_action(message.chat.id, "typing")
+
+            # Берём фото наибольшего размера
+            photo = message.photo[-1]
+            caption = message.caption or ""
+
+            ai_text = f"[Пользователь отправил фото ({photo.width}x{photo.height})]"
+            if caption:
+                ai_text += f"\nПодпись: {caption}"
+            ai_text += "\nОпиши что можешь сделать: создать задачу из фото, обсудить содержимое, сохранить заметку."
+
+            await process_text_message(user_id, ai_text, message, None)
+            return
+
+        except Exception as e:
+            logger.error(f"[PHOTO] Error processing photo: {e}", exc_info=True)
+            await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке фото.")
+            return
+
     # Обработка текстовых сообщений
     if message.text:
         await process_text_message(user_id, message.text, message, None)

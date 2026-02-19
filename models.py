@@ -452,6 +452,39 @@ class AnchorDeliveryLog(Base):
     user = relationship("User", backref="anchor_logs")
 
 
+class UserMessage(Base):
+    """
+    Сообщения между пользователями через AI-агента.
+    Агент может отправить сообщение от имени одного пользователя другому —
+    для согласования встреч, предложений по проекту, поиска единомышленников.
+    """
+    __tablename__ = 'user_messages'
+
+    id = Column(Integer, primary_key=True)
+    sender_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    recipient_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Контент
+    message_text = Column(Text, nullable=False)          # Текст сообщения
+    intent = Column(String(100))                          # Цель: meeting, collaboration, idea, project_invite, question
+    context = Column(Text)                                # JSON: оригинальный запрос отправителя, задача, цель
+    
+    # Статус
+    status = Column(String(50), default='sent', index=True)  # sent, delivered, read, replied, declined
+    reply_text = Column(Text)                             # Ответ получателя
+    replied_at = Column(DateTime)
+    
+    # Антиспам
+    is_ai_generated = Column(Boolean, default=True)       # AI сгенерировал текст
+    sender_approved = Column(Boolean, default=False)      # Отправитель подтвердил отправку (если нужно)
+    
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+    delivered_at = Column(DateTime)
+    
+    sender = relationship("User", foreign_keys=[sender_id], backref="sent_messages")
+    recipient = relationship("User", foreign_keys=[recipient_id], backref="received_messages")
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

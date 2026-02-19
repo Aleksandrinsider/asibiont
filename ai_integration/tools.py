@@ -683,4 +683,113 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_message_to_user",
+            "description": "📩 Отправить сообщение другому пользователю через AI-агента. Используй когда пользователь просит: 'напиши Ивану', 'предложи @anna встречу', 'согласуй с @petrov время'. AI генерирует вежливое персонализированное сообщение. НЕ путай с delegate_task — здесь нет задачи, только общение.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipient_username": {
+                        "type": "string",
+                        "description": "Username или имя получателя (без @). Примеры: 'ivan', 'anna_dev', 'Пётр'"
+                    },
+                    "intent": {
+                        "type": "string",
+                        "description": "Цель сообщения",
+                        "enum": ["meeting", "collaboration", "idea", "project_invite", "question"]
+                    },
+                    "message_context": {
+                        "type": "string",
+                        "description": "Что хочет передать отправитель. В свободной форме. Примеры: 'хочу обсудить совместный проект по AI', 'предлагаю встретиться в пятницу в 14:00', 'ищу партнёра для стартапа'"
+                    }
+                },
+                "required": ["recipient_username", "intent", "message_context"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_and_message_relevant_users",
+            "description": "🔍🤝 Найти релевантных пользователей и отправить им сообщение. Ищет людей с похожими интересами, навыками, целями или задачами. Используй когда: 'найди кто тоже занимается AI', 'хочу найти партнёра для бега', 'кто в Москве интересуется стартапами'. ОТЛИЧИЕ от find_relevant_contacts_for_task: здесь агент не просто ищет, а ОТПРАВЛЯЕТ сообщение найденным людям.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "type": "string",
+                        "description": "Цель поиска. Описание кого ищем и зачем. Примеры: 'партнёр для стартапа по AI', 'кто бегает в Перми', 'дизайнер для проекта'"
+                    },
+                    "message_context": {
+                        "type": "string",
+                        "description": "Что предложить найденным людям. Примеры: 'предлагаю обсудить совместный проект', 'приглашаю на совместную пробежку', 'ищу сооснователя'"
+                    },
+                    "match_by": {
+                        "type": "string",
+                        "description": "По чему искать совпадения",
+                        "enum": ["interests", "skills", "goals", "tasks", "city", "all"],
+                        "default": "all"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Максимум человек (1-5)",
+                        "default": 3
+                    }
+                },
+                "required": ["purpose", "message_context"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reply_to_user_message",
+            "description": "💬 Ответить на сообщение от другого пользователя. Используй когда: 'ответь @ivan что согласен', 'напиши @anna ответ: давай в пятницу'. Ключевые слова: 'ответь', 'ответить', 'reply'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipient_username": {
+                        "type": "string",
+                        "description": "Username того, кому отвечаем (без @)"
+                    },
+                    "reply_text": {
+                        "type": "string",
+                        "description": "Текст ответа"
+                    }
+                },
+                "required": ["recipient_username", "reply_text"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_incoming_messages",
+            "description": "📬 Показать входящие сообщения от других пользователей. Вызывай проактивно когда в контексте есть НЕПРОЧИТАННЫХ СООБЩЕНИЙ или пользователь спрашивает про сообщения.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status_filter": {
+                        "type": "string",
+                        "enum": ["unread", "all", "replied"],
+                        "description": "Фильтр: unread (непрочитанные), all (все), replied (отвеченные)"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_message_status",
+            "description": "📊 Показать статус отправленных сообщений — кто прочитал, кто ответил. Вызывай когда пользователь спрашивает 'ответил ли?', 'что с сообщением?', 'статус переписки' или когда в контексте есть НОВЫЕ ОТВЕТЫ.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
 ]
