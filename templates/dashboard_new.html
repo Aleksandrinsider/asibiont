@@ -1669,7 +1669,7 @@
         }
 
         function showEmojiPickerForPost() {
-            const emojis = ['??', '??', '??', '??', '??', '??', '??', '??'];
+            const emojis = ['\u{1F44D}', '\u{2764}', '\u{1F525}', '\u{1F389}', '\u{1F4AA}', '\u{1F60E}', '\u{1F913}', '\u{1F680}'];
             
             let picker = document.getElementById('emoji-picker-post');
             if (!picker) {
@@ -4856,7 +4856,7 @@
                                     
                                     // Приоритет: сначала релевантность для текущих задач
                                     if (partner.task_relevance) {
-                                        html += '<span class="task-meta" style="color: #D97706; font-weight: 500;">?? ' + partner.task_relevance + '</span>';
+                                        html += '<span class="task-meta" style="color: #D97706; font-weight: 500;">🎯 ' + partner.task_relevance + '</span>';
                                     }
                                     if (partner.interests) {
                                         html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
@@ -5970,7 +5970,7 @@
             switch(section) {
                 case 'profile':
                     content = `
-                        <h3>?? Профиль пользователя</h3>
+                        <h3>👤 Профиль пользователя</h3>
                         <p>Этот раздел содержит вашу персональную информацию и настройки аккаунта. Данные профиля используются AI-ассистентом для персонализации взаимодействия и улучшения рекомендаций.</p>
                         <p><strong>Зачем собираются данные:</strong></p>
                         <ul>
@@ -6049,7 +6049,7 @@
                     break;
                 case 'tasks':
                     content = `
-                        <h3>?? Управление задачами</h3>
+                        <h3>✅ Управление задачами</h3>
                         <p>Центральный раздел для просмотра и управления задачами. Система собирает данные о ваших задачах для анализа продуктивности и оптимизации рабочих процессов.</p>
                         <p><strong>Зачем собираются данные задач:</strong></p>
                         <ul>
