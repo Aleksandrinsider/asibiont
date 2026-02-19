@@ -39,488 +39,392 @@
     }
     </script>
     <style>
+        @media (max-width: 768px) {
+            .tiers-grid {
+                grid-template-columns: 1fr !important;
+                gap: 16px !important;
+            }
+        }
+    </style>
+    <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
             height: 100%;
             background: #FFFFFF;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-            overflow-x: hidden;
         }
         body {
-            display: block;
-            padding: 40px 15px;
-            overflow-y: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
         }
-        .tutorial-container {
+        @media (max-width: 768px) {
+            body {
+                padding: 15px 12px !important;
+                display: block !important;
+                align-items: unset !important;
+                justify-content: unset !important;
+            }
+            .pricing-container { margin-top: 0; }
+        }
+        .pricing-container {
             width: 100%;
             max-width: 900px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
-        .tutorial-card {
+        .pricing-card {
             padding: 24px;
             background: transparent;
-        }
-
-        /* Section styles */
-        .section {
-            margin-bottom: 32px;
-        }
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #374151;
-            margin: 0 0 16px 0;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #D1D9E0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .section-icon {
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-
-        /* Command card grid */
-        .commands-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-        .cmd-card {
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            padding: 16px;
-            background: white;
-            transition: all 0.2s;
-        }
-        .cmd-card:hover {
-            border-color: #1F2328;
-        }
-        .cmd-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1F2328;
-            margin-bottom: 4px;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-        }
-        .cmd-desc {
-            font-size: 13px;
-            color: #6C727F;
-            line-height: 1.5;
-        }
-        .cmd-example {
-            margin-top: 8px;
-            padding: 8px 12px;
-            background: #F6F8FA;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #374151;
-            line-height: 1.5;
-            font-style: italic;
-        }
-
-        /* Feature cards for AI capabilities */
-        .feature-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .feature-item {
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            padding: 14px 16px;
-            background: white;
-            transition: all 0.2s;
-        }
-        .feature-item:hover {
-            border-color: #1F2328;
-        }
-        .feature-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1F2328;
-            margin-bottom: 4px;
-        }
-        .feature-desc {
-            font-size: 13px;
-            color: #6C727F;
-            line-height: 1.5;
-        }
-
-        /* Tag / badge */
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            vertical-align: middle;
-            margin-left: 6px;
-        }
-        .badge-slash { background: #DBEAFE; color: #1E40AF; }
-        .badge-ai { background: #E0E7FF; color: #4338CA; }
-        .badge-auto { background: #D1FAE5; color: #065F46; }
-
-        /* Tip box */
-        .tip-box {
-            border: 1px solid #D1D9E0;
-            border-left: 3px solid #374151;
-            border-radius: 6px;
-            padding: 16px;
-            background: #F6F8FA;
-            margin-top: 8px;
-        }
-        .tip-box strong {
-            color: #374151;
-            font-size: 13px;
-        }
-        .tip-box p {
-            color: #6C727F;
-            font-size: 13px;
-            line-height: 1.5;
-            margin-top: 4px;
-        }
-
-        /* Mobile */
-        @media (max-width: 768px) {
-            body {
-                padding: 20px 12px;
-            }
-            .commands-grid {
-                grid-template-columns: 1fr !important;
-                gap: 10px !important;
-            }
-            .tutorial-container {
-                max-width: calc(100vw - 24px);
-            }
         }
     </style>
 </head>
 <body>
-    <div class="tutorial-container">
-        <div class="tutorial-card">
+    <div class="pricing-container">
+        <div class="pricing-card">
             <!-- Header -->
-            <div style="text-align: center; margin-bottom: 32px;">
+            <div style="text-align: center; margin-bottom: 24px;">
                 <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 600; color: #374151;">Руководство по ASI Biont</h1>
-                <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto;">
+                <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 8px auto;">
                     Полный список команд и возможностей AI-партнёра. Не нужно запоминать синтаксис — просто пишите боту естественным языком.
                 </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 1: Быстрый старт -->
-            <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">🚀</span> Быстрый старт</h2>
-                <div class="commands-grid">
-                    <div class="cmd-card">
-                        <div class="cmd-name">/start</div>
-                        <div class="cmd-desc">Регистрация и запуск бота. Вы получите 1 500 бесплатных токенов и сможете сразу начать работу.</div>
-                    </div>
-                    <div class="cmd-card">
-                        <div class="cmd-name">/dashboard</div>
-                        <div class="cmd-desc">Открывает веб-дашборд с задачами, контактами, аналитикой и лентой событий.</div>
-                    </div>
-                </div>
-                <div class="tip-box" style="margin-top: 12px;">
-                    <strong>💡 Совет</strong>
-                    <p>После /start бот предложит заполнить профиль — укажите навыки, город и интересы, чтобы другие пользователи могли вас найти.</p>
+                <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 32px auto;">
+                    <b>При регистрации — 1 500 бесплатных токенов. Все функции доступны сразу.</b>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 2: Управление задачами -->
+            <!-- Ряд 1: Быстрый старт -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">✅</span> Управление задачами <span class="badge badge-ai">AI</span></h2>
-                <div class="feature-list">
-                    <div class="feature-item">
-                        <div class="feature-name">Создание задачи</div>
-                        <div class="feature-desc">Просто напишите, что нужно сделать. Агент сам определит название, дедлайн, приоритет и категорию.</div>
-                        <div class="cmd-example">«Завтра в 9 созвон с инвестором» · «Сдать отчёт до пятницы» · «Купить билеты на конференцию»</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🚀 Быстрый старт</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/start</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Регистрация и запуск</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Первая команда для начала работы</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Откройте бота в Telegram и отправьте /start. Вы получите 1 500 токенов и сможете сразу начать: создавать задачи, искать партнёров и делегировать.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Завершение задачи</div>
-                        <div class="feature-desc">Скажите, что задача выполнена — агент отметит её завершённой.</div>
-                        <div class="cmd-example">«Отчёт сдал» · «Созвон прошёл» · «Билеты купил»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/update_profile</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Заполните профиль</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Чтобы вас находили другие</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Я дизайнер из Москвы, интересуюсь AI и стартапами» — агент сохранит навыки, город и интересы. Другие пользователи смогут вас найти.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Редактирование задачи</div>
-                        <div class="feature-desc">Измените дедлайн, приоритет, описание или категорию через диалог.</div>
-                        <div class="cmd-example">«Перенеси созвон на среду» · «Сделай задачу с отчётом высокоприоритетной»</div>
-                    </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Удаление и пропуск</div>
-                        <div class="feature-desc">Удалите задачу или отложите её. Пропущенные задачи можно восстановить.</div>
-                        <div class="cmd-example">«Удали задачу про билеты» · «Пропусти задачу с отчётом» · «Верни задачу»</div>
-                    </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Список задач</div>
-                        <div class="feature-desc">Просмотр всех задач с фильтрацией по статусу, категории и периоду.</div>
-                        <div class="cmd-example">«Покажи мои задачи» · «Что на сегодня?» · «Какие задачи просрочены?»</div>
-                    </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Проверка конфликтов</div>
-                        <div class="feature-desc">Агент автоматически проверяет пересечения по времени и предупреждает о конфликтах.</div>
-                        <div class="cmd-example">«Есть ли конфликты по расписанию?» · «Свободен ли я завтра в 15:00?»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/dashboard</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Веб-панель управления</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Задачи, контакты, аналитика</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Откроет дашборд в браузере: задачи с дедлайнами, граф связей, контакты, лента событий. Единая база — два интерфейса: бот + веб.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 3: Цели -->
+            <!-- Ряд 2: Управление задачами -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">🎯</span> Цели и прогресс <span class="badge badge-ai">AI</span></h2>
-                <div class="feature-list">
-                    <div class="feature-item">
-                        <div class="feature-name">Создание цели</div>
-                        <div class="feature-desc">Поставьте долгосрочную цель с метриками прогресса. Агент будет отслеживать движение к ней.</div>
-                        <div class="cmd-example">«Хочу пробежать марафон к октябрю» · «Цель: выпустить продукт до конца квартала»</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">✅ Управление задачами</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
+                    <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #59636E; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">ОСНОВНОЕ</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Создание задач</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Естественный язык</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Без команд — просто скажите</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Завтра в 9 созвон с инвестором» — поставит задачу с дедлайном. «Сдать отчёт до пятницы» — зафиксирует приоритет. «Купить билеты на конференцию» — добавит в список.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Обновление прогресса</div>
-                        <div class="feature-desc">Сообщайте о продвижении — агент обновит процент выполнения.</div>
-                        <div class="cmd-example">«Пробежал 20 км на этой неделе» · «Завершил 3 модуля из 10»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Управление</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Завершение, редактирование</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Полный контроль через диалог</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Отчёт сдал» — отметит выполненной. «Перенеси созвон на среду» — изменит дедлайн. «Удали задачу про билеты» — удалит. «Что на сегодня?» — покажет список.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Список целей</div>
-                        <div class="feature-desc">Просмотр всех целей с текущим прогрессом и сроками.</div>
-                        <div class="cmd-example">«Покажи мои цели» · «Как дела с целями?»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Напоминания</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Автоматические алерты</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Никогда не забудете</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Агент сам напомнит о задачах за час до дедлайна. Просрочена задача — получите уведомление. «Свободен ли я завтра в 15?» — проверит конфликты по расписанию.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 4: Делегирование -->
+            <!-- Ряд 3: Цели и прогресс -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">👥</span> Делегирование задач <span class="badge badge-ai">AI</span></h2>
-                <div class="feature-list">
-                    <div class="feature-item">
-                        <div class="feature-name">Делегировать задачу</div>
-                        <div class="feature-desc">Поручите задачу другому пользователю из вашей сети. Агент отправит уведомление, установит дедлайн и будет контролировать выполнение.</div>
-                        <div class="cmd-example">«Поручи @ivan подготовить презентацию до среды» · «Делегируй дизайн логотипа Анне»</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🎯 Цели и прогресс</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Создание цели</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Долгосрочные планы</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">С метриками прогресса</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Хочу пробежать марафон к октябрю» — создаст цель. «Выпустить продукт до конца квартала» — зафиксирует. Агент будет отслеживать движение к цели.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Прогресс делегирования</div>
-                        <div class="feature-desc">Проверяйте статус делегированных задач — принято, в работе, выполнено или отклонено.</div>
-                        <div class="cmd-example">«Как дела с задачей для Ивана?» · «Статус делегированных задач»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Обновление</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Фиксация прогресса</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Процент выполнения</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Пробежал 20 км на этой неделе» — обновит прогресс. «Завершил 3 модуля из 10» — пересчитает процент. Агент визуализирует продвижение.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Принять / Отклонить</div>
-                        <div class="feature-desc">Если вам делегировали задачу — примите или отклоните её с комментарием.</div>
-                        <div class="cmd-example">«Принимаю задачу» · «Не могу взять — у меня дедлайн»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Обзор целей</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Текущий статус</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Все цели в одном месте</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Покажи мои цели» — выведет список с прогрессом. «Как дела с марафоном?» — покажет статус конкретной цели. Всё на дашборде и в боте.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 5: Поручения и переписка -->
+            <!-- Ряд 4: Делегирование -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">💬</span> Поручения и переписка <span class="badge badge-ai">AI</span></h2>
-                <div class="feature-list">
-                    <div class="feature-item">
-                        <div class="feature-name">Отправить сообщение</div>
-                        <div class="feature-desc">Попросите агента передать сообщение другому пользователю — неформальный запрос, приглашение или вопрос.</div>
-                        <div class="cmd-example">«Напиши Ивану, что встреча перенесена на 16:00» · «Спроси у Анны, готов ли макет»</div>
-                    </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Массовая рассылка по интересам</div>
-                        <div class="feature-desc">Найдите пользователей по интересам, навыкам или городу и отправьте им сообщение.</div>
-                        <div class="cmd-example">«Пригласи всех, кто занимается спортом, на пробежку в субботу»</div>
-                    </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Ответить на сообщение</div>
-                        <div class="feature-desc">Когда вам пришло сообщение от другого пользователя — просто ответьте через агента.</div>
-                        <div class="cmd-example">«Ответь Ивану, что буду на встрече» · «Да, макет готов — передай Анне»</div>
-                    </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Входящие и статус</div>
-                        <div class="feature-desc">Просмотр входящих сообщений и статус доставки отправленных.</div>
-                        <div class="cmd-example">«Есть ли новые сообщения?» · «Доставлено ли моё сообщение Ивану?»</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">👥 Делегирование задач</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
+                    <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #59636E; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">ФОРМАЛЬНОЕ</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Поручить задачу</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Дедлайн + контроль</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Задача уйдёт исполнителю</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Поручи @ivan подготовить презентацию до среды» — задача уйдёт исполнителю. Дедлайн встанет на контроль. Агент напомнит обеим сторонам.
                     </div>
                 </div>
-                <div class="tip-box" style="margin-top: 12px;">
-                    <strong>💡 Делегирование vs Поручения</strong>
-                    <p>Делегирование — это формальная задача с дедлайном и контролем. Поручение — неформальная переписка: вопросы, приглашения, уточнения. Агент автоматически выбирает нужный инструмент.</p>
-                </div>
-            </div>
 
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 6: Контакты и партнёры -->
-            <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">🤝</span> Контакты и партнёры <span class="badge badge-ai">AI</span></h2>
-                <div class="commands-grid">
-                    <div class="cmd-card">
-                        <div class="cmd-name">/find_partners</div>
-                        <div class="cmd-desc">Поиск партнёров и исполнителей по навыкам, городу, интересам. Показывает подходящих людей из закрытой сети.</div>
-                        <div class="cmd-example">«Нужен дизайнер в Москве» · «Кто разбирается в финтехе?»</div>
-                    </div>
-                    <div class="cmd-card">
-                        <div class="cmd-name">/update_profile</div>
-                        <div class="cmd-desc">Обновите свой профиль: навыки, город, интересы, описание — чтобы вас находили другие.</div>
-                        <div class="cmd-example">«Добавь навык Python» · «Я переехал в Казань»</div>
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Контроль</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Статус делегирования</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Принято / В работе / Готово</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Как дела с задачей для Ивана?» — покажет статус. «Статус делегированных задач» — обзор всех поручений. Автоматический трекинг прогресса.
                     </div>
                 </div>
-                <div class="feature-list" style="margin-top: 12px;">
-                    <div class="feature-item">
-                        <div class="feature-name">Алерт на контакт</div>
-                        <div class="feature-desc">Установите слежение за конкретным профилем — агент уведомит, когда контакт обновит профиль или появится в вашем городе.</div>
-                        <div class="cmd-example">«Следи за профилем Ивана» · «Уведоми, когда появится дизайнер в Казани»</div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Принять / Отклонить</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Для исполнителя</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Управление входящими задачами</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Принимаю задачу» — подтверждение. «Не могу взять — у меня дедлайн» — отклонение с причиной. Заказчик получит уведомление о решении.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 7: Автопостинг и контент -->
+            <!-- Ряд 5: Поручения и переписка -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">📝</span> Автопостинг и контент <span class="badge badge-auto">АВТО</span></h2>
-                <div class="feature-list">
-                    <div class="feature-item">
-                        <div class="feature-name">Контент-стратегия</div>
-                        <div class="feature-desc">Задайте тематику, тон и расписание публикаций — агент будет генерировать и постить контент автоматически.</div>
-                        <div class="cmd-example">«Постим про AI и стартапы, тон экспертный, по вторникам и четвергам»</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">💬 Поручения и переписка</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Сообщения</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Неформальный диалог</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Вопросы, приглашения, уточнения</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Напиши Ивану, что встреча перенесена на 16:00» — агент передаст. «Спроси у Анны, готов ли макет» — отправит вопрос и доставит ответ.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Создание поста</div>
-                        <div class="feature-desc">Попросите агента написать пост на заданную тему. Можно указать стиль, длину и ключевые тезисы.</div>
-                        <div class="cmd-example">«Напиши пост про тренды AI в 2026» · «Сделай короткий пост про продуктивность»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
+                    <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #59636E; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">МАССОВОЕ</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Рассылка</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">По интересам и навыкам</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Найти и отправить</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Пригласи всех, кто занимается спортом, на пробежку в субботу» — найдёт подходящих и отправит. «Напиши всем дизайнерам про проект» — массовая рассылка.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Управление постами</div>
-                        <div class="feature-desc">Просматривайте, редактируйте и удаляйте запланированные и опубликованные посты.</div>
-                        <div class="cmd-example">«Покажи мои посты» · «Отредактируй последний пост» · «Удали черновик»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Входящие</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Ответы и статусы</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Контроль доставки</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Есть ли новые сообщения?» — покажет входящие. «Доставлено ли сообщение Ивану?» — статус. «Ответь Ивану, что буду» — отправит ответ.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 8: Исследования и аналитика -->
+            <!-- Ряд 6: Контакты и партнёры -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">🔍</span> Исследования и аналитика <span class="badge badge-ai">AI</span></h2>
-                <div class="feature-list">
-                    <div class="feature-item">
-                        <div class="feature-name">Исследование темы</div>
-                        <div class="feature-desc">Агент проведёт исследование по заданной теме и предоставит структурированную выжимку.</div>
-                        <div class="cmd-example">«Исследуй рынок EdTech в России» · «Что нового в Web3?»</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🤝 Контакты и партнёры</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/find_partners</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Поиск людей</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">По навыкам, городу, интересам</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Нужен дизайнер в Москве» — покажет подходящих из закрытой сети. «Кто разбирается в финтехе?» — найдёт по навыкам. Не каталог, а закрытое сообщество.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Новости и тренды</div>
-                        <div class="feature-desc">Получайте актуальные тренды и новости по вашей отрасли или интересам.</div>
-                        <div class="cmd-example">«Какие тренды в AI сейчас?» · «Новости финтеха за неделю»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Алерты контактов</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Слежение за профилями</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Уведомление об изменениях</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Следи за профилем Ивана» — уведомит при обновлении. «Уведоми, когда появится дизайнер в Казани» — сработает алерт. Точечные сигналы, не шум.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">Биржевая информация</div>
-                        <div class="feature-desc">Быстрая справка по акциям, курсам валют и рыночным данным.</div>
-                        <div class="cmd-example">«Курс Tesla» · «Что с биткоином?» · «Акции Сбера»</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Профиль</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Навыки и интересы</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Ваша визитка в сети</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Добавь навык Python» — обновит профиль. «Я переехал в Казань» — изменит город. Чем полнее профиль, тем точнее вас находят другие участники.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 9: Баланс и подписка -->
+            <!-- Ряд 7: Автопостинг и контент -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">💰</span> Баланс и токены <span class="badge badge-slash">КОМАНДА</span></h2>
-                <div class="commands-grid">
-                    <div class="cmd-card">
-                        <div class="cmd-name">/balance</div>
-                        <div class="cmd-desc">Проверить текущий баланс токенов. 1 токен = 1 рубль.</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">📝 Автопостинг и контент</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Стратегия</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Тематика и расписание</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Автоматическая генерация</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Постим про AI и стартапы, тон экспертный, по вторникам и четвергам» — агент настроит стратегию и будет публиковать автоматически.
                     </div>
-                    <div class="cmd-card">
-                        <div class="cmd-name">/buy</div>
-                        <div class="cmd-desc">Пополнить баланс токенов. Откроет страницу с пакетами: 1 500₽, 5 000₽ (+10%), 15 000₽ (+20%).</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Создание поста</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">По запросу или автоматом</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Стиль, длина, тезисы</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Напиши пост про тренды AI в 2026» — сгенерирует текст. «Сделай короткий пост про продуктивность» — с учётом стиля. Публикует в канал по расписанию.
                     </div>
-                    <div class="cmd-card">
-                        <div class="cmd-name">/subscription</div>
-                        <div class="cmd-desc">Информация о текущей подписке и доступных тарифах.</div>
-                    </div>
-                    <div class="cmd-card">
-                        <div class="cmd-name">/subscribe</div>
-                        <div class="cmd-desc">Оформить или продлить подписку на AI-партнёра.</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Управление</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Просмотр, правка, удаление</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Полный контроль контента</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Покажи мои посты» — список. «Отредактируй последний пост» — внесёт правки. «Удали черновик» — уберёт. Вы спите — он публикует по расписанию.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- РАЗДЕЛ 10: Дополнительные возможности -->
+            <!-- Ряд 8: Исследования -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">⚡</span> Дополнительные возможности</h2>
-                <div class="feature-list">
-                    <div class="feature-item">
-                        <div class="feature-name">🎤 Голосовые сообщения</div>
-                        <div class="feature-desc">Отправьте голосовое — агент распознает речь и выполнит команду. Работает на русском и английском.</div>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🔍 Исследования и аналитика</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Исследование</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Глубокий анализ темы</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Структурированная выжимка</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Исследуй рынок EdTech в России» — проведёт анализ. «Что нового в Web3?» — соберёт актуальные данные. Готовый отчёт, а не список ссылок.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">📄 Документы и фото</div>
-                        <div class="feature-desc">Отправьте документ или фото — агент проанализирует содержимое и поможет с задачей.</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Новости</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Тренды и события</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">По вашей отрасли</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Какие тренды в AI сейчас?» — выдаст обзор. «Новости финтеха за неделю» — свежая подборка. Релевантные сигналы, не информационный шум.
                     </div>
-                    <div class="feature-item">
-                        <div class="feature-name">🔔 Проактивные уведомления</div>
-                        <div class="feature-desc">Агент сам напомнит о просроченных задачах, отправит утреннюю сводку и сообщит о новых возможностях.</div>
-                    </div>
-                    <div class="feature-item">
-                        <div class="feature-name">🌐 Веб-дашборд</div>
-                        <div class="feature-desc">Полная панель управления в браузере: задачи, контакты, граф связей, аналитика и лента событий.</div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Биржа</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Акции и валюты</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Быстрая справка</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        «Курс Tesla» — текущая цена. «Что с биткоином?» — динамика. «Акции Сбера» — рыночные данные. Быстрая и точная финансовая справка.
                     </div>
                 </div>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- Полная таблица команд -->
+            <!-- Ряд 9: Баланс -->
             <!-- ═══════════════════════════════════════════ -->
-            <div class="section">
-                <h2 class="section-title"><span class="section-icon">📋</span> Все команды</h2>
-                <div style="overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid #D1D9E0;">
-                                <th style="text-align: left; padding: 10px 12px; color: #374151; font-weight: 600;">Команда</th>
-                                <th style="text-align: left; padding: 10px 12px; color: #374151; font-weight: 600;">Описание</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr style="border-bottom: 1px solid #F3F4F6;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/start</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Регистрация и запуск бота</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #F3F4F6; background: #FAFBFC;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/balance</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Проверить баланс токенов</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #F3F4F6;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/buy</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Пополнить баланс</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #F3F4F6; background: #FAFBFC;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/subscription</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Информация о подписке</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #F3F4F6;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/subscribe</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Оформить подписку</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #F3F4F6; background: #FAFBFC;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/update_profile</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Обновить профиль (навыки, город, интересы)</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #F3F4F6;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/find_partners</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Поиск партнёров и исполнителей</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #F3F4F6; background: #FAFBFC;">
-                                <td style="padding: 10px 12px; font-family: monospace; color: #1F2328; white-space: nowrap;">/dashboard</td>
-                                <td style="padding: 10px 12px; color: #6C727F;">Открыть веб-дашборд</td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">💰 Баланс и токены</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/balance</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Текущий баланс</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">1 токен = 1 рубль</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Проверьте сколько токенов осталось. Все функции оплачиваются токенами. Без скрытых комиссий — вы всегда видите расход.
+                    </div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/buy</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Пополнить баланс</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Три пакета с бонусами</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Стартовый — 1 500₽. Оптимальный — 5 000₽ <span style="color: #059669; font-weight: 600;">+10%</span>. Максимальный — 15 000₽ <span style="color: #059669; font-weight: 600;">+20%</span>. Оплата через Юкассу.
+                    </div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/subscription</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Информация о подписке</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Статус и продление</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Узнайте статус подписки и доступные тарифы. /subscribe — оформить или продлить. Все функции открыты для всех тарифов.
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!-- Ряд 10: Дополнительные возможности -->
+            <!-- ═══════════════════════════════════════════ -->
+            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">⚡ Дополнительные возможности</div>
+            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">🎤 Голос</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Голосовые сообщения</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Распознавание речи</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Отправьте голосовое — агент распознает речь и выполнит команду. Работает на русском и английском. Идеально, когда руки заняты.
+                    </div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">📄 Документы</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Фото и файлы</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Анализ содержимого</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Отправьте документ или фото — агент проанализирует содержимое. Извлечёт текст, разберёт скриншот, создаст задачу из документа.
+                    </div>
+                </div>
+
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">🔔 Проактивность</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Утренние сводки</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Уведомления без запроса</div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
+                        Агент сам пришлёт утреннюю сводку задач. Напомнит о просроченных. Сообщит о новых контактах с нужными навыками. Без вашего участия.
+                    </div>
                 </div>
             </div>
 
