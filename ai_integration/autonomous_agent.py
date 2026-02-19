@@ -841,6 +841,9 @@ class HybridAutonomousAgent:
             all_execution_results = []
             MAX_ITERATIONS = 4
             seen_tools = set()  # Для предотвращения дублей
+            # Критичные инструменты — вызываются ТОЛЬКО 1 раз за сессию
+            once_only_tools = {'create_post', 'add_task', 'delete_post', 'delegate_task'}
+            used_once_only = set()
 
             # Прогресс — "Думаю ..."
             if _cb:
@@ -895,6 +898,18 @@ class HybridAutonomousAgent:
                         })
                         continue
                     seen_tools.add(dedup_key)
+
+                    # Критичные инструменты — строго 1 вызов за ответ
+                    if name in once_only_tools:
+                        if name in used_once_only:
+                            logger.warning(f"[ONCE_ONLY] Skipping second {name} call")
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc_item['id'],
+                                "content": json.dumps({"status": f"skipped: {name} already called once this turn"}, ensure_ascii=False)
+                            })
+                            continue
+                        used_once_only.add(name)
 
                     # ГИБРИДНЫЙ ПОДХОД: никаких keyword guards.
                     # AI сам решает какие инструменты вызывать.
