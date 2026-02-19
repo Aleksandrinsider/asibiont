@@ -702,20 +702,16 @@ class ExternalAPIClient:
 НОВОСТИ:
 {articles_text}
 
-Создай анализ:
-🔥 **Главные тренды**: • Тренд 1 (пояснение) • Тренд 2 • Тренд 3
-📈 **О чём говорят**: Резюме (3-4 предложения)
-📋 **Ключевые события**: • Событие 1 • Событие 2""",
+Напиши СПЛОШНЫМ ТЕКСТОМ (без bullets, без emoji-заголовков, без списков):
+Главные тренды — что происходит, о чём говорят, какие ключевые события. 3-5 предложений с конкретикой.""",
             
             "opportunities": f"""Проанализируй новости по теме: "{topic}" и найди возможности и выводы.
 
 НОВОСТИ:
 {articles_text}
 
-Создай анализ:
-🚀 **Возможности**: • Возможность 1 • Возможность 2
-📋 **На что обратить внимание**: Резюме (3-4 предложения)
-🔍 **Рекомендации**: • Действие 1 • Действие 2"""
+Напиши СПЛОШНЫМ ТЕКСТОМ (без bullets, без emoji-заголовков, без списков):
+Какие возможности открываются, на что обратить внимание, какие рекомендации. 3-5 предложений с конкретикой."""
         }
         
         prompt = focus_prompts.get(focus, focus_prompts["trends"])
@@ -726,8 +722,8 @@ class ExternalAPIClient:
             temperature=0.7
         )
         
-        message = f"📰 **Анализ новостей**: {topic}\n\n{analysis}" if analysis else \
-                  self._format_news_list(topic, articles[:5])
+        message = f"Анализ новостей по теме '{topic}': {analysis}" if analysis else \
+                  f"По запросу '{topic}' не найдено свежих новостей."
         
         return {
             'success': True,
@@ -764,40 +760,28 @@ class ExternalAPIClient:
         return text
     
     def _format_analysis(self, query: str, analysis, results: list) -> str:
-        """Форматирует AI-анализ с источниками"""
+        """Форматирует AI-анализ в ЧИСТЫЙ текст (без bullets и emoji-заголовков).
+        AI сам переработает в живой ответ."""
         if isinstance(analysis, dict):
-            summary = f"🔍 Анализ: {query}\n\n"
+            parts = []
             if analysis.get('summary'):
-                summary += f"{analysis['summary']}\n\n"
+                parts.append(analysis['summary'])
             if analysis.get('key_insights'):
-                summary += "💡 Ключевые выводы:\n"
-                for insight in analysis['key_insights'][:4]:
-                    summary += f"• {insight}\n"
-                summary += "\n"
+                insights = ", ".join(analysis['key_insights'][:4])
+                parts.append(f"Ключевые выводы: {insights}")
             if analysis.get('opportunities'):
-                summary += "🎯 Возможности:\n"
-                for opp in analysis['opportunities'][:3]:
-                    summary += f"• {opp}\n"
-                summary += "\n"
-            if analysis.get('actionable_steps') or analysis.get('action_plan'):
-                steps = analysis.get('actionable_steps') or analysis.get('action_plan', [])
-                summary += "✅ Рекомендации:\n"
-                for i, step in enumerate(steps[:3], 1):
-                    summary += f"{i}. {step}\n"
-                summary += "\n"
-            # Добавляем ссылки на источники
-            if results:
-                summary += "📎 Источники:\n"
-                for r in results[:5]:
-                    summary += f"• {r['title']} — {r['link']}\n"
-            return summary
+                opps = ", ".join(
+                    o if isinstance(o, str) else str(o)
+                    for o in analysis['opportunities'][:3]
+                )
+                parts.append(f"Возможности: {opps}")
+            steps = analysis.get('actionable_steps') or analysis.get('action_plan', [])
+            if steps:
+                steps_text = ", ".join(steps[:3])
+                parts.append(f"Рекомендации: {steps_text}")
+            return f"Анализ по теме '{query}': " + ". ".join(parts)
         elif isinstance(analysis, str):
-            text = f"🔍 Анализ: {query}\n\n{analysis}"
-            if results:
-                text += "\n\n📎 Источники:\n"
-                for r in results[:5]:
-                    text += f"• {r['title']} — {r['link']}\n"
-            return text
+            return f"Анализ по теме '{query}': {analysis}"
         else:
             return self._format_search_results(query, results[:5])
 

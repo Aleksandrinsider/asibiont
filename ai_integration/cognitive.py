@@ -522,6 +522,23 @@ class CognitiveEngine:
             text = re.sub(r'\.\s*\.', '.', text)
             issues.append('list_converted')
 
+        # 4b. Убираем bullet-списки (•, —, –, - в начале строки)
+        bullet_pattern = re.findall(r'^[•—–\-]\s+(.+)$', text, re.MULTILINE)
+        if len(bullet_pattern) >= 2:
+            items = bullet_pattern[:6]
+            text_without_bullets = re.sub(r'^[•—–\-]\s+.+$', '', text, flags=re.MULTILINE)
+            prefix = text_without_bullets.strip()
+            joined = ', '.join(items)
+            text = f"{prefix} {joined}." if prefix else f"{joined}."
+            text = re.sub(r'\.\s*\.', '.', text)
+            text = re.sub(r'\s{2,}', ' ', text)
+            issues.append('bullets_converted')
+
+        # 4c. Убираем emoji-заголовки (🔍 Анализ:, 💡 Выводы:, etc.)
+        text = re.sub(r'^[🔍💡🎯✅📎📊📰🚀⚡️🔥💰📋]\s*[А-Яа-яA-Za-z\s]+:\s*\n?', '', text, flags=re.MULTILINE)
+        # Убираем остаточные секционные заголовки
+        text = re.sub(r'^(Ключевые выводы|Возможности|Рекомендации|Источники|Результаты исследования):\s*\n?', '', text, flags=re.MULTILINE)
+
         # 5. Убираем пустые секции ("Вот почему:" без содержимого)
         # Паттерн: заголовок с двоеточием, за которым сразу следующий заголовок или конец
         empty_section_pattern = re.compile(
@@ -587,11 +604,11 @@ class CognitiveEngine:
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def compress_tool_result(result_json, max_length=1200):
+    def compress_tool_result(result_json, max_length=2000):
         """Сжимает результат tool call для экономии контекстного окна.
         
         - Списки: оставляет только ключевые поля (title, status, id)
-        - Словари: обрезает длинные значения
+        - Словари: обрезает длинные значения, убирает ссылки
         - Fallback: простая обрезка
         """
         if len(result_json) <= max_length:
@@ -608,7 +625,9 @@ class CognitiveEngine:
                             k: v for k, v in item.items()
                             if k in ('title', 'status', 'id', 'name',
                                      'description', 'progress', 'city',
-                                     'username', 'query', 'summary')
+                                     'username', 'query', 'summary',
+                                     'key_insights', 'opportunities',
+                                     'action_plan')
                         })
                     else:
                         compressed.append(str(item)[:100])
@@ -616,9 +635,14 @@ class CognitiveEngine:
 
             if isinstance(data, dict):
                 compressed = {}
+                # Убираем поля, которые не нужны AI для ответа
+                skip_keys = {'link', 'links', 'sources', 'url', 'urls',
+                             'cached', 'success'}
                 for k, v in data.items():
-                    if isinstance(v, str) and len(v) > 300:
-                        compressed[k] = v[:300] + '...'
+                    if k in skip_keys:
+                        continue
+                    if isinstance(v, str) and len(v) > 500:
+                        compressed[k] = v[:500] + '...'
                     elif isinstance(v, list) and len(v) > 5:
                         compressed[k] = v[:5]
                     else:

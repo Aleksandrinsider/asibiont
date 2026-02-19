@@ -144,7 +144,7 @@ async def research_topic(query, depth="full", user_id=None, session=None):
                         "summary": cached_result['results'],
                         "key_insights": cached_result['insights']
                     },
-                    "message": f"🔍 Кэшированный анализ: {query}\n\n{cached_result['results']}\n\n💡 Ранее полученные инсайты:\n" + "\n".join(f"• {insight}" for insight in cached_result['insights'][:3])
+                    "message": f"Кэшированные данные по теме {query}: {cached_result['results']}. Выводы: " + ", ".join(cached_result['insights'][:3])
                 }
         except Exception as e:
             logger.warning(f"[RESEARCH] LTM cache check failed: {e}")
@@ -191,38 +191,32 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         
         analysis = result.get('analysis')
         
-        # Если анализ — dict, форматируем красиво
+        # Если анализ — dict, формируем ЧИСТЫЙ текст для AI (без форматирования)
         if isinstance(analysis, dict):
-            summary = f"🔍 Анализ: {query}\n\n"
+            # Возвращаем PLAIN TEXT — AI сам переработает в живой ответ
+            parts = []
             
             if analysis.get('summary'):
-                summary += f"{analysis['summary']}\n\n"
+                parts.append(analysis['summary'])
             
             if analysis.get('key_insights'):
-                summary += "💡 Ключевые выводы:\n"
-                for insight in analysis['key_insights'][:3]:
-                    summary += f"• {insight}\n"
-                summary += "\n"
+                insights_text = ", ".join(analysis['key_insights'][:3])
+                parts.append(f"Ключевые выводы: {insights_text}")
             
             if analysis.get('opportunities'):
-                summary += "🎯 Возможности:\n"
-                for opp in analysis['opportunities'][:2]:
-                    summary += f"• {opp}\n"
-                summary += "\n"
+                opps_text = ", ".join(
+                    o if isinstance(o, str) else str(o)
+                    for o in (analysis.get('opportunities') or [])[:2]
+                )
+                if opps_text:
+                    parts.append(f"Возможности: {opps_text}")
             
             steps = analysis.get('actionable_steps') or analysis.get('action_plan', [])
             if steps:
-                summary += "✅ Рекомендации:\n"
-                for i, step in enumerate(steps[:3], 1):
-                    summary += f"{i}. {step}\n"
-                summary += "\n"
+                steps_text = ", ".join(steps[:3])
+                parts.append(f"Рекомендации: {steps_text}")
             
-            # Добавляем ссылки на источники
-            search_results = result.get('results', [])
-            if search_results:
-                summary += "📎 Источники:\n"
-                for r in search_results[:5]:
-                    summary += f"• {r.get('title', '')} — {r.get('link', '')}\n"
+            summary = ". ".join(parts)
             
             result['message'] = summary
         
