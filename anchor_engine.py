@@ -1485,16 +1485,21 @@ class AnchorEngine:
                 anchor_types=json.dumps(anchor_types),
             )
             session.add(log)
-            session.commit()
 
-            # Отправляем через бот
+            # Отправляем через бот ПЕРЕД commit — если отправка не удалась, откатываем
             if self.bot:
-                await self.bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=message
-                )
-                logger.info(f"[ANCHOR] ✅ Delivered to {user.telegram_id}: {message[:80]}...")
+                try:
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=message
+                    )
+                    session.commit()
+                    logger.info(f"[ANCHOR] ✅ Delivered to {user.telegram_id}: {message[:80]}...")
+                except Exception as send_err:
+                    logger.error(f"[ANCHOR] Send failed to {user.telegram_id}: {send_err}")
+                    session.rollback()
             else:
+                session.commit()
                 logger.info(f"[ANCHOR] Message (no bot): {message[:80]}...")
 
         except Exception as e:

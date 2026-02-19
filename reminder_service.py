@@ -1362,8 +1362,15 @@ class ReminderService:
                 # Request progress update from recipient
                 try:
                     current_time = datetime.now(timezone.utc)
-                    time_until_deadline = task.reminder_time - current_time
-                    hours_remaining = int(time_until_deadline.total_seconds() / 3600)
+                    if task.reminder_time:
+                        reminder_aware = task.reminder_time
+                        if reminder_aware.tzinfo is None:
+                            import pytz
+                            reminder_aware = pytz.UTC.localize(reminder_aware)
+                        time_until_deadline = reminder_aware - current_time
+                        hours_remaining = int(time_until_deadline.total_seconds() / 3600)
+                    else:
+                        hours_remaining = 0
 
                     if hours_remaining > 24:
                         time_desc = f"{hours_remaining // 24} дней"

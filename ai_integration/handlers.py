@@ -4689,30 +4689,37 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
     if reminder_time:
         try:
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
-            # Try different formats
-            for fmt in ["%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
-                try:
-                    if isinstance(reminder_time, str) and "завтра" in reminder_time.lower():
-                        local_dt = datetime.now(user_tz) + timedelta(days=1)
-                        time_part = reminder_time.lower().replace("завтра", "").strip()
-                        if time_part:
-                            time_dt = datetime.strptime(time_part, "%H:%M")
-                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
-                    elif isinstance(reminder_time, str) and "сегодня" in reminder_time.lower():
-                        local_dt = datetime.now(user_tz)
-                        time_part = reminder_time.lower().replace("сегодня", "").strip()
-                        if time_part:
-                            time_dt = datetime.strptime(time_part, "%H:%M")
-                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
-                    else:
-                        local_dt = datetime.strptime(reminder_time, fmt)
-                        if user.timezone:
-                            local_dt = user_tz.localize(local_dt)
-                    
-                    task.reminder_time = local_dt.astimezone(pytz.UTC)
-                    break
-                except ValueError:
-                    continue
+            
+            # Если reminder_time уже datetime (после parse_time_to_datetime), используем напрямую
+            if isinstance(reminder_time, datetime):
+                if reminder_time.tzinfo is None:
+                    reminder_time = user_tz.localize(reminder_time)
+                task.reminder_time = reminder_time.astimezone(pytz.UTC)
+            else:
+                # Try different string formats
+                for fmt in ["%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
+                    try:
+                        if "завтра" in reminder_time.lower():
+                            local_dt = datetime.now(user_tz) + timedelta(days=1)
+                            time_part = reminder_time.lower().replace("завтра", "").strip()
+                            if time_part:
+                                time_dt = datetime.strptime(time_part, "%H:%M")
+                                local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
+                        elif "сегодня" in reminder_time.lower():
+                            local_dt = datetime.now(user_tz)
+                            time_part = reminder_time.lower().replace("сегодня", "").strip()
+                            if time_part:
+                                time_dt = datetime.strptime(time_part, "%H:%M")
+                                local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
+                        else:
+                            local_dt = datetime.strptime(reminder_time, fmt)
+                            if user.timezone:
+                                local_dt = user_tz.localize(local_dt)
+                        
+                        task.reminder_time = local_dt.astimezone(pytz.UTC)
+                        break
+                    except ValueError:
+                        continue
         except Exception as e:
             logger.warning(f"[DELEGATE_TASK] Could not parse reminder_time '{reminder_time}': {e}")
             import traceback
@@ -5067,7 +5074,7 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
             # Валидация
             if len(interests.strip()) < 2 or len(interests.strip()) > 100:
                 logger.warning(f"Invalid interests length: {len(interests)}")
-            elif any(char in interests.lower() for char in ['<', '>', 'script', 'http']):
+            elif any(pattern in interests.lower() for pattern in ['<script', 'onclick', 'onerror', 'javascript:', 'http://', 'https://']):
                 logger.warning(f"Invalid interests content: {interests}")
             else:
                 if replace_mode:
@@ -6806,7 +6813,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
 # МЕЖПОЛЬЗОВАТЕЛЬСКИЕ СООБЩЕНИЯ (AI-агент как посредник)
 # ═══════════════════════════════════════════════════════════════
 
-def send_message_to_user(
+async def send_message_to_user(
     recipient_username: str,
     intent: str,
     message_context: str,
@@ -6904,7 +6911,7 @@ def send_message_to_user(
         intent_label = intent_labels.get(intent, intent)
         
         # Генерируем через DeepSeek
-        generated_message = _generate_user_message_sync(
+        generated_message = await _generate_user_message_async(
             sender_name=sender_info,
             sender_username=sender_username,
             recipient_name=recipient_name,
@@ -6930,7 +6937,7 @@ def send_message_to_user(
         
         # Отправляем через Telegram
         try:
-            _send_telegram_message_sync(
+            await _send_telegram_message_async(
                 recipient.telegram_id,
                 f"📩 Сообщение от @{sender_username} ({intent_label}):\n\n{generated_message}\n\n"
                 f"💬 Чтобы ответить, напиши: «ответь @{sender_username} [твой ответ]»"
@@ -6956,7 +6963,7 @@ def send_message_to_user(
             session.close()
 
 
-def find_and_message_relevant_users(
+async def find_and_message_relevant_users(
     purpose: str,
     message_context: str,
     match_by: str = "interests",
@@ -7124,7 +7131,7 @@ def find_and_message_relevant_users(
             recipient_name = recipient.first_name or recipient.username or "Пользователь"
             reasons_str = ', '.join(cand['reasons'])
             
-            generated = _generate_user_message_sync(
+            generated = await _generate_user_message_async(
                 sender_name=sender_info,
                 sender_username=sender_username,
                 recipient_name=recipient_name,
@@ -7155,7 +7162,7 @@ def find_and_message_relevant_users(
             
             # Отправляем
             try:
-                _send_telegram_message_sync(
+                await _send_telegram_message_async(
                     recipient.telegram_id,
                     f"🤝 Вам написал @{sender_username} — у вас общее ({reasons_str}):\n\n"
                     f"{generated}\n\n"
@@ -7182,7 +7189,7 @@ def find_and_message_relevant_users(
             session.close()
 
 
-def reply_to_user_message(
+async def reply_to_user_message(
     recipient_username: str,
     reply_text: str,
     user_id: int = None,
@@ -7263,7 +7270,7 @@ def reply_to_user_message(
         try:
             # Уведомляем отправителя об ответе с контекстом
             context_line = f"\nНа ваше: {last_msg.message_text[:100]}..." if last_msg else ""
-            _send_telegram_message_sync(
+            await _send_telegram_message_async(
                 original_sender.telegram_id,
                 f"💬 Ответ от @{replier_username}:{context_line}\n\n{reply_text}\n\n"
                 f"📝 Чтобы продолжить диалог, напиши: «напиши @{replier_username} ...»"
@@ -7284,9 +7291,10 @@ def reply_to_user_message(
             session.close()
 
 
-def _generate_user_message_sync(sender_name, sender_username, recipient_name, intent_label, message_context):
-    """Генерирует персонализированное сообщение через DeepSeek (синхронно)."""
+async def _generate_user_message_async(sender_name, sender_username, recipient_name, intent_label, message_context):
+    """Генерирует персонализированное сообщение через DeepSeek (асинхронно)."""
     from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+    import aiohttp
     
     try:
         prompt = f"""Сгенерируй короткое дружелюбное сообщение для отправки через AI-ассистента.
@@ -7304,29 +7312,60 @@ def _generate_user_message_sync(sender_name, sender_username, recipient_name, in
 — НЕ пиши от первого лица AI, пиши от имени отправителя
 — НЕ используй скобки, маркеры списка, звёздочки"""
 
-        resp = requests.post(
-            "https://api.deepseek.com/chat/completions",
-            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": DEEPSEEK_MODEL or "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.8,
-                "max_tokens": 300
-            },
-            timeout=15
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            return data['choices'][0]['message']['content'].strip()
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": DEEPSEEK_MODEL or "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.8,
+                    "max_tokens": 300
+                },
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data['choices'][0]['message']['content'].strip()
     except Exception as e:
         logger.error(f"[GEN_MSG] AI generation failed: {e}")
     
     return None
 
 
+# Backward-compatible sync wrapper (delegates to async)
+def _generate_user_message_sync(sender_name, sender_username, recipient_name, intent_label, message_context):
+    """Sync wrapper — runs async version via event loop."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        # Already in event loop — schedule as task
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            result = loop.run_in_executor(pool, lambda: asyncio.run(
+                _generate_user_message_async(sender_name, sender_username, recipient_name, intent_label, message_context)
+            ))
+            return None  # Can't block, callers should use async version
+    except RuntimeError:
+        return asyncio.run(_generate_user_message_async(sender_name, sender_username, recipient_name, intent_label, message_context))
+
+
+async def _send_telegram_message_async(chat_id, text):
+    """Отправляет сообщение в Telegram асинхронно."""
+    from config import TELEGRAM_TOKEN
+    import aiohttp
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    async with aiohttp.ClientSession() as http_session:
+        async with http_session.post(url, json={"chat_id": chat_id, "text": text}, 
+                                      timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            if resp.status != 200:
+                text_body = await resp.text()
+                raise Exception(f"Telegram API error: {resp.status} {text_body[:200]}")
+
+
 def _send_telegram_message_sync(chat_id, text):
-    """Отправляет сообщение в Telegram синхронно."""
+    """Sync wrapper — runs async version. Отправляет сообщение в Telegram."""
     from config import TELEGRAM_TOKEN
     
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"

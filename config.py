@@ -19,7 +19,7 @@ CURRENT_DATE_STR = os.getenv("CURRENT_DATE")
 if CURRENT_DATE_STR:
     CURRENT_DATE = datetime.fromisoformat(CURRENT_DATE_STR)
 else:
-    CURRENT_DATE = datetime.now()
+    CURRENT_DATE = None  # None = use real current time
 
 # Database
 if LOCAL:

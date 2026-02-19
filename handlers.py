@@ -187,9 +187,11 @@ async def start_handler(message: Message):
     is_new_user = False
     if not user:
         user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+        if referrer_id:
+            user.referrer_id = referrer_id
         session.add(user)
         session.commit()
-        logger.info(f"Created new user {user_id}")
+        logger.info(f"Created new user {user_id}, referrer={referrer_id}")
         is_new_user = True
         # Начисляем бесплатные токены
         grant_signup_tokens(user_id, session=session)
@@ -971,7 +973,8 @@ def get_delegation_report(user_id, session=None):
         if should_close:
             session.close()
 
-        return f"DELEGATION_REPORT: {report}"
+        sep = '\n'
+        return f"DELEGATION_REPORT: {sep.join(report)}"
 
     except Exception as e:
         logger.error(f"Error getting delegation progress for user {user_id}: {e}")

@@ -315,6 +315,13 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
         return None
 
 
+def safe_avatar_url(telegram_id):
+    """Return safe proxied avatar URL (without bot token) for API responses."""
+    if telegram_id:
+        return f"/api/avatar/{telegram_id}"
+    return None
+
+
 def check_telegram_authentication(data):
     # Проерка аторизации от Telegram
     token = TELEGRAM_TOKEN
@@ -656,7 +663,7 @@ async def dashboard_handler(request):
 
                 # Люди, которые делегироали м задачи (я получаю задачи от х)
                 delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
                     Task.delegation_status.in_(['pending', 'accepted']),
                     Task.status != 'deleted',
                     Task.status != 'rejected'
@@ -775,7 +782,7 @@ async def dashboard_handler(request):
                             'common_goals': partner.common_goals if hasattr(partner, 'common_goals') else None,
                             'common_tasks': partner.common_tasks if hasattr(partner, 'common_tasks') else None,
                             'contact_info': partner_user.username if partner_user.username else None,
-                            'photo_url': partner_user.photo_url if hasattr(partner_user, 'photo_url') else None,
+                            'photo_url': safe_avatar_url(partner_user.telegram_id),
                             'city': partner.city if hasattr(partner, 'city') else None,
                             'average_rating': partner.average_rating if hasattr(partner, 'average_rating') else 0
                         })
@@ -797,7 +804,7 @@ async def dashboard_handler(request):
                                 'id': blocked_user.id,
                                 'username': blocked_user.username,
                                 'first_name': blocked_user.first_name,
-                                'photo_url': blocked_user.photo_url,
+                                'photo_url': safe_avatar_url(blocked_user.telegram_id),
                                 'reason': 'заблокироаый контакт'
                             })
             except Exception as e:
@@ -887,14 +894,14 @@ async def dashboard_handler(request):
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
-        # Add photo_url to partners
+        # Add photo_url to partners (safe proxy URL without bot token)
         if partners:
             session_db = Session()
             try:
                 for p in partners:
                     partner_user = session_db.query(User).filter_by(id=p.user_id).first()
                     if partner_user:
-                        p.photo_url = partner_user.photo_url
+                        p.photo_url = safe_avatar_url(partner_user.telegram_id)
                     else:
                         p.photo_url = None
             finally:
@@ -1010,10 +1017,10 @@ async def dashboard_handler(request):
             }
             tasks_dict.append(task_dict)
 
-        # Get user avatar URL from database and update if needed
-        user_avatar_url = user.photo_url if user and user.photo_url else None
+        # Get user avatar URL — always use safe proxy URL (no bot token)
+        user_avatar_url = safe_avatar_url(user_id) if user else None
 
-        # Try to update avatar from Telegram API if bot is available
+        # Refresh avatar in DB from Telegram API if bot is available
         if 'bot' in request.app and user:
             try:
                 updated_avatar_url = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
@@ -1025,7 +1032,6 @@ async def dashboard_handler(request):
                             avatar_user.photo_url = updated_avatar_url
                             avatar_session.commit()
                             logger.info(f"Updated avatar URL for user {user_id}")
-                            user_avatar_url = updated_avatar_url
                     finally:
                         avatar_session.close()
             except Exception as e:
@@ -2418,8 +2424,8 @@ async def api_partners_handler(request):
                     logger.warning(f"Partner user not found for profile user_id: {p.user_id}")
                     continue
 
-                # Use cached avatar from DB (updated daily by scheduler)
-                photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
+                # Use safe proxied avatar URL (no bot token)
+                photo_url = safe_avatar_url(partner_user.telegram_id) if partner_user else None
 
                 # Все контакты доступны всем (токенная модель)
                 can_access = True
@@ -2554,15 +2560,14 @@ async def api_partners_handler(request):
             # Get delegator user object
             delegator = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
 
-            # Update avatar from Telegram if available
-            photo_url = delegator.photo_url if delegator and delegator.photo_url else None
+            # Use safe proxy URL for avatar (no bot token leak)
+            photo_url = safe_avatar_url(delegator.telegram_id) if delegator and delegator.telegram_id else None
             if delegator and delegator.telegram_id and 'bot' in request.app:
                 try:
                     updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id, force_refresh=True)
                     if updated_avatar and updated_avatar != delegator.photo_url:
                         delegator.photo_url = updated_avatar
                         session_db.commit()
-                        photo_url = updated_avatar
                 except Exception as e:
                     logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
 
@@ -2673,15 +2678,14 @@ async def api_partners_handler(request):
                         list(common_task_titles)[
                             :5]) if common_task_titles else None  # Limit to 5 common tasks
 
-            # Update avatar from Telegram if available
-            photo_url = delegatee.photo_url if delegatee and delegatee.photo_url else None
+            # Use safe proxy URL for avatar (no bot token leak)
+            photo_url = safe_avatar_url(delegatee.telegram_id) if delegatee and delegatee.telegram_id else None
             if delegatee and delegatee.telegram_id and 'bot' in request.app:
                 try:
                     updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id, force_refresh=True)
                     if updated_avatar and updated_avatar != delegatee.photo_url:
                         delegatee.photo_url = updated_avatar
                         session_db.commit()
-                        photo_url = updated_avatar
                 except Exception as e:
                     logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
 
@@ -2772,15 +2776,14 @@ async def api_partners_handler(request):
                             can_access = True
                             required_tier = None
 
-                            # Update avatar from Telegram if available
-                            photo_url = favorite_user.photo_url if favorite_user.photo_url else None
+                            # Use safe proxy URL for avatar (no bot token leak)
+                            photo_url = safe_avatar_url(favorite_user.telegram_id) if favorite_user.telegram_id else None
                             if favorite_user.telegram_id and 'bot' in request.app:
                                 try:
                                     updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id, force_refresh=True)
                                     if updated_avatar and updated_avatar != favorite_user.photo_url:
                                         favorite_user.photo_url = updated_avatar
                                         session_db.commit()
-                                        photo_url = updated_avatar
                                 except Exception as e:
                                     logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
 
@@ -3360,7 +3363,7 @@ async def api_contact_profile_handler(request):
                     'contact_info': contact_user.username if hasattr(contact_user, 'username') else None,
                     'first_name': getattr(contact_user, 'first_name', None),
                     'last_name': getattr(contact_user, 'last_name', None),
-                    'photo_url': getattr(contact_user, 'photo_url', None),
+                    'photo_url': safe_avatar_url(contact_user.telegram_id) if hasattr(contact_user, 'telegram_id') else None,
                     'city': getattr(profile, 'city', None) if profile else None,
                     'company': getattr(profile, 'company', None) if profile else None,
                     'position': getattr(profile, 'position', None) if profile else None,
@@ -3551,7 +3554,8 @@ async def api_blocked_contacts_handler(request):
                                     try:
                                         message = f"@{user.username}  гото примать задачи от ас. Ваши делегироаые задачи были отклоны."
                                         # Schedule notification asynchronously to avoid blocking
-                                        asyncio.create_task(bot.send_message(blocked_user.telegram_id, message))
+                                        if bot:
+                                            asyncio.create_task(bot.send_message(blocked_user.telegram_id, message))
                                     except Exception as e:
                                         logger.error(f"Failed to notify blocked user {blocked_username}: {e}")
                         except Exception as e:
