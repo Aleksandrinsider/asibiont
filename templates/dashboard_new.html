@@ -1117,7 +1117,7 @@
             const messages = document.getElementById('chat-messages');
             let typingDiv = document.getElementById('typing-indicator');
             if (typingDiv) {
-                typingDiv.querySelector('.typing-label').textContent = text || 'Думаю';
+                typingDiv.querySelector('.typing-label').textContent = text || 'Думаю...';
                 return;
             }
             typingDiv = document.createElement('div');
@@ -1125,7 +1125,7 @@
             typingDiv.id = 'typing-indicator';
             typingDiv.innerHTML = `
                 <span class="typing-text" style="color: #6C727F; font-size: 13px;">
-                    <span class="typing-label">${text || 'Думаю'}</span>
+                    <span class="typing-label">${text || 'Думаю...'}</span>
                 </span>
             `;
             messages.appendChild(typingDiv);
@@ -1201,7 +1201,7 @@
             }
 
             // Show loading animation после сообщения пользователя
-            showTypingIndicator('Думаю');
+            showTypingIndicator('Думаю...');
 
             // Подключаемся к SSE для получения прогресса в реальном времени
             let evtSource = null;
