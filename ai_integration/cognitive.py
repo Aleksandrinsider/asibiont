@@ -511,8 +511,8 @@ class CognitiveEngine:
         # 4. Убираем нумерованные списки (конвертируем в текст)
         # "1. Сделай X\n2. Потом Y" → "Сначала сделай X. Потом Y."
         numbered_pattern = re.findall(r'^\d+[\.\)]\s+(.+)$', text, re.MULTILINE)
-        if len(numbered_pattern) >= 3:
-            # Слишком много пунктов — это список, конвертируем
+        if len(numbered_pattern) >= 2:
+            # Нумерованный список — конвертируем в связный текст
             items = numbered_pattern[:4]
             text_without_list = re.sub(r'^\d+[\.\)]\s+.+$', '', text, flags=re.MULTILINE)
             # Собираем оставшийся текст + items как предложения

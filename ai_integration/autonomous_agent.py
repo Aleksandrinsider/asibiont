@@ -315,9 +315,15 @@ class HybridAutonomousAgent:
         }
         return weather_info, news_info
 
-    async def _build_context(self, user_id):
+    async def _build_context(self, user_id, mode=None):
         """Собирает весь контекст пользователя за 1 сессию БД.
         Async: погода/новости загружаются через api_client (не блокируют event loop).
+        
+        Args:
+            user_id: telegram ID
+            mode: 'proactive'|'anchor'|'reminder'|None — для проактивных режимов
+                  user_memory минимизируется чтобы AI не цитировал устаревшие данные
+        
         Returns: dict с полями для промпта + метаданные.
         """
         session = Session()
@@ -389,6 +395,13 @@ class HybridAutonomousAgent:
                 except Exception as e:
                     logger.debug(f"Failed to decrypt user memory: {e}")
 
+            # Для проактивных/anchor режимов — НЕ передаём user_memory в промпт
+            # чтобы AI не цитировал устаревшие данные из памяти как факты.
+            # AI должен получать актуальные данные ТОЛЬКО через инструменты (list_tasks, list_goals).
+            effective_memory = decrypted_memory
+            if mode in ('proactive', 'anchor'):
+                effective_memory = ""  # AI получит данные через tool calls
+
             # Текущая задача
             current_task_info = None
             if user.current_task_id:
@@ -412,7 +425,7 @@ class HybridAutonomousAgent:
                 current_date_str=date_str,
                 user_username=user.username or "пользователь",
                 mentions_str="",
-                user_memory=decrypted_memory,
+                user_memory=effective_memory,
                 context=None, intent=None,
                 subscription_tier=sub_tier,
                 message_type=None,
@@ -1087,7 +1100,8 @@ class HybridAutonomousAgent:
         """
         try:
             # Контекст — тот же что и для обычного чата (async)
-            ctx = await self._build_context(user_id)
+            # Для proactive/anchor передаём mode чтобы не включать user_memory
+            ctx = await self._build_context(user_id, mode=mode)
             if not ctx:
                 return self._system_message_fallback(mode, instruction)
 
@@ -1117,7 +1131,13 @@ class HybridAutonomousAgent:
                     "Используй инструменты (list_tasks, list_goals, get_news_trends) для получения реальных данных. "
                     "НЕ вызывай research_topic в проактивных сообщениях — это дорого и долго. Используй get_news_trends для информации.\n"
                     "Не выдумывай данные. Задай вопрос, который заставит задуматься.\n"
-                    "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard."
+                    "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard.\n\n"
+                    "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
+                    "Секция ПАМЯТЬ ПОЛЬЗОВАТЕЛЯ — это устаревший фон. НЕ цитируй из неё задачи, цели, посты или факты как текущие.\n"
+                    "ТОЛЬКО данные из инструментов (list_tasks, list_goals) считай актуальными.\n"
+                    "Если list_tasks вернул пустой список — у пользователя НЕТ задач. Не упоминай задачи.\n"
+                    "Если list_goals вернул пустой список — у пользователя НЕТ целей. Не упоминай цели.\n"
+                    "НЕ УПОМИНАЙ конкретные задачи/цели/посты которые ты НЕ получил из инструментов."
                 ),
                 'result_check': (
                     "\n\n[РЕЖИМ: ПОЗДРАВЛЕНИЕ]\n"
@@ -1135,7 +1155,13 @@ class HybridAutonomousAgent:
                     "Думай о человеке целиком: какие сферы жизни проседают? "
                     "Где он застрял? Что он упускает?\n"
                     "Объедини якоря в одно связное сообщение. Закончи конкретным вопросом или предложением.\n"
-                    "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard."
+                    "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard.\n\n"
+                    "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
+                    "Секция ПАМЯТЬ ПОЛЬЗОВАТЕЛЯ — это устаревший фон. НЕ цитируй из неё задачи, цели, посты или факты как текущие.\n"
+                    "ТОЛЬКО данные из инструментов (list_tasks, list_goals) считай актуальными.\n"
+                    "Если list_tasks вернул пустой список — у пользователя НЕТ задач. Не упоминай задачи.\n"
+                    "Если list_goals вернул пустой список — у пользователя НЕТ целей. Не упоминай цели.\n"
+                    "НЕ УПОМИНАЙ конкретные задачи/цели/посты которые ты НЕ получил из инструментов."
                 ),
             }
 
