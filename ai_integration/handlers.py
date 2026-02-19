@@ -4463,11 +4463,23 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         except ImportError:
             pass
         
-        # Сбрасываем current_task_id у пользователя если он указывает на эту задачу
+        # Сбрасываем current_task_id у ВСЕХ пользователей, которые ссылаются на эту задачу
         # (иначе FK constraint не даст удалить)
-        if user.current_task_id == task_db_id:
-            user.current_task_id = None
-            logger.info(f"[DELETE_TASK] Reset current_task_id for user {user.telegram_id}")
+        users_with_this_task = session.query(User).filter(User.current_task_id == task_db_id).all()
+        for u in users_with_this_task:
+            u.current_task_id = None
+            logger.info(f"[DELETE_TASK] Reset current_task_id for user {u.telegram_id}")
+        
+        # Удаляем дочерние задачи (рекурентные инстансы с parent_task_id)
+        # Иначе FK constraint на parent_task_id не даст удалить родителя
+        child_tasks = session.query(Task).filter(Task.parent_task_id == task_db_id).all()
+        for child in child_tasks:
+            # Сбрасываем current_task_id для дочерних тоже
+            child_users = session.query(User).filter(User.current_task_id == child.id).all()
+            for cu in child_users:
+                cu.current_task_id = None
+            session.delete(child)
+            logger.info(f"[DELETE_TASK] Deleted child task ID: {child.id}")
         
         # Удаляем задачу
         session.delete(task)
@@ -4482,6 +4494,10 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         logger.error(f"[DELETE_TASK] Error: {e}")
         import traceback
         traceback.print_exc()
+        try:
+            session.rollback()
+        except Exception:
+            pass
         return f"Ошибка при удалении задачи: {str(e)}"
     finally:
         if close_session:

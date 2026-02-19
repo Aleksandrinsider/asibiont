@@ -1424,6 +1424,21 @@ async def clear_single_task_handler(request):
         if not task:
             return web.json_response({'error': 'Task not found'}, status=404)
 
+        # Сбрасываем current_task_id у всех пользователей, ссылающихся на эту задачу
+        users_with_task = session_db.query(User).filter(User.current_task_id == task.id).all()
+        for u in users_with_task:
+            u.current_task_id = None
+            logger.info(f"[CLEAR_SINGLE_TASK] Reset current_task_id for user {u.telegram_id}")
+        
+        # Удаляем дочерние задачи (рекурентные инстансы)
+        child_tasks = session_db.query(Task).filter(Task.parent_task_id == task.id).all()
+        for child in child_tasks:
+            child_users = session_db.query(User).filter(User.current_task_id == child.id).all()
+            for cu in child_users:
+                cu.current_task_id = None
+            session_db.delete(child)
+            logger.info(f"[CLEAR_SINGLE_TASK] Deleted child task ID: {child.id}")
+        
         session_db.delete(task)
         session_db.commit()
         logger.info(f"Task {task_id} deleted by user {user_id}")
@@ -1587,6 +1602,11 @@ async def delete_task_handler(request):
         # Передаём confirmed=True, поскольку пользователь уже подтвердил удаление в UI
         result = await delete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} deleted by user {user_id}: {result}")
+        
+        # Проверяем успешность удаления
+        if 'не найден' in result.lower() or 'ошибка' in result.lower():
+            logger.warning(f"Task deletion failed for task_id={task_id}, user_id={user_id}: {result}")
+            return web.json_response({'error': result}, status=404)
         
         # Если результат содержит флаг, обработаем через AI и отпраим  Telegram
         if result.startswith('TASK_COMPLETED_ASK_RESULT:') or result.startswith('TASK_UPDATED:') or result.startswith('TASK_DELETED_ASK_REASON:'):

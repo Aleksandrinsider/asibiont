@@ -3858,9 +3858,12 @@
                     updateTasksCounter();
                     updateStats(allTasksFromServer);
                     renderTaskGroups(allTasksFromServer);
+                    showNotification('Задача удалена', 'success');
                 } else {
                     const error = await response.json();
-                    showNotification(`Error: ${error.error}`, 'error');
+                    showNotification(`Ошибка удаления: ${error.error || 'Попробуйте ещё раз'}`, 'error');
+                    // Перезагружаем задачи с сервера чтобы показать актуальное состояние
+                    await updateTasks();
                 }
             } catch (error) {
                 console.error('Error deleting task:', error);
