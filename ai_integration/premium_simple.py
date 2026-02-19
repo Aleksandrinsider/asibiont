@@ -586,7 +586,7 @@ def manage_recommendations(user_id: int, action: str, recommendation_data: Dict[
                     existing = json.loads(profile.pending_premium_recommendations)
                     if not isinstance(existing, list):
                         existing = []
-                except:
+                except (json.JSONDecodeError, ValueError, TypeError):
                     existing = []
 
             # Добавляем новую (макс 20 рекомендаций)
@@ -608,7 +608,7 @@ def manage_recommendations(user_id: int, action: str, recommendation_data: Dict[
                 recommendations = json.loads(profile.pending_premium_recommendations)
                 if not isinstance(recommendations, list):
                     return ""
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError):
                 return ""
 
             # Фильтруем активные рекомендации
@@ -669,7 +669,7 @@ def manage_recommendations(user_id: int, action: str, recommendation_data: Dict[
                 recommendations = json.loads(profile.pending_premium_recommendations)
                 if not isinstance(recommendations, list):
                     return
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError):
                 return
 
             # Увеличиваем shown_count
@@ -753,7 +753,7 @@ def save_partner_notification_to_premium(session: SessionType,
                 existing = json.loads(profile.pending_premium_recommendations)
                 if not isinstance(existing, list):
                     existing = []
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError):
                 existing = []
         
         # Добавляем уведомление о найденном партнёре
@@ -828,7 +828,7 @@ def save_partner_progress_notification(session: SessionType,
                 existing = json.loads(profile.pending_premium_recommendations)
                 if not isinstance(existing, list):
                     existing = []
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError):
                 existing = []
         
         notification = {
@@ -1610,7 +1610,7 @@ async def collect_premium_insights(user_id: int, mode: str = 'collect', session:
                     if profile.pending_premium_recommendations:
                         try:
                             existing = json.loads(profile.pending_premium_recommendations)
-                        except:
+                        except (json.JSONDecodeError, ValueError, TypeError):
                             existing = []
 
                     # Добавляем новые (избегаем дубликатов)
