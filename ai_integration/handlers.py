@@ -3432,7 +3432,7 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             except Exception:
                 pass
             session.commit()
-            return f"Удалено целей: {count}. Чистый лист — можно ставить новые!"
+            return f"Удалено целей: {count}. Чистый лист — можно ставить новые! ⚠️ ВНИМАНИЕ: все упоминания целей в текущем контексте и профиле УСТАРЕЛИ. НЕ ссылайся на них, НЕ цитируй, НЕ предлагай вернуть. Целей НОЛЬ."
         
         # Поиск конкретной цели
         goals = session.query(Goal).filter(
@@ -3481,7 +3481,7 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             pass
         
         session.commit()
-        return f"Цель \"{title}\" удалена."
+        return f"Цель \"{title}\" удалена. ⚠️ Если эта цель упоминается в контексте или профиле — ИГНОРИРУЙ, она удалена."
     
     except Exception as e:
         logger.error(f"Error deleting goal for user {user_id}: {e}")
