@@ -418,6 +418,7 @@ class HybridAutonomousAgent:
                 message_type=None,
                 weather_info=weather_info,
                 news_info=news_info,
+                profile_data=profile_data,
                 proactive_context=proactive_context,
                 current_task_info=current_task_info,
                 user_id_param=user_id
@@ -751,7 +752,7 @@ class HybridAutonomousAgent:
                 # Семантическая память из Pinecone
                 memory_context = ""
                 try:
-                    memory_context = await build_memory_context(user_id, user_message, max_chars=600)
+                    memory_context = await build_memory_context(user_id, user_message, max_chars=1200)
                     if memory_context:
                         base_prompt += memory_context
                 except Exception as e:
@@ -778,6 +779,9 @@ class HybridAutonomousAgent:
                 )
                 if multi_context:
                     base_prompt += multi_context
+                
+                # ═══ ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ ═══
+                base_prompt += "\n\n[ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ]\nЕсли пользователь упоминает задачу, проект или тему для исследования, ОБЯЗАТЕЛЬНО используй research_topic для глубокого анализа и find_relevant_contacts_for_task для поиска полезных контактов из сети. Не просто отвечай — действуй и предоставь результаты.\nЕсли пользователь спрашивает о новостях или трендах, ОБЯЗАТЕЛЬНО используй get_news_trends для актуальной информации.\nЕсли пользователь упоминает дедлайн или время, используй add_task с reminder_time.\nЕсли пользователь упоминает цель, ОБЯЗАТЕЛЬНО используй create_goal."
             except Exception as e:
                 logger.warning(f"[MULTI-AGENT] Context build failed: {e}")
             
@@ -838,7 +842,7 @@ class HybridAutonomousAgent:
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc)
+                    tool_choice=tc, max_tokens=1200)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')
@@ -919,7 +923,7 @@ class HybridAutonomousAgent:
                 "content": "Сформируй финальный ответ на основе выполненных действий."
             })
             final_resp = await self.call_ai(
-                messages, use_tools=False, temperature=0.7)
+                messages, use_tools=False, temperature=0.7, max_tokens=1200)
             final_text = final_resp['choices'][0]['message'].get('content', '')
             return self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)
