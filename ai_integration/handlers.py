@@ -5092,6 +5092,19 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
                 # Разрешаем пустую строку для удаления
                 profile.goals = goals
                 updates.append(f"цели заменены: {goals}")
+                # Также удаляем Goal записи из БД (иначе останутся призраки)
+                try:
+                    from models import Goal
+                    deleted_goals = session.query(Goal).filter(
+                        Goal.user_id == user.id,
+                        Goal.status.in_(['active', 'paused'])
+                    ).all()
+                    for g in deleted_goals:
+                        session.delete(g)
+                    if deleted_goals:
+                        updates.append(f"удалено Goal записей: {len(deleted_goals)}")
+                except Exception as e:
+                    logger.warning(f"[UPDATE_PROFILE] Failed to delete Goal records: {e}")
             elif len(goals.strip()) < 2 or len(goals.strip()) > 200:
                 logger.warning(f"Invalid goals length: {len(goals)}")
             elif any(pattern in goals.lower() for pattern in ['<script', 'http://', 'https://', 'onclick', 'onerror']):
