@@ -865,7 +865,7 @@ class HybridAutonomousAgent:
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc, max_tokens=1200)
+                    tool_choice=tc, max_tokens=800)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')
@@ -958,7 +958,7 @@ class HybridAutonomousAgent:
                 "content": "Сформируй финальный ответ. ВАЖНО: перескажи данные из инструментов СВОИМИ СЛОВАМИ, вплети в живой разговорный текст. Не копируй формат, bullets, emoji-заголовки из результатов. Если инструмент не нашёл полезного — не упоминай это. Пиши сплошным текстом без списков."
             })
             final_resp = await self.call_ai(
-                messages, use_tools=False, temperature=0.7, max_tokens=1200)
+                messages, use_tools=False, temperature=0.7, max_tokens=800)
             final_text = final_resp['choices'][0]['message'].get('content', '')
             return self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)
