@@ -77,8 +77,19 @@
             padding: 15px;
             /* Делаем блоки адаптивными по высоте */
             height: fit-content;
-            min-height: 100px; /* Минимальная высота для пустых блоков */
-            transition: flex 0.3s ease, height 0.3s ease; /* Плавные переходы */
+            min-height: 0; /* Минимальная высота убрана — свёрнутые блоки компактны */
+            transition: flex 0.3s ease, height 0.3s ease, padding 0.2s ease; /* Плавные переходы */
+        }
+        .context-section.collapsed,
+        .task-stats-block.collapsed {
+            padding: 10px 15px;
+            min-height: 0;
+        }
+        .context-section.collapsed > div:first-child,
+        .task-stats-block.collapsed > div:first-child {
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+            border-bottom: none !important;
         }
         
         .stats-content, .profile-content {
@@ -194,6 +205,7 @@
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (profileSection) {
                     profileSection.style.flex = '0 0 auto';
+                    profileSection.classList.remove('collapsed');
                 }
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
@@ -206,6 +218,7 @@
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (profileSection) {
                     profileSection.style.flex = '0 0 auto';
+                    profileSection.classList.add('collapsed');
                 }
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
@@ -264,7 +277,10 @@
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 const statsBlock = content.parentElement;
-                if (statsBlock) statsBlock.style.flex = '0 0 auto';
+                if (statsBlock) {
+                    statsBlock.style.flex = '0 0 auto';
+                    statsBlock.classList.remove('collapsed');
+                }
                 if (tasksWrapper) {
                     tasksWrapper.style.flex = '1 1 auto';
                     tasksWrapper.style.minHeight = '';
@@ -276,7 +292,10 @@
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 const statsBlock = content.parentElement;
-                if (statsBlock) statsBlock.style.flex = '0 0 auto';
+                if (statsBlock) {
+                    statsBlock.style.flex = '0 0 auto';
+                    statsBlock.classList.add('collapsed');
+                }
                 if (tasksWrapper) {
                     tasksWrapper.style.flex = '1 1 auto';
                     tasksWrapper.style.minHeight = '0';
