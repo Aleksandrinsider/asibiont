@@ -2762,7 +2762,7 @@
             }
         }
 
-        // Функция для проверки новых сообщений
+        // Функция для проверки новых сообщений (ID-based, не count-based)
         async function checkForNewMessages() {
             try {
                 const response = await fetch('/api/interactions', {
@@ -2776,24 +2776,28 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.interactions && data.interactions.length > lastMessageCount) {
-                        // Есть новые сообщения
-                        const newInteractions = data.interactions.slice(lastMessageCount);
-                        newInteractions.forEach((interaction) => {
+                    if (data.interactions && data.interactions.length > 0) {
+                        // Проверяем по ID, а не по количеству (API лимитирует 100 записей)
+                        const sortedInteractions = data.interactions.sort((a, b) => a.id - b.id);
+                        let hasNew = false;
+                        sortedInteractions.forEach((interaction) => {
                             const msgId = interaction.id;
                             if (!displayedMessageIds.has(msgId)) {
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                 displayedMessageIds.add(msgId);
+                                hasNew = true;
                             }
                         });
                         lastMessageCount = data.interactions.length;
                         
-                        // Прокрутить чат вниз, если пользователь внизу
-                        const messages = document.getElementById('chat-messages');
-                        if (messages) {
-                            const isNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
-                            if (isNearBottom) {
-                                setTimeout(() => messages.scrollTop = messages.scrollHeight, 100);
+                        // Прокрутить чат вниз, если есть новые и пользователь внизу
+                        if (hasNew) {
+                            const messages = document.getElementById('chat-messages');
+                            if (messages) {
+                                const isNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+                                if (isNearBottom) {
+                                    setTimeout(() => messages.scrollTop = messages.scrollHeight, 100);
+                                }
                             }
                         }
                     }
@@ -5808,17 +5812,14 @@
                                 }
                             });
                             lastMessageCount = currentMessageCount;
-                        } else if (currentMessageCount > lastMessageCount) {
-                            // Есть новые сообщения - добавляем только их
+                        } else if (currentMessageCount > 0) {
+                            // Проверяем по ID, а не по количеству (API лимитирует 100 записей)
                             const sortedInteractions = data.interactions
                                 .sort((a, b) => a.id - b.id);
                             
-                            // Находим новые сообщения (с ID больше последнего отображенного)
-                            const maxDisplayedId = Math.max(...Array.from(displayedMessageIds));
-                            
                             sortedInteractions.forEach((interaction) => {
                                 const msgId = interaction.id;
-                                if (msgId > maxDisplayedId && !displayedMessageIds.has(msgId)) {
+                                if (!displayedMessageIds.has(msgId)) {
                                     addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                     displayedMessageIds.add(msgId);
                                 }
