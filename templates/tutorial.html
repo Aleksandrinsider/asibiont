@@ -31,7 +31,7 @@
         "description": "Полное руководство по AI-партнёру ASI Biont в Telegram",
         "url": "https://asibiont.ru/tutorial",
         "step": [
-            {"@type": "HowToStep", "name": "Регистрация", "text": "Отправьте /start боту в Telegram для регистрации"},
+            {"@type": "HowToStep", "name": "Регистрация", "text": "Откройте бота в Telegram для регистрации"},
             {"@type": "HowToStep", "name": "Создание задач", "text": "Просто скажите боту, что нужно сделать — он создаст задачу"},
             {"@type": "HowToStep", "name": "Делегирование", "text": "Поручите задачу другому пользователю через естественный диалог"},
             {"@type": "HowToStep", "name": "Автопостинг", "text": "Настройте контент-стратегию и публикации в канал"}
@@ -54,19 +54,13 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
         }
         body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 15px;
+            display: block;
+            padding: 40px 15px;
         }
         @media (max-width: 768px) {
             body {
                 padding: 15px 12px !important;
-                display: block !important;
-                align-items: unset !important;
-                justify-content: unset !important;
             }
-            .pricing-container { margin-top: 0; }
         }
         .pricing-container {
             width: 100%;
@@ -98,19 +92,18 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 1: Быстрый старт -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🚀 Быстрый старт</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/start</h2>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Регистрация и запуск</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Первая команда для начала работы</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Регистрация</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Запуск бота</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Первый шаг для начала работы</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
-                        Откройте бота в Telegram и отправьте /start. Вы получите 1 500 токенов и сможете сразу начать: создавать задачи, искать партнёров и делегировать.
+                        Откройте бота в Telegram и начните диалог. Вы получите 1 500 токенов и сможете сразу начать: создавать задачи, искать партнёров и делегировать.
                     </div>
                 </div>
 
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/update_profile</h2>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Профиль</h2>
                     <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Заполните профиль</div>
                     <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Чтобы вас находили другие</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
@@ -119,7 +112,7 @@
                 </div>
 
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/dashboard</h2>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Дашборд</h2>
                     <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Веб-панель управления</div>
                     <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Задачи, контакты, аналитика</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
@@ -131,7 +124,6 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 2: Управление задачами -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">✅ Управление задачами</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
                     <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #59636E; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">ОСНОВНОЕ</div>
@@ -165,7 +157,6 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 3: Цели и прогресс -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🎯 Цели и прогресс</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                     <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Создание цели</h2>
@@ -198,7 +189,6 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 4: Делегирование -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">👥 Делегирование задач</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
                     <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #59636E; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">ФОРМАЛЬНОЕ</div>
@@ -232,7 +222,6 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 5: Поручения и переписка -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">💬 Поручения и переписка</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                     <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Сообщения</h2>
@@ -266,10 +255,9 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 6: Контакты и партнёры -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🤝 Контакты и партнёры</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/find_partners</h2>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Поиск партнёров</h2>
                     <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Поиск людей</div>
                     <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">По навыкам, городу, интересам</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
@@ -299,7 +287,6 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 7: Автопостинг и контент -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">📝 Автопостинг и контент</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                     <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Стратегия</h2>
@@ -332,7 +319,6 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- Ряд 8: Исследования -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">🔍 Исследования и аналитика</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                     <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Исследование</h2>
@@ -363,42 +349,8 @@
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- Ряд 9: Баланс -->
+            <!-- Ряд 9: Дополнительные возможности -->
             <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">💰 Баланс и токены</div>
-            <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
-                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/balance</h2>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Текущий баланс</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">1 токен = 1 рубль</div>
-                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
-                        Проверьте сколько токенов осталось. Все функции оплачиваются токенами. Без скрытых комиссий — вы всегда видите расход.
-                    </div>
-                </div>
-
-                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/buy</h2>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Пополнить баланс</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Три пакета с бонусами</div>
-                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
-                        Стартовый — 1 500₽. Оптимальный — 5 000₽ <span style="color: #059669; font-weight: 600;">+10%</span>. Максимальный — 15 000₽ <span style="color: #059669; font-weight: 600;">+20%</span>. Оплата через Юкассу.
-                    </div>
-                </div>
-
-                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">/subscription</h2>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Информация о подписке</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Статус и продление</div>
-                    <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
-                        Узнайте статус подписки и доступные тарифы. /subscribe — оформить или продлить. Все функции открыты для всех тарифов.
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- Ряд 10: Дополнительные возможности -->
-            <!-- ═══════════════════════════════════════════ -->
-            <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 12px;">⚡ Дополнительные возможности</div>
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                     <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">🎤 Голос</h2>
