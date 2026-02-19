@@ -559,17 +559,19 @@ async def process_text_message(user_id, text, message, state):
 
     try:
         session = Session()
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        is_first_message = False
-        if not user:
-            user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
-            session.add(user)
-            session.commit()
-            grant_signup_tokens(user_id, session=session)
-            is_first_message = True
-        elif not session.query(Interaction).filter_by(user_id=user.id).first():
-            is_first_message = True
-        session.close()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            is_first_message = False
+            if not user:
+                user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+                session.add(user)
+                session.commit()
+                grant_signup_tokens(user_id, session=session)
+                is_first_message = True
+            elif not session.query(Interaction).filter_by(user_id=user.id).first():
+                is_first_message = True
+        finally:
+            session.close()
 
         # Новый пользователь — сначала показываем описание и тарифы
         if is_first_message:
@@ -627,6 +629,12 @@ async def process_text_message(user_id, text, message, state):
                 interaction = Interaction(user_id=user.id, message_type='user', content=text)
                 session.add(interaction)
                 session.commit()
+        except Exception as e:
+            logger.error(f"Failed to save user message for {user_id}: {e}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
         finally:
             session.close()
 
@@ -688,37 +696,49 @@ async def process_text_message(user_id, text, message, state):
             if not response_text or not response_text.strip():
                 response_text = "Готово! Что дальше?"
             
-            await message.bot.send_message(message.chat.id, response_text)
+            # Разбиваем длинный ответ на части (Telegram лимит 4096)
+            if len(response_text) > 4000:
+                for i in range(0, len(response_text), 4000):
+                    chunk = response_text[i:i+4000]
+                    await message.bot.send_message(message.chat.id, chunk)
+            else:
+                await message.bot.send_message(message.chat.id, response_text)
             
             # Списываем токены за сообщение
             if not FREE_ACCESS_MODE:
                 spend_tokens(user_id, 'message', description=text[:100])
         except Exception as e:
             logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)
-            await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке сообщения.")
+            try:
+                await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке сообщения.")
+            except Exception:
+                logger.error(f"Failed to send error message to user {user_id}")
             response_text = ""
         finally:
             db_session.close()
         
         # СОХРАНЯЕМ ОТВЕТ AI
-        session = Session()
         try:
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if user:
-                from models import Interaction
-                if response_text and response_text.strip():
-                    interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
+            session = Session()
+            try:
+                user = session.query(User).filter_by(telegram_id=user_id).first()
+                if user:
+                    from models import Interaction
+                    if response_text and response_text.strip():
+                        interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
+                    else:
+                        interaction = Interaction(
+                            user_id=user.id,
+                            message_type='ai',
+                            content="Извините, не удалось сгенерировать ответ.")
+                    session.add(interaction)
+                    session.commit()
                 else:
-                    interaction = Interaction(
-                        user_id=user.id,
-                        message_type='ai',
-                        content="Извините, не удалось сгенерировать ответ.")
-                session.add(interaction)
-                session.commit()
-            else:
-                logger.warning(f"User not found for telegram_id {user_id}, cannot save interactions")
-        finally:
-            session.close()
+                    logger.warning(f"User not found for telegram_id {user_id}, cannot save interactions")
+            finally:
+                session.close()
+        except Exception as e:
+            logger.error(f"Failed to save AI response for {user_id}: {e}")
     except Exception as e:
         logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
         try:
