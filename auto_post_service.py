@@ -313,32 +313,37 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         
         logger.info(f"Auto-post created for user {user_id}")
         
-        # Notify user about created post
+        # Notify user about created post — через AI агент для единого стиля
         if notify:
             try:
-                # Worker не может импортировать bot из main, используем прямой API
-                from config import TELEGRAM_TOKEN
-                import aiohttp
+                from ai_integration.autonomous_agent import get_autonomous_agent
+                agent = get_autonomous_agent()
                 
-                if TELEGRAM_TOKEN:
-                    # Разные тексты уведомлений в зависимости от типа поста
-                    if post_type == 'research':
-                        notification_text = f"Твоё исследование опубликовано в ленту 🔥 Теперь контакты увидят твои находки:\n\n{content[:200]}{'...' if len(content) > 200 else ''}\n\nПосмотреть в ленте: https://asibiont.ru/dashboard"
-                    else:
-                        notification_text = f"📝 Ежедневный автопост опубликован!\n\n{content}\n\n💡 Вы можете удалить пост в панели управления"
-                    
-                    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-                    data = {
-                        "chat_id": user_id,
-                        "text": notification_text
-                    }
-                    
-                    async with aiohttp.ClientSession() as aio_session:
-                        async with aio_session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                            if response.status == 200:
-                                logger.info(f"Notification sent to user {user_id} about auto-post")
-                            else:
-                                logger.warning(f"Failed to send notification to {user_id}: {response.status}")
+                notification = await agent.generate_system_message(
+                    user_id=user_id,
+                    mode='result_check',
+                    instruction=(
+                        f"Только что опубликован пост в ленту новостей на сайте. "
+                        f"Содержание поста: «{content[:150]}{'...' if len(content) > 150 else ''}». "
+                        f"Скажи об этом коротко и естественно, дай ссылку https://asibiont.ru/dashboard. "
+                        f"Предложи отредактировать или удалить если что-то не так."
+                    ),
+                    max_tokens=400,
+                    max_iterations=1
+                )
+                
+                if notification and notification.strip():
+                    from config import TELEGRAM_TOKEN
+                    import aiohttp
+                    if TELEGRAM_TOKEN:
+                        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                        data = {"chat_id": user_id, "text": notification}
+                        async with aiohttp.ClientSession() as aio_session:
+                            async with aio_session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                                if response.status == 200:
+                                    logger.info(f"AI notification sent to user {user_id} about auto-post")
+                                else:
+                                    logger.warning(f"Failed to send notification to {user_id}: {response.status}")
             except Exception as notify_error:
                 logger.warning(f"Could not send notification to user {user_id}: {notify_error}")
         
