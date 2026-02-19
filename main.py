@@ -1372,13 +1372,31 @@ async def clear_user_tasks_handler(request):
         logger.info(f"User {user_id} has {task_count} tasks to clear")
 
         # Clear user's tasks (both created by user and delegated to user)
-        # Clear user's tasks (both created by user and delegated to user)
         del_filter = [Task.user_id == user.id]
         if user.username:
             del_filter.append(Task.delegated_to_username.ilike(user.username))
-        session_db.query(Task).filter(
-            or_(*del_filter)
-        ).delete()
+        
+        # Собираем ID всех задач для удаления
+        tasks_to_delete = session_db.query(Task).filter(or_(*del_filter)).all()
+        task_ids = [t.id for t in tasks_to_delete]
+        
+        if task_ids:
+            # Сбрасываем current_task_id у всех пользователей, ссылающихся на эти задачи
+            session_db.query(User).filter(User.current_task_id.in_(task_ids)).update(
+                {User.current_task_id: None}, synchronize_session='fetch'
+            )
+            
+            # Удаляем дочерние задачи (parent_task_id FK)
+            child_ids = [c.id for c in session_db.query(Task).filter(Task.parent_task_id.in_(task_ids)).all()]
+            if child_ids:
+                session_db.query(User).filter(User.current_task_id.in_(child_ids)).update(
+                    {User.current_task_id: None}, synchronize_session='fetch'
+                )
+                session_db.query(Task).filter(Task.id.in_(child_ids)).delete(synchronize_session='fetch')
+            
+            # Удаляем сами задачи
+            session_db.query(Task).filter(Task.id.in_(task_ids)).delete(synchronize_session='fetch')
+        
         session_db.commit()
         logger.info(f"User {user_id} tasks cleared successfully")
         return web.json_response({'message': 'Tasks cleared'})
@@ -1470,6 +1488,12 @@ async def complete_task_handler(request):
         result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"[COMPLETE_TASK_HANDLER] Task {task_id} completed by user {user_id}: {result}")
         
+        # Проверяем успешность операции
+        result_lower = result.lower() if isinstance(result, str) else str(result).lower()
+        if 'не найден' in result_lower or 'ошибка' in result_lower or 'error' in result_lower or 'нет активных' in result_lower:
+            logger.warning(f"[COMPLETE_TASK_HANDLER] Failed for task_id={task_id}: {result}")
+            return web.json_response({'error': result}, status=404)
+        
         # Проеряем статус задачи после заершея
         from models import Task
         db_session = Session()
@@ -1535,7 +1559,13 @@ async def complete_task_handler(request):
         except Exception as notification_error:
             logger.error(f"Error sending completion notification: {notification_error}")
         
-        return web.json_response({'message': result})
+        # Очищаем внутренние маркеры перед отправкой клиенту
+        clean_result = result
+        for prefix in ['TASK_COMPLETED_ASK_RESULT:', 'TASK_UPDATED:', 'TASK_DELETED_ASK_REASON:']:
+            if isinstance(clean_result, str) and clean_result.startswith(prefix):
+                clean_result = clean_result[len(prefix):].strip() or 'Задача выполнена'
+        
+        return web.json_response({'message': clean_result})
     except Exception as e:
         logger.error(f"Error completing task {task_id}: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)
@@ -1557,6 +1587,13 @@ async def restore_task_handler(request):
     try:
         result = await restore_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} restored by user {user_id}: {result}")
+        
+        # Проверяем успешность операции
+        result_lower = result.lower() if isinstance(result, str) else str(result).lower()
+        if 'не найден' in result_lower or 'ошибка' in result_lower or 'error' in result_lower or 'некорректн' in result_lower:
+            logger.warning(f"Task restore failed for task_id={task_id}: {result}")
+            return web.json_response({'error': result}, status=404)
+        
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error restoring task {task_id}: {e}")
@@ -1579,6 +1616,13 @@ async def skip_task_handler(request):
     try:
         result = await skip_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} skipped by user {user_id}: {result}")
+        
+        # Проверяем успешность операции
+        result_lower = result.lower() if isinstance(result, str) else str(result).lower()
+        if 'не найден' in result_lower or 'ошибка' in result_lower or 'error' in result_lower or 'некорректн' in result_lower:
+            logger.warning(f"Task skip failed for task_id={task_id}: {result}")
+            return web.json_response({'error': result}, status=404)
+        
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error skipping task {task_id}: {e}")
@@ -1641,7 +1685,13 @@ async def delete_task_handler(request):
             except Exception as ai_error:
                 logger.error(f"Error processing result through AI: {ai_error}")
         
-        return web.json_response({'message': result})
+        # Очищаем внутренние маркеры перед отправкой клиенту
+        clean_result = result
+        for prefix in ['TASK_COMPLETED_ASK_RESULT:', 'TASK_UPDATED:', 'TASK_DELETED_ASK_REASON:']:
+            if isinstance(clean_result, str) and clean_result.startswith(prefix):
+                clean_result = clean_result[len(prefix):].strip() or 'Задача удалена'
+        
+        return web.json_response({'message': clean_result})
     except Exception as e:
         logger.error(f"Error deleting task {task_id}: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)
@@ -1661,8 +1711,15 @@ async def cancel_delegation_handler(request):
 
     from ai_integration.handlers import cancel_delegation
     try:
-        result = cancel_delegation(task_id=task_id, user_id=user_id)
+        result = await cancel_delegation(task_id=task_id, user_id=user_id)
         logger.info(f"Delegation cancelled for task {task_id} by user {user_id}: {result}")
+        
+        # Проверяем успешность операции
+        result_lower = result.lower() if isinstance(result, str) else str(result).lower()
+        if 'не найден' in result_lower or 'ошибка' in result_lower or 'error' in result_lower or 'нельзя' in result_lower or 'не является' in result_lower or 'не делегирован' in result_lower:
+            logger.warning(f"Cancel delegation failed for task_id={task_id}: {result}")
+            return web.json_response({'error': result}, status=400)
+        
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error cancelling delegation for task {task_id}: {e}")
@@ -1686,6 +1743,13 @@ async def reschedule_task_handler(request):
     try:
         result = await reschedule_task(task_title=task_title, new_time=new_time, user_id=user_id)
         logger.info(f"Task '{task_title}' rescheduled by user {user_id}: {result}")
+        
+        # Проверяем успешность операции
+        result_lower = result.lower() if isinstance(result, str) else str(result).lower()
+        if 'не найден' in result_lower or 'ошибка' in result_lower or 'error' in result_lower or 'не могу понять' in result_lower:
+            logger.warning(f"Task reschedule failed for '{task_title}': {result}")
+            return web.json_response({'error': result}, status=400)
+        
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error rescheduling task '{task_title}': {e}")
