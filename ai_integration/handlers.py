@@ -3425,6 +3425,12 @@ def delete_goal(goal_title=None, user_id=None, session=None):
                     profile.goals = ''
             except Exception:
                 pass
+            # Очистить conversation_history чтобы бот не цитировал старые цели
+            try:
+                from .conversation_history import clear_conversation_history
+                clear_conversation_history(user_id)
+            except Exception:
+                pass
             session.commit()
             return f"Удалено целей: {count}. Чистый лист — можно ставить новые!"
         
@@ -3464,6 +3470,13 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             if profile and profile.goals:
                 parts = [p.strip() for p in profile.goals.split(';') if title.lower() not in p.strip().lower()]
                 profile.goals = '; '.join(parts) if parts else ''
+        except Exception:
+            pass
+        
+        # Очистить conversation_history чтобы бот не цитировал удалённую цель
+        try:
+            from .conversation_history import clear_conversation_history
+            clear_conversation_history(user_id)
         except Exception:
             pass
         
