@@ -323,7 +323,7 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                 if TELEGRAM_TOKEN:
                     # Разные тексты уведомлений в зависимости от типа поста
                     if post_type == 'research':
-                        notification_text = f"🔍 Ваше исследование опубликовано в ленту!\n\nТеперь ваши контакты увидят ваши находки:\n\n{content[:200]}{'...' if len(content) > 200 else ''}\n\n💡 Посмотреть в ленте: /dashboard"
+                        notification_text = f"Твоё исследование опубликовано в ленту 🔥 Теперь контакты увидят твои находки:\n\n{content[:200]}{'...' if len(content) > 200 else ''}\n\nПосмотреть в ленте: https://asibiont.ru/dashboard"
                     else:
                         notification_text = f"📝 Ежедневный автопост опубликован!\n\n{content}\n\n💡 Вы можете удалить пост в панели управления"
                     

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 import aiohttp
-from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment
+from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
@@ -5420,25 +5420,8 @@ async def research_topic(query: str, depth: str = 'full', user_id: int = None, s
             session=session
         )
         
-        # Create auto-post from research results (для разнообразия ленты новостей)
-        analysis_data = result.get('analysis') if isinstance(result, dict) else None
-        if isinstance(result, dict) and result.get('success') and isinstance(analysis_data, dict):
-            try:
-                from auto_post_service import generate_research_post, create_auto_post
-                
-                post_content = await generate_research_post(
-                    user_id=user_id,
-                    query=query,
-                    analysis=analysis_data,
-                    session=session
-                )
-                
-                if post_content:
-                    await create_auto_post(user_id, post_content, session, notify=True, post_type='research')
-                    logger.info(f"[RESEARCH] Auto-post created and user notified: {user_id}")
-            except Exception as post_error:
-                logger.warning(f"[RESEARCH] Could not create auto-post: {post_error}")
-                # Не прерываем основной flow, продолжаем нормально
+        # НЕ публикуем автоматически — пусть AI предложит пользователю создать пост
+        # и пользователь решит сам
         
         if isinstance(result, dict):
             return result.get('message', 'Исследование завершено')
@@ -6688,3 +6671,719 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
     finally:
         if close_session:
             session.close()
+
+
+# ═══════════════════════════════════════════════════════════════
+# МЕЖПОЛЬЗОВАТЕЛЬСКИЕ СООБЩЕНИЯ (AI-агент как посредник)
+# ═══════════════════════════════════════════════════════════════
+
+def send_message_to_user(
+    recipient_username: str,
+    intent: str,
+    message_context: str,
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Отправить сообщение другому пользователю через AI-агента.
+    AI генерирует вежливое, персонализированное сообщение на основе intent и контекста.
+    Используется для: согласования встреч, предложений по проекту, обмена идеями.
+    
+    Args:
+        recipient_username: Username получателя (без @) или имя
+        intent: Цель сообщения: meeting (встреча), collaboration (сотрудничество),
+                idea (идея/предложение), project_invite (приглашение в проект), question (вопрос)
+        message_context: Что именно хочет передать отправитель (в свободной форме)
+        user_id: telegram_id отправителя
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[SEND_MSG] user={user_id} → @{recipient_username}, intent={intent}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        # Находим отправителя
+        sender = session.query(User).filter_by(telegram_id=user_id).first()
+        if not sender:
+            return "❌ Пользователь-отправитель не найден"
+        
+        sender_profile = session.query(UserProfile).filter_by(user_id=sender.id).first()
+        sender_name = sender.first_name or sender.username or "Пользователь"
+        sender_username = sender.username or ""
+        
+        # Находим получателя по username или имени
+        recipient_clean = recipient_username.lstrip('@').strip()
+        recipient = session.query(User).filter(
+            or_(
+                func.lower(User.username) == func.lower(recipient_clean),
+                func.lower(User.first_name) == func.lower(recipient_clean)
+            )
+        ).first()
+        
+        if not recipient:
+            return f"❌ Пользователь @{recipient_clean} не найден в системе. Он должен начать диалог с ботом, чтобы быть доступным."
+        
+        if recipient.telegram_id == user_id:
+            return "❌ Нельзя отправить сообщение самому себе"
+        
+        # Проверяем blocked_contacts
+        recipient_profile = session.query(UserProfile).filter_by(user_id=recipient.id).first()
+        if recipient_profile and recipient_profile.blocked_contacts:
+            try:
+                blocked = json.loads(recipient_profile.blocked_contacts)
+                if sender_username in blocked or str(user_id) in blocked:
+                    return f"❌ @{recipient_clean} заблокировал входящие сообщения от вас"
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        # Антиспам: макс 3 сообщения в день одному получателю
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        sent_today = session.query(UserMessage).filter(
+            UserMessage.sender_id == sender.id,
+            UserMessage.recipient_id == recipient.id,
+            UserMessage.created_at >= today_start
+        ).count()
+        
+        if sent_today >= 3:
+            return f"⚠️ Лимит: максимум 3 сообщения в день одному пользователю. Уже отправлено: {sent_today}"
+        
+        # Генерируем сообщение через AI
+        import asyncio
+        
+        sender_info = f"{sender_name}"
+        if sender_profile:
+            if sender_profile.position:
+                sender_info += f", {sender_profile.position}"
+            if sender_profile.company:
+                sender_info += f" в {sender_profile.company}"
+            if sender_profile.city:
+                sender_info += f" ({sender_profile.city})"
+        
+        recipient_name = recipient.first_name or recipient.username or "Пользователь"
+        
+        intent_labels = {
+            'meeting': 'согласование встречи',
+            'collaboration': 'предложение сотрудничества',
+            'idea': 'обмен идеей / предложение',
+            'project_invite': 'приглашение в проект',
+            'question': 'вопрос'
+        }
+        intent_label = intent_labels.get(intent, intent)
+        
+        # Генерируем через DeepSeek
+        generated_message = _generate_user_message_sync(
+            sender_name=sender_info,
+            sender_username=sender_username,
+            recipient_name=recipient_name,
+            intent_label=intent_label,
+            message_context=message_context
+        )
+        
+        if not generated_message:
+            generated_message = f"Привет! Меня зовут {sender_name}. {message_context}\n\nНапиши мне @{sender_username} если интересно!"
+        
+        # Сохраняем в БД
+        msg = UserMessage(
+            sender_id=sender.id,
+            recipient_id=recipient.id,
+            message_text=generated_message,
+            intent=intent,
+            context=json.dumps({'original_request': message_context, 'sender_info': sender_info}, ensure_ascii=False),
+            status='sent',
+            is_ai_generated=True
+        )
+        session.add(msg)
+        session.commit()
+        
+        # Отправляем через Telegram
+        try:
+            _send_telegram_message_sync(
+                recipient.telegram_id,
+                f"📩 Сообщение от @{sender_username} ({intent_label}):\n\n{generated_message}\n\n"
+                f"💬 Чтобы ответить, напиши: «ответь @{sender_username} [твой ответ]»"
+            )
+            msg.status = 'delivered'
+            msg.delivered_at = datetime.utcnow()
+            session.commit()
+        except Exception as e:
+            logger.error(f"[SEND_MSG] Telegram delivery failed: {e}")
+            # Сообщение сохранено, доставим позже
+        
+        return (
+            f"✅ Сообщение отправлено @{recipient_clean}!\n"
+            f"Цель: {intent_label}\n"
+            f"Текст: {generated_message[:200]}{'...' if len(generated_message) > 200 else ''}"
+        )
+    
+    except Exception as e:
+        logger.error(f"[SEND_MSG] Error: {e}", exc_info=True)
+        return f"❌ Ошибка отправки: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def find_and_message_relevant_users(
+    purpose: str,
+    message_context: str,
+    match_by: str = "interests",
+    limit: int = 3,
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Найти релевантных пользователей по интересам/задачам/навыкам и отправить им сообщение.
+    AI ищет людей с похожими интересами, целями или навыками и предлагает связь.
+    
+    Args:
+        purpose: Цель поиска и сообщения (в свободной форме): 
+                 'найти партнёра для стартапа', 'кто тоже бегает', 'нужен дизайнер'
+        message_context: Что хочешь предложить/спросить у найденных людей
+        match_by: По чему искать: interests (интересы), skills (навыки), 
+                  goals (цели), tasks (похожие задачи), city (город), all (всё)
+        limit: Максимум людей для отправки (1-5)
+        user_id: telegram_id инициатора
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[FIND_MSG] user={user_id}, purpose='{purpose}', match_by={match_by}, limit={limit}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        sender = session.query(User).filter_by(telegram_id=user_id).first()
+        if not sender:
+            return "❌ Пользователь не найден"
+        
+        sender_profile = session.query(UserProfile).filter_by(user_id=sender.id).first()
+        sender_name = sender.first_name or sender.username or "Пользователь"
+        sender_username = sender.username or ""
+        
+        sender_info = sender_name
+        if sender_profile:
+            if sender_profile.position:
+                sender_info += f", {sender_profile.position}"
+            if sender_profile.company:
+                sender_info += f" в {sender_profile.company}"
+            if sender_profile.city:
+                sender_info += f" ({sender_profile.city})"
+        
+        limit = min(max(limit, 1), 5)
+        
+        # Извлекаем ключевые слова из purpose
+        stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'найти', 'ищу', 'кто', 'нужен', 'для', 'в', 'на', 'с', 'по'}
+        keywords = set()
+        for w in purpose.lower().split():
+            clean = w.strip('.,!?()[]')
+            if len(clean) >= 2 and clean not in stop_words:
+                keywords.add(clean)
+        
+        if not keywords:
+            return "❌ Не удалось определить ключевые слова из запроса. Опиши подробнее, кого ищешь."
+        
+        # Собираем кандидатов
+        candidates = []
+        all_profiles = session.query(UserProfile).join(User).filter(
+            User.id != sender.id,
+            User.telegram_id.isnot(None)
+        ).all()
+        
+        for profile in all_profiles:
+            user = session.query(User).filter_by(id=profile.user_id).first()
+            if not user or not user.telegram_id:
+                continue
+            
+            # Проверяем блокировку
+            if profile.blocked_contacts:
+                try:
+                    blocked = json.loads(profile.blocked_contacts)
+                    if sender_username in blocked or str(user_id) in blocked:
+                        continue
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            score = 0
+            match_reasons = []
+            
+            # Поиск по интересам
+            if match_by in ('interests', 'all') and profile.interests:
+                interests_lower = profile.interests.lower()
+                for kw in keywords:
+                    if kw in interests_lower:
+                        score += 3
+                        match_reasons.append(f"интересы: {kw}")
+            
+            # Поиск по навыкам
+            if match_by in ('skills', 'all') and profile.skills:
+                skills_lower = profile.skills.lower()
+                for kw in keywords:
+                    if kw in skills_lower:
+                        score += 3
+                        match_reasons.append(f"навыки: {kw}")
+            
+            # Поиск по целям
+            if match_by in ('goals', 'all') and profile.goals:
+                goals_lower = profile.goals.lower()
+                for kw in keywords:
+                    if kw in goals_lower:
+                        score += 2
+                        match_reasons.append(f"цели: {kw}")
+            
+            # Поиск по городу
+            if match_by in ('city', 'all') and profile.city and sender_profile:
+                if sender_profile.city and profile.city.lower() == sender_profile.city.lower():
+                    score += 1
+                    match_reasons.append(f"город: {profile.city}")
+            
+            # Поиск по задачам
+            if match_by in ('tasks', 'all'):
+                user_tasks = session.query(Task).filter_by(
+                    user_id=user.id, status='pending'
+                ).limit(10).all()
+                for task in user_tasks:
+                    task_text = (task.title + ' ' + (task.description or '')).lower()
+                    for kw in keywords:
+                        if kw in task_text:
+                            score += 2
+                            match_reasons.append(f"задача: {task.title[:30]}")
+                            break
+            
+            if score > 0:
+                candidates.append({
+                    'user': user,
+                    'profile': profile,
+                    'score': score,
+                    'reasons': match_reasons[:3]  # макс 3 причины
+                })
+        
+        # Сортируем по score и берём top N
+        candidates.sort(key=lambda x: x['score'], reverse=True)
+        top = candidates[:limit]
+        
+        if not top:
+            return (
+                f"🔍 Не нашёл подходящих пользователей по запросу: «{purpose}».\n"
+                "Пока мало людей с такими интересами. Попробуй расширить поиск или подожди — "
+                "я уведомлю когда появится подходящий человек (contact_alert)."
+            )
+        
+        # Антиспам: общий лимит 10 исходящих в день
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        total_sent_today = session.query(UserMessage).filter(
+            UserMessage.sender_id == sender.id,
+            UserMessage.created_at >= today_start
+        ).count()
+        
+        remaining = max(0, 10 - total_sent_today)
+        if remaining == 0:
+            return "⚠️ Дневной лимит исходящих сообщений (10) исчерпан. Попробуй завтра."
+        
+        top = top[:remaining]
+        
+        # Отправляем сообщения
+        sent_results = []
+        for cand in top:
+            recipient = cand['user']
+            recipient_profile = cand['profile']
+            recipient_name = recipient.first_name or recipient.username or "Пользователь"
+            reasons_str = ', '.join(cand['reasons'])
+            
+            generated = _generate_user_message_sync(
+                sender_name=sender_info,
+                sender_username=sender_username,
+                recipient_name=recipient_name,
+                intent_label=f"у вас общее: {reasons_str}",
+                message_context=message_context
+            )
+            
+            if not generated:
+                generated = f"Привет, {recipient_name}! Я {sender_info}. {message_context}\nНапиши @{sender_username} если интересно!"
+            
+            # Сохраняем
+            msg = UserMessage(
+                sender_id=sender.id,
+                recipient_id=recipient.id,
+                message_text=generated,
+                intent='auto_match',
+                context=json.dumps({
+                    'purpose': purpose, 
+                    'match_reasons': cand['reasons'],
+                    'score': cand['score'],
+                    'original_message': message_context
+                }, ensure_ascii=False),
+                status='sent',
+                is_ai_generated=True
+            )
+            session.add(msg)
+            session.commit()
+            
+            # Отправляем
+            try:
+                _send_telegram_message_sync(
+                    recipient.telegram_id,
+                    f"🤝 Вам написал @{sender_username} — у вас общее ({reasons_str}):\n\n"
+                    f"{generated}\n\n"
+                    f"💬 Ответить: «ответь @{sender_username} [текст]»"
+                )
+                msg.status = 'delivered'
+                msg.delivered_at = datetime.utcnow()
+                session.commit()
+                sent_results.append(f"✅ @{recipient.username or recipient_name} — {reasons_str}")
+            except Exception as e:
+                logger.error(f"[FIND_MSG] Delivery to {recipient.telegram_id} failed: {e}")
+                sent_results.append(f"⏳ @{recipient.username or recipient_name} — сохранено, доставлю позже")
+        
+        result = f"🔍 Найдено совпадений: {len(candidates)} | Отправлено: {len(sent_results)}\n\n"
+        result += '\n'.join(sent_results)
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"[FIND_MSG] Error: {e}", exc_info=True)
+        return f"❌ Ошибка поиска/отправки: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def reply_to_user_message(
+    recipient_username: str,
+    reply_text: str,
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Ответить на сообщение от другого пользователя.
+    Используется когда пользователь говорит: 'ответь @username ...'
+    
+    Args:
+        recipient_username: Username того, кому отвечаем
+        reply_text: Текст ответа
+        user_id: telegram_id отвечающего
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[REPLY_MSG] user={user_id} → @{recipient_username}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        replier = session.query(User).filter_by(telegram_id=user_id).first()
+        if not replier:
+            return "❌ Пользователь не найден"
+        
+        recipient_clean = recipient_username.lstrip('@').strip()
+        original_sender = session.query(User).filter(
+            or_(
+                func.lower(User.username) == func.lower(recipient_clean),
+                func.lower(User.first_name) == func.lower(recipient_clean)
+            )
+        ).first()
+        
+        if not original_sender:
+            return f"❌ Пользователь @{recipient_clean} не найден"
+        
+        # Находим последнее входящее сообщение от этого пользователя
+        last_msg = session.query(UserMessage).filter(
+            UserMessage.sender_id == original_sender.id,
+            UserMessage.recipient_id == replier.id,
+            UserMessage.status.in_(['sent', 'delivered', 'read'])
+        ).order_by(UserMessage.created_at.desc()).first()
+        
+        replier_name = replier.first_name or replier.username or "Пользователь"
+        replier_username = replier.username or ""
+        
+        # Обновляем статус оригинального сообщения
+        if last_msg:
+            last_msg.status = 'replied'
+            last_msg.reply_text = reply_text
+            last_msg.replied_at = datetime.utcnow()
+        
+        # Сохраняем ответ как новое сообщение
+        reply_msg = UserMessage(
+            sender_id=replier.id,
+            recipient_id=original_sender.id,
+            message_text=reply_text,
+            intent='reply',
+            context=json.dumps({'reply_to_msg_id': last_msg.id if last_msg else None}, ensure_ascii=False),
+            status='sent',
+            is_ai_generated=False  # Ответ написан пользователем
+        )
+        session.add(reply_msg)
+        session.commit()
+        
+        # Отправляем через Telegram
+        original_context = ""
+        if last_msg:
+            try:
+                ctx = json.loads(last_msg.context) if last_msg.context else {}
+                original_context = ctx.get('original_request', '')
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        try:
+            # Уведомляем отправителя об ответе с контекстом
+            context_line = f"\nНа ваше: {last_msg.message_text[:100]}..." if last_msg else ""
+            _send_telegram_message_sync(
+                original_sender.telegram_id,
+                f"💬 Ответ от @{replier_username}:{context_line}\n\n{reply_text}\n\n"
+                f"📝 Чтобы продолжить диалог, напиши: «напиши @{replier_username} ...»"
+            )
+            reply_msg.status = 'delivered'
+            reply_msg.delivered_at = datetime.utcnow()
+            session.commit()
+        except Exception as e:
+            logger.error(f"[REPLY_MSG] Delivery failed: {e}")
+        
+        return f"✅ Ответ отправлен @{recipient_clean}. Они могут продолжить диалог через меня."
+    
+    except Exception as e:
+        logger.error(f"[REPLY_MSG] Error: {e}", exc_info=True)
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def _generate_user_message_sync(sender_name, sender_username, recipient_name, intent_label, message_context):
+    """Генерирует персонализированное сообщение через DeepSeek (синхронно)."""
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+    
+    try:
+        prompt = f"""Сгенерируй короткое дружелюбное сообщение для отправки через AI-ассистента.
+
+Отправитель: {sender_name} (@{sender_username})
+Получатель: {recipient_name}
+Цель: {intent_label}
+Контекст от отправителя: {message_context}
+
+Правила:
+— 2-4 предложения, неформально но вежливо
+— Представь отправителя кратко
+— Объясни суть (что предлагает / о чём хочет поговорить)
+— Закончи призывом к ответу
+— НЕ пиши от первого лица AI, пиши от имени отправителя
+— НЕ используй скобки, маркеры списка, звёздочки"""
+
+        resp = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": DEEPSEEK_MODEL or "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.8,
+                "max_tokens": 300
+            },
+            timeout=15
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            return data['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        logger.error(f"[GEN_MSG] AI generation failed: {e}")
+    
+    return None
+
+
+def _send_telegram_message_sync(chat_id, text):
+    """Отправляет сообщение в Telegram синхронно."""
+    from config import TELEGRAM_TOKEN
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    resp = requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=10)
+    if resp.status_code != 200:
+        raise Exception(f"Telegram API error: {resp.status_code} {resp.text[:200]}")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ПРОЦЕСС ДИАЛОГА: входящие, статусы, follow-up
+# ═══════════════════════════════════════════════════════════════
+
+def get_incoming_messages(
+    status_filter: str = "unread",
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Показать входящие сообщения от других пользователей.
+    Вызывай проактивно в начале разговора или когда пользователь спрашивает про сообщения.
+    
+    Args:
+        status_filter: Фильтр: unread (непрочитанные), all (все), replied (отвеченные)
+        user_id: telegram_id пользователя
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[INBOX] user={user_id}, filter={status_filter}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+        
+        query = session.query(UserMessage).filter(
+            UserMessage.recipient_id == user.id
+        )
+        
+        if status_filter == "unread":
+            query = query.filter(UserMessage.status.in_(['sent', 'delivered']))
+        elif status_filter == "replied":
+            query = query.filter(UserMessage.status == 'replied')
+        
+        messages = query.order_by(UserMessage.created_at.desc()).limit(10).all()
+        
+        if not messages:
+            if status_filter == "unread":
+                return "📭 Нет новых сообщений"
+            return "📭 Нет сообщений"
+        
+        result_lines = []
+        for msg in messages:
+            sender = session.query(User).filter_by(id=msg.sender_id).first()
+            sender_name = f"@{sender.username}" if sender and sender.username else "Пользователь"
+            
+            intent_labels = {
+                'meeting': '📅 встреча',
+                'collaboration': '🤝 сотрудничество', 
+                'idea': '💡 идея',
+                'project_invite': '🚀 приглашение в проект',
+                'question': '❓ вопрос',
+                'reply': '💬 ответ'
+            }
+            intent_str = intent_labels.get(msg.intent, msg.intent or '')
+            
+            time_ago = ""
+            if msg.created_at:
+                delta = datetime.utcnow() - msg.created_at
+                if delta.days > 0:
+                    time_ago = f"{delta.days}д назад"
+                elif delta.seconds // 3600 > 0:
+                    time_ago = f"{delta.seconds // 3600}ч назад"
+                else:
+                    time_ago = f"{delta.seconds // 60}мин назад"
+            
+            status_icon = {"sent": "🔵", "delivered": "🔵", "read": "👁", "replied": "✅", "declined": "❌"}.get(msg.status, "")
+            
+            line = f"{status_icon} {sender_name} ({intent_str}, {time_ago}): {msg.message_text[:150]}{'...' if len(msg.message_text) > 150 else ''}"
+            result_lines.append(line)
+            
+            # Помечаем как прочитанные
+            if msg.status in ('sent', 'delivered'):
+                msg.status = 'read'
+        
+        session.commit()
+        
+        return f"📬 Входящие ({len(messages)}):\n\n" + "\n\n".join(result_lines)
+    
+    except Exception as e:
+        logger.error(f"[INBOX] Error: {e}", exc_info=True)
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def get_message_status(
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Показать статус отправленных сообщений — кто прочитал, кто ответил, кто молчит.
+    Вызывай когда пользователь спрашивает 'ответил ли?', 'что с сообщением?', 'статус'.
+    
+    Args:
+        user_id: telegram_id пользователя
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[MSG_STATUS] user={user_id}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+        
+        # Последние 10 отправленных
+        messages = session.query(UserMessage).filter(
+            UserMessage.sender_id == user.id
+        ).order_by(UserMessage.created_at.desc()).limit(10).all()
+        
+        if not messages:
+            return "📭 Нет отправленных сообщений"
+        
+        result_lines = []
+        for msg in messages:
+            recipient = session.query(User).filter_by(id=msg.recipient_id).first()
+            recipient_name = f"@{recipient.username}" if recipient and recipient.username else "Пользователь"
+            
+            time_ago = ""
+            if msg.created_at:
+                delta = datetime.utcnow() - msg.created_at
+                if delta.days > 0:
+                    time_ago = f"{delta.days}д назад"
+                elif delta.seconds // 3600 > 0:
+                    time_ago = f"{delta.seconds // 3600}ч назад"
+                else:
+                    time_ago = f"{delta.seconds // 60}мин назад"
+            
+            status_map = {
+                'sent': '📤 Отправлено',
+                'delivered': '📬 Доставлено',
+                'read': '👁 Прочитано',
+                'replied': '✅ Ответил',
+                'declined': '❌ Отклонено'
+            }
+            status_str = status_map.get(msg.status, msg.status)
+            
+            line = f"→ {recipient_name} ({time_ago}): {status_str}"
+            if msg.status == 'replied' and msg.reply_text:
+                line += f"\n  Ответ: {msg.reply_text[:100]}{'...' if len(msg.reply_text) > 100 else ''}"
+            
+            # Проверяем ответные сообщения (reply intent)
+            if msg.status != 'replied':
+                reply_msg = session.query(UserMessage).filter(
+                    UserMessage.sender_id == msg.recipient_id,
+                    UserMessage.recipient_id == user.id,
+                    UserMessage.intent == 'reply',
+                    UserMessage.created_at > msg.created_at
+                ).first()
+                if reply_msg:
+                    line += f"\n  💬 Ответ: {reply_msg.message_text[:100]}{'...' if len(reply_msg.message_text) > 100 else ''}"
+                    msg.status = 'replied'
+                    msg.reply_text = reply_msg.message_text
+                    msg.replied_at = reply_msg.created_at
+            
+            result_lines.append(line)
+        
+        session.commit()
+        
+        return f"📊 Отправленные сообщения ({len(messages)}):\n\n" + "\n\n".join(result_lines)
+    
+    except Exception as e:
+        logger.error(f"[MSG_STATUS] Error: {e}", exc_info=True)
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
