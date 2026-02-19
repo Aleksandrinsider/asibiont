@@ -3385,6 +3385,99 @@ def list_goals(status_filter=None, user_id=None, session=None):
             session.close()
 
 
+def delete_goal(goal_title=None, user_id=None, session=None):
+    """Удалить цель пользователя
+    
+    Args:
+        goal_title: Название или ключевые слова цели для поиска. 'all' — удалить все цели.
+        user_id: Telegram ID
+        session: SQLAlchemy session
+    """
+    if not goal_title:
+        return "Укажи название цели для удаления или 'все' чтобы удалить все."
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        # Удалить все цели
+        if goal_title.lower().strip() in ('all', 'все', 'всё'):
+            goals = session.query(Goal).filter(
+                Goal.user_id == user.id,
+                Goal.status.in_(['active', 'paused'])
+            ).all()
+            if not goals:
+                return "У тебя нет активных целей."
+            count = len(goals)
+            for g in goals:
+                session.delete(g)
+            # Очистить goals в профиле
+            try:
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile:
+                    profile.goals = ''
+            except Exception:
+                pass
+            session.commit()
+            return f"Удалено целей: {count}. Чистый лист — можно ставить новые!"
+        
+        # Поиск конкретной цели
+        goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status.in_(['active', 'paused'])
+        ).all()
+        
+        if not goals:
+            return "У тебя нет активных целей."
+        
+        search = goal_title.lower()
+        matched = None
+        for g in goals:
+            if search in g.title.lower() or (g.description and search in g.description.lower()):
+                matched = g
+                break
+        
+        if not matched:
+            for g in goals:
+                title_words = g.title.lower().split()
+                if any(w in search for w in title_words if len(w) > 2):
+                    matched = g
+                    break
+        
+        if not matched:
+            titles = ', '.join(f'"{g.title}"' for g in goals[:5])
+            return f"Цель \"{goal_title}\" не найдена. Активные цели: {titles}"
+        
+        title = matched.title
+        session.delete(matched)
+        
+        # Убрать из profile.goals
+        try:
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile and profile.goals:
+                parts = [p.strip() for p in profile.goals.split(';') if title.lower() not in p.strip().lower()]
+                profile.goals = '; '.join(parts) if parts else ''
+        except Exception:
+            pass
+        
+        session.commit()
+        return f"Цель \"{title}\" удалена."
+    
+    except Exception as e:
+        logger.error(f"Error deleting goal for user {user_id}: {e}")
+        return f"Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 def _progress_bar(pct):
     """Визуальная полоска прогресса"""
     filled = int(pct / 10)

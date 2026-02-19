@@ -566,6 +566,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "delete_goal",
+            "description": "❌ УДАЛИТЬ ЦЕЛЬ: Удалить цель пользователя по названию или все цели сразу. Ключевые слова: 'удали цель', 'убери цель', 'удали все цели'. Примеры: 'удали цель тестирование' → delete_goal(goal_title='тестирование'), 'удали все цели' → delete_goal(goal_title='все')",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal_title": {
+                        "type": "string",
+                        "description": "Название или ключевые слова цели. 'все' или 'all' — удалить все цели."
+                    }
+                },
+                "required": ["goal_title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "update_goal_progress",
             "description": "📊 ОБНОВИТЬ ПРОГРЕСС ЦЕЛИ: Изменить процент, статус или добавить заметку к цели. Ключевые слова: 'прогресс по цели', 'я продвинулся', 'обнови цель', 'завершил цель', 'приостанови цель'. Примеры: 'прогресс по Python 40%' → update_goal_progress(goal_title='Python', progress=40), 'завершил цель марафон' → update_goal_progress(goal_title='марафон', status='completed')",
             "parameters": {

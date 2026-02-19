@@ -163,6 +163,7 @@ class HybridAutonomousAgent:
         'update_profile': 'Обновляю профиль...',
         'get_user_goals': 'Проверяю цели...',
         'create_goal': 'Создаю цель...',
+        'delete_goal': 'Удаляю цель...',
         'generate_post': 'Пишу пост...',
         'create_post': 'Публикую пост...',
         'edit_post': 'Редактирую пост...',
