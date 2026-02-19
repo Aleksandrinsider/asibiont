@@ -33,6 +33,7 @@
         "step": [
             {"@type": "HowToStep", "name": "Регистрация", "text": "Откройте бота в Telegram для регистрации"},
             {"@type": "HowToStep", "name": "Создание задач", "text": "Просто скажите боту, что нужно сделать — он создаст задачу"},
+            {"@type": "HowToStep", "name": "Поручения и переговоры", "text": "Агент сам договорится за вас: встречи, проекты, согласования"},
             {"@type": "HowToStep", "name": "Делегирование", "text": "Поручите задачу другому пользователю через естественный диалог"},
             {"@type": "HowToStep", "name": "Автопостинг", "text": "Настройте контент-стратегию и публикации в канал"}
         ]
@@ -218,33 +219,33 @@
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
-            <!-- Ряд 5: Поручения и переписка -->
+            <!-- Ряд 5: Поручения и переговоры -->
             <!-- ═══════════════════════════════════════════ -->
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Сообщения</h2>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Неформальный диалог</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Вопросы, приглашения, уточнения</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Поручения</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Агент договаривается за вас</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Встречи, проекты, согласования</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
-                        «Напиши @ivan, что встреча перенесена на 16:00» — агент передаст. «Спроси у @anna, готов ли макет» — отправит вопрос и доставит ответ.
+                        «Договорись с @ivan о встрече на следующей неделе» — агент сам напишет, предложит время и зафиксирует договорённость. «Предложи @anna сотрудничество по проекту» — составит персональное предложение.
                     </div>
                 </div>
 
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Рассылка</h2>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">По интересам и навыкам</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Найти и отправить</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Умная рассылка</h2>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Найдёт и договорится</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">По навыкам, интересам, целям</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
-                        «Пригласи всех, кто занимается спортом, на пробежку в субботу» — найдёт подходящих и отправит. «Напиши всем дизайнерам про проект» — массовая рассылка.
+                        «Найди дизайнеров и предложи им проект» — найдёт подходящих, составит персональное сообщение каждому и отправит. Антиспам: макс 3 сообщения в день одному человеку.
                     </div>
                 </div>
 
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                     <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Входящие</h2>
                     <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">Ответы и статусы</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Контроль доставки</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">Контроль переговоров</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 0;">
-                        «Есть ли новые сообщения?» — покажет входящие. «Доставлено ли сообщение @ivan?» — статус. «Ответь @ivan, что буду» — отправит ответ.
+                        «Есть ли ответы?» — покажет входящие предложения и ответы на ваши поручения. «Ответь @ivan, что согласен» — продолжит диалог. Трекинг: отправлено → доставлено → прочитано → отвечено.
                     </div>
                 </div>
             </div>
