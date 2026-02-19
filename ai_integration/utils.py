@@ -459,8 +459,8 @@ def get_weather_info(city, cache_ttl_minutes=30):
         logger.info(f"[WEATHER CACHE] Using memory cached weather for {city}")
         refresh_weather_cache_async(city, cache_ttl_minutes)
         return cached_data
-    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
-    logger.info(f"[WEATHER] No cache for {city}, loading synchronously")
+    # Нет данных в кэше - загружаем синхронно (только при первом запросе, deprecated path)
+    logger.info(f"[WEATHER] No cache for {city}, loading synchronously (deprecated)")
     return _load_weather_sync(city)
 
 
@@ -531,8 +531,8 @@ def get_news_info(city=None, cache_ttl_minutes=120):
         logger.info(f"[NEWS CACHE] Using memory cached news for {cache_key}")
         refresh_news_cache_async(city, cache_ttl_minutes)
         return cached_data
-    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
-    logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously")
+    # Нет данных в кэше - загружаем синхронно (только при первом запросе, deprecated path)
+    logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously (deprecated)")
     return _load_news_sync(city)
 
 

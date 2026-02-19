@@ -5926,7 +5926,7 @@ async def publish_to_telegram(content: str, user_id: int, session):
         try:
             import json
             content_data = json.loads(content)
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             content_data = content
         
         result = await marketing_agent.publish_to_telegram(
@@ -7438,7 +7438,9 @@ def get_incoming_messages(
             
             time_ago = ""
             if msg.created_at:
-                delta = datetime.utcnow() - msg.created_at
+                now = datetime.utcnow()
+                created = msg.created_at.replace(tzinfo=None) if msg.created_at.tzinfo else msg.created_at
+                delta = now - created
                 if delta.days > 0:
                     time_ago = f"{delta.days}д назад"
                 elif delta.seconds // 3600 > 0:
@@ -7446,7 +7448,7 @@ def get_incoming_messages(
                 else:
                     time_ago = f"{delta.seconds // 60}мин назад"
             
-            status_icon = {"sent": "🔵", "delivered": "🔵", "read": "👁", "replied": "✅", "declined": "❌"}.get(msg.status, "")
+            status_icon = {"sent": "🟢", "delivered": "🟢", "read": "👁", "replied": "✅", "declined": "❌"}.get(msg.status, "")
             
             line = f"{status_icon} {sender_name} ({intent_str}, {time_ago}): {msg.message_text[:150]}{'...' if len(msg.message_text) > 150 else ''}"
             result_lines.append(line)
@@ -7507,7 +7509,9 @@ def get_message_status(
             
             time_ago = ""
             if msg.created_at:
-                delta = datetime.utcnow() - msg.created_at
+                now = datetime.utcnow()
+                created = msg.created_at.replace(tzinfo=None) if msg.created_at.tzinfo else msg.created_at
+                delta = now - created
                 if delta.days > 0:
                     time_ago = f"{delta.days}д назад"
                 elif delta.seconds // 3600 > 0:
