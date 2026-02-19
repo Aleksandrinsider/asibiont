@@ -748,9 +748,12 @@ async def process_text_message(user_id, text, message, state):
     except Exception as e:
         logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
         import traceback
-        logger.error(f"FULL TRACEBACK: {traceback.format_exc()}")
+        error_detail = traceback.format_exc()
+        logger.error(f"FULL TRACEBACK: {error_detail}")
         try:
-            await message.bot.send_message(message.chat.id, "Произошла техническая ошибка. Попробуй написать ещё раз.")
+            # Показываем детали ошибки для отладки
+            short_error = str(e)[:300]
+            await message.bot.send_message(message.chat.id, f"⚠️ Ошибка: {short_error}\n\nПопробуй написать ещё раз.")
         except Exception:
             pass
 
