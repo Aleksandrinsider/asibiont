@@ -558,6 +558,7 @@ async def process_text_message(user_id, text, message, state):
         logger.info(f"[DEDUP] Message registered: msg_id={message_id}, user={user_id}, cache_size={len(message_cache)}")
 
     try:
+        logger.info(f"[PTM] Step 1: checking user {user_id}")
         session = Session()
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -572,6 +573,7 @@ async def process_text_message(user_id, text, message, state):
                 is_first_message = True
         finally:
             session.close()
+        logger.info(f"[PTM] Step 1 done, is_first={is_first_message}")
 
         # Новый пользователь — сначала показываем описание и тарифы
         if is_first_message:
@@ -621,6 +623,7 @@ async def process_text_message(user_id, text, message, state):
             return
 
         # СОХРАНЯЕМ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ СРАЗУ
+        logger.info(f"[PTM] Step 2: saving user message")
         session = Session()
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -678,12 +681,14 @@ async def process_text_message(user_id, text, message, state):
                 logger.warning(f"Progress callback error: {e}")
         
         # Use autonomous agent instead of command router
+        logger.info(f"[PTM] Step 3: calling chat_with_ai")
         from ai_integration import chat_with_ai
         db_session = Session()
         response_text = ""
         try:
             result = await chat_with_ai(text, context=context, user_id=user_id, db_session=db_session, progress_callback=progress_callback)
             response_text = result.get('response', '') if isinstance(result, dict) else str(result)
+            logger.info(f"[PTM] Step 3a: got response, len={len(response_text)}")
             
             # Удаляем прогресс-сообщение перед финальным ответом
             if _progress_state['last_msg_id']:
@@ -718,6 +723,7 @@ async def process_text_message(user_id, text, message, state):
             db_session.close()
         
         # СОХРАНЯЕМ ОТВЕТ AI
+        logger.info(f"[PTM] Step 4: saving AI response")
         try:
             session = Session()
             try:
@@ -741,6 +747,8 @@ async def process_text_message(user_id, text, message, state):
             logger.error(f"Failed to save AI response for {user_id}: {e}")
     except Exception as e:
         logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
+        import traceback
+        logger.error(f"FULL TRACEBACK: {traceback.format_exc()}")
         try:
             await message.bot.send_message(message.chat.id, "Произошла техническая ошибка. Попробуй написать ещё раз.")
         except Exception:
