@@ -649,13 +649,14 @@ async def process_text_message(user_id, text, message, state):
         _progress_state = {'last_msg_id': None}
         
         async def progress_callback(text):
-            """Отправляет или обновляет прогресс-сообщение в Telegram"""
+            """Отправляет или обновляет прогресс-сообщение в Telegram с многоточием"""
+            display_text = f"{text} ..." if text and not text.endswith('...') else text
             try:
                 if _progress_state['last_msg_id']:
                     # Обновляем существующее сообщение (не спамим чат)
                     try:
                         await bot.edit_message_text(
-                            text=text,
+                            text=display_text,
                             chat_id=chat_id,
                             message_id=_progress_state['last_msg_id']
                         )
@@ -663,7 +664,7 @@ async def process_text_message(user_id, text, message, state):
                     except Exception:
                         pass  # Если не удалось обновить — отправим новое
                 
-                sent = await bot.send_message(chat_id, text)
+                sent = await bot.send_message(chat_id, display_text)
                 _progress_state['last_msg_id'] = sent.message_id
             except Exception as e:
                 logger.warning(f"Progress callback error: {e}")

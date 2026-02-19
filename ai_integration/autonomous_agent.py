@@ -148,43 +148,43 @@ class HybridAutonomousAgent:
         return "auto"
 
     _TOOL_PROGRESS_MAP = {
-        'list_tasks': 'Смотрю задачи ...',
-        'add_task': 'Создаю задачу ...',
-        'complete_task': 'Завершаю задачу ...',
-        'edit_task': 'Обновляю задачу ...',
-        'delete_task': 'Удаляю задачу ...',
-        'skip_task': 'Пропускаю задачу ...',
-        'restore_task': 'Восстанавливаю задачу ...',
-        'quick_topic_search': 'Быстрый поиск ...',
-        'research_topic': 'Исследую тему ...',
-        'get_news_trends': 'Ищу новости ...',
-        'find_relevant_contacts_for_task': 'Ищу контакты ...',
-        'get_stock_info': 'Проверяю котировки ...',
-        'update_profile': 'Обновляю профиль ...',
-        'get_user_goals': 'Проверяю цели ...',
-        'create_goal': 'Создаю цель ...',
-        'generate_post': 'Пишу пост ...',
-        'create_post': 'Публикую пост ...',
-        'edit_post': 'Редактирую пост ...',
-        'get_posts': 'Смотрю посты ...',
-        'delete_post': 'Удаляю пост ...',
-        'delegate_task': 'Делегирую ...',
-        'get_delegation_progress': 'Проверяю делегирование ...',
-        'accept_delegated_task': 'Принимаю задачу ...',
-        'reject_delegated_task': 'Отклоняю задачу ...',
-        'check_time_conflicts': 'Проверяю конфликты ...',
-        'update_goal_progress': 'Обновляю цель ...',
-        'list_goals': 'Смотрю цели ...',
-        'set_contact_alert': 'Настраиваю мониторинг ...',
-        'set_content_strategy': 'Сохраняю стратегию ...',
-        'toggle_autonomous_feature': 'Настраиваю автономность ...',
+        'list_tasks': 'Смотрю задачи',
+        'add_task': 'Создаю задачу',
+        'complete_task': 'Завершаю задачу',
+        'edit_task': 'Обновляю задачу',
+        'delete_task': 'Удаляю задачу',
+        'skip_task': 'Пропускаю задачу',
+        'restore_task': 'Восстанавливаю задачу',
+        'quick_topic_search': 'Быстрый поиск',
+        'research_topic': 'Исследую тему',
+        'get_news_trends': 'Ищу новости',
+        'find_relevant_contacts_for_task': 'Ищу контакты',
+        'get_stock_info': 'Проверяю котировки',
+        'update_profile': 'Обновляю профиль',
+        'get_user_goals': 'Проверяю цели',
+        'create_goal': 'Создаю цель',
+        'generate_post': 'Пишу пост',
+        'create_post': 'Публикую пост',
+        'edit_post': 'Редактирую пост',
+        'get_posts': 'Смотрю посты',
+        'delete_post': 'Удаляю пост',
+        'delegate_task': 'Делегирую',
+        'get_delegation_progress': 'Проверяю делегирование',
+        'accept_delegated_task': 'Принимаю задачу',
+        'reject_delegated_task': 'Отклоняю задачу',
+        'check_time_conflicts': 'Проверяю конфликты',
+        'update_goal_progress': 'Обновляю цель',
+        'list_goals': 'Смотрю цели',
+        'set_contact_alert': 'Настраиваю мониторинг',
+        'set_content_strategy': 'Сохраняю стратегию',
+        'toggle_autonomous_feature': 'Настраиваю автономность',
     }
 
     def _tool_progress_text(self, tool_name, iteration):
-        """Генерирует текст прогресса для Telegram по имени инструмента."""
-        text = self._TOOL_PROGRESS_MAP.get(tool_name, 'Работаю ...')
+        """Генерирует текст прогресса по имени инструмента."""
+        text = self._TOOL_PROGRESS_MAP.get(tool_name, 'Работаю')
         if iteration > 1:
-            text = 'Углубляюсь ...'
+            text = 'Углубляюсь'
         return text
 
     # ===== TOKEN BUDGET =====
@@ -842,16 +842,23 @@ class HybridAutonomousAgent:
             MAX_ITERATIONS = 4
             seen_tools = set()  # Для предотвращения дублей
 
-            # Прогресс в Telegram — "Думаю ..."
+            # Прогресс — "Думаю ..."
             if _cb:
                 try:
-                    await _cb('Думаю ...')
+                    await _cb('Думаю')
                 except Exception:
                     pass
 
             for iteration in range(MAX_ITERATIONS):
                 # Первая итерация может быть "required", остальные "auto"
                 tc = initial_tool_choice if iteration == 0 else "auto"
+
+                # Обновляем прогресс перед вызовом AI
+                if _cb and iteration > 0:
+                    try:
+                        await _cb('Анализирую')
+                    except Exception:
+                        pass
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,

@@ -1088,13 +1088,68 @@ async def profile_handler(request):
     return web.HTTPFound('/dashboard')
 
 
+# ═══ SSE Progress для WebChat ═══
+# In-memory хранилище очередей прогресса (user_id → asyncio.Queue)
+_chat_progress_queues = {}
+
+
+async def chat_progress_handler(request):
+    """SSE endpoint — стримит прогресс обработки сообщения на дашборд."""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+
+    response = web.StreamResponse(
+        status=200,
+        reason='OK',
+        headers={
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        }
+    )
+    await response.prepare(request)
+
+    # Создаём очередь если ещё нет
+    if user_id not in _chat_progress_queues:
+        _chat_progress_queues[user_id] = asyncio.Queue()
+
+    queue = _chat_progress_queues[user_id]
+
+    try:
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=60)
+            except asyncio.TimeoutError:
+                # keepalive
+                await response.write(b': keepalive\n\n')
+                continue
+
+            if msg is None:
+                # Сигнал завершения
+                break
+
+            data = json.dumps(msg, ensure_ascii=False)
+            await response.write(f'data: {data}\n\n'.encode('utf-8'))
+
+            if msg.get('type') == 'done':
+                break
+    except (ConnectionResetError, asyncio.CancelledError):
+        pass
+    finally:
+        # Очищаем очередь
+        _chat_progress_queues.pop(user_id, None)
+
+    return response
+
+
 async def chat_handler(request):
     try:
         session = await get_session(request)
         user_id = session.get('user_id')
         logger.info(f"Chat handler called, session user_id: {user_id}")
-        logger.info(f"Session keys: {list(session.keys())}")
-        logger.info(f"Session data: {dict(session)}")
 
         if not user_id:
             logger.warning("No user_id in session for chat")
@@ -1106,31 +1161,36 @@ async def chat_handler(request):
         file_content = None
         if file:
             # Read file content
-            file_content = file.file.read().decode('utf-8', errors='ignore')  # For text files, ignore errors for binary
+            file_content = file.file.read().decode('utf-8', errors='ignore')
             logger.info(f"File received: {file.filename}, size: {len(file_content)}")
         logger.info(f"Message received: {message}")
 
         # Load context from DB
         context = get_context_from_db(user_id, limit=10)
-        logger.info(f"Loaded context with {len(context)} message pairs from DB")
 
         logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
+
+        # ═══ Progress callback для SSE стриминга ═══
+        async def web_progress_callback(text):
+            """Отправляет прогресс в SSE очередь для дашборда."""
+            queue = _chat_progress_queues.get(user_id)
+            if queue:
+                await queue.put({'type': 'progress', 'text': text})
 
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
-            logger.info(f"User found: {user is not None}")
 
-            # КРИТИЧНО: Сохраняем сообщение пользователя ДО вызова AI
-            # Это гарантирует, что сообщение появится в истории даже если AI упадет
-            #  предотращает race condition с дубликатами
+            # Сохраняем сообщение пользователя ДО вызова AI
             save_context_to_db(user_id, message, None)
-            logger.info("User message saved to DB BEFORE AI call")
 
-            # Get AI response (will take time, so agent timestamp will be later)
+            # Get AI response с progress_callback
             try:
-                logger.info(f"Calling chat_with_ai with user_id: {user_id}")
-                ai_result = await chat_with_ai(message, context, user_id, file_content, db_session=session_db)
+                ai_result = await chat_with_ai(
+                    message, context, user_id, file_content,
+                    db_session=session_db,
+                    progress_callback=web_progress_callback
+                )
                 response = ai_result['response']
                 logger.info("AI response: %s...", response[:100])
             except Exception as e:
@@ -1151,6 +1211,11 @@ async def chat_handler(request):
                 logger.info("Saved AI response to database")
         finally:
             session_db.close()
+
+        # Сигнализируем SSE что ответ готов
+        queue = _chat_progress_queues.get(user_id)
+        if queue:
+            await queue.put({'type': 'done'})
 
         return web.json_response({'response': response})
     except Exception as e:
@@ -5456,6 +5521,7 @@ app.router.add_get('/dashboard', dashboard_handler)
 app.router.add_get('/tasks', tasks_handler)
 app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
+app.router.add_get('/chat/progress', chat_progress_handler)
 app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
 

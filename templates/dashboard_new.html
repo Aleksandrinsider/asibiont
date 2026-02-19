@@ -90,6 +90,19 @@
             overflow-y: auto;
         }
 
+        /* Typing indicator animation */
+        .typing-dots span {
+            animation: typingDot 1.4s infinite;
+            opacity: 0;
+        }
+        .typing-dots span:nth-child(1) { animation-delay: 0s; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingDot {
+            0%, 60%, 100% { opacity: 0; }
+            30% { opacity: 1; }
+        }
+
         /* Mobile adjustments */
         
     </style>
@@ -999,12 +1012,13 @@
             // Проверка на дубликаты: проверяем последние 5 сообщений по тексту и отправителю
             const existingMessages = Array.from(messages.querySelectorAll('.message'));
             const lastFiveMessages = existingMessages.slice(-5);
+            const plainText = text.replace(/\n/g, ' ').trim();  // для сравнения без форматирования
             for (const msg of lastFiveMessages) {
-                const msgText = msg.querySelector('.message-text')?.textContent || '';
+                const msgText = (msg.querySelector('.message-text')?.textContent || '').trim();
                 const msgSender = msg.classList.contains('ai') ? 'ai' : 'user';
                 
                 // Если найдено сообщение с таким же текстом и отправителем - это дубликат
-                if (msgText === processedText && msgSender === normalizedSender) {
+                if (msgText === plainText && msgSender === normalizedSender) {
                     return; // Не добавляем дубликат
                 }
             }
@@ -1085,13 +1099,17 @@
             const messages = document.getElementById('chat-messages');
             let typingDiv = document.getElementById('typing-indicator');
             if (typingDiv) {
-                typingDiv.querySelector('.typing-text').textContent = text || 'Думаю';
+                typingDiv.querySelector('.typing-label').textContent = text || 'Думаю';
                 return;
             }
             typingDiv = document.createElement('div');
             typingDiv.className = 'message ai typing-indicator';
             typingDiv.id = 'typing-indicator';
-            typingDiv.innerHTML = `<span class="typing-text" style="color: #6C727F; font-size: 13px;">${text || 'Думаю'}</span>`;
+            typingDiv.innerHTML = `
+                <span class="typing-text" style="color: #6C727F; font-size: 13px;">
+                    <span class="typing-label">${text || 'Думаю'}</span><span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
+                </span>
+            `;
             messages.appendChild(typingDiv);
             messages.scrollTop = messages.scrollHeight;
         }
@@ -1159,8 +1177,32 @@
             input.value = '';
             fileInput.value = '';
 
-            // Show loading animation
-            showTypingIndicator();
+            // Сразу показываем сообщение пользователя в чате
+            if (message) {
+                addMessage(message, 'user');
+            }
+
+            // Show loading animation после сообщения пользователя
+            showTypingIndicator('Думаю');
+
+            // Подключаемся к SSE для получения прогресса в реальном времени
+            let evtSource = null;
+            try {
+                evtSource = new EventSource('/chat/progress');
+                evtSource.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'progress' && data.text) {
+                            showTypingIndicator(data.text);
+                        }
+                    } catch(e) {}
+                };
+                evtSource.onerror = function() {
+                    if (evtSource) { evtSource.close(); evtSource = null; }
+                };
+            } catch(e) {
+                // SSE не поддерживается — будет просто "Думаю..."
+            }
 
             try {
                 const controller = new AbortController();
@@ -1179,13 +1221,12 @@
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
+                if (evtSource) { evtSource.close(); evtSource = null; }
                 hideTypingIndicator();
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
-                    // НЕ синхронизируем вручную - updateChat() каждые 3 сек подгрузит сообщения
-                    // Это предотвращает race condition и дублирование
-                    // updateChat() уже работает в фоне через setInterval
+                    // updateChat() каждые 3 сек подгрузит сообщения
                     
                     // Обновить список задач, профиль и контакты после отправки сообщения
                     setTimeout(async () => {
@@ -1201,6 +1242,7 @@
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
             } catch (error) {
+                if (evtSource) { evtSource.close(); evtSource = null; }
                 hideTypingIndicator();
                 addMessage('Ошибка: ' + error.message, 'ai');
             } finally {
