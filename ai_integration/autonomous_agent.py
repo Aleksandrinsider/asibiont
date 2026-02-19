@@ -178,6 +178,11 @@ class HybridAutonomousAgent:
         'set_contact_alert': 'Настраиваю мониторинг...',
         'set_content_strategy': 'Сохраняю стратегию...',
         'toggle_autonomous_feature': 'Настраиваю автономность...',
+        'send_message_to_user': 'Отправляю сообщение...',
+        'find_and_message_relevant_users': 'Ищу людей и пишу...',
+        'reply_to_user_message': 'Отвечаю на сообщение...',
+        'get_incoming_messages': 'Проверяю входящие...',
+        'get_message_status': 'Проверяю статус сообщений...',
     }
 
     def _tool_progress_text(self, tool_name, iteration):
