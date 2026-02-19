@@ -5600,7 +5600,7 @@ async def create_post(content: str, user_id: int, session=None):
         
         post_preview = content[:80] + '...' if len(content) > 80 else content
         logger.info(f"[CREATE_POST] User {user_id} published post #{post.id}: '{post_preview}'")
-        return f"✅ Пост #{post.id} опубликован в ленту новостей!\n\n«{post_preview}»\n\nТеперь все пользователи его увидят."
+        return f"✅ Пост #{post.id} опубликован в ленту новостей!\n\n«{post_preview}»\n\nСсылка на ленту: https://asibiont.ru/dashboard"
         
     except Exception as e:
         logger.error(f"[CREATE_POST] Error: {e}", exc_info=True)
@@ -5651,7 +5651,7 @@ async def edit_post(new_content: str, user_id: int, post_id: int = None, session
         
         new_preview = new_content[:80] + '...' if len(new_content) > 80 else new_content
         logger.info(f"[EDIT_POST] User {user_id} edited post #{post.id}")
-        return f"✅ Пост #{post.id} обновлён!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»"
+        return f"✅ Пост #{post.id} обновлён!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»\n\nСсылка на ленту: https://asibiont.ru/dashboard"
         
     except Exception as e:
         logger.error(f"[EDIT_POST] Error: {e}", exc_info=True)
