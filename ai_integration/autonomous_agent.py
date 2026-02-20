@@ -885,7 +885,7 @@ class HybridAutonomousAgent:
                     base_prompt += multi_context
                 
                 # ═══ ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ ═══
-                base_prompt += "\n\n[ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ]\nКороткие ответы пользователя (да, давай, создай, поставь, ок, го, сделай) = ПОДТВЕРЖДЕНИЕ твоего последнего предложения. Посмотри свой предыдущий ответ в истории и ВЫПОЛНИ то, что предложил. Не анализируй заново, не предлагай варианты — просто ДЕЙСТВУЙ.\nЕсли пользователь ЯВНО спрашивает о новостях или трендах — используй get_news_trends.\nЕсли пользователь упоминает дедлайн или время — используй add_task с reminder_time.\nЕсли пользователь говорит о долгосрочной цели — используй create_goal."
+                base_prompt += "\n\n[ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ]\nКороткие ответы пользователя (да, давай, создай, поставь, ок, го, сделай) = ПОДТВЕРЖДЕНИЕ твоего последнего предложения. Посмотри свой предыдущий ответ в истории и ВЫПОЛНИ то, что предложил. Не анализируй заново, не предлагай варианты — просто ДЕЙСТВУЙ.\nБУДЬ ПРОАКТИВНЫМ — вызывай 1-3 инструмента на КАЖДЫЙ ход диалога. Не жди прямых команд.\nПользователь рассказывает о себе/проекте → update_profile + research_topic(тренды в нише) + find_relevant_contacts_for_task.\nПользователь упоминает навыки/технологии → update_profile + research_topic(тренды).\nПользователь говорит о достижении → complete_task + update_goal_progress + предложи create_post.\nЗадача связана с людьми → find_relevant_contacts_for_task + set_contact_alert."
             except Exception as e:
                 logger.warning(f"[MULTI-AGENT] Context build failed: {e}")
             
@@ -958,7 +958,7 @@ class HybridAutonomousAgent:
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc, max_tokens=600)
+                    tool_choice=tc, max_tokens=800)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')
@@ -970,7 +970,7 @@ class HybridAutonomousAgent:
                     if iteration == 0 and not all_execution_results:
                         _profile_fields = ['city', 'goals', 'skills', 'interests']
                         _missing = sum(1 for f in _profile_fields if not profile_data.get(f))
-                        if _missing >= 3 and len(content.strip()) < 600:
+                        if _missing >= 2 and len(content.strip()) < 300:
                             logger.info(f"[AGENT] Short response ({len(content)} chars) for new user — retrying without tools")
                             # НЕ добавляем короткий ответ в историю — просто перезваниваем без tools
                             retry_messages = messages.copy()
@@ -1076,7 +1076,7 @@ class HybridAutonomousAgent:
                 "content": "Сформируй финальный ответ. ВАЖНО: перескажи данные из инструментов СВОИМИ СЛОВАМИ, вплети в живой разговорный текст. Не копируй формат, bullets, emoji-заголовки из результатов. Если инструмент не нашёл полезного — не упоминай это. Пиши сплошным текстом без списков."
             })
             final_resp = await self.call_ai(
-                messages, use_tools=False, temperature=0.7, max_tokens=600)
+                messages, use_tools=False, temperature=0.7, max_tokens=800)
             final_text = final_resp['choices'][0]['message'].get('content', '')
             return self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)
