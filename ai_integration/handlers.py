@@ -400,15 +400,20 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     # Create new task — время ОПЦИОНАЛЬНО
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
 
-    # Привязка к цели по названию
+    # Привязка к цели по названию (нечёткий поиск по словам)
     if goal_title:
         try:
             from models import Goal
-            goal = session.query(Goal).filter(
+            from sqlalchemy import and_
+            # Разбиваем на ключевые слова (>2 символов) и ищем все в названии
+            keywords = [w for w in goal_title.split() if len(w) > 2]
+            query = session.query(Goal).filter(
                 Goal.user_id == user.id,
-                Goal.title.ilike(f'%{goal_title}%'),
                 Goal.status != 'deleted'
-            ).first()
+            )
+            for kw in keywords:
+                query = query.filter(Goal.title.ilike(f'%{kw}%'))
+            goal = query.first()
             if goal:
                 task.goal_id = goal.id
                 logger.info(f"[ADD_TASK] Linked task to goal '{goal.title}' (id={goal.id})")
