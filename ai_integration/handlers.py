@@ -5185,6 +5185,23 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
                         updates.append(f"навык '{skills}' уже есть")
         
         if goals is not None:
+            # Серверная обрезка: если goals длиннее 50 символов — обрезаем разумно
+            if goals and len(goals.strip()) > 50:
+                truncated = goals.strip()[:50]
+                # Обрезаем по последнему разделителю (запятая, " и ", пробел)
+                for sep in [', ', ' и ', ' ']:
+                    idx = truncated.rfind(sep)
+                    if idx > 10:
+                        truncated = truncated[:idx]
+                        break
+                logger.info(f"[UPDATE_PROFILE] Goals truncated: '{goals}' -> '{truncated}'")
+                goals = truncated
+            # Чистим начальные глаголы: «использовать X» → «X», «создать Y» → «Y»
+            import re as _re_goals
+            goals = _re_goals.sub(
+                r'^(?:использовать|создать|разработать|внедрить|освоить|изучить|научиться|применять|запустить|начать|попробовать|сделать)\s+',
+                '', goals.strip(), flags=_re_goals.IGNORECASE
+            ).strip()
             # Валидация - для replace_mode позволяем пустые строки (удаление)
             if replace_mode and goals.strip() == "":
                 # Разрешаем пустую строку для удаления
