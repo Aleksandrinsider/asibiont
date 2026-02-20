@@ -5152,7 +5152,8 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
             garbage_patterns = [
                 'реально востребован', 'нужно', 'хочу', 'планирую', 'думаю',
                 'будет', 'можно', 'стоит', 'важно', 'интересно', 'отлично',
-                'работаю', 'знаю что', 'вижу что', 'понимаю', 'считаю'
+                'работаю', 'знаю что', 'вижу что', 'понимаю', 'считаю',
+                'и интересы', 'и цели', 'навыки)', 'цели)', 'профиль',
             ]
             if len(skills.strip()) < 2 or len(skills.strip()) > 200:
                 logger.warning(f"Invalid skills length: {len(skills)}")
@@ -5195,6 +5196,12 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
                 logger.warning(f"Invalid goals length: {len(goals)}")
             elif any(pattern in goals.lower() for pattern in ['<script', 'http://', 'https://', 'onclick', 'onerror']):
                 logger.warning(f"Invalid goals content (suspicious): {goals}")
+            elif any(g in goals.lower() for g in [
+                'обсудить', 'поговорить', 'узнать', 'спросить', 'понять',
+                'посмотреть', 'попробовать', 'подумать', 'разобраться',
+                'как его лучше', 'как лучше', 'чтобы ты', 'чтоб ты',
+            ]):
+                logger.warning(f"[UPDATE_PROFILE] Garbage goals rejected: '{goals}' — looks like conversational phrase, not a goal")
             else:
                 if replace_mode:
                     profile.goals = goals

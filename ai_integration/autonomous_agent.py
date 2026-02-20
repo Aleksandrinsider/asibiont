@@ -635,16 +635,22 @@ class HybridAutonomousAgent:
                 # «владею Python», «разбираюсь в ML», «специализируюсь на backend»,
                 # «занимаюсь разработкой», «мои скиллы: Python, Go»
                 skills_patterns = [
-                    r'навыки?[:\s]+([^.!?]+)',
+                    r'(?:мои\s+)?навыки?[:\s]+([^.!?]+)',
                     r'скилл[ыа]?[:\s]+([^.!?]+)',
                     r'(?:умею|знаю|владею|освоил[а]?)\s+([^.!?]+)',
                     r'(?:разбираюсь|специализируюсь)\s+(?:в|на)\s+([^.!?]+)',
+                ]
+                _skills_garbage = [
+                    'и интересы', 'и цели', 'навыки)', 'цели)', 'профиль',
+                    'нужно', 'будет', 'можно', 'стоит', 'важно', 'отлично',
+                    'знаю что', 'вижу что', 'понимаю', 'считаю',
                 ]
                 for pat in skills_patterns:
                     m = _re.search(pat, msg, _re.IGNORECASE)
                     if m:
                         val = m.group(1).strip().rstrip(',')
-                        if len(val) > 1:
+                        val_lower = val.lower()
+                        if len(val) > 1 and not any(val_lower.startswith(g) for g in _skills_garbage):
                             params['skills'] = val
                         break
                 
@@ -679,14 +685,20 @@ class HybridAutonomousAgent:
                 # «планирую переехать», «стремлюсь к 1 млн выручки»,
                 # «цели: запустить MVP, найти инвестора»
                 goals_patterns = [
-                    r'цел[иья][:\s—–-]+([^.!?]+)',
+                    r'(?:моя\s+)?цел[иья][:\s—–-]+([^.!?]+)',
                     r'(?:хочу|планирую|стремлюсь|мечтаю|собираюсь|намерен[а]?)\s+([^.!?]+)',
+                ]
+                _goals_garbage = [
+                    'обсудить', 'поговорить', 'узнать', 'спросить', 'понять',
+                    'посмотреть', 'попробовать', 'подумать', 'разобраться',
+                    'чтобы ты', 'чтоб ты', 'тебя попросить',
                 ]
                 for pat in goals_patterns:
                     m = _re.search(pat, msg, _re.IGNORECASE)
                     if m:
                         val = m.group(1).strip().rstrip(',')
-                        if len(val) > 2:
+                        val_lower = val.lower()
+                        if len(val) > 2 and not any(val_lower.startswith(g) for g in _goals_garbage):
                             params['goals'] = val
                         break
                 
