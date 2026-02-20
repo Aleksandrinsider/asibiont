@@ -1046,6 +1046,7 @@ async def dashboard_handler(request):
 
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
+            'bot_username': 'asibiont_bot',
             'tasks': tasks_dict,
             'user': user,
             'profile': profile,
