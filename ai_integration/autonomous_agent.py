@@ -148,49 +148,65 @@ class HybridAutonomousAgent:
         return "auto"
 
     _TOOL_PROGRESS_MAP = {
-        'list_tasks': 'Смотрю задачи...',
-        'add_task': 'Создаю задачу...',
-        'complete_task': 'Завершаю задачу...',
-        'edit_task': 'Обновляю задачу...',
-        'delete_task': 'Удаляю задачу...',
-        'skip_task': 'Пропускаю задачу...',
-        'restore_task': 'Восстанавливаю задачу...',
-        'quick_topic_search': 'Быстрый поиск...',
-        'research_topic': 'Исследую тему...',
-        'get_news_trends': 'Ищу новости...',
-        'find_relevant_contacts_for_task': 'Ищу контакты...',
-        'get_stock_info': 'Проверяю котировки...',
-        'update_profile': 'Обновляю профиль...',
-        'get_user_goals': 'Проверяю цели...',
-        'create_goal': 'Создаю цель...',
-        'delete_goal': 'Удаляю цель...',
-        'generate_post': 'Пишу пост...',
-        'create_post': 'Публикую пост...',
-        'edit_post': 'Редактирую пост...',
-        'get_posts': 'Смотрю посты...',
-        'delete_post': 'Удаляю пост...',
-        'delegate_task': 'Делегирую...',
-        'get_delegation_progress': 'Проверяю делегирование...',
-        'accept_delegated_task': 'Принимаю задачу...',
-        'reject_delegated_task': 'Отклоняю задачу...',
-        'check_time_conflicts': 'Проверяю конфликты...',
-        'update_goal_progress': 'Обновляю цель...',
-        'list_goals': 'Смотрю цели...',
-        'set_contact_alert': 'Настраиваю мониторинг...',
-        'set_content_strategy': 'Сохраняю стратегию...',
-        'toggle_autonomous_feature': 'Настраиваю автономность...',
-        'send_message_to_user': 'Отправляю сообщение...',
-        'find_and_message_relevant_users': 'Ищу людей и пишу...',
-        'reply_to_user_message': 'Отвечаю на сообщение...',
+        'list_tasks': 'Листаю ежедневник...',
+        'add_task': 'Вношу в план...',
+        'complete_task': 'Закрываю задачу...',
+        'edit_task': 'Корректирую план...',
+        'delete_task': 'Вычёркиваю из списка...',
+        'skip_task': 'Откладываю на потом...',
+        'restore_task': 'Возвращаю в строй...',
+        'quick_topic_search': 'Быстро проверяю...',
+        'research_topic': 'Копаю тему...',
+        'get_news_trends': 'Сканирую новостной фон...',
+        'find_relevant_contacts_for_task': 'Перебираю контакты...',
+        'get_stock_info': 'Сверяюсь с рынком...',
+        'update_profile': 'Запоминаю о тебе...',
+        'get_user_goals': 'Сверяю с целями...',
+        'create_goal': 'Фиксирую направление...',
+        'delete_goal': 'Снимаю с повестки...',
+        'generate_post': 'Набрасываю текст...',
+        'create_post': 'Отправляю в ленту...',
+        'edit_post': 'Вношу правки...',
+        'get_posts': 'Пролистываю ленту...',
+        'delete_post': 'Убираю из ленты...',
+        'delegate_task': 'Передаю исполнителю...',
+        'get_delegation_progress': 'Проверяю, как дела у исполнителя...',
+        'accept_delegated_task': 'Беру в работу...',
+        'reject_delegated_task': 'Отклоняю запрос...',
+        'check_time_conflicts': 'Сверяю с расписанием...',
+        'update_goal_progress': 'Обновляю прогресс...',
+        'list_goals': 'Открываю карту целей...',
+        'set_contact_alert': 'Ставлю на радар...',
+        'set_content_strategy': 'Запоминаю стратегию...',
+        'toggle_autonomous_feature': 'Перенастраиваю режим...',
+        'send_message_to_user': 'Пишу от твоего имени...',
+        'find_and_message_relevant_users': 'Ищу подходящих людей...',
+        'reply_to_user_message': 'Формулирую ответ...',
         'get_incoming_messages': 'Проверяю входящие...',
-        'get_message_status': 'Проверяю статус сообщений...',
+        'get_message_status': 'Смотрю, кто прочитал...',
     }
+
+    _THINKING_PHRASES = [
+        'Секунду, соображаю...',
+        'Дай подумать...',
+        'Уже прикидываю...',
+        'Сейчас разберусь...',
+        'Обдумываю...',
+    ]
+
+    _DEEP_THINKING_PHRASES = [
+        'Копаю глубже...',
+        'Ещё чуть-чуть...',
+        'Связываю факты...',
+        'Почти готово...',
+    ]
 
     def _tool_progress_text(self, tool_name, iteration):
         """Генерирует текст прогресса по имени инструмента."""
-        text = self._TOOL_PROGRESS_MAP.get(tool_name, 'Работаю...')
+        text = self._TOOL_PROGRESS_MAP.get(tool_name, '⚙️ Работаю...')
         if iteration > 1:
-            text = 'Углубляюсь...'
+            import random
+            text = random.choice(self._DEEP_THINKING_PHRASES)
         return text
 
     # ===== TOKEN BUDGET =====
@@ -851,10 +867,11 @@ class HybridAutonomousAgent:
             once_only_tools = {'create_post', 'add_task', 'delete_post', 'delegate_task'}
             used_once_only = set()
 
-            # Прогресс — "Думаю ..."
+            # Прогресс — живые фразы
             if _cb:
                 try:
-                    await _cb('Думаю...')
+                    import random
+                    await _cb(random.choice(self._THINKING_PHRASES))
                 except Exception:
                     pass
 
@@ -865,7 +882,8 @@ class HybridAutonomousAgent:
                 # Обновляем прогресс перед вызовом AI
                 if _cb and iteration > 0:
                     try:
-                        await _cb('Анализирую...')
+                        import random
+                        await _cb(random.choice(self._DEEP_THINKING_PHRASES))
                     except Exception:
                         pass
 
