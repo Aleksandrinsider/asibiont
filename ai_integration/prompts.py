@@ -168,8 +168,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         elif len(profile_missing) >= 2:
             profile_instruction = (
                 f"\n\nПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). "
-                f"ОБЯЗАТЕЛЬНО В КОНЦЕ ОТВЕТА задай живой вопрос о недостающем. "
-                f"Можешь дать ценность по теме + вопрос. Когда ответит — сразу update_profile.\n"
+                f"ОБЯЗАТЕЛЬНО В КОНЦЕ ОТВЕТА задай КОНКРЕТНЫЙ вопрос о недостающем поле — "
+                f"НЕ общий 'чем занимаешься', а именно про {profile_missing[0]}: "
+                f"например 'какая у тебя главная цель сейчас?' или 'какие навыки считаешь ключевыми?'. "
+                f"Вопрос вплетай в разговор. Когда ответит — сразу update_profile.\n"
             )
         else:
             profile_instruction = f"\n\nПрофиль почти полный (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"

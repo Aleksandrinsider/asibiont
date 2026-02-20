@@ -261,6 +261,16 @@ class ContextBuilder:
             if not tasks:
                 hints.append("ЗАДАЧ НЕТ")
 
+            # ═══ НЕПОЛНЫЙ ПРОФИЛЬ: подсказка ═══
+            if profile:
+                _missing = []
+                if not profile.goals: _missing.append('цели')
+                if not profile.skills: _missing.append('навыки')
+                if not profile.city: _missing.append('город')
+                if not profile.interests: _missing.append('интересы')
+                if _missing:
+                    hints.append(f"ПРОФИЛЬ НЕПОЛНЫЙ (не заполнено: {', '.join(_missing)}) — спроси у пользователя!")
+
             # ═══ ЦЕЛИ ═══
             from models import Goal
             active_goals = session.query(Goal).filter(
