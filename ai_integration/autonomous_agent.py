@@ -964,9 +964,11 @@ class HybridAutonomousAgent:
             all_execution_results = []
             MAX_ITERATIONS = 4
             seen_tools = set()  # Для предотвращения дублей
-            # Критичные инструменты — вызываются ТОЛЬКО 1 раз за сессию
-            once_only_tools = {'create_post', 'add_task', 'delete_post', 'delegate_task'}
+            # Критичные инструменты — лимит вызовов за сессию
+            once_only_tools = {'create_post', 'delete_post', 'delegate_task'}  # строго 1 раз
+            multi_limit_tools = {'add_task': 3}  # до 3 задач за ход (юзер может попросить несколько)
             used_once_only = set()
+            multi_limit_counts = {}
 
             # Прогресс — живые фразы
             if _cb:
@@ -1060,6 +1062,18 @@ class HybridAutonomousAgent:
                             })
                             continue
                         used_once_only.add(name)
+
+                    # Инструменты с лимитом >1 (add_task — до 3 за ход)
+                    if name in multi_limit_tools:
+                        multi_limit_counts[name] = multi_limit_counts.get(name, 0) + 1
+                        if multi_limit_counts[name] > multi_limit_tools[name]:
+                            logger.warning(f"[MULTI_LIMIT] Skipping {name} call #{multi_limit_counts[name]} (limit: {multi_limit_tools[name]})")
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc_item['id'],
+                                "content": json.dumps({"status": f"skipped: {name} limit reached ({multi_limit_tools[name]} per turn)"}, ensure_ascii=False)
+                            })
+                            continue
 
                     # ГИБРИДНЫЙ ПОДХОД: никаких keyword guards.
                     # AI сам решает какие инструменты вызывать.

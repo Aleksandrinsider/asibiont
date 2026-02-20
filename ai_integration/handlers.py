@@ -473,6 +473,11 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
                     parsed_time = parse_time_simple_fallback(reminder_time, current_time)
                 
                 if parsed_time:
+                    # НОЧНАЯ ЗАЩИТА: если время попало в 00:00-07:59, сдвигаем на 10:00 того же дня
+                    if 0 <= parsed_time.hour < 8:
+                        old_time = parsed_time.strftime('%H:%M')
+                        parsed_time = parsed_time.replace(hour=10, minute=0, second=0)
+                        logger.info(f"[ADD_TASK] Night guard: {old_time} -> 10:00 (shifted from night to morning)")
                     # Convert to UTC for storage
                     task.reminder_time = parsed_time.astimezone(pytz.UTC)
                     logger.info(f"[ADD_TASK] Time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
