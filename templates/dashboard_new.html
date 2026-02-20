@@ -198,6 +198,7 @@
             const indicator = document.getElementById('profile-update-indicator');
             if (!content) return; // nothing to toggle
             
+            const peopleList = document.getElementById('people-list');
             const isCollapsed = (content.style.display || '') === 'none';
             if (isCollapsed) {
                 content.style.display = 'block';
@@ -211,6 +212,8 @@
                 }
                 // Скрываем индикатор при разворачивании
                 if (indicator) indicator.style.display = 'none';
+                // Скрываем список контактов когда профиль развёрнут
+                if (peopleList) peopleList.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
@@ -222,6 +225,8 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
+                // Показываем список контактов когда профиль свёрнут
+                if (peopleList) peopleList.style.display = 'block';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
@@ -574,7 +579,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="people-list" id="people-list" style="padding: 0 4px;">
+                    <div class="people-list" id="people-list" style="padding: 0 4px; display: none;">
                         <!-- Контакты будут загружены динамически -->
                         <div style="padding: 20px; text-align: center; color: #6C727F;">Загрузка контактов...</div>
                     </div>
