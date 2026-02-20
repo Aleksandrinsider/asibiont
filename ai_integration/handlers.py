@@ -2138,6 +2138,8 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         tomorrow_start = today_start + timedelta(days=1)
         tomorrow_end = tomorrow_start + timedelta(days=1)
         
+        no_time_tasks = []  # Задачи без времени — отдельная проблемная группа
+        
         for task in my_tasks:
             if task.reminder_time:
                 try:
@@ -2154,15 +2156,15 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                     logger.warning(f"[TASKLIST] Error parsing reminder time: {e}")
                     later_tasks.append(task)
             else:
-                later_tasks.append(task)  # Без времени - в конец
+                no_time_tasks.append(task)  # Без времени — проблема!
         
         # Сортируем по времени внутри каждой группы
         priority_tasks.sort(key=lambda t: t.reminder_time or datetime.min.replace(tzinfo=pytz.UTC))
         today_tasks.sort(key=lambda t: t.reminder_time or datetime.min.replace(tzinfo=pytz.UTC))
         upcoming_tasks.sort(key=lambda t: t.reminder_time or datetime.min.replace(tzinfo=pytz.UTC))
         
-        # Объединяем: сначала важные
-        sorted_tasks = priority_tasks + today_tasks + upcoming_tasks + later_tasks
+        # Объединяем: сначала важные, задачи без времени в конец
+        sorted_tasks = priority_tasks + today_tasks + upcoming_tasks + later_tasks + no_time_tasks
         
         # КРИТИЧНО: Просроченные задачи показываем ВСЕГДА, независимо от лимита
         # Остальные задачи ограничиваем с учетом уже показанных просроченных
@@ -2266,6 +2268,16 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         result += ", "
                     else:
                         result += ". "
+        
+        # Показываем задачи без времени — это проблема!
+        if no_time_tasks:
+            result += f"⚠️ ЗАДАЧИ БЕЗ ВРЕМЕНИ (нужно установить напоминание!): "
+            for i, task in enumerate(no_time_tasks):
+                result += f"'{task.title}'"
+                if i < len(no_time_tasks) - 1:
+                    result += ", "
+                else:
+                    result += ". "
         
         # Показываем сколько задач скрыто
         if hidden_count > 0:
