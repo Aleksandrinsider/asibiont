@@ -588,6 +588,29 @@ class HybridAutonomousAgent:
             elif 'query' not in params:
                 params['query'] = user_message[:200] if user_message else 'исследование'
 
+        elif tool_name == 'add_task' and user_message:
+            if 'title' not in params or not params.get('title'):
+                # DeepSeek вызвал add_task без title — извлекаем из сообщения
+                import re as _re
+                # Пробуем найти суть задачи в сообщении
+                task_patterns = [
+                    r'(?:задачу|задание|таск)\s+(?:на\s+)?["«]?([^"»,.!?]{5,80})',
+                    r'(?:поставь|создай|добавь|запиши)\s+(?:задачу\s+)?(?:на\s+)?["«]?([^"»,.!?]{5,80})',
+                ]
+                for pat in task_patterns:
+                    m = _re.search(pat, user_message, _re.IGNORECASE)
+                    if m:
+                        params['title'] = m.group(1).strip()
+                        break
+                if 'title' not in params or not params.get('title'):
+                    # Fallback — берём сообщение как title
+                    clean = _re.sub(r'^(да|ок|хорошо|давай|го|ставь|поставь|создай)[,!.\s]*', '', user_message, flags=_re.IGNORECASE).strip()
+                    if len(clean) > 3:
+                        params['title'] = clean[:80]
+                    else:
+                        params['title'] = user_message[:80]
+                logger.info(f"[FIX_PARAMS] add_task title extracted: {params['title']}")
+
         elif tool_name == 'update_profile' and user_message:
             # Универсальный fallback: если DeepSeek вызвал update_profile без данных,
             # извлекаем факты из сообщения пользователя по разным формулировкам.
@@ -673,7 +696,8 @@ class HybridAutonomousAgent:
                         val = m.group(1).strip().rstrip(',')
                         val_lower = val.lower()
                         if len(val) > 1 and not any(val_lower.startswith(g) for g in _skills_garbage):
-                            params['skills'] = val
+                            from .utils import _normalize_skills_text
+                            params['skills'] = _normalize_skills_text(val)
                         break
                 
                 # === ИНТЕРЕСЫ ===
@@ -757,7 +781,8 @@ class HybridAutonomousAgent:
                     if m:
                         val = m.group(1).strip()
                         if len(val) > 1:
-                            params['company'] = val
+                            from .utils import _normalize_company_name
+                            params['company'] = _normalize_company_name(val)
                         break
                 
                 extracted = {k: v for k, v in params.items() if k not in ('user_id', 'session')}

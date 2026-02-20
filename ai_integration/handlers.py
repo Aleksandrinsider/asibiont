@@ -5111,6 +5111,8 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
             profile.birthdate = birth_date
             updates.append(f"день рождения: {birth_date}")
         if company is not None:
+            from .utils import _normalize_company_name
+            company = _normalize_company_name(company)
             profile.company = company
             updates.append(f"компания: {company}")
         if position is not None:
@@ -5122,6 +5124,9 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         
         # Списочные поля (добавляются или заменяются в зависимости от replace_mode)
         if interests is not None:
+            # Нормализуем падеж
+            from .utils import _normalize_skills_text
+            interests = _normalize_skills_text(interests)
             # Валидация
             # Фильтр: мусорные фразы скопированные из контекста (не интересы)
             garbage_interest_patterns = [
@@ -5150,6 +5155,9 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
                         updates.append(f"интерес '{interests}' уже есть")
         
         if skills is not None:
+            # Нормализуем падеж
+            from .utils import _normalize_skills_text
+            skills = _normalize_skills_text(skills)
             # Валидация (исключаем вредоносный контент и мусорные значения)
             # Фильтр: мусорные фразы скопированные из контекста (не навыки)
             garbage_patterns = [

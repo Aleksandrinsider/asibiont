@@ -849,3 +849,153 @@ def _normalize_position_case(position: str) -> str:
 
     # Если ничего не подошло — просто capitalize
     return val.capitalize()
+
+
+def _normalize_skill_word(word: str) -> str:
+    """Нормализует одно слово навыка/интереса: предложный → именительный.
+    таргете → таргет, маркетинге → маркетинг, дизайне → дизайн, аналитике → аналитика
+    """
+    w = word.strip()
+    if not w or len(w) < 4:
+        return w
+    low = w.lower()
+    
+    # Словарь исключений
+    _exc = {
+        'контент-маркетинге': 'контент-маркетинг',
+        'программировании': 'программирование',
+        'проектировании': 'проектирование',
+        'тестировании': 'тестирование',
+        'моделировании': 'моделирование',
+        'управлении': 'управление',
+        'продвижении': 'продвижение',
+        'аналитике': 'аналитика',
+        'логистике': 'логистика',
+        'робототехнике': 'робототехника',
+        'математике': 'математика',
+        'физике': 'физика',
+        'статистике': 'статистика',
+        'экономике': 'экономика',
+    }
+    exc = _exc.get(low)
+    if exc:
+        return exc
+    
+    # Суффиксные правила: предложный → именительный (мужской род)
+    # -ии → -ие (управлении → управление, программировании → программирование)
+    if low.endswith('ии') and len(low) > 4:
+        return w[:-1] + 'е'
+    
+    # -ике → -ика (аналитике → аналитика, физике → физика)
+    if low.endswith('ике') and len(low) > 4:
+        return w[:-1] + 'а'
+    
+    # Generic: if ends in согласная+е → remove е
+    if low.endswith('е') and len(low) > 3:
+        base = w[:-1]
+        # Проверяем что перед -е стоит согласная (не гласная)
+        vowels = set('аеёиоуыэюя')
+        if base[-1].lower() not in vowels:
+            return base
+    
+    return w
+
+
+def _normalize_skills_text(skills_str: str) -> str:
+    """Нормализует строку навыков/интересов: разделяет, нормализует каждое слово."""
+    import re
+    # Разделяем по , и " и "
+    parts = re.split(r'\s*,\s*|\s+и\s+', skills_str)
+    normalized = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # Нормализуем каждое слово в фразе
+        words = part.split()
+        norm_words = [_normalize_skill_word(w) for w in words]
+        normalized.append(' '.join(norm_words))
+    return ', '.join(normalized)
+
+
+def _normalize_company_name(company: str) -> str:
+    """Нормализует название компании: косвенные падежи → именительный.
+    'маркетинговом агентстве' → 'Маркетинговое агентство'
+    'Яндексе' → 'Яндекс'
+    """
+    if not company:
+        return company
+    val = company.strip()
+    low = val.lower()
+    
+    # Если это латиница (имя компании на англ.) — не трогаем
+    import re
+    if re.match(r'^[A-Za-z0-9\s\-\.]+$', val):
+        return val
+    
+    # Словарь: косвенные формы существительных → именительный
+    _noun_fixes = {
+        'агентстве': 'агентство', 'агентства': 'агентство',
+        'компании': 'компания',
+        'студии': 'студия',
+        'лаборатории': 'лаборатория',
+        'корпорации': 'корпорация',
+        'организации': 'организация',
+        'фирме': 'фирма', 'фирмы': 'фирма',
+        'банке': 'банк', 'банка': 'банк',
+        'группе': 'группа', 'группы': 'группа',
+        'холдинге': 'холдинг',
+    }
+    
+    # Определяем род по существительному
+    _neuter_nouns = {'агентство', 'бюро', 'ателье', 'издательство', 'предприятие'}
+    _fem_nouns = {'компания', 'студия', 'лаборатория', 'корпорация', 'организация', 'фирма', 'группа'}
+    _masc_nouns = {'банк', 'холдинг', 'фонд', 'центр', 'клуб'}
+    
+    words = val.split()
+    
+    # Однословные компании: "Яндексе" → "Яндекс", "Сбере" → "Сбер"
+    if len(words) == 1:
+        w = words[0]
+        wl = w.lower()
+        # Если заканчивается на -е после согласной — это предложный падеж
+        vowels = set('аеёиоуыэюя')
+        if wl.endswith('е') and len(wl) > 3 and wl[-2] not in vowels:
+            return w[:-1]
+        # -ии → -ия
+        if wl.endswith('ии') and len(wl) > 4:
+            return w[:-1] + 'я'
+        return val
+    
+    # Многословные: нормализуем последнее слово (существительное)
+    last_low = words[-1].lower()
+    noun_fix = _noun_fixes.get(last_low)
+    if noun_fix:
+        words[-1] = noun_fix
+        noun_lower = noun_fix.lower()
+        
+        # Нормализуем прилагательные перед существительным
+        for i in range(len(words) - 1):
+            w = words[i]
+            wl = w.lower()
+            if noun_lower in _neuter_nouns:
+                if wl.endswith('ом') and len(wl) > 3:
+                    words[i] = w[:-2] + 'ое'
+                elif wl.endswith('ем') and len(wl) > 3:
+                    words[i] = w[:-2] + 'ее'
+            elif noun_lower in _fem_nouns:
+                if wl.endswith('ой') and len(wl) > 3:
+                    words[i] = w[:-2] + 'ая'
+                elif wl.endswith('ей') and len(wl) > 3:
+                    words[i] = w[:-2] + 'яя'
+            elif noun_lower in _masc_nouns:
+                if wl.endswith('ом') and len(wl) > 3:
+                    words[i] = w[:-2] + 'ый'
+                elif wl.endswith('ем') and len(wl) > 3:
+                    words[i] = w[:-2] + 'ий'
+    
+    result = ' '.join(words)
+    # Capitalize только первую букву всей строки
+    if result and result[0].islower():
+        result = result[0].upper() + result[1:]
+    return result
