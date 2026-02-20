@@ -896,7 +896,30 @@ class HybridAutonomousAgent:
                 tool_calls = msg.get('tool_calls', [])
 
                 if not tool_calls:
-                    # AI ответил текстом → когнитивная валидация → готово
+                    # AI ответил текстом → проверяем, не слишком ли коротко для нового пользователя
+                    _profile_fields = ['city', 'goals', 'skills', 'interests']
+                    _missing = sum(1 for f in _profile_fields if not profile_data.get(f))
+                    if _missing >= 3 and len(content.strip()) < 400:
+                        # Новый пользователь, модель дала короткий ответ из-за tool-контекста
+                        # Перезваниваем БЕЗ tools — модель сфокусируется на тексте
+                        logger.info(f"[AGENT] Short response ({len(content)} chars) for new user — retrying without tools")
+                        messages.append({"role": "assistant", "content": content})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "Ты ответил слишком коротко. Это новый человек, момент знакомства. "
+                                "Представься полноценно: расскажи кто ты и что умеешь "
+                                "(задачи, исследования, делегирование, поиск людей, контент, аналитика). "
+                                "Покажи характер и энергию. Заверши живым вопросом о нём — "
+                                "чем занимается, к чему стремится. НЕ предлагай создать задачу. "
+                                "Пиши сплошным текстом, без списков."
+                            )
+                        })
+                        retry_resp = await self.call_ai(
+                            messages, use_tools=False, temperature=0.7, max_tokens=1200)
+                        retry_text = retry_resp['choices'][0]['message'].get('content', '')
+                        if len(retry_text.strip()) > len(content.strip()):
+                            content = retry_text
                     return self._finalize_response(
                         content, user_message, user_id, all_execution_results)
 
