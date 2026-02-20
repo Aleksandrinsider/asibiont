@@ -267,27 +267,23 @@ class AnchorEngine:
 
             logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
-            # ── 3a. CRITICAL/HIGH — доставка ВСЕГДА (кроме DND/ночь, которые уже проверены) ──
-            if critical_anchors:
-                logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(critical_anchors)} CRITICAL anchors...")
-                message = await self._ai_decide_and_compose(user, critical_anchors, session)
-                if message:
-                    await self._deliver(user, critical_anchors, message, session)
-                    logger.info(f"[ANCHOR] User {user_id}: ✅ CRITICAL/HIGH delivered ({len(critical_anchors)} anchors)")
-                else:
-                    logger.warning(f"[ANCHOR] User {user_id}: ❌ AI returned SKIP/None for CRITICAL anchors")
-
-            # ── 3b. REGULAR — с проверкой лимита + gap ──
+            # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
+            # Объединяем, чтобы пользователь не получал 2 сообщения подряд
+            all_dialog_anchors = critical_anchors.copy()
             if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
-                logger.info(f"[ANCHOR] User {user_id}: 💬 AI deciding for {len(regular_anchors)} regular anchors...")
-                message = await self._ai_decide_and_compose(user, regular_anchors, session)
-                if message:
-                    await self._deliver(user, regular_anchors, message, session)
-                    logger.info(f"[ANCHOR] User {user_id}: ✅ Regular delivered ({len(regular_anchors)} anchors)")
-                else:
-                    logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for regular anchors")
+                all_dialog_anchors.extend(regular_anchors)
             elif regular_anchors:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok})")
+
+            if all_dialog_anchors:
+                anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
+                logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
+                message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
+                if message:
+                    await self._deliver(user, all_dialog_anchors, message, session)
+                    logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(all_dialog_anchors)} anchors in ONE message")
+                else:
+                    logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
 
             # ── 3c. FEED POSTS — отдельный лимит ──
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
