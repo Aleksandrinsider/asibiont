@@ -328,7 +328,7 @@ async def check_time_conflicts(reminder_time, user_id=None, session=None):
             session.close()
         return f"Ошибка при проверке времени: {str(e)}"
 
-async def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1):
+async def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1, goal_title=None):
     """Add a new task"""
     logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}, is_recurring={is_recurring} (type: {type(is_recurring)}), recurrence_pattern={recurrence_pattern}, recurrence_interval={recurrence_interval}")
     
@@ -399,6 +399,24 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     
     # Create new task — время ОПЦИОНАЛЬНО
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
+
+    # Привязка к цели по названию
+    if goal_title:
+        try:
+            from models import Goal
+            goal = session.query(Goal).filter(
+                Goal.user_id == user.id,
+                Goal.title.ilike(f'%{goal_title}%'),
+                Goal.status != 'deleted'
+            ).first()
+            if goal:
+                task.goal_id = goal.id
+                logger.info(f"[ADD_TASK] Linked task to goal '{goal.title}' (id={goal.id})")
+            else:
+                logger.info(f"[ADD_TASK] Goal '{goal_title}' not found for user {user_id}")
+        except Exception as e:
+            logger.warning(f"[ADD_TASK] Error linking to goal: {e}")
+
     if reminder_time:
         try:
             # Check if reminder_time is already a datetime object
@@ -1963,7 +1981,13 @@ async def edit_task(
                     session.close()
                 return f"Ошибка при обработке времени: {e}"
         session.commit()
-        result = f"TASK_UPDATED: Задача '{task.title}' обновлена."
+        # Включаем точное время в ответ, чтобы агент не угадывал
+        if reminder_time and task.reminder_time:
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
+            local_new_time = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+            result = f"TASK_UPDATED: Задача '{task.title}' обновлена. Новое время напоминания: {local_new_time.strftime('%d.%m.%Y %H:%M')}."
+        else:
+            result = f"TASK_UPDATED: Задача '{task.title}' обновлена."
     else:
         result = "Задача не найдена."
 
