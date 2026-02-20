@@ -653,17 +653,24 @@ class HybridAutonomousAgent:
                 # «интересы: ML, робототехника», «хобби: шахматы»,
                 # «мне интересно AI», «нравится программирование»
                 interests_patterns = [
-                    r'интересы?[:\s]+([^.!?]+)',
+                    r'(?:мои\s+)?интересы?[:\s]+([^.!?]+)',
                     r'хобби[:\s]+([^.!?]+)',
                     r'увлечени[яе][:\s]+([^.!?]+)',
                     r'(?:интересуюсь|увлекаюсь|люблю|нравится|обожаю)\s+([^.!?]+)',
                     r'мне\s+интересн[оа]\s+([^.!?]+)',
                 ]
+                # Мусорные слова — если интерес начинается с них, это не интерес
+                _interest_garbage = [
+                    'и настрой', 'настрой алерт', 'навыки', 'цели', 'профиль',
+                    'добавь', 'помоги', 'подскажи', 'сделай', 'поставь', 'напомни',
+                    'создай', 'проверь', 'покажи', 'расскажи',
+                ]
                 for pat in interests_patterns:
                     m = _re.search(pat, msg, _re.IGNORECASE)
                     if m:
                         val = m.group(1).strip().rstrip(',')
-                        if len(val) > 1:
+                        val_lower = val.lower()
+                        if len(val) > 1 and not any(val_lower.startswith(g) for g in _interest_garbage):
                             params['interests'] = val
                         break
                 

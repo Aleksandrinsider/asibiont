@@ -3172,8 +3172,30 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
             if profile:
                 existing = profile.goals or ""
-                if existing and title not in existing:
+                existing_lower = existing.lower()
+                title_lower = title.lower()
+                # Проверяем дубликат: точное вхождение ИЛИ один является частью другого
+                is_duplicate = (
+                    title_lower in existing_lower or
+                    any(part.strip() and title_lower.startswith(part.strip()) 
+                        for part in existing_lower.split(';'))
+                )
+                if existing and not is_duplicate:
                     profile.goals = f"{existing}; {title}"
+                elif existing and is_duplicate:
+                    # Заменяем короткую версию на полную (более детальную)
+                    parts = [p.strip() for p in existing.split(';') if p.strip()]
+                    updated_parts = []
+                    replaced = False
+                    for part in parts:
+                        if not replaced and title_lower.startswith(part.lower()):
+                            updated_parts.append(title)
+                            replaced = True
+                        else:
+                            updated_parts.append(part)
+                    if not replaced:
+                        updated_parts = parts  # ничего не меняем если точное вхождение
+                    profile.goals = '; '.join(updated_parts)
                 elif not existing:
                     profile.goals = title
                 session.commit()
@@ -4989,18 +5011,36 @@ def _add_to_list_field(current_value: str, new_value: str) -> tuple[str, bool]:
     # Разбираем новые значения по запятым
     new_items = [item.strip() for item in new_value.split(',') if item.strip()]
     
-    # Фильтруем дубликаты
+    # Фильтруем дубликаты (точные и подстроковые)
     added_items = []
+    replaced_in_place = False
     for new_item in new_items:
         new_item_lower = new_item.lower()
-        if new_item_lower not in current_items_lower:
+        # Точный дубликат
+        if new_item_lower in current_items_lower:
+            continue
+        # Подстроковый дубликат: если новый элемент является частью существующего или наоборот
+        is_substring_dup = False
+        for idx, existing_lower in enumerate(current_items_lower):
+            if new_item_lower in existing_lower:
+                # Новый короче существующего — пропускаем
+                is_substring_dup = True
+                break
+            if existing_lower in new_item_lower:
+                # Новый длиннее существующего — заменяем на более детальный
+                current_items[idx] = new_item
+                current_items_lower[idx] = new_item_lower
+                is_substring_dup = True
+                replaced_in_place = True
+                break
+        if not is_substring_dup:
             added_items.append(new_item)
             current_items_lower.append(new_item_lower)
     
-    if not added_items:
+    if not added_items and not replaced_in_place:
         return current_value, False
     
-    # Объединяем со старыми
+    # Объединяем со старыми (current_items могут содержать in-place замены)
     if current_items:
         result = ', '.join(current_items + added_items)
     else:
@@ -5080,10 +5120,20 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         # Списочные поля (добавляются или заменяются в зависимости от replace_mode)
         if interests is not None:
             # Валидация
+            # Фильтр: мусорные фразы скопированные из контекста (не интересы)
+            garbage_interest_patterns = [
+                'и настрой', 'настрой алерт', 'добавь', 'помоги', 'подскажи',
+                'сделай', 'поставь', 'напомни', 'создай', 'проверь', 'покажи',
+                'расскажи', 'навыки, цели', 'навыки)', 'цели)', 'заполни профиль',
+                'нужно', 'будет', 'можно', 'стоит', 'важно', 'отлично',
+                'знаю что', 'вижу что', 'понимаю', 'считаю', 'думаю что',
+            ]
             if len(interests.strip()) < 2 or len(interests.strip()) > 100:
                 logger.warning(f"Invalid interests length: {len(interests)}")
             elif any(pattern in interests.lower() for pattern in ['<script', 'onclick', 'onerror', 'javascript:', 'http://', 'https://']):
                 logger.warning(f"Invalid interests content: {interests}")
+            elif any(g in interests.lower() for g in garbage_interest_patterns):
+                logger.warning(f"[UPDATE_PROFILE] Garbage interests rejected: '{interests}' — looks like copied phrase, not an interest")
             else:
                 if replace_mode:
                     profile.interests = interests
