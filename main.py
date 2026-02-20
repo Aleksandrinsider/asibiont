@@ -2082,22 +2082,23 @@ async def yookassa_webhook(request):
 
                 # Legacy tier subscription removed — only token purchases supported now
 
-                # Handle referral commission (20% of payment amount)
+                # Handle referral commission (20% of payment → tokens to referrer)
                 if user.referrer_id:
                     try:
                         referrer = session.query(User).filter_by(id=user.referrer_id).first()
                         if referrer:
                             payment_amount = float(payment['amount']['value'])
-                            commission_amount = int(payment_amount * 0.20)
-                            referrer.referral_balance += commission_amount
+                            commission_tokens = int(payment_amount * 0.20)
+                            referrer.token_balance = (referrer.token_balance or 0) + commission_tokens
+                            referrer.referral_balance = (referrer.referral_balance or 0) + commission_tokens
                             session.commit()
-                            logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} from payment {payment_amount} RUB")
+                            logger.info(f"Referral commission: {commission_tokens} tokens added to referrer {referrer.telegram_id} from payment {payment_amount} RUB")
                             
                             if bot:
                                 try:
                                     await bot.send_message(
                                         int(referrer.telegram_id),
-                                        f"💰 Ваш реферал пополнил баланс! Вы получили {commission_amount} рублей комиссии. Текущий баланс: {referrer.referral_balance} рублей."
+                                        f"💰 Ваш реферал пополнил баланс! Вам начислено {commission_tokens} токенов (20% комиссия). Баланс: {referrer.token_balance} токенов."
                                     )
                                 except Exception as e:
                                     logger.error(f"Failed to notify referrer {referrer.telegram_id} about commission: {e}")

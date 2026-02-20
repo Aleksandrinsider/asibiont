@@ -186,9 +186,16 @@ async def start_handler(message: Message):
     user = session.query(User).filter_by(telegram_id=user_id).first()
     is_new_user = False
     if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+        # Find referrer by telegram_id to get internal user.id
+        referrer = None
         if referrer_id:
-            user.referrer_id = referrer_id
+            referrer = session.query(User).filter_by(telegram_id=referrer_id).first()
+            if referrer:
+                logger.info(f"Referrer found: telegram_id={referrer_id}, internal_id={referrer.id}")
+            else:
+                logger.warning(f"Referrer not found for telegram_id: {referrer_id}")
+        user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0,
+                    referrer_id=referrer.id if referrer else None)
         session.add(user)
         session.commit()
         logger.info(f"Created new user {user_id}, referrer={referrer_id}")
