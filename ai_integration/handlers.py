@@ -397,7 +397,13 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             session.close()
         return f"Задача '{existing.title}' уже есть в списке (статус: pending). Используй edit_task чтобы изменить её."
     
-    # Create new task — время ОПЦИОНАЛЬНО
+    # Create new task — время ОБЯЗАТЕЛЬНО
+    if not reminder_time:
+        logger.warning(f"[ADD_TASK] No reminder_time provided for task '{title}'")
+        if close_session:
+            session.close()
+        return "⚠️ ВРЕМЯ НЕ УКАЗАНО. Спроси у пользователя: «На какое время поставить напоминание?». Задача без времени бесполезна."
+    
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
 
     # Привязка к цели по названию (нечёткий поиск по словам)
