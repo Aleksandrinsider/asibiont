@@ -783,6 +783,11 @@ def _normalize_position_case(position: str) -> str:
     # Аббревиатуры (CTO, CEO, COO, CFO, HR) — не трогаем
     if val.isupper() and len(val) <= 5:
         return val
+    # Если содержит дефис и первая часть — аббревиатура (SMM-специалист, IT-директор) — не трогаем
+    if '-' in val:
+        parts = val.split('-', 1)
+        if parts[0].isupper() and len(parts[0]) <= 5:
+            return val
     low = val.lower()
 
     # --- Словарь исключений (неправильные / сложные формы) ---
