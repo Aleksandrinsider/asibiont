@@ -552,11 +552,11 @@ class CognitiveEngine:
         # 5b. Убираем множественные пустые строки (оставляем максимум одну)
         text = re.sub(r'\n{3,}', '\n\n', text)
 
-        # 6. Обрезаем ТОЛЬКО если ответ неоправданно огромный (>3000 символов)
-        if len(text) > 3000:
-            cut = text[:2800]
+        # 6. Обрезаем ЕСЛИ ответ слишком длинный (>1500 символов)
+        if len(text) > 1500:
+            cut = text[:1300]
             last_end = max(cut.rfind('.'), cut.rfind('!'), cut.rfind('?'))
-            if last_end > 1200:
+            if last_end > 600:
                 text = cut[:last_end + 1]
             else:
                 text = cut[:2500]

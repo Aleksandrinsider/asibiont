@@ -897,37 +897,31 @@ class HybridAutonomousAgent:
 
                 if not tool_calls:
                     # AI ответил текстом → проверяем, не слишком ли коротко для нового пользователя
-                    _profile_fields = ['city', 'goals', 'skills', 'interests']
-                    _missing = sum(1 for f in _profile_fields if not profile_data.get(f))
-                    if _missing >= 3 and len(content.strip()) < 400:
-                        # Новый пользователь, модель дала короткий ответ из-за tool-контекста
-                        # Перезваниваем БЕЗ tools — модель сфокусируется на тексте
-                        logger.info(f"[AGENT] Short response ({len(content)} chars) for new user — retrying without tools")
-                        messages.append({"role": "assistant", "content": content})
-                        messages.append({
-                            "role": "user",
-                            "content": (
-                                "Ты ответил слишком коротко. Это новый человек, момент знакомства. "
-                                "РАСКРОЙ каждое направление с конкретным примером — покажи глубину и сообразительность, "
-                                "а не перечисляй через запятую. Например: \n"
-                                "— задачи и планирование: как ты замечаешь перегруз и помогаешь приоритизировать\n"
-                                "— исследования: как находишь свежие данные по рынку, конкурентам, трендам\n"
-                                "— нетворкинг: как подбираешь нужных людей и сводишь\n"
-                                "— делегирование: как ведёшь переговоры от имени человека\n"
-                                "— баланс жизни: здоровье, финансы, развитие — не только работа\n"
-                                "Раскрой 3-4 направления подробно, с живыми примерами ситуаций. "
-                                "Покажи что ты ДУМАЕШЬ, а не просто выполняешь команды. "
-                                "Заверши ОДНИМ живым вопросом о нём — чем занимается или к чему стремится. "
-                                "НЕ упоминай пустые задачи, НЕ предлагай создать задачу. "
-                                "Задавай только ОДИН вопрос, в самом конце. "
-                                "Пиши сплошным текстом 4-6 абзацев, без списков и буллетов."
-                            )
-                        })
-                        retry_resp = await self.call_ai(
-                            messages, use_tools=False, temperature=0.75, max_tokens=1800)
-                        retry_text = retry_resp['choices'][0]['message'].get('content', '')
-                        if len(retry_text.strip()) > len(content.strip()):
-                            content = retry_text
+                    # Retry только на первой итерации и только если не было tool-вызовов
+                    if iteration == 0 and not all_execution_results:
+                        _profile_fields = ['city', 'goals', 'skills', 'interests']
+                        _missing = sum(1 for f in _profile_fields if not profile_data.get(f))
+                        if _missing >= 3 and len(content.strip()) < 600:
+                            logger.info(f"[AGENT] Short response ({len(content)} chars) for new user — retrying without tools")
+                            # НЕ добавляем короткий ответ в историю — просто перезваниваем без tools
+                            retry_messages = messages.copy()
+                            retry_messages.append({
+                                "role": "user",
+                                "content": (
+                                    "Это новый человек, момент знакомства. "
+                                    "РАСКРОЙ каждое направление с конкретным примером — покажи глубину и сообразительность, "
+                                    "а не перечисляй через запятую. "
+                                    "Раскрой 3-4 направления подробно, с живыми примерами ситуаций. "
+                                    "Покажи что ты ДУМАЕШЬ, а не просто выполняешь команды. "
+                                    "Заверши ОДНИМ живым вопросом о нём. "
+                                    "Пиши сплошным текстом 3-5 абзацев, без списков."
+                                )
+                            })
+                            retry_resp = await self.call_ai(
+                                retry_messages, use_tools=False, temperature=0.75, max_tokens=1200)
+                            retry_text = retry_resp['choices'][0]['message'].get('content', '')
+                            if len(retry_text.strip()) > len(content.strip()):
+                                content = retry_text
                     return self._finalize_response(
                         content, user_message, user_id, all_execution_results)
 
