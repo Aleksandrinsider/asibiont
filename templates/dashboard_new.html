@@ -5359,8 +5359,8 @@
             // Перемешиваем контакты
             const shuffled = [...myContacts].sort(() => Math.random() - 0.5);
             
-            // Размер аватаров
-            const avatarSize = 40;
+            // Размер аватаров (как в профиле — 64px)
+            const avatarSize = 64;
             
             let html = '';
             shuffled.forEach((contact) => {
