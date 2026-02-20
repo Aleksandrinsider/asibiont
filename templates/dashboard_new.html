@@ -2302,7 +2302,11 @@
                 cachedFavorites = favorites;
                 // Force reload contacts to update heart icons
                 cachedPartnersData = null;
-                await updatePeople();
+                const wasAdded = index === -1;
+                await updatePeople(true);
+                
+                // Показать уведомление
+                showNotification(wasAdded ? 'Контакт добавлен в избранное' : 'Контакт удалён из избранного', 'success');
                 
                 // Если активен фильтр избранное, обновляем его через пагинацию
                 if (currentContactFilter === 'favorite') {
@@ -2315,6 +2319,8 @@
                 if (currentContactFilter === 'elite') {
                     await loadEliteContacts();
                 }
+            } else {
+                showNotification('Не удалось обновить избранное', 'error');
             }
         }
 
