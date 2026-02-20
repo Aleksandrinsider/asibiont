@@ -1198,24 +1198,12 @@ class HybridAutonomousAgent:
             logger.warning(f"[SELF-LEARN] Record failed: {e}")
 
         # === Долгосрочная память — только значимые факты ===
-        # НЕ сохраняем CRUD-операции (задачи уже в БД)
+        # НЕ сохраняем CRUD-результаты (задачи/цели уже в БД — дубли вызывают галлюцинации)
+        # Сохраняем ТОЛЬКО пользовательские предпочтения, НЕ результаты tool-вызовов
         try:
-            from .memory import update_user_memory
-            facts = []
-            for r in execution_results:
-                if r.get('success') and r.get('tool') in (
-                    'create_goal', 'update_goal_progress',
-                    'set_content_strategy', 'set_contact_alert',
-                    'research_topic', 'get_news_trends'
-                ):
-                    if r['tool'] in ('research_topic', 'get_news_trends'):
-                        facts.append(f"Искал: {r.get('reason', '')[:100]}")
-                    else:
-                        result_str = str(r.get('result', ''))[:150]
-                        facts.append(f"{r['tool']}: {result_str}")
-            if facts:
-                update_user_memory("\n".join(facts), user_id=user_id)
-                logger.info(f"[MEMORY] Saved {len(facts)} facts to long-term memory")
+            pass  # Убрано: tool results в memory вызывали галлюцинации
+            # Цели, задачи, контакты — всё в своих таблицах БД.
+            # Бот читал "create_goal: Цель создана: X" из memory и думал что цель X существует.
         except Exception as e:
             logger.warning(f"[MEMORY] Save failed: {e}")
 

@@ -333,12 +333,24 @@ async def _build_proactive_context(user_id):
         ctx['current_time_str'] = f"{user_now.strftime('%H:%M')} ({user_tz.zone})"
         ctx['current_date_str'] = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
         
-        # Память пользователя
+        # Память пользователя — фильтруем tool-логи
         user_memory = ""
         if user.memory:
             try:
+                import re as _re
                 decrypted = decrypt_data(user.memory)
-                user_memory = f"\nИнформация о пользователе: {decrypted}"
+                # Убираем строки с результатами tool-вызовов — они НЕ факты
+                _TOOL_JUNK_RE = _re.compile(
+                    r'^(Искал:.*|create_goal:.*|update_goal_progress:.*|'
+                    r'set_content_strategy:.*|set_contact_alert:.*|'
+                    r'research_topic:.*|get_news_trends:.*|'
+                    r'hide_contact:.*|AI iter \d+:.*)$',
+                    _re.MULTILINE
+                )
+                decrypted = _TOOL_JUNK_RE.sub('', decrypted).strip()
+                decrypted = '\n'.join(line for line in decrypted.split('\n') if line.strip())
+                if decrypted:
+                    user_memory = f"\nИнформация о пользователе: {decrypted}"
             except Exception as e:
                 logger.warning(f"Failed to decrypt user memory for user {user.id}: {e}")
         

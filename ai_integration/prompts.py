@@ -103,13 +103,30 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         except Exception as e:
             logger.warning(f"[PROMPTS] Failed to get search context: {e}")
 
-    # User memory
+    # User memory — фильтруем мусор (логи tool-вызовов) чтобы AI не путал с реальными данными
     memory_section = ""
     if user_memory:
         try:
+            import re as _re
             decrypted_memory = user_memory  # Assuming it's already decrypted
             if decrypted_memory and len(decrypted_memory.strip()) > 0:
-                memory_section = f"\nПАМЯТЬ ПОЛЬЗОВАТЕЛЯ:\n{decrypted_memory[:500]}"  # Limit to 500 chars
+                # Убираем строки с результатами tool-вызовов — они НЕ факты
+                _TOOL_JUNK_RE = _re.compile(
+                    r'^(Искал:.*|create_goal:.*|update_goal_progress:.*|'
+                    r'set_content_strategy:.*|set_contact_alert:.*|'
+                    r'research_topic:.*|get_news_trends:.*|'
+                    r'hide_contact:.*|AI iter \d+:.*)$',
+                    _re.MULTILINE
+                )
+                cleaned = _TOOL_JUNK_RE.sub('', decrypted_memory).strip()
+                # Убираем пустые строки
+                cleaned = '\n'.join(line for line in cleaned.split('\n') if line.strip())
+                if cleaned:
+                    memory_section = (
+                        f"\nЗАМЕТКИ О ПРОШЛЫХ РАЗГОВОРАХ (это НЕ текущие задачи/цели — "
+                        f"текущие задачи и цели указаны в секциях ЗАДАЧИ и ЦЕЛИ выше):\n"
+                        f"{cleaned[:400]}"
+                    )
         except Exception as e:
             logger.warning(f"[PROMPTS] Failed to process user memory: {e}")
 
