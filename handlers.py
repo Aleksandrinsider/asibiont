@@ -691,7 +691,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         
         async def progress_callback(text):
             """Отправляет или обновляет прогресс-сообщение в Telegram"""
-            display_text = text or 'Работаю...'
+            display_text = text or 'Обрабатываю...'
             try:
                 if _progress_state['last_msg_id']:
                     # Обновляем существующее сообщение (не спамим чат)
