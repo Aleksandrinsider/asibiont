@@ -229,11 +229,12 @@ class ReminderService:
         try:
             tasks = db.query(Task).filter(Task.reminder_time.isnot(None), Task.reminder_sent == False).all()
             logger.info(f"Found {len(tasks)} tasks with reminders to schedule")
+            now_utc = datetime.now(pytz.UTC)
             for task in tasks:
                 reminder_time = task.reminder_time
                 if reminder_time.tzinfo is None:
                     reminder_time = reminder_time.replace(tzinfo=pytz.UTC)
-                if reminder_time > datetime.now(pytz.UTC):
+                if reminder_time > now_utc:
                     # Безопасная проверка наличия user
                     if task.user and task.user.telegram_id:
                         logger.info(f"Scheduling reminder for task {task.id} at {task.reminder_time}")
@@ -241,7 +242,19 @@ class ReminderService:
                     else:
                         logger.warning(f"Task {task.id} has no user or telegram_id")
                 else:
-                    logger.info(f"Task {task.id} reminder time {task.reminder_time} is in the past")
+                    # Задача просрочена — НЕ отправляем скопом при старте!
+                    # Помечаем как отправленное, AnchorEngine подхватит как task_overdue
+                    minutes_overdue = (now_utc - reminder_time).total_seconds() / 60
+                    if minutes_overdue > 5:
+                        logger.info(f"Task {task.id} reminder time {task.reminder_time} is {minutes_overdue:.0f}min in the past — marking sent, AnchorEngine will handle")
+                        task.reminder_sent = True
+                    else:
+                        # Менее 5 минут — отправляем сейчас (только что просрочилось)
+                        if task.user and task.user.telegram_id:
+                            logger.info(f"Task {task.id} just expired ({minutes_overdue:.0f}min ago), scheduling immediate reminder")
+                            immediate_time = now_utc + timedelta(seconds=5)
+                            self.schedule_reminder(task.id, immediate_time, task.user.telegram_id, task.title)
+            db.commit()
             
             # Планируем проверки результатов для задач с reminder_sent=True и estimated_duration
             result_tasks = db.query(Task).filter(

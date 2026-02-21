@@ -386,6 +386,15 @@ class AnchorEngine:
 
                 if rt < now_utc:
                     hours_overdue = (now_utc - rt).total_seconds() / 3600
+                    
+                    # Пропускаем задачи, для которых ReminderService УЖЕ отправил напоминание
+                    # и прошло менее 1 часа — чтобы не дублировать с reminder + followup
+                    if task.reminder_sent and hours_overdue < 1.0:
+                        continue
+                    # Если followup тоже уже отправлен и прошло менее 2 часов — пропускаем
+                    if getattr(task, 'followup_reminder_sent', False) and hours_overdue < 2.0:
+                        continue
+                    
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_overdue',
