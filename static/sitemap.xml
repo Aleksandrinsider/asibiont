@@ -28,9 +28,30 @@
 
     <url>
         <loc>https://asibiont.ru/tutorial</loc>
-        <lastmod>2026-02-19</lastmod>
+        <lastmod>2026-02-21</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
+    </url>
+
+    <url>
+        <loc>https://asibiont.ru/faq</loc>
+        <lastmod>2026-02-21</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+
+    <url>
+        <loc>https://asibiont.ru/llms.txt</loc>
+        <lastmod>2026-02-21</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+
+    <url>
+        <loc>https://asibiont.ru/llms-full.txt</loc>
+        <lastmod>2026-02-21</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
     </url>
 
 </urlset>

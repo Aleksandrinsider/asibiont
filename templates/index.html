@@ -27,16 +27,17 @@
     <link rel="canonical" href="https://asibiont.ru">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 
-    <!-- Structured Data -->
+    <!-- Structured Data: WebApplication -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebApplication",
         "name": "ASI Biont",
         "url": "https://asibiont.ru",
-        "description": "AI-партнёр в Telegram: управляет задачами, находит партнёров и исполнителей, делегирует задачи, постит контент по расписанию и присылает точечные возможности для роста.",
+        "description": "AI-агент в Telegram: автономно ведёт задачи, находит партнёров и исполнителей, делегирует задачи, постит контент по расписанию и присылает точечные возможности для роста.",
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Web, Telegram",
+        "inLanguage": "ru",
         "offers": {
             "@type": "AggregateOffer",
             "lowPrice": "1500",
@@ -50,12 +51,89 @@
             "Делегирование задач внутри сети",
             "Автопостинг контента по расписанию",
             "Проактивные предложения и алерты контактов",
-            "Веб-дашборд с графом связей и аналитикой"
+            "Веб-дашборд с графом связей и аналитикой",
+            "Голосовые команды в Telegram",
+            "Работа на русском языке нативно"
         ],
         "creator": {
             "@type": "Organization",
-            "name": "ASI Biont"
+            "name": "ASI Biont",
+            "url": "https://asibiont.ru"
+        },
+        "screenshot": "https://asibiont.ru/static/asibiont.svg",
+        "softwareVersion": "2.0",
+        "applicationSubCategory": "AI Agent, Task Management, Delegation"
+    }
+    </script>
+
+    <!-- Structured Data: Organization -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "ASI Biont",
+        "url": "https://asibiont.ru",
+        "logo": "https://asibiont.ru/static/asibiont.svg",
+        "description": "Автономный AI-агент для бизнеса: управление задачами, делегирование, поиск партнёров, контент-маркетинг в Telegram.",
+        "sameAs": [
+            "https://t.me/asibiont_bot"
+        ],
+        "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer support",
+            "availableLanguage": "Russian",
+            "url": "https://t.me/asibiont_bot"
         }
+    }
+    </script>
+
+    <!-- Structured Data: FAQPage for AI Search -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "Что такое ASI Biont?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "ASI Biont — это AI-агент в Telegram, который автономно управляет вашими задачами, находит партнёров и исполнителей, делегирует поручения и публикует контент. Это не чат-бот — он сам действует, а не просто отвечает на вопросы. При регистрации — 1 500 бесплатных токенов."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Чем ASI Biont отличается от ChatGPT?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "ChatGPT только отвечает на вопросы. ASI Biont — действует: ставит напоминания, контролирует дедлайны, находит людей, делегирует задачи другим пользователям и публикует контент в каналы. Он работает проактивно — сам пишет вам первым, когда есть важное."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Сколько стоит ASI Biont?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "При регистрации вы получаете 1 500 бесплатных токенов. Все функции доступны сразу. 1 токен = 1 рубль. Пакеты пополнения: 1 500₽, 5 000₽ (+10% бонус), 15 000₽ (+20% бонус)."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Как начать пользоваться ASI Biont?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Откройте @asibiont_bot в Telegram, нажмите /start. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите боту, что нужно сделать — задачи, напоминания, поиск людей. Также доступен веб-дашборд на asibiont.ru."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Какой AI используется в ASI Biont?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "ASI Biont работает на DeepSeek V3 — одной из самых мощных открытых AI-моделей. Для сложных задач используется DeepSeek R1 (reasoning model). Весь интерфейс и промпты — на русском языке."
+                }
+            }
+        ]
     }
     </script>
     <style>
@@ -303,9 +381,11 @@
             </div>
         </div>
 
-        <!-- Footer -->
         <div style="text-align: center; margin-top: 32px; padding-top: 24px; color: #6C727F; font-size: 13px;">
-            2026 ASI Biont
+            <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
+            <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Руководство</a>
+            <a href="/subscription-tiers" style="color: #59636E; text-decoration: none;">Тарифы</a>
+            <div style="margin-top: 8px;">2026 ASI Biont</div>
         </div>
     </div>
 <!-- Yandex.Metrika counter -->

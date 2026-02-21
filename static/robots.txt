@@ -2,6 +2,8 @@ User-agent: *
 Allow: /
 Allow: /static/
 Allow: /subscription-tiers
+Allow: /tutorial
+Allow: /faq
 Disallow: /admin/
 Disallow: /api/
 Disallow: /health
@@ -16,8 +18,40 @@ Allow: /
 User-agent: Yandex
 Allow: /
 
+# AI Search Crawlers — explicitly allow
+User-agent: GPTBot
+Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
 # Crawl delay for respectful crawling
 Crawl-delay: 1
 
 # Sitemap location
 Sitemap: https://asibiont.ru/sitemap.xml
+
+# LLMs.txt — AI-readable site description
+# https://llmstxt.org
+# /llms.txt — краткое описание
+# /llms-full.txt — полное описание с кейсами и FAQ

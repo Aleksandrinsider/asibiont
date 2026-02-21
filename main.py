@@ -5422,6 +5422,11 @@ async def subscription_tiers_handler(request):
     return {}
 
 
+async def faq_handler(request):
+    """FAQ страница для AI SEO — AI-поиск цитирует ответы"""
+    return aiohttp_jinja2.render_template('faq.html', request, {})
+
+
 @aiohttp_jinja2.template('tutorial.html')
 async def tutorial_handler(request):
     """Страница туториала со всеми командами"""
@@ -5667,6 +5672,11 @@ app.router.add_get('/robots.txt', lambda r: web.FileResponse('static/robots.txt'
 app.router.add_get('/sitemap.xml', lambda r: web.FileResponse('static/sitemap.xml', headers={'Content-Type': 'application/xml; charset=utf-8'}))
 # SEO: IndexNow key file
 app.router.add_get('/d6193b04262141bba808b1279123715b.txt', lambda r: web.FileResponse('static/d6193b04262141bba808b1279123715b.txt'))
+# AI SEO: llms.txt for AI crawlers (ChatGPT, Perplexity, Yandex GPT)
+app.router.add_get('/llms.txt', lambda r: web.FileResponse('static/llms.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
+app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
+# AI SEO: FAQ page
+app.router.add_get('/faq', faq_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # API routes for dynamic updates
@@ -5789,7 +5799,10 @@ async def start_reminder_service(app):
             "https://asibiont.ru/",
             "https://asibiont.ru/subscription-tiers",
             "https://asibiont.ru/tutorial",
-            "https://asibiont.ru/dashboard"
+            "https://asibiont.ru/dashboard",
+            "https://asibiont.ru/faq",
+            "https://asibiont.ru/llms.txt",
+            "https://asibiont.ru/llms-full.txt"
         ])
         logger.info("[IndexNow] Pinged search engines about all pages")
     except Exception as e:
