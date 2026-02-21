@@ -35,6 +35,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytz
 
+from sqlalchemy import text
+
 from models import (
     Session, User, UserProfile, Task, Goal, Interaction, Post,
     Anchor, AnchorDeliveryLog, AnchorPriority,
@@ -141,171 +143,200 @@ class AnchorEngine:
         logger.info("[ANCHOR] Stopped")
 
     async def _scan_all_users(self):
-        """Сканирует всех пользователей с активной подпиской"""
+        """Сканирует всех пользователей — параллельно по батчам"""
         session = Session()
         try:
             users = session.query(User).filter(
                 User.telegram_id.isnot(None)
             ).all()
-            
-            for user in users:
-                try:
-                    # Не сканировать параллельно одного user
-                    lock = self._scan_locks[user.telegram_id]
-                    if lock.locked():
-                        continue
-                    async with lock:
-                        await self._process_user(user.telegram_id)
-                except Exception as e:
-                    logger.error(f"[ANCHOR] Error processing user {user.telegram_id}: {e}")
-                    continue
+            user_ids = [u.telegram_id for u in users]
         finally:
             session.close()
+
+        # Параллельная обработка батчами по BATCH_CONCURRENCY пользователей
+        BATCH_CONCURRENCY = 3  # Параллельных AI-вызовов за раз
+        for i in range(0, len(user_ids), BATCH_CONCURRENCY):
+            batch = user_ids[i:i + BATCH_CONCURRENCY]
+            tasks = []
+            for uid in batch:
+                lock = self._scan_locks[uid]
+                if lock.locked():
+                    continue
+                tasks.append(self._process_user_safe(uid, lock))
+            if tasks:
+                await asyncio.gather(*tasks)
+
+    async def _process_user_safe(self, user_id: int, lock: asyncio.Lock):
+        """Обёртка с lock для безопасной параллельной обработки"""
+        async with lock:
+            try:
+                await self._process_user(user_id)
+            except Exception as e:
+                logger.error(f"[ANCHOR] Error processing user {user_id}: {e}")
 
     async def _process_user(self, user_id: int):
         """Полный цикл для одного пользователя: scan → evaluate → deliver"""
         session = Session()
         try:
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                logger.debug(f"[ANCHOR] User {user_id}: не найден в БД, пропуск")
+            # ── DB-LEVEL ADVISORY LOCK — атомарная защита от параллельных процессов ──
+            # pg_try_advisory_lock не блокирует, а возвращает False если lock занят другим процессом
+            lock_id = abs(user_id) % 2147483647  # PostgreSQL advisory lock ID (int4)
+            lock_result = session.execute(
+                text(f"SELECT pg_try_advisory_lock(:lock_id)"),
+                {"lock_id": lock_id}
+            ).scalar()
+            if not lock_result:
+                logger.debug(f"[ANCHOR] User {user_id}: ⛔ advisory lock busy (another process), skip")
                 return
 
-            # Проверка баланса токенов (минимум на 1 проактивное сообщение)
-            from token_service import has_enough_tokens, get_balance
-            from config import FREE_ACCESS_MODE
-            if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'proactive_message'):
-                balance = get_balance(user_id)
-                logger.info(f"[ANCHOR] User {user_id}: ⛔ недостаточно токенов (баланс: {balance}, нужно: 15), пропуск")
-                return
-
-            # Проверка DND
-            if user.do_not_disturb_until:
-                dnd = user.do_not_disturb_until
-                if dnd.tzinfo is None:
-                    dnd = dnd.replace(tzinfo=timezone.utc)
-                if datetime.now(timezone.utc) < dnd:
-                    logger.info(f"[ANCHOR] User {user_id}: ⛔ DND до {dnd}, пропуск")
-                    return
-
-            # Проверка ночных часов
-            user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
-            user_now = datetime.now(user_tz)
-            if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
-                logger.info(f"[ANCHOR] User {user_id}: ⛔ ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00), пропуск")
-                return
-
-            # ── Подсчёт доставок за сегодня (раздельно) ──
-            today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
-            today_start_utc = today_start.astimezone(pytz.UTC)
-
-            today_logs = session.query(AnchorDeliveryLog).filter(
-                AnchorDeliveryLog.user_id == user.id,
-                AnchorDeliveryLog.created_at >= today_start_utc
-            ).all()
-
-            dialog_count = 0
-            post_count = 0
-            channel_count = 0
-            for log in today_logs:
-                try:
-                    types = json.loads(log.anchor_types) if log.anchor_types else []
-                except (json.JSONDecodeError, TypeError):
-                    types = []
-                if 'channel_post' in types:
-                    channel_count += 1
-                elif 'post_opportunity' in types:
-                    post_count += 1
-                else:
-                    dialog_count += 1
-
-            # ── Последнее проактивное сообщение (gap между ними, но НЕ блокирует CRITICAL) ──
-            last_proactive = session.query(Interaction).filter(
-                Interaction.user_id == user.id,
-                Interaction.message_type == 'proactive'
-            ).order_by(Interaction.created_at.desc()).first()
-
-            proactive_gap_ok = True
-            if last_proactive:
-                lp_time = last_proactive.created_at
-                if lp_time.tzinfo is None:
-                    lp_time = lp_time.replace(tzinfo=timezone.utc)
-                gap = datetime.now(timezone.utc) - lp_time
-                if gap < timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES):
-                    proactive_gap_ok = False
-
-            # 1. SCAN — обнаружить новые якоря
-            new_anchors = await self._scan_anchors(user, session)
-            if new_anchors:
-                session.add_all(new_anchors)
+            try:
+                await self._process_user_inner(user_id, session)
+            finally:
+                # Освобождаем advisory lock
+                session.execute(text(f"SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
                 session.commit()
-                logger.info(f"[ANCHOR] User {user_id}: created {len(new_anchors)} new anchors")
-
-            # 2. EVALUATE — собрать доставляемые якоря
-            deliverable = session.query(Anchor).filter(
-                Anchor.user_id == user.id,
-                Anchor.delivered_at.is_(None),
-                Anchor.triggered_at.isnot(None),
-            ).order_by(
-                Anchor.priority.asc(),  # CRITICAL first (enum order)
-                Anchor.created_at.asc()
-            ).limit(15).all()
-
-            logger.info(f"[ANCHOR] User {user_id}: найдено {len(deliverable)} deliverable якорей")
-
-            # Фильтруем: не истёкшие + cooldown
-            ready = [a for a in deliverable if a.is_deliverable()]
-            if not ready:
-                logger.info(f"[ANCHOR] User {user_id}: ⛔ после is_deliverable() — 0 ready (expired/suppressed)")
-                return
-            ready = self._apply_cooldowns(ready, user, session)
-            if not ready:
-                logger.info(f"[ANCHOR] User {user_id}: ⛔ после _apply_cooldowns — 0 ready")
-                return
-
-            # ── Разделяем потоки ──
-            critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
-                                or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
-            post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
-            regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors]
-
-            logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
-
-            # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
-            # Объединяем, чтобы пользователь не получал 2 сообщения подряд
-            all_dialog_anchors = critical_anchors.copy()
-            if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
-                all_dialog_anchors.extend(regular_anchors)
-            elif regular_anchors:
-                logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok})")
-
-            if all_dialog_anchors:
-                anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
-                logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
-                message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
-                if message:
-                    await self._deliver(user, all_dialog_anchors, message, session)
-                    logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(all_dialog_anchors)} anchors in ONE message")
-                else:
-                    logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
-
-            # ── 3c. FEED POSTS — отдельный лимит ──
-            feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
-            if feed_posts and post_count < MAX_FEED_PER_DAY:
-                for pa in feed_posts[:1]:  # Максимум 1 за цикл
-                    await self._process_post_anchor(user, pa, session)
-
-            # ── 3d. CHANNEL POSTS — отдельный лимит ──
-            channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
-            if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
-                for pa in channel_posts[:1]:
-                    await self._process_post_anchor(user, pa, session)
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
             session.rollback()
         finally:
             session.close()
+
+    async def _process_user_inner(self, user_id: int, session):
+        """Внутренняя логика обработки пользователя (под advisory lock)"""
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            logger.debug(f"[ANCHOR] User {user_id}: не найден в БД, пропуск")
+            return
+
+        # Проверка баланса токенов (минимум на 1 проактивное сообщение)
+        from token_service import has_enough_tokens, get_balance
+        from config import FREE_ACCESS_MODE
+        if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'proactive_message'):
+            balance = get_balance(user_id)
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ недостаточно токенов (баланс: {balance}, нужно: 15), пропуск")
+            return
+
+        # Проверка DND
+        if user.do_not_disturb_until:
+            dnd = user.do_not_disturb_until
+            if dnd.tzinfo is None:
+                dnd = dnd.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) < dnd:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ DND до {dnd}, пропуск")
+                return
+
+        # Проверка ночных часов
+        user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
+        user_now = datetime.now(user_tz)
+        if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00), пропуск")
+            return
+
+        # ── Подсчёт доставок за сегодня (раздельно) ──
+        today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start.astimezone(pytz.UTC)
+
+        today_logs = session.query(AnchorDeliveryLog).filter(
+            AnchorDeliveryLog.user_id == user.id,
+            AnchorDeliveryLog.created_at >= today_start_utc
+        ).all()
+
+        dialog_count = 0
+        post_count = 0
+        channel_count = 0
+        for log in today_logs:
+            try:
+                types = json.loads(log.anchor_types) if log.anchor_types else []
+            except (json.JSONDecodeError, TypeError):
+                types = []
+            if 'channel_post' in types:
+                channel_count += 1
+            elif 'post_opportunity' in types:
+                post_count += 1
+            else:
+                dialog_count += 1
+
+        # ── Последнее проактивное сообщение (gap между ними, но НЕ блокирует CRITICAL) ──
+        last_proactive = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type == 'proactive'
+        ).order_by(Interaction.created_at.desc()).first()
+
+        proactive_gap_ok = True
+        if last_proactive:
+            lp_time = last_proactive.created_at
+            if lp_time.tzinfo is None:
+                lp_time = lp_time.replace(tzinfo=timezone.utc)
+            gap = datetime.now(timezone.utc) - lp_time
+            if gap < timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES):
+                proactive_gap_ok = False
+
+        # 1. SCAN — обнаружить новые якоря
+        new_anchors = await self._scan_anchors(user, session)
+        if new_anchors:
+            session.add_all(new_anchors)
+            session.commit()
+            logger.info(f"[ANCHOR] User {user_id}: created {len(new_anchors)} new anchors")
+
+        # 2. EVALUATE — собрать доставляемые якоря
+        deliverable = session.query(Anchor).filter(
+            Anchor.user_id == user.id,
+            Anchor.delivered_at.is_(None),
+            Anchor.triggered_at.isnot(None),
+        ).order_by(
+            Anchor.priority.asc(),  # CRITICAL first (enum order)
+            Anchor.created_at.asc()
+        ).limit(15).all()
+
+        logger.info(f"[ANCHOR] User {user_id}: найдено {len(deliverable)} deliverable якорей")
+
+        # Фильтруем: не истёкшие + cooldown
+        ready = [a for a in deliverable if a.is_deliverable()]
+        if not ready:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ после is_deliverable() — 0 ready (expired/suppressed)")
+            return
+        ready = self._apply_cooldowns(ready, user, session)
+        if not ready:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ после _apply_cooldowns — 0 ready")
+            return
+
+        # ── Разделяем потоки ──
+        critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
+                            or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
+        post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
+        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors]
+
+        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
+
+        # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
+        all_dialog_anchors = critical_anchors.copy()
+        if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
+            all_dialog_anchors.extend(regular_anchors)
+        elif regular_anchors:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok})")
+
+        if all_dialog_anchors:
+            anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
+            logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
+            message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
+            if message:
+                await self._deliver(user, all_dialog_anchors, message, session)
+                logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(all_dialog_anchors)} anchors in ONE message")
+            else:
+                logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
+
+        # ── 3c. FEED POSTS — отдельный лимит ──
+        feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
+        if feed_posts and post_count < MAX_FEED_PER_DAY:
+            for pa in feed_posts[:1]:
+                await self._process_post_anchor(user, pa, session)
+
+        # ── 3d. CHANNEL POSTS — отдельный лимит ──
+        channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
+        if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
+            for pa in channel_posts[:1]:
+                await self._process_post_anchor(user, pa, session)
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
@@ -1155,23 +1186,37 @@ class AnchorEngine:
     # ═══════════════════════════════════════════════════════
 
     def _apply_cooldowns(self, anchors: list, user, session) -> list:
-        """Фильтрует якоря по cooldown — не доставлять если недавно доставляли такой тип"""
+        """Фильтрует якоря по cooldown — один батч-запрос вместо N отдельных"""
         now_utc = datetime.now(timezone.utc)
         result = []
 
-        for anchor in anchors:
-            # Проверяем: был ли недавно доставлен якорь этого типа?
-            cooldown_h = anchor.cooldown_hours or PRIORITY_COOLDOWN.get(anchor.priority, 4)
-            recent = session.query(Anchor).filter(
-                Anchor.user_id == user.id,
-                Anchor.anchor_type == anchor.anchor_type,
-                Anchor.delivered_at.isnot(None),
-                Anchor.delivered_at >= now_utc - timedelta(hours=cooldown_h)
-            ).first()
+        # Один запрос: все недавние доставки этого пользователя по типам
+        # Берём max cooldown из списка якорей чтобы покрыть все 
+        max_cooldown = max((a.cooldown_hours or PRIORITY_COOLDOWN.get(a.priority, 4)) for a in anchors) if anchors else 8
+        recent_deliveries = session.query(
+            Anchor.anchor_type,
+            Anchor.delivered_at
+        ).filter(
+            Anchor.user_id == user.id,
+            Anchor.delivered_at.isnot(None),
+            Anchor.delivered_at >= now_utc - timedelta(hours=max_cooldown)
+        ).all()
 
-            if recent:
-                logger.debug(f"[ANCHOR] Cooldown: {anchor.anchor_type} (last delivered {recent.delivered_at})")
-                continue
+        # Индексируем: тип → последняя доставка
+        last_delivery_by_type = {}
+        for atype, delivered_at in recent_deliveries:
+            if atype not in last_delivery_by_type or delivered_at > last_delivery_by_type[atype]:
+                last_delivery_by_type[atype] = delivered_at
+
+        for anchor in anchors:
+            cooldown_h = anchor.cooldown_hours or PRIORITY_COOLDOWN.get(anchor.priority, 4)
+            last_delivered = last_delivery_by_type.get(anchor.anchor_type)
+            if last_delivered:
+                if last_delivered.tzinfo is None:
+                    last_delivered = last_delivered.replace(tzinfo=timezone.utc)
+                if last_delivered >= now_utc - timedelta(hours=cooldown_h):
+                    logger.debug(f"[ANCHOR] Cooldown: {anchor.anchor_type} (last delivered {last_delivered})")
+                    continue
 
             result.append(anchor)
 

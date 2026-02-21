@@ -3,7 +3,7 @@ import logging
 import enum
 import json
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, Float, text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, Float, text, Index
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
@@ -387,6 +387,12 @@ class Anchor(Base):
 
     user = relationship("User", backref="anchors")
 
+    # Составные индексы для частых запросов AnchorEngine
+    __table_args__ = (
+        Index('ix_anchors_user_delivered', 'user_id', 'delivered_at'),  # deliverable lookup
+        Index('ix_anchors_user_type_delivered', 'user_id', 'anchor_type', 'delivered_at'),  # cooldown check
+    )
+
     def is_expired(self):
         if self.expires_at:
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -512,8 +518,8 @@ if db_url and db_url.startswith('postgresql'):
 
 engine = create_engine(
     db_url,
-    pool_size=10,  # 10 permanent connections (thinking pipeline needs more)
-    max_overflow=10,  # 10 additional overflow connections (max 20 total)
+    pool_size=15,  # 15 permanent connections (parallel anchor processing + API handlers)
+    max_overflow=15,  # 15 additional overflow connections (max 30 total)
     pool_timeout=30,  # 30 second timeout before giving up
     pool_recycle=600,  # Recycle every 10 minutes
     pool_pre_ping=True,
