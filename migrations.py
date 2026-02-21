@@ -254,6 +254,18 @@ def _migrate_token_transactions(session, inspector):
         })
 
 
+def _migrate_goals(session, inspector):
+    """Миграции таблицы goals — добавление полей метрик"""
+    if not inspector.has_table('goals'):
+        return
+    cols = [col['name'] for col in inspector.get_columns('goals')]
+    _add_columns(session, 'goals', cols, {
+        'metric_unit': 'ALTER TABLE goals ADD COLUMN metric_unit VARCHAR(100)',
+        'metric_target': 'ALTER TABLE goals ADD COLUMN metric_target FLOAT',
+        'metric_current': 'ALTER TABLE goals ADD COLUMN metric_current FLOAT DEFAULT 0',
+    })
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -269,6 +281,7 @@ def run_migrations():
         _migrate_payments(session, inspector)
         _migrate_anchors(session, inspector)
         _migrate_token_transactions(session, inspector)
+        _migrate_goals(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

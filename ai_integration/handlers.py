@@ -3134,7 +3134,7 @@ def analyze_group_opportunities(user_id, session):
     return None
 
 
-def create_goal(title=None, description=None, category=None, priority=None, target_date=None, success_criteria=None, user_id=None, session=None):
+def create_goal(title=None, description=None, category=None, priority=None, target_date=None, success_criteria=None, metric_target=None, metric_unit=None, user_id=None, session=None):
     """Создать новую цель пользователя
     
     Args:
@@ -3144,6 +3144,8 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         priority: Приоритет (low, medium, high, critical)
         target_date: Целевая дата достижения
         success_criteria: Критерии успеха
+        metric_target: Целевое числовое значение (50, 10, 1000000)
+        metric_unit: Единица измерения (учеников, кг, руб)
         user_id: Telegram ID пользователя
         session: SQLAlchemy session
     """
@@ -3208,6 +3210,9 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
             priority=priority or 'medium',
             target_date=parsed_date,
             success_criteria=success_criteria[:500] if success_criteria else None,
+            metric_target=float(metric_target) if metric_target else None,
+            metric_unit=str(metric_unit)[:100] if metric_unit else None,
+            metric_current=0,
             status='active',
             progress_percentage=0
         )
@@ -3251,6 +3256,8 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
             logger.warning(f"[CREATE_GOAL] Failed to sync profile.goals: {e}")
         
         result = f"🎯 Цель создана: **{goal.title}**"
+        if goal.metric_target and goal.metric_unit:
+            result += f"\n📊 Метрика: 0/{int(goal.metric_target)} {goal.metric_unit}"
         if goal.category:
             result += f"\n📂 Категория: {goal.category}"
         if goal.priority and goal.priority != 'medium':
@@ -3271,14 +3278,15 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
             session.close()
 
 
-def update_goal_progress(goal_title=None, progress=None, status=None, notes=None, user_id=None, session=None):
+def update_goal_progress(goal_title=None, progress=None, status=None, notes=None, metric_current=None, user_id=None, session=None):
     """Обновить прогресс или статус цели
     
     Args:
         goal_title: Название или часть названия цели для поиска
-        progress: Новый процент прогресса (0-100)
+        progress: Новый процент прогресса (0-100) — для целей без метрики
         status: Новый статус (active, completed, paused, cancelled)
         notes: Заметки о прогрессе
+        metric_current: Текущее значение метрики (авто-расчёт процента)
         user_id: Telegram ID
         session: SQLAlchemy session
     """
@@ -3327,7 +3335,22 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         
         changes = []
         
-        if progress is not None:
+        # Обработка metric_current — автоматический расчёт процента
+        if metric_current is not None and matched.metric_target:
+            try:
+                mc = float(metric_current)
+                matched.metric_current = mc
+                pct = int(mc / matched.metric_target * 100)
+                pct = max(0, min(100, pct))
+                matched.progress_percentage = pct
+                changes.append(f"метрика: {int(mc)}/{int(matched.metric_target)} {matched.metric_unit or ''} ({pct}%)")
+                if pct >= 100 and matched.status == 'active':
+                    matched.status = 'completed'
+                    matched.completed_at = datetime.now()
+                    changes.append("статус: завершено! 🎉")
+            except (ValueError, TypeError):
+                pass
+        elif progress is not None:
             try:
                 pct = int(progress)
                 pct = max(0, min(100, pct))
@@ -3363,7 +3386,12 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         
         result = f"🎯 **{matched.title}** обновлена:\n"
         result += ", ".join(changes)
-        result += f"\n📊 Прогресс: {matched.progress_percentage}%"
+        if matched.metric_target and matched.metric_unit:
+            mc = int(matched.metric_current or 0)
+            mt = int(matched.metric_target)
+            result += f"\n📏 {mc}/{mt} {matched.metric_unit} ({matched.progress_percentage}%)"
+        else:
+            result += f"\n📊 Прогресс: {matched.progress_percentage}%"
         
         # Связанные задачи
         linked_tasks = session.query(Task).filter_by(user_id=user.id, goal_id=matched.id, status='pending').count()

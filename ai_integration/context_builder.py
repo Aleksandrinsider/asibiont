@@ -285,7 +285,12 @@ class ContextBuilder:
             if active_goals:
                 goal_lines = []
                 for g in active_goals:
-                    line = f"{g.title} ({g.progress_percentage}%)"
+                    if g.metric_target and g.metric_unit:
+                        mc = int(g.metric_current or 0)
+                        mt = int(g.metric_target)
+                        line = f"{g.title} ({mc}/{mt} {g.metric_unit}, {g.progress_percentage}%)"
+                    else:
+                        line = f"{g.title} ({g.progress_percentage}%)"
                     if g.target_date:
                         days = g.days_until_target()
                         if days is not None and days < 0:

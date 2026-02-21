@@ -3,7 +3,7 @@ import logging
 import enum
 import json
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, Float, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
@@ -155,6 +155,10 @@ class Goal(Base):
     progress_notes = Column(Text)  # Notes about progress
     related_tasks = Column(Text)  # JSON array of related task IDs
     success_criteria = Column(Text)  # How to measure success
+    # Метрики цели — измеримый прогресс
+    metric_unit = Column(String(100))  # единица измерения: 'учеников', 'кг', 'руб', 'км', 'подписчиков'
+    metric_target = Column(Float)  # целевое значение: 50, 10, 1000000
+    metric_current = Column(Float, default=0)  # текущее значение: 12, 3, 250000
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), onupdate=datetime.datetime.now(datetime.timezone.utc))
 
