@@ -683,7 +683,7 @@
                                 <div id="today-stats">{% if tasks %}<span>В работе: {{ tasks|selectattr('status', 'in', ['pending', 'in_progress'])|rejectattr('overdue', 'equalto', true)|list|length }} · <span style="color: #d73a49;">С отставанием: {{ tasks|selectattr('overdue', 'equalto', true)|selectattr('status', 'in', ['pending', 'in_progress'])|list|length }}</span> · Выполнено: {{ tasks|selectattr('status', 'equalto', 'completed')|list|length }}</span>{% endif %}</div>
                             </div>
                             {% if user and user.username == 'aleksandrinsider' %}
-                            <div class="stats-text" style="margin-top: 8px; color: #6e7781; font-size: 12px;">
+                            <div class="stats-text" style="margin-top: 8px;">
                                 Пользователей на сайте: {{ total_users_count|default(0) }}
                             </div>
                             {% endif %}
