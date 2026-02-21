@@ -308,19 +308,10 @@ class ReminderService:
         logger.info(f"[REMINDER] Followup for task {task_id} — handled by AnchorEngine (no APScheduler job)")
 
     def schedule_result_check(self, task_id: int, result_check_time: datetime, user_id: int, task_title: str):
-        # Конвертируем naive datetime в aware с UTC
-        if result_check_time.tzinfo is None:
-            result_check_time = pytz.UTC.localize(result_check_time)
-        
-        trigger = DateTrigger(run_date=result_check_time, timezone=pytz.UTC)
-        # Use jobstore-safe wrapper
-        self.scheduler.add_job(
-            _send_result_check_job,
-            trigger=trigger,
-            args=[task_id],
-            id=f"result_check_{task_id}",
-            replace_existing=True
-        )
+        """Проверка результата теперь через AnchorEngine (task_result_check якорь).
+        Метод сохранён для совместимости."""
+        logger = logging.getLogger(__name__)
+        logger.info(f"[REMINDER] Result check for task {task_id} — handled by AnchorEngine (no APScheduler job)")
 
     async def send_result_check(self, user_id: int, task_title: str, task_id: int):
         import traceback
@@ -866,193 +857,16 @@ class ReminderService:
             db.close()
 
     def schedule_task_checkpoints(self, user_id: int):
-        """Планирование чекпоинтов для задач пользователя по принципу 1/3-2/3-3/3 ПОСЛЕ ПРОСРОЧКИ
-        
-        Для просроченных задач:
-        - 1/3 estimated_duration после просрочки: первый чекпоинт
-        - 2/3 estimated_duration после просрочки: второй чекпоинт  
-        - 3/3 estimated_duration после просрочки: третий чекпоинт (финальный)
-        
-        Для задач с приближающимся дедлайном:
-        - 1/3 времени до reminder_time: предварительный чекпоинт
-        """
-        db = Session()
-        try:
-            user = db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                return
-            
-            # Получить все pending задачи с reminder_time
-            pending_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status == 'pending',
-                Task.reminder_time.isnot(None)
-            ).all()
-            
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
-            current_time = datetime.now(pytz.UTC)
-            
-            for task in pending_tasks:
-                # Сделать reminder_time aware с UTC
-                reminder_time = task.reminder_time
-                if reminder_time.tzinfo is None:
-                    reminder_time = pytz.UTC.localize(reminder_time)
-                
-                # Пропустить задачи, которые уже просрочены более чем на день
-                if reminder_time < current_time - timedelta(days=1):
-                    continue
-                
-                time_until_reminder = reminder_time - current_time
-                
-                if time_until_reminder.total_seconds() <= 0:
-                    # Задача просрочена - чекпоинты на 1/3, 2/3, 3/3 estimated_duration ПОСЛЕ просрочки
-                    overdue_duration = task.estimated_duration or 60  # по умолчанию 1 час
-                    
-                    # Рассчитываем чекпоинты относительно reminder_time
-                    checkpoint_1 = reminder_time + timedelta(minutes=overdue_duration // 3)  # 1/3
-                    checkpoint_2 = reminder_time + timedelta(minutes=(overdue_duration * 2) // 3)  # 2/3  
-                    checkpoint_3 = reminder_time + timedelta(minutes=overdue_duration)  # 3/3
-                    
-                    # Планируем все три чекпоинта, если они в будущем
-                    checkpoints = [
-                        (checkpoint_1, "overdue_1_3"),
-                        (checkpoint_2, "overdue_2_3"), 
-                        (checkpoint_3, "overdue_3_3")
-                    ]
-                    
-                    for check_time, check_type in checkpoints:
-                        if check_time > current_time:
-                            job_id = f"task_overdue_{task.id}_{check_type}_{user.telegram_id}"
-                            
-                            # Удалить существующий джоб
-                            if self.scheduler.get_job(job_id):
-                                self.scheduler.remove_job(job_id)
-                            
-                            # Запланировать чекпоинт
-                            self.scheduler.add_job(
-                                _send_task_checkpoint_job,
-                                trigger="date",
-                                run_date=check_time,
-                                args=[user.telegram_id, check_type],
-                                id=job_id,
-                                replace_existing=True,
-                                misfire_grace_time=300,  # 5 минут на опоздание
-                                max_instances=1
-                            )
-                            
-                            logger.debug(f"Scheduled overdue checkpoint {check_type} for task {task.id} at {check_time} (user {user.telegram_id})")
-                else:
-                    # Задача не просрочена - чекпоинт на 1/3 времени до reminder_time
-                    if time_until_reminder.total_seconds() > 0:
-                        check_time = current_time + (time_until_reminder * 1 / 3)
-                        if check_time > current_time:
-                            job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
-                            
-                            # Удалить существующий джоб
-                            if self.scheduler.get_job(job_id):
-                                self.scheduler.remove_job(job_id)
-                            
-                            # Запланировать чекпоинт
-                            self.scheduler.add_job(
-                                _send_task_checkpoint_job,
-                                trigger="date",
-                                run_date=check_time,
-                                args=[user.telegram_id, "pre_deadline"],
-                                id=job_id,
-                                replace_existing=True,
-                                misfire_grace_time=300,
-                                max_instances=1
-                            )
-                            
-                            logger.debug(f"Scheduled pre-deadline checkpoint for task {task.id} at {check_time} (user {user.telegram_id})")
-            
-            # НЕ создаём дублирующий no_tasks_checkpoint — проактивные сообщения
-            # уже планируются через _reschedule_proactive_check (job_id=proactive_{user_id}).
-            # Два джоба на одно время = два сообщения одновременно.
-            logger.debug(f"Skipping no-tasks checkpoint for user {user.telegram_id} — handled by proactive scheduler")
-                
-        finally:
-            db.close()
+        """Чекпоинты теперь обрабатываются AnchorEngine (task_overdue + task_deadline_soon якоря).
+        Метод сохранён для совместимости."""
+        logger = logging.getLogger(__name__)
+        logger.info(f"[REMINDER] Task checkpoints for user {user_id} — handled by AnchorEngine (no APScheduler job)")
 
     async def _reschedule_proactive_check(self, user_id: int, task_count: int = 0):
-        """Перепланирование следующей проактивной проверки с СОКРАЩЁННЫМИ интервалами.
-        
-        Новые интервалы (были 4-10ч, стали 2-4ч):
-        - 0 задач: 2ч (мотивация к планированию)
-        - 1-3: 2.5ч
-        - 4-7: 3ч
-        - 8-12: 3.5ч
-        - 13+: 4ч
-        """
-        import random
-        
-        db = Session()
-        try:
-            user = db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                return
-            
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
-            job_id = f"proactive_{user.telegram_id}"
-            
-            # Сокращённые адаптивные интервалы
-            if task_count == 0:
-                base_hours = 2
-            elif task_count <= 3:
-                base_hours = 2.5
-            elif task_count <= 7:
-                base_hours = 3
-            elif task_count <= 12:
-                base_hours = 3.5
-            else:
-                base_hours = 4
-            
-            # Случайность ±30 минут
-            random_offset_minutes = random.randint(-30, 30)
-            hours_with_variance = base_hours + (random_offset_minutes / 60.0)
-            
-            # Привязка к последнему сообщению пользователя
-            last_user_message = db.query(Interaction).filter(
-                Interaction.user_id == user.id,
-                Interaction.message_type == "user"
-            ).order_by(Interaction.created_at.desc()).first()
-            
-            if last_user_message:
-                next_check_time = last_user_message.created_at.replace(tzinfo=pytz.UTC) + timedelta(hours=hours_with_variance)
-            else:
-                next_check_time = datetime.now(pytz.UTC) + timedelta(hours=hours_with_variance)
-            
-            # Убедимся, что время в будущем
-            now_utc = datetime.now(pytz.UTC)
-            if next_check_time <= now_utc:
-                next_check_time = now_utc + timedelta(hours=hours_with_variance)
-            
-            # Проверка разрешённого диапазона (10:00 - 22:00)
-            next_check_local = next_check_time.astimezone(user_tz)
-            
-            if next_check_local.hour < PROACTIVE_SEND_START_HOUR:
-                next_check_local = next_check_local.replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
-            elif next_check_local.hour >= PROACTIVE_NO_SEND_START_HOUR:
-                next_check_local = (next_check_local + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
-            
-            if next_check_local <= datetime.now(user_tz):
-                # Время в прошлом — запланировать через base_hours от текущего момента
-                next_check_local = datetime.now(user_tz) + timedelta(hours=hours_with_variance)
-                # Если новое время за пределами разрешённого диапазона — перенести на утро
-                if next_check_local.hour >= PROACTIVE_NO_SEND_START_HOUR or next_check_local.hour < PROACTIVE_SEND_START_HOUR:
-                    next_check_local = (datetime.now(user_tz) + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
-            
-            self.scheduler.add_job(
-                _check_and_send_proactive_job,
-                trigger=DateTrigger(run_date=next_check_local, timezone=user_tz),
-                args=[user.telegram_id],
-                id=job_id,
-                replace_existing=True,
-                max_instances=1
-            )
-            logger.info(f"Rescheduled proactive for user {user.telegram_id} at {next_check_local} ({base_hours}h base + {random_offset_minutes}m, {task_count} tasks)")
-        finally:
-            db.close()
+        """Проактивные проверки теперь через AnchorEngine (dialog_followup, morning_plan, etc.).
+        Метод сохранён для совместимости."""
+        logger = logging.getLogger(__name__)
+        logger.info(f"[REMINDER] Proactive check for user {user_id} — handled by AnchorEngine (no APScheduler job)")
 
     def schedule_overdue_checks(self):
         """ОТКЛЮЧЕНО — просроченные задачи обрабатываются AnchorEngine.
@@ -1306,31 +1120,10 @@ class ReminderService:
             db.close()
 
     def schedule_delegation_check(self, task_id: int, check_time: datetime, delegator_id: int, recipient_id: int, task_title: str, check_type: str = "progress_request"):
-        """Schedule delegation progress check"""
+        """Делегирование теперь отслеживается AnchorEngine (_scan_delegation, delegation_pending/delegation_update якоря).
+        Метод сохранён для совместимости."""
         logger = logging.getLogger(__name__)
-
-        # Конвертируем naive datetime в aware с UTC
-        if check_time.tzinfo is None:
-            check_time = pytz.UTC.localize(check_time)
-
-        logger.info(f"Scheduling delegation check for task {task_id}, type: {check_type}, delegator {delegator_id}, recipient {recipient_id}, time: {check_time}")
-
-        # Проверяем, запущен ли scheduler
-        if not self.scheduler.running:
-            return
-
-        job_id = f"delegation_check_{task_id}_{check_type}_{int(check_time.timestamp())}"
-        trigger = DateTrigger(run_date=check_time, timezone=pytz.UTC)
-
-        # Use jobstore-safe module-level wrapper
-        self.scheduler.add_job(
-            _send_delegation_check_job,
-            trigger=trigger,
-            args=[task_id, delegator_id, recipient_id, check_type],
-            id=job_id,
-            replace_existing=True
-        )
-        logger.info(f"Delegation check scheduled for {check_time}")
+        logger.info(f"[REMINDER] Delegation check for task {task_id} — handled by AnchorEngine (no APScheduler job)")
 
     async def send_delegation_check(self, task_id: int, delegator_id: int, recipient_id: int, check_type: str = "progress_request"):
         """Send delegation progress check/reminder"""
@@ -1477,27 +1270,10 @@ class ReminderService:
         logger.info("Scheduled avatar updates once a day at 3:00 AM")
 
     def schedule_delegation_checks(self):
-        """Schedule periodic delegation deadline checks"""
-        from apscheduler.triggers.interval import IntervalTrigger
+        """Делегирование теперь отслеживается AnchorEngine (_scan_delegation).
+        Метод сохранён для совместимости."""
         logger = logging.getLogger(__name__)
-
-        job_id = "delegation_deadline_check"
-
-        # Проверяем, существует ли уже такой джоб
-        if self.scheduler.get_job(job_id):
-            logger.debug(f"Delegation check job {job_id} already exists, skipping")
-            return
-
-        # Schedule daily delegation deadline checks at 9 AM UTC
-        self.scheduler.add_job(
-            check_delegation_deadlines,
-            trigger="cron",
-            hour=9,
-            minute=0,
-            id=job_id,
-            replace_existing=True
-        )
-        logger.info("Scheduled daily delegation deadline checks at 9:00 UTC")
+        logger.info("[REMINDER] Delegation checks — handled by AnchorEngine (no APScheduler job)")
 
     def schedule_recurring_tasks(self):
         """Schedule creation of new instances for recurring tasks"""
@@ -1612,14 +1388,7 @@ class ReminderService:
             return last_time + timedelta(days=interval)
 
     def schedule_recurring_task_checks(self):
-        """Schedule periodic checks for creating new recurring task instances"""
-        job_id = "recurring_tasks_check"
-        self.scheduler.add_job(
-            _schedule_recurring_tasks_job,
-            trigger="interval",
-            hours=1,  # Check every hour
-            id=job_id,
-            replace_existing=True
-        )
-        logger.info("Scheduled recurring tasks check every hour")
+        """Повторяющиеся задачи теперь проверяются AnchorEngine (recurring_task_due якорь, каждые 5 мин).
+        Метод сохранён для совместимости."""
+        logger.info("[REMINDER] Recurring tasks check — handled by AnchorEngine (no APScheduler job)")
 

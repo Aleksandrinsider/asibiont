@@ -100,6 +100,8 @@ BATCH_GROUPS = {
     'weather_activity': 'misc',
     'morning_plan': 'daily',
     'evening_review': 'daily',
+    'task_result_check': 'tasks',
+    'recurring_task_due': 'tasks',
     'post_opportunity': 'posting',
     'channel_post': 'posting',
 }
@@ -462,6 +464,89 @@ class AnchorEngine:
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(days=3),
                         cooldown_hours=24,
+                        batch_group='tasks',
+                    ))
+
+            # ПРОВЕРКА РЕЗУЛЬТАТА: задача с reminder_sent, estimated_duration, не проверена
+            if (getattr(task, 'reminder_sent', False) 
+                and getattr(task, 'estimated_duration', None)
+                and not getattr(task, 'result_check_sent', False)):
+                rt = task.reminder_time
+                if rt and rt.tzinfo is None:
+                    rt = rt.replace(tzinfo=timezone.utc)
+                if rt:
+                    result_check_time = rt + timedelta(minutes=task.estimated_duration)
+                    if now_utc >= result_check_time:
+                        anchors.append(Anchor(
+                            user_id=user.id,
+                            anchor_type='task_result_check',
+                            source=f'task:{task.id}:result',
+                            topic=f'Время проверить результат задачи «{task.title}»',
+                            priority=AnchorPriority.MEDIUM,
+                            data=json.dumps({'task_id': task.id, 'title': task.title,
+                                            'estimated_duration': task.estimated_duration}),
+                            triggered_at=now_utc,
+                            expires_at=now_utc + timedelta(hours=12),
+                            cooldown_hours=6,
+                            batch_group='tasks',
+                        ))
+
+        # Повторяющиеся задачи: проверяем нужно ли создать новый экземпляр
+        recurring_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.is_recurring == True,
+            Task.status.in_(['pending', 'in_progress', 'active', 'completed'])
+        ).all()
+
+        for rtask in recurring_tasks:
+            if rtask.reminder_time and rtask.recurrence_pattern:
+                rt = rtask.reminder_time
+                if rt.tzinfo is None:
+                    rt = rt.replace(tzinfo=timezone.utc)
+                # Проверяем: последний экземпляр уже в прошлом?
+                last_instance = session.query(Task).filter(
+                    Task.parent_task_id == rtask.id
+                ).order_by(Task.reminder_time.desc()).first()
+                
+                last_time = last_instance.reminder_time if last_instance else rt
+                if last_time and last_time.tzinfo is None:
+                    last_time = last_time.replace(tzinfo=timezone.utc)
+                
+                if last_time and last_time < now_utc:
+                    # Создаём новый экземпляр повторяющейся задачи
+                    next_time = self._calculate_next_recurrence(last_time, rtask.recurrence_pattern, rtask.recurrence_interval or 1)
+                    # Проверяем что такой экземпляр ещё не создан
+                    existing = session.query(Task).filter(
+                        Task.parent_task_id == rtask.id,
+                        Task.reminder_time == next_time
+                    ).first()
+                    if not existing:
+                        new_task = Task(
+                            user_id=rtask.user_id,
+                            title=rtask.title,
+                            description=rtask.description,
+                            reminder_time=next_time,
+                            parent_task_id=rtask.id
+                        )
+                        session.add(new_task)
+                        try:
+                            session.commit()
+                            logger.info(f"[ANCHOR] Created recurring instance for task {rtask.id}: '{rtask.title}' at {next_time}")
+                        except Exception:
+                            session.rollback()
+                    
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='recurring_task_due',
+                        source=f'task:{rtask.id}:recurring',
+                        topic=f'Повторяющаяся задача «{rtask.title}» — создан новый экземпляр',
+                        priority=AnchorPriority.MEDIUM,
+                        data=json.dumps({'task_id': rtask.id, 'title': rtask.title,
+                                        'pattern': rtask.recurrence_pattern,
+                                        'interval': rtask.recurrence_interval or 1}),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(hours=12),
+                        cooldown_hours=4,
                         batch_group='tasks',
                     ))
 
@@ -1030,6 +1115,40 @@ class AnchorEngine:
         ))
 
         return anchors
+
+    # ═══════════════════════════════════════════════════════
+    # RECURRENCE HELPERS
+    # ═══════════════════════════════════════════════════════
+
+    def _calculate_next_recurrence(self, last_time, pattern: str, interval: int = 1):
+        """Вычисляет следующее время для повторяющейся задачи.
+        
+        Args:
+            last_time: datetime последнего срабатывания
+            pattern: 'daily' | 'weekly' | 'monthly' | 'yearly'
+            interval: каждые N единиц (по умолчанию 1)
+        """
+        import calendar
+
+        if pattern == 'daily':
+            return last_time + timedelta(days=interval)
+        elif pattern == 'weekly':
+            return last_time + timedelta(weeks=interval)
+        elif pattern == 'monthly':
+            year = last_time.year
+            month = last_time.month + interval
+            day = last_time.day
+            while month > 12:
+                year += 1
+                month -= 12
+            last_day = calendar.monthrange(year, month)[1]
+            if day > last_day:
+                day = last_day
+            return last_time.replace(year=year, month=month, day=day)
+        elif pattern == 'yearly':
+            return last_time.replace(year=last_time.year + interval)
+        else:
+            return last_time + timedelta(days=interval)
 
     # ═══════════════════════════════════════════════════════
     # COOLDOWN & ANTI-SPAM
