@@ -118,6 +118,8 @@ class AnchorEngine:
         self.bot = bot
         self.running = False
         self._scan_locks = defaultdict(asyncio.Lock)
+        # Семафор для AI-вызовов — ограничивает параллельные запросы к DeepSeek
+        self._ai_semaphore = asyncio.Semaphore(5)
         logger.info("[ANCHOR] AnchorEngine initialized")
 
     # ═══════════════════════════════════════════════════════
@@ -130,10 +132,16 @@ class AnchorEngine:
         logger.info(f"[ANCHOR] 🚀 Starting scan loop (every {SCAN_INTERVAL_MINUTES}min)")
         while self.running:
             try:
-                logger.info(f"[ANCHOR] 🔄 Starting scan cycle (interval: {SCAN_INTERVAL_MINUTES}min)")
+                import time as _time
+                cycle_start = _time.monotonic()
+                logger.info(f"[ANCHOR] 🔄 Starting scan cycle")
                 await self._scan_all_users()
-                logger.info(f"[ANCHOR] ✅ Scan cycle complete, sleeping {SCAN_INTERVAL_MINUTES}min")
-                await asyncio.sleep(SCAN_INTERVAL_MINUTES * 60)
+                cycle_duration = _time.monotonic() - cycle_start
+                # Adaptive sleep: если цикл занял долго, спим меньше
+                target_interval = SCAN_INTERVAL_MINUTES * 60
+                sleep_time = max(60, target_interval - cycle_duration)  # минимум 1 мин
+                logger.info(f"[ANCHOR] ✅ Scan cycle complete in {cycle_duration:.1f}s, sleeping {sleep_time:.0f}s")
+                await asyncio.sleep(sleep_time)
             except Exception as e:
                 logger.error(f"[ANCHOR] Loop error: {e}\n{traceback.format_exc()}")
                 await asyncio.sleep(300)
@@ -143,20 +151,59 @@ class AnchorEngine:
         logger.info("[ANCHOR] Stopped")
 
     async def _scan_all_users(self):
-        """Сканирует всех пользователей — параллельно по батчам"""
+        """Двухфазный пайплайн: bulk pre-filter → parallel scan+eval
+        
+        При 1000 юзерах:
+        - Phase 0: 1 запрос, отсеивает ~60% (ночь/DND) → ~400 eligible
+        - Phase 1: DB-scan 10 параллельно, без AI → ~200ms/user → 400/10 × 0.2 = 8s
+        - Phase 2: AI eval только для юзеров с ready anchors (~5%) → ~20 AI calls
+        """
         session = Session()
         try:
+            # ── PHASE 0: Массовый pre-filter (1 запрос к БД) ──
             users = session.query(User).filter(
                 User.telegram_id.isnot(None)
             ).all()
-            user_ids = [u.telegram_id for u in users]
+
+            now_utc = datetime.now(timezone.utc)
+            eligible = []
+            skipped_night = 0
+            skipped_dnd = 0
+
+            for u in users:
+                # DND check
+                if u.do_not_disturb_until:
+                    dnd = u.do_not_disturb_until
+                    if dnd.tzinfo is None:
+                        dnd = dnd.replace(tzinfo=timezone.utc)
+                    if now_utc < dnd:
+                        skipped_dnd += 1
+                        continue
+
+                # Night hours check
+                try:
+                    user_tz = pytz.timezone(u.timezone or 'Europe/Moscow')
+                    user_now = datetime.now(user_tz)
+                    if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
+                        skipped_night += 1
+                        continue
+                except Exception:
+                    pass  # если timezone кривой — пропускаем pre-filter, проверим в _process_user_inner
+
+                eligible.append(u.telegram_id)
+
+            logger.info(
+                f"[ANCHOR] Pre-filter: {len(users)} total → {len(eligible)} eligible "
+                f"(skipped: {skipped_night} night, {skipped_dnd} DND)"
+            )
         finally:
             session.close()
 
-        # Параллельная обработка батчами по BATCH_CONCURRENCY пользователей
-        BATCH_CONCURRENCY = 3  # Параллельных AI-вызовов за раз
-        for i in range(0, len(user_ids), BATCH_CONCURRENCY):
-            batch = user_ids[i:i + BATCH_CONCURRENCY]
+        # ── PHASE 1+2: Параллельная обработка eligible пользователей ──
+        # DB-scan безопасен при высоком параллелизме, AI ограничен семафором
+        BATCH_CONCURRENCY = 10
+        for i in range(0, len(eligible), BATCH_CONCURRENCY):
+            batch = eligible[i:i + BATCH_CONCURRENCY]
             tasks = []
             for uid in batch:
                 lock = self._scan_locks[uid]
@@ -319,7 +366,9 @@ class AnchorEngine:
         if all_dialog_anchors:
             anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
             logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
-            message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
+            # AI semaphore — ограничивает параллельные DeepSeek запросы
+            async with self._ai_semaphore:
+                message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
             if message:
                 await self._deliver(user, all_dialog_anchors, message, session)
                 logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(all_dialog_anchors)} anchors in ONE message")
@@ -330,13 +379,15 @@ class AnchorEngine:
         feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
         if feed_posts and post_count < MAX_FEED_PER_DAY:
             for pa in feed_posts[:1]:
-                await self._process_post_anchor(user, pa, session)
+                async with self._ai_semaphore:
+                    await self._process_post_anchor(user, pa, session)
 
         # ── 3d. CHANNEL POSTS — отдельный лимит ──
         channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
         if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
             for pa in channel_posts[:1]:
-                await self._process_post_anchor(user, pa, session)
+                async with self._ai_semaphore:
+                    await self._process_post_anchor(user, pa, session)
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
