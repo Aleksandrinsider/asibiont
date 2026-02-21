@@ -1047,7 +1047,9 @@ async def dashboard_handler(request):
         if user and user.username == 'aleksandrinsider':
             try:
                 total_users_count = session.query(User).count()
-            except Exception:
+                logger.info(f"[ADMIN] Total users count: {total_users_count}")
+            except Exception as e:
+                logger.error(f"[ADMIN] Error counting users: {e}")
                 total_users_count = 0
 
         logger.info(f"Rendering dashboard for user {user.id}")
