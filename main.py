@@ -1042,6 +1042,9 @@ async def dashboard_handler(request):
             import random
             user_avatar_url += f"?r={random.randint(100000, 999999)}"
 
+        # Count total users for admin stats
+        total_users_count = session.query(User).count() if user and user.username == 'aleksandrinsider' else 0
+
         logger.info(f"Rendering dashboard for user {user.id}")
 
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
@@ -1049,6 +1052,7 @@ async def dashboard_handler(request):
             'bot_username': 'asibiont_bot',
             'tasks': tasks_dict,
             'user': user,
+            'total_users_count': total_users_count,
             'profile': profile,
             'telegram_channel': user.telegram_channel if user else None,
             'interactions': interactions,
