@@ -1958,7 +1958,11 @@ async def edit_task(
                 
                 if parsed_time:
                     task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                    logger.info(f"[EDIT_TASK] Time updated: '{reminder_time}' -> {task.reminder_time} UTC")
+                    # КРИТИЧНО: сбрасываем флаги при переносе, чтобы AnchorEngine создал новое напоминание
+                    task.reminder_sent = False
+                    task.followup_reminder_sent = False
+                    task.result_check_sent = False
+                    logger.info(f"[EDIT_TASK] Time updated: '{reminder_time}' -> {task.reminder_time} UTC, reminder flags reset")
                 else:
                     if close_session:
                         session.close()
