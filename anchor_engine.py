@@ -1175,20 +1175,38 @@ class AnchorEngine:
 
             result.append(anchor)
 
-        # Адаптация: если пользователь игнорирует > 70% — понижаем частоту LOW
-        # НО НЕ блокируем MEDIUM, чтобы пользователь видел работу агента
+        # Адаптация: если пользователь игнорирует > 70% — понижаем частоту LOW ДИАЛОГОВЫХ
+        # НО НЕ блокируем: posting (post_opportunity, channel_post) — это посты, не диалог
+        # И НЕ считаем CRITICAL/HIGH доставки — они информационные, ответ не ожидается
         recent_logs = session.query(AnchorDeliveryLog).filter(
             AnchorDeliveryLog.user_id == user.id,
             AnchorDeliveryLog.created_at >= now_utc - timedelta(days=7)
         ).all()
 
-        if len(recent_logs) >= 5:
-            ignored = sum(1 for log in recent_logs if not log.user_responded)
-            ignore_rate = ignored / len(recent_logs)
+        # Для подсчёта ignore rate берём только ДИАЛОГОВЫЕ (не CRITICAL/HIGH)
+        dialog_logs = []
+        for log in recent_logs:
+            try:
+                types = json.loads(log.anchor_types) if log.anchor_types else []
+            except (json.JSONDecodeError, TypeError):
+                types = []
+            # Пропускаем логи, которые содержат ТОЛЬКО ALWAYS_DELIVER_TYPES
+            if all(t in ALWAYS_DELIVER_TYPES for t in types) and types:
+                continue
+            # Пропускаем логи постов — они не диалоговые
+            if any(t in ('post_opportunity', 'channel_post') for t in types):
+                continue
+            dialog_logs.append(log)
+
+        if len(dialog_logs) >= 5:
+            ignored = sum(1 for log in dialog_logs if not log.user_responded)
+            ignore_rate = ignored / len(dialog_logs)
             if ignore_rate > 0.7:
-                # Убираем LOW — но MEDIUM/HIGH/CRITICAL остаются
-                result = [a for a in result if a.priority != AnchorPriority.LOW]
-                logger.info(f"[ANCHOR] User {user.telegram_id}: high ignore rate ({ignore_rate:.0%}), filtered out LOW")
+                # Убираем LOW ДИАЛОГОВЫЕ — но posting якоря остаются
+                POSTING_TYPES = {'post_opportunity', 'channel_post'}
+                result = [a for a in result if a.priority != AnchorPriority.LOW
+                          or a.anchor_type in POSTING_TYPES]
+                logger.info(f"[ANCHOR] User {user.telegram_id}: high ignore rate ({ignore_rate:.0%}), filtered out LOW dialog anchors (kept posting)")
 
         return result
 
