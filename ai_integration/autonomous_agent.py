@@ -212,7 +212,6 @@ class HybridAutonomousAgent:
 
     def _tool_progress_text(self, tool_name, iteration):
         """Генерирует текст прогресса по имени инструмента."""
-        import random
         entry = self._TOOL_PROGRESS_MAP.get(tool_name, ['⚙️ Работаю...'])
         if isinstance(entry, list):
             text = random.choice(entry)
@@ -976,7 +975,6 @@ class HybridAutonomousAgent:
             # Прогресс — живые фразы
             if _cb:
                 try:
-                    import random
                     await _cb(random.choice(self._THINKING_PHRASES))
                 except Exception:
                     pass
@@ -988,7 +986,6 @@ class HybridAutonomousAgent:
                 # Обновляем прогресс перед вызовом AI
                 if _cb and iteration > 0:
                     try:
-                        import random
                         await _cb(random.choice(self._DEEP_THINKING_PHRASES))
                     except Exception:
                         pass
