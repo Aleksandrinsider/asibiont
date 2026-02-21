@@ -1495,11 +1495,13 @@ class AnchorEngine:
                 desc = f" — {t.description[:80]}" if t.description else ""
                 task_lines.append(f"• {t.title}{time_str}{desc}")
 
-            # Недавно завершённые задачи (за 7 дней) — AI должен знать прогресс
+            # Завершённые задачи за сегодня — AI должен знать прогресс дня
+            user_today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start_utc = user_today_start.astimezone(pytz.UTC)
             completed_tasks = session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status == 'completed',
-                Task.actual_completion_time >= now_utc - timedelta(days=7)
+                Task.actual_completion_time >= today_start_utc
             ).order_by(Task.actual_completion_time.desc()).limit(5).all()
 
             completed_lines = []
