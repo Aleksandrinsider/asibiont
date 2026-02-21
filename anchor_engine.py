@@ -1202,11 +1202,32 @@ class AnchorEngine:
             ignored = sum(1 for log in dialog_logs if not log.user_responded)
             ignore_rate = ignored / len(dialog_logs)
             if ignore_rate > 0.7:
-                # Убираем LOW ДИАЛОГОВЫЕ — но posting якоря остаются
-                POSTING_TYPES = {'post_opportunity', 'channel_post'}
-                result = [a for a in result if a.priority != AnchorPriority.LOW
-                          or a.anchor_type in POSTING_TYPES]
-                logger.info(f"[ANCHOR] User {user.telegram_id}: high ignore rate ({ignore_rate:.0%}), filtered out LOW dialog anchors (kept posting)")
+                # НЕ блокируем — увеличиваем cooldown для необязательных LOW
+                # Re-engagement типы (dialog_followup, task_stale, profile_gap) НУЖНЫ 
+                # чтобы вернуть пользователя в строй — их не трогаем
+                RE_ENGAGEMENT_TYPES = {
+                    'dialog_followup', 'task_stale', 'profile_gap',
+                    'post_opportunity', 'channel_post',
+                }
+                OPTIONAL_LOW = {'market_insight', 'content_opportunity', 'weather_activity'}
+                # Необязательные LOW — удваиваем cooldown (через доп. фильтр)
+                filtered = []
+                for a in result:
+                    if a.priority == AnchorPriority.LOW and a.anchor_type in OPTIONAL_LOW:
+                        # Проверяем двойной cooldown
+                        double_cd = (a.cooldown_hours or 8) * 2
+                        recent_opt = session.query(Anchor).filter(
+                            Anchor.user_id == user.id,
+                            Anchor.anchor_type == a.anchor_type,
+                            Anchor.delivered_at.isnot(None),
+                            Anchor.delivered_at >= now_utc - timedelta(hours=double_cd)
+                        ).first()
+                        if recent_opt:
+                            logger.debug(f"[ANCHOR] High ignore rate → doubled cooldown for {a.anchor_type}")
+                            continue
+                    filtered.append(a)
+                result = filtered
+                logger.info(f"[ANCHOR] User {user.telegram_id}: high ignore rate ({ignore_rate:.0%}), doubled cooldown for optional LOW (re-engagement kept)")
 
         return result
 
