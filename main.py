@@ -1043,7 +1043,12 @@ async def dashboard_handler(request):
             user_avatar_url += f"?r={random.randint(100000, 999999)}"
 
         # Count total users for admin stats
-        total_users_count = session.query(User).count() if user and user.username == 'aleksandrinsider' else 0
+        total_users_count = 0
+        if user and user.username == 'aleksandrinsider':
+            try:
+                total_users_count = session.query(User).count()
+            except Exception:
+                total_users_count = 0
 
         logger.info(f"Rendering dashboard for user {user.id}")
 
@@ -1084,6 +1089,7 @@ async def dashboard_handler(request):
             'bot_username': bot_user,
             'subscription_tier': 'Токены',
             'token_balance': 0,
+            'total_users_count': 0,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
