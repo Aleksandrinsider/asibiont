@@ -403,6 +403,9 @@ class AnchorEngine:
 
                 # Дедлайн в ближайшие 24ч (но ещё не просрочен)
                 elif rt < now_utc + timedelta(hours=24):
+                    # Пропускаем если reminder_service уже отправил напоминание
+                    if getattr(task, 'reminder_sent', False):
+                        continue
                     hours_left = (rt - now_utc).total_seconds() / 3600
                     anchors.append(Anchor(
                         user_id=user.id,
