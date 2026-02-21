@@ -553,6 +553,7 @@
                             {% endif %}
                             <p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: 
                                 <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">копировать</a>
+                                <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">вывести</a>
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;">20% токенов с каждого пополнения привлечённого пользователя</p>
                         </div>
@@ -5678,7 +5679,7 @@
                         }
                         if (true) {
                             const refLink = 'https://t.me/{{ bot_username }}?start=ref' + data.telegram_id;
-                            html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">копировать</a></p>';
+                            html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">копировать</a> <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">вывести</a></p>';
                             html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">20% токенов с каждого пополнения привлечённого пользователя</p>';
                         }
                         html += '</div>';
