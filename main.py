@@ -2387,16 +2387,16 @@ async def api_partners_handler(request):
                         # Точное совпадение задач
                         common_task_titles = user_task_titles & partner_task_titles
                         
-                        # Частичное совпадение - если хотя бы 2 слова совпадают
+                        # Частичное совпадение - только значимые слова (4+ символов)
+                        _stop = {'для', 'как', 'что', 'это', 'все', 'они', 'его', 'были', 'или', 'при', 'так', 'уже', 'нет', 'без', 'под', 'над', 'между', 'через', 'после', 'перед', 'список', 'составить', 'сделать', 'создать'}
                         if not common_task_titles:
                             partial_matches = set()
                             for user_task in user_task_titles:
-                                user_words = set(user_task.split())
-                                if len(user_words) < 2:  # Пропускаем слишком короткие
+                                user_words = set(w for w in user_task.split() if len(w) >= 4 and w not in _stop)
+                                if len(user_words) < 2:
                                     continue
                                 for partner_task in partner_task_titles:
-                                    partner_words = set(partner_task.split())
-                                    # Если сопадает >= 2 сло
+                                    partner_words = set(w for w in partner_task.split() if len(w) >= 4 and w not in _stop)
                                     common_words = user_words & partner_words
                                     if len(common_words) >= 2:
                                         partial_matches.add(user_task)
@@ -2540,15 +2540,16 @@ async def api_partners_handler(request):
                     # Точное совпадение задач
                     common_task_titles = user_task_titles & delegator_task_titles
                     
-                    # Частичное совпадение - если хотя бы 2 слова совпадают
+                    # Частичное совпадение - только значимые слова (4+ символов)
+                    _stop = {'для', 'как', 'что', 'это', 'все', 'они', 'его', 'были', 'или', 'при', 'так', 'уже', 'нет', 'без', 'под', 'над', 'между', 'через', 'после', 'перед', 'список', 'составить', 'сделать', 'создать'}
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
-                            user_words = set(user_task.split())
+                            user_words = set(w for w in user_task.split() if len(w) >= 4 and w not in _stop)
                             if len(user_words) < 2:
                                 continue
                             for delegator_task in delegator_task_titles:
-                                delegator_words = set(delegator_task.split())
+                                delegator_words = set(w for w in delegator_task.split() if len(w) >= 4 and w not in _stop)
                                 common_words = user_words & delegator_words
                                 if len(common_words) >= 2:
                                     partial_matches.add(user_task)
@@ -2661,15 +2662,16 @@ async def api_partners_handler(request):
                     # Точное совпадение задач
                     common_task_titles = user_task_titles & delegatee_task_titles
                     
-                    # Частичное совпадение - если хотя бы 2 слова совпадают
+                    # Частичное совпадение - только значимые слова (4+ символов)
+                    _stop = {'для', 'как', 'что', 'это', 'все', 'они', 'его', 'были', 'или', 'при', 'так', 'уже', 'нет', 'без', 'под', 'над', 'между', 'через', 'после', 'перед', 'список', 'составить', 'сделать', 'создать'}
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
-                            user_words = set(user_task.split())
+                            user_words = set(w for w in user_task.split() if len(w) >= 4 and w not in _stop)
                             if len(user_words) < 2:
                                 continue
                             for delegatee_task in delegatee_task_titles:
-                                delegatee_words = set(delegatee_task.split())
+                                delegatee_words = set(w for w in delegatee_task.split() if len(w) >= 4 and w not in _stop)
                                 common_words = user_words & delegatee_words
                                 if len(common_words) >= 2:
                                     partial_matches.add(user_task)
@@ -3017,14 +3019,15 @@ async def api_elite_partners_handler(request):
                     premium_task_titles = set(t.title.lower().strip() for t in premium_tasks if t.title)
                     
                     common_task_titles = user_task_titles & premium_task_titles
+                    _stop = {'для', 'как', 'что', 'это', 'все', 'они', 'его', 'были', 'или', 'при', 'так', 'уже', 'нет', 'без', 'под', 'над', 'между', 'через', 'после', 'перед', 'список', 'составить', 'сделать', 'создать'}
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
-                            user_words = set(user_task.split())
+                            user_words = set(w for w in user_task.split() if len(w) >= 4 and w not in _stop)
                             if len(user_words) < 2:
                                 continue
                             for premium_task in premium_task_titles:
-                                premium_words = set(premium_task.split())
+                                premium_words = set(w for w in premium_task.split() if len(w) >= 4 and w not in _stop)
                                 common_words = user_words & premium_words
                                 if len(common_words) >= 2:
                                     partial_matches.add(user_task)
@@ -3255,14 +3258,15 @@ async def api_elite_partners_handler(request):
                         partner_task_titles = set(t.title.lower().strip() for t in partner_tasks if t.title)
                         
                         common_task_titles = user_task_titles & partner_task_titles
+                        _stop = {'для', 'как', 'что', 'это', 'все', 'они', 'его', 'были', 'или', 'при', 'так', 'уже', 'нет', 'без', 'под', 'над', 'между', 'через', 'после', 'перед', 'список', 'составить', 'сделать', 'создать'}
                         if not common_task_titles:
                             partial_matches = set()
                             for user_task in user_task_titles:
-                                user_words = set(user_task.split())
+                                user_words = set(w for w in user_task.split() if len(w) >= 4 and w not in _stop)
                                 if len(user_words) < 2:
                                     continue
                                 for partner_task in partner_task_titles:
-                                    partner_words = set(partner_task.split())
+                                    partner_words = set(w for w in partner_task.split() if len(w) >= 4 and w not in _stop)
                                     common_words = user_words & partner_words
                                     if len(common_words) >= 2:
                                         partial_matches.add(user_task)
