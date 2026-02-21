@@ -553,7 +553,7 @@
                             {% endif %}
                             <p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: 
                                 <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">копировать</a>
-                                <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">вывести</a>
+                                <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">вывести</a>
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;">20% токенов с каждого пополнения привлечённого пользователя</p>
                         </div>
@@ -854,6 +854,36 @@
 
     <!-- Contact Profile Modal -->
     <div id="contact-profile-modal" class="rating-modal">
+
+    <!-- Withdraw Modal -->
+    <div id="withdraw-modal" class="rating-modal">
+        <div class="rating-modal-content">
+            <div class="rating-modal-header">
+                <h3>Вывод реферальных средств</h3>
+                <button onclick="closeWithdrawModal()" class="rating-close-btn">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="rating-modal-body">
+                <p style="font-size: 13px; color: #374151; margin-bottom: 8px;">Доступно для вывода: <strong id="withdraw-balance">0</strong> токенов</p>
+                <p style="font-size: 12px; color: #6C727F; margin-bottom: 16px;">1 токен = 1 рубль. Минимальная сумма вывода: 100 токенов</p>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px;">Номер карты</label>
+                    <input type="text" id="withdraw-card" placeholder="0000 0000 0000 0000" maxlength="19" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" oninput="formatCardNumber(this)" />
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px;">Сумма (токенов)</label>
+                    <input type="number" id="withdraw-amount" placeholder="100" min="100" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" />
+                </div>
+                <div class="rating-modal-actions">
+                    <button onclick="closeWithdrawModal()" class="rating-cancel-btn">Отмена</button>
+                    <button onclick="submitWithdraw()" class="rating-submit-btn">Отправить заявку</button>
+                </div>
+            </div>
+        </div>
+    </div>
         <div class="rating-modal-content">
             <div class="rating-modal-header">
                 <h3>Профиль контакта</h3>
@@ -1295,6 +1325,61 @@
         function closeTimeModal() {
             const modal = document.getElementById('time-modal');
             if (modal) modal.style.display = 'none';
+        }
+
+        function openWithdrawModal() {
+            const modal = document.getElementById('withdraw-modal');
+            const balanceEl = document.getElementById('withdraw-balance');
+            if (balanceEl) balanceEl.textContent = {{ referral_balance or 0 }};
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeWithdrawModal() {
+            const modal = document.getElementById('withdraw-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function formatCardNumber(input) {
+            let value = input.value.replace(/\D/g, '');
+            let formatted = value.match(/.{1,4}/g);
+            input.value = formatted ? formatted.join(' ') : '';
+        }
+
+        async function submitWithdraw() {
+            const card = document.getElementById('withdraw-card').value.replace(/\s/g, '');
+            const amount = parseInt(document.getElementById('withdraw-amount').value);
+            const balance = {{ referral_balance or 0 }};
+
+            if (!card || card.length < 16) {
+                showNotification('Введите корректный номер карты', 'error');
+                return;
+            }
+            if (!amount || amount < 100) {
+                showNotification('Минимальная сумма вывода: 100 токенов', 'error');
+                return;
+            }
+            if (amount > balance) {
+                showNotification('Недостаточно средств для вывода', 'error');
+                return;
+            }
+
+            closeWithdrawModal();
+
+            try {
+                const resp = await fetch('/api/withdraw', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({card: card, amount: amount})
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showNotification('Заявка на вывод отправлена! Обработка до 24 часов.', 'info');
+                } else {
+                    showNotification(data.error || 'Ошибка при отправке заявки', 'error');
+                }
+            } catch (e) {
+                showNotification('Ошибка сети. Попробуйте позже.', 'error');
+            }
         }
 
         async function submitTimeChange() {
@@ -5679,7 +5764,7 @@
                         }
                         if (true) {
                             const refLink = 'https://t.me/{{ bot_username }}?start=ref' + data.telegram_id;
-                            html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">копировать</a> <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">вывести</a></p>';
+                            html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">копировать</a> <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">вывести</a></p>';
                             html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">20% токенов с каждого пополнения привлечённого пользователя</p>';
                         }
                         html += '</div>';

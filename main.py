@@ -5638,6 +5638,67 @@ async def add_test_users_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def withdraw_handler(request):
+    """Handle referral balance withdrawal request"""
+    try:
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        data = await request.json()
+        card = data.get('card', '').strip()
+        amount = data.get('amount')
+
+        if not card or len(card) < 16:
+            return web.json_response({'error': 'Некорректный номер карты'}, status=400)
+
+        try:
+            amount = int(amount)
+        except (ValueError, TypeError):
+            return web.json_response({'error': 'Некорректная сумма'}, status=400)
+
+        if amount < 100:
+            return web.json_response({'error': 'Минимальная сумма вывода: 100 токенов'}, status=400)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'Пользователь не найден'}, status=404)
+
+            if (user.referral_balance or 0) < amount:
+                return web.json_response({'error': 'Недостаточно средств'}, status=400)
+
+            # Маскируем карту для логов
+            masked_card = card[:4] + ' **** **** ' + card[-4:]
+
+            # Уведомляем админа через Telegram
+            from config import DEVELOPER_CHAT_ID
+            if DEVELOPER_CHAT_ID and bot:
+                admin_msg = (
+                    f"💸 Заявка на вывод\n"
+                    f"👤 @{user.username or user.telegram_id}\n"
+                    f"💰 Сумма: {amount} токенов ({amount} руб)\n"
+                    f"💳 Карта: {masked_card}\n"
+                    f"📊 Баланс: {user.referral_balance or 0} токенов"
+                )
+                try:
+                    await bot.send_message(int(DEVELOPER_CHAT_ID), admin_msg)
+                except Exception as e:
+                    logger.error(f"Failed to notify admin about withdraw: {e}")
+
+            logger.info(f"[WITHDRAW] User @{user.username} requested {amount} tokens to card {masked_card}")
+
+            return web.json_response({'success': True})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error in withdraw_handler: {e}")
+        return web.json_response({'error': 'Ошибка сервера'}, status=500)
+
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/', login_handler)
@@ -5703,6 +5764,7 @@ app.router.add_post('/api/update_profile', api_update_profile_handler)
 app.router.add_post('/api/accept_delegated_task', api_accept_delegated_task_handler)
 app.router.add_post('/api/reject_delegated_task', api_reject_delegated_task_handler)
 app.router.add_post('/api/cancel_delegation', cancel_delegation_handler)
+app.router.add_post('/api/withdraw', withdraw_handler)
 app.router.add_get('/api/feed', get_feed_handler)
 app.router.add_post('/api/feed/mark-viewed', mark_posts_viewed_handler)
 app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
