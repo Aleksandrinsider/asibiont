@@ -1238,6 +1238,13 @@ class AnchorEngine:
     async def _process_post_anchor(self, user, anchor, session):
         """Обрабатывает постовый якорь: AI создаёт пост, публикует в ленту/канал."""
         try:
+            # ── ЗАЩИТА ОТ ДУБЛЕЙ (race condition при деплое) ──
+            fresh = session.query(Anchor).filter_by(id=anchor.id).with_for_update(skip_locked=True).first()
+            if not fresh or fresh.delivered_at is not None:
+                logger.info(f"[ANCHOR] Post anchor #{anchor.id} already delivered by another process, skip")
+                return
+            anchor = fresh
+
             # Проверяем и списываем токены
             from token_service import spend_tokens, has_enough_tokens
             from config import FREE_ACCESS_MODE
@@ -1639,6 +1646,29 @@ class AnchorEngine:
     async def _deliver(self, user, anchors: list, message: str, session):
         """Отправляет сообщение и записывает лог. Списывает токены."""
         try:
+            now_utc = datetime.now(timezone.utc)
+
+            # ── ЗАЩИТА ОТ ДУБЛЕЙ (race condition при деплое / 2 инстанса) ──
+            # Перечитываем якоря из БД — может другой процесс уже доставил
+            still_pending = []
+            for anchor in anchors:
+                fresh = session.query(Anchor).filter_by(id=anchor.id).with_for_update(skip_locked=True).first()
+                if fresh and fresh.delivered_at is None:
+                    still_pending.append(fresh)
+            if not still_pending:
+                logger.info(f"[ANCHOR] User {user.telegram_id}: all anchors already delivered by another process, skip")
+                return
+            anchors = still_pending
+
+            # Проверяем: не было ли доставки этому юзеру за последние MIN_PROACTIVE_GAP_MINUTES?
+            recent_delivery = session.query(AnchorDeliveryLog).filter(
+                AnchorDeliveryLog.user_id == user.id,
+                AnchorDeliveryLog.created_at >= now_utc - timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES)
+            ).first()
+            if recent_delivery:
+                logger.info(f"[ANCHOR] User {user.telegram_id}: delivery gap too small ({MIN_PROACTIVE_GAP_MINUTES}min), skip")
+                return
+
             # Проверяем и списываем токены за проактивное сообщение
             from token_service import spend_tokens, has_enough_tokens
             from config import FREE_ACCESS_MODE
@@ -1647,8 +1677,6 @@ class AnchorEngine:
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск доставки — нет токенов")
                     return
                 spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor')
-
-            now_utc = datetime.now(timezone.utc)
 
             # Помечаем якоря как доставленные
             anchor_ids = []
