@@ -176,10 +176,12 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         "risks": ["реальный риск 1", "риск 2"]
     }},
     "action_plan": ["конкретный шаг 1", "шаг 2", "шаг 3"],
-    "sources": ["главный источник 1", "источник 2"]
+    "sources": ["Название сайта — URL", "Название 2 — URL"]
 }}
 
-ВАЖНО: Извлекай КОНКРЕТНЫЕ данные, цифры, названия, даты из источников. Не пиши общие фразы вроде "растущий рынок" — пиши "рынок $X в 2024, рост Y%"."""
+ВАЖНО: 
+- Извлекай КОНКРЕТНЫЕ данные, цифры, названия, даты из источников. Не пиши общие фразы вроде "растущий рынок" — пиши "рынок $X в 2024, рост Y%".
+- В "sources" указывай РЕАЛЬНЫЕ URL-адреса из предоставленных данных."""
 
         result = await api.search_and_analyze(
             query=query,
@@ -215,6 +217,18 @@ async def research_topic(query, depth="full", user_id=None, session=None):
             if steps:
                 steps_text = ", ".join(steps[:3])
                 parts.append(f"Рекомендации: {steps_text}")
+            
+            # Добавляем ссылки на источники из поисковых результатов
+            search_results = result.get('results', [])
+            if search_results:
+                sources = []
+                for r in search_results[:5]:
+                    title = r.get('title', '')
+                    link = r.get('link', '')
+                    if link:
+                        sources.append(f"{title}: {link}")
+                if sources:
+                    parts.append("Источники: " + ", ".join(sources))
             
             summary = ". ".join(parts)
             
