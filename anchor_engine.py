@@ -29,6 +29,7 @@ AnchorEngine — единая событийная система автоном
 import asyncio
 import json
 import logging
+import re
 import traceback
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -1858,9 +1859,11 @@ class AnchorEngine:
             # Отправляем через бот ПЕРЕД commit — если отправка не удалась, откатываем
             if self.bot:
                 try:
+                    # Гарантируем кликабельность URL
+                    send_text = re.sub(r'(?<=[^\s\n])(https?://)', r' \1', message)
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
-                        text=message
+                        text=send_text
                     )
                     session.commit()
                     logger.info(f"[ANCHOR] ✅ Delivered to {user.telegram_id}: {message[:80]}...")

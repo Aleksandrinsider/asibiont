@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import os
+import re
 import tempfile
 import json
 import traceback
@@ -10,6 +11,15 @@ from datetime import datetime, timedelta, timezone
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+
+
+def _ensure_links_spaced(text: str) -> str:
+    """Ensure URLs are surrounded by spaces/newlines so Telegram makes them clickable."""
+    # Add space before URL if preceded by non-whitespace (e.g. 'text https://...'  is ok, 'texthttps://' is not)
+    text = re.sub(r'(?<=[^\s\n])(https?://)', r' \1', text)
+    # Add space after URL if followed by non-whitespace that's not punctuation
+    text = re.sub(r'(https?://\S+?)(?=[^\s.,!?;:)\]\n])', r'\1 ', text)
+    return text
 
 router = Router()
 
@@ -731,6 +741,9 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             if not response_text or not response_text.strip():
                 response_text = "Готово! Что дальше?"
             
+            # Гарантируем кликабельность ссылок в Telegram
+            response_text = _ensure_links_spaced(response_text)
+
             # Разбиваем длинный ответ на части (Telegram лимит 4096)
             if len(response_text) > 4000:
                 for i in range(0, len(response_text), 4000):
