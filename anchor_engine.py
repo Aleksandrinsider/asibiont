@@ -57,7 +57,7 @@ MAX_CHANNEL_PER_DAY = 1
 
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
 MORNING_START_HOUR = PROACTIVE_SEND_START_HOUR   # Общая настройка: 10
-SCAN_INTERVAL_MINUTES = 20
+SCAN_INTERVAL_MINUTES = 5
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
@@ -72,6 +72,7 @@ PRIORITY_COOLDOWN = {
 
 # Якоря, которые ВСЕГДА доставляются (кроме DND/ночь)
 ALWAYS_DELIVER_TYPES = {
+    'task_reminder',          # Точное напоминание по reminder_time
     'task_overdue',           # Просроченная задача — критично
     'task_deadline_soon',     # Дедлайн скоро — критично
     'delegation_update',      # Результат делегирования — пользователь ждёт
@@ -80,6 +81,7 @@ ALWAYS_DELIVER_TYPES = {
 
 # Группы батчинга
 BATCH_GROUPS = {
+    'task_reminder': 'tasks',
     'task_overdue': 'tasks',
     'task_deadline_soon': 'tasks',
     'task_stale': 'tasks',
@@ -378,14 +380,39 @@ class AnchorEngine:
         ).all()
 
         for task in tasks:
-            # Просроченные
             if task.reminder_time:
                 rt = task.reminder_time
                 if rt.tzinfo is None:
                     rt = rt.replace(tzinfo=timezone.utc)
 
-                if rt < now_utc:
-                    hours_overdue = (now_utc - rt).total_seconds() / 3600
+                minutes_diff = (rt - now_utc).total_seconds() / 60
+
+                # ТОЧНОЕ НАПОМИНАНИЕ: reminder_time наступило (от 0 до -30 мин) и ещё не отправлено
+                if -30 <= minutes_diff <= 0 and not getattr(task, 'reminder_sent', False):
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='task_reminder',
+                        source=f'task:{task.id}',
+                        topic=f'Напоминание: задача «{task.title}» на сейчас',
+                        priority=AnchorPriority.CRITICAL,
+                        data=json.dumps({'task_id': task.id, 'title': task.title,
+                                        'description': (task.description or '')[:200],
+                                        'reminder_type': 'exact'}),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(minutes=30),
+                        cooldown_hours=0.5,
+                        batch_group='tasks',
+                    ))
+                    # Помечаем как отправленное чтобы не дублировать
+                    task.reminder_sent = True
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+
+                # ПРОСРОЧЕННЫЕ (более 30 мин назад)
+                elif minutes_diff < -30:
+                    hours_overdue = abs(minutes_diff) / 60
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_overdue',
@@ -401,12 +428,9 @@ class AnchorEngine:
                         batch_group='tasks',
                     ))
 
-                # Дедлайн в ближайшие 24ч (но ещё не просрочен)
-                elif rt < now_utc + timedelta(hours=24):
-                    # Пропускаем если reminder_service уже отправил напоминание
-                    if getattr(task, 'reminder_sent', False):
-                        continue
-                    hours_left = (rt - now_utc).total_seconds() / 3600
+                # ДЕДЛАЙН СКОРО (до 24ч до reminder_time)
+                elif 0 < minutes_diff <= 24 * 60:
+                    hours_left = minutes_diff / 60
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_deadline_soon',

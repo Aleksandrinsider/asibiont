@@ -292,57 +292,20 @@ class ReminderService:
             db.close()
 
     def schedule_reminder(self, task_id: int, reminder_time: datetime, user_id: int, task_title: str):
+        """Напоминания теперь обрабатываются через AnchorEngine (task_reminder якорь).
+        Метод сохранён для совместимости — просто логирует без создания APScheduler job."""
         logger = logging.getLogger(__name__)
-        # Конвертируем naive datetime в aware с UTC
         if reminder_time.tzinfo is None:
             reminder_time = pytz.UTC.localize(reminder_time)
-
-        logger.info(f"Scheduling reminder for task {task_id}, user {user_id}, time: {reminder_time}")
-
-        # Проверяем, запущен ли scheduler
-        if not self.scheduler.running:
-            # Scheduler не запущен в тестах - это нормально
-            return
-
-        trigger = DateTrigger(run_date=reminder_time, timezone=pytz.UTC)
-        # Use jobstore-safe module-level wrapper to avoid pickling scheduler-bound instances
-        self.scheduler.add_job(
-            _send_reminder_job,
-            trigger=trigger,
-            args=[task_id],
-            id=f"reminder_{task_id}",
-            replace_existing=True,
-            misfire_grace_time=3600  # выполнить даже если опоздал до 1 часа
-        )
-        logger.info(f"Reminder scheduled for {reminder_time} (in {(reminder_time - datetime.now(pytz.UTC)).total_seconds() / 60:.1f} minutes)")
-        
-        # Планируем повторное напоминание через 15 минут
-        followup_time = reminder_time + timedelta(minutes=15)
-        self.schedule_followup_reminder(task_id, followup_time, user_id, task_title)
+        logger.info(f"[REMINDER] Reminder for task {task_id} at {reminder_time} — handled by AnchorEngine (no APScheduler job)")
+        # APScheduler job больше НЕ создаётся — AnchorEngine сканирует каждые 5 мин
+        # и создаёт CRITICAL якорь task_reminder когда reminder_time наступает
     
     def schedule_followup_reminder(self, task_id: int, followup_time: datetime, user_id: int, task_title: str):
-        """Планирует повторное напоминание через 15 минут после основного"""
+        """Followup теперь обрабатывается AnchorEngine (task_overdue якорь с cooldown 2ч).
+        Метод сохранён для совместимости."""
         logger = logging.getLogger(__name__)
-        
-        # Конвертируем naive datetime в aware с UTC
-        if followup_time.tzinfo is None:
-            followup_time = pytz.UTC.localize(followup_time)
-        
-        logger.info(f"Scheduling followup reminder for task {task_id}, time: {followup_time}")
-        
-        if not self.scheduler.running:
-            return
-        
-        trigger = DateTrigger(run_date=followup_time, timezone=pytz.UTC)
-        self.scheduler.add_job(
-            _send_followup_reminder_job,
-            trigger=trigger,
-            args=[task_id],
-            id=f"followup_{task_id}",
-            replace_existing=True,
-            misfire_grace_time=3600  # выполнить даже если опоздал до 1 часа
-        )
-        logger.info(f"Followup reminder scheduled for {followup_time}")
+        logger.info(f"[REMINDER] Followup for task {task_id} — handled by AnchorEngine (no APScheduler job)")
 
     def schedule_result_check(self, task_id: int, result_check_time: datetime, user_id: int, task_title: str):
         # Конвертируем naive datetime в aware с UTC
