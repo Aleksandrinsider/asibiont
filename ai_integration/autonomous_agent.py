@@ -417,6 +417,19 @@ class HybridAutonomousAgent:
                     if t.due_date:
                         task_info['deadline'] = t.due_date.isoformat()
                     tasks_data.append(task_info)
+
+                # Добавляем недавно завершённые (за 7 дней) — AI знает прогресс
+                from datetime import timedelta as td
+                completed_recent = session.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status == 'completed',
+                    Task.actual_completion_time >= datetime.now(timezone.utc) - td(days=7)
+                ).order_by(Task.actual_completion_time.desc()).limit(5).all()
+                for t in completed_recent:
+                    task_info = {'id': t.id, 'title': t.title, 'status': 'completed'}
+                    if t.actual_completion_time:
+                        task_info['completed_at'] = t.actual_completion_time.isoformat()
+                    tasks_data.append(task_info)
             except Exception as e:
                 logger.warning(f"[CTX] Failed to load tasks: {e}")
 

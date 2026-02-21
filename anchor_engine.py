@@ -1495,6 +1495,49 @@ class AnchorEngine:
                 desc = f" — {t.description[:80]}" if t.description else ""
                 task_lines.append(f"• {t.title}{time_str}{desc}")
 
+            # Недавно завершённые задачи (за 7 дней) — AI должен знать прогресс
+            completed_tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status == 'completed',
+                Task.actual_completion_time >= now_utc - timedelta(days=7)
+            ).order_by(Task.actual_completion_time.desc()).limit(5).all()
+
+            completed_lines = []
+            for ct in completed_tasks:
+                ct_time = ""
+                if ct.actual_completion_time:
+                    try:
+                        act = ct.actual_completion_time if ct.actual_completion_time.tzinfo else ct.actual_completion_time.replace(tzinfo=timezone.utc)
+                        act_local = act.astimezone(user_tz)
+                        ct_time = f" (выполнено {act_local.strftime('%d.%m %H:%M')})"
+                    except Exception:
+                        pass
+                completed_lines.append(f"✓ {ct.title}{ct_time}")
+
+            # Пропущенные задачи — AI знает проблемные паттерны
+            skipped_tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status == 'skipped'
+            ).order_by(Task.created_at.desc()).limit(3).all()
+
+            skipped_lines = []
+            for st in skipped_tasks:
+                reason = ""
+                if st.skipped_reason:
+                    try:
+                        from ai_integration.memory import decrypt_data
+                        reason = f" — {decrypt_data(st.skipped_reason)[:60]}"
+                    except Exception:
+                        pass
+                skipped_lines.append(f"✗ {st.title}{reason}")
+
+            # Общая статистика
+            total_tasks = session.query(Task).filter(Task.user_id == user.id).count()
+            total_completed = session.query(Task).filter(
+                Task.user_id == user.id, Task.status == 'completed'
+            ).count()
+            completion_rate = round(total_completed / total_tasks * 100) if total_tasks > 3 else None
+
             # Цели
             goals = session.query(Goal).filter(
                 Goal.user_id == user.id, Goal.status == 'active'
@@ -1592,8 +1635,19 @@ class AnchorEngine:
                 )
 
             if task_lines:
-                prompt_parts.append(f"\n=== ЗАДАЧИ ({len(tasks)}) ===")
+                prompt_parts.append(f"\n=== АКТИВНЫЕ ЗАДАЧИ ({len(tasks)}) ===")
                 prompt_parts.extend(task_lines)
+
+            if completed_lines:
+                prompt_parts.append(f"\n=== НЕДАВНО ЗАВЕРШЕНО ({len(completed_tasks)}) ===")
+                prompt_parts.extend(completed_lines)
+
+            if skipped_lines:
+                prompt_parts.append(f"\n=== ПРОПУЩЕНО ===")
+                prompt_parts.extend(skipped_lines)
+
+            if completion_rate is not None:
+                prompt_parts.append(f"\nВыполненность задач: {completion_rate}% ({total_completed}/{total_tasks})")
 
             if goal_lines:
                 prompt_parts.append(f"\n=== ЦЕЛИ ===")

@@ -2319,6 +2319,17 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         elif len(active_tasks) > 5:
             result += "Много задач - лучше приоритизировать самые важные."
 
+        # Краткая статистика завершённых — AI знает прогресс
+        if completed_tasks:
+            recent_7d = [t for t in completed_tasks if t.actual_completion_time and 
+                         t.actual_completion_time.replace(tzinfo=pytz.UTC) >= (datetime.now(pytz.UTC) - timedelta(days=7))]
+            if recent_7d:
+                last_titles = [t.title for t in recent_7d[:3]]
+                result += f" Завершено за неделю: {len(recent_7d)} "
+                result += f"(последние: {', '.join(last_titles)})."
+            else:
+                result += f" Всего завершённых задач: {len(completed_tasks)}."
+
         logger.info(f"[LIST_TASKS] Returning {len(active_tasks)} active tasks for user {user_id}")
         return result.strip()
     except Exception as e:
