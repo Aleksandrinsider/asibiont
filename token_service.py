@@ -27,66 +27,66 @@ logger = logging.getLogger(__name__)
 
 ACTION_COSTS = {
     # ── Базовые ──
-    'message':           20,   # Чат с AI (один раунд: запрос + ответ)
-    'voice_message':     25,   # Голосовое сообщение (транскрипция + AI)
+    'message':           10,   # Чат с AI (один раунд: запрос + ответ)
+    'voice_message':     12,   # Голосовое сообщение (транскрипция + AI)
 
     # ── Задачи ──
-    'add_task':          15,   # Создание задачи
-    'edit_task':         10,   # Редактирование задачи
-    'complete_task':      5,   # Завершение задачи
-    'delete_task':        5,   # Удаление задачи
-    'reschedule_task':   10,   # Перенос задачи
-    'restore_task':       5,   # Восстановление задачи
-    'list_tasks':         5,   # Просмотр списка задач
-    'get_task_details':   5,   # Детали задачи
+    'add_task':           7,   # Создание задачи
+    'edit_task':          5,   # Редактирование задачи
+    'complete_task':      2,   # Завершение задачи
+    'delete_task':        2,   # Удаление задачи
+    'reschedule_task':    5,   # Перенос задачи
+    'restore_task':       2,   # Восстановление задачи
+    'list_tasks':         2,   # Просмотр списка задач
+    'get_task_details':   2,   # Детали задачи
 
     # ── Цели ──
-    'create_goal':       20,   # Создание цели
-    'update_goal':       15,   # Обновление цели
-    'complete_goal':      5,   # Завершение цели
-    'list_goals':         5,   # Список целей
+    'create_goal':       10,   # Создание цели
+    'update_goal':        7,   # Обновление цели
+    'complete_goal':      2,   # Завершение цели
+    'list_goals':         2,   # Список целей
 
     # ── Делегирование ──
-    'delegate_task':     40,   # Делегирование задачи
-    'get_delegation_progress': 10,  # Проверка статуса
-    'cancel_delegation': 10,   # Отмена делегирования
+    'delegate_task':     20,   # Делегирование задачи
+    'get_delegation_progress': 5,  # Проверка статуса
+    'cancel_delegation':  5,   # Отмена делегирования
 
     # ── Аналитика ──
-    'analyze_situation_and_suggest_tasks': 30,   # Полный анализ
-    'research_and_plan':  30,   # Исследование и планирование
-    'analyze_group_opportunities': 25,  # Анализ групповых возможностей
+    'analyze_situation_and_suggest_tasks': 15,   # Полный анализ
+    'research_and_plan':  15,   # Исследование и планирование
+    'analyze_group_opportunities': 12,  # Анализ групповых возможностей
 
     # ── Маркетинг ──
-    'generate_marketing_content': 60,  # Генерация маркетинг-контента
-    'set_content_strategy':       30,  # Настройка стратегии контента
-    'publish_to_telegram':        60,  # Публикация в канал
+    'generate_marketing_content': 30,  # Генерация маркетинг-контента
+    'set_content_strategy':       15,  # Настройка стратегии контента
+    'publish_to_telegram':        30,  # Публикация в канал
 
     # ── Автономные функции ──
-    'toggle_autonomous_feature':  10,  # Вкл/выкл автономной функции
+    'toggle_autonomous_feature':   5,  # Вкл/выкл автономной функции
 
     # ── Контакты / профиль ──
-    'find_partners':     15,   # Поиск партнёров
-    'update_profile':    10,   # Обновление профиля
-    'smart_update_profile': 10,
+    'find_partners':      7,   # Поиск партнёров
+    'update_profile':     5,   # Обновление профиля
+    'smart_update_profile': 5,
 
     # ── Напоминания ──
-    'set_reminder':      10,   # Установка напоминания
+    'set_reminder':       5,   # Установка напоминания
 
     # ── Утилиты ──
-    'get_weather_info':  10,   # Погода
-    'get_news_trends':   10,   # Новости
-    'quick_topic_search': 10,  # Быстрый поиск
-    'research_topic':    20,   # Глубокое исследование
-    'get_crypto_price':  5,    # Котировки
+    'get_weather_info':   5,   # Погода
+    'get_news_trends':    5,   # Новости
+    'quick_topic_search': 5,   # Быстрый поиск
+    'research_topic':    10,   # Глубокое исследование
+    'get_crypto_price':   2,   # Котировки
 
     # ── Проактивные (от агента) ──
-    'proactive_message': 15,   # Проактивное сообщение
-    'proactive_post':    20,   # Проактивный пост в ленту
-    'proactive_channel': 30,   # Проактивный пост в канал
+    'proactive_message':  7,   # Проактивное сообщение
+    'proactive_post':    10,   # Проактивный пост в ленту
+    'proactive_channel': 15,   # Проактивный пост в канал
 }
 
 # Стоимость по умолчанию для неизвестных инструментов
-DEFAULT_TOOL_COST = 10
+DEFAULT_TOOL_COST = 5
 
 # Токены при регистрации — хватит на ~3 дня активного использования
 FREE_TOKENS_ON_SIGNUP = 1500
