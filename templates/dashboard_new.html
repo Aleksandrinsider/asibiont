@@ -1637,13 +1637,13 @@
                                     
                                     <div style="display: flex; gap: 4px;">
                                         ${post.author.is_current_user ? 
-                                            `<button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                            `<button onclick="editPost(${post.id})" class="delete-btn" title="Редактировать пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
                                             : ''
                                         }
                                     </div>
                                 </div>
                                 
-                                <p style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                                <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
                                 
                                 <!-- Comments section -->
                                 <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
@@ -1774,7 +1774,7 @@
         }
 
         function showEmojiPickerForPost() {
-            const emojis = ['�', '❤️', '🔥', '👍', '😍', '🎉'];
+            const emojis = ['😊', '❤️', '🔥', '👍', '😍', '🎉'];
             
             let picker = document.getElementById('emoji-picker-post');
             if (!picker) {
@@ -1956,13 +1956,13 @@
                             
                             <div style="display: flex; gap: 4px;">
                                 ${post.author.is_current_user ? 
-                                    `<button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                    `<button onclick="editPost(${post.id})" class="delete-btn" title="Редактировать пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
                                     : ''
                                 }
                             </div>
                         </div>
                         
-                        <p style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                        <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
                         
                         <!-- Comments section -->
                         <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
@@ -2068,10 +2068,10 @@
                                     }
                                     <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                 </div>
-                                <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
+                                <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
                             </div>
                             ${comment.author.is_current_user ? 
-                                `<button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="Удалить комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="Редактировать комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="Удалить комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
                                 : ''
                             }
                         `;
@@ -2142,10 +2142,10 @@
                                         }
                                         <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                     </div>
-                                    <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
+                                    <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
                                 </div>
                                 ${comment.author.is_current_user ? 
-                                    `<button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="Удалить комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                    `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="Редактировать комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="Удалить комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
                                     : ''
                                 }
                             `;
@@ -2248,6 +2248,149 @@
         function handleCommentKeyPress(event, postId) {
             if (event.key === 'Enter') {
                 addComment(postId);
+            }
+        }
+
+        // ═══ EDIT POST ═══
+        function editPost(postId) {
+            const contentEl = document.getElementById(`post-content-${postId}`);
+            if (!contentEl) return;
+            
+            // Already editing?
+            if (contentEl.querySelector('textarea')) return;
+            
+            const currentText = contentEl.textContent;
+            const originalHtml = contentEl.innerHTML;
+            
+            contentEl.innerHTML = `
+                <textarea id="edit-post-textarea-${postId}" style="width: 100%; min-height: 60px; padding: 6px 10px; border: 1px solid #068487; border-radius: 4px; font-size: 13px; line-height: 1.6; font-family: inherit; resize: vertical; outline: none; color: #374151;">${escapeHtml(currentText)}</textarea>
+                <div style="display: flex; gap: 6px; margin-top: 6px;">
+                    <button onclick="saveEditPost(${postId})" style="padding: 4px 12px; background: #068487; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">Сохранить</button>
+                    <button onclick="cancelEditPost(${postId}, ${JSON.stringify(currentText).replace(/'/g, '\\&#39;')})" style="padding: 4px 12px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">Отмена</button>
+                </div>
+            `;
+            
+            const textarea = document.getElementById(`edit-post-textarea-${postId}`);
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+        
+        function cancelEditPost(postId, originalText) {
+            const contentEl = document.getElementById(`post-content-${postId}`);
+            if (contentEl) {
+                contentEl.textContent = originalText;
+            }
+        }
+        
+        async function saveEditPost(postId) {
+            const textarea = document.getElementById(`edit-post-textarea-${postId}`);
+            if (!textarea) return;
+            
+            const newContent = textarea.value.trim();
+            if (!newContent) {
+                showNotification('Текст поста не может быть пустым', 'error');
+                return;
+            }
+            
+            if (newContent.length > 2000) {
+                showNotification('Пост слишком длинный (максимум 2000 символов)', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/posts/${postId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newContent }),
+                    credentials: 'include'
+                });
+                
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const contentEl = document.getElementById(`post-content-${postId}`);
+                    if (contentEl) {
+                        contentEl.textContent = newContent;
+                    }
+                    showNotification('Пост обновлён', 'success');
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error) {
+                console.error('Error editing post:', error);
+                showNotification('Ошибка редактирования: ' + error.message, 'error');
+            }
+        }
+
+        // ═══ EDIT COMMENT ═══
+        function editComment(commentId, postId) {
+            const contentEl = document.getElementById(`comment-content-${commentId}`);
+            if (!contentEl) return;
+            
+            // Already editing?
+            if (contentEl.querySelector('textarea')) return;
+            
+            const currentText = contentEl.textContent;
+            
+            contentEl.innerHTML = `
+                <textarea id="edit-comment-textarea-${commentId}" style="width: 100%; min-height: 40px; padding: 4px 8px; border: 1px solid #068487; border-radius: 4px; font-size: 13px; line-height: 1.4; font-family: inherit; resize: vertical; outline: none; color: #374151;">${escapeHtml(currentText)}</textarea>
+                <div style="display: flex; gap: 6px; margin-top: 4px;">
+                    <button onclick="saveEditComment(${commentId}, ${postId})" style="padding: 3px 10px; background: #068487; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Сохранить</button>
+                    <button onclick="cancelEditComment(${commentId}, ${JSON.stringify(currentText).replace(/'/g, '\\&#39;')})" style="padding: 3px 10px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Отмена</button>
+                </div>
+            `;
+            
+            const textarea = document.getElementById(`edit-comment-textarea-${commentId}`);
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+        
+        function cancelEditComment(commentId, originalText) {
+            const contentEl = document.getElementById(`comment-content-${commentId}`);
+            if (contentEl) {
+                contentEl.textContent = originalText;
+            }
+        }
+        
+        async function saveEditComment(commentId, postId) {
+            const textarea = document.getElementById(`edit-comment-textarea-${commentId}`);
+            if (!textarea) return;
+            
+            const newContent = textarea.value.trim();
+            if (!newContent) {
+                showNotification('Текст комментария не может быть пустым', 'error');
+                return;
+            }
+            
+            if (newContent.length > 1000) {
+                showNotification('Комментарий слишком длинный (максимум 1000 символов)', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/comments/${commentId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newContent }),
+                    credentials: 'include'
+                });
+                
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const contentEl = document.getElementById(`comment-content-${commentId}`);
+                    if (contentEl) {
+                        contentEl.textContent = newContent;
+                    }
+                    showNotification('Комментарий обновлён', 'success');
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error) {
+                console.error('Error editing comment:', error);
+                showNotification('Ошибка редактирования: ' + error.message, 'error');
             }
         }
 
@@ -3016,13 +3159,13 @@
                         
                         <div style="display: flex; gap: 4px;">
                             ${post.author.is_current_user ? 
-                                `<button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                `<button onclick="editPost(${post.id})" class="delete-btn" title="Редактировать пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
                                 : ''
                             }
                         </div>
                     </div>
                     
-                    <p style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                    <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
                     
                     <!-- Comments section -->
                     <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">

@@ -4347,6 +4347,55 @@ async def mark_posts_viewed_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def edit_post_handler(request):
+    """API endpoint to edit a post"""
+    db_session = None
+    try:
+        user_session = await get_session(request)
+        user_id = user_session.get('user_id')
+        
+        if not user_id:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        post_id = int(request.match_info['post_id'])
+        data = await request.json()
+        new_content = data.get('content', '').strip()
+        
+        if not new_content:
+            return web.json_response({'error': 'Content is required'}, status=400)
+        
+        if len(new_content) > 2000:
+            return web.json_response({'error': 'Post too long (max 2000 chars)'}, status=400)
+
+        db_session = Session()
+        
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=401)
+        
+        post = db_session.query(Post).filter_by(id=post_id).first()
+        if not post:
+            return web.json_response({'error': 'Post not found'}, status=404)
+        
+        if post.user_id != user.id:
+            return web.json_response({'error': 'You can only edit your own posts'}, status=403)
+
+        post.content = new_content
+        db_session.commit()
+        
+        logger.info(f"Post {post_id} edited by user {user.username}")
+        return web.json_response({'success': True, 'message': 'Post updated'})
+        
+    except Exception as e:
+        if db_session:
+            db_session.rollback()
+        logger.error(f"Error editing post: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+    finally:
+        if db_session:
+            db_session.close()
+
+
 async def delete_post_handler(request):
     """API endpoint to delete a post"""
     try:
@@ -4552,6 +4601,55 @@ async def get_comments_handler(request):
     except Exception as e:
         logger.error(f"Error getting comments: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def edit_comment_handler(request):
+    """API endpoint to edit a comment"""
+    db_session = None
+    try:
+        user_session = await get_session(request)
+        user_id = user_session.get('user_id')
+        
+        if not user_id:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        comment_id = int(request.match_info['comment_id'])
+        data = await request.json()
+        new_content = data.get('content', '').strip()
+        
+        if not new_content:
+            return web.json_response({'error': 'Content is required'}, status=400)
+        
+        if len(new_content) > 1000:
+            return web.json_response({'error': 'Comment too long (max 1000 chars)'}, status=400)
+
+        db_session = Session()
+        
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=401)
+        
+        comment = db_session.query(Comment).filter_by(id=comment_id).first()
+        if not comment:
+            return web.json_response({'error': 'Comment not found'}, status=404)
+        
+        if comment.user_id != user.id:
+            return web.json_response({'error': 'You can only edit your own comments'}, status=403)
+
+        comment.content = new_content
+        db_session.commit()
+        
+        logger.info(f"Comment {comment_id} edited by user {user.username}")
+        return web.json_response({'success': True, 'message': 'Comment updated'})
+        
+    except Exception as e:
+        if db_session:
+            db_session.rollback()
+        logger.error(f"Error editing comment: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 async def delete_comment_handler(request):
@@ -5779,9 +5877,11 @@ app.router.add_post('/api/cancel_delegation', cancel_delegation_handler)
 app.router.add_post('/api/withdraw', withdraw_handler)
 app.router.add_get('/api/feed', get_feed_handler)
 app.router.add_post('/api/feed/mark-viewed', mark_posts_viewed_handler)
+app.router.add_put('/api/posts/{post_id}', edit_post_handler)
 app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
 app.router.add_post('/api/comments', create_comment_handler)
 app.router.add_get('/api/comments/{post_id}', get_comments_handler)
+app.router.add_put('/api/comments/{comment_id}', edit_comment_handler)
 app.router.add_delete('/api/comments/{comment_id}', delete_comment_handler)
 app.router.add_post('/api/posts/{post_id}/like', toggle_like_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
