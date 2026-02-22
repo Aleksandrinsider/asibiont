@@ -108,7 +108,7 @@ BATCH_GROUPS = {
     'post_opportunity': 'posting',
     'channel_post': 'posting',
     'event_discovery': 'insights',
-    'contact_event': 'contacts',
+    'contact_activity': 'contacts',
 }
 
 
@@ -1047,50 +1047,113 @@ class AnchorEngine:
                 batch_group='insights',
             ))
 
-        # 2) Якорь по задачам контактов в том же городе — ищем мероприятия
+        # 2) Якорь «активности контактов» — сопоставляем ВСЕ данные профиля
+        #    Интересы, навыки, цели, планы, задачи — ищем пересечения
         if city:
-            EVENT_KEYWORDS = ('мероприятие', 'конференция', 'митап', 'meetup', 'форум',
-                              'выставка', 'встреча', 'воркшоп', 'workshop', 'хакатон',
-                              'hackathon', 'семинар', 'вебинар', 'нетворкинг')
+            # Собираем полный профиль пользователя для матчинга
+            user_interests = (interests or '').lower()
+            user_skills = (getattr(profile, 'skills', '') or '').lower()
+            user_goals = (goals or '').lower()
+            user_plans = (getattr(profile, 'current_plans', '') or '').lower()
+            user_bio = (getattr(profile, 'bio', '') or '').lower()
+
+            # Всё что характеризует пользователя — одной строкой для ИИ
+            user_profile_text = ' '.join(filter(None, [
+                user_interests, user_skills, user_goals, user_plans, user_bio,
+                (getattr(profile, 'position', '') or '').lower()
+            ]))
+
+            if not user_profile_text.strip():
+                return anchors
+
+            # Ключевые слова из профиля — грубый pre-filter
+            # Берём значимые слова (>3 букв) из интересов, навыков, целей
+            profile_words = set()
+            for field in [user_interests, user_skills, user_goals, user_plans]:
+                for word in field.replace(',', ' ').replace(';', ' ').split():
+                    w = word.strip().lower()
+                    if len(w) > 3 and w not in ('для', 'что', 'как', 'это', 'мой', 'моя', 'при', 'или', 'так'):
+                        profile_words.add(w)
+
             # Контакты в том же городе
             same_city_profiles = session.query(UserProfile).filter(
                 UserProfile.user_id != user.id,
                 UserProfile.city.ilike(f'%{city}%')
             ).limit(50).all()
+
             contact_user_ids = [p.user_id for p in same_city_profiles]
+            contact_profiles_map = {p.user_id: p for p in same_city_profiles}
 
             if contact_user_ids:
-                # Задачи контактов за последние 7 дней с ключевыми словами
+                # Задачи контактов за последние 7 дней
                 week_ago = now_utc - timedelta(days=7)
                 contact_tasks = session.query(Task).filter(
                     Task.user_id.in_(contact_user_ids),
                     Task.created_at >= week_ago,
                     Task.status.in_(['pending', 'in_progress', 'active'])
-                ).limit(100).all()
+                ).limit(200).all()
 
-                event_tasks = []
+                # Группируем активности по контакту
+                contact_activities = {}  # user_id → {username, activities: [str], plans, interests, skills}
                 for t in contact_tasks:
                     text = f'{t.title} {t.description or ""}'.lower()
-                    if any(kw in text for kw in EVENT_KEYWORDS):
-                        task_user = session.query(User).filter_by(id=t.user_id).first()
-                        username = task_user.username if task_user else 'unknown'
-                        event_tasks.append({
-                            'task': t.title[:80],
-                            'username': username,
-                            'date': t.reminder_time.strftime('%d.%m.%Y %H:%M') if t.reminder_time else ''
-                        })
+                    # Грубый pre-filter: есть ли хоть одно слово-пересечение с профилем
+                    match = any(pw in text for pw in profile_words) if profile_words else False
+                    if not match:
+                        continue
+                    if t.user_id not in contact_activities:
+                        c_user = session.query(User).filter_by(id=t.user_id).first()
+                        c_prof = contact_profiles_map.get(t.user_id)
+                        contact_activities[t.user_id] = {
+                            'username': c_user.username if c_user else 'unknown',
+                            'activities': [],
+                            'plans': (c_prof.current_plans or '')[:150] if c_prof else '',
+                            'interests': (c_prof.interests or '')[:150] if c_prof else '',
+                            'skills': (c_prof.skills or '')[:150] if c_prof else '',
+                            'position': (c_prof.position or '')[:80] if c_prof else '',
+                        }
+                    date_str = ''
+                    if t.reminder_time:
+                        date_str = f' ({t.reminder_time.strftime("%d.%m %H:%M")})'
+                    contact_activities[t.user_id]['activities'].append(
+                        f'{t.title[:80]}{date_str}'
+                    )
 
-                if event_tasks:
+                # Также проверяем current_plans контактов (даже без задач)
+                for cp in same_city_profiles:
+                    plans = (cp.current_plans or '').lower()
+                    if not plans or cp.user_id in contact_activities:
+                        continue
+                    if any(pw in plans for pw in profile_words):
+                        c_user = session.query(User).filter_by(id=cp.user_id).first()
+                        if c_user and c_user.username:
+                            contact_activities[cp.user_id] = {
+                                'username': c_user.username,
+                                'activities': [],
+                                'plans': (cp.current_plans or '')[:150],
+                                'interests': (cp.interests or '')[:150],
+                                'skills': (cp.skills or '')[:150],
+                                'position': (cp.position or '')[:80],
+                            }
+
+                if contact_activities:
+                    # Берём до 5 самых релевантных контактов
+                    top_contacts = list(contact_activities.values())[:5]
                     anchors.append(Anchor(
                         user_id=user.id,
-                        anchor_type='contact_event',
-                        source=f'contact_events:{now_utc.strftime("%Y-%m-%d")}',
-                        topic=f'Контакты в {city} планируют мероприятия ({len(event_tasks)} шт)',
+                        anchor_type='contact_activity',
+                        source=f'contact_activity:{now_utc.strftime("%Y-%m-%d")}',
+                        topic=f'Активности контактов в {city} совпадают с вашим профилем ({len(contact_activities)} чел)',
                         priority=AnchorPriority.MEDIUM,
                         data=json.dumps({
                             'city': city,
-                            'events': event_tasks[:5],
-                            'niche': niche[:100]
+                            'user_profile': {
+                                'interests': (interests or '')[:200],
+                                'skills': (getattr(profile, 'skills', '') or '')[:200],
+                                'goals': goals[:200],
+                                'plans': (getattr(profile, 'current_plans', '') or '')[:200],
+                            },
+                            'contacts': top_contacts,
                         }),
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(hours=24),
