@@ -280,8 +280,31 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            mask-image: linear-gradient(to right, transparent, black 60px, black calc(100% - 60px), transparent);
-            -webkit-mask-image: linear-gradient(to right, transparent, black 60px, black calc(100% - 60px), transparent);
+            position: relative;
+        }
+        .reviews-section::before,
+        .reviews-section::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .reviews-section::before {
+            left: 0;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            mask-image: linear-gradient(to right, black, transparent);
+            -webkit-mask-image: linear-gradient(to right, black, transparent);
+        }
+        .reviews-section::after {
+            right: 0;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            mask-image: linear-gradient(to left, black, transparent);
+            -webkit-mask-image: linear-gradient(to left, black, transparent);
         }
         .reviews-track {
             overflow: hidden;
@@ -325,9 +348,9 @@
             border-color: #1F2328;
         }
         @media (max-width: 768px) {
-            .reviews-section {
-                mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
-                -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+            .reviews-section::before,
+            .reviews-section::after {
+                width: 30px;
             }
             .reviews-scroll {
                 animation-duration: 35s;
