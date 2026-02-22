@@ -766,8 +766,9 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             else:
                 try:
                     await message.bot.send_message(message.chat.id, response_html, parse_mode='HTML')
-                except Exception:
+                except Exception as html_err:
                     # Fallback without HTML if formatting breaks
+                    logger.warning(f"[PTM] HTML send failed, falling back to plain text: {html_err}")
                     await message.bot.send_message(message.chat.id, response_text)
             
             # Списываем токены за сообщение
