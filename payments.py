@@ -3,6 +3,8 @@ from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, WEB_APP_URL, LOCAL
 import logging
 import datetime
 import json
+import time
+import uuid
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -64,8 +66,10 @@ def create_payment(amount, description, user_id, tier='tokens_small', promo_code
             }
         }
         
+        # Idempotence key prevents duplicate payments on retry
+        idempotence_key = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{user_id}_{tier}_{int(time.time() // 60)}"))
         logger.info(f"Creating Yookassa payment with data: {json.dumps(payment_data, ensure_ascii=False)}")
-        payment = Payment.create(payment_data)
+        payment = Payment.create(payment_data, idempotence_key=idempotence_key)
         logger.info(f"Payment created successfully: ID={payment.id}, URL={payment.confirmation.confirmation_url[:50]}...")
         
         return payment.confirmation.confirmation_url

@@ -34,18 +34,25 @@ def _format_html(text: str) -> str:
 
 router = Router()
 
-# Dedup cache for message processing
+# Dedup cache for message processing (TTL-based to prevent memory leak)
 message_cache = {}
 message_cache_lock = threading.Lock()
+MESSAGE_CACHE_MAX_SIZE = 5000  # Максимум записей
 
 # Per-user processing lock — prevents duplicate responses
 # when Telegram retries webhook or sends duplicate updates
 _user_processing_locks: dict[int, asyncio.Lock] = {}
 _user_processing_locks_guard = threading.Lock()
+_USER_LOCKS_MAX_SIZE = 2000  # Максимум локов
 
 def _get_user_lock(user_id: int) -> asyncio.Lock:
     with _user_processing_locks_guard:
         if user_id not in _user_processing_locks:
+            # Очистка при переполнении — удаляем незалоченные локи
+            if len(_user_processing_locks) >= _USER_LOCKS_MAX_SIZE:
+                to_remove = [k for k, v in _user_processing_locks.items() if not v.locked()]
+                for k in to_remove[:len(to_remove)//2]:
+                    del _user_processing_locks[k]
             _user_processing_locks[user_id] = asyncio.Lock()
         return _user_processing_locks[user_id]
 from ai_integration import chat_with_ai
@@ -586,8 +593,10 @@ async def process_text_message(user_id, text, message, state):
     current_time = time_module.time()
     
     with message_cache_lock:
-        # Очистка старых записей (старше 60 секунд)
+        # Очистка старых записей (старше 60 секунд) + лимит размера
         message_cache = {k: v for k, v in message_cache.items() if current_time - v < 60}
+        if len(message_cache) > MESSAGE_CACHE_MAX_SIZE:
+            message_cache.clear()
         
         # Проверяем, было ли уже обработано это сообщение
         if message_cache_key in message_cache:

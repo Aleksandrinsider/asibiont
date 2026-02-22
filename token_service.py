@@ -129,9 +129,12 @@ def has_enough_tokens(user_id: int, action: str, session=None) -> bool:
     return balance >= cost
 
 
-def spend_tokens(user_id: int, action: str, description: str = '', session=None) -> dict:
+def spend_tokens(user_id: int, action: str, description: str = '', session=None, auto_commit: bool = True) -> dict:
     """
     Списывает токены за действие.
+    
+    Args:
+        auto_commit: Если False, не коммитит (вызывающий код коммитит сам) — для транзакционной целостности.
     
     Returns: {'success': True/False, 'balance': int, 'spent': int, 'error': str}
     """
@@ -143,12 +146,21 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None)
         close = True
     
     try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return {'success': False, 'balance': 0, 'spent': 0, 'error': 'Пользователь не найден'}
-        
-        balance = user.token_balance or 0
-        if balance < cost:
+        # Атомарное списание — защита от race condition
+        from sqlalchemy import text as sa_text
+        result = session.execute(
+            sa_text(
+                "UPDATE users SET token_balance = token_balance - :cost, "
+                "tokens_spent = COALESCE(tokens_spent, 0) + :cost "
+                "WHERE telegram_id = :tid AND COALESCE(token_balance, 0) >= :cost "
+                "RETURNING id, token_balance"
+            ),
+            {'cost': cost, 'tid': user_id}
+        )
+        row = result.fetchone()
+        if not row:
+            # Либо пользователь не найден, либо недостаточно токенов
+            balance = get_balance(user_id, session)
             return {
                 'success': False,
                 'balance': balance,
@@ -156,27 +168,26 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None)
                 'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
             }
         
-        # Списываем
-        user.token_balance = balance - cost
-        user.tokens_spent = (user.tokens_spent or 0) + cost
+        db_user_id, new_balance = row
         
         # Записываем транзакцию
         from models import TokenTransaction
         tx = TokenTransaction(
-            user_id=user.id,
+            user_id=db_user_id,
             amount=-cost,
             action=action,
             description=description or action,
-            balance_after=user.token_balance
+            balance_after=new_balance
         )
         session.add(tx)
-        session.commit()
+        if auto_commit:
+            session.commit()
         
-        logger.debug(f"[TOKEN] User {user_id}: -{cost} за {action} (баланс: {user.token_balance})")
+        logger.debug(f"[TOKEN] User {user_id}: -{cost} за {action} (баланс: {new_balance})")
         
         return {
             'success': True,
-            'balance': user.token_balance,
+            'balance': new_balance,
             'spent': cost,
         }
         

@@ -1514,15 +1514,15 @@ class AnchorEngine:
                 return
             anchor = fresh
 
-            # Проверяем и списываем токены
+            # Проверяем и списываем токены (в той же сессии для атомарности)
             from token_service import spend_tokens, has_enough_tokens
             from config import FREE_ACCESS_MODE
             action = 'proactive_channel' if anchor.anchor_type == 'channel_post' else 'proactive_post'
             if not FREE_ACCESS_MODE:
-                if not has_enough_tokens(user.telegram_id, action):
+                if not has_enough_tokens(user.telegram_id, action, session=session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск поста — нет токенов")
                     return
-                spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}')
+                spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}', session=session, auto_commit=False)
 
             anchor_data = json.loads(anchor.data) if anchor.data else {}
 
@@ -1994,14 +1994,14 @@ class AnchorEngine:
                 logger.info(f"[ANCHOR] User {user.telegram_id}: delivery gap too small ({MIN_PROACTIVE_GAP_MINUTES}min), skip")
                 return
 
-            # Проверяем и списываем токены за проактивное сообщение
+            # Проверяем и списываем токены за проактивное сообщение (в той же сессии для атомарности)
             from token_service import spend_tokens, has_enough_tokens
             from config import FREE_ACCESS_MODE
             if not FREE_ACCESS_MODE:
-                if not has_enough_tokens(user.telegram_id, 'proactive_message'):
+                if not has_enough_tokens(user.telegram_id, 'proactive_message', session=session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск доставки — нет токенов")
                     return
-                spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor')
+                spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor', session=session, auto_commit=False)
 
             # Помечаем якоря как доставленные
             anchor_ids = []

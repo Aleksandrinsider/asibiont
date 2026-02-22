@@ -30,10 +30,10 @@ class User(Base):
     timezone = Column(String(50), default='Europe/Moscow')
     do_not_disturb_until = Column(DateTime)
     pending_action = Column(Text)  # JSON for pending interactions
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки пользователей
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки пользователей
     updated_at = Column(
-        DateTime, default=datetime.datetime.now(
-            datetime.timezone.utc), onupdate=datetime.datetime.now(
+        DateTime, default=lambda: datetime.datetime.now(
+            datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(
             datetime.timezone.utc))
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT, index=True)  # Индекс для фильтрации по подписке
     average_rating = Column(Integer, default=0)  # Average rating from other users (0-10)
@@ -41,7 +41,7 @@ class User(Base):
     history_cleared_at = Column(DateTime)  # When user cleared chat history
     conversation_state = Column(String(100), default='normal')  # Current conversation state
     pending_task_data = Column(Text)  # JSON for pending task creation data
-    last_interaction_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для активных пользователей
+    last_interaction_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для активных пользователей
     conversation_context = Column(Text)  # JSON array of recent messages for context
     current_task_id = Column(Integer, ForeignKey('tasks.id'))  # Currently discussed task
     referral_balance = Column(Integer, default=0)  # Referral earnings in kopecks
@@ -83,7 +83,7 @@ class Task(Base):
     parent_task_id = Column(Integer, ForeignKey('tasks.id'))  # For recurring task instances
     pending_delegator_report = Column(BigInteger)  # Telegram ID of delegator waiting for completion report
     goal_id = Column(Integer, ForeignKey('goals.id'))  # Link to goal this task contributes to
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по дате создания
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по дате создания
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])
     goal = relationship("Goal", backref="tasks")
@@ -96,7 +96,7 @@ class Interaction(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Индекс для поиска взаимодействий пользователя
     message_type = Column(String(50), index=True)  # Индекс для фильтрации по типу сообщения
     content = Column(Text)
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по времени
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по времени
 
     user = relationship("User", backref="interactions")
 
@@ -123,8 +123,8 @@ class UserProfile(Base):
     completed_tasks = Column(Integer, default=0)  # Total completed tasks
     skipped_tasks = Column(Integer, default=0)  # Tasks marked as skipped or overdue
     average_completion_time = Column(Integer, default=0)  # Average time to complete tasks in minutes
-    last_activity = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))  # Last interaction time
-    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    last_activity = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))  # Last interaction time
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     average_rating = Column(Integer, default=0)  # Average rating from other users (0-10)
     rating_count = Column(Integer, default=0)  # Number of ratings received
     favorite_contacts = Column(Text)  # JSON array of favorite contact usernames
@@ -143,7 +143,7 @@ class Goal(Base):
     __tablename__ = 'goals'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text)
     status = Column(String(50), default='active')  # active, completed, paused, cancelled
@@ -159,8 +159,8 @@ class Goal(Base):
     metric_unit = Column(String(100))  # единица измерения: 'учеников', 'кг', 'руб', 'км', 'подписчиков'
     metric_target = Column(Float)  # целевое значение: 50, 10, 1000000
     metric_current = Column(Float, default=0)  # текущее значение: 12, 3, 250000
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
-    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), onupdate=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="goals")
 
@@ -191,11 +191,15 @@ class UserRating(Base):
     rater_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # User who gives the rating
     rated_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # User who receives the rating
     rating = Column(Integer, nullable=False)  # Rating value 1-10
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
-    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     rater = relationship("User", foreign_keys=[rater_user_id])
     rated_user = relationship("User", foreign_keys=[rated_user_id])
+
+    __table_args__ = (
+        UniqueConstraint('rater_user_id', 'rated_user_id', name='unique_user_rating'),
+    )
 
 
 class Subscription(Base):
@@ -209,11 +213,11 @@ class Subscription(Base):
     status = Column(String(50), default='inactive')  # active, inactive, expired
     plan = Column(String(50), default='monthly')  # monthly, yearly, etc.
     tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # Subscription tier
-    start_date = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    start_date = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     end_date = Column(DateTime)
     login_count = Column(Integer, default=0)  # Number of logins
     subscriber_number = Column(Integer, unique=True)  # Subscriber number
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="subscription")
 
@@ -233,7 +237,7 @@ class PaymentHistory(Base):
     start_date = Column(DateTime)  # Subscription start date
     end_date = Column(DateTime)  # Subscription end date
     details = Column(Text)  # JSON with additional details
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="payment_history")
 
@@ -259,7 +263,7 @@ class PostLike(Base):
     id = Column(Integer, primary_key=True)
     post_id = Column(Integer, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     post = relationship("Post", backref="likes")
     user = relationship("User", backref="post_likes")
@@ -279,7 +283,7 @@ class Comment(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     username = Column(String(255))  # Denormalized username for easy viewing
     content = Column(Text, nullable=False)  # Comment content
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     post = relationship("Post", backref="comments")
     user = relationship("User", backref="comments")
@@ -292,7 +296,7 @@ class PostView(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     post_id = Column(Integer, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
-    viewed_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    viewed_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="post_views")
     post = relationship("Post", backref="views")
@@ -314,7 +318,7 @@ class ActivityAlert(Base):
     location = Column(String(100))  # City filter
     frequency = Column(String(20), default='any')  # 'any', 'regular', 'one_time'
     enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     last_triggered_at = Column(DateTime)  # Last time alert was triggered
 
     user = relationship("User", backref="activity_alerts")
@@ -331,7 +335,7 @@ class ContactAlert(Base):
     city = Column(String(100))  # City filter
     position = Column(String(100))  # Position/role filter
     enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     last_triggered_at = Column(DateTime)  # Last time alert was triggered
 
     user = relationship("User", backref="contact_alerts")
@@ -442,7 +446,7 @@ class TokenTransaction(Base):
     action = Column(String(100), nullable=False)   # Тип действия (message, add_task, purchase, signup...) 
     description = Column(Text)                     # Описание
     balance_after = Column(Integer)                 # Баланс после транзакции
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
 
     user = relationship("User", backref="token_transactions")
 
@@ -456,7 +460,7 @@ class AnchorDeliveryLog(Base):
     anchor_ids = Column(Text)          # JSON array: [1, 5, 12] — какие якоря вошли в сообщение
     message_text = Column(Text)        # Что отправили
     anchor_types = Column(Text)        # JSON: ['task_overdue', 'goal_progress'] — для статистики
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
     user_responded = Column(Boolean)   # True если пользователь ответил в течение часа
     response_time_seconds = Column(Integer)  # Время до ответа
 
@@ -489,7 +493,7 @@ class UserMessage(Base):
     is_ai_generated = Column(Boolean, default=True)       # AI сгенерировал текст
     sender_approved = Column(Boolean, default=False)      # Отправитель подтвердил отправку (если нужно)
     
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
     delivered_at = Column(DateTime)
     
     sender = relationship("User", foreign_keys=[sender_id], backref="sent_messages")

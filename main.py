@@ -85,14 +85,17 @@ with engine.connect() as conn:
     conn.execute(text("SELECT 1"))
 logger.info("✅ Database connection successful")
 
-# Clear database if requested
+# Clear database if requested (LOCAL only — safety guard)
 if os.getenv('CLEAR_DB') == '1':
-    logger.warning("CLEAR_DB=1 detected, clearing all database data...")
-    try:
-        Base.metadata.drop_all(engine)
-        logger.warning("All tables dropped successfully")
-    except Exception as e:
-        logger.error(f"Error dropping tables: {e}")
+    if LOCAL:
+        logger.warning("CLEAR_DB=1 detected (LOCAL mode), clearing all database data...")
+        try:
+            Base.metadata.drop_all(engine)
+            logger.warning("All tables dropped successfully")
+        except Exception as e:
+            logger.error(f"Error dropping tables: {e}")
+    else:
+        logger.error("❌ CLEAR_DB=1 IGNORED — not allowed in production! Remove this env var.")
 
 # Initialize database tables
 init_db()
@@ -2043,6 +2046,14 @@ async def yookassa_webhook(request):
         try:
             user = session.query(User).filter_by(telegram_id=int(user_id)).first()
             if user:
+                # ═══ IDEMPOTENCY CHECK — prevent double processing on webhook retry ═══
+                existing_payment = session.query(PaymentHistory).filter_by(
+                    payment_id=payment['id']
+                ).first()
+                if existing_payment:
+                    logger.warning(f"[YOOKASSA] Duplicate webhook for payment {payment['id']}, skipping")
+                    return web.Response(text="OK")
+
                 # ═══ TOKEN PACK PURCHASE ═══
                 if tier.startswith('tokens_'):
                     from token_service import add_tokens, TOKEN_PACKAGES
