@@ -1042,7 +1042,7 @@ class AnchorEngine:
                 'niche': niche,
                 'city': city,
                 'goals': goals[:200],
-                'search_query': f'мероприятия конференции {niche[:40]} {city} {now_utc.strftime("%Y")}'
+                'search_query': f'конференции митапы события {niche[:40]} {now_utc.strftime("%B %Y")} онлайн офлайн'
             }),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=72),
