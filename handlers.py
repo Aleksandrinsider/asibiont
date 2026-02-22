@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import html as html_mod
 import os
 import re
 import tempfile
@@ -13,13 +14,23 @@ from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 
-def _ensure_links_spaced(text: str) -> str:
-    """Ensure URLs are surrounded by spaces/newlines so Telegram makes them clickable."""
-    # Add space before URL if preceded by non-whitespace (e.g. 'text https://...'  is ok, 'texthttps://' is not)
+def _format_html(text: str) -> str:
+    """Prepare text for Telegram HTML parse_mode: escape text, wrap URLs in <a> tags."""
+    url_re = re.compile(r'(https?://\S+)')
+    # Ensure URLs have space before them if glued to text
     text = re.sub(r'(?<=[^\s\n])(https?://)', r' \1', text)
-    # Add space after URL if followed by non-whitespace that's not punctuation
-    text = re.sub(r'(https?://\S+?)(?=[^\s.,!?;:)\]\n])', r'\1 ', text)
-    return text
+    parts = url_re.split(text)
+    result = []
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            # Regular text — escape HTML entities
+            result.append(html_mod.escape(part))
+        else:
+            # URL — strip trailing punctuation, wrap in <a>
+            clean = part.rstrip('.,;:!?)—»')
+            trailing = part[len(clean):]
+            result.append(f'<a href="{html_mod.escape(clean)}">{html_mod.escape(clean)}</a>{html_mod.escape(trailing)}')
+    return ''.join(result)
 
 router = Router()
 
@@ -741,16 +752,23 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             if not response_text or not response_text.strip():
                 response_text = "Готово! Что дальше?"
             
-            # Гарантируем кликабельность ссылок в Telegram
-            response_text = _ensure_links_spaced(response_text)
+            # Гарантируем кликабельность ссылок в Telegram (HTML parse_mode)
+            response_html = _format_html(response_text)
 
             # Разбиваем длинный ответ на части (Telegram лимит 4096)
-            if len(response_text) > 4000:
-                for i in range(0, len(response_text), 4000):
-                    chunk = response_text[i:i+4000]
-                    await message.bot.send_message(message.chat.id, chunk)
+            if len(response_html) > 4000:
+                for i in range(0, len(response_html), 4000):
+                    chunk = response_html[i:i+4000]
+                    try:
+                        await message.bot.send_message(message.chat.id, chunk, parse_mode='HTML')
+                    except Exception:
+                        await message.bot.send_message(message.chat.id, response_text[i:i+4000])
             else:
-                await message.bot.send_message(message.chat.id, response_text)
+                try:
+                    await message.bot.send_message(message.chat.id, response_html, parse_mode='HTML')
+                except Exception:
+                    # Fallback without HTML if formatting breaks
+                    await message.bot.send_message(message.chat.id, response_text)
             
             # Списываем токены за сообщение
             if not FREE_ACCESS_MODE:
