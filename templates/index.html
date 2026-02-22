@@ -291,6 +291,10 @@
             animation-duration: 45s;
             animation-timing-function: linear;
             animation-iteration-count: infinite;
+            will-change: transform;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            backface-visibility: hidden;
         }
         .reviews-track:hover .reviews-scroll {
             animation-play-state: paused;
@@ -323,6 +327,8 @@
             min-height: 80px;
             flex-shrink: 0;
             vertical-align: top;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         @media (max-width: 768px) {
             .reviews-scroll {
