@@ -107,6 +107,7 @@ BATCH_GROUPS = {
     'recurring_task_due': 'tasks',
     'post_opportunity': 'posting',
     'channel_post': 'posting',
+    'event_discovery': 'insights',
 }
 
 
@@ -431,6 +432,9 @@ class AnchorEngine:
 
         # --- РЫНОК/КОНТЕНТ (открыто всем) ---
         anchors.extend(self._scan_premium_insights(user, profile, session, now_utc))
+
+        # --- СОБЫТИЯ / МЕРОПРИЯТИЯ ---
+        anchors.extend(self._scan_events(user, profile, session, now_utc))
 
         # --- ПОСТЫ В ЛЕНТУ (все) ---
         anchors.extend(self._scan_post_opportunities(user, profile, session, now_utc))
@@ -1010,6 +1014,43 @@ class AnchorEngine:
 
         return anchors
 
+    def _scan_events(self, user, profile, session, now_utc) -> list:
+        """Раз в 3 дня ищет актуальные мероприятия по интересам/нише пользователя."""
+        anchors = []
+        if not profile:
+            return anchors
+
+        interests = getattr(profile, 'interests', '') or ''
+        goals = getattr(profile, 'goals', '') or ''
+        position = getattr(profile, 'position', '') or ''
+        niche = interests[:100] or goals[:100] or position[:60]
+        if not niche:
+            return anchors
+
+        city = getattr(profile, 'city', '') or ''
+
+        # Раз в 3 дня — source привязан к 3-дневному окну
+        day_bucket = now_utc.strftime("%Y") + str(now_utc.timetuple().tm_yday // 3)
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='event_discovery',
+            source=f'events:{day_bucket}',
+            topic=f'Поиск актуальных мероприятий по теме: {niche[:60]}',
+            priority=AnchorPriority.LOW,
+            data=json.dumps({
+                'niche': niche,
+                'city': city,
+                'goals': goals[:200],
+                'search_query': f'мероприятия конференции {niche[:40]} {city} {now_utc.strftime("%Y")}'
+            }),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=72),
+            cooldown_hours=72,
+            batch_group='insights',
+        ))
+        return anchors
+
     # ═══════════════════════════════════════════════════════
     # POST SCANNERS — ленточный автопостинг + канал
     # ═══════════════════════════════════════════════════════
@@ -1325,7 +1366,7 @@ class AnchorEngine:
                     'dialog_followup', 'task_stale', 'profile_gap',
                     'post_opportunity', 'channel_post',
                 }
-                OPTIONAL_LOW = {'market_insight', 'content_opportunity', 'weather_activity'}
+                OPTIONAL_LOW = {'market_insight', 'content_opportunity', 'weather_activity', 'event_discovery'}
                 # Необязательные LOW — удваиваем cooldown (через доп. фильтр)
                 filtered = []
                 for a in result:

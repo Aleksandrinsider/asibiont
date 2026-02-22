@@ -6733,23 +6733,33 @@ async def web_search(query: str, user_id: int = None, session=None) -> str:
         if not results:
             return f"❌ Результаты поиска по '{query}' не найдены"
         
-        # AI-синтез результатов
+        # AI-синтез результатов с URL-ами
         context = "\n\n".join([
-            f"**{r['title']}**\n{r['snippet']}"
+            f"**{r['title']}**\nURL: {r['link']}\n{r['snippet']}"
             for r in results[:7]
         ])
+        
+        import datetime as _dt
+        today_str = _dt.datetime.now().strftime('%d.%m.%Y')
         
         prompt = f"""На основе результатов поиска по запросу "{query}":
 
 {context}
 
-Составь краткий ответ (3-5 предложений) на запрос пользователя, используя данные из поиска. Извлеки суть, цифры, конкретику. Не пересказывай каждый результат отдельно — синтезируй в конкретный ответ."""
+Сегодня {today_str}.
+
+Составь краткий ответ (3-7 предложений), используя данные поиска.
+ПРАВИЛА:
+1. ОБЯЗАТЕЛЬНО включи ВСЕ найденные URL-ссылки в формате: Название — URL
+2. Если речь о мероприятиях/событиях — указывай ТОЛЬКО будущие (после {today_str}). Прошедшие НЕ упоминай, кроме записей.
+3. Извлекай суть, даты, цифры, конкретику.
+4. Каждый ресурс/событие — на отдельной строке со ссылкой."""
         
         try:
             synthesis = await api.deepseek_analyze(
                 prompt=prompt,
-                system_prompt="Ты исследователь. Извлекай суть из данных, не пересказывай.",
-                max_tokens=400
+                system_prompt="Ты исследователь. Извлекай суть и ОБЯЗАТЕЛЬНО сохраняй все URL-ссылки в ответе. Не выбрасывай ссылки.",
+                max_tokens=600
             )
         except Exception:
             synthesis = None
@@ -6759,10 +6769,10 @@ async def web_search(query: str, user_id: int = None, session=None) -> str:
         if synthesis:
             result += f"{synthesis}\n\n"
         
-        # Добавляем топ-3 источника для проверки
+        # Добавляем ВСЕ источники с URL
         result += "🔗 **Источники:**\n"
-        for i, item in enumerate(results[:3], 1):
-            result += f"{i}. [{item['title']}]({item['link']})\n"
+        for i, item in enumerate(results[:5], 1):
+            result += f"{i}. {item['title']} — {item['link']}\n"
         
         return result
 
