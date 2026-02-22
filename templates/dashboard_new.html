@@ -899,7 +899,7 @@
 
     <!-- Contact Profile Modal -->
     <div id="contact-profile-modal" class="rating-modal">
-        <div class="rating-modal-content">
+        <div class="rating-modal-content" style="max-width: 680px;">
             <div class="rating-modal-header">
                 <h3>Профиль контакта</h3>
                 <button onclick="closeContactProfileModal()" class="rating-close-btn">
@@ -4679,54 +4679,87 @@
                     
                     html += '</div>';
                     
-                    // Profile details - текст слева, отступы как в блоке профиля
-                    html += '<div class="context-item">';
+                    // === Two-column layout ===
+                    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">';
                     
-                    html += `<p style="text-align: left;">Город: ${partner.city || 'Не указан'}</p>`;
-                    if (partner.birthdate) {
-                        console.log('partner.birthdate:', partner.birthdate);
-                        const age = calculateAge(partner.birthdate);
-                        console.log('calculated age:', age);
-                        const ageText = age !== null ? ` (${age} лет)` : '';
-                        console.log('ageText:', ageText);
-                        html += `<p style="text-align: left;">День рождения: ${partner.birthdate}${ageText}</p>`;
-                        console.log('html after adding birthdate:', html);
-                    } else {
-                        html += `<p style="text-align: left;">День рождения: Не указана</p>`;
+                    // --- Left block: Информация ---
+                    html += '<div style="background: #F6F8FA; border: 1px solid #E8ECEF; border-radius: 8px; padding: 14px;">';
+                    html += '<p style="text-align: left; font-weight: 600; color: #374151; margin-bottom: 10px; font-size: 13px;">Информация</p>';
+                    
+                    if (partner.company || partner.position) {
+                        const role = [partner.position, partner.company].filter(Boolean).join(', ');
+                        html += `<p style="text-align: left;"><span style="color: #6C727F;">Работа:</span> ${role}</p>`;
                     }
-                    html += `<p style="text-align: left;">Компания: ${partner.company || 'Не указана'}</p>`;
-                    html += `<p style="text-align: left;">Должность: ${partner.position || 'Не указана'}</p>`;
-                    html += `<p style="text-align: left;">Цели: ${partner.goals || 'Не указаны'}</p>`;
-                    html += `<p style="text-align: left;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
-                    html += `<p style="text-align: left;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
-                    
-                    // Telegram канал
+                    html += `<p style="text-align: left;"><span style="color: #6C727F;">Город:</span> ${partner.city || 'Не указан'}</p>`;
+                    if (partner.birthdate) {
+                        const age = calculateAge(partner.birthdate);
+                        const ageText = age !== null ? ` (${age} лет)` : '';
+                        html += `<p style="text-align: left;"><span style="color: #6C727F;">День рождения:</span> ${partner.birthdate}${ageText}</p>`;
+                    }
+                    if (partner.goals) {
+                        html += `<p style="text-align: left;"><span style="color: #6C727F;">Цели:</span> ${partner.goals}</p>`;
+                    }
+                    if (partner.languages) {
+                        html += `<p style="text-align: left;"><span style="color: #6C727F;">Языки:</span> ${partner.languages}</p>`;
+                    }
                     if (partner.telegram_channel) {
                         const channelClean = partner.telegram_channel.replace(/^@/, '');
-                        html += `<p style="text-align: left;">Telegram канал: <a href="https://t.me/${channelClean}" target="_blank" style="color: #068487; text-decoration: none;">@${channelClean}</a></p>`;
+                        html += `<p style="text-align: left;"><span style="color: #6C727F;">Канал:</span> <a href="https://t.me/${channelClean}" target="_blank" style="color: #068487; text-decoration: none;">@${channelClean}</a></p>`;
+                    }
+                    if (partner.interests) {
+                        html += `<p style="text-align: left;"><span style="color: #6C727F;">Интересы:</span> ${partner.interests}</p>`;
+                    }
+                    if (partner.skills) {
+                        html += `<p style="text-align: left;"><span style="color: #6C727F;">Навыки:</span> ${partner.skills}</p>`;
+                    }
+                    html += '</div>';
+                    
+                    // --- Right block: Связь ---
+                    html += '<div style="background: #F6F8FA; border: 1px solid #E8ECEF; border-radius: 8px; padding: 14px;">';
+                    html += '<p style="text-align: left; font-weight: 600; color: #374151; margin-bottom: 10px; font-size: 13px;">Точки пересечения</p>';
+                    
+                    // Common interests as tags
+                    if (partner.common_interests) {
+                        html += '<p style="text-align: left; margin-bottom: 4px;"><span style="color: #6C727F;">Общие интересы:</span></p>';
+                        html += '<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;">';
+                        partner.common_interests.split(',').forEach(item => {
+                            const trimmed = item.trim();
+                            if (trimmed) html += `<span style="display: inline-block; padding: 2px 8px; background: rgba(6,132,135,0.1); color: #068487; border-radius: 10px; font-size: 12px;">${trimmed}</span>`;
+                        });
+                        html += '</div>';
                     }
                     
-                    // Рекомендация с цветом
+                    // Common skills as tags
+                    if (partner.common_skills) {
+                        html += '<p style="text-align: left; margin-bottom: 4px;"><span style="color: #6C727F;">Общие навыки:</span></p>';
+                        html += '<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;">';
+                        partner.common_skills.split(',').forEach(item => {
+                            const trimmed = item.trim();
+                            if (trimmed) html += `<span style="display: inline-block; padding: 2px 8px; background: rgba(6,132,135,0.1); color: #068487; border-radius: 10px; font-size: 12px;">${trimmed}</span>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    if (!partner.common_interests && !partner.common_skills) {
+                        html += '<p style="text-align: left; color: #9CA3AF; font-style: italic;">Заполните интересы и навыки в профиле, чтобы найти общие точки</p>';
+                    }
+                    
+                    // Rating
                     if (partner.average_rating > 0) {
-                        let ratingStyle = 'text-align: left;';
-                        if (partner.average_rating < 5) {
-                            ratingStyle = 'text-align: left; color: #d73a49;';
-                        } else if (partner.average_rating >= 8) {
-                            ratingStyle = 'text-align: left; color: #068487;';
-                        }
-                        html += `<p style="${ratingStyle}">Рекомендация: ${partner.average_rating}/10</p>`;
+                        let ratingColor = '#374151';
+                        if (partner.average_rating < 5) ratingColor = '#d73a49';
+                        else if (partner.average_rating >= 8) ratingColor = '#068487';
+                        html += `<p style="text-align: left; margin-top: 8px;"><span style="color: #6C727F;">Рекомендация:</span> <span style="color: ${ratingColor}; font-weight: 600;">${partner.average_rating}/10</span></p>`;
                     } else {
-                        html += `<p style="text-align: left;">Нет рекомендаций</p>`;
+                        html += `<p style="text-align: left; margin-top: 8px; color: #9CA3AF;">Нет рекомендаций</p>`;
                     }
                     
-                    // Активные задачи с отступом снизу
-                    if (partner.task_count) {
-                        html += `<p style="text-align: left; margin-bottom: 20px;">Активных задач: ${partner.task_count}</p>`;
-                    } else {
-                        html += `<p style="text-align: left; margin-bottom: 20px;">Активных задач: 0</p>`;
-                    }
+                    // Active tasks
+                    html += `<p style="text-align: left;"><span style="color: #6C727F;">Активных задач:</span> ${partner.task_count || 0}</p>`;
                     
                     html += '</div>';
+                    
+                    html += '</div>'; // close grid
                     
                     // Action buttons
                     html += '<div class="rating-modal-actions">';

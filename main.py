@@ -3414,6 +3414,13 @@ async def api_contact_profile_handler(request):
                 common = current_interests & profile_interests
                 common_interests = ', '.join(common) if common else None
 
+            common_skills = None
+            if profile and current_profile and current_profile.skills and profile.skills:
+                current_skills = set(s.strip().lower() for s in current_profile.skills.split(','))
+                profile_skills = set(s.strip().lower() for s in profile.skills.split(','))
+                common_s = current_skills & profile_skills
+                common_skills = ', '.join(common_s) if common_s else None
+
             # Get active task count
             active_tasks = session_db.query(Task).filter(
                 Task.user_id == contact_user.id,
@@ -3439,6 +3446,7 @@ async def api_contact_profile_handler(request):
                     'birthdate': getattr(profile, 'birthdate', None) if profile else None,
                     'zodiac_sign': getattr(profile, 'zodiac_sign', None) if profile else None,
                     'common_interests': common_interests,
+                    'common_skills': common_skills,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
                     'task_count': active_tasks,
                     'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
@@ -3461,6 +3469,7 @@ async def api_contact_profile_handler(request):
                     'languages': None,
                     'bio': None,
                     'common_interests': None,
+                    'common_skills': None,
                     'average_rating': 0,
                     'task_count': 0,
                     'subscription_tier': 'light'
