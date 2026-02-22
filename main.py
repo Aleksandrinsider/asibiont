@@ -3886,17 +3886,23 @@ async def create_post_handler(request):
 
             data = await request.json()
             content = data.get('content', '').strip()
+            image_url = data.get('image_url', '').strip() or None
 
-            if not content:
-                return web.json_response({'error': 'Post content is required'}, status=400)
+            if not content and not image_url:
+                return web.json_response({'error': 'Post content or image is required'}, status=400)
 
             if len(content) > 2000:
                 return web.json_response({'error': 'Post is too long (max 2000 characters)'}, status=400)
 
+            # Validate image size (max ~2MB base64)
+            if image_url and len(image_url) > 2_800_000:
+                return web.json_response({'error': 'Image is too large (max 2MB)'}, status=400)
+
             post = Post(
                 user_id=user.id,
                 username=user.username,
-                content=content
+                content=content,
+                image_url=image_url
             )
             session_db.add(post)
             session_db.commit()
@@ -3913,6 +3919,7 @@ async def create_post_handler(request):
                 'post': {
                     'id': post.id,
                     'content': post.content,
+                    'image_url': post.image_url,
                     'created_at': created_at_str,
                     'like_count': 0,
                     'user_liked': False,
@@ -4247,6 +4254,7 @@ async def get_feed_handler(request):
                     feed.append({
                         'id': post.id,
                         'content': post.content,
+                        'image_url': post.image_url,
                         'created_at': created_at_str,
                         'likes_count': likes_count,
                         'user_liked': user_liked,

@@ -127,8 +127,13 @@ def _migrate_tasks(session, inspector):
 
 
 def _migrate_posts(session, inspector):
-    """Создание таблицы posts"""
+    """Создание таблицы posts + image_url колонка"""
     if inspector.has_table('posts'):
+        # Добавляем image_url если нет
+        cols = [c['name'] for c in inspector.get_columns('posts')]
+        _add_columns(session, 'posts', cols, {
+            'image_url': 'ALTER TABLE posts ADD COLUMN image_url TEXT',
+        })
         return
     logger.info("Creating posts table")
     if LOCAL:
