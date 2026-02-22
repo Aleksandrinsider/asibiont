@@ -41,7 +41,7 @@ from sqlalchemy import text
 from models import (
     Session, User, UserProfile, Task, Goal, Interaction, Post,
     Anchor, AnchorDeliveryLog, AnchorPriority,
-    ActivityAlert, ContactAlert,
+    ActivityAlert, ContactAlert, UserMessage,
 )
 from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR
 
@@ -80,6 +80,8 @@ ALWAYS_DELIVER_TYPES = {
     'task_deadline_soon',     # Дедлайн скоро — критично
     'delegation_update',      # Результат делегирования — пользователь ждёт
     'goal_deadline',          # Горящий дедлайн цели
+    'incoming_message',       # Непрочитанные входящие сообщения
+    'token_low_balance',      # Критически низкий баланс токенов
 }
 
 # Группы батчинга
@@ -109,6 +111,11 @@ BATCH_GROUPS = {
     'channel_post': 'posting',
     'event_discovery': 'insights',
     'contact_activity': 'contacts',
+    'incoming_message': 'engagement',
+    'token_low_balance': 'engagement',
+    'delegation_overdue': 'delegation',
+    'goal_decomposition': 'goals',
+    'inactivity_reengagement': 'engagement',
 }
 
 
@@ -436,6 +443,21 @@ class AnchorEngine:
 
         # --- СОБЫТИЯ / МЕРОПРИЯТИЯ ---
         anchors.extend(self._scan_events(user, profile, session, now_utc))
+
+        # --- ВХОДЯЩИЕ СООБЩЕНИЯ ---
+        anchors.extend(self._scan_incoming_messages(user, session, now_utc))
+
+        # --- НИЗКИЙ БАЛАНС ТОКЕНОВ ---
+        anchors.extend(self._scan_token_low_balance(user, session, now_utc))
+
+        # --- ПРОСРОЧЕННЫЕ ДЕЛЕГИРОВАНИЯ ---
+        anchors.extend(self._scan_delegation_overdue(user, session, now_utc))
+
+        # --- ДЕКОМПОЗИЦИЯ ЦЕЛЕЙ БЕЗ ЗАДАЧ ---
+        anchors.extend(self._scan_goal_decomposition(user, session, now_utc))
+
+        # --- РЕАКТИВАЦИЯ НЕАКТИВНЫХ ---
+        anchors.extend(self._scan_inactivity_reengagement(user, session, now_utc))
 
         # --- ПОСТЫ В ЛЕНТУ (все) ---
         anchors.extend(self._scan_post_opportunities(user, profile, session, now_utc))
@@ -1164,6 +1186,227 @@ class AnchorEngine:
         return anchors
 
     # ═══════════════════════════════════════════════════════
+    # ENGAGEMENT SCANNERS — сообщения, баланс, неактивность, декомпозиция
+    # ═══════════════════════════════════════════════════════
+
+    def _scan_incoming_messages(self, user, session, now_utc) -> list:
+        """Уведомляет о непрочитанных входящих сообщениях (status='sent' или 'delivered')."""
+        anchors = []
+
+        unread = session.query(UserMessage).filter(
+            UserMessage.recipient_id == user.id,
+            UserMessage.status.in_(['sent', 'delivered']),
+        ).all()
+
+        if not unread:
+            return anchors
+
+        # Группируем по отправителю
+        senders = {}
+        for msg in unread:
+            sender = session.query(User).filter_by(id=msg.sender_id).first()
+            uname = sender.username if sender else 'unknown'
+            if uname not in senders:
+                senders[uname] = []
+            senders[uname].append(msg.message_text[:80])
+
+        summaries = []
+        for uname, texts in list(senders.items())[:5]:
+            summaries.append(f'@{uname}: {len(texts)} сообщ.')
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='incoming_message',
+            source=f'messages:unread:{now_utc.strftime("%Y-%m-%d-%H")}',
+            topic=f'{len(unread)} непрочитанных сообщений от {len(senders)} чел: {", ".join(summaries)}',
+            priority=AnchorPriority.HIGH,
+            data=json.dumps({
+                'total': len(unread),
+                'senders': {k: v[:3] for k, v in senders.items()},  # до 3 сообщений на отправителя
+            }),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=12),
+            cooldown_hours=3,
+            batch_group='engagement',
+        ))
+
+        return anchors
+
+    def _scan_token_low_balance(self, user, session, now_utc) -> list:
+        """Предупреждает когда баланс токенов критически низкий."""
+        anchors = []
+
+        balance = user.token_balance or 0
+        # Порог: менее 50 токенов (≈3 проактивных сообщения)
+        if balance >= 50:
+            return anchors
+
+        # Не предупреждаем если совсем 0 — тогда _process_user_inner и так пропустит
+        if balance <= 0:
+            return anchors
+
+        msgs_left = balance // 15  # 15 токенов за проактивное сообщение
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='token_low_balance',
+            source=f'tokens:low:{balance}',
+            topic=f'Баланс токенов: {balance} — хватит на ~{msgs_left} сообщений',
+            priority=AnchorPriority.HIGH,
+            data=json.dumps({
+                'balance': balance,
+                'messages_left': msgs_left,
+            }),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(days=3),
+            cooldown_hours=24,
+            batch_group='engagement',
+        ))
+
+        return anchors
+
+    def _scan_delegation_overdue(self, user, session, now_utc) -> list:
+        """Задачи делегированы, приняты, но дедлайн прошёл — исполнитель не выполнил."""
+        anchors = []
+
+        overdue_delegated = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.delegated_to_username.isnot(None),
+            Task.delegation_status == 'accepted',
+            Task.status.in_(['pending', 'in_progress']),
+            Task.reminder_time.isnot(None),
+            Task.reminder_time < now_utc,
+        ).all()
+
+        for task in overdue_delegated:
+            rt = task.reminder_time
+            if rt.tzinfo is None:
+                rt = rt.replace(tzinfo=timezone.utc)
+            hours_overdue = (now_utc - rt).total_seconds() / 3600
+            if hours_overdue >= 2:  # Просрочена > 2ч
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='delegation_overdue',
+                    source=f'task:{task.id}:delegation_overdue',
+                    topic=f'Делегированная задача «{task.title}» → @{task.delegated_to_username} просрочена на {int(hours_overdue)}ч',
+                    priority=AnchorPriority.HIGH,
+                    data=json.dumps({
+                        'task_id': task.id,
+                        'title': task.title,
+                        'delegated_to': task.delegated_to_username,
+                        'hours_overdue': round(hours_overdue, 1),
+                        'deadline': rt.isoformat(),
+                    }),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=48),
+                    cooldown_hours=8,
+                    batch_group='delegation',
+                ))
+
+        return anchors
+
+    def _scan_goal_decomposition(self, user, session, now_utc) -> list:
+        """Активные цели без привязанных задач → предложить разбить на шаги."""
+        anchors = []
+
+        active_goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status == 'active',
+        ).all()
+
+        for goal in active_goals:
+            # Проверяем есть ли ХОТЬ ОДНА активная задача, привязанная к цели
+            linked_tasks = session.query(Task).filter(
+                Task.goal_id == goal.id,
+                Task.status.in_(['pending', 'in_progress']),
+            ).count()
+
+            if linked_tasks > 0:
+                continue
+
+            # Цель должна быть хотя бы 2 дня старой (дать время создать задачи)
+            if goal.created_at:
+                ct = goal.created_at
+                if ct.tzinfo is None:
+                    ct = ct.replace(tzinfo=timezone.utc)
+                age_days = (now_utc - ct).days
+                if age_days < 2:
+                    continue
+
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='goal_decomposition',
+                source=f'goal:{goal.id}:no_tasks',
+                topic=f'Цель «{goal.title}» — нет активных задач, нужна декомпозиция',
+                priority=AnchorPriority.MEDIUM,
+                data=json.dumps({
+                    'goal_id': goal.id,
+                    'title': goal.title,
+                    'description': (goal.description or '')[:200],
+                    'progress': goal.progress_percentage,
+                    'category': goal.category,
+                    'target_date': goal.target_date.isoformat() if goal.target_date else None,
+                }),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(days=3),
+                cooldown_hours=48,
+                batch_group='goals',
+            ))
+
+        return anchors
+
+    def _scan_inactivity_reengagement(self, user, session, now_utc) -> list:
+        """Пользователь не взаимодействовал 3+ дня → мягкое возвращение."""
+        anchors = []
+
+        # Последнее взаимодействие
+        last_interaction = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+        ).order_by(Interaction.created_at.desc()).first()
+
+        if not last_interaction or not last_interaction.created_at:
+            return anchors
+
+        li = last_interaction.created_at
+        if li.tzinfo is None:
+            li = li.replace(tzinfo=timezone.utc)
+        days_inactive = (now_utc - li).days
+
+        if days_inactive < 3:
+            return anchors
+
+        # Собираем число незакрытых задач для контекста
+        pending_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status.in_(['pending', 'in_progress']),
+        ).count()
+
+        active_goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status == 'active',
+        ).count()
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='inactivity_reengagement',
+            source=f'inactivity:{days_inactive}d:{now_utc.strftime("%Y-%m-%d")}',
+            topic=f'Не заходил {days_inactive} дней — {pending_tasks} задач и {active_goals} целей ждут',
+            priority=AnchorPriority.MEDIUM,
+            data=json.dumps({
+                'days_inactive': days_inactive,
+                'pending_tasks': pending_tasks,
+                'active_goals': active_goals,
+                'last_seen': li.isoformat(),
+            }),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(days=3),
+            cooldown_hours=48,
+            batch_group='engagement',
+        ))
+
+        return anchors
+
+    # ═══════════════════════════════════════════════════════
     # POST SCANNERS — ленточный автопостинг + канал
     # ═══════════════════════════════════════════════════════
 
@@ -1477,6 +1720,7 @@ class AnchorEngine:
                 RE_ENGAGEMENT_TYPES = {
                     'dialog_followup', 'task_stale', 'profile_gap',
                     'post_opportunity', 'channel_post',
+                    'inactivity_reengagement',
                 }
                 OPTIONAL_LOW = {'market_insight', 'content_opportunity', 'weather_activity', 'event_discovery'}
                 # Необязательные LOW — удваиваем cooldown (через доп. фильтр)
