@@ -108,6 +108,7 @@ BATCH_GROUPS = {
     'post_opportunity': 'posting',
     'channel_post': 'posting',
     'event_discovery': 'insights',
+    'contact_event': 'contacts',
 }
 
 
@@ -1015,7 +1016,7 @@ class AnchorEngine:
         return anchors
 
     def _scan_events(self, user, profile, session, now_utc) -> list:
-        """Раз в 3 дня ищет актуальные мероприятия по интересам/нише пользователя."""
+        """Ищет актуальные мероприятия: по нише + по задачам контактов в городе."""
         anchors = []
         if not profile:
             return anchors
@@ -1024,31 +1025,79 @@ class AnchorEngine:
         goals = getattr(profile, 'goals', '') or ''
         position = getattr(profile, 'position', '') or ''
         niche = interests[:100] or goals[:100] or position[:60]
-        if not niche:
-            return anchors
-
         city = getattr(profile, 'city', '') or ''
 
-        # Раз в 3 дня — source привязан к 3-дневному окну
-        day_bucket = now_utc.strftime("%Y") + str(now_utc.timetuple().tm_yday // 3)
+        # 1) Якорь по нише — ежедневный (AI сам решит нужно ли)
+        if niche:
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='event_discovery',
+                source=f'events:{now_utc.strftime("%Y-%m-%d")}',
+                topic=f'Поиск актуальных мероприятий по теме: {niche[:60]}',
+                priority=AnchorPriority.LOW,
+                data=json.dumps({
+                    'niche': niche,
+                    'city': city,
+                    'goals': goals[:200],
+                    'search_query': f'конференции митапы события {niche[:40]} {now_utc.strftime("%B %Y")} онлайн офлайн'
+                }),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(hours=24),
+                cooldown_hours=24,
+                batch_group='insights',
+            ))
 
-        anchors.append(Anchor(
-            user_id=user.id,
-            anchor_type='event_discovery',
-            source=f'events:{day_bucket}',
-            topic=f'Поиск актуальных мероприятий по теме: {niche[:60]}',
-            priority=AnchorPriority.LOW,
-            data=json.dumps({
-                'niche': niche,
-                'city': city,
-                'goals': goals[:200],
-                'search_query': f'конференции митапы события {niche[:40]} {now_utc.strftime("%B %Y")} онлайн офлайн'
-            }),
-            triggered_at=now_utc,
-            expires_at=now_utc + timedelta(hours=72),
-            cooldown_hours=72,
-            batch_group='insights',
-        ))
+        # 2) Якорь по задачам контактов в том же городе — ищем мероприятия
+        if city:
+            EVENT_KEYWORDS = ('мероприятие', 'конференция', 'митап', 'meetup', 'форум',
+                              'выставка', 'встреча', 'воркшоп', 'workshop', 'хакатон',
+                              'hackathon', 'семинар', 'вебинар', 'нетворкинг')
+            # Контакты в том же городе
+            same_city_profiles = session.query(UserProfile).filter(
+                UserProfile.user_id != user.id,
+                UserProfile.city.ilike(f'%{city}%')
+            ).limit(50).all()
+            contact_user_ids = [p.user_id for p in same_city_profiles]
+
+            if contact_user_ids:
+                # Задачи контактов за последние 7 дней с ключевыми словами
+                week_ago = now_utc - timedelta(days=7)
+                contact_tasks = session.query(Task).filter(
+                    Task.user_id.in_(contact_user_ids),
+                    Task.created_at >= week_ago,
+                    Task.status.in_(['pending', 'in_progress', 'active'])
+                ).limit(100).all()
+
+                event_tasks = []
+                for t in contact_tasks:
+                    text = f'{t.title} {t.description or ""}'.lower()
+                    if any(kw in text for kw in EVENT_KEYWORDS):
+                        task_user = session.query(User).filter_by(id=t.user_id).first()
+                        username = task_user.username if task_user else 'unknown'
+                        event_tasks.append({
+                            'task': t.title[:80],
+                            'username': username,
+                            'date': t.reminder_time.strftime('%d.%m.%Y %H:%M') if t.reminder_time else ''
+                        })
+
+                if event_tasks:
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='contact_event',
+                        source=f'contact_events:{now_utc.strftime("%Y-%m-%d")}',
+                        topic=f'Контакты в {city} планируют мероприятия ({len(event_tasks)} шт)',
+                        priority=AnchorPriority.MEDIUM,
+                        data=json.dumps({
+                            'city': city,
+                            'events': event_tasks[:5],
+                            'niche': niche[:100]
+                        }),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(hours=24),
+                        cooldown_hours=24,
+                        batch_group='contacts',
+                    ))
+
         return anchors
 
     # ═══════════════════════════════════════════════════════
