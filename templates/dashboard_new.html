@@ -1667,8 +1667,6 @@
                                             placeholder="Написать комментарий..." 
                                             style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
                                             onkeypress="handleCommentKeyPress(event, ${post.id})"
-                                            onfocus="this.style.borderColor='#068487'" 
-                                            onblur="this.style.borderColor='#D1D9E0'"
                                         >
                                         <button 
                                             onclick="addComment(${post.id})" 
@@ -2018,8 +2016,6 @@
                                     placeholder="Написать комментарий..." 
                                     style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
                                     onkeypress="handleCommentKeyPress(event, ${post.id})"
-                                    onfocus="this.style.borderColor='#068487'" 
-                                    onblur="this.style.borderColor='#D1D9E0'"
                                 >
                                 <button 
                                     onclick="addComment(${post.id})" 
@@ -2305,7 +2301,7 @@
             _editOriginals['post-' + postId] = contentEl.textContent;
             
             contentEl.contentEditable = 'true';
-            contentEl.style.outline = '1px solid #068487';
+            contentEl.style.outline = '1px solid #D1D9E0';
             contentEl.style.borderRadius = '4px';
             contentEl.style.padding = '6px 10px';
             contentEl.focus();
@@ -2393,7 +2389,7 @@
             _editOriginals['comment-' + commentId] = contentEl.textContent;
             
             contentEl.contentEditable = 'true';
-            contentEl.style.outline = '1px solid #068487';
+            contentEl.style.outline = '1px solid #D1D9E0';
             contentEl.style.borderRadius = '4px';
             contentEl.style.padding = '4px 8px';
             contentEl.focus();
@@ -3255,8 +3251,6 @@
                                 placeholder="Написать комментарий..." 
                                 style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
                                 onkeypress="handleCommentKeyPress(event, ${post.id})"
-                                onfocus="this.style.borderColor='#068487'" 
-                                onblur="this.style.borderColor='#D1D9E0'"
                             >
                             <button 
                                 onclick="addComment(${post.id})" 
