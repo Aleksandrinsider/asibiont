@@ -1301,7 +1301,14 @@
                 if (evtSource) { evtSource.close(); evtSource = null; }
                 hideTypingIndicator();
                 if (!await checkAuth(response)) return;
-                const data = await response.json();
+                let data;
+                try {
+                    data = await response.json();
+                } catch (parseErr) {
+                    hideTypingIndicator();
+                    addMessage('Сервер временно недоступен. Попробуйте через минуту.', 'ai');
+                    return;
+                }
                 if (response.ok) {
                     // updateChat() каждые 3 сек подгрузит сообщения
                     
@@ -1316,7 +1323,7 @@
                         }
                     }, 1500);
                 } else {
-                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                    addMessage(`Ошибка: ${data.error || 'Сервер временно недоступен. Попробуйте через минуту.'}`, 'ai');
                 }
             } catch (error) {
                 if (evtSource) { evtSource.close(); evtSource = null; }

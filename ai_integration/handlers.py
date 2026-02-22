@@ -5794,11 +5794,23 @@ async def set_content_strategy(strategy: str, user_id: int, session):
         
         # Сохраняем стратегию
         profile.content_strategy = strategy
+        
+        # Автоматически включаем автомаркетинг при сохранении стратегии
+        if not profile.auto_marketing_enabled:
+            profile.auto_marketing_enabled = True
+            logger.info(f"[CONTENT_STRATEGY] Auto-enabled marketing for user {user_id}")
+        
         session.commit()
         
         logger.info(f"[CONTENT_STRATEGY] ✅ Saved: {strategy[:100]}...")
         
-        return f"✅ Стратегия контента сохранена!\n\n{strategy}\n\nТеперь автоматический маркетинг будет генерировать посты на основе твоей стратегии. Для запуска автопостинга настрой telegram_channel и включи Premium функции."
+        channel_info = ''
+        if user.telegram_channel:
+            channel_info = f"\n\n📢 Канал: {user.telegram_channel}\n✅ Автопостинг включён"
+        else:
+            channel_info = "\n\n⚠️ Telegram-канал не указан. Укажи его в профиле, чтобы посты публиковались автоматически."
+        
+        return f"✅ Стратегия контента сохранена!\n\n{strategy}{channel_info}"
         
     except Exception as e:
         logger.error(f"[CONTENT_STRATEGY] Error: {e}", exc_info=True)

@@ -58,7 +58,7 @@ EXCLUDED_TOOLS = {
     'generate_unified_recommendations',  # внутренняя аналитика
     'quick_topic_search',                # дубль research_topic (лёгкий)
     'get_partners_list',                 # дубль find_relevant_contacts_for_task
-    'toggle_autonomous_feature',         # внутренняя настройка
+    # 'toggle_autonomous_feature' — разблокирован, AI может управлять автопостингом
     'cancel_delegation',                 # покрывается reject_delegated_task
     'and_',                              # SQLAlchemy operator leak
     'or_',                               # SQLAlchemy operator leak
