@@ -280,13 +280,8 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            /* Выходим за пределы контейнера на всю ширину */
-            width: 100vw;
-            position: relative;
-            left: 50%;
-            transform: translateX(-50%);
-            mask-image: linear-gradient(to right, transparent, black 80px, black calc(100% - 80px), transparent);
-            -webkit-mask-image: linear-gradient(to right, transparent, black 80px, black calc(100% - 80px), transparent);
+            mask-image: linear-gradient(to right, transparent, black 60px, black calc(100% - 60px), transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 60px, black calc(100% - 60px), transparent);
         }
         .reviews-track {
             overflow: hidden;
@@ -315,27 +310,31 @@
         }
         .review-item {
             display: inline-block;
-            padding: 10px 18px;
-            background: #F6F8FA;
+            padding: 14px 20px;
+            background: white;
             border: 1px solid #D1D9E0;
-            border-radius: 20px;
-            font-size: 13px;
+            border-radius: 6px;
+            font-size: 14px;
             color: #374151;
-            line-height: 1.4;
+            line-height: 1.5;
             white-space: nowrap;
             flex-shrink: 0;
+            transition: all 0.2s;
+        }
+        .review-item:hover {
+            border-color: #1F2328;
         }
         @media (max-width: 768px) {
             .reviews-section {
-                mask-image: linear-gradient(to right, transparent, black 30px, black calc(100% - 30px), transparent);
-                -webkit-mask-image: linear-gradient(to right, transparent, black 30px, black calc(100% - 30px), transparent);
+                mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+                -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
             }
             .reviews-scroll {
                 animation-duration: 35s;
             }
             .review-item {
-                font-size: 12px;
-                padding: 8px 14px;
+                font-size: 13px;
+                padding: 12px 16px;
             }
         }
     </style>
