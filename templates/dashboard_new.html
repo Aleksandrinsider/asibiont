@@ -1753,6 +1753,8 @@
             } catch (error) {
                 console.error('Error loading feed:', error);
                 showNotification('Ошибка загрузки ленты новостей: ' + error.message, 'error');
+            } finally {
+                isLoadingFeed = false;
             }
         }
 
@@ -1948,13 +1950,10 @@
                     // Немедленно удаляем пост из DOM
                     const postElement = document.querySelector(`[data-post-id="${postId}"]`);
                     if (postElement) {
-                        postElement.remove();
+                        postElement.style.transition = 'opacity 0.3s ease';
+                        postElement.style.opacity = '0';
+                        setTimeout(() => postElement.remove(), 300);
                     }
-                    
-                    // Небольшая задержка перед обновлением ленты для синхронизации с сервером
-                    setTimeout(() => {
-                        if (typeof loadFeed === 'function') loadFeed();
-                    }, 300);
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
