@@ -3414,18 +3414,54 @@ async def api_contact_profile_handler(request):
                 common = current_interests & profile_interests
                 common_interests = ', '.join(common) if common else None
 
-            common_skills = None
-            if profile and current_profile and current_profile.skills and profile.skills:
-                current_skills = set(s.strip().lower() for s in current_profile.skills.split(','))
-                profile_skills = set(s.strip().lower() for s in profile.skills.split(','))
-                common_s = current_skills & profile_skills
-                common_skills = ', '.join(common_s) if common_s else None
-
             # Get active task count
             active_tasks = session_db.query(Task).filter(
                 Task.user_id == contact_user.id,
                 Task.status.in_(['in_progress', 'pending'])
             ).count()
+
+            # Get contact's favorite contacts
+            contact_favorites = []
+            if profile and profile.favorite_contacts:
+                try:
+                    fav_list = json.loads(profile.favorite_contacts)
+                    for fav_item in fav_list[:10]:  # max 10
+                        fav_username = None
+                        if isinstance(fav_item, dict):
+                            fav_username = fav_item.get('username') or fav_item.get('contact_info')
+                        elif isinstance(fav_item, str):
+                            fav_username = fav_item
+                        if fav_username:
+                            fav_username = str(fav_username).replace('@', '').strip()
+                            fav_user = session_db.query(User).filter(
+                                User.username.ilike(fav_username)
+                            ).first()
+                            contact_favorites.append({
+                                'username': fav_username,
+                                'first_name': fav_user.first_name if fav_user else None,
+                                'photo_url': safe_avatar_url(fav_user.telegram_id) if fav_user and hasattr(fav_user, 'telegram_id') else None
+                            })
+                except Exception as e:
+                    logger.error(f"Error parsing contact favorites: {e}")
+
+            # Get recent posts (last 3)
+            recent_posts = []
+            try:
+                posts = session_db.query(Post).filter(
+                    Post.user_id == contact_user.id
+                ).order_by(Post.created_at.desc()).limit(3).all()
+                for p in posts:
+                    text_preview = (p.content[:80] + '...') if len(p.content) > 80 else p.content
+                    created = p.created_at.strftime('%d.%m.%Y') if p.created_at else ''
+                    like_count = session_db.query(PostLike).filter(PostLike.post_id == p.id).count()
+                    recent_posts.append({
+                        'id': p.id,
+                        'text': text_preview,
+                        'date': created,
+                        'likes': like_count
+                    })
+            except Exception as e:
+                logger.error(f"Error getting recent posts: {e}")
 
             # Prepare profile data (use defaults if profile doesn't exist)
             try:
@@ -3446,11 +3482,12 @@ async def api_contact_profile_handler(request):
                     'birthdate': getattr(profile, 'birthdate', None) if profile else None,
                     'zodiac_sign': getattr(profile, 'zodiac_sign', None) if profile else None,
                     'common_interests': common_interests,
-                    'common_skills': common_skills,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
                     'task_count': active_tasks,
                     'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
-                    'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None
+                    'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None,
+                    'contact_favorites': contact_favorites,
+                    'recent_posts': recent_posts
                 }
             except Exception as profile_error:
                 logger.error(f"Error building profile data: {profile_error}", exc_info=True)
@@ -3469,7 +3506,6 @@ async def api_contact_profile_handler(request):
                     'languages': None,
                     'bio': None,
                     'common_interests': None,
-                    'common_skills': None,
                     'average_rating': 0,
                     'task_count': 0,
                     'subscription_tier': 'light'
