@@ -159,13 +159,17 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи (опционально, если известен). Приоритетнее task_title.",
+                    },
                     "task_title": {
                         "type": "string",
                         "description": "Ключевые слова задачи (опционально). При 'готово'/'сделал' — оставь пустым.",
                     },
                     "completion_note": {
                         "type": "string",
-                        "description": "Заметка о результат выполнения (опционально)",
+                        "description": "Заметка о результате выполнения (опционально)",
                     },
                 },
                 "required": [],  # task_title опционален
@@ -180,6 +184,10 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи (опционально, если известен). Приоритетнее task_title.",
+                    },
                     "task_title": {
                         "type": "string",
                         "description": "Ключевые слова для поиска задачи (НЕ точное название). Примеры: 'почта' найдёт 'Проверить почту', 'встреч' найдёт 'Встреча с командой'",
@@ -209,6 +217,10 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи (опционально, если известен). Приоритетнее task_title.",
+                    },
                     "task_title": {
                         "type": "string",
                         "description": "Название или часть названия задачи для удаления. Примеры: 'купить', 'встреча', 'хлеб'",
@@ -218,7 +230,7 @@ TOOLS = [
                         "description": "Причина удаления (опционально)",
                     },
                 },
-                "required": ["task_title"],
+                "required": [],
             },
         },
     },
@@ -687,14 +699,18 @@ TOOLS = [
                 "properties": {
                     "task_id": {
                         "type": "integer",
-                        "description": "ID задачи для пропуска"
+                        "description": "ID задачи для пропуска (опционально если есть task_title)"
+                    },
+                    "task_title": {
+                        "type": "string",
+                        "description": "Ключевые слова задачи для пропуска (опционально если есть task_id)"
                     },
                     "reason": {
                         "type": "string",
                         "description": "Причина пропуска (почему неактуальна, что помешало)"
                     }
                 },
-                "required": ["task_id"]
+                "required": []
             }
         }
     },
@@ -708,10 +724,14 @@ TOOLS = [
                 "properties": {
                     "task_id": {
                         "type": "integer",
-                        "description": "ID задачи для восстановления"
+                        "description": "ID задачи для восстановления (опционально если есть task_title)"
+                    },
+                    "task_title": {
+                        "type": "string",
+                        "description": "Ключевые слова задачи для восстановления (опционально если есть task_id)"
                     }
                 },
-                "required": ["task_id"]
+                "required": []
             }
         }
     },

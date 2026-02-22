@@ -7167,7 +7167,7 @@ async def send_message_to_user(
 async def find_and_message_relevant_users(
     purpose: str,
     message_context: str,
-    match_by: str = "interests",
+    match_by: str = "all",
     limit: int = 3,
     user_id: int = None,
     session=None
