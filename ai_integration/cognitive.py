@@ -523,21 +523,36 @@ class CognitiveEngine:
             issues.append('list_converted')
 
         # 4b. Убираем bullet-списки (•, —, –, - в начале строки)
-        bullet_pattern = re.findall(r'^[•—–\-]\s+(.+)$', text, re.MULTILINE)
-        if len(bullet_pattern) >= 2:
-            items = bullet_pattern[:6]
-            text_without_bullets = re.sub(r'^[•—–\-]\s+.+$', '', text, flags=re.MULTILINE)
-            prefix = text_without_bullets.strip()
-            joined = ', '.join(items)
-            text = f"{prefix} {joined}." if prefix else f"{joined}."
-            text = re.sub(r'\.\s*\.', '.', text)
-            text = re.sub(r'\s{2,}', ' ', text)
-            issues.append('bullets_converted')
+        # НО сохраняем строки с URL-ссылками
+        bullet_lines = re.findall(r'^[•—–\-]\s+(.+)$', text, re.MULTILINE)
+        bullet_lines_no_url = [l for l in bullet_lines if not re.search(r'https?://', l)]
+        if len(bullet_lines_no_url) >= 2:
+            # Убираем только bullet-строки БЕЗ ссылок
+            def replace_bullet_no_url(m):
+                content = m.group(0).lstrip('•—–- ')
+                if re.search(r'https?://', content):
+                    return m.group(0)  # Сохраняем строки с URL
+                return content
+            text_new = re.sub(r'^[•—–\-]\s+.+$', replace_bullet_no_url, text, flags=re.MULTILINE)
+            if text_new != text:
+                # Собираем не-URL items в текст
+                non_url_items = [l for l in bullet_lines if not re.search(r'https?://', l)][:6]
+                url_items = [l for l in bullet_lines if re.search(r'https?://', l)]
+                text_without_bullets = re.sub(r'^[•—–\-]\s+.+$', '', text, flags=re.MULTILINE)
+                prefix = text_without_bullets.strip()
+                joined = ', '.join(non_url_items)
+                url_section = '\n'.join(url_items) if url_items else ''
+                text = f"{prefix} {joined}." if prefix else f"{joined}."
+                if url_section:
+                    text = f"{text}\n\n{url_section}"
+                text = re.sub(r'\.\s*\.', '.', text)
+                text = re.sub(r'\s{2,}', ' ', text)
+                issues.append('bullets_converted')
 
         # 4c. Убираем emoji-заголовки (🔍 Анализ:, 💡 Выводы:, etc.)
         text = re.sub(r'^[🔍💡🎯✅📎📊📰🚀⚡️🔥💰📋]\s*[А-Яа-яA-Za-z\s]+:\s*\n?', '', text, flags=re.MULTILINE)
-        # Убираем остаточные секционные заголовки
-        text = re.sub(r'^(Ключевые выводы|Возможности|Рекомендации|Источники|Результаты исследования):\s*\n?', '', text, flags=re.MULTILINE)
+        # Убираем остаточные секционные заголовки (НО НЕ "Источники" — там ссылки)
+        text = re.sub(r'^(Ключевые выводы|Возможности|Рекомендации|Результаты исследования):\s*\n?', '', text, flags=re.MULTILINE)
 
         # 5. Убираем пустые секции ("Вот почему:" без содержимого)
         # Паттерн: заголовок с двоеточием, за которым сразу следующий заголовок или конец
@@ -552,14 +567,25 @@ class CognitiveEngine:
         # 5b. Убираем множественные пустые строки (оставляем максимум одну)
         text = re.sub(r'\n{3,}', '\n\n', text)
 
-        # 6. Обрезаем ЕСЛИ ответ слишком длинный (>800 символов)
-        if len(text) > 800:
-            cut = text[:700]
+        # 6. Обрезаем ЕСЛИ ответ слишком длинный
+        # Увеличиваем лимит если есть URL-ссылки (чтобы не обрезать их)
+        has_urls = bool(re.search(r'https?://', text))
+        max_len = 1500 if has_urls else 800
+        cut_at = 1400 if has_urls else 700
+        if len(text) > max_len:
+            cut = text[:cut_at]
             last_end = max(cut.rfind('.'), cut.rfind('!'), cut.rfind('?'))
             if last_end > 300:
                 text = cut[:last_end + 1]
             else:
                 text = cut
+            # Если обрезали, но URL остался в хвосте — добавляем его
+            if has_urls and not re.search(r'https?://', text):
+                # Достаём все URL из оригинала
+                urls_in_original = re.findall(r'(?:.*?\s)?(https?://\S+)', response)
+                if urls_in_original:
+                    url_lines = '\n'.join(urls_in_original[:5])
+                    text = f"{text}\n\n{url_lines}"
             issues.append('truncated')
 
         return text.strip(), issues
@@ -627,7 +653,7 @@ class CognitiveEngine:
                                      'description', 'progress', 'city',
                                      'username', 'query', 'summary',
                                      'key_insights', 'opportunities',
-                                     'action_plan')
+                                     'action_plan', 'link', 'url', 'source')
                         })
                     else:
                         compressed.append(str(item)[:100])
@@ -636,8 +662,7 @@ class CognitiveEngine:
             if isinstance(data, dict):
                 compressed = {}
                 # Убираем поля, которые не нужны AI для ответа
-                skip_keys = {'link', 'links', 'sources', 'url', 'urls',
-                             'cached', 'success'}
+                skip_keys = {'cached', 'success'}
                 for k, v in data.items():
                     if k in skip_keys:
                         continue
