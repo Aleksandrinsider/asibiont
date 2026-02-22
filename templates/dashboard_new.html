@@ -5154,6 +5154,22 @@
                                 }
                             });
                             
+                            // Применяем my_ratings ко ВСЕМ контактам (включая клиентские favorites)
+                            const myRatings = data.my_ratings || {};
+                            Object.values(uniquePartners).forEach(p => {
+                                const uname = (p.contact_info || '').replace('@', '').toLowerCase();
+                                if (uname && myRatings[uname] !== undefined) {
+                                    p.my_rating = myRatings[uname];
+                                }
+                            });
+                            // То же для delegation контактов
+                            Object.values(delegationContacts).forEach(p => {
+                                const uname = (p.contact_info || '').replace('@', '').toLowerCase();
+                                if (uname && myRatings[uname] !== undefined) {
+                                    p.my_rating = myRatings[uname];
+                                }
+                            });
+                            
                             let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                             Object.values(uniquePartners).forEach(partner => {
                                 const telegramUrl = 'https://t.me/' + partner.contact_info;

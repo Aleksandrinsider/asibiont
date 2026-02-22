@@ -46,7 +46,7 @@ EXCLUDED_TOOLS = {
     'show_profile',                      # профиль в контексте, не нужно вызывать как инструмент
     'analyze_group_opportunities',       # внутренняя
     'set_auto_post_time',                # покрывается set_content_strategy
-    'publish_to_telegram',               # внутренняя (вызывается через create_post)
+    # 'publish_to_telegram' — разблокирован, AI может публиковать в TG-канал напрямую
     'get_weather_info',                  # дубль встроенного контекста погоды
     # Внутренние утилиты (не инструменты для AI)
     'encrypt_data',                      # служебная криптография
@@ -732,6 +732,23 @@ TOOLS = [
                     }
                 },
                 "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_to_telegram",
+            "description": "📢 ПОСТ В TELEGRAM КАНАЛ (НЕ в ленту!): Публикует пост в личный Telegram-канал пользователя. Это ДРУГАЯ система, не путай с create_post (лента новостей). Используй когда пользователь явно просит опубликовать в его TG-канал. Требует: канал должен быть указан в профиле, бот добавлен как админ канала. Ключевые слова: 'пост в канал', 'опубликуй в телеграм', 'запости в мой канал'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Текст поста для Telegram-канала. Поддерживает Markdown. Пиши качественный контент по теме канала."
+                    }
+                },
+                "required": ["content"]
             }
         }
     },

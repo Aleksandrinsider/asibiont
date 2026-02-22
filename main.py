@@ -2917,7 +2917,8 @@ async def api_partners_handler(request):
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({
             'partners': partners_data,
-            'blocked_partners_info': blocked_partners_data  # Добавляем информацию о заблокированных
+            'blocked_partners_info': blocked_partners_data,  # Добавляем информацию о заблокированных
+            'my_ratings': my_ratings_map  # Карта всех оценок текущего пользователя (username → rating)
         })
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)

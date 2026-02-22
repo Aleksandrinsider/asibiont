@@ -1019,6 +1019,9 @@ class AnchorEngine:
 
         AI потом сам решит, стоит ли делать пост и О ЧЁМ.
         Мы здесь только проверяем: есть ли вообще о чём писать.
+
+        Время поста индивидуально для каждого пользователя:
+        распределяется по user.id в окне 10:00–21:00.
         """
         anchors = []
 
@@ -1035,6 +1038,22 @@ class AnchorEngine:
 
         feed_limit = MAX_FEED_PER_DAY
         if posts_today >= feed_limit:
+            return anchors
+
+        # ── Индивидуальное время для поста в ленту ──
+        # Каждый пользователь получает уникальное время на основе user.id
+        # Окно: 10:00–21:00 (660 минут), hash от id → стабильное смещение
+        import hashlib
+        uid_hash = int(hashlib.md5(str(user.id).encode()).hexdigest()[:8], 16)
+        feed_offset_minutes = uid_hash % 660  # 0..659 минут внутри окна 10:00-21:00
+        preferred_hour = 10 + feed_offset_minutes // 60
+        preferred_minute = feed_offset_minutes % 60
+
+        current_minutes = user_now.hour * 60 + user_now.minute
+        target_minutes = preferred_hour * 60 + preferred_minute
+
+        # Окно: ±30 мин от индивидуального времени
+        if abs(current_minutes - target_minutes) > 30:
             return anchors
 
         # Собираем «материал» для AI:

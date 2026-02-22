@@ -6099,11 +6099,11 @@ async def delete_post(user_id: int, post_id: int = None, session=None):
 async def publish_to_telegram(content: str, user_id: int, session):
     """
     📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
-    Требует: STANDARD или PREMIUM подписку
     
     Требования:
     - Пользователь должен указать telegram_channel в профиле
     - Бот должен быть админом канала
+    - Лимит: 1 пост в канал в день
     
     Args:
         content: Текст для публикации (Markdown)
@@ -6116,12 +6116,46 @@ async def publish_to_telegram(content: str, user_id: int, session):
         close_session = True
     
     try:
-        # Все функции открыты — оплата токенами
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден. Напишите /start."
         
         logger.info(f"[PUBLISH] Starting for user {user_id}")
+        
+        # ── Проверка дневного лимита (1 пост в канал в день) ──
+        import pytz
+        from models import AnchorDeliveryLog
+        user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
+        user_now = datetime.now(user_tz)
+        today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start.astimezone(pytz.UTC)
+        
+        # Проверяем по AnchorDeliveryLog (автоматические публикации)
+        auto_channel_today = session.query(AnchorDeliveryLog).filter(
+            AnchorDeliveryLog.user_id == user.id,
+            AnchorDeliveryLog.created_at >= today_start_utc,
+            AnchorDeliveryLog.anchor_types.contains('channel_post')
+        ).count()
+        
+        # Также проверяем по задачам (ручные публикации через publish_to_telegram)
+        from models import Task
+        manual_channel_today = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.title.like('%Пост опубликован в%'),
+            Task.status == 'completed',
+            Task.actual_completion_time >= today_start_utc
+        ).count()
+        
+        total_channel_posts_today = auto_channel_today + manual_channel_today
+        if total_channel_posts_today >= 1:
+            channel = user.telegram_channel or 'канал'
+            if not channel.startswith('@') and not channel.startswith('-'):
+                channel = f"@{channel}"
+            return (
+                f"📢 Сегодня пост в {channel} уже был опубликован.\n"
+                f"Лимит — 1 пост в канал в день, чтобы не спамить подписчиков.\n"
+                f"Следующий пост можно опубликовать завтра."
+            )
         
         # Если content это JSON строка от generate_marketing_content, парсим
         try:
@@ -6139,10 +6173,10 @@ async def publish_to_telegram(content: str, user_id: int, session):
         # Проверяем результат публикации
         if isinstance(result, dict):
             if result.get('success'):
-                return result.get('message', '✅ Пост успешно опубликован')
+                return result.get('message', '✅ Пост успешно опубликован в Telegram-канал')
             else:
                 # Публикация не удалась - возвращаем детальное сообщение об ошибке
-                return result.get('message', '❌ Не удалось опубликовать пост')
+                return result.get('message', '❌ Не удалось опубликовать пост в Telegram-канал')
         else:
             return str(result)
         
