@@ -859,7 +859,7 @@ details[open] .details-content {
 
 .chat-input input:focus {
     outline: none;
-    border-color: #0969DA;
+    border-color: #D1D9E0;
 }
 
 .context-section h3 {
