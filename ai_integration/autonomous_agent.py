@@ -147,78 +147,44 @@ class HybridAutonomousAgent:
         logger.info(f"[HYBRID] tool_choice=auto for: '{user_message[:50]}'")
         return "auto"
 
-    _TOOL_PROGRESS_MAP = {
-        'list_tasks': ['Открываю твой день...', 'Так, что у нас по плану...', 'Раскладываю дела по полочкам...'],
-        'add_task': ['Вписываю в расписание...', 'Бронирую время для дела...', 'Ставлю в очередь...'],
-        'complete_task': ['Финиш! Вычёркиваю...', 'Одним делом меньше!', 'Закрываю гештальт...'],
-        'edit_task': ['Перекраиваю план...', 'Двигаю шестерёнки...', 'Тюнингую задачу...'],
-        'delete_task': ['Безжалостно вычёркиваю...', 'Прощай, задача...'],
-        'skip_task': ['Перебрасываю на потом...', 'Не сегодня — переношу...'],
-        'restore_task': ['Воскрешаю из архива...', 'Камбэк задачи!'],
-        'quick_topic_search': ['Быстрый сёрч...', 'Секунду, пробиваю...'],
-        'research_topic': ['Ныряю в тему...', 'Провожу разведку...', 'Штудирую источники...', 'Прочёсываю интернет...'],
-        'get_news_trends': ['Ловлю сигналы из инфополя...', 'Чекаю новости...', 'Мониторю тренды...'],
-        'find_relevant_contacts_for_task': ['Ищу кто может помочь...', 'Прочёсываю базу контактов...', 'Подбираю нужных людей...'],
-        'get_stock_info': ['Сверяюсь с рынком...', 'Чекаю котировки...'],
-        'update_profile': ['Запоминаю, кто ты...', 'Обновляю досье...'],
-        'get_user_goals': ['Открываю карту целей...', 'Сверяю курс...'],
-        'create_goal': ['Задаю новый вектор...', 'Ставлю маяк на горизонте...', 'Фиксирую вершину...'],
-        'delete_goal': ['Снимаю с повестки...', 'Расчищаю горизонт...'],
-        'generate_post': ['Ловлю вдохновение...', 'Формулирую мысль...', 'Колдую над текстом...'],
-        'create_post': ['Запускаю в эфир...', 'Публикую!'],
-        'edit_post': ['Полирую текст...', 'Докручиваю...'],
-        'get_posts': ['Листаю ленту...', 'Смотрю что публиковал...'],
-        'delete_post': ['Убираю из ленты...'],
-        'delegate_task': ['Передаю на исполнение...', 'Делегирую!'],
-        'get_delegation_progress': ['Чекаю статус у исполнителя...', 'Как там дела...'],
-        'accept_delegated_task': ['Принимаю вызов!', 'Беру на себя!'],
-        'reject_delegated_task': ['Отклоняю запрос...'],
-        'check_time_conflicts': ['Проверяю, не пересечётся ли...', 'Сканирую расписание...'],
-        'update_goal_progress': ['Двигаю прогресс-бар...', 'Фиксирую продвижение...'],
-        'list_goals': ['Разворачиваю карту целей...', 'Сверяю маршрут...'],
-        'set_contact_alert': ['Ставлю на радар...', 'Настраиваю маячок...'],
-        'set_content_strategy': ['Фиксирую стратегию...', 'Записываю контент-план...'],
-        'toggle_autonomous_feature': ['Переключаю режим...'],
-        'send_message_to_user': ['Пишу от твоего имени...', 'Отправляю послание...'],
-        'find_and_message_relevant_users': ['Ищу и связываюсь...', 'Обхожу платформу...'],
-        'reply_to_user_message': ['Формулирую ответ...', 'Готовлю реплику...'],
-        'get_incoming_messages': ['Проверяю входящие...', 'Что в почте...'],
-        'get_message_status': ['Проверяю, доставлено ли...'],
-    }
+    # Phrases moved to i18n.py — these are fallbacks only
+    _TOOL_PROGRESS_MAP = None  # loaded from i18n at runtime
+    _THINKING_PHRASES = None
+    _DEEP_THINKING_PHRASES = None
 
-    _THINKING_PHRASES = [
-        'Секунду, варю кашу в голове...',
-        'Включаю нейросети...',
-        'Хмм, дай подумать...',
-        'Разгоняю процессор...',
-        'Заглядываю в контекст...',
-        'Фокусируюсь на задаче...',
-        'Ищу лучший подход...',
-        'Собираю картину...',
-        'Момент, анализирую...',
-        'Прокручиваю варианты...',
-    ]
+    def _get_progress_phrases(self, lang='ru'):
+        """Get tool progress phrases for given language from i18n."""
+        try:
+            from i18n import PROGRESS_PHRASES
+            return PROGRESS_PHRASES.get(lang, PROGRESS_PHRASES['ru'])
+        except Exception:
+            return {}
 
-    _DEEP_THINKING_PHRASES = [
-        'Копаю глубже...',
-        'Ещё чуть-чуть, почти нашёл...',
-        'Связываю факты воедино...',
-        'Финишная прямая...',
-        'Складываю пазл...',
-        'Докручиваю детали...',
-        'Верифицирую данные...',
-        'Полирую результат...',
-    ]
+    def _get_thinking_phrases(self, lang='ru'):
+        try:
+            from i18n import THINKING_PHRASES
+            return THINKING_PHRASES.get(lang, THINKING_PHRASES['ru'])
+        except Exception:
+            return ['Thinking...'] if lang == 'en' else ['Думаю...']
 
-    def _tool_progress_text(self, tool_name, iteration):
+    def _get_deep_thinking_phrases(self, lang='ru'):
+        try:
+            from i18n import DEEP_THINKING_PHRASES
+            return DEEP_THINKING_PHRASES.get(lang, DEEP_THINKING_PHRASES['ru'])
+        except Exception:
+            return ['Digging deeper...'] if lang == 'en' else ['Копаю глубже...']
+
+    def _tool_progress_text(self, tool_name, iteration, lang='ru'):
         """Генерирует текст прогресса по имени инструмента."""
-        entry = self._TOOL_PROGRESS_MAP.get(tool_name, ['Обрабатываю запрос...', 'Думаю над этим...', 'Разбираюсь...'])
+        progress_map = self._get_progress_phrases(lang)
+        fallback = ['Processing...', 'Thinking...'] if lang == 'en' else ['Обрабатываю запрос...', 'Думаю над этим...', 'Разбираюсь...']
+        entry = progress_map.get(tool_name, fallback)
         if isinstance(entry, list):
             text = random.choice(entry)
         else:
             text = entry
         if iteration > 1:
-            text = random.choice(self._DEEP_THINKING_PHRASES)
+            text = random.choice(self._get_deep_thinking_phrases(lang))
         return text
 
     # ===== TOKEN BUDGET =====
@@ -467,12 +433,15 @@ class HybridAutonomousAgent:
             # Подписка
             sub_tier = getattr(user, 'subscription_tier', 'LIGHT')
 
+            # Язык пользователя
+            user_lang = getattr(user, 'language', 'ru') or 'ru'
+
             # Базовый промпт
             base_prompt = get_extended_system_prompt(
                 user_now=user_now,
                 current_time_str=time_str,
                 current_date_str=date_str,
-                user_username=user.username or "пользователь",
+                user_username=user.username or ("user" if user_lang == 'en' else "пользователь"),
                 mentions_str="",
                 user_memory=effective_memory,
                 context=None, intent=None,
@@ -483,7 +452,8 @@ class HybridAutonomousAgent:
                 profile_data=profile_data,
                 proactive_context=proactive_context,
                 current_task_info=current_task_info,
-                user_id_param=user_id
+                user_id_param=user_id,
+                lang=user_lang
             )
 
             return {
@@ -494,6 +464,7 @@ class HybridAutonomousAgent:
                 'user_now': user_now,
                 'time_str': time_str,
                 'date_str': date_str,
+                'user_lang': user_lang,
             }
         finally:
             session.close()
@@ -853,6 +824,7 @@ class HybridAutonomousAgent:
 
             base_prompt = ctx['base_prompt']
             sub_tier = ctx['sub_tier']
+            user_lang = ctx.get('user_lang', 'ru')
 
             # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
             from .conversation_history import get_conversation_history
@@ -990,7 +962,7 @@ class HybridAutonomousAgent:
             # Прогресс — живые фразы
             if _cb:
                 try:
-                    await _cb(random.choice(self._THINKING_PHRASES))
+                    await _cb(random.choice(self._get_thinking_phrases(user_lang)))
                 except Exception:
                     pass
 
@@ -1001,7 +973,7 @@ class HybridAutonomousAgent:
                 # Обновляем прогресс перед вызовом AI
                 if _cb and iteration > 0:
                     try:
-                        await _cb(random.choice(self._DEEP_THINKING_PHRASES))
+                        await _cb(random.choice(self._get_deep_thinking_phrases(user_lang)))
                     except Exception:
                         pass
 
@@ -1096,7 +1068,7 @@ class HybridAutonomousAgent:
 
                     # Execute single tool — с прогрессом в Telegram
                     if _cb:
-                        status = self._tool_progress_text(name, iteration + 1)
+                        status = self._tool_progress_text(name, iteration + 1, lang=user_lang)
                         try:
                             await _cb(status)
                         except Exception:
@@ -1292,68 +1264,129 @@ class HybridAutonomousAgent:
             # Для proactive/anchor передаём mode чтобы не включать user_memory
             ctx = await self._build_context(user_id, mode=mode)
             if not ctx:
-                return self._system_message_fallback(mode, instruction)
+                from i18n import get_user_lang
+                _lang = get_user_lang(user_id)
+                return self._system_message_fallback(mode, instruction, lang=_lang)
 
             base_prompt = ctx['base_prompt']
             sub_tier = ctx['sub_tier']
+            user_lang = ctx.get('user_lang', 'ru')
 
-            # Добавляем режим в системный промпт
-            mode_instructions = {
-                'reminder': (
-                    "\n\n[РЕЖИМ: НАПОМИНАНИЕ]\n"
-                    "Время задачи пришло. Подумай: можешь ли ты ПОМОЧЬ решить, а не просто напомнить?\n"
-                    "Задача требует информации → найди через инструменты и дай результат.\n"
-                    "Задача простая → напомни кратко. Спроси о статусе. НЕ создавай новые задачи.\n"
-                    "Пиши ТОЧНО ТАК ЖЕ как обычный ответ — тот же стиль, тон, эмодзи внутри текста."
-                ),
-                'task_assist': (
-                    "\n\n[РЕЖИМ: ПОМОЩЬ С ЗАДАЧЕЙ]\n"
-                    "Помоги решить задачу — не предлагай, а СДЕЛАЙ.\n"
-                    "Используй инструменты и дай конкретный результат.\n"
-                    "НЕ создавай новые задачи. Пиши ТОЧНО ТАК ЖЕ как обычный ответ."
-                ),
-                'proactive': (
-                    "\n\n[РЕЖИМ: ПРОАКТИВНОЕ СООБЩЕНИЕ]\n"
-                    "Ты сам решил написать — но человек НЕ ДОЛЖЕН чувствовать, что это 'системное сообщение'. "
-                    "Пиши ТОЧНО ТАК ЖЕ как если бы отвечал на его сообщение — тот же стиль, тот же тон, те же эмодзи внутри текста.\n"
-                    "Подумай: что сейчас важно для этого человека? Какая сфера его жизни требует внимания?\n"
-                    "Используй инструменты (list_tasks, list_goals, get_news_trends) для получения реальных данных. "
-                    "НЕ вызывай research_topic в проактивных сообщениях — это дорого и долго. Используй get_news_trends для информации.\n"
-                    "Не выдумывай данные. Задай вопрос, который заставит задуматься.\n"
-                    "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard.\n\n"
-                    "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
-                    "Секция ПАМЯТЬ ПОЛЬЗОВАТЕЛЯ — это устаревший фон. НЕ цитируй из неё задачи, цели, посты или факты как текущие.\n"
-                    "ТОЛЬКО данные из инструментов (list_tasks, list_goals) считай актуальными.\n"
-                    "Если list_tasks вернул пустой список — у пользователя НЕТ задач. Не упоминай задачи.\n"
-                    "Если list_goals вернул пустой список — у пользователя НЕТ целей. Не упоминай цели.\n"
-                    "НЕ УПОМИНАЙ конкретные задачи/цели/посты которые ты НЕ получил из инструментов."
-                ),
-                'result_check': (
-                    "\n\n[РЕЖИМ: ПОЗДРАВЛЕНИЕ]\n"
-                    "Задача выполнена — поздравь кратко. 1-2 предложения."
-                ),
-                'anchor': (
-                    "\n\n[РЕЖИМ: ANCHOR ENGINE]\n"
-                    "Тебе переданы ЯКОРЯ (события/факты) + полный контекст человека.\n"
-                    "Подумай: есть ли здесь что-то, ради чего стоит отвлечь человека?\n"
-                    "Если нет — верни SKIP. Не пиши ради того, чтобы написать.\n"
-                    "Если да — используй инструменты (get_news_trends, list_tasks, list_goals) "
-                    "по релевантной теме. НЕ вызывай research_topic — используй get_news_trends.\n"
-                    "Пиши ТОЧНО ТАК ЖЕ как обычный ответ — тот же стиль, тон, эмодзи внутри текста. "
-                    "Человек не должен отличить проактивное сообщение от обычного ответа.\n"
-                    "Думай о человеке целиком: какие сферы жизни проседают? "
-                    "Где он застрял? Что он упускает?\n"
-                    "ОДНА ТЕМА НА СООБЩЕНИЕ: выбери ОДИН самый важный якорь и пиши ТОЛЬКО о нём. "
-                    "НЕ пытайся охватить всё. Закончи конкретным вопросом или предложением.\n"
-                    "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard.\n\n"
-                    "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
-                    "Секция ПАМЯТЬ ПОЛЬЗОВАТЕЛЯ — это устаревший фон. НЕ цитируй из неё задачи, цели, посты или факты как текущие.\n"
-                    "ТОЛЬКО данные из инструментов (list_tasks, list_goals) считай актуальными.\n"
-                    "Если list_tasks вернул пустой список — у пользователя НЕТ задач. Не упоминай задачи.\n"
-                    "Если list_goals вернул пустой список — у пользователя НЕТ целей. Не упоминай цели.\n"
-                    "НЕ УПОМИНАЙ конкретные задачи/цели/посты которые ты НЕ получил из инструментов."
-                ),
-            }
+            # Добавляем режим в системный промпт (bilingual)
+            if user_lang == 'en':
+                mode_instructions = {
+                    'reminder': (
+                        "\n\n[MODE: REMINDER]\n"
+                        "Task time has arrived. Think: can you HELP solve it, not just remind?\n"
+                        "Task needs info → find via tools and deliver the result.\n"
+                        "Simple task → remind briefly. Ask about status. Do NOT create new tasks.\n"
+                        "Write EXACTLY like a regular reply — same style, tone, emojis in text."
+                    ),
+                    'task_assist': (
+                        "\n\n[MODE: TASK ASSIST]\n"
+                        "Help solve the task — don't suggest, DO it.\n"
+                        "Use tools and give a concrete result.\n"
+                        "Do NOT create new tasks. Write EXACTLY like a regular reply."
+                    ),
+                    'proactive': (
+                        "\n\n[MODE: PROACTIVE MESSAGE]\n"
+                        "You decided to write — but the user must NOT feel it's a 'system message'. "
+                        "Write EXACTLY as if replying to their message — same style, tone, emojis.\n"
+                        "Think: what matters to this person now? Which area of life needs attention?\n"
+                        "Use tools (list_tasks, list_goals, get_news_trends) for real data. "
+                        "Do NOT call research_topic in proactive messages — too expensive. Use get_news_trends.\n"
+                        "Don't invent data. Ask a thought-provoking question.\n"
+                        "IMPORTANT: Do NOT auto-publish posts. Do NOT use /dashboard — only https://asibiont.ru/dashboard.\n\n"
+                        "⚠️ DATA VERIFICATION RULE:\n"
+                        "USER MEMORY section is outdated background. Do NOT cite tasks, goals, posts from it as current.\n"
+                        "ONLY data from tools (list_tasks, list_goals) is current.\n"
+                        "If list_tasks returns empty — user has NO tasks. Don't mention tasks.\n"
+                        "If list_goals returns empty — user has NO goals. Don't mention goals.\n"
+                        "Do NOT mention specific tasks/goals/posts you did NOT get from tools."
+                    ),
+                    'result_check': (
+                        "\n\n[MODE: CONGRATULATION]\n"
+                        "Task completed — congratulate briefly. 1-2 sentences."
+                    ),
+                    'anchor': (
+                        "\n\n[MODE: ANCHOR ENGINE]\n"
+                        "You received ANCHORS (events/facts) + full user context.\n"
+                        "Think: is there something worth interrupting the user for?\n"
+                        "If not — return SKIP. Don't write just to write.\n"
+                        "If yes — use tools (get_news_trends, list_tasks, list_goals) "
+                        "on the relevant topic. Do NOT call research_topic — use get_news_trends.\n"
+                        "Write EXACTLY like a regular reply — same style, tone, emojis. "
+                        "User must not distinguish proactive from regular reply.\n"
+                        "Think about the whole person: which life areas are lagging? "
+                        "Where are they stuck? What are they missing?\n"
+                        "ONE TOPIC PER MESSAGE: pick ONE most important anchor and write ONLY about it. "
+                        "Don't try to cover everything. End with a specific question or suggestion.\n"
+                        "IMPORTANT: Do NOT auto-publish posts. Do NOT use /dashboard — only https://asibiont.ru/dashboard.\n\n"
+                        "⚠️ DATA VERIFICATION RULE:\n"
+                        "USER MEMORY section is outdated background. Do NOT cite tasks, goals, posts from it as current.\n"
+                        "ONLY data from tools (list_tasks, list_goals) is current.\n"
+                        "If list_tasks returns empty — user has NO tasks. Don't mention tasks.\n"
+                        "If list_goals returns empty — user has NO goals. Don't mention goals.\n"
+                        "Do NOT mention specific tasks/goals/posts you did NOT get from tools."
+                    ),
+                }
+            else:
+                mode_instructions = {
+                    'reminder': (
+                        "\n\n[РЕЖИМ: НАПОМИНАНИЕ]\n"
+                        "Время задачи пришло. Подумай: можешь ли ты ПОМОЧЬ решить, а не просто напомнить?\n"
+                        "Задача требует информации → найди через инструменты и дай результат.\n"
+                        "Задача простая → напомни кратко. Спроси о статусе. НЕ создавай новые задачи.\n"
+                        "Пиши ТОЧНО ТАК ЖЕ как обычный ответ — тот же стиль, тон, эмодзи внутри текста."
+                    ),
+                    'task_assist': (
+                        "\n\n[РЕЖИМ: ПОМОЩЬ С ЗАДАЧЕЙ]\n"
+                        "Помоги решить задачу — не предлагай, а СДЕЛАЙ.\n"
+                        "Используй инструменты и дай конкретный результат.\n"
+                        "НЕ создавай новые задачи. Пиши ТОЧНО ТАК ЖЕ как обычный ответ."
+                    ),
+                    'proactive': (
+                        "\n\n[РЕЖИМ: ПРОАКТИВНОЕ СООБЩЕНИЕ]\n"
+                        "Ты сам решил написать — но человек НЕ ДОЛЖЕН чувствовать, что это 'системное сообщение'. "
+                        "Пиши ТОЧНО ТАК ЖЕ как если бы отвечал на его сообщение — тот же стиль, тот же тон, те же эмодзи внутри текста.\n"
+                        "Подумай: что сейчас важно для этого человека? Какая сфера его жизни требует внимания?\n"
+                        "Используй инструменты (list_tasks, list_goals, get_news_trends) для получения реальных данных. "
+                        "НЕ вызывай research_topic в проактивных сообщениях — это дорого и долго. Используй get_news_trends для информации.\n"
+                        "Не выдумывай данные. Задай вопрос, который заставит задуматься.\n"
+                        "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard.\n\n"
+                        "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
+                        "Секция ПАМЯТЬ ПОЛЬЗОВАТЕЛЯ — это устаревший фон. НЕ цитируй из неё задачи, цели, посты или факты как текущие.\n"
+                        "ТОЛЬКО данные из инструментов (list_tasks, list_goals) считай актуальными.\n"
+                        "Если list_tasks вернул пустой список — у пользователя НЕТ задач. Не упоминай задачи.\n"
+                        "Если list_goals вернул пустой список — у пользователя НЕТ целей. Не упоминай цели.\n"
+                        "НЕ УПОМИНАЙ конкретные задачи/цели/посты которые ты НЕ получил из инструментов."
+                    ),
+                    'result_check': (
+                        "\n\n[РЕЖИМ: ПОЗДРАВЛЕНИЕ]\n"
+                        "Задача выполнена — поздравь кратко. 1-2 предложения."
+                    ),
+                    'anchor': (
+                        "\n\n[РЕЖИМ: ANCHOR ENGINE]\n"
+                        "Тебе переданы ЯКОРЯ (события/факты) + полный контекст человека.\n"
+                        "Подумай: есть ли здесь что-то, ради чего стоит отвлечь человека?\n"
+                        "Если нет — верни SKIP. Не пиши ради того, чтобы написать.\n"
+                        "Если да — используй инструменты (get_news_trends, list_tasks, list_goals) "
+                        "по релевантной теме. НЕ вызывай research_topic — используй get_news_trends.\n"
+                        "Пиши ТОЧНО ТАК ЖЕ как обычный ответ — тот же стиль, тон, эмодзи внутри текста. "
+                        "Человек не должен отличить проактивное сообщение от обычного ответа.\n"
+                        "Думай о человеке целиком: какие сферы жизни проседают? "
+                        "Где он застрял? Что он упускает?\n"
+                        "ОДНА ТЕМА НА СООБЩЕНИЕ: выбери ОДИН самый важный якорь и пиши ТОЛЬКО о нём. "
+                        "НЕ пытайся охватить всё. Закончи конкретным вопросом или предложением.\n"
+                        "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.ru/dashboard.\n\n"
+                        "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
+                        "Секция ПАМЯТЬ ПОЛЬЗОВАТЕЛЯ — это устаревший фон. НЕ цитируй из неё задачи, цели, посты или факты как текущие.\n"
+                        "ТОЛЬКО данные из инструментов (list_tasks, list_goals) считай актуальными.\n"
+                        "Если list_tasks вернул пустой список — у пользователя НЕТ задач. Не упоминай задачи.\n"
+                        "Если list_goals вернул пустой список — у пользователя НЕТ целей. Не упоминай цели.\n"
+                        "НЕ УПОМИНАЙ конкретные задачи/цели/посты которые ты НЕ получил из инструментов."
+                    ),
+                }
 
             system_prompt = base_prompt + mode_instructions.get(mode, '')
 
@@ -1362,9 +1395,10 @@ class HybridAutonomousAgent:
 
             # Если есть extra_context (ситуация, красные флаги) — добавляем
             if extra_context:
+                ctx_label = "[SITUATION CONTEXT]" if user_lang == 'en' else "[КОНТЕКСТ СИТУАЦИИ]"
                 messages.append({
                     "role": "user",
-                    "content": f"[КОНТЕКСТ СИТУАЦИИ]\n{extra_context}"
+                    "content": f"{ctx_label}\n{extra_context}"
                 })
 
             messages.append({"role": "user", "content": instruction})
@@ -1423,7 +1457,7 @@ class HybridAutonomousAgent:
                         retry_clean = clean_technical_details(retry_content).strip()
                         if retry_clean:
                             return retry_clean
-                    return self._system_message_fallback(mode, instruction)
+                    return self._system_message_fallback(mode, instruction, lang=user_lang)
 
                 # AI вызвал tools
                 messages.append(msg)
@@ -1481,30 +1515,37 @@ class HybridAutonomousAgent:
                 messages, use_tools=False, max_tokens=max_tokens)
             final_text = final_resp['choices'][0]['message'].get('content', '')
             from .utils import clean_technical_details
-            return clean_technical_details(final_text).strip() or self._system_message_fallback(mode, instruction)
+            return clean_technical_details(final_text).strip() or self._system_message_fallback(mode, instruction, lang=user_lang)
 
         except Exception as e:
             logger.error(f"[AGENT:SYSTEM] Error in {mode}: {e}\n{traceback.format_exc()}")
-            return self._system_message_fallback(mode, instruction)
+            from i18n import get_user_lang
+            _lang = get_user_lang(user_id)
+            return self._system_message_fallback(mode, instruction, lang=_lang)
 
-    def _system_message_fallback(self, mode, instruction):
-        """Fallback текст если AI недоступен."""
+    def _system_message_fallback(self, mode, instruction, lang='ru'):
+        """Fallback text when AI is unavailable."""
         if mode == 'reminder':
-            # Извлекаем имя задачи из instruction
             import re
-            match = re.search(r"[«'](.+?)[»']", instruction)
-            task_name = match.group(1) if match else "задача"
-            return (f"Время задачи «{task_name}» пришло. "
-                    f"Расскажи, как продвигается — сделал, в процессе или нужно перенести? "
-                    f"Если нужна помощь, могу подключиться.")
+            match = re.search(r"[«\"](.+?)[»\"]", instruction)
+            if lang == 'en':
+                task_name = match.group(1) if match else "task"
+                return (f"Time for task \"{task_name}\" has come. "
+                        f"How's it going — done, in progress, or need to reschedule? "
+                        f"I can help if needed.")
+            else:
+                task_name = match.group(1) if match else "задача"
+                return (f"Время задачи «{task_name}» пришло. "
+                        f"Расскажи, как продвигается — сделал, в процессе или нужно перенести? "
+                        f"Если нужна помощь, могу подключиться.")
         elif mode == 'result_check':
-            return "Отлично, задача выполнена! 👍"
+            return "Great, task completed! 👍" if lang == 'en' else "Отлично, задача выполнена! 👍"
         elif mode == 'anchor':
-            return None  # лучше промолчать чем отправить мусор
+            return None
         elif mode == 'proactive':
-            return None  # не отправляем генерик-мусор
+            return None
         else:
-            return None  # если AI недоступен — не отправляем ничего
+            return None
 
     def _learn_from_success(self, message, user_id, tools_used):
         """Обучение на успешных паттернах.

@@ -12,6 +12,7 @@ import asyncio
 from collections import defaultdict
 from config import DATABASE_URL, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_MINUTES
 from ai_integration import check_delegation_deadlines, generate_proactive_message
+from i18n import get_user_lang
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,8 @@ async def _send_reminder_job(task_id: int):
             logger.warning(f"_send_reminder_job: telegram_id is None for task {task_id}")
             return
         user_id = task.user.telegram_id
-        task_title = task.title or "Без названия"
+        _untitled = "Untitled" if get_user_lang(user_id) == 'en' else "Без названия"
+        task_title = task.title or _untitled
         
         # Помечаем, что напоминание отправлено
         task.reminder_sent = True
@@ -109,7 +111,8 @@ async def _send_followup_reminder_job(task_id: int):
             logger.warning(f"_send_followup_reminder_job: telegram_id is None for task {task_id}")
             return
         user_id = task.user.telegram_id
-        task_title = task.title or "Без названия"
+        _untitled = "Untitled" if get_user_lang(user_id) == 'en' else "Без названия"
+        task_title = task.title or _untitled
         
         # Помечаем, что повторное напоминание отправлено
         task.followup_reminder_sent = True
@@ -148,7 +151,8 @@ async def _send_result_check_job(task_id: int):
             logger.warning(f"_send_result_check_job: telegram_id is None for task {task_id}")
             return
         user_id = task.user.telegram_id
-        task_title = task.title or "Без названия"
+        _untitled = "Untitled" if get_user_lang(user_id) == 'en' else "Без названия"
+        task_title = task.title or _untitled
         
         # Помечаем, что проверка результата отправлена
         task.result_check_sent = True

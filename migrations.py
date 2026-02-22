@@ -74,6 +74,7 @@ def _migrate_users(session, inspector):
         'current_task_id': 'ALTER TABLE users ADD COLUMN current_task_id INTEGER REFERENCES tasks(id)',
         'token_balance': 'ALTER TABLE users ADD COLUMN token_balance INTEGER DEFAULT 0',
         'tokens_spent': 'ALTER TABLE users ADD COLUMN tokens_spent INTEGER DEFAULT 0',
+        'language': "ALTER TABLE users ADD COLUMN language VARCHAR(5) DEFAULT 'ru'",
     })
 
 

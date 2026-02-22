@@ -151,6 +151,9 @@ class ContactAlertsService:
             return
 
         try:
+            from i18n import get_user_lang
+            lang = get_user_lang(user_telegram_id)
+
             # Получаем время последнего взаимодействия
             last_seen_hours = 0
             if contact_info.get('last_seen'):
@@ -161,24 +164,38 @@ class ContactAlertsService:
                 last_seen_hours = int((now - last_seen).total_seconds() / 3600)
 
             # Формируем сообщение
-            message = f"🔥 @{contact_username} онлайн"
+            if lang == 'en':
+                message = f"🔥 @{contact_username} is online"
+                if last_seen_hours < 1:
+                    message += " (active now)"
+                elif last_seen_hours < 24:
+                    message += f" (was {last_seen_hours}h ago)"
 
-            if last_seen_hours < 1:
-                message += " (активен сейчас)"
-            elif last_seen_hours < 24:
-                message += f" (был {last_seen_hours}ч назад)"
+                profile_parts = []
+                if contact_info.get('position'):
+                    profile_parts.append(f"position: {contact_info['position']}")
+                if contact_info.get('city'):
+                    profile_parts.append(f"city: {contact_info['city']}")
 
-            # Добавляем информацию о профиле
-            profile_parts = []
-            if contact_info.get('position'):
-                profile_parts.append(f"должность: {contact_info['position']}")
-            if contact_info.get('city'):
-                profile_parts.append(f"город: {contact_info['city']}")
+                if profile_parts:
+                    message += f"\n📋 {' • '.join(profile_parts)}"
+                message += "\n\n💬 You can message them right now!"
+            else:
+                message = f"🔥 @{contact_username} онлайн"
+                if last_seen_hours < 1:
+                    message += " (активен сейчас)"
+                elif last_seen_hours < 24:
+                    message += f" (был {last_seen_hours}ч назад)"
 
-            if profile_parts:
-                message += f"\n📋 {' • '.join(profile_parts)}"
+                profile_parts = []
+                if contact_info.get('position'):
+                    profile_parts.append(f"должность: {contact_info['position']}")
+                if contact_info.get('city'):
+                    profile_parts.append(f"город: {contact_info['city']}")
 
-            message += "\n\n💬 Можно написать прямо сейчас!"
+                if profile_parts:
+                    message += f"\n📋 {' • '.join(profile_parts)}"
+                message += "\n\n💬 Можно написать прямо сейчас!"
 
             await self.bot.send_message(user_telegram_id, message)
             logger.info(f"[CONTACT_ALERTS] Sent alert to {user_telegram_id}: {message[:100]}...")

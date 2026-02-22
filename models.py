@@ -49,6 +49,7 @@ class User(Base):
     telegram_channel = Column(String(255))  # Telegram channel username or ID for auto-posting (e.g., @my_channel or -1001234567890)
     token_balance = Column(Integer, default=0)  # Баланс токенов (1 токен = 1 рубль)
     tokens_spent = Column(Integer, default=0)  # Всего потрачено токенов
+    language = Column(String(5), default='ru')  # User language: 'ru' or 'en'
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 

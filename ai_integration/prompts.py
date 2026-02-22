@@ -13,7 +13,7 @@ from .system_prompt import select_prompt_version
 
 logger = logging.getLogger(__name__)
 
-def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None, user_id_param=None):
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None, user_id_param=None, lang='ru'):
     """Упрощенный промпт - использует отдельные модули"""
 
     # Token system — все функции открыты, ограничение только баланс
@@ -25,9 +25,14 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         try:
             from token_service import get_balance
             balance = get_balance(user_id_param)
-            token_balance_info = f"\nБаланс токенов: {balance} (1 токен = 1₽). Каждое действие стоит токены."
-            if balance < 100:
-                token_balance_info += " ⚠️ У пользователя мало токенов — предупреди о балансе, но НЕ снижай качество ответа."
+            if lang == 'en':
+                token_balance_info = f"\nToken balance: {balance} (1 token = 1₽). Each action costs tokens."
+                if balance < 100:
+                    token_balance_info += " ⚠️ User has low tokens — warn about balance, but DON'T reduce response quality."
+            else:
+                token_balance_info = f"\nБаланс токенов: {balance} (1 токен = 1₽). Каждое действие стоит токены."
+                if balance < 100:
+                    token_balance_info += " ⚠️ У пользователя мало токенов — предупреди о балансе, но НЕ снижай качество ответа."
         except Exception:
             pass
 
@@ -42,7 +47,15 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     except Exception:
         msg_cost, task_cost_min, task_cost_max, delegate_cost, research_cost = 20, 5, 15, 40, 20
 
-    tier_info = f"""\n## СИСТЕМА ТОКЕНОВ
+    if lang == 'en':
+        tier_info = f"""\n## TOKEN SYSTEM
+All features are available. User pays tokens for each action.{token_balance_info}
+
+Costs (1 token = 1₽):
+• Message: {msg_cost}₽ • Task: {task_cost_min}-{task_cost_max}₽ • Delegation: {delegate_cost}₽ • Research: {research_cost}₽
+If balance is low — warn and suggest /buy."""
+    else:
+        tier_info = f"""\n## СИСТЕМА ТОКЕНОВ
 Все функции открыты. Пользователь платит токенами за каждое действие.{token_balance_info}
 
 Стоимость (1 токен = 1₽):
@@ -50,34 +63,41 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 Если баланс низкий — предупреди и предложи /buy."""
 
     # Context data
-    weather = f"\nПогода: {weather_info}" if weather_info else ""
-    news = f"\nНовости: {news_info}" if news_info else ""
+    weather = f"\n{'Weather' if lang == 'en' else 'Погода'}: {weather_info}" if weather_info else ""
+    news = f"\n{'News' if lang == 'en' else 'Новости'}: {news_info}" if news_info else ""
 
     # Profile completeness check
     profile_complete = False
     profile_missing = []
     if profile_data:
         if not profile_data.get('city'):
-            profile_missing.append('город')
+            profile_missing.append('city' if lang == 'en' else 'город')
         if not profile_data.get('goals'):
-            profile_missing.append('цели')
+            profile_missing.append('goals' if lang == 'en' else 'цели')
         if not profile_data.get('skills'):
-            profile_missing.append('навыки')
+            profile_missing.append('skills' if lang == 'en' else 'навыки')
         if not profile_data.get('interests'):
-            profile_missing.append('интересы')
+            profile_missing.append('interests' if lang == 'en' else 'интересы')
         if len(profile_missing) <= 1:  # If only one thing missing, consider complete
             profile_complete = True
     else:
-        profile_missing = ['город', 'цели', 'навыки', 'интересы']
+        profile_missing = ['city', 'goals', 'skills', 'interests'] if lang == 'en' else ['город', 'цели', 'навыки', 'интересы']
 
     # Profile — явный формат чтобы AI видел данные и НЕ переспрашивал
     profile = ""
     if profile_data:
-        FIELD_LABELS = {
-            'city': 'Город', 'company': 'Компания', 'position': 'Должность',
-            'goals': 'Цели', 'skills': 'Навыки', 'interests': 'Интересы',
-            'telegram_channel': 'TG-канал'
-        }
+        if lang == 'en':
+            FIELD_LABELS = {
+                'city': 'City', 'company': 'Company', 'position': 'Position',
+                'goals': 'Goals', 'skills': 'Skills', 'interests': 'Interests',
+                'telegram_channel': 'TG channel'
+            }
+        else:
+            FIELD_LABELS = {
+                'city': 'Город', 'company': 'Компания', 'position': 'Должность',
+                'goals': 'Цели', 'skills': 'Навыки', 'interests': 'Интересы',
+                'telegram_channel': 'TG-канал'
+            }
         filled_parts = []
         empty_fields = []
         for k, label in FIELD_LABELS.items():
@@ -86,11 +106,17 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
             elif k != 'telegram_channel':  # telegram_channel необязателен
                 empty_fields.append(label)
         if filled_parts:
-            profile = "\nПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (уже известно, НЕ переспрашивай):\n" + "\n".join(filled_parts)
+            header = "USER PROFILE (already known, DON'T re-ask):" if lang == 'en' else "ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (уже известно, НЕ переспрашивай):"
+            profile = "\n" + header + "\n" + "\n".join(filled_parts)
         if empty_fields:
-            profile += f"\n[Не заполнено: {', '.join(empty_fields)} — узнай через живой вопрос]"
+            ask = "find out through a natural question" if lang == 'en' else "узнай через живой вопрос"
+            not_filled = "Not filled" if lang == 'en' else "Не заполнено"
+            profile += f"\n[{not_filled}: {', '.join(empty_fields)} — {ask}]"
     else:
-        profile = "\n[❗ профиль пуст: НИЧЕГО не знаешь о человеке — узнай через живой разговор]"
+        if lang == 'en':
+            profile = "\n[❗ profile is empty: you know NOTHING about this person — find out through conversation]"
+        else:
+            profile = "\n[❗ профиль пуст: НИЧЕГО не знаешь о человеке — узнай через живой разговор]"
 
     # Search history
     search_context = ""
@@ -99,7 +125,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
             from .utils import generate_unified_recommendations
             recommendations = generate_unified_recommendations('personalized', user_id=user_id_param)
             if recommendations:
-                search_context = "\nИСТОРИЯ ПОИСКОВ:\n" + "\n".join(f"• {rec}" for rec in recommendations[:3])
+                header = "SEARCH HISTORY:" if lang == 'en' else "ИСТОРИЯ ПОИСКОВ:"
+                search_context = "\n" + header + "\n" + "\n".join(f"• {rec}" for rec in recommendations[:3])
         except Exception as e:
             logger.warning(f"[PROMPTS] Failed to get search context: {e}")
 
@@ -122,22 +149,34 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
                 # Убираем пустые строки
                 cleaned = '\n'.join(line for line in cleaned.split('\n') if line.strip())
                 if cleaned:
-                    memory_section = (
-                        f"\nЗАМЕТКИ О ПРОШЛЫХ РАЗГОВОРАХ (это НЕ текущие задачи/цели — "
-                        f"текущие задачи и цели указаны в секциях ЗАДАЧИ и ЦЕЛИ выше):\n"
-                        f"{cleaned[:400]}"
-                    )
+                    if lang == 'en':
+                        memory_section = (
+                            f"\nNOTES FROM PAST CONVERSATIONS (these are NOT current tasks/goals — "
+                            f"current tasks and goals are in TASKS and GOALS sections above):\n"
+                            f"{cleaned[:400]}"
+                        )
+                    else:
+                        memory_section = (
+                            f"\nЗАМЕТКИ О ПРОШЛЫХ РАЗГОВОРАХ (это НЕ текущие задачи/цели — "
+                            f"текущие задачи и цели указаны в секциях ЗАДАЧИ и ЦЕЛИ выше):\n"
+                            f"{cleaned[:400]}"
+                        )
         except Exception as e:
             logger.warning(f"[PROMPTS] Failed to process user memory: {e}")
 
     # Current task
     task_section = ""
     if current_task_info:
-        task_section = f"""
+        if lang == 'en':
+            task_section = f"""
+ACTIVE TASK: "{current_task_info['title']}" (ID: {current_task_info['id']})
+If user says "done/finished/completed" → complete_task()"""
+        else:
+            task_section = f"""
 АКТИВНАЯ ЗАДАЧА: "{current_task_info['title']}" (ID: {current_task_info['id']})
 Если пользователь говорит "сделал/готово/выполнил" → complete_task()"""
     else:
-        task_section = "\nАКТИВНАЯ ЗАДАЧА: нет"
+        task_section = "\n" + ("ACTIVE TASK: none" if lang == 'en' else "АКТИВНАЯ ЗАДАЧА: нет")
 
     # Proactive context - теперь из context_builder
     if proactive_context is None and user_id_param:
@@ -154,31 +193,54 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     profile_instruction = ""
     if not profile_complete and profile_missing:
         missing_str = ', '.join(profile_missing)
-        if len(profile_missing) >= 3:
-            profile_instruction = (
-                f"\n\nКРИТИЧНО — ПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). "
-                f"Человек пишет из Telegram, у него нет попапа профиля как на сайте. "
-                f"ТЫ — единственный способ узнать о нём. Без профиля ты бесполезен. "
-                f"В КАЖДОМ ответе задавай ОДИН конкретный вопрос пока не заполнишь все поля. "
-                f"Порядок: 1) Чем занимается (сфера/должность) 2) Город 3) Главная цель сейчас 4) Ключевые навыки/интересы. "
-                f"Вопрос должен быть естественным, не анкетным. Вплетай в разговор. "
-                f"Каждый ответ пользователя — сразу update_profile. "
-                f"НЕ ВЫЗЫВАЙ research_topic, get_news_trends пока не знаешь хотя бы сферу деятельности.\n"
-            )
-        elif len(profile_missing) >= 2:
-            profile_instruction = (
-                f"\n\nПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). "
-                f"ОБЯЗАТЕЛЬНО В КОНЦЕ ОТВЕТА задай КОНКРЕТНЫЙ вопрос о недостающем поле — "
-                f"НЕ общий 'чем занимаешься', а именно про {profile_missing[0]}: "
-                f"например 'какая у тебя главная цель сейчас?' или 'какие навыки считаешь ключевыми?'. "
-                f"Вопрос вплетай в разговор. Когда ответит — сразу update_profile.\n"
-            )
+        if lang == 'en':
+            if len(profile_missing) >= 3:
+                profile_instruction = (
+                    f"\n\nCRITICAL — PROFILE IS EMPTY (missing: {missing_str}). "
+                    f"The person is writing from Telegram, they don't have a profile popup like on the website. "
+                    f"YOU are the only way to learn about them. Without a profile you are useless. "
+                    f"In EVERY response ask ONE specific question until all fields are filled. "
+                    f"Order: 1) What they do (field/position) 2) City 3) Main goal right now 4) Key skills/interests. "
+                    f"The question should be natural, not survey-like. Weave it into conversation. "
+                    f"On each user answer — immediately update_profile. "
+                    f"DON'T call research_topic, get_news_trends until you know at least their field.\n"
+                )
+            elif len(profile_missing) >= 2:
+                profile_instruction = (
+                    f"\n\nPROFILE INCOMPLETE (missing: {missing_str}). "
+                    f"YOU MUST ask a SPECIFIC question about the missing field at the END of your response — "
+                    f"NOT a generic 'what do you do', but specifically about {profile_missing[0]}: "
+                    f"for example 'what is your main goal right now?' or 'what skills do you consider key?'. "
+                    f"Weave the question into conversation. When they answer — immediately update_profile.\n"
+                )
+            else:
+                profile_instruction = f"\n\nProfile almost complete (missing: {missing_str}). When appropriate, find out naturally and save via update_profile.\n"
         else:
-            profile_instruction = f"\n\nПрофиль почти полный (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"
+            if len(profile_missing) >= 3:
+                profile_instruction = (
+                    f"\n\nКРИТИЧНО — ПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). "
+                    f"Человек пишет из Telegram, у него нет попапа профиля как на сайте. "
+                    f"ТЫ — единственный способ узнать о нём. Без профиля ты бесполезен. "
+                    f"В КАЖДОМ ответе задавай ОДИН конкретный вопрос пока не заполнишь все поля. "
+                    f"Порядок: 1) Чем занимается (сфера/должность) 2) Город 3) Главная цель сейчас 4) Ключевые навыки/интересы. "
+                    f"Вопрос должен быть естественным, не анкетным. Вплетай в разговор. "
+                    f"Каждый ответ пользователя — сразу update_profile. "
+                    f"НЕ ВЫЗЫВАЙ research_topic, get_news_trends пока не знаешь хотя бы сферу деятельности.\n"
+                )
+            elif len(profile_missing) >= 2:
+                profile_instruction = (
+                    f"\n\nПРОФИЛЬ НЕПОЛНЫЙ (нет: {missing_str}). "
+                    f"ОБЯЗАТЕЛЬНО В КОНЦЕ ОТВЕТА задай КОНКРЕТНЫЙ вопрос о недостающем поле — "
+                    f"НЕ общий 'чем занимаешься', а именно про {profile_missing[0]}: "
+                    f"например 'какая у тебя главная цель сейчас?' или 'какие навыки считаешь ключевыми?'. "
+                    f"Вопрос вплетай в разговор. Когда ответит — сразу update_profile.\n"
+                )
+            else:
+                profile_instruction = f"\n\nПрофиль почти полный (нет: {missing_str}). При случае узнай естественно и сохрани через update_profile.\n"
 
     # Выбираем версию промпта
     complexity = "medium"  # Можно определить на основе контекста
-    base_prompt = select_prompt_version(subscription_tier, complexity)
+    base_prompt = select_prompt_version(subscription_tier, complexity, lang=lang)
 
     # Заполняем шаблон
     prompt = base_prompt.format(

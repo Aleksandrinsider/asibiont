@@ -67,6 +67,7 @@ from token_service import (
     TOKEN_PACKAGES, FREE_TOKENS_ON_SIGNUP
 )
 from timezonefinder import TimezoneFinder
+from i18n import get_user_lang, set_user_lang, detect_lang_from_telegram, t
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,8 @@ async def send_delegation_notification_async(chat_id, message_text):
     except Exception as e:
         logger.warning(f"Error sending delegation notification: {e}")
 
-PREMIUM_DESCRIPTION = """AI отвечают. ASI Biont — действует!
+PREMIUM_DESCRIPTION = {
+    'ru': """AI отвечают. ASI Biont — действует!
 
 Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.
 
@@ -135,7 +137,52 @@ PREMIUM_DESCRIPTION = """AI отвечают. ASI Biont — действует!
 
 Пополнить баланс: /buy
 Баланс: /balance
-Поддержка: @aleksandrinsider"""
+Поддержка: @aleksandrinsider""",
+
+    'en': """AIs answer. ASI Biont — acts!
+
+Not a chatbot, but an AI agent. It manages tasks, finds the right people, delegates, and posts content to Telegram. No prompts needed — just tell it what you need. 1,500 free tokens on signup.
+
+Tasks & Goals
+"Call with investor tomorrow at 9" — it sets a reminder. "Report due Friday" — it locks the deadline and follows up. You speak — it acts.
+
+Ready Connections
+"Need a designer for a project" — it shows matching people from the network. "Who knows fintech?" — finds by skills and city. Not an open directory — a closed community.
+
+Delegation
+"Assign @ivan the report by Wednesday" — the task goes to the assignee, deadline goes on track. The agent monitors deadlines and reminds both sides.
+
+Autopilot 24/7
+You sleep — it posts to your channel on schedule. You're in a meeting — it sends a morning briefing. Task overdue — it reminds you on its own.
+
+Pinpoint Capabilities
+A new member with the right skills in your city — the agent notifies you. A contact updated their profile — you learn first. Not noise, but relevant signals.
+
+Bot + Dashboard
+In your pocket — a Telegram bot for voice and text commands. On screen — a dashboard with tasks, contacts, and feed. One database, two interfaces.
+
+━━━━━━━━━━━━━━━━━━━━
+
+Top Up Your Token Balance
+All features are open to everyone. Pay only for usage. 1 token = 1₽.
+On signup — 1,500 free tokens.
+
+Starter — 1,500₽
+1,500 tokens. Get to know your AI partner.
+"Remind me about the call tomorrow at 9" — it remembers. "Find a designer" — it finds. All features unlocked from the first token.
+
+Optimal — 5,000₽ BEST VALUE
+5,500 tokens (+10%). Most popular choice.
++500 tokens on top. You're in a meeting — it delegates tasks. You sleep — it posts to your channel. Autopilot that never stops.
+
+Maximum — 15,000₽
+18,000 tokens (+20%). Best value per token.
++3,000 tokens on top. Content, delegation, alerts, insights — all on autopilot. You grow while AI works.
+
+Top up: /buy
+Balance: /balance
+Support: @aleksandrinsider"""
+}
 
 try:
     import speech_recognition as sr
@@ -199,6 +246,10 @@ logger = logging.getLogger(__name__)
 async def start_handler(message: Message):
     user_id = message.from_user.id
 
+    # Auto-detect language from Telegram
+    tg_lang = getattr(message.from_user, 'language_code', None) or ''
+    detected_lang = detect_lang_from_telegram(tg_lang)
+
     # Extract referral code if present
     referrer_id = None
     if message.text and len(message.text.split()) > 1:
@@ -223,25 +274,41 @@ async def start_handler(message: Message):
             else:
                 logger.warning(f"Referrer not found for telegram_id: {referrer_id}")
         user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0,
-                    referrer_id=referrer.id if referrer else None)
+                    referrer_id=referrer.id if referrer else None,
+                    language=detected_lang)
         session.add(user)
         session.commit()
-        logger.info(f"Created new user {user_id}, referrer={referrer_id}")
+        logger.info(f"Created new user {user_id}, referrer={referrer_id}, lang={detected_lang}")
         is_new_user = True
         # Начисляем бесплатные токены
         grant_signup_tokens(user_id, session=session)
+    else:
+        # Existing user — use their saved language
+        detected_lang = getattr(user, 'language', None) or detected_lang
     
+    # Set language in cache
+    set_user_lang(user_id, detected_lang)
+    lang = detected_lang
+
     balance = user.token_balance or 0
     session.close()
 
+    btn_text = "Open web version" if lang == 'en' else "Открыть веб-версию"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
+        [InlineKeyboardButton(text=btn_text, web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
     
+    desc = PREMIUM_DESCRIPTION.get(lang, PREMIUM_DESCRIPTION['ru'])
     if is_new_user:
-        welcome_text = PREMIUM_DESCRIPTION + f"\n\n🎁 Тебе начислено {FREE_TOKENS_ON_SIGNUP} бесплатных токенов! Просто напиши мне."
+        if lang == 'en':
+            welcome_text = desc + f"\n\n🎁 You've received {FREE_TOKENS_ON_SIGNUP} free tokens! Just write to me."
+        else:
+            welcome_text = desc + f"\n\n🎁 Тебе начислено {FREE_TOKENS_ON_SIGNUP} бесплатных токенов! Просто напиши мне."
     else:
-        welcome_text = PREMIUM_DESCRIPTION + f"\n\n💰 Твой баланс: {balance} токенов"
+        if lang == 'en':
+            welcome_text = desc + f"\n\n💰 Your balance: {balance} tokens"
+        else:
+            welcome_text = desc + f"\n\n💰 Твой баланс: {balance} токенов"
     await message.bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
 
 
@@ -253,15 +320,40 @@ async def balance_handler(message: Message):
     await message.bot.send_message(message.chat.id, info)
 
 
+@router.message(Command("lang"))
+async def lang_handler(message: Message):
+    """Change language / Сменить язык"""
+    user_id = message.from_user.id
+    args = (message.text or '').replace('/lang', '').strip().lower()
+    
+    if args in ('en', 'english'):
+        set_user_lang(user_id, 'en')
+        await message.bot.send_message(message.chat.id, t('en', 'cmd_lang_changed', lang='English'))
+    elif args in ('ru', 'russian', 'русский'):
+        set_user_lang(user_id, 'ru')
+        await message.bot.send_message(message.chat.id, t('ru', 'cmd_lang_changed', lang='Русский'))
+    else:
+        lang = get_user_lang(user_id)
+        lang_name = 'English' if lang == 'en' else 'Русский'
+        await message.bot.send_message(message.chat.id, t(lang, 'cmd_lang_current', lang=lang_name))
+
+
 @router.message(Command("buy"))
 async def buy_handler(message: Message):
     """Покупка пакетов токенов"""
     user_id = message.from_user.id
+    lang = get_user_lang(user_id)
     
-    text = "📦 Пакеты токенов (1 токен = 1₽):\n\n"
-    for key, pkg in TOKEN_PACKAGES.items():
-        text += f"• {pkg['label']}\n"
-    text += "\nВыберите пакет:"
+    if lang == 'en':
+        text = "📦 Token packages (1 token = 1₽):\n\n"
+        for key, pkg in TOKEN_PACKAGES.items():
+            text += f"• {pkg['label']}\n"
+        text += "\nChoose a package:"
+    else:
+        text = "📦 Пакеты токенов (1 токен = 1₽):\n\n"
+        for key, pkg in TOKEN_PACKAGES.items():
+            text += f"• {pkg['label']}\n"
+        text += "\nВыберите пакет:"
     
     try:
         urls = {}
@@ -282,7 +374,8 @@ async def buy_handler(message: Message):
         await message.bot.send_message(message.chat.id, text + "\n" + payment_text)
     except Exception as e:
         logger.error(f"Error creating token payment for user {user_id}: {e}")
-        await message.bot.send_message(message.chat.id, text + "\n\n⚠️ Ошибка создания платежа. Попробуйте позже.\nПоддержка: @aleksandrinsider")
+        err_msg = "⚠️ Payment error. Try again later.\nSupport: @aleksandrinsider" if lang == 'en' else "⚠️ Ошибка создания платежа. Попробуйте позже.\nПоддержка: @aleksandrinsider"
+        await message.bot.send_message(message.chat.id, text + "\n\n" + err_msg)
 
 
 @router.message(Command("subscription"))
@@ -325,7 +418,8 @@ async def find_partners_handler(message: Message):
         await message.bot.send_message(message.chat.id, response)
     except Exception as e:
         logger.error(f"Error in find_partners_handler: {e}")
-        await message.bot.send_message(message.chat.id, "Произошла ошибка при поиске партнеров.")
+        err = "An error occurred while searching for partners." if get_user_lang(user_id) == 'en' else "Произошла ошибка при поиске партнеров."
+        await message.bot.send_message(message.chat.id, err)
 
 
 @router.message(Command("subscribe"))
@@ -392,9 +486,9 @@ async def chat_handler(message: Message):
                                 await process_text_message(user_id, text, message, None)
                                 return
                             else:
+                                err = "Couldn't recognize voice message. Try sending text." if get_user_lang(user_id) == 'en' else "Не удалось распознать голосовое сообщение. Попробуйте отправить текст."
                                 await message.bot.send_message(
-                                    message.chat.id,
-                                    "Не удалось распознать голосовое сообщение. Попробуйте отправить текст."
+                                    message.chat.id, err
                                 )
                                 return
                         finally:
@@ -402,11 +496,13 @@ async def chat_handler(message: Message):
                             os.unlink(tmp_file_path)
                     else:
                         logger.error(f"[VOICE] Failed to download voice file: {resp.status}")
-                        await message.bot.send_message(message.chat.id, "Ошибка при скачивании голосового сообщения.")
+                        err = "Error downloading voice message." if get_user_lang(user_id) == 'en' else "Ошибка при скачивании голосового сообщения."
+                        await message.bot.send_message(message.chat.id, err)
                         return
         except Exception as e:
             logger.error(f"[VOICE] Error processing voice message: {e}", exc_info=True)
-            await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке голосового сообщения.")
+            err = "An error occurred processing the voice message." if get_user_lang(user_id) == 'en' else "Произошла ошибка при обработке голосового сообщения."
+            await message.bot.send_message(message.chat.id, err)
             return
 
     # Обработка документов
@@ -532,7 +628,8 @@ async def chat_handler(message: Message):
 
         except Exception as e:
             logger.error(f"[DOC] Error processing document: {e}", exc_info=True)
-            await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке файла.")
+            err = "An error occurred processing the file." if get_user_lang(user_id) == 'en' else "Произошла ошибка при обработке файла."
+            await message.bot.send_message(message.chat.id, err)
             return
 
     # Обработка фото
@@ -568,7 +665,8 @@ async def chat_handler(message: Message):
 
         except Exception as e:
             logger.error(f"[PHOTO] Error processing photo: {e}", exc_info=True)
-            await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке фото.")
+            err = "An error occurred processing the photo." if get_user_lang(user_id) == 'en' else "Произошла ошибка при обработке фото."
+            await message.bot.send_message(message.chat.id, err)
             return
 
     # Обработка текстовых сообщений
@@ -636,13 +734,20 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             session.close()
         logger.info(f"[PTM] Step 1 done, is_first={is_first_message}")
 
+        lang = get_user_lang(user_id)
+
         # Новый пользователь — сначала показываем описание и тарифы
         if is_first_message:
+            btn_text = "Open web version" if lang == 'en' else "Открыть веб-версию"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
+                [InlineKeyboardButton(text=btn_text, web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
             ])
             balance = get_balance(user_id)
-            welcome_text = PREMIUM_DESCRIPTION + f"\n\n1 500 бесплатных токенов начислено. Просто напиши мне."
+            desc = PREMIUM_DESCRIPTION.get(lang, PREMIUM_DESCRIPTION['ru'])
+            if lang == 'en':
+                welcome_text = desc + f"\n\n1,500 free tokens credited. Just write to me."
+            else:
+                welcome_text = desc + f"\n\n1 500 бесплатных токенов начислено. Просто напиши мне."
             await message.bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
 
         # Проверка баланса токенов
@@ -651,27 +756,29 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             return
 
         # Handle delegation commands
-        if text.lower().startswith("принять задачу "):
+        if text.lower().startswith("принять задачу ") or text.lower().startswith("accept task "):
             task_id = text.split()[-1]
             try:
                 from ai_integration import accept_delegated_task
                 result = accept_delegated_task(int(task_id), user_id=user_id)
                 await message.bot.send_message(message.chat.id, result)
             except Exception as e:
-                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
+                err_label = "Error" if lang == 'en' else "Ошибка"
+                await message.bot.send_message(message.chat.id, f"{err_label}: {str(e)}")
             return
 
-        if text.lower().startswith("отклонить задачу "):
+        if text.lower().startswith("отклонить задачу ") or text.lower().startswith("reject task "):
             task_id = text.split()[-1]
             try:
                 from ai_integration import reject_delegated_task
                 result = reject_delegated_task(int(task_id), user_id=user_id)
                 await message.bot.send_message(message.chat.id, result)
             except Exception as e:
-                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
+                err_label = "Error" if lang == 'en' else "Ошибка"
+                await message.bot.send_message(message.chat.id, f"{err_label}: {str(e)}")
             return
 
-        if text.lower() == "очистить историю":
+        if text.lower() in ("очистить историю", "clear history"):
             # Update user.history_cleared_at in DB
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -680,7 +787,8 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                 user.history_cleared_at = datetime.now(timezone.utc)
                 session.commit()
             session.close()
-            await message.bot.send_message(message.chat.id, "История очищена.")
+            cleared_msg = "History cleared." if lang == 'en' else "История очищена."
+            await message.bot.send_message(message.chat.id, cleared_msg)
             return
 
         # СОХРАНЯЕМ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ СРАЗУ
@@ -721,7 +829,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         
         async def progress_callback(text):
             """Отправляет или обновляет прогресс-сообщение в Telegram"""
-            display_text = text or 'Обрабатываю...'
+            display_text = text or ('Processing...' if lang == 'en' else 'Обрабатываю...')
             try:
                 if _progress_state['last_msg_id']:
                     # Обновляем существующее сообщение (не спамим чат)
@@ -759,7 +867,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             
             # Защита от пустого ответа
             if not response_text or not response_text.strip():
-                response_text = "Готово! Что дальше?"
+                response_text = "Done! What's next?" if lang == 'en' else "Готово! Что дальше?"
             
             # Гарантируем кликабельность ссылок в Telegram (HTML parse_mode)
             response_html = _format_html(response_text)
@@ -786,7 +894,8 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         except Exception as e:
             logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)
             try:
-                await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке сообщения.")
+                err_msg = "Sorry, an error occurred while processing your message." if lang == 'en' else "Извините, произошла ошибка при обработке сообщения."
+                await message.bot.send_message(message.chat.id, err_msg)
             except Exception:
                 logger.error(f"Failed to send error message to user {user_id}")
             response_text = ""
@@ -803,10 +912,11 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                     if response_text and response_text.strip():
                         interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
                     else:
+                        fallback_content = "Sorry, could not generate a response." if lang == 'en' else "Извините, не удалось сгенерировать ответ."
                         interaction = Interaction(
                             user_id=user.id,
                             message_type='ai',
-                            content="Извините, не удалось сгенерировать ответ.")
+                            content=fallback_content)
                     session.add(interaction)
                     session.commit()
                 else:
@@ -823,7 +933,11 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         try:
             # Показываем детали ошибки для отладки
             short_error = str(e)[:300]
-            await message.bot.send_message(message.chat.id, f"⚠️ Ошибка: {short_error}\n\nПопробуй написать ещё раз.")
+            if lang == 'en':
+                err_text = f"⚠️ Error: {short_error}\n\nPlease try again."
+            else:
+                err_text = f"⚠️ Ошибка: {short_error}\n\nПопробуй написать ещё раз."
+            await message.bot.send_message(message.chat.id, err_text)
         except Exception:
             pass
     finally:
@@ -934,12 +1048,14 @@ def get_delegation_report(user_id, session=None):
         session = Session()
         should_close = True
 
+    lang = get_user_lang(user_id)
+
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             if should_close:
                 session.close()
-            return "Пользователь не найден"
+            return "User not found" if lang == 'en' else "Пользователь не найден"
 
         # Задачи, делегированные ОТ пользователя (кому он делегировал)
         delegated_by_user = session.query(Task).filter(
@@ -952,71 +1068,71 @@ def get_delegation_report(user_id, session=None):
             Task.delegation_status.isnot(None)
         ).order_by(Task.created_at.desc()).all()
 
+        status_texts_by = {
+            'ru': {None: "ожидает принятия", "pending": "ожидает принятия", "accepted": "принята в работу", "rejected": "отклонена", "completed": "завершена"},
+            'en': {None: "pending acceptance", "pending": "pending acceptance", "accepted": "accepted", "rejected": "rejected", "completed": "completed"}
+        }
+        status_texts_to = {
+            'ru': {"pending": "ожидает вашего решения", "accepted": "вы работаете над ней", "rejected": "вы отклонили", "completed": "завершена"},
+            'en': {"pending": "awaiting your decision", "accepted": "you're working on it", "rejected": "you rejected", "completed": "completed"}
+        }
+        unknown_status = "unknown status" if lang == 'en' else "неизвестный статус"
+        lbl_status = "Status" if lang == 'en' else "Статус"
+        lbl_result = "Result" if lang == 'en' else "Результат"
+        lbl_deadline = "Deadline" if lang == 'en' else "Дедлайн"
+
         report = []
 
         if delegated_by_user:
-            report.append("📤 ВАШИ ДЕЛЕГИРОВАННЫЕ ЗАДАЧИ:")
-            for task in delegated_by_user[:10]:  # Ограничим 10 задачами
+            header_by = "📤 YOUR DELEGATED TASKS:" if lang == 'en' else "📤 ВАШИ ДЕЛЕГИРОВАННЫЕ ЗАДАЧИ:"
+            report.append(header_by)
+            for task in delegated_by_user[:10]:
                 status_emoji = {
-                    None: "⏳",
-                    "pending": "⏳",
-                    "accepted": "✅",
-                    "rejected": "❌",
-                    "completed": "🎉"
+                    None: "⏳", "pending": "⏳", "accepted": "✅", "rejected": "❌", "completed": "🎉"
                 }.get(task.delegation_status, "❓")
 
-                status_text = {
-                    None: "ожидает принятия",
-                    "pending": "ожидает принятия",
-                    "accepted": "принята в работу",
-                    "rejected": "отклонена",
-                    "completed": "завершена"
-                }.get(task.delegation_status, "неизвестный статус")
+                status_text = status_texts_by.get(lang, status_texts_by['ru']).get(task.delegation_status, unknown_status)
 
                 report.append(f"{status_emoji} '{task.title}' → @{task.delegated_to_username}")
-                report.append(f"   Статус: {status_text}")
+                report.append(f"   {lbl_status}: {status_text}")
 
                 if task.completion_notes:
-                    report.append(f"   Результат: {task.completion_notes[:100]}...")
+                    report.append(f"   {lbl_result}: {task.completion_notes[:100]}...")
 
                 if task.due_date:
-                    report.append(f"   Дедлайн: {task.due_date.strftime('%d.%m.%Y %H:%M')}")
+                    report.append(f"   {lbl_deadline}: {task.due_date.strftime('%d.%m.%Y %H:%M')}")
 
-                report.append("")  # Пустая строка между задачами
+                report.append("")
 
         if delegated_to_user:
-            report.append("📥 ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:")
+            header_to = "📥 TASKS DELEGATED TO YOU:" if lang == 'en' else "📥 ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:"
+            report.append(header_to)
             for task in delegated_to_user[:10]:
                 delegator = session.query(User).filter_by(id=task.delegated_by).first()
-                delegator_name = f"@{delegator.username}" if delegator and delegator.username else "неизвестный"
+                unknown_lbl = "unknown" if lang == 'en' else "неизвестный"
+                delegator_name = f"@{delegator.username}" if delegator and delegator.username else unknown_lbl
 
                 status_emoji = {
-                    "pending": "⏳",
-                    "accepted": "✅",
-                    "rejected": "❌",
-                    "completed": "🎉"
+                    "pending": "⏳", "accepted": "✅", "rejected": "❌", "completed": "🎉"
                 }.get(task.delegation_status, "❓")
 
-                status_text = {
-                    "pending": "ожидает вашего решения",
-                    "accepted": "вы работаете над ней",
-                    "rejected": "вы отклонили",
-                    "completed": "завершена"
-                }.get(task.delegation_status, "неизвестный статус")
+                from_lbl = "from" if lang == 'en' else "от"
+                status_text = status_texts_to.get(lang, status_texts_to['ru']).get(task.delegation_status, unknown_status)
 
-                report.append(f"{status_emoji} '{task.title}' от {delegator_name}")
-                report.append(f"   Статус: {status_text}")
+                report.append(f"{status_emoji} '{task.title}' {from_lbl} {delegator_name}")
+                report.append(f"   {lbl_status}: {status_text}")
 
                 if task.completion_notes:
-                    report.append(f"   Результат: {task.completion_notes[:100]}...")
+                    report.append(f"   {lbl_result}: {task.completion_notes[:100]}...")
 
                 if task.due_date:
-                    report.append(f"   Дедлайн: {task.due_date.strftime('%d.%m.%Y %H:%M')}")
+                    report.append(f"   {lbl_deadline}: {task.due_date.strftime('%d.%m.%Y %H:%M')}")
 
                 report.append("")
 
         if not delegated_by_user and not delegated_to_user:
-            report.append("У вас нет делегированных задач.")
+            no_tasks = "You have no delegated tasks." if lang == 'en' else "У вас нет делегированных задач."
+            report.append(no_tasks)
 
         if should_close:
             session.close()
@@ -1028,7 +1144,8 @@ def get_delegation_report(user_id, session=None):
         logger.error(f"Error getting delegation progress for user {user_id}: {e}")
         if should_close:
             session.close()
-        return f"Ошибка при получении отчета о делегировании: {str(e)}"
+        err_prefix = "Error getting delegation report" if lang == 'en' else "Ошибка при получении отчета о делегировании"
+        return f"{err_prefix}: {str(e)}"
 
 
 
@@ -1038,10 +1155,12 @@ def get_delegation_report(user_id, session=None):
 @router.message(Command("dashboard"))
 async def dashboard_handler(message: Message):
     user_id = message.from_user.id
+    lang = get_user_lang(user_id)
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        await message.bot.send_message(message.chat.id, "Сначала зарегистрируйтесь, отправив /start")
+        msg = "Please register first by sending /start" if lang == 'en' else "Сначала зарегистрируйтесь, отправив /start"
+        await message.bot.send_message(message.chat.id, msg)
         session.close()
         return
     session.close()
@@ -1050,13 +1169,15 @@ async def dashboard_handler(message: Message):
     base_url = WEBHOOK_URL.replace("/webhook", "")
     dashboard_url = f"{base_url}/dashboard?telegram_id={user_id}"
     
+    btn_text = "🌐 Open web version" if lang == 'en' else "🌐 Открыть веб-версию"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🌐 Открыть веб-версию", web_app=WebAppInfo(url=dashboard_url))]
+        [InlineKeyboardButton(text=btn_text, web_app=WebAppInfo(url=dashboard_url))]
     ])
     
+    dash_label = "🌐 Your personal dashboard" if lang == 'en' else "🌐 Ваш личный дашборд"
     await message.bot.send_message(
         message.chat.id, 
-        f"🌐 Ваш личный дашборд:\n{dashboard_url}", 
+        f"{dash_label}:\n{dashboard_url}", 
         reply_markup=keyboard
     )
 

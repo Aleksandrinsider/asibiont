@@ -139,34 +139,50 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         }
 
 async def generate_reminder(user_id, task_title, task_id=None, escalation_level=1):
-    """Генерирует напоминание через единый мозг агента (с tool calling).
+    """Generates a reminder through the unified agent brain (with tool calling).
     
     Args:
-        user_id: ID пользователя
-        task_title: Название задачи
-        task_id: ID задачи (опционально)
-        escalation_level: Уровень эскалации (1=мягко, 2=настойчиво, 3=критично)
+        user_id: User ID
+        task_title: Task title
+        task_id: Task ID (optional)
+        escalation_level: Escalation level (1=soft, 2=insistent, 3=critical)
     """
     try:
         from .autonomous_agent import get_autonomous_agent
+        from i18n import get_user_lang
         agent = get_autonomous_agent()
+        lang = get_user_lang(user_id)
 
-        # Формируем инструкцию с учётом уровня эскалации
-        escalation_tones = {
-            1: "дружелюбный и мягкий, как от друга",
-            2: "настойчивый (это ПОВТОРНОЕ напоминание, прошло 15 минут)",
-            3: "срочный и серьёзный (КРИТИЧЕСКОЕ напоминание, задача требует немедленного внимания)"
-        }
-        tone = escalation_tones.get(escalation_level, escalation_tones[1])
-
-        instruction = (
-            f"Напоминание о задаче «{task_title}»"
-            f"{f' (ID: {task_id})' if task_id else ''}.\n"
-            f"Тон: {tone}. Эскалация: {escalation_level}/3.\n"
-            "Подумай: можешь ли ты ПОМОЧЬ решить эту задачу, а не просто напомнить?\n"
-            "Используй find_relevant_contacts_for_task чтобы проверить, есть ли кто-то из сети кто тоже занимается похожей активностью — и если да, упомяни это.\n"
-            "Спроси о статусе."
-        )
+        if lang == 'en':
+            escalation_tones = {
+                1: "friendly and soft, like from a friend",
+                2: "insistent (this is a REPEAT reminder, 15 minutes passed)",
+                3: "urgent and serious (CRITICAL reminder, task needs immediate attention)"
+            }
+            tone = escalation_tones.get(escalation_level, escalation_tones[1])
+            instruction = (
+                f"Reminder about task \"{task_title}\""
+                f"{f' (ID: {task_id})' if task_id else ''}.\n"
+                f"Tone: {tone}. Escalation: {escalation_level}/3.\n"
+                "Think: can you HELP solve this task, not just remind?\n"
+                "Use find_relevant_contacts_for_task to check if someone in their network does similar activity — if so, mention it.\n"
+                "Ask about status."
+            )
+        else:
+            escalation_tones = {
+                1: "дружелюбный и мягкий, как от друга",
+                2: "настойчивый (это ПОВТОРНОЕ напоминание, прошло 15 минут)",
+                3: "срочный и серьёзный (КРИТИЧЕСКОЕ напоминание, задача требует немедленного внимания)"
+            }
+            tone = escalation_tones.get(escalation_level, escalation_tones[1])
+            instruction = (
+                f"Напоминание о задаче «{task_title}»"
+                f"{f' (ID: {task_id})' if task_id else ''}.\n"
+                f"Тон: {tone}. Эскалация: {escalation_level}/3.\n"
+                "Подумай: можешь ли ты ПОМОЧЬ решить эту задачу, а не просто напомнить?\n"
+                "Используй find_relevant_contacts_for_task чтобы проверить, есть ли кто-то из сети кто тоже занимается похожей активностью — и если да, упомяни это.\n"
+                "Спроси о статусе."
+            )
 
         result = await agent.generate_system_message(
             user_id=user_id,
@@ -181,20 +197,33 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
 
     except Exception as e:
         logger.error(f"Error in generate_reminder: {e}", exc_info=True)
+        from i18n import get_user_lang
+        lang = get_user_lang(user_id)
+        if lang == 'en':
+            return f"Reminder about task: {task_title}\nTime to get started. Ready to begin?"
         return f"Напоминание о задаче: {task_title}\nВремя приступить к выполнению. Готов начать?"
 
 
 async def generate_result_check(user_id, task_title):
-    """Генерирует поздравление с выполнением задачи через единый мозг агента."""
+    """Generates a task completion congratulation through the unified agent brain."""
     try:
         from .autonomous_agent import get_autonomous_agent
+        from i18n import get_user_lang
         agent = get_autonomous_agent()
+        lang = get_user_lang(user_id)
 
-        instruction = (
-            f"Задача «{task_title}» отмечена как выполненная. "
-            "Поздравь с завершением кратко и позитивно (1-2 предложения). "
-            "Не задавай дополнительных вопросов."
-        )
+        if lang == 'en':
+            instruction = (
+                f"Task \"{task_title}\" marked as completed. "
+                "Congratulate briefly and positively (1-2 sentences). "
+                "Don't ask additional questions."
+            )
+        else:
+            instruction = (
+                f"Задача «{task_title}» отмечена как выполненная. "
+                "Поздравь с завершением кратко и позитивно (1-2 предложения). "
+                "Не задавай дополнительных вопросов."
+            )
 
         result = await agent.generate_system_message(
             user_id=user_id,
@@ -209,6 +238,10 @@ async def generate_result_check(user_id, task_title):
 
     except Exception as e:
         logger.error(f"Error in generate_result_check: {e}")
+        from i18n import get_user_lang
+        lang = get_user_lang(user_id)
+        if lang == 'en':
+            return f"Task \"{task_title}\" completed. Great job! 🎉"
         return f"Задача «{task_title}» выполнена. Отличная работа! 🎉"
 
 
@@ -1009,7 +1042,9 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         # 1. Собираем полный контекст ситуации
         ctx = await _build_proactive_context(user_id)
         if not ctx:
-            return "Привет! Готов помочь. Что обсудим?"
+            from i18n import get_user_lang
+            lang = get_user_lang(user_id)
+            return "Hey! Ready to help. What shall we discuss?" if lang == 'en' else "Привет! Готов помочь. Что обсудим?"
         
         # 2. Определяем intent
         intent = None
@@ -1074,7 +1109,9 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             from .utils import generate_unified_recommendations
             return generate_unified_recommendations('fallback', task_count=task_count, overdue_count=overdue_count)
         except Exception:
-            return "Привет! Готов помочь с задачами и целями. Что обсудим?"
+            from i18n import get_user_lang
+            lang = get_user_lang(user_id)
+            return "Hey! Ready to help with tasks and goals. What shall we discuss?" if lang == 'en' else "Привет! Готов помочь с задачами и целями. Что обсудим?"
 
 
 async def generate_daily_report(user_id):

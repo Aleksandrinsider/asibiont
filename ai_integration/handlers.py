@@ -20,6 +20,24 @@ from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, SERPER_API_KEY
 logger = logging.getLogger(__name__)
 
 
+def _get_lang(user_id):
+    """Get user language, default ru."""
+    try:
+        from i18n import get_user_lang
+        return get_user_lang(user_id)
+    except Exception:
+        return 'ru'
+
+
+def _t(user_id, key, **kwargs):
+    """Translate string by user_id."""
+    try:
+        from i18n import tu
+        return tu(user_id, key, **kwargs)
+    except Exception:
+        return key
+
+
 def _utc_to_local(dt_naive, user_tz):
     """Конвертирует naive UTC datetime в локальный timezone пользователя.
     
@@ -339,7 +357,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     # Валидация: название не может быть пустым
     if not title or not title.strip():
         logger.error("[ADD_TASK] ERROR: title is empty or whitespace only")
-        return "ERROR: Название задачи не может быть пустым"
+        return _t(user_id, 'task_title_empty')
     
     title = title.strip()
     
@@ -359,11 +377,11 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             title = ' '.join(words)
             logger.info(f"[ADD_TASK] Title cleaned: '{original_title}' -> '{title}'")
 
-    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 150 символов
-    if description and len(description) > 150:
+    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 200 символов
+    if description and len(description) > 200:
         original_desc = description
-        description = description[:147] + "..."
-        logger.warning(f"[ADD_TASK] Description truncated from {len(original_desc)} to 150 chars")
+        description = description[:197] + "..."
+        logger.warning(f"[ADD_TASK] Description truncated from {len(original_desc)} to 200 chars")
 
     if session is None:
         session = Session()
@@ -395,14 +413,14 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         logger.warning(f"[ADD_TASK] Duplicate pending task found: '{existing.title}' (id={existing.id})")
         if close_session:
             session.close()
-        return f"Задача '{existing.title}' уже есть в списке (статус: pending). Используй edit_task чтобы изменить её."
+        return _t(user_id, 'task_duplicate', title=existing.title)
     
     # Create new task — время ОБЯЗАТЕЛЬНО
     if not reminder_time:
         logger.warning(f"[ADD_TASK] No reminder_time provided for task '{title}'")
         if close_session:
             session.close()
-        return "⚠️ ВРЕМЯ НЕ УКАЗАНО. Спроси у пользователя: «На какое время поставить напоминание?». Задача без времени бесполезна."
+        return _t(user_id, 'task_no_time')
     
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
 
@@ -649,13 +667,15 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         session.commit()
 
     # Format result message
-    result_msg = f"Добавлена задача '{title}'"
+    lang = _get_lang(user_id)
     if task.reminder_time:
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         local_time = _utc_to_local(task.reminder_time, user_tz)
         time_str = local_time.strftime('%H:%M')
         date_str = local_time.strftime('%d.%m.%Y')
-        result_msg += f" с напоминанием на {date_str} в {time_str}"
+        result_msg = _t(user_id, 'task_created', title=title, time=f"{date_str} {time_str}")
+    else:
+        result_msg = _t(user_id, 'task_created_no_time', title=title)
 
     # Обновляем контекст диалога для последующих местоимений
     if user_id:
@@ -4251,7 +4271,7 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id)
+        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id, lang='ru')
 
         prompt = """Создай персонализированное и мотивирующее уведомление о делегированной задаче.
 
@@ -4308,7 +4328,7 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id)
+        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id, lang='ru')
 
         prompt = """Создай запрос о прогрессе выполнения делегированной задачи.
 
