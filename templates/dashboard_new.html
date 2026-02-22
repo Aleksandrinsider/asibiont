@@ -113,6 +113,166 @@
             30% { opacity: 1; }
         }
 
+        /* Gamification: Streak */
+        .streak-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: #FFF8F0;
+            border: 1px solid #F0D9B5;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #B45309;
+            cursor: default;
+        }
+        .streak-badge.active {
+            background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+            border-color: #F59E0B;
+            color: #92400E;
+        }
+        
+        /* Gamification: Heatmap */
+        .heatmap-container {
+            margin-top: 16px;
+        }
+        .heatmap-label {
+            font-size: 11px;
+            color: #8B949E;
+            margin-bottom: 6px;
+        }
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            grid-template-rows: repeat(7, 1fr);
+            gap: 2px;
+            grid-auto-flow: column;
+        }
+        .heatmap-cell {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 2px;
+            background: #EBEDF0;
+            position: relative;
+        }
+        .heatmap-cell[data-count="1"] { background: #9BE9A8; }
+        .heatmap-cell[data-count="2"] { background: #40C463; }
+        .heatmap-cell[data-count="3"] { background: #30A14E; }
+        .heatmap-cell[data-count="4"] { background: #216E39; }
+        .heatmap-cell:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: calc(100% + 4px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1F2328;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            justify-content: flex-end;
+            margin-top: 4px;
+            font-size: 10px;
+            color: #8B949E;
+        }
+        .heatmap-legend-cell {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+        
+        /* Gamification: Achievements */
+        .achievement-badge-profile {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            background: #F6F8FA;
+            border: 1px solid #D1D9E0;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #374151;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .achievement-badge-profile:hover {
+            border-color: #068487;
+        }
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        .achievement-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #D1D9E0;
+            border-radius: 8px;
+            background: #FFFFFF;
+            transition: border-color 0.2s;
+        }
+        .achievement-card.unlocked {
+            border-color: #068487;
+            background: #F0FDFA;
+        }
+        .achievement-card.locked {
+            opacity: 0.55;
+        }
+        .achievement-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+            width: 36px;
+            text-align: center;
+        }
+        .achievement-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .achievement-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #1F2328;
+            margin-bottom: 2px;
+        }
+        .achievement-desc {
+            font-size: 11px;
+            color: #6C727F;
+        }
+        .achievement-progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #EBEDF0;
+            border-radius: 2px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+        .achievement-progress-fill {
+            height: 100%;
+            background: #068487;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+        .achievement-counter {
+            font-size: 10px;
+            color: #8B949E;
+            text-align: right;
+            margin-top: 2px;
+        }
+
         /* Mobile adjustments */
         
     </style>
@@ -532,7 +692,10 @@
                                 
                                 <!-- Имя и ник под аватаром -->
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
-                                <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
+                                <p style="margin: 0; color: #374151; font-size: 13px;">@{{ user.username or 'неизвестен' }}</p>
+                                <!-- Achievement badge -->
+                                <div id="profile-achievement-badge" onclick="openAchievementsModal()" style="display: none; margin-top: 4px; margin-bottom: 4px;">
+                                </div>
                                 
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
@@ -700,6 +863,31 @@
                             <div class="week-timeline" style="margin-top: 24px; margin-bottom: 20px;">
                                 <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
                                     <!-- Дни недели будут добавлены через JS -->
+                                </div>
+                            </div>
+                            <!-- Streak counter -->
+                            <div id="streak-container" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                                <div id="streak-badge" class="streak-badge" style="display: none;">
+                                    <span>🔥</span>
+                                    <span id="streak-count">0</span>
+                                    <span>дн. подряд</span>
+                                </div>
+                                <div id="achievements-quick" onclick="openAchievementsModal()" style="cursor: pointer; display: none; font-size: 12px; color: #068487;">
+                                    <span id="achievements-score"></span>
+                                </div>
+                            </div>
+                            <!-- Activity heatmap -->
+                            <div class="heatmap-container" id="heatmap-container" style="display: none;">
+                                <div class="heatmap-label">Активность за 12 недель</div>
+                                <div class="heatmap-grid" id="heatmap-grid"></div>
+                                <div class="heatmap-legend">
+                                    <span>Меньше</span>
+                                    <div class="heatmap-legend-cell" style="background: #EBEDF0;"></div>
+                                    <div class="heatmap-legend-cell" style="background: #9BE9A8;"></div>
+                                    <div class="heatmap-legend-cell" style="background: #40C463;"></div>
+                                    <div class="heatmap-legend-cell" style="background: #30A14E;"></div>
+                                    <div class="heatmap-legend-cell" style="background: #216E39;"></div>
+                                    <span>Больше</span>
                                 </div>
                             </div>
                         </div>
@@ -966,6 +1154,25 @@
                     <button onclick="submitQuickProfile()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;">
                         <span id="quick-profile-btn-text">Сохранить</span>
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Achievements Modal -->
+    <div id="achievements-modal" class="rating-modal" style="display: none;">
+        <div class="rating-modal-content" style="max-width: 720px;">
+            <div class="rating-modal-header">
+                <h3>Достижения <span id="achievements-modal-count" style="font-weight: 400; font-size: 13px; color: #6C727F;"></span></h3>
+                <button onclick="closeAchievementsModal()" class="rating-close-btn">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="rating-modal-body">
+                <div class="achievements-grid" id="achievements-grid">
+                    <div style="text-align: center; color: #6C727F; padding: 20px;">Загрузка...</div>
                 </div>
             </div>
         </div>
@@ -4000,6 +4207,141 @@
             updateWeekTimeline(allTasks);
         }
         
+        // ========== GAMIFICATION ==========
+        let gamificationData = null;
+        let gamificationLoaded = false;
+        
+        async function loadGamification() {
+            try {
+                const response = await fetch('/api/gamification', { credentials: 'include' });
+                if (!response.ok) return;
+                gamificationData = await response.json();
+                gamificationLoaded = true;
+                renderStreak();
+                renderHeatmap();
+                renderProfileAchievementBadge();
+            } catch (error) {
+                console.error('Error loading gamification:', error);
+            }
+        }
+        
+        function renderStreak() {
+            if (!gamificationData) return;
+            const badge = document.getElementById('streak-badge');
+            const countEl = document.getElementById('streak-count');
+            const quickEl = document.getElementById('achievements-quick');
+            const scoreEl = document.getElementById('achievements-score');
+            
+            if (badge && countEl) {
+                const streak = gamificationData.streak;
+                if (streak > 0) {
+                    countEl.textContent = streak;
+                    badge.classList.add('active');
+                } else {
+                    countEl.textContent = '0';
+                    badge.classList.remove('active');
+                }
+                badge.style.display = 'inline-flex';
+            }
+            
+            if (quickEl && scoreEl) {
+                scoreEl.textContent = `🏆 ${gamificationData.unlocked_count}/${gamificationData.total_achievements}`;
+                quickEl.style.display = 'inline';
+            }
+        }
+        
+        function renderHeatmap() {
+            if (!gamificationData || !gamificationData.heatmap) return;
+            const container = document.getElementById('heatmap-container');
+            const grid = document.getElementById('heatmap-grid');
+            if (!container || !grid) return;
+            
+            const monthNames = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+            
+            let html = '';
+            gamificationData.heatmap.forEach(entry => {
+                const count = entry.count;
+                let level = 0;
+                if (count >= 4) level = 4;
+                else if (count === 3) level = 3;
+                else if (count === 2) level = 2;
+                else if (count === 1) level = 1;
+                
+                const date = new Date(entry.date);
+                const dateStr = `${date.getDate()} ${monthNames[date.getMonth()]}`;
+                const taskWord = count === 1 ? 'задача' : (count >= 2 && count <= 4) ? 'задачи' : 'задач';
+                const tooltip = count > 0 ? `${dateStr}: ${count} ${taskWord}` : `${dateStr}: нет задач`;
+                
+                html += `<div class="heatmap-cell" data-count="${level}" title="${tooltip}"></div>`;
+            });
+            
+            grid.innerHTML = html;
+            container.style.display = 'block';
+        }
+        
+        function renderProfileAchievementBadge() {
+            if (!gamificationData || !gamificationData.featured_achievement) return;
+            const badgeEl = document.getElementById('profile-achievement-badge');
+            if (!badgeEl) return;
+            
+            const feat = gamificationData.featured_achievement;
+            badgeEl.innerHTML = `<span class="achievement-badge-profile">${feat.icon} ${feat.title}</span>`;
+            badgeEl.style.display = 'block';
+        }
+        
+        function openAchievementsModal() {
+            const modal = document.getElementById('achievements-modal');
+            if (!modal) return;
+            
+            if (gamificationData) {
+                renderAchievementsGrid();
+            }
+            modal.style.display = 'flex';
+        }
+        
+        function closeAchievementsModal() {
+            const modal = document.getElementById('achievements-modal');
+            if (modal) modal.style.display = 'none';
+        }
+        
+        function renderAchievementsGrid() {
+            if (!gamificationData) return;
+            const grid = document.getElementById('achievements-grid');
+            const countEl = document.getElementById('achievements-modal-count');
+            if (!grid) return;
+            
+            if (countEl) {
+                countEl.textContent = `(${gamificationData.unlocked_count} из ${gamificationData.total_achievements})`;
+            }
+            
+            // Сортируем: сначала открытые, потом закрытые
+            const sorted = [...gamificationData.achievements].sort((a, b) => {
+                if (a.unlocked && !b.unlocked) return -1;
+                if (!a.unlocked && b.unlocked) return 1;
+                return 0;
+            });
+            
+            let html = '';
+            sorted.forEach(a => {
+                const progressPercent = a.target > 0 ? Math.min(100, Math.round(a.progress / a.target * 100)) : 0;
+                html += `<div class="achievement-card ${a.unlocked ? 'unlocked' : 'locked'}">`;
+                html += `<div class="achievement-icon">${a.unlocked ? a.icon : '🔒'}</div>`;
+                html += `<div class="achievement-info">`;
+                html += `<div class="achievement-title">${a.title}</div>`;
+                html += `<div class="achievement-desc">${a.desc}</div>`;
+                if (!a.unlocked) {
+                    html += `<div class="achievement-progress-bar"><div class="achievement-progress-fill" style="width: ${progressPercent}%;"></div></div>`;
+                    html += `<div class="achievement-counter">${a.progress}/${a.target}</div>`;
+                }
+                html += `</div>`;
+                html += `</div>`;
+            });
+            
+            grid.innerHTML = html;
+        }
+        
+        // ========== END GAMIFICATION ==========
+        
         async function completeTask(taskId) {
             try {
                 const response = await fetch('/complete_task', {
@@ -4019,6 +4361,8 @@
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
                     await updateTasks();
+                    // Refresh gamification data (streak, achievements)
+                    loadGamification();
                 } else {
                     const error = await response.json();
                     showNotification(`Error: ${error.error}`, 'error');
@@ -5998,7 +6342,9 @@
                             html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;">' + initial + '</div>';
                         }
                         html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || 'Пользователь') + '</p>';
-                        html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
+                        html += '<p style="margin: 0; color: #374151; font-size: 13px;">@' + (data.profile.username || 'неизвестен') + '</p>';
+                        // Achievement badge in dynamic profile
+                        html += '<div id="profile-achievement-badge" onclick="openAchievementsModal()" style="display: none; margin-top: 4px; margin-bottom: 4px;"></div>';
                         html += '</div>';
                         html += '<p>Город: ' + (data.profile.city || 'Не указан') + '</p>';
                         if (data.profile.birthdate) {
@@ -6031,6 +6377,8 @@
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
+                        // Re-render achievement badge after profile update
+                        if (gamificationLoaded) renderProfileAchievementBadge();
                     }
                     }
                 }
@@ -6046,6 +6394,7 @@
         if (isLoggedIn) {
             loadInitialMessages();
             updateProfile();
+            loadGamification();
             
             // Auto-update every 30 seconds (reduced from 5s to lower DB load)
             setInterval(() => {
