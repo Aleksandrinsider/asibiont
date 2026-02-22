@@ -12,23 +12,72 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 
-async def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None:
+async def parse_time_with_ai(time_str: str, current_time: datetime, lang: str = 'ru') -> datetime | None:
     """
-    Использует DeepSeek для парсинга любого формата времени.
+    Uses DeepSeek for parsing any time format (bilingual RU/EN).
     
     Args:
-        time_str: Строка со временем ("завтра в 10:00", "через 2 часа", "15:30", etc)
-        current_time: Текущее время в timezone пользователя
+        time_str: Time string ("завтра в 10:00", "tomorrow at 10:00", "in 2 hours", etc)
+        current_time: Current time in user's timezone
+        lang: User language ('ru' or 'en')
     
     Returns:
-        datetime в timezone пользователя или None если не удалось распарсить
+        datetime in user's timezone or None if parsing failed
     """
     try:
         current_str = current_time.strftime('%Y-%m-%d %H:%M')
-        weekday_ru = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
-        current_weekday = weekday_ru[current_time.weekday()]
         
-        prompt = f"""Текущее время: {current_str} ({current_weekday})
+        if lang == 'en':
+            weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            current_weekday = weekday_names[current_time.weekday()]
+            
+            prompt = f"""Current time: {current_str} ({current_weekday})
+
+User wants to schedule for: "{time_str}"
+
+Return JSON with target time in format:
+{{
+  "year": number,
+  "month": number,
+  "day": number,
+  "hour": number,
+  "minute": number
+}}
+
+Rules:
+- If only time (HH:MM) without date — use today if not passed, otherwise tomorrow
+- "tomorrow" = +1 day from current date
+- "day after tomorrow" = +2 days
+- "in N hours/minutes" = add to current time
+- "today" = current date
+- "every day" = ignore, use specified time for today
+- If you can't parse — return {{"error": "description"}}
+
+EDGE CASES:
+- "morning" = 9:00 today or tomorrow if morning passed
+- "afternoon" = 14:00 today or tomorrow
+- "evening" = 19:00 today or tomorrow  
+- "night" = 23:00 today or tomorrow
+- "now" = current time + 5 minutes
+- "right now" = current time + 1 minute
+- "soon" = current time + 30 minutes
+- "later" = current time + 2 hours
+- "at lunch" = 13:00 today or tomorrow
+- "after lunch" = 15:00 today or tomorrow
+- "before lunch" = 11:00 today or tomorrow
+- "on the weekend" = nearest Saturday 10:00
+- "on Monday" = next Monday 9:00
+- "on Friday evening" = nearest Friday 19:00
+- "in a week" = +7 days, same time
+- "end of month" = last day of month 17:00
+- "beginning of month" = 1st of next month 9:00
+
+Return ONLY JSON, no text."""
+        else:
+            weekday_ru = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
+            current_weekday = weekday_ru[current_time.weekday()]
+            
+            prompt = f"""Текущее время: {current_str} ({current_weekday})
 
 Пользователь хочет перенести задачу на: "{time_str}"
 
@@ -136,11 +185,9 @@ EDGE CASES (особые случаи):
         return None
 
 
-def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetime | None:
+def parse_time_simple_fallback(time_str: str, current_time: datetime, lang: str = 'ru') -> datetime | None:
     """
-    Простой fallback для базовых форматов если AI не доступен.
-    Парсит: "завтра в HH:MM", "сегодня в HH:MM", "послезавтра в HH:MM",
-            "через N минут/часов/дней", "HH:MM".
+    Simple fallback for basic formats if AI is unavailable (bilingual RU/EN).
     """
     import re
     try:
@@ -155,16 +202,18 @@ def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetim
                     return h, mi
             return None, None
         
-        # "через N минут/часов/дней/недель"
+        # "через N минут/часов" / "in N minutes/hours"
         через_match = re.match(r'через\s+(\d+)\s+(минут|мин|час|часа|часов|дней|дня|день|недел|нед)', time_str)
-        if через_match:
-            num = int(через_match.group(1))
-            unit = через_match.group(2)
-            if 'минут' in unit or 'мин' in unit:
+        in_match = re.match(r'in\s+(\d+)\s+(min|minute|minutes|hour|hours|day|days|week|weeks)', time_str)
+        delta_match = через_match or in_match
+        if delta_match:
+            num = int(delta_match.group(1))
+            unit = delta_match.group(2)
+            if any(u in unit for u in ['минут', 'мин', 'min']):
                 delta = timedelta(minutes=num)
-            elif 'час' in unit:
+            elif any(u in unit for u in ['час', 'hour']):
                 delta = timedelta(hours=num)
-            elif 'недел' in unit or 'нед' in unit:
+            elif any(u in unit for u in ['недел', 'нед', 'week']):
                 delta = timedelta(weeks=num)
             else:
                 delta = timedelta(days=num)
@@ -172,33 +221,28 @@ def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetim
             logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
             return result
         
-        # "завтра [в] HH:MM"
-        if time_str.startswith('завтра'):
+        # "завтра" / "tomorrow"
+        if time_str.startswith('завтра') or time_str.startswith('tomorrow'):
             h, mi = _extract_hhmm(time_str)
             if h is not None:
                 result = (current_time + timedelta(days=1)).replace(hour=h, minute=mi, second=0, microsecond=0)
-                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
-                return result
             else:
-                # "завтра" without time → 09:00
                 result = (current_time + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
-                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
-                return result
+            logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+            return result
         
-        # "послезавтра [в] HH:MM"
-        if time_str.startswith('послезавтра'):
+        # "послезавтра" / "day after tomorrow"
+        if time_str.startswith('послезавтра') or 'day after tomorrow' in time_str:
             h, mi = _extract_hhmm(time_str)
             if h is not None:
                 result = (current_time + timedelta(days=2)).replace(hour=h, minute=mi, second=0, microsecond=0)
-                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
-                return result
             else:
                 result = (current_time + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
-                logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
-                return result
+            logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+            return result
         
-        # "сегодня [в] HH:MM"
-        if time_str.startswith('сегодня'):
+        # "сегодня" / "today"
+        if time_str.startswith('сегодня') or time_str.startswith('today'):
             h, mi = _extract_hhmm(time_str)
             if h is not None:
                 result = current_time.replace(hour=h, minute=mi, second=0, microsecond=0)
@@ -207,13 +251,14 @@ def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetim
                 logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
                 return result
         
-        # "утром/днём/вечером/ночью"
+        # Time of day keywords (bilingual)
         time_of_day = {
-            'утром': 9, 'утро': 9,
-            'днём': 14, 'днем': 14,
-            'вечером': 19, 'вечер': 19,
-            'ночью': 23, 'ночь': 23,
+            'утром': 9, 'утро': 9, 'morning': 9,
+            'днём': 14, 'днем': 14, 'afternoon': 14,
+            'вечером': 19, 'вечер': 19, 'evening': 19,
+            'ночью': 23, 'ночь': 23, 'night': 23,
             'в обед': 13, 'после обеда': 15,
+            'at lunch': 13, 'after lunch': 15, 'before lunch': 11,
         }
         for keyword, hour in time_of_day.items():
             if keyword in time_str:
@@ -228,7 +273,6 @@ def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetim
             h, mi = _extract_hhmm(time_str)
             if h is not None:
                 result = current_time.replace(hour=h, minute=mi, second=0, microsecond=0)
-                # If time passed, schedule for tomorrow
                 if result <= current_time:
                     result += timedelta(days=1)
                 logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")

@@ -3765,19 +3765,20 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
 
 def find_partners(user_id=None, session=None):
     """Find potential partners based on user profile - FULL implementation here"""
-    # Due to size limit, implementing key part only
-    # Full implementation is in ai_integration.py lines 2457-2720
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
 
+    from i18n import get_user_lang, get_user_lang_by_db_id, get_lang_badge
+    lang = get_user_lang(user_id)
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
             session.close()
-        return "Пользователь не найден."
+        return "User not found." if lang == 'en' else "Пользователь не найден."
 
     # Get user profile
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -3788,55 +3789,61 @@ def find_partners(user_id=None, session=None):
     if not partners:
         if close_session:
             session.close()
+        if lang == 'en':
+            return "No matching people found for your profile yet. Fill in your profile (interests, skills, city) and I'll find like-minded people!"
         return "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, город), и я найду единомышленников!"
 
-    # НОВАЯ ЛОГИКА: показываем топ релевантных контактов для роста пользователя
-    # Партнеры уже отсортированы по релевантности в get_partners_list
+    if lang == 'en':
+        response = "Found interesting people for your growth and development:\n\n"
+    else:
+        response = "Нашел интересных людей для твоего роста и развития:\n\n"
 
-    response = "Нашел интересных людей для твоего роста и развития:\n\n"
-
-    # Показываем топ-5 наиболее релевантных контактов
     for idx, p in enumerate(partners[:5], 1):
         partner_user = session.query(User).filter_by(id=p.user_id).first()
         if partner_user and partner_user.username:
-            info_parts = []
+            # Get partner language badge
+            partner_lang = get_user_lang_by_db_id(p.user_id, session=session)
+            badge = get_lang_badge(partner_lang)
 
-            # Добавляем информацию о релевантности
+            info_parts = []
             relevance_indicators = []
-            if user_profile.skills and p.skills:
+
+            if user_profile and user_profile.skills and p.skills:
                 user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
                 profile_skills = set(s.strip().lower() for s in p.skills.split(","))
                 if user_skills & profile_skills:
-                    relevance_indicators.append("⚡ общие навыки")
+                    relevance_indicators.append("⚡ " + ("shared skills" if lang == 'en' else "общие навыки"))
 
-            if user_profile.interests and p.interests:
+            if user_profile and user_profile.interests and p.interests:
                 user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
                 profile_interests = set(i.strip().lower() for i in p.interests.split(","))
                 if user_interests & profile_interests:
-                    relevance_indicators.append("🎯 общие интересы")
+                    relevance_indicators.append("🎯 " + ("shared interests" if lang == 'en' else "общие интересы"))
 
-            if user_profile.goals and p.goals:
+            if user_profile and user_profile.goals and p.goals:
                 user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
                 profile_goals = set(g.strip().lower() for g in p.goals.split(","))
                 if user_goals & profile_goals:
-                    relevance_indicators.append("🚀 общие цели")
+                    relevance_indicators.append("🚀 " + ("shared goals" if lang == 'en' else "общие цели"))
 
-            # Основная информация
             if hasattr(p, "current_plans") and p.current_plans:
-                info_parts.append(f"сейчас: {p.current_plans}")
+                lbl = "now" if lang == 'en' else "сейчас"
+                info_parts.append(f"{lbl}: {p.current_plans}")
             if p.interests:
-                info_parts.append(f"интересы: {p.interests}")
+                lbl = "interests" if lang == 'en' else "интересы"
+                info_parts.append(f"{lbl}: {p.interests}")
             if hasattr(p, "position") and p.position:
                 info_parts.append(f"{p.position}")
             if hasattr(p, "company") and p.company:
-                info_parts.append(f"компания: {p.company}")
+                lbl = "company" if lang == 'en' else "компания"
+                info_parts.append(f"{lbl}: {p.company}")
             if p.city:
-                info_parts.append(f"город: {p.city}")
+                lbl = "city" if lang == 'en' else "город"
+                info_parts.append(f"{lbl}: {p.city}")
 
-            info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
+            info_str = ", ".join(info_parts) if info_parts else ("profile in progress" if lang == 'en' else "профиль в разработке")
 
-            # Собираем строку контакта
-            contact_line = f"{idx}. @{partner_user.username}"
+            contact_line = f"{idx}. {badge} @{partner_user.username}"
             if relevance_indicators:
                 contact_line += f" {' • '.join(relevance_indicators)}"
             contact_line += f"\n   {info_str}\n"
@@ -3844,10 +3851,16 @@ def find_partners(user_id=None, session=None):
             response += contact_line
 
     if len(partners) > 5:
-        response += f"\n💡 Это топ-5 самых релевантных контактов. Используй всю базу данных для максимального роста!"
+        if lang == 'en':
+            response += "\n💡 These are the top-5 most relevant contacts. Use the full database for maximum growth!"
+        else:
+            response += "\n💡 Это топ-5 самых релевантных контактов. Используй всю базу данных для максимального роста!"
 
     if not partners:
-        response = "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, цели), и я найду единомышленников для твоего развития!"
+        if lang == 'en':
+            response = "No matching people found yet. Fill in your profile (interests, skills, goals) and I'll find like-minded people for your development!"
+        else:
+            response = "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, цели), и я найду единомышленников для твоего развития!"
 
     if close_session:
         session.close()
@@ -3856,19 +3869,12 @@ def find_partners(user_id=None, session=None):
 
 def find_relevant_contacts_for_task(task_description: str, user_id: int = None, limit: int = 5, session=None) -> str:
     """
-    Найти контакты релевантные для конкретной задачи.
-    Используется AI агентом для рекомендации людей при создании/обсуждении задач.
-    
-    Args:
-        task_description: Описание задачи или активности
-        user_id: ID пользователя (telegram_id)
-        limit: Максимальное количество контактов
-        session: SQLAlchemy сессия
-        
-    Returns:
-        Строка с рекомендациями контактов
+    Find contacts relevant for a specific task (bilingual).
     """
     logger.info(f"[FIND_RELEVANT] Searching contacts for task: '{task_description}', user_id={user_id}")
+    
+    from i18n import get_user_lang, get_user_lang_by_db_id, get_lang_badge
+    lang = get_user_lang(user_id) if user_id else 'ru'
     
     if session is None:
         session = Session()
@@ -3876,12 +3882,11 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     else:
         close_session = False
     
-    # Получить пользователя
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
             session.close()
-        return "❌ Пользователь не найден"
+        return "❌ User not found" if lang == 'en' else "❌ Пользователь не найден"
     
     # Извлечь ключевые слова из описания задачи
     task_keywords = set()
@@ -4001,6 +4006,15 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     if not all_partners:
         if close_session:
             session.close()
+        if lang == 'en':
+            return """❌ No contacts found in the network for this task.
+
+💡 Recommendations:
+• Fill in your profile (interests, skills, goals)
+• Add your city information
+• Describe how you can help others
+
+Once profiles are filled, I'll be able to suggest suitable people for collaboration."""
         return """❌ В сети пока нет контактов для этой задачи.
 
 💡 Рекомендации:
@@ -4024,7 +4038,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         if same_city:
             if is_offline_activity:
                 relevance_score += 15  # Критично для спорта/встреч
-                match_reasons.append(f"тот же город ({partner.city})")
+                match_reasons.append(f"{'same city' if lang == 'en' else 'тот же город'} ({partner.city})")
             else:
                 relevance_score += 5  # Полезно для онлайн активностей
         elif is_offline_activity and user_city and partner_city:
@@ -4037,7 +4051,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
             skill_match = task_keywords & partner_skills
             if skill_match:
                 relevance_score += len(skill_match) * 8  # Навыки очень важны
-                match_reasons.append(f"навыки: {', '.join(list(skill_match)[:2])}")
+                match_reasons.append(f"{'skills' if lang == 'en' else 'навыки'}: {', '.join(list(skill_match)[:2])}")
         
         # ПРИОРИТЕТ 3: Интересы
         if hasattr(partner, 'interests') and partner.interests:
@@ -4045,7 +4059,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
             interest_match = task_keywords & partner_interests
             if interest_match:
                 relevance_score += len(interest_match) * 4
-                match_reasons.append(f"интересы: {', '.join(list(interest_match)[:2])}")
+                match_reasons.append(f"{'interests' if lang == 'en' else 'интересы'}: {', '.join(list(interest_match)[:2])}")
         
         # ПРИОРИТЕТ 4: Цели контакта совпадают с задачей пользователя
         if hasattr(partner, 'goals') and partner.goals:
@@ -4053,7 +4067,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
             goal_match = task_keywords & partner_goals
             if goal_match:
                 relevance_score += len(goal_match) * 6  # Цели важны
-                match_reasons.append(f"цели: {', '.join(list(goal_match)[:2])}")
+                match_reasons.append(f"{'goals' if lang == 'en' else 'цели'}: {', '.join(list(goal_match)[:2])}")
         
         # ПРИОРИТЕТ 4.5: Структурированные цели (Goal table)
         try:
@@ -4068,7 +4082,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     goal_kw_match = task_keywords & goal_words
                     if goal_kw_match:
                         relevance_score += len(goal_kw_match) * 5
-                        match_reasons.append(f"цель «{pg.title[:30]}»")
+                        match_reasons.append(f"{'goal' if lang == 'en' else 'цель'} «{pg.title[:30]}»")
                         break  # Одного совпадения достаточно
         except Exception as e:
             logger.debug(f"Failed to compare partner goals: {e}")
@@ -4082,6 +4096,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         if relevance_score > 0:
             partner_user = session.query(User).filter_by(id=partner.user_id).first()
             if partner_user and partner_user.username:
+                partner_lang = get_user_lang_by_db_id(partner.user_id, session=session)
                 relevant_contacts.append({
                     'username': partner_user.username,
                     'name': partner_user.username,
@@ -4089,7 +4104,8 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     'skills': partner.skills or '',
                     'city': partner.city or '',
                     'score': relevance_score,
-                    'reasons': match_reasons
+                    'reasons': match_reasons,
+                    'lang': partner_lang,
                 })
     
     # НОВАЯ ЛОГИКА СОРТИРОВКИ: способствовать росту через всю базу данных
@@ -4132,21 +4148,23 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                 overlap = user_skills_set & partner_goals_set
                 if overlap:
                     score += len(overlap) * 3
-                    reasons.append(f"нуждается в твоих навыках: {', '.join(list(overlap)[:2])}")
+                    reasons.append(f"{'needs your skills' if lang == 'en' else 'нуждается в твоих навыках'}: {', '.join(list(overlap)[:2])}")
             # Навыки пользователя совпадают с интересами контакта
             if hasattr(partner, 'interests') and partner.interests:
                 partner_interests_set = set(i.strip().lower() for i in partner.interests.split(','))
                 overlap = user_skills_set & partner_interests_set
                 if overlap:
                     score += len(overlap) * 2
-                    reasons.append(f"интересуется тем, в чем ты эксперт")
+                    reasons.append(f"{'interested in your expertise' if lang == 'en' else 'интересуется тем, в чем ты эксперт'}")
             
             if score > 0:
+                partner_lang = get_user_lang(partner_user.telegram_id) if partner_user.telegram_id else 'ru'
                 reverse_matches.append({
                     'username': partner_user.username,
                     'city': partner.city or '',
                     'score': score,
-                    'reasons': reasons
+                    'reasons': reasons,
+                    'lang': partner_lang
                 })
     
     reverse_matches.sort(key=lambda x: x['score'], reverse=True)
@@ -4189,10 +4207,12 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     result_lines = []
     
     if sorted_contacts:
-        result_lines.append("💡 Кто может помочь тебе:")
+        header = "💡 Who can help you:" if lang == 'en' else "💡 Кто может помочь тебе:"
+        result_lines.append(header)
         top_contacts = sorted_contacts[:min(3, limit)]
         for i, contact in enumerate(top_contacts, 1):
-            line = f"• @{contact['username']}"
+            badge = get_lang_badge(contact.get('lang', 'ru'))
+            line = f"• {badge} @{contact['username']}"
             if contact['reasons']:
                 line += f" — {', '.join(contact['reasons'][:2])}"
             if contact['city']:
@@ -4202,20 +4222,22 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     if reverse_matches:
         if result_lines:
             result_lines.append("")
-        result_lines.append("🤝 Кому ты можешь помочь:")
+        header = "🤝 Who you can help:" if lang == 'en' else "🤝 Кому ты можешь помочь:"
+        result_lines.append(header)
         for i, contact in enumerate(reverse_matches[:min(3, limit)], 1):
-            line = f"• @{contact['username']}"
+            badge = get_lang_badge(contact.get('lang', 'ru'))
+            line = f"• {badge} @{contact['username']}"
             if contact['reasons']:
                 line += f" — {', '.join(contact['reasons'][:2])}"
             if contact['city']:
                 line += f" | {contact['city']}"
             result_lines.append(line)
     
-    # Добавить предложения для существующих задач пользователя
     if user_tasks_suggestions:
         if result_lines:
             result_lines.append("")
-        result_lines.append("💡 Также для твоих задач:")
+        header = "💡 Also for your tasks:" if lang == 'en' else "💡 Также для твоих задач:"
+        result_lines.append(header)
         for suggestion in user_tasks_suggestions:
             contacts_str = ', '.join(f"@{c}" for c in suggestion['contacts'])
             result_lines.append(f"• {suggestion['task']}: {contacts_str}")
@@ -4223,6 +4245,8 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     if result_lines:
         return '\n'.join(result_lines)
     else:
+        if lang == 'en':
+            return "No matching contacts found for this task. Try filling in more profile information."
         return "Не нашел подходящих контактов для этой задачи. Попробуй заполнить больше информации в профиле."
 
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
@@ -4230,6 +4254,8 @@ async def generate_delegation_notification_async(delegator_username, recipient_u
         from main import bot
         if not bot:
             return
+
+        lang = get_user_lang(recipient_telegram_id)
 
         # Generate AI-powered personalized notification
         notification_text = await generate_delegation_notification(
@@ -4246,15 +4272,26 @@ async def generate_delegation_notification_async(delegator_username, recipient_u
             message = notification_text
         else:
             # Fallback to template if AI generation fails
-            message = f"Новое предложение задачи от @{delegator_username}:\n\n"
-            message += f"Задача: {task_title}\n"
-            if task_description:
-                message += f"Описание: {task_description}\n"
-            if deadline:
-                message += f"Дедлайн: {deadline}\n"
-            if delegation_details:
-                message += f"Детали: {delegation_details}\n"
-            message += "\nНапишите боту 'принять задачу' для подтверждения или 'отклонить задачу' для отказа."
+            if lang == 'en':
+                message = f"New task proposal from @{delegator_username}:\n\n"
+                message += f"Task: {task_title}\n"
+                if task_description:
+                    message += f"Description: {task_description}\n"
+                if deadline:
+                    message += f"Deadline: {deadline}\n"
+                if delegation_details:
+                    message += f"Details: {delegation_details}\n"
+                message += "\nWrite 'accept task' to confirm or 'reject task' to decline."
+            else:
+                message = f"Новое предложение задачи от @{delegator_username}:\n\n"
+                message += f"Задача: {task_title}\n"
+                if task_description:
+                    message += f"Описание: {task_description}\n"
+                if deadline:
+                    message += f"Дедлайн: {deadline}\n"
+                if delegation_details:
+                    message += f"Детали: {delegation_details}\n"
+                message += "\nНапишите боту 'принять задачу' для подтверждения или 'отклонить задачу' для отказа."
 
         await bot.send_message(recipient_telegram_id, message)
 
@@ -4268,12 +4305,35 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
     from .utils import clean_technical_details
 
     try:
+        lang = get_user_lang(user_id)
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id, lang='ru')
+        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None, None, None, None, None, None, user_id, lang=lang)
 
-        prompt = """Создай персонализированное и мотивирующее уведомление о делегированной задаче.
+        if lang == 'en':
+            prompt = f"""Create a personalized and motivating notification about a delegated task.
+
+CONTEXT:
+- Sender: @{delegator_username}
+- Recipient: @{recipient_username}
+- Task: {task_title}
+- Description: {task_description or 'Not specified'}
+- Deadline: {deadline or 'Not specified'}
+- Delegation details: {delegation_details or 'Not specified'}
+
+REQUIREMENTS:
+1. Be friendly and motivating
+2. Emphasize the importance of the task for the team/project
+3. Mention the deadline if provided
+4. Add a call to action (accept/reject)
+5. Make the message personalized
+6. No more than 300 characters
+
+RESPONSE FORMAT:
+Return only the notification text, without additional comments."""
+        else:
+            prompt = f"""Создай персонализированное и мотивирующее уведомление о делегированной задаче.
 
 КОНТЕКСТ:
 - Отправитель: @{delegator_username}

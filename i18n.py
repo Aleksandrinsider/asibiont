@@ -76,6 +76,36 @@ def detect_lang_from_telegram(language_code: str) -> str:
     return 'en'
 
 
+def get_user_lang_by_db_id(db_user_id: int, session=None) -> str:
+    """Get language of a user by their database ID (not telegram_id)."""
+    try:
+        from models import Session, User
+        _close = False
+        if session is None:
+            session = Session()
+            _close = True
+        try:
+            user = session.query(User).filter_by(id=db_user_id).first()
+            if user:
+                lang = getattr(user, 'language', 'ru') or 'ru'
+                if user.telegram_id:
+                    _user_lang_cache[user.telegram_id] = lang
+                return lang
+            return 'ru'
+        finally:
+            if _close:
+                session.close()
+    except Exception:
+        return 'ru'
+
+
+def get_lang_badge(lang: str) -> str:
+    """Return a language flag badge for display in contacts."""
+    if lang == 'en':
+        return '🇬🇧'
+    return '🇷🇺'
+
+
 # ═══════════════════════════════════════════════════════
 # ПЕРЕВОДЫ
 # ═══════════════════════════════════════════════════════
