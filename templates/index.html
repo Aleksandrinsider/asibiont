@@ -287,9 +287,12 @@
         .reviews-scroll {
             display: inline-flex;
             gap: 12px;
-            animation-duration: 50s;
+            animation-duration: 80s;
             animation-timing-function: linear;
             animation-iteration-count: infinite;
+        }
+        .reviews-track:hover .reviews-scroll {
+            animation-play-state: paused;
         }
         .reviews-left .reviews-scroll {
             animation-name: scroll-left;
@@ -326,7 +329,7 @@
         }
         @media (max-width: 768px) {
             .reviews-scroll {
-                animation-duration: 35s;
+                animation-duration: 55s;
             }
             .review-item {
                 font-size: 13px;
