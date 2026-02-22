@@ -3440,7 +3440,8 @@ async def api_contact_profile_handler(request):
                     'common_interests': common_interests,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
                     'task_count': active_tasks,
-                    'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light'
+                    'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
+                    'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None
                 }
             except Exception as profile_error:
                 logger.error(f"Error building profile data: {profile_error}", exc_info=True)

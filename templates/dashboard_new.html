@@ -4693,6 +4693,12 @@
                     html += `<p style="text-align: left;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
                     html += `<p style="text-align: left;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
                     
+                    // Telegram канал
+                    if (partner.telegram_channel) {
+                        const channelClean = partner.telegram_channel.replace(/^@/, '');
+                        html += `<p style="text-align: left;">Telegram канал: <a href="https://t.me/${channelClean}" target="_blank" style="color: #068487; text-decoration: none;">@${channelClean}</a></p>`;
+                    }
+                    
                     // Рекомендация с цветом
                     if (partner.average_rating > 0) {
                         let ratingStyle = 'text-align: left;';
