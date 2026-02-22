@@ -106,6 +106,13 @@ def get_lang_badge(lang: str) -> str:
     return '🇷🇺'
 
 
+def get_platform_badge(platform: str) -> str:
+    """Return a platform icon for display in contacts."""
+    if platform == 'whatsapp':
+        return '📱'  # WhatsApp
+    return '✈️'  # Telegram
+
+
 # ═══════════════════════════════════════════════════════
 # ПЕРЕВОДЫ
 # ═══════════════════════════════════════════════════════

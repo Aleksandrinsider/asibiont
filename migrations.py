@@ -75,6 +75,8 @@ def _migrate_users(session, inspector):
         'token_balance': 'ALTER TABLE users ADD COLUMN token_balance INTEGER DEFAULT 0',
         'tokens_spent': 'ALTER TABLE users ADD COLUMN tokens_spent INTEGER DEFAULT 0',
         'language': "ALTER TABLE users ADD COLUMN language VARCHAR(5) DEFAULT 'ru'",
+        'platform': "ALTER TABLE users ADD COLUMN platform VARCHAR(20) DEFAULT 'telegram'",
+        'whatsapp_phone': "ALTER TABLE users ADD COLUMN whatsapp_phone VARCHAR(20)",
     })
 
 

@@ -5056,6 +5056,14 @@ async def on_shutdown(app):
     except Exception as e:
         logger.error(f"❌ Failed to close API client: {e}")
 
+    # Close WhatsApp client
+    try:
+        from whatsapp.client import whatsapp_client
+        await whatsapp_client.close()
+        logger.info("✅ WhatsApp client closed")
+    except Exception:
+        pass
+
 
 async def api_tasks_handler(request):
     session = await get_session(request)
@@ -5939,6 +5947,14 @@ app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-ful
 app.router.add_get('/faq', faq_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
+# WhatsApp Cloud API webhook
+try:
+    from whatsapp import whatsapp_webhook_verify, whatsapp_webhook_handler
+    app.router.add_get('/webhook/whatsapp', whatsapp_webhook_verify)
+    app.router.add_post('/webhook/whatsapp', whatsapp_webhook_handler)
+    logger.info("✅ WhatsApp webhook routes registered")
+except ImportError as e:
+    logger.warning(f"WhatsApp module not available: {e}")
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)

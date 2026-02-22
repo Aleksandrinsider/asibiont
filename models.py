@@ -50,6 +50,8 @@ class User(Base):
     token_balance = Column(Integer, default=0)  # Баланс токенов (1 токен = 1 рубль)
     tokens_spent = Column(Integer, default=0)  # Всего потрачено токенов
     language = Column(String(5), default='ru')  # User language: 'ru' or 'en'
+    platform = Column(String(20), default='telegram')  # 'telegram' or 'whatsapp'
+    whatsapp_phone = Column(String(20), unique=True, index=True)  # WhatsApp phone number (E.164 format)
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 
