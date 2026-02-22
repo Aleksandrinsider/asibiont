@@ -280,35 +280,9 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            position: relative;
-        }
-        .reviews-section::before,
-        .reviews-section::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            width: 60px;
-            z-index: 2;
-            pointer-events: none;
-        }
-        .reviews-section::before {
-            left: 0;
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            mask-image: linear-gradient(to right, black, transparent);
-            -webkit-mask-image: linear-gradient(to right, black, transparent);
-        }
-        .reviews-section::after {
-            right: 0;
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            mask-image: linear-gradient(to left, black, transparent);
-            -webkit-mask-image: linear-gradient(to left, black, transparent);
         }
         .reviews-track {
             overflow: hidden;
-            white-space: nowrap;
         }
         .reviews-scroll {
             display: inline-flex;
@@ -340,24 +314,26 @@
             font-size: 14px;
             color: #374151;
             line-height: 1.5;
-            white-space: nowrap;
+            white-space: normal;
+            width: 280px;
+            min-height: 80px;
             flex-shrink: 0;
             transition: all 0.2s;
+            vertical-align: top;
         }
         .review-item:hover {
             border-color: #1F2328;
         }
         @media (max-width: 768px) {
-            .reviews-section::before,
-            .reviews-section::after {
-                width: 30px;
-            }
             .reviews-scroll {
                 animation-duration: 35s;
             }
             .review-item {
                 font-size: 13px;
                 padding: 12px 16px;
+                width: 240px;
+                min-height: 70px;
+            }
             }
         }
     </style>
