@@ -899,7 +899,7 @@
 
     <!-- Contact Profile Modal -->
     <div id="contact-profile-modal" class="rating-modal">
-        <div class="rating-modal-content" style="max-width: 680px;">
+        <div class="rating-modal-content">
             <div class="rating-modal-header">
                 <h3>Профиль контакта</h3>
                 <button onclick="closeContactProfileModal()" class="rating-close-btn">
@@ -4727,53 +4727,6 @@
                     }
                     
                     html += '</div>';
-                    
-                    // === Two side-by-side blocks: Избранные | Последние посты ===
-                    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px;">';
-                    
-                    // --- Left block: Избранные контакты ---
-                    html += '<div class="context-item" style="margin: 0; max-height: 200px; overflow-y: auto;">';
-                    html += '<p style="text-align: left; font-weight: 600; color: #374151; margin-bottom: 8px;">Избранные</p>';
-                    if (partner.contact_favorites && partner.contact_favorites.length > 0) {
-                        partner.contact_favorites.forEach(fav => {
-                            const favInitial = fav.first_name ? fav.first_name.charAt(0).toUpperCase() : '@';
-                            const favName = fav.first_name || ('@' + fav.username);
-                            html += `<div onclick="closeContactProfileModal(); setTimeout(() => openContactProfileModal('${fav.username}'), 200);" style="display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">`;
-                            if (fav.photo_url) {
-                                html += `<img src="${fav.photo_url}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; flex-shrink: 0;">`;
-                                html += `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; color: white; display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; border: 2px solid #E8ECEF; flex-shrink: 0;">${favInitial}</div>`;
-                            } else {
-                                html += `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; border: 2px solid #E8ECEF; flex-shrink: 0;">${favInitial}</div>`;
-                            }
-                            html += `<span style="font-size: 13px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${favName}</span>`;
-                            html += '</div>';
-                        });
-                    } else {
-                        html += '<p style="text-align: left; color: #9CA3AF; font-size: 12px; font-style: italic;">Нет избранных</p>';
-                    }
-                    html += '</div>';
-                    
-                    // --- Right block: Последние посты ---
-                    html += '<div class="context-item" style="margin: 0; max-height: 200px; overflow-y: auto;">';
-                    html += '<p style="text-align: left; font-weight: 600; color: #374151; margin-bottom: 8px;">Последние посты</p>';
-                    if (partner.recent_posts && partner.recent_posts.length > 0) {
-                        partner.recent_posts.forEach(post => {
-                            html += `<div style="padding: 6px 0; border-bottom: 1px solid #F0F0F0;">`;
-                            html += `<p style="text-align: left; font-size: 12px; color: #374151; margin: 0 0 2px 0; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${post.text}</p>`;
-                            html += `<div style="display: flex; align-items: center; gap: 8px;">`;
-                            html += `<span style="font-size: 11px; color: #9CA3AF;">${post.date}</span>`;
-                            if (post.likes > 0) {
-                                html += `<span style="font-size: 11px; color: #9CA3AF;">♥ ${post.likes}</span>`;
-                            }
-                            html += '</div>';
-                            html += '</div>';
-                        });
-                    } else {
-                        html += '<p style="text-align: left; color: #9CA3AF; font-size: 12px; font-style: italic;">Нет постов</p>';
-                    }
-                    html += '</div>';
-                    
-                    html += '</div>'; // close grid
                     
                     // Action buttons
                     html += '<div class="rating-modal-actions">';
