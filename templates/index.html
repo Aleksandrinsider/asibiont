@@ -272,6 +272,72 @@
                 height: 150px !important;
             }
         }
+
+        /* ── Отзывы: бегущие строки ── */
+        .reviews-section {
+            margin: 0 0 32px 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            /* Выходим за пределы контейнера на всю ширину */
+            width: 100vw;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
+            mask-image: linear-gradient(to right, transparent, black 80px, black calc(100% - 80px), transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 80px, black calc(100% - 80px), transparent);
+        }
+        .reviews-track {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .reviews-scroll {
+            display: inline-flex;
+            gap: 12px;
+            animation-duration: 50s;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }
+        .reviews-left .reviews-scroll {
+            animation-name: scroll-left;
+        }
+        .reviews-right .reviews-scroll {
+            animation-name: scroll-right;
+        }
+        @keyframes scroll-left {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        @keyframes scroll-right {
+            0% { transform: translateX(-50%); }
+            100% { transform: translateX(0); }
+        }
+        .review-item {
+            display: inline-block;
+            padding: 10px 18px;
+            background: #F6F8FA;
+            border: 1px solid #D1D9E0;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #374151;
+            line-height: 1.4;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        @media (max-width: 768px) {
+            .reviews-section {
+                mask-image: linear-gradient(to right, transparent, black 30px, black calc(100% - 30px), transparent);
+                -webkit-mask-image: linear-gradient(to right, transparent, black 30px, black calc(100% - 30px), transparent);
+            }
+            .reviews-scroll {
+                animation-duration: 35s;
+            }
+            .review-item {
+                font-size: 12px;
+                padding: 8px 14px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -322,6 +388,48 @@
         <div class="auth-card">
             <h1>AI отвечают. ASI Biont — действует!</h1>
             <p class="subtitle">Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.</p>
+
+            <!-- Отзывы — бегущие строки -->
+            <div class="reviews-section">
+                <div class="reviews-track reviews-left">
+                    <div class="reviews-scroll">
+                        <span class="review-item">«Агент заставляет меня держать фокус на главном. Раньше идеи оставались идеями, сейчас я просто двигаюсь к цели. Это круто!»</span>
+                        <span class="review-item">«Поставил задачу голосом в метро — вечером напомнил. Не нужно ничего запоминать.»</span>
+                        <span class="review-item">«Нашёл дизайнера через агента за 5 минут. Раньше тратил полдня на поиски.»</span>
+                        <span class="review-item">«Утренний план + вечерний обзор — как персональный ассистент, только дешевле в сто раз.»</span>
+                        <span class="review-item">«Делегировал задачу коллеге прямо в чате. Дедлайн — на контроле. Магия.»</span>
+                        <span class="review-item">«Автопостинг в канал — настроил стратегию один раз, контент выходит сам.»</span>
+                        <span class="review-item">«Агент сам заметил, что я забыл про дедлайн, и написал первым. Спас проект.»</span>
+
+                        <span class="review-item">«Агент заставляет меня держать фокус на главном. Раньше идеи оставались идеями, сейчас я просто двигаюсь к цели. Это круто!»</span>
+                        <span class="review-item">«Поставил задачу голосом в метро — вечером напомнил. Не нужно ничего запоминать.»</span>
+                        <span class="review-item">«Нашёл дизайнера через агента за 5 минут. Раньше тратил полдня на поиски.»</span>
+                        <span class="review-item">«Утренний план + вечерний обзор — как персональный ассистент, только дешевле в сто раз.»</span>
+                        <span class="review-item">«Делегировал задачу коллеге прямо в чате. Дедлайн — на контроле. Магия.»</span>
+                        <span class="review-item">«Автопостинг в канал — настроил стратегию один раз, контент выходит сам.»</span>
+                        <span class="review-item">«Агент сам заметил, что я забыл про дедлайн, и написал первым. Спас проект.»</span>
+                    </div>
+                </div>
+                <div class="reviews-track reviews-right">
+                    <div class="reviews-scroll">
+                        <span class="review-item">«За неделю закрыл больше задач, чем за месяц без агента. Просто потому что он не даёт забить.»</span>
+                        <span class="review-item">«Написал "найди маркетолога в Казани" — через минуту показал троих с портфолио.»</span>
+                        <span class="review-item">«Веду два проекта параллельно. Агент разруливает конфликты по времени сам.»</span>
+                        <span class="review-item">«Цель "набрать 50 учеников" — агент разбил на шаги и пинает каждый день. Уже 30!»</span>
+                        <span class="review-item">«Просто сказал "сделал" — он сам закрыл задачу и спросил про результат. Понимает контекст.»</span>
+                        <span class="review-item">«Раньше вёл задачи в Notion. Теперь просто пишу боту — быстрее в 10 раз.»</span>
+                        <span class="review-item">«Агент предложил написать пост после того, как я закрыл крупный проект. Сам бы не догадался.»</span>
+
+                        <span class="review-item">«За неделю закрыл больше задач, чем за месяц без агента. Просто потому что он не даёт забить.»</span>
+                        <span class="review-item">«Написал "найди маркетолога в Казани" — через минуту показал троих с портфолио.»</span>
+                        <span class="review-item">«Веду два проекта параллельно. Агент разруливает конфликты по времени сам.»</span>
+                        <span class="review-item">«Цель "набрать 50 учеников" — агент разбил на шаги и пинает каждый день. Уже 30!»</span>
+                        <span class="review-item">«Просто сказал "сделал" — он сам закрыл задачу и спросил про результат. Понимает контекст.»</span>
+                        <span class="review-item">«Раньше вёл задачи в Notion. Теперь просто пишу боту — быстрее в 10 раз.»</span>
+                        <span class="review-item">«Агент предложил написать пост после того, как я закрыл крупный проект. Сам бы не догадался.»</span>
+                    </div>
+                </div>
+            </div>
 
             <div class="features-grid">
                 <!-- Ряд 1 -->
