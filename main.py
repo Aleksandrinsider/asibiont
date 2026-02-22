@@ -2888,6 +2888,32 @@ async def api_partners_handler(request):
             contact_username = contact_info.replace('@', '').lower()
             partner['is_favorite'] = contact_username in favorite_usernames
 
+        # Добавить my_rating — оценку текущего пользователя для каждого контакта
+        my_ratings_map = {}
+        try:
+            my_ratings = session_db.query(UserRating).filter_by(rater_user_id=user.id).all()
+            for r in my_ratings:
+                rated_u = session_db.query(User).filter_by(id=r.rated_user_id).first()
+                if rated_u and rated_u.username:
+                    my_ratings_map[rated_u.username.replace('@', '').lower()] = r.rating
+        except Exception as e:
+            logger.error(f"Error fetching my ratings: {e}")
+
+        for partner in partners_data:
+            contact_info = partner.get('contact_info')
+            if contact_info is None:
+                contact_info = ''
+            contact_username = contact_info.replace('@', '').lower()
+            partner['my_rating'] = my_ratings_map.get(contact_username, None)
+
+        # Также добавить my_rating для заблокированных контактов
+        for partner in blocked_partners_data:
+            contact_info = partner.get('contact_info')
+            if contact_info is None:
+                contact_info = ''
+            contact_username = contact_info.replace('@', '').lower()
+            partner['my_rating'] = my_ratings_map.get(contact_username, None)
+
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({
             'partners': partners_data,
@@ -3313,6 +3339,24 @@ async def api_elite_partners_handler(request):
                 return (same_city, rating_group, rating_value)
 
             partners_data.sort(key=sort_key)
+
+            # Добавить my_rating — оценку текущего пользователя для каждого контакта
+            my_ratings_map = {}
+            try:
+                my_ratings = session_db.query(UserRating).filter_by(rater_user_id=user.id).all()
+                for r in my_ratings:
+                    rated_u = session_db.query(User).filter_by(id=r.rated_user_id).first()
+                    if rated_u and rated_u.username:
+                        my_ratings_map[rated_u.username.replace('@', '').lower()] = r.rating
+            except Exception as e:
+                logger.error(f"Error fetching my ratings in elite: {e}")
+
+            for partner in partners_data:
+                contact_info = partner.get('contact_info')
+                if contact_info is None:
+                    contact_info = ''
+                contact_username = contact_info.replace('@', '').lower()
+                partner['my_rating'] = my_ratings_map.get(contact_username, None)
 
             logger.info(f"Returning {len(partners_data)} elite (Premium) partners for user {user_id}")
             return web.json_response({'partners': partners_data})
@@ -5318,6 +5362,26 @@ async def api_search_contacts_handler(request):
                     'average_rating': profile.average_rating if profile else 0,
                     'rating_count': profile.rating_count if profile else 0
                 })
+
+            # Добавить my_rating для результатов поиска
+            current_user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if current_user:
+                my_ratings_map = {}
+                try:
+                    my_ratings = session_db.query(UserRating).filter_by(rater_user_id=current_user.id).all()
+                    for r in my_ratings:
+                        rated_u = session_db.query(User).filter_by(id=r.rated_user_id).first()
+                        if rated_u and rated_u.username:
+                            my_ratings_map[rated_u.username.replace('@', '').lower()] = r.rating
+                except Exception as e:
+                    logger.error(f"Error fetching my ratings in search: {e}")
+
+                for contact in contacts_data:
+                    username = contact.get('username', '')
+                    if username:
+                        contact['my_rating'] = my_ratings_map.get(username.replace('@', '').lower(), None)
+                    else:
+                        contact['my_rating'] = None
 
             return web.json_response({'contacts': contacts_data})
         finally:
