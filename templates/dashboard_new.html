@@ -2252,46 +2252,62 @@
         }
 
         // ═══ EDIT POST ═══
+        const _editOriginals = {};
+        
         function editPost(postId) {
             const contentEl = document.getElementById(`post-content-${postId}`);
             if (!contentEl) return;
+            if (contentEl.isContentEditable) return;
             
-            // Already editing?
-            if (contentEl.querySelector('textarea')) return;
+            _editOriginals['post-' + postId] = contentEl.textContent;
             
-            const currentText = contentEl.textContent;
-            const originalHtml = contentEl.innerHTML;
+            contentEl.contentEditable = 'true';
+            contentEl.style.outline = '1px solid #068487';
+            contentEl.style.borderRadius = '4px';
+            contentEl.style.padding = '6px 10px';
+            contentEl.focus();
             
-            contentEl.innerHTML = `
-                <textarea id="edit-post-textarea-${postId}" style="width: 100%; min-height: 60px; padding: 6px 10px; border: 1px solid #068487; border-radius: 4px; font-size: 13px; line-height: 1.6; font-family: inherit; resize: vertical; outline: none; color: #374151;">${escapeHtml(currentText)}</textarea>
-                <div style="display: flex; gap: 6px; margin-top: 6px;">
-                    <button onclick="saveEditPost(${postId})" style="padding: 4px 12px; background: #068487; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">Сохранить</button>
-                    <button onclick="cancelEditPost(${postId}, ${JSON.stringify(currentText).replace(/'/g, '\\&#39;')})" style="padding: 4px 12px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">Отмена</button>
-                </div>
+            // Place cursor at end
+            const range = document.createRange();
+            range.selectNodeContents(contentEl);
+            range.collapse(false);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            
+            // Add save/cancel buttons
+            const btnContainer = document.createElement('div');
+            btnContainer.id = `edit-btns-post-${postId}`;
+            btnContainer.style.cssText = 'display: flex; gap: 6px; margin-top: 4px;';
+            btnContainer.innerHTML = `
+                <button onclick="saveEditPost(${postId})" style="padding: 3px 10px; background: #068487; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Сохранить</button>
+                <button onclick="cancelEditPost(${postId})" style="padding: 3px 10px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Отмена</button>
             `;
-            
-            const textarea = document.getElementById(`edit-post-textarea-${postId}`);
-            textarea.focus();
-            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            contentEl.parentNode.insertBefore(btnContainer, contentEl.nextSibling);
         }
         
-        function cancelEditPost(postId, originalText) {
+        function cancelEditPost(postId) {
             const contentEl = document.getElementById(`post-content-${postId}`);
             if (contentEl) {
-                contentEl.textContent = originalText;
+                contentEl.textContent = _editOriginals['post-' + postId] || contentEl.textContent;
+                contentEl.contentEditable = 'false';
+                contentEl.style.outline = '';
+                contentEl.style.padding = '';
             }
+            const btns = document.getElementById(`edit-btns-post-${postId}`);
+            if (btns) btns.remove();
+            delete _editOriginals['post-' + postId];
         }
         
         async function saveEditPost(postId) {
-            const textarea = document.getElementById(`edit-post-textarea-${postId}`);
-            if (!textarea) return;
+            const contentEl = document.getElementById(`post-content-${postId}`);
+            if (!contentEl) return;
             
-            const newContent = textarea.value.trim();
+            const newContent = contentEl.textContent.trim();
             if (!newContent) {
                 showNotification('Текст поста не может быть пустым', 'error');
                 return;
             }
-            
             if (newContent.length > 2000) {
                 showNotification('Пост слишком длинный (максимум 2000 символов)', 'error');
                 return;
@@ -2304,15 +2320,17 @@
                     body: JSON.stringify({ content: newContent }),
                     credentials: 'include'
                 });
-                
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 
                 if (response.ok) {
-                    const contentEl = document.getElementById(`post-content-${postId}`);
-                    if (contentEl) {
-                        contentEl.textContent = newContent;
-                    }
+                    contentEl.textContent = newContent;
+                    contentEl.contentEditable = 'false';
+                    contentEl.style.outline = '';
+                    contentEl.style.padding = '';
+                    const btns = document.getElementById(`edit-btns-post-${postId}`);
+                    if (btns) btns.remove();
+                    delete _editOriginals['post-' + postId];
                     showNotification('Пост обновлён', 'success');
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
@@ -2327,42 +2345,55 @@
         function editComment(commentId, postId) {
             const contentEl = document.getElementById(`comment-content-${commentId}`);
             if (!contentEl) return;
+            if (contentEl.isContentEditable) return;
             
-            // Already editing?
-            if (contentEl.querySelector('textarea')) return;
+            _editOriginals['comment-' + commentId] = contentEl.textContent;
             
-            const currentText = contentEl.textContent;
+            contentEl.contentEditable = 'true';
+            contentEl.style.outline = '1px solid #068487';
+            contentEl.style.borderRadius = '4px';
+            contentEl.style.padding = '4px 8px';
+            contentEl.focus();
             
-            contentEl.innerHTML = `
-                <textarea id="edit-comment-textarea-${commentId}" style="width: 100%; min-height: 40px; padding: 4px 8px; border: 1px solid #068487; border-radius: 4px; font-size: 13px; line-height: 1.4; font-family: inherit; resize: vertical; outline: none; color: #374151;">${escapeHtml(currentText)}</textarea>
-                <div style="display: flex; gap: 6px; margin-top: 4px;">
-                    <button onclick="saveEditComment(${commentId}, ${postId})" style="padding: 3px 10px; background: #068487; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Сохранить</button>
-                    <button onclick="cancelEditComment(${commentId}, ${JSON.stringify(currentText).replace(/'/g, '\\&#39;')})" style="padding: 3px 10px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Отмена</button>
-                </div>
+            const range = document.createRange();
+            range.selectNodeContents(contentEl);
+            range.collapse(false);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            
+            const btnContainer = document.createElement('div');
+            btnContainer.id = `edit-btns-comment-${commentId}`;
+            btnContainer.style.cssText = 'display: flex; gap: 6px; margin-top: 4px;';
+            btnContainer.innerHTML = `
+                <button onclick="saveEditComment(${commentId}, ${postId})" style="padding: 3px 10px; background: #068487; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Сохранить</button>
+                <button onclick="cancelEditComment(${commentId})" style="padding: 3px 10px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">Отмена</button>
             `;
-            
-            const textarea = document.getElementById(`edit-comment-textarea-${commentId}`);
-            textarea.focus();
-            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            contentEl.parentNode.insertBefore(btnContainer, contentEl.nextSibling);
         }
         
-        function cancelEditComment(commentId, originalText) {
+        function cancelEditComment(commentId) {
             const contentEl = document.getElementById(`comment-content-${commentId}`);
             if (contentEl) {
-                contentEl.textContent = originalText;
+                contentEl.textContent = _editOriginals['comment-' + commentId] || contentEl.textContent;
+                contentEl.contentEditable = 'false';
+                contentEl.style.outline = '';
+                contentEl.style.padding = '';
             }
+            const btns = document.getElementById(`edit-btns-comment-${commentId}`);
+            if (btns) btns.remove();
+            delete _editOriginals['comment-' + commentId];
         }
         
         async function saveEditComment(commentId, postId) {
-            const textarea = document.getElementById(`edit-comment-textarea-${commentId}`);
-            if (!textarea) return;
+            const contentEl = document.getElementById(`comment-content-${commentId}`);
+            if (!contentEl) return;
             
-            const newContent = textarea.value.trim();
+            const newContent = contentEl.textContent.trim();
             if (!newContent) {
                 showNotification('Текст комментария не может быть пустым', 'error');
                 return;
             }
-            
             if (newContent.length > 1000) {
                 showNotification('Комментарий слишком длинный (максимум 1000 символов)', 'error');
                 return;
@@ -2375,15 +2406,17 @@
                     body: JSON.stringify({ content: newContent }),
                     credentials: 'include'
                 });
-                
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 
                 if (response.ok) {
-                    const contentEl = document.getElementById(`comment-content-${commentId}`);
-                    if (contentEl) {
-                        contentEl.textContent = newContent;
-                    }
+                    contentEl.textContent = newContent;
+                    contentEl.contentEditable = 'false';
+                    contentEl.style.outline = '';
+                    contentEl.style.padding = '';
+                    const btns = document.getElementById(`edit-btns-comment-${commentId}`);
+                    if (btns) btns.remove();
+                    delete _editOriginals['comment-' + commentId];
                     showNotification('Комментарий обновлён', 'success');
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
