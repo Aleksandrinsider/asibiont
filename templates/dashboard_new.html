@@ -1691,7 +1691,7 @@
                                         <button 
                                             id="translate-btn-${post.id}"
                                             onclick="translatePost(${post.id})"
-                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center;"
+                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; line-height: normal;"
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                             title="${t('translate')}"
@@ -2059,7 +2059,7 @@
                                 <button 
                                     id="translate-btn-${post.id}"
                                     onclick="translatePost(${post.id})"
-                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center;"
+                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; line-height: normal;"
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                     title="${t('translate')}"
@@ -2272,10 +2272,10 @@
             }
         }
 
-        // SVG icons for translate button (matching like button style)
-        const TRANSLATE_GLOBE_SVG = '<svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#374151" stroke-width="1.5"/><ellipse cx="8" cy="8" rx="2.5" ry="6" fill="none" stroke="#374151" stroke-width="1.5"/><line x1="2" y1="8" x2="14" y2="8" stroke="#374151" stroke-width="1.5"/></svg>';
-        const TRANSLATE_LOADING_SVG = '<svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#374151" stroke-width="1.5"/><path d="M8 4.5V8l2.5 2.5" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/></svg>';
-        const TRANSLATE_BACK_SVG = '<svg width="14" height="14" viewBox="0 0 16 16"><path d="M7 3L2.5 7.5 7 12" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.5H11c1.5 0 2.5 1 2.5 2.5v2" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/></svg>';
+        // SVG icons for translate button (matching like button style - fill-based, #374151)
+        const TRANSLATE_GLOBE_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM5.78 8.75a9.64 9.64 0 0 0 .2 2.014c.312 1.16.753 1.986 1.27 2.465.517.474.958.521 1.12.521h.26c.162 0 .603-.047 1.12-.521.517-.479.958-1.305 1.27-2.465a9.64 9.64 0 0 0 .2-2.014Zm4.44-1.5a9.64 9.64 0 0 0-.2-2.014c-.312-1.16-.753-1.986-1.27-2.465C8.233 2.297 7.792 2.25 7.63 2.25h-.26c-.162 0-.603.047-1.12.521-.517.479-.958 1.305-1.27 2.465a9.64 9.64 0 0 0-.2 2.014Zm1.5 1.5a11.05 11.05 0 0 1-.2 2.188 6.612 6.612 0 0 1-.558 1.638 6.51 6.51 0 0 0 2.484-3.826Zm.024-1.5h2.5a6.51 6.51 0 0 0-2.484-3.826c.244.502.432 1.05.558 1.638.13.698.21 1.432.237 2.188h-.811ZM4.258 8.75H1.756a6.51 6.51 0 0 0 2.484 3.826 6.612 6.612 0 0 1-.558-1.638 11.05 11.05 0 0 1-.202-2.188h.778Zm-.024-1.5a11.05 11.05 0 0 1 .237-2.188c.126-.588.314-1.136.558-1.638A6.51 6.51 0 0 0 1.756 7.25h2.478Z"/></svg>';
+        const TRANSLATE_LOADING_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM8 4a.75.75 0 0 1 .75.75v2.69l1.78 1.78a.749.749 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 7.25 8V4.75A.75.75 0 0 1 8 4Z"/></svg>';
+        const TRANSLATE_BACK_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"/></svg>';
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
@@ -3371,7 +3371,7 @@
                             <button 
                                 id="translate-btn-${post.id}"
                                 onclick="translatePost(${post.id})"
-                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center;"
+                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; line-height: normal;"
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                 title="${t('translate')}"
