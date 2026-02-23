@@ -714,7 +714,6 @@
                             </div>
                             <!-- Цели пользователя -->
                             <div id="goals-progress-section" style="display: none; border-top: 1px solid #D1D9E0; padding-top: 12px;">
-                                <div style="font-size: 13px; font-weight: 400; color: #374151; margin-bottom: 10px;" data-i18n="goal-progress-title">Прогресс по целям:</div>
                                 <div id="goals-progress-list">
                                     <!-- Цели будут загружены динамически -->
                                 </div>
@@ -4216,15 +4215,12 @@
                     
                     html += `<div style="margin-bottom: 10px;">`;
                     html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">`;
-                    html += `<span style="font-size: 12px; color: #374151; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">🎯 ${g.title}</span>`;
+                    html += `<span style="font-size: 12px; color: #374151; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${g.title}</span>`;
                     html += `<span style="font-size: 11px; color: #6C727F; white-space: nowrap;">${progress}%</span>`;
                     html += `</div>`;
                     html += `<div class="progress-bar" style="height: 6px; background: #F3F4F6; border-radius: 3px; overflow: hidden;">`;
                     html += `<div style="width: ${progress}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.5s ease;"></div>`;
                     html += `</div>`;
-                    if (metricText || deadlineText) {
-                        html += `<div style="font-size: 11px; color: #6C727F; margin-top: 2px;">${metricText}${deadlineText}</div>`;
-                    }
                     html += `</div>`;
                 });
                 list.innerHTML = html;
