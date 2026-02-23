@@ -566,7 +566,7 @@
                                 <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="copy">копировать</a>
                                 <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="withdraw">вывести</a>
                             </p>
-                            <p style="margin: 0; color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения привлечённого пользователя</p>
+                            <p style="margin: 0; color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения</p>
                         </div>
                     </div>
                 </div>
@@ -610,8 +610,8 @@
                                 <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer;" data-i18n="chat-ai">Чат с ИИ</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
+                                    <span id="new-posts-indicator" class="reminder-pulse" style="display: none;"></span>
                                     <span data-i18n="news-feed">Лента новостей</span>
-                                    <span id="new-posts-indicator" class="new-posts-indicator" style="display: none;"></span>
                                 </span>
                             </h3>
                         </div>
@@ -7049,7 +7049,7 @@
       'goals-label':'Цели:','skills-label':'Навыки:','interests-label':'Интересы:',
       'rating-label':'Рекомендация:','no-ratings':'Нет рекомендаций',
       'referral-link':'Реферальная ссылка:','copy':'копировать','withdraw':'вывести',
-      'referral-desc':'20% токенов с каждого пополнения привлечённого пользователя',
+      'referral-desc':'20% токенов с каждого пополнения',
 
       'link-discord':'Привязать',
       'link-telegram':'Привязать',
@@ -7216,7 +7216,7 @@
       'goals-label':'Goals:','skills-label':'Skills:','interests-label':'Interests:',
       'rating-label':'Rating:','no-ratings':'No ratings',
       'referral-link':'Referral link:','copy':'copy','withdraw':'withdraw',
-      'referral-desc':'20% tokens from each top-up by referred user',
+      'referral-desc':'20% tokens from each top-up',
       'link-discord':'Link',
       'link-telegram':'Link',
       'unlink':'unlink',
