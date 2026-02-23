@@ -210,7 +210,7 @@ async def discord_oauth_callback(request):
                         telegram_id=pseudo_telegram_id,
                         discord_id=discord_id,
                         username=discord_username,
-                        discord_username=discord_display,
+                        discord_username=discord_username,
                         first_name=discord_display,
                         photo_url=avatar_url,
                         platform='discord',
@@ -243,7 +243,7 @@ async def discord_oauth_callback(request):
                     if discord_display:
                         user.first_name = discord_display
                     user.discord_id = discord_id
-                    user.discord_username = discord_display
+                    user.discord_username = discord_username
                     db.commit()
 
                 # Set session
@@ -282,9 +282,9 @@ async def discord_oauth_callback(request):
                     logger.info(f"Merged Discord-only account (id={discord_only_user.id}) into TG account (id={user.id})")
 
                     user.discord_id = discord_id
-                    user.discord_username = discord_display
+                    user.discord_username = discord_username
                     db.commit()
-                    logger.info(f"Linked discord_id={discord_id} ({discord_display}) to user telegram_id={existing_user_id}")
+                    logger.info(f"Linked discord_id={discord_id} ({discord_username}) to user telegram_id={existing_user_id}")
         finally:
             db.close()
 
