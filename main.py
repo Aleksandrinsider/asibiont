@@ -389,7 +389,8 @@ async def login_handler(request):
         user_id = None
 
     # Если пользователь уже залогинен, редиректим в dashboard
-    if user_id:
+    # (но не если он пришёл привязать Telegram к Discord-аккаунту)
+    if user_id and request.query.get('link_tg') != '1':
         try:
             user_id = int(user_id)
             return web.HTTPFound('/dashboard')
@@ -432,6 +433,54 @@ async def auth_handler(request):
         if check_telegram_authentication(data):
             user_id = int(data['id'])
             logger.info(f"Authentication successful for user_id: {user_id}")
+
+            # Check if current session belongs to a Discord-only user → link TG to their account
+            try:
+                existing_session = await get_session(request)
+                existing_uid = existing_session.get('user_id')
+                if existing_uid and int(existing_uid) < 0:
+                    # Discord-only user is linking Telegram
+                    link_db = Session()
+                    try:
+                        discord_user = link_db.query(User).filter_by(telegram_id=int(existing_uid)).first()
+                        if discord_user:
+                            # Check if TG user already exists separately
+                            tg_user = link_db.query(User).filter_by(telegram_id=user_id).first()
+                            if tg_user and tg_user.id != discord_user.id:
+                                # Merge: move Discord data → TG account
+                                tg_user.discord_id = discord_user.discord_id
+                                # Move interactions
+                                link_db.query(Interaction).filter_by(user_id=discord_user.id).update(
+                                    {Interaction.user_id: tg_user.id}, synchronize_session=False
+                                )
+                                # Transfer tokens
+                                if discord_user.token_balance and discord_user.token_balance > 0:
+                                    tg_user.token_balance = (tg_user.token_balance or 0) + discord_user.token_balance
+                                link_db.delete(discord_user)
+                                link_db.commit()
+                                logger.info(f"Merged Discord account (id={discord_user.id}) into TG account (id={tg_user.id})")
+                            else:
+                                # No separate TG account — upgrade Discord account to TG
+                                discord_user.telegram_id = user_id
+                                discord_user.username = data.get('username') or discord_user.username
+                                discord_user.first_name = data.get('first_name') or discord_user.first_name
+                                discord_user.platform = 'telegram'
+                                # Update avatar from TG
+                                if 'bot' in request.app:
+                                    try:
+                                        av = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
+                                        if av:
+                                            discord_user.photo_url = av
+                                    except Exception:
+                                        pass
+                                link_db.commit()
+                                logger.info(f"Linked TG {user_id} to Discord user (id={discord_user.id})")
+                            existing_session['user_id'] = user_id
+                            return web.HTTPFound('/dashboard')
+                    finally:
+                        link_db.close()
+            except Exception as e:
+                logger.warning(f"Error checking existing session for linking: {e}")
 
             # Check for referral
             referrer_telegram_id = None
@@ -1091,7 +1140,10 @@ async def dashboard_handler(request):
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
             'timestamp': int(time.time()),
             'user_avatar_url': user_avatar_url,
-            'referral_balance': user.referral_balance
+            'referral_balance': user.referral_balance,
+            'discord_linked': bool(user.discord_id) if user else False,
+            'is_discord_user': (user.telegram_id < 0) if user else False,
+            'telegram_linked': (user.telegram_id > 0) if user else False,
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -6099,11 +6151,12 @@ app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
-# Discord OAuth2 callback + login redirect
+# Discord OAuth2 callback + login/link redirects
 try:
-    from discord_bot import discord_oauth_callback, discord_login_redirect
+    from discord_bot import discord_oauth_callback, discord_login_redirect, discord_link_redirect
     app.router.add_get('/auth/discord', discord_oauth_callback)
     app.router.add_get('/discord/login', discord_login_redirect)
+    app.router.add_get('/discord/link', discord_link_redirect)
     logger.info("✅ Discord OAuth route registered")
 except ImportError as e:
     logger.warning(f"Discord module not available: {e}")

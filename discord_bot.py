@@ -177,7 +177,7 @@ async def discord_oauth_callback(request):
         existing_user_id = session.get("user_id")
 
         # ── LOGIN / REGISTER via Discord ──
-        if state == 'login' or not existing_user_id:
+        if not existing_user_id and (state == 'login' or state == ''):
             from models import Session as DBSession, User, Subscription
             from token_service import grant_signup_tokens
             import time as _time
@@ -314,6 +314,32 @@ async def discord_login_redirect(request):
         f"&redirect_uri={redirect_uri}"
         f"&scope=identify"
         f"&state=login"
+    )
+    return web.HTTPFound(oauth_url)
+
+
+async def discord_link_redirect(request):
+    """
+    aiohttp route: GET /discord/link
+    Redirects logged-in user to Discord OAuth2 to link their Discord account.
+    """
+    from aiohttp import web
+    from aiohttp_session import get_session
+    from config import DISCORD_CLIENT_ID, WEB_APP_URL
+    import urllib.parse
+
+    session = await get_session(request)
+    if not session.get('user_id'):
+        return web.HTTPFound('/')
+
+    redirect_uri = urllib.parse.quote(f"{WEB_APP_URL}/auth/discord", safe='')
+    oauth_url = (
+        f"https://discord.com/oauth2/authorize"
+        f"?client_id={DISCORD_CLIENT_ID}"
+        f"&response_type=code"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope=identify"
+        f"&state=link"
     )
     return web.HTTPFound(oauth_url)
 
