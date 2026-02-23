@@ -3977,7 +3977,7 @@
             
             // Кнопки действий
             const isDelegatedToMe = task.delegated_by && task.delegation_status === 'pending';
-            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: column;">';
+            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: column; margin-right: 8px;">';
             
             if (isDelegatedToMe) {
                 // Задача делегирована МНЕ и ожидает моего принятия - только кнопки Принять и Отклонить (БЕЗ удаления)
