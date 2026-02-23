@@ -2018,20 +2018,21 @@ details[open] .details-content {
     justify-content: center;
     width: 32px;
     height: 32px;
-    border: none;
+    border: 1px solid #D1D9E0;
     border-radius: 6px;
-    background: #F6F8FA;
+    background: #FFFFFF;
     cursor: pointer;
     transition: all 0.2s;
     color: #374151;
 }
 
 .quick-action:hover {
-    background: #E1E4E8;
+    background: #F6F8FA;
+    border-color: #374151;
 }
 
 .quick-action:active {
-    background: #D1D5DB;
+    background: #E8ECEF;
 }
 
 .quick-action svg {
@@ -2040,17 +2041,18 @@ details[open] .details-content {
 }
 
 .delete-btn {
-    background: #F6F8FA !important;
-    color: #374151 !important;
-    border: none !important;
+    background: #FFFFFF;
+    color: #374151;
+    border: 1px solid #D1D9E0;
 }
 
 .delete-btn:hover {
-    background: #E8ECEF !important;
+    background: #F6F8FA;
+    border-color: #374151;
 }
 
 .delete-btn:active {
-    background: #D1D9E0 !important;
+    background: #E8ECEF;
 }
 
 /* Error notification styles */

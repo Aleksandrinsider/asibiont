@@ -628,16 +628,16 @@
                             <input type="text" id="message-input" placeholder="Сообщение..." data-i18n-ph="msg-placeholder">
                             <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
                             <div style="display: flex; gap: 4px; flex-direction: row;">
-                                <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn">
+                                <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn" title="Голосовой ввод" data-i18n-title="voice-input">
                                     <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3ZM3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5Z"/></svg>
                                 </button>
-                                <button onclick="document.getElementById('file-input').click()" class="chat-action-btn">
+                                <button onclick="document.getElementById('file-input').click()" class="chat-action-btn" title="Прикрепить файл" data-i18n-title="attach-file">
                                     <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
                                 </button>
-                                <button onclick="clearChatHistory()" class="chat-action-btn">
+                                <button onclick="clearChatHistory()" class="chat-action-btn" title="Очистить чат" data-i18n-title="clear-chat">
                                     <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg>
                                 </button>
-                                <button onclick="sendChatMessage()" class="chat-action-btn">
+                                <button onclick="sendChatMessage()" class="chat-action-btn" title="Отправить" data-i18n-title="send">
                                     <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg>
                                 </button>
                             </div>
@@ -1705,6 +1705,7 @@
                                             style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                            title="${t('send')}"
                                         >${t('send')}</button>
                                         <button 
                                             id="translate-btn-${post.id}"
@@ -1720,6 +1721,7 @@
                                             style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                            title="${t('like')}"
                                         >
                                             <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                                                 <path d="${post.user_liked ? 'm8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002Z' : 'm8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002ZM4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.58 20.58 0 0 0 8 13.393a20.58 20.58 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z'}"></path>
@@ -2073,6 +2075,7 @@
                                     style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                    title="${t('send')}"
                                 >${t('send')}</button>
                                 <button 
                                     id="translate-btn-${post.id}"
@@ -2088,6 +2091,7 @@
                                     style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                    title="${t('like')}"
                                 >
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                                         <path d="${post.user_liked ? 'm8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002Z' : 'm8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002ZM4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.58 20.58 0 0 0 8 13.393a20.58 20.58 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z'}"></path>
@@ -3385,6 +3389,7 @@
                                 style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                title="${t('send')}"
                             >${t('send')}</button>
                             <button 
                                 id="translate-btn-${post.id}"
@@ -3400,6 +3405,7 @@
                                 style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                title="${t('like')}"
                             >
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                                     <path d="${post.user_liked ? 'm8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002Z' : 'm8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002ZM4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.58 20.58 0 0 0 8 13.393a20.58 20.58 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z'}"></path>
@@ -3981,8 +3987,8 @@
             
             if (isDelegatedToMe) {
                 // Задача делегирована МНЕ и ожидает моего принятия - только кнопки Принять и Отклонить (БЕЗ удаления)
-                html += '<button onclick="event.stopPropagation(); acceptDelegatedTask(' + task.id + ')" class="quick-action" style="background: #238636;" title="' + t('accept-task') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
-                html += '<button onclick="event.stopPropagation(); rejectDelegatedTask(' + task.id + ')" class="quick-action" style="background: #d73a49;" title="' + t('reject-task') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+                html += '<button onclick="event.stopPropagation(); acceptDelegatedTask(' + task.id + ')" class="quick-action" title="' + t('accept-task') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="event.stopPropagation(); rejectDelegatedTask(' + task.id + ')" class="quick-action" title="' + t('reject-task') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
             } else if (task.delegated_by_me) {
                 // Задача поручена МНОЙ другому пользователю - делегатор НЕ может завершить, только отменить делегирование
                 html += '<button onclick="event.stopPropagation(); cancelDelegation(' + task.id + ', \'' + (task.delegated_to_username || '') + '\')" class="quick-action" title="' + t('cancel-delegation') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
@@ -6983,6 +6989,7 @@
       'remove-image':'Убрать картинку','write-something':'Напишите что-нибудь...',
       'insert-image':'Вставить картинку','add-emoji':'Добавить эмодзи','publish-post':'Опубликовать пост',
       'write-comment':'Написать комментарий...','send':'Отправить',
+      'like':'Нравится','voice-input':'Голосовой ввод','attach-file':'Прикрепить файл','clear-chat':'Очистить чат',
       'edit-post':'Редактировать пост','delete-post':'Удалить пост',
       'edit-comment':'Редактировать комментарий','delete-comment':'Удалить комментарий',
       'translate':'Перевести','original':'Оригинал',
@@ -7145,6 +7152,7 @@
       'remove-image':'Remove image','write-something':'Write something...',
       'insert-image':'Insert image','add-emoji':'Add emoji','publish-post':'Publish post',
       'write-comment':'Write a comment...','send':'Send',
+      'like':'Like','voice-input':'Voice input','attach-file':'Attach file','clear-chat':'Clear chat',
       'edit-post':'Edit post','delete-post':'Delete post',
       'edit-comment':'Edit comment','delete-comment':'Delete comment',
       'translate':'Translate','original':'Original',
