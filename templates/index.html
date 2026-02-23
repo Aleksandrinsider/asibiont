@@ -350,10 +350,35 @@
             transition: all 0.2s;
             font-weight: 500;
             color: #374151;
+            display: none;
         }
         .lang-toggle:hover {
             border-color: #1F2328;
             background: #F6F8FA;
+        }
+        .lang-switcher {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin: 8px 0 16px 0;
+            font-size: 24px;
+            color: #374151;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+        }
+        .lang-switcher span {
+            cursor: pointer;
+            transition: all 0.15s;
+            padding: 0 2px;
+        }
+        .lang-switcher span.active {
+            font-weight: 700;
+        }
+        .lang-switcher span:not(.active) {
+            font-weight: 400;
+            opacity: 0.5;
+        }
+        .lang-switcher span:hover:not(.active) {
+            opacity: 0.8;
         }
     </style>
 </head>
@@ -392,7 +417,6 @@
             console.log('Desktop device detected on index page');
         }
     </script>
-    <button id="lang-toggle" class="lang-toggle">🇬🇧 EN</button>
     <div class="auth-container">
         <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 300px; height: 300px; display: block; margin: 0 auto 20px; max-width: 100%;">
         <div id="telegram-login-container">
@@ -405,7 +429,12 @@
         </div>
         <div class="auth-card">
             <h1>AI отвечают. ASI Biont — действует!</h1>
-            <p class="subtitle">Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.</p>
+            <div class="lang-switcher" id="lang-toggle">
+                <span id="lang-en" onclick="applyLang('en')">EN</span>
+                <span>/</span>
+                <span id="lang-ru" onclick="applyLang('ru')">RU</span>
+            </div>
+            <p class="subtitle">Мультиязычный AI-агент. Ведёт задачи, находит исполнителей, делегирует и связывает людей на разных языках — в Telegram и WhatsApp. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.</p>
 
             <!-- Отзывы — бегущие строки -->
             <div class="reviews-section">
@@ -521,7 +550,7 @@
     ru: {
       title: 'ASI Biont — AI-агент в Telegram | Не чат-бот, а автономный помощник',
       heading: 'AI отвечают. ASI Biont — действует!',
-      subtitle: 'Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.',
+      subtitle: 'Мультиязычный AI-агент. Ведёт задачи, находит исполнителей, делегирует и связывает людей на разных языках — в Telegram и WhatsApp. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.',
       feat: [
         ['Задачи и цели', '«Завтра в 9 созвон с инвестором» — он поставит напоминание. «Сдать отчёт в пятницу» — зафиксирует дедлайн и проконтролирует. Вы говорите — он действует.'],
         ['Готовые связи', '«Нужен дизайнер для проекта» — покажет подходящих людей из сети. «Кто разбирается в финтехе?» — найдёт по навыкам и городу. Не открытый каталог, а закрытое сообщество.'],
@@ -555,7 +584,7 @@
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
       heading: 'AI answers. ASI Biont — takes action!',
-      subtitle: 'Not a chatbot — an AI agent. Manages tasks, finds contractors, delegates and posts content in Telegram. No prompts — just say what you need. 1,500 tokens on signup.',
+      subtitle: 'A multilingual AI agent. Manages tasks, finds contractors, delegates, and bridges people across languages — in Telegram and WhatsApp. No prompts — just say what you need. 1,500 tokens on signup.',
       feat: [
         ['Tasks & Goals', '"Call with investor tomorrow at 9" — it sets a reminder. "Submit report by Friday" — it tracks the deadline and follows up. You speak — it acts.'],
         ['Ready Connections', '"Need a designer?" — it shows matching people from the network. "Who knows fintech?" — finds by skills and city. Not a directory — a closed community.'],
@@ -598,8 +627,10 @@
     localStorage.setItem('asibiont_lang', lang);
     document.documentElement.lang = lang;
     document.title = t.title;
-    var tog = document.getElementById('lang-toggle');
-    if (tog) tog.textContent = lang === 'ru' ? '🇬🇧 EN' : '🇷🇺 RU';
+    var enSpan = document.getElementById('lang-en');
+    var ruSpan = document.getElementById('lang-ru');
+    if (enSpan) { enSpan.classList.toggle('active', lang === 'en'); }
+    if (ruSpan) { ruSpan.classList.toggle('active', lang === 'ru'); }
     var h1 = document.querySelector('h1');
     if (h1) h1.textContent = t.heading;
     var sub = document.querySelector('.subtitle');
@@ -633,13 +664,9 @@
       if (fa[2]) fa[2].textContent = t.fPrice;
     }
   }
+  window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {
     apply(detectLang());
-    var tog = document.getElementById('lang-toggle');
-    if (tog) tog.addEventListener('click', function() {
-      var c = localStorage.getItem('asibiont_lang') || detectLang();
-      apply(c === 'ru' ? 'en' : 'ru');
-    });
   });
 })();
 </script>
