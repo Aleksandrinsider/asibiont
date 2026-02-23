@@ -3560,6 +3560,7 @@ async def api_contact_profile_handler(request):
                     'bio': None,
                     'common_interests': None,
                     'average_rating': 0,
+                    'status_text': None,
                     'task_count': 0,
                     'subscription_tier': 'light'
                 }
@@ -4239,10 +4240,12 @@ async def api_update_profile_handler(request):
 
             # Handle status_text separately (not in update_profile)
             if 'status_text' in data:
-                profile = session_db.query(UserProfile).filter_by(user_id=user_id).first()
-                if profile:
-                    profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
-                    session_db.commit()
+                user = session_db.query(User).filter_by(telegram_id=user_id).first()
+                if user:
+                    profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+                    if profile:
+                        profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
+                        session_db.commit()
 
             return web.json_response({
                 'success': True,
