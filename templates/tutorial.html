@@ -63,6 +63,13 @@
                 padding: 15px 12px !important;
             }
         }
+        .lang-toggle {
+            position: fixed; top: 12px; right: 12px; z-index: 1000;
+            padding: 6px 12px; background: #FFFFFF; border: 1px solid #D1D9E0;
+            border-radius: 6px; font-size: 14px; cursor: pointer;
+            transition: all 0.2s; font-weight: 500; color: #374151;
+        }
+        .lang-toggle:hover { border-color: #1F2328; background: #F6F8FA; }
         .pricing-container {
             width: 100%;
             max-width: 900px;
@@ -77,6 +84,7 @@
     </style>
 </head>
 <body>
+    <button id="lang-toggle" class="lang-toggle">🇬🇧 EN</button>
     <div class="pricing-container">
         <a href="/logout" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">← На главную</a>
         <div class="pricing-card">
@@ -397,7 +405,110 @@
             window.location.href = '/logout';
         }
     </script>
-
+<!-- i18n -->
+<script>
+(function(){
+  var T = {
+    ru: {
+      title: 'Туториал ASI Biont — Все команды и возможности | AI-партнёр в Telegram',
+      back: '← На главную', h1: 'Руководство по ASI Biont',
+      desc1: 'Полный список команд и возможностей AI-партнёра. Не нужно запоминать синтаксис — просто пишите боту естественным языком.',
+      desc2: 'При регистрации — 1 500 бесплатных токенов. Все функции доступны сразу.',
+      home: 'На главную', topup: 'Пополнить баланс',
+      cards: [
+        ['Регистрация','Запуск бота','Первый шаг для начала работы','Откройте бота в Telegram и начните диалог. Вы получите 1 500 токенов и сможете сразу начать: создавать задачи, искать партнёров и делегировать.'],
+        ['Профиль','Заполните профиль','Чтобы вас находили другие','«Я дизайнер из Москвы, интересуюсь AI и стартапами» — агент сохранит навыки, город и интересы. Другие пользователи смогут вас найти.'],
+        ['Дашборд','Веб-панель управления','Задачи, контакты, аналитика','Откроет дашборд в браузере: задачи с дедлайнами, граф связей, контакты, лента событий. Единая база — два интерфейса: бот + веб.'],
+        ['Создание задач','Естественный язык','Без команд — просто скажите','«Завтра в 9 созвон с инвестором» — поставит задачу с дедлайном. «Сдать отчёт до пятницы» — зафиксирует приоритет. «Купить билеты на конференцию» — добавит в список.'],
+        ['Управление','Завершение, редактирование','Полный контроль через диалог','«Отчёт сдал» — отметит выполненной. «Перенеси созвон на среду» — изменит дедлайн. «Удали задачу про билеты» — удалит. «Что на сегодня?» — покажет список.'],
+        ['Напоминания','Автоматические алерты','Никогда не забудете','Агент сам напомнит о задачах за час до дедлайна. Просрочена задача — получите уведомление. «Свободен ли я завтра в 15?» — проверит конфликты по расписанию.'],
+        ['Создание цели','Долгосрочные планы','С метриками прогресса','«Хочу пробежать марафон к октябрю» — создаст цель. «Выпустить продукт до конца квартала» — зафиксирует. Агент будет отслеживать движение к цели.'],
+        ['Обновление','Фиксация прогресса','Процент выполнения','«Пробежал 20 км на этой неделе» — обновит прогресс. «Завершил 3 модуля из 10» — пересчитает процент. Агент визуализирует продвижение.'],
+        ['Обзор целей','Текущий статус','Все цели в одном месте','«Покажи мои цели» — выведет список с прогрессом. «Как дела с марафоном?» — покажет статус конкретной цели. Всё на дашборде и в боте.'],
+        ['Делегировать задачу','Задача + дедлайн + контроль','Задача уйдёт исполнителю','«Делегируй @ivan подготовить презентацию до среды» — создаст задачу и отправит исполнителю. Дедлайн встанет на контроль. Агент напомнит обеим сторонам.'],
+        ['Контроль','Статус делегирования','Принято / В работе / Готово','«Как дела с задачей для @ivan?» — покажет статус. «Статус делегированных задач» — обзор всех поручений. Автоматический трекинг прогресса.'],
+        ['Принять / Отклонить','Для исполнителя','Управление входящими задачами','«Принимаю задачу» — подтверждение. «Не могу взять — у меня дедлайн» — отклонение с причиной. Заказчик получит уведомление о решении.'],
+        ['Поручения','Агент договаривается за вас','Встречи, проекты, согласования','«Договорись с @ivan о встрече на следующей неделе» — агент сам напишет, предложит время и зафиксирует договорённость. «Предложи @anna сотрудничество по проекту» — составит персональное предложение.'],
+        ['Умная рассылка','Найдёт и договорится','По навыкам, интересам, целям','«Найди дизайнеров и предложи им проект» — найдёт подходящих, составит персональное сообщение каждому и отправит. Антиспам: макс 3 сообщения в день одному человеку.'],
+        ['Входящие','Ответы и статусы','Контроль переговоров','«Есть ли ответы?» — покажет входящие предложения и ответы на ваши поручения. «Ответь @ivan, что согласен» — продолжит диалог. Трекинг: отправлено → доставлено → прочитано → отвечено.'],
+        ['Поиск партнёров','Поиск людей','По навыкам, городу, интересам','«Нужен дизайнер в Москве» — покажет подходящих из закрытой сети. «Кто разбирается в финтехе?» — найдёт по навыкам. Не каталог, а закрытое сообщество.'],
+        ['Алерты контактов','Слежение за профилями','Уведомление об изменениях','«Следи за профилем @ivan» — уведомит при обновлении. «Уведоми, когда появится дизайнер в Казани» — сработает алерт. Точечные сигналы, не шум.'],
+        ['Профиль','Навыки и интересы','Ваша визитка в сети','«Добавь навык Python» — обновит профиль. «Я переехал в Казань» — изменит город. Чем полнее профиль, тем точнее вас находят другие участники.'],
+        ['Стратегия','Тематика и расписание','Автоматическая генерация','«Постим про AI и стартапы, тон экспертный, по вторникам и четвергам» — агент настроит стратегию и будет публиковать автоматически.'],
+        ['Создание поста','По запросу или автоматом','Стиль, длина, тезисы','«Напиши пост про тренды AI в 2026» — сгенерирует текст. «Сделай короткий пост про продуктивность» — с учётом стиля. Публикует в канал по расписанию.'],
+        ['Управление','Просмотр, правка, удаление','Полный контроль контента','«Покажи мои посты» — список. «Отредактируй последний пост» — внесёт правки. «Удали черновик» — уберёт. Вы спите — он публикует по расписанию.'],
+        ['Исследование','Глубокий анализ темы','Структурированная выжимка','«Исследуй рынок EdTech в России» — проведёт анализ. «Что нового в Web3?» — соберёт актуальные данные. Готовый отчёт, а не список ссылок.'],
+        ['Новости','Тренды и события','По вашей отрасли','«Какие тренды в AI сейчас?» — выдаст обзор. «Новости финтеха за неделю» — свежая подборка. Релевантные сигналы, не информационный шум.'],
+        ['Биржа','Акции и валюты','Быстрая справка','«Курс Tesla» — текущая цена. «Что с биткоином?» — динамика. «Акции Сбера» — рыночные данные. Быстрая и точная финансовая справка.'],
+        ['Голос','Голосовые сообщения','Распознавание речи','Отправьте голосовое — агент распознает речь и выполнит команду. Работает на русском и английском. Идеально, когда руки заняты.'],
+        ['Документы','Фото и файлы','Анализ содержимого','Отправьте документ или фото — агент проанализирует содержимое. Извлечёт текст, разберёт скриншот, создаст задачу из документа.'],
+        ['Проактивность','Утренние сводки','Уведомления без запроса','Агент сам пришлёт утреннюю сводку задач. Напомнит о просроченных. Сообщит о новых контактах с нужными навыками. Без вашего участия.']
+      ]
+    },
+    en: {
+      title: 'ASI Biont Guide — All Commands & Features | AI Agent in Telegram',
+      back: '← Back', h1: 'ASI Biont User Guide',
+      desc1: 'Full list of AI agent commands and features. No syntax to memorize — just write to the bot in natural language.',
+      desc2: 'On registration — 1,500 free tokens. All features available immediately.',
+      home: 'Home', topup: 'Top Up Balance',
+      cards: [
+        ['Registration','Start the bot','First step to get started','Open the bot in Telegram and start a dialogue. You will receive 1,500 tokens and can immediately: create tasks, find partners, and delegate.'],
+        ['Profile','Fill in your profile','So others can find you','"I\'m a designer from Moscow, interested in AI and startups" — the agent saves skills, city and interests. Other users will be able to find you.'],
+        ['Dashboard','Web control panel','Tasks, contacts, analytics','Opens the dashboard in your browser: tasks with deadlines, connection graph, contacts, event feed. One database — two interfaces: bot + web.'],
+        ['Creating Tasks','Natural language','No commands — just say it','"Call with investor tomorrow at 9" — sets a task with deadline. "Submit report by Friday" — locks in priority. "Buy conference tickets" — adds to list.'],
+        ['Management','Complete, edit, delete','Full control via dialogue','"Report submitted" — marks done. "Move call to Wednesday" — changes deadline. "Delete tickets task" — deletes. "What\'s on my plate today?" — shows list.'],
+        ['Reminders','Automatic alerts','Never forget anything','The agent reminds you about tasks an hour before the deadline. Overdue task — you get a notification. "Am I free tomorrow at 3?" — checks schedule conflicts.'],
+        ['Create a Goal','Long-term plans','With progress metrics','"I want to run a marathon by October" — creates the goal. "Launch product by end of quarter" — locks it in. The agent tracks progress toward the goal.'],
+        ['Update Progress','Track progress','Completion percentage','"Ran 20 km this week" — updates progress. "Finished 3 of 10 modules" — recalculates percentage. The agent visualizes advancement.'],
+        ['Goals Overview','Current status','All goals in one place','"Show my goals" — outputs list with progress. "How\'s the marathon goal?" — shows status of specific goal. Everything on dashboard and in bot.'],
+        ['Delegate a Task','Task + deadline + tracking','Task goes to the assignee','"Ask @ivan to prepare a presentation by Wednesday" — creates task and sends to assignee. Deadline tracked. Agent reminds both parties.'],
+        ['Tracking','Delegation status','Accepted / In progress / Done','"How\'s the task for @ivan?" — shows status. "Status of delegated tasks" — overview of all assignments. Automatic progress tracking.'],
+        ['Accept / Decline','For the assignee','Manage incoming tasks','"I accept the task" — confirmation. "Can\'t take it — I have a deadline" — decline with reason. The requester gets a notification.'],
+        ['Assignments','Agent negotiates for you','Meetings, projects, agreements','"Arrange a meeting with @ivan next week" — agent writes, proposes time and records agreement. "Propose collaboration to @anna" — drafts a personalized offer.'],
+        ['Smart Outreach','Finds and negotiates','By skills, interests, goals','"Find designers and offer them a project" — finds matches, drafts personalized messages and sends them. Anti-spam: max 3 messages per day per person.'],
+        ['Inbox','Replies and statuses','Track negotiations','"Any replies?" — shows incoming offers and replies to your assignments. "Tell @ivan I agree" — continues the dialogue. Tracking: sent → delivered → read → replied.'],
+        ['Find Partners','Search for people','By skills, city, interests','"Need a designer in Moscow" — shows matches from the closed network. "Who knows fintech?" — finds by skills. Not a directory — a closed community.'],
+        ['Contact Alerts','Monitor profiles','Notifications of changes','"Track @ivan\'s profile" — notify when updated. "Alert me when a designer in Kazan appears" — alert fires. Targeted signals, not noise.'],
+        ['Profile','Skills and interests','Your card in the network','"Add Python skill" — updates profile. "I moved to Kazan" — changes city. The fuller the profile, the more accurately others find you.'],
+        ['Strategy','Topics and schedule','Automatic generation','"Posting about AI and startups, expert tone, Tuesdays and Thursdays" — agent sets strategy and publishes automatically.'],
+        ['Create a Post','On demand or automatic','Style, length, points','"Write a post about AI trends in 2026" — generates text. "Make a short post about productivity" — style-aware. Posts to channel on schedule.'],
+        ['Management','View, edit, delete','Full content control','"Show my posts" — list. "Edit the last post" — makes changes. "Delete the draft" — removes it. You sleep — it posts on schedule.'],
+        ['Research','Deep topic analysis','Structured summary','"Research the EdTech market in Russia" — conducts analysis. "What\'s new in Web3?" — gathers current data. A finished report, not a list of links.'],
+        ['News','Trends and events','For your industry','"What are the AI trends now?" — gives overview. "Fintech news this week" — fresh selection. Relevant signals, not information noise.'],
+        ['Market Data','Stocks and currencies','Quick reference','"Tesla price" — current price. "What about Bitcoin?" — dynamics. "Sberbank stock" — market data. Quick and accurate financial reference.'],
+        ['Voice','Voice messages','Speech recognition','Send a voice message — the agent recognizes speech and executes the command. Works in Russian and English. Perfect when your hands are busy.'],
+        ['Documents','Photos and files','Content analysis','Send a document or photo — the agent analyzes the content. Extracts text, interprets screenshots, creates tasks from documents.'],
+        ['Proactivity','Morning briefings','Notifications without asking','The agent sends a morning task briefing on its own. Reminds about overdue items. Notifies about new contacts with needed skills. No input from you.']
+      ]
+    }
+  };
+  function detect(){var s=localStorage.getItem('asibiont_lang');if(s&&T[s])return s;return(navigator.language||'ru').startsWith('ru')?'ru':'en';}
+  function apply(lang){
+    var t=T[lang]; localStorage.setItem('asibiont_lang',lang); document.documentElement.lang=lang; document.title=t.title;
+    var tog=document.getElementById('lang-toggle'); if(tog) tog.textContent=lang==='ru'?'🇬🇧 EN':'🇷🇺 RU';
+    var back=document.querySelector('a[href="/logout"]'); if(back) back.textContent=t.back;
+    var h1=document.querySelector('h1'); if(h1) h1.textContent=t.h1;
+    var hdr=document.querySelector('.pricing-card > div[style*="text-align: center"]');
+    if(hdr){var ds=hdr.querySelectorAll('div'); if(ds[0])ds[0].textContent=t.desc1; if(ds[1])ds[1].innerHTML='<b>'+t.desc2+'</b>';}
+    var allCards=document.querySelectorAll('.tiers-grid > div');
+    allCards.forEach(function(card,i){
+      if(!t.cards[i])return;
+      var h2=card.querySelector('h2'); if(h2) h2.textContent=t.cards[i][0];
+      var subs=card.querySelectorAll('div[style*="font-size: 13px"][style*="#6C727F"], div[style*="font-size: 12px"][style*="#6C727F"]');
+      if(subs[0]) subs[0].textContent=t.cards[i][1];
+      if(subs[1]) subs[1].textContent=t.cards[i][2];
+      var desc=card.querySelector('div[style*="line-height: 1.6"]'); if(desc) desc.textContent=t.cards[i][3];
+    });
+    var homeBtns=document.querySelectorAll('div[style*="justify-content: center"] button, div[style*="justify-content: center"] a');
+    if(homeBtns[0]) homeBtns[0].textContent=t.home;
+    if(homeBtns[1]) homeBtns[1].textContent=t.topup;
+  }
+  document.addEventListener('DOMContentLoaded',function(){
+    apply(detect());
+    var tog=document.getElementById('lang-toggle'); if(tog) tog.addEventListener('click',function(){apply(detect()==='ru'?'en':'ru');});
+  });
+})();
+</script>
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){

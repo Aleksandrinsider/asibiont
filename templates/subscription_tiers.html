@@ -73,6 +73,22 @@
                 font-weight: 600;
             }
         }
+        .lang-toggle {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            padding: 6px 12px;
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            color: #374151;
+        }
+        .lang-toggle:hover { border-color: #1F2328; background: #F6F8FA; }
     </style>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -105,6 +121,7 @@
     </style>
 </head>
 <body class="subscription-page">
+    <button id="lang-toggle" class="lang-toggle">🇬🇧 EN</button>
     <div class="pricing-container">
         <a href="/logout" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">← На главную</a>
         <div class="pricing-card">
@@ -178,7 +195,89 @@
             window.location.href = '/logout';
         }
     </script>
-
+<!-- i18n -->
+<script>
+(function(){
+  var T = {
+    ru: {
+      title: 'Токены ASI Biont — Пополните баланс | AI-партнёр для бизнеса',
+      back: '← На главную',
+      h1: 'Пополните баланс токенов',
+      desc1: 'Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.',
+      desc2: 'При регистрации вы получаете 1 500 бесплатных токенов.',
+      badge: 'ВЫГОДНЫЙ',
+      cards: [
+        { name: 'Стартовый', sub: 'Для знакомства с AI-партнёром', desc: '«Напомни завтра в 9 про созвон» — он помнит. «Найди дизайнера» — находит. Все функции открыты с первого токена.' },
+        { name: 'Оптимальный', sub: 'Самый популярный выбор', desc: '+500 токенов сверху. Вы на встрече — он делегирует задачи. Вы спите — постит в канал. Автопилот, который не выключается.' },
+        { name: 'Максимальный', sub: 'Максимальная выгода за токен', desc: '+3 000 токенов сверху. Контент, делегирование, алерты, инсайты — всё на автопилоте. Вы растёте, пока AI работает.' }
+      ],
+      topup: 'Пополнить', home: 'На главную', support: 'Поддержка'
+    },
+    en: {
+      title: 'ASI Biont Tokens — Top Up Balance | AI Partner for Business',
+      back: '← Back',
+      h1: 'Top Up Token Balance',
+      desc1: 'All features open for everyone. Pay only for usage. 1 token = 1 rouble.',
+      desc2: 'You receive 1,500 free tokens on registration.',
+      badge: 'BEST VALUE',
+      cards: [
+        { name: 'Starter', sub: 'To get started with your AI partner', desc: '"Remind me tomorrow at 9 about the call" — it remembers. "Find a designer" — it finds. All features open from the first token.' },
+        { name: 'Optimal', sub: 'Most popular choice', desc: '+500 bonus tokens. In a meeting — it delegates tasks. Asleep — posts to your channel. An autopilot that never shuts off.' },
+        { name: 'Maximum', sub: 'Maximum value per token', desc: '+3,000 bonus tokens. Content, delegation, alerts, insights — all on autopilot. You grow while the AI works.' }
+      ],
+      topup: 'Top Up', home: 'Home', support: 'Support'
+    }
+  };
+  function detect() {
+    var s = localStorage.getItem('asibiont_lang');
+    if (s && T[s]) return s;
+    return (navigator.language||'ru').startsWith('ru') ? 'ru' : 'en';
+  }
+  function apply(lang) {
+    var t = T[lang];
+    localStorage.setItem('asibiont_lang', lang);
+    document.documentElement.lang = lang;
+    document.title = t.title;
+    var tog = document.getElementById('lang-toggle');
+    if (tog) tog.textContent = lang==='ru'?'🇬🇧 EN':'🇷🇺 RU';
+    // Back link
+    var back = document.querySelector('a[href="/logout"]');
+    if (back) back.textContent = t.back;
+    // H1
+    var h1 = document.querySelector('h1'); if (h1) h1.textContent = t.h1;
+    // Descriptions
+    var hdr = document.querySelector('.pricing-card > div[style*="text-align: center"]');
+    if (hdr) {
+      var ds = hdr.querySelectorAll('div');
+      if (ds[0]) ds[0].textContent = t.desc1;
+      if (ds[1]) ds[1].innerHTML = '<b>' + t.desc2 + '</b>';
+    }
+    // Badge
+    var badge = document.querySelector('[style*="background: #59636E"][style*="border-radius: 12px"]');
+    if (badge) badge.textContent = t.badge;
+    // Cards
+    var cards = document.querySelectorAll('.tiers-grid > div');
+    cards.forEach(function(card, i) {
+      if (!t.cards[i]) return;
+      var h2 = card.querySelector('h2'); if (h2) h2.textContent = t.cards[i].name;
+      var subdiv = card.querySelector('[style*="font-size: 12px"]'); if (subdiv) subdiv.textContent = t.cards[i].sub;
+      var descdiv = card.querySelector('[style*="line-height: 1.6"]'); if (descdiv) descdiv.textContent = t.cards[i].desc;
+      var btn = card.querySelector('button'); if (btn) btn.textContent = t.topup;
+    });
+    // Buttons
+    var btns = document.querySelectorAll('.pricing-card > div:last-of-type button, .pricing-card > div:last-of-type a');
+    if (btns[0]) btns[0].textContent = t.home;
+    if (btns[1]) btns[1].textContent = t.support;
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    apply(detect());
+    var tog = document.getElementById('lang-toggle');
+    if (tog) tog.addEventListener('click', function() {
+      apply(detect()==='ru'?'en':'ru');
+    });
+  });
+})();
+</script>
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){
