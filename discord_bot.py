@@ -288,11 +288,7 @@ async def discord_oauth_callback(request):
         finally:
             db.close()
 
-        return web.Response(
-            text=f"<html><body><p>Discord account <b>{discord_username}</b> linked successfully! "
-                 f"<a href='/dashboard'>Back to dashboard</a></p></body></html>",
-            content_type="text/html",
-        )
+        return web.HTTPFound('/dashboard')
 
     except Exception as e:
         logger.error(f"Discord OAuth error: {e}", exc_info=True)
