@@ -2779,10 +2779,16 @@
             try {
                 // Убираем @ если есть
                 const cleanUsername = username.replace('@', '');
-                // Открываем Telegram чат
-                window.open(`https://t.me/${cleanUsername}`, '_blank');
+                const platformData = (window._partnerPlatforms || {})[cleanUsername.toLowerCase()];
+                if (platformData && platformData.platform === 'discord' && platformData.discord_id) {
+                    // Открываем Discord DM
+                    window.open(`https://discord.com/users/${platformData.discord_id}`, '_blank');
+                } else {
+                    // Открываем Telegram чат
+                    window.open(`https://t.me/${cleanUsername}`, '_blank');
+                }
             } catch (error) {
-                console.error('Error opening Telegram:', error);
+                console.error('Error opening messenger:', error);
                 showNotification(t('err-open-tg'), 'error');
             }
         }
@@ -4754,6 +4760,15 @@
                     const data = await response.json();
                     const partner = data.partner;
                     
+                    // Store platform data from profile for writeToContact
+                    if (partner.contact_info) {
+                        window._partnerPlatforms = window._partnerPlatforms || {};
+                        window._partnerPlatforms[partner.contact_info.replace('@', '').toLowerCase()] = {
+                            platform: partner.platform || 'telegram',
+                            discord_id: partner.discord_id || null
+                        };
+                    }
+                    
                     let html = '';
                     
                     // Avatar and basic info - центрированно как в панели профиля
@@ -4853,8 +4868,13 @@
         }
         
         function writeToContact(username) {
-            const telegramUrl = `https://t.me/${username}`;
-            window.open(telegramUrl, '_blank');
+            const platformData = (window._partnerPlatforms || {})[username.toLowerCase()];
+            if (platformData && platformData.platform === 'discord' && platformData.discord_id) {
+                window.open(`https://discord.com/users/${platformData.discord_id}`, '_blank');
+            } else {
+                const telegramUrl = `https://t.me/${username}`;
+                window.open(telegramUrl, '_blank');
+            }
             closeContactProfileModal();
         }
         
@@ -5274,7 +5294,15 @@
                             });
                             
                             let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
+                            // Store partner platform data for message routing
+                            window._partnerPlatforms = window._partnerPlatforms || {};
                             Object.values(uniquePartners).forEach(partner => {
+                                if (partner.contact_info) {
+                                    window._partnerPlatforms[partner.contact_info.replace('@', '').toLowerCase()] = {
+                                        platform: partner.platform || 'telegram',
+                                        discord_id: partner.discord_id || null
+                                    };
+                                }
                                 const telegramUrl = 'https://t.me/' + partner.contact_info;
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                 
@@ -5568,7 +5596,13 @@
                             
                             // Добавляем delegation контакты после всех остальных
                             Object.values(delegationContacts).forEach(partner => {
-                                const telegramUrl = 'https://t.me/' + partner.contact_info;
+                                // Store platform data for delegation contacts too
+                                if (partner.contact_info) {
+                                    window._partnerPlatforms[partner.contact_info.replace('@', '').toLowerCase()] = {
+                                        platform: partner.platform || 'telegram',
+                                        discord_id: partner.discord_id || null
+                                    };
+                                }
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                 
                                 if (partner.type === 'delegating_to_me') {

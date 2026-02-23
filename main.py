@@ -2507,6 +2507,8 @@ async def api_partners_handler(request):
                                 'подходящий контакт'),
                             'average_rating': partner_profile.average_rating if partner_profile else 0,
                             'rating_count': partner_profile.rating_count if partner_profile else 0,
+                            'platform': partner_user.platform if partner_user else 'telegram',
+                            'discord_id': str(partner_user.discord_id) if (partner_user and partner_user.discord_id) else None,
                             'type': 'recommended'})
             except Exception as e:
                 logger.error(f"Error processing partner {getattr(p, 'user_id', 'unknown')}: {e}", exc_info=True)
@@ -2629,6 +2631,8 @@ async def api_partners_handler(request):
                 'common_tasks': common_tasks,
                 'average_rating': delegator_profile.average_rating if delegator_profile else 0,
                 'rating_count': delegator_profile.rating_count if delegator_profile else 0,
+                'platform': delegator.platform if delegator else 'telegram',
+                'discord_id': str(delegator.discord_id) if (delegator and delegator.discord_id) else None,
                 'reason': contact['reason'],
                 'task_count': contact.get('task_count', 0),
                 'type': 'delegating_to_me'
@@ -2749,6 +2753,8 @@ async def api_partners_handler(request):
                 'common_tasks': common_tasks,
                 'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
                 'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
+                'platform': delegatee.platform if delegatee else 'telegram',
+                'discord_id': str(delegatee.discord_id) if (delegatee and delegatee.discord_id) else None,
                 'reason': contact['reason'],
                 'task_count': contact.get('task_count', 0),
                 'type': 'delegating_by_me'
@@ -2844,6 +2850,8 @@ async def api_partners_handler(request):
                                 'common_tasks': None,
                                 'average_rating': favorite_profile.average_rating if favorite_profile else 0,
                                 'rating_count': favorite_profile.rating_count if favorite_profile else 0,
+                                'platform': favorite_user.platform if favorite_user else 'telegram',
+                                'discord_id': str(favorite_user.discord_id) if (favorite_user and favorite_user.discord_id) else None,
                                 'reason': 'избраый контакт',
                                 'task_count': 0,
                                 'type': 'favorite'
@@ -3465,7 +3473,9 @@ async def api_contact_profile_handler(request):
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
                     'task_count': active_tasks,
                     'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
-                    'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None
+                    'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None,
+                    'platform': contact_user.platform if hasattr(contact_user, 'platform') else 'telegram',
+                    'discord_id': str(contact_user.discord_id) if hasattr(contact_user, 'discord_id') and contact_user.discord_id else None
                 }
             except Exception as profile_error:
                 logger.error(f"Error building profile data: {profile_error}", exc_info=True)
