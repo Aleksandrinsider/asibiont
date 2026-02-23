@@ -542,8 +542,7 @@
                                 </div>
                                 
                                 <!-- Имя и ник под аватаром -->
-                                <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %}</p>
-                                <p style="margin: 0; color: #6C727F; font-size: 12px;"><a href="#" onclick="openStatusModal(); return false;" style="color: #6C727F; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
+                                <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %} <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
                                 
                             </div>
@@ -6355,8 +6354,7 @@
                             const initial = (data.profile.username || data.first_name || 'U')[0].toUpperCase();
                             html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;">' + initial + '</div>';
                         }
-                        html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || t('user')) + '</p>';
-                        html += '<p style="margin: 0; color: #6C727F; font-size: 12px;"><a href="#" onclick="openStatusModal(); return false;" style="color: #6C727F; text-decoration: none;" id="status-display">' + (data.profile.status_text || t('status-set')) + '</a></p>';
+                        html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || t('user')) + ' <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">' + (data.profile.status_text || t('status-set')) + '</a></p>';
                         html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || t('unknown-user')) + '</p>';
                         html += '</div>';
                         html += '<p>' + t('city-label') + ' ' + (data.profile.city || t('not-specified')) + '</p>';
