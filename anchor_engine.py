@@ -528,15 +528,28 @@ class AnchorEngine:
 
                 # ТОЧНОЕ НАПОМИНАНИЕ: reminder_time наступило (от 0 до -30 мин) и ещё не отправлено
                 if -30 <= minutes_diff <= 0 and not getattr(task, 'reminder_sent', False):
+                    scan_delay = int(abs(minutes_diff))  # 0..30 мин — шаг сканирования, НЕ просрочка
+                    try:
+                        rt_local = rt.astimezone(user_tz)
+                        sched_time_str = rt_local.strftime('%H:%M')
+                    except Exception:
+                        sched_time_str = '??:??'
+                    if scan_delay <= 2:
+                        reminder_topic = f'Напоминание: задача «{task.title}» — запланировано {sched_time_str}, сработало точно по расписанию'
+                    else:
+                        reminder_topic = (f'Напоминание: задача «{task.title}» — запланировано {sched_time_str}, '
+                                         f'задержка {scan_delay} мин из-за шага сканирования (НЕ просрочено)')
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_reminder',
                         source=f'task:{task.id}',
-                        topic=f'Напоминание: задача «{task.title}» на сейчас',
+                        topic=reminder_topic,
                         priority=AnchorPriority.CRITICAL,
                         data=json.dumps({'task_id': task.id, 'title': task.title,
                                         'description': (task.description or '')[:200],
-                                        'reminder_type': 'exact'}),
+                                        'reminder_type': 'exact',
+                                        'scheduled_time': sched_time_str,
+                                        'scan_delay_minutes': scan_delay}),
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(minutes=30),
                         cooldown_hours=0.5,
@@ -2154,6 +2167,11 @@ class AnchorEngine:
                 "1. Стоит ли это сообщение того, чтобы отвлечь человека? Если якоря слабые — верни SKIP. Лучше промолчать, чем отправить воду.",
                 "2. Что я РЕАЛЬНО знаю? Вызови инструменты (research_topic, get_news_trends, list_tasks) — получи данные. Не выдумывай. Если не вызвал — не говори что 'проверил'.",
                 "3. Какая сфера жизни этого человека сейчас требует внимания? Работа? Развитие? Здоровье? Отношения? Цели? Подумай, где он застрял или что упускает.",
+                "",
+                "ПРАВИЛА ДЛЯ ТИПОВ ЯКОРЕЙ:",
+                "— task_reminder: ЗАПЛАНИРОВАННОЕ напоминание сработало по расписанию. Задержка до 30 мин в топике — это шаг сканирования, а НЕ просрочка задачи. НИКОГДА не называй задачу просроченной при task_reminder. Пиши только напоминание о задаче и уточни готовность.",
+                "— task_overdue: задача РЕАЛЬНО просрочена (прошло >30 мин после дедлайна). Только тут уместно говорить о просрочке.",
+                "— task_deadline_soon: дедлайн ещё не наступил, но приближается.",
                 "",
                 "ПРИНЦИПЫ:",
                 "— НЕ НАЧИНАЙ С ПРИВЕТСТВИЯ: никаких 'Привет!', 'Здравствуй!', 'Доброе утро!' и т.п. Сразу по делу — с факта, вопроса или наблюдения. Ты не здороваешься каждый раз, ты уже рядом.",
