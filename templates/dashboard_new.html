@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -427,7 +427,7 @@
                         <!-- Заголовок -->
                         <div class="search-modal-header">
                             <h3 data-i18n="search-contacts-title">Поиск контактов</h3>
-                            <button onclick="closeSearchModal()" class="search-modal-close-btn">
+                            <button onclick="closeSearchModal()" class="search-modal-close-btn" title="Закрыть" data-i18n-title="close">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                                     <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                                 </svg>
@@ -827,7 +827,7 @@
         <div class="rating-modal-content">
             <div class="rating-modal-header">
                 <h3 data-i18n="rate-contact">Рекомендовать контакт</h3>
-                <button onclick="closeRatingModal()" class="rating-close-btn">
+                <button onclick="closeRatingModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
@@ -844,8 +844,8 @@
                     </div>
                 </div>
                 <div class="rating-modal-actions">
-                    <button onclick="closeRatingModal()" class="rating-cancel-btn" data-i18n="cancel">Отмена</button>
-                    <button onclick="submitRating()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;" data-i18n="rate-btn">
+                    <button onclick="closeRatingModal()" class="rating-cancel-btn" data-i18n="cancel" title="Отмена" data-i18n-title="cancel">Отмена</button>
+                    <button onclick="submitRating()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;" data-i18n="rate-btn" title="Рекомендовать" data-i18n-title="rate-btn">
                         Рекомендовать
                     </button>
                 </div>
@@ -858,7 +858,7 @@
         <div class="rating-modal-content">
             <div class="rating-modal-header">
                 <h3 data-i18n="change-time">Изменить местное время</h3>
-                <button onclick="closeTimeModal()" class="rating-close-btn">
+                <button onclick="closeTimeModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
@@ -871,8 +871,8 @@
                     <input type="text" id="time-input" placeholder="20:30" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" />
                 </div>
                 <div class="rating-modal-actions">
-                    <button onclick="closeTimeModal()" class="rating-cancel-btn" data-i18n="cancel">Отмена</button>
-                    <button onclick="submitTimeChange()" class="rating-submit-btn" data-i18n="save">Сохранить</button>
+                    <button onclick="closeTimeModal()" class="rating-cancel-btn" data-i18n="cancel" title="Отмена" data-i18n-title="cancel">Отмена</button>
+                    <button onclick="submitTimeChange()" class="rating-submit-btn" data-i18n="save" title="Сохранить" data-i18n-title="save">Сохранить</button>
                 </div>
             </div>
         </div>
@@ -883,7 +883,7 @@
         <div class="rating-modal-content">
             <div class="rating-modal-header">
                 <h3 data-i18n="withdrawal-title">Вывод реферальных средств</h3>
-                <button onclick="closeWithdrawModal()" class="rating-close-btn">
+                <button onclick="closeWithdrawModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
@@ -901,8 +901,8 @@
                     <input type="number" id="withdraw-amount" placeholder="100" min="100" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" />
                 </div>
                 <div class="rating-modal-actions">
-                    <button onclick="closeWithdrawModal()" class="rating-cancel-btn" data-i18n="cancel">Отмена</button>
-                    <button onclick="submitWithdraw()" class="rating-submit-btn" data-i18n="submit-request">Отправить заявку</button>
+                    <button onclick="closeWithdrawModal()" class="rating-cancel-btn" data-i18n="cancel" title="Отмена" data-i18n-title="cancel">Отмена</button>
+                    <button onclick="submitWithdraw()" class="rating-submit-btn" data-i18n="submit-request" title="Отправить заявку" data-i18n-title="submit-request">Отправить заявку</button>
                 </div>
             </div>
         </div>
@@ -913,7 +913,7 @@
         <div class="rating-modal-content">
             <div class="rating-modal-header">
                 <h3 data-i18n="contact-profile">Профиль контакта</h3>
-                <button onclick="closeContactProfileModal()" class="rating-close-btn">
+                <button onclick="closeContactProfileModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
@@ -930,7 +930,7 @@
         <div class="rating-modal-content" style="max-width: 1100px;">
             <div class="rating-modal-header">
                 <h3 data-i18n="quick-setup">Быстрая настройка профиля</h3>
-                <button onclick="closeQuickProfileModal()" class="rating-close-btn">
+                <button onclick="closeQuickProfileModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
@@ -992,7 +992,7 @@
                     </div>
                 </div>
                 <div class="rating-modal-actions" style="margin-top: 16px;">
-                    <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip">Пропустить</button>
+                    <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip" title="Пропустить" data-i18n-title="skip">Пропустить</button>
                     <button onclick="submitQuickProfile()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;">
                         <span id="quick-profile-btn-text" data-i18n="save">Сохранить</span>
                     </button>
@@ -1702,7 +1702,7 @@
                                         >
                                         <button 
                                             onclick="addComment(${post.id})" 
-                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
+                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                             title="${t('send')}"
@@ -1710,7 +1710,7 @@
                                         <button 
                                             id="translate-btn-${post.id}"
                                             onclick="translatePost(${post.id})"
-                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
+                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                             title="${t('translate')}"
@@ -1718,7 +1718,7 @@
                                         <button 
                                             id="like-btn-${post.id}"
                                             onclick="toggleLike(${post.id})" 
-                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
+                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                             title="${t('like')}"
@@ -2072,7 +2072,7 @@
                                 >
                                 <button 
                                     onclick="addComment(${post.id})" 
-                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
+                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                     title="${t('send')}"
@@ -2080,7 +2080,7 @@
                                 <button 
                                     id="translate-btn-${post.id}"
                                     onclick="translatePost(${post.id})"
-                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
+                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                     title="${t('translate')}"
@@ -2088,7 +2088,7 @@
                                 <button 
                                     id="like-btn-${post.id}"
                                     onclick="toggleLike(${post.id})" 
-                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
+                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                     title="${t('like')}"
@@ -2445,8 +2445,8 @@
             btnContainer.id = `edit-btns-post-${postId}`;
             btnContainer.style.cssText = 'display: flex; gap: 6px; margin-top: 4px;';
             btnContainer.innerHTML = `
-                <button onclick="saveEditPost(${postId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
-                <button onclick="cancelEditPost(${postId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('cancel')}</button>
+                <button onclick="saveEditPost(${postId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
+                <button onclick="cancelEditPost(${postId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('cancel')}</button>
             `;
             contentEl.parentNode.insertBefore(btnContainer, contentEl.nextSibling);
         }
@@ -2531,8 +2531,8 @@
             btnContainer.id = `edit-btns-comment-${commentId}`;
             btnContainer.style.cssText = 'display: flex; gap: 6px; margin-top: 4px;';
             btnContainer.innerHTML = `
-                <button onclick="saveEditComment(${commentId}, ${postId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
-                <button onclick="cancelEditComment(${commentId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('cancel')}</button>
+                <button onclick="saveEditComment(${commentId}, ${postId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
+                <button onclick="cancelEditComment(${commentId})" style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'">${t('cancel')}</button>
             `;
             contentEl.parentNode.insertBefore(btnContainer, contentEl.nextSibling);
         }
@@ -3386,7 +3386,7 @@
                             >
                             <button 
                                 onclick="addComment(${post.id})" 
-                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
+                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                 title="${t('send')}"
@@ -3394,7 +3394,7 @@
                             <button 
                                 id="translate-btn-${post.id}"
                                 onclick="translatePost(${post.id})"
-                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
+                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                 title="${t('translate')}"
@@ -3402,7 +3402,7 @@
                             <button 
                                 id="like-btn-${post.id}"
                                 onclick="toggleLike(${post.id})" 
-                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
+                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                 title="${t('like')}"

@@ -1514,8 +1514,8 @@ details[open] .details-content {
 }
 
 .rating-close-btn {
-    background: none;
-    border: none;
+    background: #FFFFFF;
+    border: 1px solid #D1D9E0;
     font-size: 24px;
     color: #374151;
     cursor: pointer;
@@ -1525,12 +1525,13 @@ details[open] .details-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: 6px;
     transition: all 0.2s;
 }
 
 .rating-close-btn:hover {
     background-color: #F6F8FA;
+    border-color: #374151;
     color: #374151;
 }
 
@@ -1693,8 +1694,8 @@ details[open] .details-content {
 }
 
 .search-modal-close-btn {
-    background: none;
-    border: none;
+    background: #FFFFFF;
+    border: 1px solid #D1D9E0;
     cursor: pointer;
     color: #374151;
     font-size: 24px;
@@ -1705,12 +1706,13 @@ details[open] .details-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: 6px;
     transition: all 0.2s;
 }
 
 .search-modal-close-btn:hover {
     background-color: #F6F8FA;
+    border-color: #374151;
     color: #374151;
 }
 
