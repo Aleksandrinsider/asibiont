@@ -4595,7 +4595,7 @@
         }
         
         async function unlinkTelegram() {
-            if (!confirm('Отвязать Telegram аккаунт?')) return;
+            if (!confirm(t('unlink-telegram-confirm') || 'Отвязать Telegram аккаунт?')) return;
             try {
                 const res = await fetch('/api/telegram/unlink', { method: 'POST', credentials: 'include' });
                 if (res.ok) {
@@ -7053,6 +7053,9 @@
 
       'link-discord':'Привязать',
       'link-telegram':'Привязать',
+      'unlink':'отвязать',
+      'unlink-discord-confirm':'Отвязать Discord аккаунт?',
+      'unlink-telegram-confirm':'Отвязать Telegram аккаунт?',
       'statistics':'Статистика','task-stats':'Статистика по задачам:',
       'in-progress':'В работе:','overdue-stat':'С отставанием:','completed-stat':'Выполнено:',
       'users-online':'Пользователей на сайте:',
@@ -7216,6 +7219,9 @@
       'referral-desc':'20% tokens from each top-up by referred user',
       'link-discord':'Link',
       'link-telegram':'Link',
+      'unlink':'unlink',
+      'unlink-discord-confirm':'Unlink Discord account?',
+      'unlink-telegram-confirm':'Unlink Telegram account?',
       'statistics':'Statistics','task-stats':'Task statistics:',
       'in-progress':'In progress:','overdue-stat':'Overdue:','completed-stat':'Completed:',
       'users-online':'Users online:',

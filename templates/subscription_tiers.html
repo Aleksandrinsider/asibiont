@@ -266,10 +266,9 @@
     if (ctaS) {
       var ctaP = ctaS.querySelector('p');
       if (ctaP) ctaP.textContent = t.cta;
-      var homeBtn = ctaS.querySelector('button');
-      var supportLink = ctaS.querySelector('a');
-      if (homeBtn) homeBtn.textContent = t.home;
-      if (supportLink) supportLink.textContent = t.support;
+      var links = ctaS.querySelectorAll('a');
+      if (links[0]) links[0].textContent = t.home;
+      if (links[1]) links[1].textContent = t.support;
     }
     // Footer links
     var fl = document.querySelectorAll('.footer-links a');
