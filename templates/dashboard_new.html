@@ -5453,7 +5453,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">' + t('no-ratings') + '</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: flex; flex-wrap: wrap; gap: 4px; margin-right: 8px; width: 68px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 8px; flex-shrink: 0;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -5545,7 +5545,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">' + t('no-ratings') + '</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: flex; flex-wrap: wrap; gap: 4px; margin-right: 8px; width: 68px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 8px; flex-shrink: 0;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -5648,7 +5648,7 @@
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #d73a49;">' + t('blocked') + '</span></div>';
                                     html += '</div>';
                                     
-                                    html += '<div class="task-actions" style="display: flex; flex-wrap: wrap; gap: 4px; margin-right: 8px; width: 68px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 8px; flex-shrink: 0;">';
                                     html += '<button onclick="unblockContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + t('unblock-contact') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,8 7,12 13,4"/></svg></button>';
                                     const blockedMyRating = blockedPartner ? blockedPartner.my_rating : null;
                                     const bulbSvgBlk = blockedMyRating ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z"/></svg>' : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z"/></svg>';
@@ -5742,7 +5742,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">' + t('no-ratings') + '</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: flex; flex-wrap: wrap; gap: 4px; margin-right: 8px; width: 68px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 8px; flex-shrink: 0;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -5836,7 +5836,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">' + t('no-ratings') + '</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: flex; flex-wrap: wrap; gap: 4px; margin-right: 8px; width: 68px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 8px; flex-shrink: 0;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
