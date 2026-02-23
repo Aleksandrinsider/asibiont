@@ -70,7 +70,7 @@ button:active {
 }
 
 :root {
-    --header-height: 58px; /* Increased from 50px to 58px */
+    --header-height: 68px; /* Increased from 58px to 68px */
     --app-gap: 6px; /* Reduced gaps for tighter layout */
 }
 

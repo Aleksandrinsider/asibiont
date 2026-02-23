@@ -580,7 +580,7 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="contacts">Контакты</h3>
                         </div>
                     </div>
-                    <div id="contact-filter-content" style="margin-bottom: 15px;">
+                    <div id="contact-filter-content" style="margin-bottom: 15px; display: none;">
                         <div style="position: relative; width: 100%;">
                             <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
                                 <option value="favorite" data-i18n="opt-fav">Избранное</option>
@@ -3927,7 +3927,6 @@
         function renderTaskItem(task) {
             let html = '';
             html += '<div style="flex: 1;">';
-            const titleStyle = task.status === 'completed' ? ' style="opacity: 0.6;"' : '';
             const overdueIndicator = task.overdue ? '<span class="overdue-pulse"></span>' : '';
             
             // Извлекаем чистый заголовок и информацию о делегировании
@@ -3960,7 +3959,7 @@
                 }
             }
             
-            html += '<div class="task-title"' + titleStyle + '>' + overdueIndicator + cleanTitle + '</div>';
+            html += '<div class="task-title" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + overdueIndicator + cleanTitle + '</div>';
             
             // Если есть делегирование, показываем отдельной строкой
             if (delegationInfo) {
