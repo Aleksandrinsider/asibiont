@@ -250,10 +250,14 @@
       var descdiv = card.querySelector('[style*="line-height: 1.6"]'); if (descdiv) descdiv.textContent = t.cards[i].desc;
       var btn = card.querySelector('button'); if (btn) btn.textContent = t.topup;
     });
-    // Buttons
-    var btns = document.querySelectorAll('.pricing-card > div:last-of-type button, .pricing-card > div:last-of-type a');
-    if (btns[0]) btns[0].textContent = t.home;
-    if (btns[1]) btns[1].textContent = t.support;
+    // Bottom buttons (Home + Support)
+    var bottomDiv = document.querySelector('.pricing-card > div[style*="justify-content: center"]');
+    if (bottomDiv) {
+      var homeBtn = bottomDiv.querySelector('button');
+      var supportLink = bottomDiv.querySelector('a');
+      if (homeBtn) homeBtn.textContent = t.home;
+      if (supportLink) supportLink.textContent = t.support;
+    }
   }
   window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {
