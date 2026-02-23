@@ -5962,8 +5962,6 @@ app.router.add_get('/faq', faq_handler)
 # i18n: English language routes (SEO — separate URLs per language)
 async def login_handler_en(request):
     """English landing page"""
-    request._match_info = type('MI', (), {'get': lambda s, k, d=None: 'en' if k == 'lang' else d})()
-    # Reuse login_handler logic but we need to handle it directly
     session = await get_session(request)
     user_id = session.get('user_id')
     if user_id:
