@@ -16,3 +16,4 @@ SpeechRecognition==3.10.0
 pydub==0.25.1
 redis==5.0.1
 pinecone>=8.0.0
+discord.py>=2.3.0

@@ -5132,11 +5132,11 @@ async def on_shutdown(app):
     except Exception as e:
         logger.error(f"❌ Failed to close API client: {e}")
 
-    # Close WhatsApp client
+    # Close Discord bot
     try:
-        from whatsapp.client import whatsapp_client
-        await whatsapp_client.close()
-        logger.info("✅ WhatsApp client closed")
+        from discord_bot import stop_discord_bot
+        await stop_discord_bot()
+        logger.info("✅ Discord bot stopped")
     except Exception:
         pass
 
@@ -6069,14 +6069,13 @@ app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
-# WhatsApp Cloud API webhook
+# Discord OAuth2 callback
 try:
-    from whatsapp import whatsapp_webhook_verify, whatsapp_webhook_handler
-    app.router.add_get('/webhook/whatsapp', whatsapp_webhook_verify)
-    app.router.add_post('/webhook/whatsapp', whatsapp_webhook_handler)
-    logger.info("✅ WhatsApp webhook routes registered")
+    from discord_bot import discord_oauth_callback
+    app.router.add_get('/auth/discord', discord_oauth_callback)
+    logger.info("✅ Discord OAuth route registered")
 except ImportError as e:
-    logger.warning(f"WhatsApp module not available: {e}")
+    logger.warning(f"Discord module not available: {e}")
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
@@ -6221,6 +6220,17 @@ app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
+
+
+async def start_discord(app):
+    try:
+        from discord_bot import start_discord_bot
+        await start_discord_bot()
+    except Exception as e:
+        logger.warning(f"Discord bot startup error: {e}")
+
+
+app.on_startup.append(start_discord)
 
 if bot:
     webhook_requests_handler = SimpleRequestHandler(

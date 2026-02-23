@@ -67,14 +67,13 @@ TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "asibiont_bot")
 if not TELEGRAM_BOT_USERNAME:
     TELEGRAM_BOT_USERNAME = "asibiont_bot"
 
-# WhatsApp Cloud API
-WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
-WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
-WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "asibiont-whatsapp-verify")
-WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET")  # For signature verification
-WHATSAPP_ENABLED = bool(WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID)
-if not WHATSAPP_ENABLED and not LOCAL:
-    logger.warning("WhatsApp not configured — set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID to enable")
+# Discord
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
+DISCORD_ENABLED = bool(DISCORD_BOT_TOKEN)
+if not DISCORD_ENABLED and not LOCAL:
+    logger.warning("Discord not configured — set DISCORD_BOT_TOKEN to enable")
 
 # Developer notifications
 # Set DEVELOPER_CHAT_ID to your Telegram user ID to receive error notifications
