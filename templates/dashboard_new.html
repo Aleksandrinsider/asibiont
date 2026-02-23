@@ -543,7 +543,7 @@
                                 
                                 <!-- Имя и ник под аватаром -->
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %}</p>
-                                <p style="margin: 0; color: #6C727F; font-size: 12px;"><a href="#" onclick="openStatusModal(); return false;" style="color: #6C727F; text-decoration: none;" id="status-display">{% if profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
+                                <p style="margin: 0; color: #6C727F; font-size: 12px;"><a href="#" onclick="openStatusModal(); return false;" style="color: #6C727F; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
                                 
                             </div>

@@ -45,6 +45,7 @@ def _migrate_user_profiles(session, inspector):
         'auto_marketing_enabled': 'ALTER TABLE user_profiles ADD COLUMN auto_marketing_enabled BOOLEAN DEFAULT TRUE',
         'auto_delegation_enabled': 'ALTER TABLE user_profiles ADD COLUMN auto_delegation_enabled BOOLEAN DEFAULT TRUE',
         'auto_post_time': "ALTER TABLE user_profiles ADD COLUMN auto_post_time VARCHAR(5) DEFAULT '12:00'",
+        'status_text': 'ALTER TABLE user_profiles ADD COLUMN status_text VARCHAR(100)',
     })
 
     # subscription_tier — особая обработка для PostgreSQL enum
