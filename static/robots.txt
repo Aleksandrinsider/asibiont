@@ -49,7 +49,7 @@ Allow: /
 Crawl-delay: 1
 
 # Sitemap location
-Sitemap: https://asibiont.ru/sitemap.xml
+Sitemap: https://asibiont.com/sitemap.xml
 
 # LLMs.txt — AI-readable site description
 # https://llmstxt.org

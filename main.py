@@ -351,9 +351,9 @@ async def notify_indexnow(urls: list):
     try:
         import aiohttp
         payload = {
-            "host": "asibiont.ru",
+            "host": "asibiont.com",
             "key": INDEXNOW_KEY,
-            "keyLocation": f"https://asibiont.ru/{INDEXNOW_KEY}.txt",
+            "keyLocation": f"https://asibiont.com/{INDEXNOW_KEY}.txt",
             "urlList": urls
         }
         async with aiohttp.ClientSession() as session:
@@ -1867,9 +1867,9 @@ async def logging_middleware(request, handler):
 async def redirect_to_root_middleware(request, handler):
     """Redirect www subdomain to root domain"""
     host = request.host
-    if host.startswith('www.asibiont.ru'):
-        new_url = f"https://asibiont.ru{request.path_qs}"
-        logger.info(f"Redirecting from {host} to asibiont.ru")
+    if host.startswith('www.asibiont.com'):
+        new_url = f"https://asibiont.com{request.path_qs}"
+        logger.info(f"Redirecting from {host} to asibiont.com")
         return web.HTTPMovedPermanently(new_url)
     return await handler(request)
 
@@ -5030,7 +5030,7 @@ async def on_startup(app):
 
     # Set webhook for production mode
     if bot and not LOCAL:
-        webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.ru/webhook')
+        webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
         try:
             await bot.set_webhook(webhook_url)
             logger.info(f"✅ Webhook set to: {webhook_url}")
@@ -6075,13 +6075,13 @@ async def start_reminder_service(app):
     # Пинг IndexNow при старте — уведомляем поисковики о всех страницах
     try:
         await notify_indexnow([
-            "https://asibiont.ru/",
-            "https://asibiont.ru/subscription-tiers",
-            "https://asibiont.ru/tutorial",
-            "https://asibiont.ru/dashboard",
-            "https://asibiont.ru/faq",
-            "https://asibiont.ru/llms.txt",
-            "https://asibiont.ru/llms-full.txt"
+            "https://asibiont.com/",
+            "https://asibiont.com/subscription-tiers",
+            "https://asibiont.com/tutorial",
+            "https://asibiont.com/dashboard",
+            "https://asibiont.com/faq",
+            "https://asibiont.com/llms.txt",
+            "https://asibiont.com/llms-full.txt"
         ])
         logger.info("[IndexNow] Pinged search engines about all pages")
     except Exception as e:

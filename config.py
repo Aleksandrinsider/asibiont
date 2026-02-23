@@ -82,9 +82,9 @@ if not WHATSAPP_ENABLED and not LOCAL:
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID", "")  # Set your Telegram user ID via env var
 
 # WEBHOOK_URL теперь хардкодится в main.py для Railway subdomain
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://asibiont.ru/webhook")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://asibiont.com/webhook")
 
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://asibiont.ru")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://asibiont.com")
 
 # Payments
 YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")

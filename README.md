@@ -4,7 +4,7 @@
 
 Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно.
 
-**Сайт:** [asibiont.ru](https://asibiont.ru)
+**Сайт:** [asibiont.com](https://asibiont.com)
 
 ---
 
@@ -41,7 +41,7 @@
 
 ## Как начать
 
-1. Перейдите на [asibiont.ru](https://asibiont.ru)
+1. Перейдите на [asibiont.com](https://asibiont.com)
 2. Войдите через Telegram
 3. Начните диалог с агентом — он сам разберётся, что делать
 
@@ -53,7 +53,7 @@
 - `WHATSAPP_ACCESS_TOKEN` — токен из Meta Business Suite
 - `WHATSAPP_PHONE_NUMBER_ID` — ID номера из WhatsApp Business
 - `WHATSAPP_APP_SECRET` — секрет приложения для верификации подписей
-- Webhook URL: `https://asibiont.ru/webhook/whatsapp`
+- Webhook URL: `https://asibiont.com/webhook/whatsapp`
 
 ---
 

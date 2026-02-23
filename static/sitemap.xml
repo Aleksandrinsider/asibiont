@@ -6,49 +6,49 @@
 
     <!-- Main pages -->
     <url>
-        <loc>https://asibiont.ru/</loc>
+        <loc>https://asibiont.com/</loc>
         <lastmod>2026-02-17</lastmod>
         <changefreq>weekly</changefreq>
         <priority>1.0</priority>
     </url>
 
     <url>
-        <loc>https://asibiont.ru/dashboard</loc>
+        <loc>https://asibiont.com/dashboard</loc>
         <lastmod>2026-02-17</lastmod>
         <changefreq>daily</changefreq>
         <priority>0.9</priority>
     </url>
 
     <url>
-        <loc>https://asibiont.ru/subscription-tiers</loc>
+        <loc>https://asibiont.com/subscription-tiers</loc>
         <lastmod>2026-02-17</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
 
     <url>
-        <loc>https://asibiont.ru/tutorial</loc>
+        <loc>https://asibiont.com/tutorial</loc>
         <lastmod>2026-02-21</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
 
     <url>
-        <loc>https://asibiont.ru/faq</loc>
+        <loc>https://asibiont.com/faq</loc>
         <lastmod>2026-02-21</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
 
     <url>
-        <loc>https://asibiont.ru/llms.txt</loc>
+        <loc>https://asibiont.com/llms.txt</loc>
         <lastmod>2026-02-21</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.5</priority>
     </url>
 
     <url>
-        <loc>https://asibiont.ru/llms-full.txt</loc>
+        <loc>https://asibiont.com/llms-full.txt</loc>
         <lastmod>2026-02-21</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.5</priority>

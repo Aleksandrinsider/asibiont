@@ -467,7 +467,7 @@ class CognitiveEngine:
         text = re.sub(r'`([^`]+?)`', r'\1', text)
 
         # 2b. Заменяем /dashboard на полный URL (только если ещё не полный URL)
-        text = re.sub(r'(?<!asibiont\.ru)/dashboard', 'https://asibiont.ru/dashboard', text)
+        text = re.sub(r'(?<!asibiont\.com)/dashboard', 'https://asibiont.com/dashboard', text)
 
         # 3. Убираем фразы автоответчика (ТОЛЬКО самые шаблонные)
         autoresponder = [

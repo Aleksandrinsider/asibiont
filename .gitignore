@@ -137,3 +137,4 @@ quick_function_test.py
 check_db.py
 debug_*.py
 debug_*.log
+ssl/

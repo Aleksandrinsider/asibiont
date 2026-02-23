@@ -17,9 +17,9 @@ def _format_html(text):
 
 # Test cases
 tests = [
-    'Ссылка на ленту: https://asibiont.ru/dashboard — можешь перейти.',
-    'Посмотри https://asibiont.ru/dashboard и скажи что думаешь',
-    'Вот:https://asibiont.ru/dashboard',
+    'Ссылка на ленту: https://asibiont.com/dashboard — можешь перейти.',
+    'Посмотри https://asibiont.com/dashboard и скажи что думаешь',
+    'Вот:https://asibiont.com/dashboard',
     'Нет ссылок тут, только текст с < и > символами',
 ]
 

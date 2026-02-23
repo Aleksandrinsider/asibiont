@@ -325,7 +325,7 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                     instruction=(
                         f"Только что опубликован пост в ленту новостей на сайте. "
                         f"Содержание поста: «{content[:150]}{'...' if len(content) > 150 else ''}». "
-                        f"Скажи об этом коротко и естественно, дай ссылку https://asibiont.ru/dashboard. "
+                        f"Скажи об этом коротко и естественно, дай ссылку https://asibiont.com/dashboard. "
                         f"Предложи отредактировать или удалить если что-то не так."
                     ),
                     max_tokens=400,
