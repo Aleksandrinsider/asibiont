@@ -5120,8 +5120,9 @@
             // Use server-provided time with user timezone
             try {
                 const now = new Date();
+                const lang = (typeof _currentLang !== 'undefined' && _currentLang === 'en') ? 'en-US' : 'ru-RU';
                 // Используем правильную конвертацию в user timezone
-                const formatter = new Intl.DateTimeFormat('ru-RU', {
+                const formatter = new Intl.DateTimeFormat(lang, {
                     timeZone: window.USER_TIMEZONE,
                     hour: '2-digit',
                     minute: '2-digit',
@@ -5129,7 +5130,7 @@
                 });
                 const timeString = formatter.format(now);
                 
-                const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
+                const dateFormatter = new Intl.DateTimeFormat(lang, {
                     timeZone: window.USER_TIMEZONE,
                     day: 'numeric',
                     month: 'long',
