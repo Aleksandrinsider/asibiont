@@ -4852,6 +4852,70 @@ async def toggle_like_handler(request):
             db_session.close()
 
 
+async def translate_post_handler(request):
+    """Translate a post to the specified language using DeepSeek"""
+    db_session = None
+    try:
+        user_session = await get_session(request)
+        user_id = user_session.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        post_id = int(request.match_info['post_id'])
+        data = await request.json()
+        target_lang = data.get('lang', 'en')
+
+        db_session = Session()
+        post = db_session.query(Post).filter_by(id=post_id).first()
+        if not post:
+            return web.json_response({'error': 'Post not found'}, status=404)
+
+        content = post.content
+        if not content or len(content.strip()) < 2:
+            return web.json_response({'error': 'Nothing to translate'}, status=400)
+
+        lang_names = {
+            'ru': 'Russian', 'en': 'English', 'es': 'Spanish', 'fr': 'French',
+            'de': 'German', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
+            'pt': 'Portuguese', 'it': 'Italian', 'ar': 'Arabic', 'hi': 'Hindi',
+            'tr': 'Turkish', 'pl': 'Polish', 'uk': 'Ukrainian',
+        }
+        lang_name = lang_names.get(target_lang, target_lang)
+
+        async with aiohttp.ClientSession() as session:
+            resp = await session.post(
+                'https://api.deepseek.com/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': DEEPSEEK_MODEL,
+                    'messages': [
+                        {'role': 'system', 'content': f'Translate the following text to {lang_name}. Return ONLY the translated text, nothing else. Preserve formatting and line breaks.'},
+                        {'role': 'user', 'content': content},
+                    ],
+                    'max_tokens': 2000,
+                    'temperature': 0.3,
+                },
+                timeout=aiohttp.ClientTimeout(total=30),
+            )
+            result = await resp.json()
+
+        translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        if not translated:
+            return web.json_response({'error': 'Translation failed'}, status=500)
+
+        return web.json_response({'success': True, 'translated': translated, 'lang': target_lang})
+
+    except Exception as e:
+        logger.error(f"Error translating post: {e}", exc_info=True)
+        return web.json_response({'error': 'Translation error'}, status=500)
+    finally:
+        if db_session:
+            db_session.close()
+
+
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id.
     Проксирует аватар через сервер, чтобы не утекал Bot Token в Location header.
@@ -6043,6 +6107,7 @@ app.router.add_get('/api/comments/{post_id}', get_comments_handler)
 app.router.add_put('/api/comments/{comment_id}', edit_comment_handler)
 app.router.add_delete('/api/comments/{comment_id}', delete_comment_handler)
 app.router.add_post('/api/posts/{post_id}/like', toggle_like_handler)
+app.router.add_post('/api/posts/{post_id}/translate', translate_post_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)
