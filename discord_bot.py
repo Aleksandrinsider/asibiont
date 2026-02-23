@@ -125,14 +125,16 @@ async def send_discord_dm(discord_user_id: int, text: str) -> bool:
 async def discord_oauth_callback(request):
     """
     aiohttp route: GET /auth/discord
-    Handles Discord OAuth2 callback to link a Discord account to the web session.
+    Handles Discord OAuth2 callback.
+    - If user is already logged in (session) → link Discord to existing account.
+    - If not logged in (state=login) → login/register via Discord.
     """
     from aiohttp import web
     from aiohttp_session import get_session
     import urllib.parse
 
     code = request.rel_url.query.get('code')
-    state = request.rel_url.query.get('state')  # telegram_id passed as state
+    state = request.rel_url.query.get('state', '')  # 'login' or telegram_id
 
     if not code:
         return web.Response(text="Missing OAuth code", status=400)
@@ -157,6 +159,7 @@ async def discord_oauth_callback(request):
             token_data = await token_resp.json()
             access_token = token_data.get("access_token")
             if not access_token:
+                logger.error(f"Discord OAuth token exchange failed: {token_data}")
                 return web.Response(text="OAuth token exchange failed", status=400)
 
             # Get Discord user info
@@ -167,22 +170,105 @@ async def discord_oauth_callback(request):
             discord_profile = await user_resp.json()
             discord_id = int(discord_profile["id"])
             discord_username = discord_profile.get("username", "")
+            discord_display = discord_profile.get("global_name") or discord_username
+            discord_avatar = discord_profile.get("avatar")
 
-        # Link Discord ID to the logged-in user
         session = await get_session(request)
-        telegram_id = session.get("user_id") or (int(state) if state else None)
-        if not telegram_id:
-            return web.Response(text="Not authenticated", status=401)
+        existing_user_id = session.get("user_id")
 
+        # ── LOGIN / REGISTER via Discord ──
+        if state == 'login' or not existing_user_id:
+            from models import Session as DBSession, User, Subscription
+            from token_service import grant_signup_tokens
+            import time as _time
+
+            pseudo_telegram_id = -discord_id
+            db = DBSession()
+            try:
+                user = db.query(User).filter_by(discord_id=discord_id).first()
+                if not user:
+                    user = db.query(User).filter_by(telegram_id=pseudo_telegram_id).first()
+
+                is_new = False
+                if not user:
+                    # Build avatar URL
+                    avatar_url = None
+                    if discord_avatar:
+                        avatar_url = f"https://cdn.discordapp.com/avatars/{discord_id}/{discord_avatar}.png?size=256"
+
+                    # Detect timezone from IP
+                    ip_address = request.headers.get('X-Forwarded-For', request.remote or '').split(',')[0].strip()
+                    timezone = 'UTC'
+                    city = None
+                    try:
+                        from main import get_timezone_from_ip
+                        timezone, city = await get_timezone_from_ip(ip_address)
+                    except Exception:
+                        pass
+
+                    user = User(
+                        telegram_id=pseudo_telegram_id,
+                        discord_id=discord_id,
+                        username=discord_username,
+                        first_name=discord_display,
+                        photo_url=avatar_url,
+                        platform='discord',
+                        language='en',
+                        timezone=timezone,
+                    )
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
+
+                    # Grant signup tokens
+                    try:
+                        grant_signup_tokens(pseudo_telegram_id, session=db)
+                    except Exception as e:
+                        logger.error(f"Discord signup tokens error: {e}")
+
+                    # Create profile with city
+                    if city:
+                        from models import UserProfile
+                        profile = UserProfile(user_id=user.id, city=city, contact_info=f"discord_{discord_id}")
+                        db.add(profile)
+                        db.commit()
+
+                    is_new = True
+                    logger.info(f"[DISCORD] New user registered via web: discord_id={discord_id}, username={discord_username}")
+                else:
+                    # Update existing user info
+                    if discord_avatar:
+                        user.photo_url = f"https://cdn.discordapp.com/avatars/{discord_id}/{discord_avatar}.png?size=256"
+                    if discord_display:
+                        user.first_name = discord_display
+                    user.discord_id = discord_id
+                    db.commit()
+                    logger.info(f"[DISCORD] Existing user logged in via Discord: discord_id={discord_id}")
+
+                # Set session
+                session['user_id'] = user.telegram_id
+                logger.info(f"[DISCORD] Session set with user_id={user.telegram_id} (discord login)")
+
+                # Increment login count
+                sub = db.query(Subscription).filter_by(user_id=user.id).first()
+                if sub:
+                    sub.login_count += 1
+                    db.commit()
+
+            finally:
+                db.close()
+
+            return web.HTTPFound('/dashboard')
+
+        # ── LINK Discord to existing logged-in user ──
         from models import Session as DBSession, User
         db = DBSession()
         try:
-            user = db.query(User).filter_by(telegram_id=telegram_id).first()
+            user = db.query(User).filter_by(telegram_id=existing_user_id).first()
             if user:
                 user.discord_id = discord_id
-                user.platform = 'discord'
                 db.commit()
-                logger.info(f"Linked discord_id={discord_id} to user telegram_id={telegram_id}")
+                logger.info(f"Linked discord_id={discord_id} to user telegram_id={existing_user_id}")
         finally:
             db.close()
 
@@ -195,6 +281,27 @@ async def discord_oauth_callback(request):
     except Exception as e:
         logger.error(f"Discord OAuth error: {e}", exc_info=True)
         return web.Response(text="OAuth error", status=500)
+
+
+async def discord_login_redirect(request):
+    """
+    aiohttp route: GET /discord/login
+    Redirects user to Discord OAuth2 authorization page for login.
+    """
+    from aiohttp import web
+    from config import DISCORD_CLIENT_ID, WEB_APP_URL
+    import urllib.parse
+
+    redirect_uri = urllib.parse.quote(f"{WEB_APP_URL}/auth/discord", safe='')
+    oauth_url = (
+        f"https://discord.com/oauth2/authorize"
+        f"?client_id={DISCORD_CLIENT_ID}"
+        f"&response_type=code"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope=identify"
+        f"&state=login"
+    )
+    return web.HTTPFound(oauth_url)
 
 
 # ─── Internal helpers ──────────────────────────────────────────────────────────

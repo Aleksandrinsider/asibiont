@@ -430,6 +430,13 @@
                 data-request-access="write">
             </script>
         </div>
+        <!-- Discord login button -->
+        <div id="discord-login-container" style="display: flex; justify-content: center; margin: 12px 0 24px;">
+            <a href="/discord/login" id="discord-login-btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #5865F2; color: white; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; transition: background 0.2s; box-shadow: 0 2px 6px rgba(88,101,242,0.3);" onmouseover="this.style.background='#4752C4'" onmouseout="this.style.background='#5865F2'">
+                <svg width="20" height="15" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M60.1 4.6A58.5 58.5 0 0 0 45.4.2a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.2 0A37.3 37.3 0 0 0 25.4.3a.2.2 0 0 0-.2-.1A58.4 58.4 0 0 0 10.5 4.6a.2.2 0 0 0-.1.1C1.5 18.3-.9 31.6.3 44.7v.2a58.7 58.7 0 0 0 17.7 9a.2.2 0 0 0 .3-.1 42 42 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.6 38.6 0 0 1-5.5-2.6.2.2 0 0 1 0-.4l1.1-.9a.2.2 0 0 1 .2 0 41.9 41.9 0 0 0 35.6 0 .2.2 0 0 1 .2 0l1.1.9a.2.2 0 0 1 0 .4 36.3 36.3 0 0 1-5.5 2.6.2.2 0 0 0-.1.3 47.1 47.1 0 0 0 3.6 5.9.2.2 0 0 0 .3.1A58.5 58.5 0 0 0 70.4 45v-.2C71.9 29.7 67.9 16.5 60.2 4.7a.2.2 0 0 0-.1-.1ZM23.7 36.7c-3.5 0-6.3-3.2-6.3-7.1s2.8-7.1 6.3-7.1 6.4 3.2 6.3 7.1c0 3.9-2.8 7.1-6.3 7.1Zm23.2 0c-3.5 0-6.3-3.2-6.3-7.1s2.8-7.1 6.3-7.1 6.4 3.2 6.3 7.1c0 3.9-2.7 7.1-6.3 7.1Z" fill="white"/></svg>
+                <span data-i18n="discordLogin">Войти через Discord</span>
+            </a>
+        </div>
         <div class="auth-card">
             <h1>AI отвечают. ASI Biont действует!</h1>
             <div class="lang-switcher" id="lang-toggle">
@@ -582,7 +589,8 @@
       ],
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
       btnTop: 'Пополнить баланс', btnGuide: 'Руководство',
-      fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы'
+      fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы',
+      discordLogin: 'Войти через Discord'
     },
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
@@ -616,7 +624,8 @@
       ],
       cta: '1,500 tokens on signup. All features available immediately.',
       btnTop: 'Top Up Balance', btnGuide: 'Guide',
-      fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing'
+      fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing',
+      discordLogin: 'Sign in with Discord'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -666,6 +675,9 @@
       if (fa[1]) fa[1].textContent = t.fGuide;
       if (fa[2]) fa[2].textContent = t.fPrice;
     }
+    // Discord login button
+    var dcBtn = document.querySelector('[data-i18n="discordLogin"]');
+    if (dcBtn) dcBtn.textContent = t.discordLogin;
   }
   window.applyLang = apply;
   window.switchLang = function(lang) {

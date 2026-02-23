@@ -6079,10 +6079,11 @@ app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
-# Discord OAuth2 callback
+# Discord OAuth2 callback + login redirect
 try:
-    from discord_bot import discord_oauth_callback
+    from discord_bot import discord_oauth_callback, discord_login_redirect
     app.router.add_get('/auth/discord', discord_oauth_callback)
+    app.router.add_get('/discord/login', discord_login_redirect)
     logger.info("✅ Discord OAuth route registered")
 except ImportError as e:
     logger.warning(f"Discord module not available: {e}")
