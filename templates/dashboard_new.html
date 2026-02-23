@@ -5001,9 +5001,10 @@
                     // Имя и ник под аватаром
                     const fullName = partner.first_name || t('user');
                     const contactInfoEscaped = (partner.contact_info || t('unknown-user')).replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                    html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     if (partner.status_text) {
-                        html += `<p style="margin: 0; color: #6C727F; font-size: 12px;">${partner.status_text}</p>`;
+                        html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName} <span style="font-weight: 400; color: #6C727F; font-size: 12px;">${partner.status_text}</span></p>`;
+                    } else {
+                        html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     }
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
                     
