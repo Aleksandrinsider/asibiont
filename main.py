@@ -1142,7 +1142,7 @@ async def dashboard_handler(request):
             'user_avatar_url': user_avatar_url,
             'referral_balance': user.referral_balance,
             'discord_linked': bool(user.discord_id) if user else False,
-            'discord_username': (user.discord_username or (user.username if user.telegram_id < 0 else '') or str(user.discord_id)) if user and user.discord_id else '',
+            'discord_username': (user.discord_username or user.first_name or '') if user and user.discord_id else '',
             'is_discord_user': (user.telegram_id < 0) if user else False,
             'telegram_linked': (user.telegram_id > 0) if user else False,
             'telegram_username': user.username if user and user.telegram_id > 0 else '',
@@ -5835,7 +5835,7 @@ async def api_profile_handler(request):
             'telegram_linked': user.telegram_id > 0,
             'telegram_username': user.username if user.telegram_id > 0 else '',
             'discord_linked': bool(user.discord_id),
-            'discord_username': (user.discord_username or (user.username if user.telegram_id < 0 else '') or str(user.discord_id)) if user.discord_id else '',
+            'discord_username': (user.discord_username or user.first_name or '') if user.discord_id else '',
         }
 
         return web.json_response(response_data)
