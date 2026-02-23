@@ -195,8 +195,18 @@ class AnchorEngine:
                     user_tz = pytz.timezone(u.timezone or 'Europe/Moscow')
                     user_now = datetime.now(user_tz)
                     if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
-                        skipped_night += 1
-                        continue
+                        # НЕ пропускаем если есть pending напоминания — они должны доставляться в любое время
+                        has_pending_reminder = session.query(Task).filter(
+                            Task.user_id == u.id,
+                            Task.reminder_sent == False,
+                            Task.reminder_time <= now_utc,
+                            Task.status.in_(['pending', 'in_progress', 'active'])
+                        ).first() is not None
+                        if not has_pending_reminder:
+                            skipped_night += 1
+                            continue
+                        else:
+                            logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has pending reminder, including")
                 except Exception:
                     pass  # если timezone кривой — пропускаем pre-filter, проверим в _process_user_inner
 
@@ -283,12 +293,22 @@ class AnchorEngine:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ DND до {dnd}, пропуск")
                 return
 
-        # Проверка ночных часов
+        # Проверка ночных часов — НЕ блокируем полностью, а помечаем флагом
         user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
         user_now = datetime.now(user_tz)
-        if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
-            logger.info(f"[ANCHOR] User {user_id}: ⛔ ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00), пропуск")
-            return
+        is_night = user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR
+        if is_night:
+            # Проверяем есть ли pending task reminders — если есть, продолжаем для них
+            has_pending = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.reminder_sent == False,
+                Task.reminder_time <= datetime.now(timezone.utc),
+                Task.status.in_(['pending', 'in_progress', 'active'])
+            ).first() is not None
+            if not has_pending:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00), пропуск")
+                return
+            logger.info(f"[ANCHOR] User {user_id}: 🌙 ночные часы, но есть pending reminders — обрабатываем только CRITICAL")
 
         # ── Подсчёт доставок за сегодня (раздельно) ──
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -368,7 +388,11 @@ class AnchorEngine:
 
         # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
         all_dialog_anchors = critical_anchors.copy()
-        if regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
+        if is_night:
+            # Ночью — только CRITICAL/ALWAYS_DELIVER (task_reminder, task_overdue и т.д.)
+            if regular_anchors:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (night hours)")
+        elif regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
             all_dialog_anchors.extend(regular_anchors)
         elif regular_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok})")
@@ -385,19 +409,22 @@ class AnchorEngine:
             else:
                 logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
 
-        # ── 3c. FEED POSTS — отдельный лимит ──
-        feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
-        if feed_posts and post_count < MAX_FEED_PER_DAY:
-            for pa in feed_posts[:1]:
-                async with self._ai_semaphore:
-                    await self._process_post_anchor(user, pa, session)
+        # ── 3c. FEED POSTS — отдельный лимит (не ночью) ──
+        if not is_night:
+            feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
+            if feed_posts and post_count < MAX_FEED_PER_DAY:
+                for pa in feed_posts[:1]:
+                    async with self._ai_semaphore:
+                        await self._process_post_anchor(user, pa, session)
 
-        # ── 3d. CHANNEL POSTS — отдельный лимит ──
-        channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
-        if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
-            for pa in channel_posts[:1]:
-                async with self._ai_semaphore:
-                    await self._process_post_anchor(user, pa, session)
+            # ── 3d. CHANNEL POSTS — отдельный лимит ──
+            channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
+            if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
+                for pa in channel_posts[:1]:
+                    async with self._ai_semaphore:
+                        await self._process_post_anchor(user, pa, session)
+        elif post_anchors:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ posts blocked (night hours)")
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
