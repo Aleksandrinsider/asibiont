@@ -336,6 +336,25 @@
             }
             }
         }
+        .lang-toggle {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            padding: 6px 12px;
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            color: #374151;
+        }
+        .lang-toggle:hover {
+            border-color: #1F2328;
+            background: #F6F8FA;
+        }
     </style>
 </head>
 <body>
@@ -373,6 +392,7 @@
             console.log('Desktop device detected on index page');
         }
     </script>
+    <button id="lang-toggle" class="lang-toggle">🇬🇧 EN</button>
     <div class="auth-container">
         <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 300px; height: 300px; display: block; margin: 0 auto 20px; max-width: 100%;">
         <div id="telegram-login-container">
@@ -479,7 +499,7 @@
         </div>
 
         <!-- Call to Action -->
-        <div style="text-align: center; margin: 32px 0; padding: 24px 16px;">
+        <div class="cta-section" style="text-align: center; margin: 32px 0; padding: 24px 16px;">
             <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">1 500 токенов при регистрации. Все функции доступны сразу.</p>
             <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
                 <a href="/subscription-tiers" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Пополнить баланс</a>
@@ -487,13 +507,142 @@
             </div>
         </div>
 
-        <div style="text-align: center; margin-top: 32px; padding-top: 24px; padding-bottom: 32px; color: #6C727F; font-size: 13px;">
+        <div class="footer-links" style="text-align: center; margin-top: 32px; padding-top: 24px; padding-bottom: 32px; color: #6C727F; font-size: 13px;">
             <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
             <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Руководство</a>
             <a href="/subscription-tiers" style="color: #59636E; text-decoration: none;">Тарифы</a>
             <div style="margin-top: 8px;">2026 ASI Biont</div>
         </div>
     </div>
+<!-- i18n Language Switcher -->
+<script>
+(function() {
+  var T = {
+    ru: {
+      title: 'ASI Biont — AI-агент в Telegram | Не чат-бот, а автономный помощник',
+      heading: 'AI отвечают. ASI Biont — действует!',
+      subtitle: 'Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.',
+      feat: [
+        ['Задачи и цели', '«Завтра в 9 созвон с инвестором» — он поставит напоминание. «Сдать отчёт в пятницу» — зафиксирует дедлайн и проконтролирует. Вы говорите — он действует.'],
+        ['Готовые связи', '«Нужен дизайнер для проекта» — покажет подходящих людей из сети. «Кто разбирается в финтехе?» — найдёт по навыкам и городу. Не открытый каталог, а закрытое сообщество.'],
+        ['Делегирование', '«Поручи @ivan подготовить отчёт до среды» — задача уйдёт исполнителю, дедлайн встанет на контроль. Агент отследит сроки и напомнит обеим сторонам.'],
+        ['Автопилот 24/7', 'Вы спите — он публикует в канал по расписанию. Вы на встрече — он отправляет утреннюю сводку. Просрочена задача — напомнит сам, без вашего участия.'],
+        ['Точечные возможности', 'Новый участник с нужными навыками в вашем городе — агент сообщит. Контакт обновил профиль — вы узнаете первым. Не шум, а релевантные сигналы.'],
+        ['Бот + дашборд', 'В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.']
+      ],
+      rl: [
+        '«Скинул голосовое на бегу — бот сам вытащил задачу и дедлайн. Магия какая-то.»',
+        '«Забыл про задачу — бот пнул. Клиент даже не заметил, что я чуть не проспал.»',
+        '«Нужен был дизайнер — агент нашёл трёх подходящих за минуту, без бирж и откликов.»',
+        '«Просыпаюсь — в Телеграме уже план дня. Я даже не просил, он сам.»',
+        '«Кинул задачу коллеге через бота — тот получил, сделал, мне пришёл отчёт. Ни одного созвона.»',
+        '«Канал постится сам, пока я сплю. Серьёзно, проснулся — уже 200 просмотров.»',
+        '«Раньше вёл задачи в заметках — половину терял. Теперь просто говорю боту и не парюсь.»'
+      ],
+      rr: [
+        '«Познакомился через бота с человеком из соседнего города — уже делаем совместный проект.»',
+        '«Notion бросил через 3 дня, Trello через неделю. Тут бот сам пишет, если молчишь — не забросишь.»',
+        '«Спросил "что там по проекту?" — одним сообщением получил всё: что сделано, что горит.»',
+        '«Написал "готово" — бот сам понял какую задачу, закрыл и предложил следующую. Он реально думает.»',
+        '«Перенёс дедлайн одним сообщением — исполнитель тут же получил уведомление. Без переписок.»',
+        '«Агент сам предложил опубликовать пост — я бы не додумался, а охваты выстрелили.»',
+        '«Искал маркетолога в своём городе — бот показал двоих с релевантным опытом за 10 секунд.»'
+      ],
+      cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
+      btnTop: 'Пополнить баланс', btnGuide: 'Руководство',
+      fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы'
+    },
+    en: {
+      title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
+      heading: 'AI answers. ASI Biont — takes action!',
+      subtitle: 'Not a chatbot — an AI agent. Manages tasks, finds contractors, delegates and posts content in Telegram. No prompts — just say what you need. 1,500 tokens on signup.',
+      feat: [
+        ['Tasks & Goals', '"Call with investor tomorrow at 9" — it sets a reminder. "Submit report by Friday" — it tracks the deadline and follows up. You speak — it acts.'],
+        ['Ready Connections', '"Need a designer?" — it shows matching people from the network. "Who knows fintech?" — finds by skills and city. Not a directory — a closed community.'],
+        ['Delegation', '"Ask @ivan to prepare the report by Wednesday" — the task goes to the assignee, deadline is tracked. The agent monitors timelines and reminds both sides.'],
+        ['Autopilot 24/7', 'You sleep — it posts to your channel on schedule. In a meeting — it sends a morning briefing. Task overdue — it reminds on its own.'],
+        ['Targeted Opportunities', 'A new member with the right skills in your city — the agent notifies you. A contact updated their profile — you learn first. Not noise — relevant signals.'],
+        ['Bot + Dashboard', 'In your pocket — a Telegram bot for voice and text. On screen — a dashboard with tasks, contacts and feed. One database, two interfaces.']
+      ],
+      rl: [
+        '"Sent a voice memo on the go — the bot extracted the task and deadline itself. Pure magic."',
+        '"Forgot a task — the bot nudged me. Client didn\'t notice I almost missed it."',
+        '"Needed a designer — the agent found three in a minute. No freelance platforms."',
+        '"Woke up — daily plan already in Telegram. Didn\'t even ask."',
+        '"Sent a task to a colleague via bot — done, report received. Zero calls."',
+        '"Channel posts itself while I sleep. Woke up to 200 views."',
+        '"Used to track tasks in notes — lost half. Now I just tell the bot."'
+      ],
+      rr: [
+        '"Met someone nearby through the bot — already on a joint project."',
+        '"Quit Notion in 3 days, Trello in a week. Here the bot nudges you — can\'t abandon it."',
+        '"Asked \'how\'s the project?\' — got everything in one message."',
+        '"Typed \'done\' — bot figured out which task, closed it, suggested next. It thinks."',
+        '"Moved a deadline with one message — assignee notified instantly."',
+        '"Agent suggested a post — wouldn\'t have thought of it, reach skyrocketed."',
+        '"Needed a marketer in my city — bot found two in 10 seconds."'
+      ],
+      cta: '1,500 tokens on signup. All features available immediately.',
+      btnTop: 'Top Up Balance', btnGuide: 'Guide',
+      fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing'
+    }
+  };
+  function detectLang() {
+    var s = localStorage.getItem('asibiont_lang');
+    if (s && T[s]) return s;
+    var b = (navigator.language || 'ru').toLowerCase();
+    return b.startsWith('ru') ? 'ru' : 'en';
+  }
+  function apply(lang) {
+    var t = T[lang];
+    localStorage.setItem('asibiont_lang', lang);
+    document.documentElement.lang = lang;
+    document.title = t.title;
+    var tog = document.getElementById('lang-toggle');
+    if (tog) tog.textContent = lang === 'ru' ? '🇬🇧 EN' : '🇷🇺 RU';
+    var h1 = document.querySelector('h1');
+    if (h1) h1.textContent = t.heading;
+    var sub = document.querySelector('.subtitle');
+    if (sub) sub.textContent = t.subtitle;
+    document.querySelectorAll('.feature-card').forEach(function(c, i) {
+      if (!t.feat[i]) return;
+      var h2 = c.querySelector('h2');
+      if (h2) h2.textContent = t.feat[i][0];
+      var d = c.querySelector('.feature-description');
+      if (d) d.textContent = t.feat[i][1];
+    });
+    document.querySelectorAll('.reviews-left .review-item').forEach(function(e, i) {
+      e.textContent = t.rl[i % 7];
+    });
+    document.querySelectorAll('.reviews-right .review-item').forEach(function(e, i) {
+      e.textContent = t.rr[i % 7];
+    });
+    var cs = document.querySelector('.cta-section');
+    if (cs) {
+      var p = cs.querySelector('p');
+      if (p) p.textContent = t.cta;
+      var aa = cs.querySelectorAll('a');
+      if (aa[0]) aa[0].textContent = t.btnTop;
+      if (aa[1]) aa[1].textContent = t.btnGuide;
+    }
+    var fl = document.querySelector('.footer-links');
+    if (fl) {
+      var fa = fl.querySelectorAll('a');
+      if (fa[0]) fa[0].textContent = t.fFaq;
+      if (fa[1]) fa[1].textContent = t.fGuide;
+      if (fa[2]) fa[2].textContent = t.fPrice;
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    apply(detectLang());
+    var tog = document.getElementById('lang-toggle');
+    if (tog) tog.addEventListener('click', function() {
+      var c = localStorage.getItem('asibiont_lang') || detectLang();
+      apply(c === 'ru' ? 'en' : 'ru');
+    });
+  });
+})();
+</script>
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){
