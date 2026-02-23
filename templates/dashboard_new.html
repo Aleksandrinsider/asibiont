@@ -564,19 +564,7 @@
                                 <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="withdraw">вывести</a>
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения привлечённого пользователя</p>
-
-                            <!-- Telegram link -->
-                            {% if telegram_linked %}
-                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #374151;"><span style="color: #26A5E4;">Telegram</span> — {{ telegram_username if telegram_username else user.first_name }}</p>
-                            {% else %}
-                            <p style="margin: 4px 0 0 0;"><a href="/?link_tg=1" style="font-size: 12px; color: #6C727F; text-decoration: none;" data-i18n="link-telegram">Привязать Telegram</a></p>
-                            {% endif %}
-                            <!-- Discord link -->
-                            {% if discord_linked %}
-                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #374151;"><span style="color: #5865F2;">Discord</span> — {{ discord_username }}</p>
-                            {% else %}
-                            <p style="margin: 4px 0 0 0;"><a href="/discord/link" style="font-size: 12px; color: #6C727F; text-decoration: none;" data-i18n="link-discord">Привязать Discord</a></p>
-                            {% endif %}
+                            <p style="margin: 0; font-size: 12px; color: #374151;">{% if telegram_linked %}<span style="color: #26A5E4;">Telegram:</span> {{ telegram_username if telegram_username else user.first_name }}{% else %}<a href="/?link_tg=1" style="color: #6C727F; text-decoration: none;" data-i18n="link-telegram">Привязать Telegram</a>{% endif %} &nbsp; {% if discord_linked %}<span style="color: #5865F2;">Discord:</span> {{ discord_username }}{% else %}<a href="/discord/link" style="color: #6C727F; text-decoration: none;" data-i18n="link-discord">Привязать Discord</a>{% endif %}</p>
                         </div>
                     </div>
                 </div>
