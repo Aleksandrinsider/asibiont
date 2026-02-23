@@ -943,7 +943,7 @@ async def dashboard_handler(request):
                 if task.reminder_time.tzinfo is None:
                     task.reminder_time = pytz.UTC.localize(task.reminder_time)
                 local_reminder = task.reminder_time.astimezone(user_tz)
-                task.overdue = local_reminder < user_now and task.status == 'pending'
+                task.overdue = local_reminder < user_now and task.status == 'pending' and getattr(task, 'reminder_sent', True)
                 task.reminder_time_local = local_reminder.strftime('%d.%m.%Y %H:%M')
                 if task.overdue:
                     delta = user_now - local_reminder

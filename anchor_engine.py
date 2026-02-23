@@ -523,7 +523,9 @@ class AnchorEngine:
                         session.rollback()
 
                 # ПРОСРОЧЕННЫЕ (более 30 мин назад)
-                elif minutes_diff < -30:
+                # НО: если reminder_sent=False — задачу только что перенесли, 
+                # новое время ещё не наступило, НЕ считаем просроченной
+                elif minutes_diff < -30 and getattr(task, 'reminder_sent', True):
                     hours_overdue = abs(minutes_diff) / 60
                     anchors.append(Anchor(
                         user_id=user.id,

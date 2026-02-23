@@ -693,17 +693,20 @@ class ReminderService:
                 all_active_tasks = user_tasks.union(delegated_by_user).union(delegated_to_user).order_by(Task.reminder_time).all()
                 
                 # Добавить просроченные задачи (только основные и делегированные пользователю)
+                # НО: если reminder_sent=False — задачу перенесли, НЕ считаем просроченной
                 now_utc = datetime.now(pytz.UTC)
                 overdue_tasks = db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'pending',
-                    Task.reminder_time < now_utc
+                    Task.reminder_time < now_utc,
+                    Task.reminder_sent == True
                 ).union(
                     db.query(Task).filter(
                         Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                         Task.delegation_status == 'accepted',
                         Task.status == 'pending',
-                        Task.reminder_time < now_utc
+                        Task.reminder_time < now_utc,
+                        Task.reminder_sent == True
                     )
                 ).order_by(Task.reminder_time).all()
                 
@@ -845,8 +848,11 @@ class ReminderService:
                 return
             
             # Определяем context hint для AI (просроченные задачи — приоритет)
+            # НО: если reminder_sent=False — задачу только что перенесли, НЕ считаем просроченной
             overdue_tasks = [t for t in pending_tasks
-                            if t.reminder_time and (t.reminder_time if t.reminder_time.tzinfo else pytz.UTC.localize(t.reminder_time)) < now_utc]
+                            if t.reminder_time 
+                            and (t.reminder_time if t.reminder_time.tzinfo else pytz.UTC.localize(t.reminder_time)) < now_utc
+                            and getattr(t, 'reminder_sent', True)]  # False = just rescheduled
             
             context = "overdue_tasks" if overdue_tasks else "general"
             

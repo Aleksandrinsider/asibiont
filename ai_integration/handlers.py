@@ -1983,6 +1983,22 @@ async def edit_task(
                     task.followup_reminder_sent = False
                     task.result_check_sent = False
                     logger.info(f"[EDIT_TASK] Time updated: '{reminder_time}' -> {task.reminder_time} UTC, reminder flags reset")
+                    
+                    # КРИТИЧНО: удаляем pending overdue-якоря для этой задачи
+                    try:
+                        from models import Session as AnchorSession
+                        anchor_session = Session() if close_session else session
+                        from anchor_engine import Anchor
+                        deleted_count = anchor_session.query(Anchor).filter(
+                            Anchor.source == f'task:{task.id}',
+                            Anchor.anchor_type.in_(['task_overdue', 'task_reminder', 'task_deadline_soon']),
+                            Anchor.delivered_at.is_(None)
+                        ).delete(synchronize_session='fetch')
+                        if deleted_count:
+                            anchor_session.commit()
+                            logger.info(f"[EDIT_TASK] Deleted {deleted_count} pending overdue/reminder anchors for task {task.id}")
+                    except Exception as e:
+                        logger.warning(f"[EDIT_TASK] Could not clean up anchors: {e}")
                 else:
                     if close_session:
                         session.close()
