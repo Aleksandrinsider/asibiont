@@ -1023,7 +1023,7 @@ details[open] .details-content {
 
 .progress-bar {
     height: 6px;
-    background-color: #D1D9E0;
+    background-color: #F3F4F6;
     border-radius: 3px;
     overflow: hidden;
 }
@@ -1031,6 +1031,7 @@ details[open] .details-content {
 .progress-fill {
     height: 100%;
     background-color: #068487;
+    border-radius: 3px;
     transition: width 0.3s ease;
 }
 
