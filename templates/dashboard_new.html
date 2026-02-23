@@ -565,6 +565,12 @@
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения привлечённого пользователя</p>
 
+                            <!-- Telegram link -->
+                            {% if telegram_linked %}
+                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #374151;"><span style="color: #26A5E4;">Telegram</span> — {{ telegram_username if telegram_username else user.first_name }}</p>
+                            {% else %}
+                            <p style="margin: 4px 0 0 0;"><a href="/?link_tg=1" style="font-size: 12px; color: #6C727F; text-decoration: none;" data-i18n="link-telegram">Привязать Telegram</a></p>
+                            {% endif %}
                             <!-- Discord link -->
                             {% if discord_linked %}
                             <p style="margin: 4px 0 0 0; font-size: 12px; color: #374151;"><span style="color: #5865F2;">Discord</span> — {{ discord_username }}</p>
@@ -6947,6 +6953,7 @@
       'referral-desc':'20% токенов с каждого пополнения привлечённого пользователя',
 
       'link-discord':'Привязать Discord',
+      'link-telegram':'Привязать Telegram',
       'statistics':'Статистика','task-stats':'Статистика по задачам:',
       'in-progress':'В работе:','overdue-stat':'С отставанием:','completed-stat':'Выполнено:',
       'users-online':'Пользователей на сайте:',
@@ -7108,6 +7115,7 @@
       'referral-link':'Referral link:','copy':'copy','withdraw':'withdraw',
       'referral-desc':'20% tokens from each top-up by referred user',
       'link-discord':'Link Discord',
+      'link-telegram':'Link Telegram',
       'statistics':'Statistics','task-stats':'Task statistics:',
       'in-progress':'In progress:','overdue-stat':'Overdue:','completed-stat':'Completed:',
       'users-online':'Users online:',

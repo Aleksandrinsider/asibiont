@@ -1145,6 +1145,7 @@ async def dashboard_handler(request):
             'discord_username': user.discord_username or (user.username if user and user.telegram_id < 0 else '') if user else '',
             'is_discord_user': (user.telegram_id < 0) if user else False,
             'telegram_linked': (user.telegram_id > 0) if user else False,
+            'telegram_username': user.username if user and user.telegram_id > 0 else '',
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
