@@ -5846,6 +5846,31 @@ async def api_profile_handler(request):
         session_db.close()
 
 
+async def discord_unlink_handler(request):
+    """Отвязывает Discord аккаунт от текущего пользователя"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            if not user.discord_id:
+                return web.json_response({'error': 'Discord not linked'}, status=400)
+            user.discord_id = None
+            user.discord_username = None
+            session_db.commit()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Discord unlink error: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def extend_subscription_handler(request):
     """Перенаправление на страницу пополнения токенов"""
     return web.HTTPFound('/subscription-tiers')
@@ -6228,6 +6253,7 @@ try:
     app.router.add_get('/discord/login', discord_login_redirect)
     app.router.add_get('/discord/link', discord_link_redirect)
     logger.info("✅ Discord OAuth route registered")
+app.router.add_post('/api/discord/unlink', discord_unlink_handler)
 except ImportError as e:
     logger.warning(f"Discord module not available: {e}")
 # API routes for dynamic updates

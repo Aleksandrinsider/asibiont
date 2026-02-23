@@ -985,7 +985,7 @@
                     <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Discord</label>
                         {% if discord_linked %}
-                        <div style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">{{ discord_username }}</div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">{{ discord_username }}<a href="#" onclick="unlinkDiscord(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="unlink">отвязать</a></div>
                         {% else %}
                         <a href="/discord/link" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-discord">Привязать</a>
                         {% endif %}
@@ -4594,6 +4594,21 @@
             }
         }
         
+        async function unlinkDiscord() {
+            if (!confirm(t('unlink-discord-confirm') || 'Отвязать Discord аккаунт?')) return;
+            try {
+                const res = await fetch('/api/discord/unlink', { method: 'POST', credentials: 'include' });
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || 'Ошибка');
+                }
+            } catch (e) {
+                alert('Ошибка сети');
+            }
+        }
+
         function skipQuickProfile() {
             const modal = document.getElementById('quick-profile-modal');
             if (modal) {
