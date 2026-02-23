@@ -4237,6 +4237,13 @@ async def api_update_profile_handler(request):
                 session=session_db
             )
 
+            # Handle status_text separately (not in update_profile)
+            if 'status_text' in data:
+                profile = session_db.query(UserProfile).filter_by(user_id=user_id).first()
+                if profile:
+                    profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
+                    session_db.commit()
+
             return web.json_response({
                 'success': True,
                 'message': 'Профиль обновлён'
