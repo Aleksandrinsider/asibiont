@@ -543,6 +543,7 @@
                                 
                                 <!-- Имя и ник под аватаром -->
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %}</p>
+                                <p style="margin: 0; color: #6C727F; font-size: 12px;"><a href="#" onclick="openStatusModal(); return false;" style="color: #6C727F; text-decoration: none;" id="status-display">{% if profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
                                 
                             </div>
@@ -908,6 +909,30 @@
                 <div class="rating-modal-actions">
                     <button onclick="closeWithdrawModal()" class="rating-cancel-btn" data-i18n="cancel" title="Отмена" data-i18n-title="cancel">Отмена</button>
                     <button onclick="submitWithdraw()" class="rating-submit-btn" data-i18n="submit-request" title="Отправить заявку" data-i18n-title="submit-request">Отправить заявку</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Modal -->
+    <div id="status-modal" class="rating-modal">
+        <div class="rating-modal-content">
+            <div class="rating-modal-header">
+                <h3 data-i18n="status-title">Статус</h3>
+                <button onclick="closeStatusModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="rating-modal-body">
+                <p style="font-size: 12px; color: #6C727F; margin-bottom: 12px;" data-i18n="status-desc">Например: Инвестор, Ищу партнёра, Открыт к предложениям</p>
+                <div style="margin-bottom: 16px;">
+                    <input type="text" id="status-input" maxlength="50" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" />
+                </div>
+                <div class="rating-modal-actions">
+                    <button onclick="closeStatusModal()" class="rating-cancel-btn" data-i18n="cancel" title="Отмена" data-i18n-title="cancel">Отмена</button>
+                    <button onclick="saveStatus()" class="rating-submit-btn" data-i18n="save" title="Сохранить" data-i18n-title="save">Сохранить</button>
                 </div>
             </div>
         </div>
@@ -1389,6 +1414,44 @@
         function closeWithdrawModal() {
             const modal = document.getElementById('withdraw-modal');
             if (modal) modal.style.display = 'none';
+        }
+
+        function openStatusModal() {
+            const modal = document.getElementById('status-modal');
+            const input = document.getElementById('status-input');
+            const display = document.getElementById('status-display');
+            if (input && display) {
+                const currentText = display.textContent.trim();
+                input.value = (currentText === t('status-set')) ? '' : currentText;
+                input.setAttribute('placeholder', t('status-placeholder'));
+            }
+            if (modal) modal.style.display = 'flex';
+            if (input) setTimeout(() => input.focus(), 100);
+        }
+
+        function closeStatusModal() {
+            const modal = document.getElementById('status-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function saveStatus() {
+            const input = document.getElementById('status-input');
+            const statusText = input ? input.value.trim() : '';
+            closeStatusModal();
+            try {
+                const resp = await fetch('/api/update_profile', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({status_text: statusText})
+                });
+                if (resp.ok) {
+                    const display = document.getElementById('status-display');
+                    if (display) display.textContent = statusText || t('status-set');
+                    showNotification(t('save') + '!', 'success');
+                }
+            } catch(e) {
+                console.error('Save status error:', e);
+            }
         }
 
         function formatCardNumber(input) {
@@ -4939,6 +5002,9 @@
                     const fullName = partner.first_name || t('user');
                     const contactInfoEscaped = (partner.contact_info || t('unknown-user')).replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
+                    if (partner.status_text) {
+                        html += `<p style="margin: 0; color: #6C727F; font-size: 12px;">${partner.status_text}</p>`;
+                    }
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
                     
                     // Город контакта
@@ -6289,6 +6355,7 @@
                             html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;">' + initial + '</div>';
                         }
                         html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || t('user')) + '</p>';
+                        html += '<p style="margin: 0; color: #6C727F; font-size: 12px;"><a href="#" onclick="openStatusModal(); return false;" style="color: #6C727F; text-decoration: none;" id="status-display">' + (data.profile.status_text || t('status-set')) + '</a></p>';
                         html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || t('unknown-user')) + '</p>';
                         html += '</div>';
                         html += '<p>' + t('city-label') + ' ' + (data.profile.city || t('not-specified')) + '</p>';
@@ -7139,6 +7206,7 @@
       'change-time':'Изменить местное время','enter-time':'Введите ваше текущее местное время',
       'time-example':'(например, 20:30 или 8:30 PM)',
       'withdrawal-title':'Вывод реферальных средств',
+      'status-title':'Статус','status-set':'+ указать статус','status-placeholder':'Например: Инвестор','status-desc':'Например: Инвестор, Ищу партнёра, Открыт к предложениям',
       'available-withdrawal':'Доступно для вывода:',
       'token-rate':'1 токен = 1 рубль. Минимальная сумма вывода: 100 токенов',
       'card-number':'Номер карты','amount-tokens':'Сумма (токенов)','submit-request':'Отправить заявку',
@@ -7306,6 +7374,7 @@
       'change-time':'Change local time','enter-time':'Enter your current local time',
       'time-example':'(e.g., 20:30 or 8:30 PM)',
       'withdrawal-title':'Referral funds withdrawal',
+      'status-title':'Status','status-set':'+ set status','status-placeholder':'E.g.: Investor','status-desc':'E.g.: Investor, Looking for a partner, Open to offers',
       'available-withdrawal':'Available for withdrawal:',
       'token-rate':'1 token = 1 ruble. Minimum withdrawal: 100 tokens',
       'card-number':'Card number','amount-tokens':'Amount (tokens)','submit-request':'Submit request',

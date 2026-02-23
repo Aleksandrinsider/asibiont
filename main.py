@@ -3531,6 +3531,7 @@ async def api_contact_profile_handler(request):
                     'zodiac_sign': getattr(profile, 'zodiac_sign', None) if profile else None,
                     'common_interests': common_interests,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
+                    'status_text': getattr(profile, 'status_text', None) if profile else None,
                     'task_count': active_tasks,
                     'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
                     'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None,
@@ -5798,6 +5799,8 @@ async def api_profile_handler(request):
                     profile.skills = data['skills'].strip() if data['skills'] and data['skills'].strip() else None
                 if 'goals' in data:
                     profile.goals = data['goals'].strip() if data['goals'] and data['goals'].strip() else None
+                if 'status_text' in data:
+                    profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
                 if 'bio' in data:
                     profile.bio = data['bio'].strip() if data['bio'] and data['bio'].strip() else None
 
@@ -5837,6 +5840,7 @@ async def api_profile_handler(request):
             'interests': profile.interests if profile else None,
             'languages': profile.languages if profile else None,
             'bio': profile.bio if profile else None,
+            'status_text': profile.status_text if profile else None,
             'average_rating': profile.average_rating if profile else 0,
             'rating_count': profile.rating_count if profile else 0
         }
