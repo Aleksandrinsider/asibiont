@@ -2166,10 +2166,13 @@
                                 </div>
                                 <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
                             </div>
-                            ${comment.author.is_current_user ? 
-                                `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
-                                : ''
-                            }
+                            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                                <button id="comment-translate-btn-${comment.id}" onclick="translateComment(${comment.id})" class="delete-btn" title="${t('translate')}" style="margin-top: 3px;"><span id="comment-translate-label-${comment.id}">${TRANSLATE_GLOBE_SVG}</span></button>
+                                ${comment.author.is_current_user ? 
+                                    `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                    : ''
+                                }
+                            </div>
                         `;
                         
                         commentsContainer.appendChild(commentDiv);
@@ -2240,10 +2243,13 @@
                                     </div>
                                     <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
                                 </div>
-                                ${comment.author.is_current_user ? 
-                                    `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
-                                    : ''
-                                }
+                                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                                    <button id="comment-translate-btn-${comment.id}" onclick="translateComment(${comment.id})" class="delete-btn" title="${t('translate')}" style="margin-top: 3px;"><span id="comment-translate-label-${comment.id}">${TRANSLATE_GLOBE_SVG}</span></button>
+                                    ${comment.author.is_current_user ? 
+                                        `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                        : ''
+                                    }
+                                </div>
                             `;
                             
                             commentsContainer.appendChild(commentDiv);
@@ -2291,12 +2297,66 @@
         }
 
         // SVG icons for translate button - text-based, matches like button height
-        const TRANSLATE_GLOBE_SVG = 'A<span style="font-size:10px;">a</span>';
-        const TRANSLATE_LOADING_SVG = '···';
-        const TRANSLATE_BACK_SVG = '↩<span style="font-size:10px;">a</span>';
+        const TRANSLATE_GLOBE_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm-.75 10.75v1.4a5.52 5.52 0 0 1-2.97-1.88l1.1-.45c.34.45.73.85 1.17 1.13-.1-.04-.19-.08-.29-.13l.99-.07Zm1.5 0 .99.07a5.254 5.254 0 0 1-.99.13v-1.4c.44-.28.83-.68 1.17-1.13l1.1.45a5.52 5.52 0 0 1-2.97 1.88h-.3Zm-4.9-3h-1.4a5.52 5.52 0 0 1 .45-2.1l1.22.53c-.16.5-.25 1.02-.27 1.57Zm9.8 0h-1.4c-.02-.55-.11-1.07-.27-1.57l1.22-.53c.29.67.44 1.39.45 2.1Zm-7.85-3.5-.88-1.1A5.52 5.52 0 0 1 7.25 3.1v1.4c-.54.15-1.04.38-1.47.7Zm5.9 0c-.43-.32-.93-.55-1.47-.7V3.1a5.52 5.52 0 0 1 2.35 1.06l-.88 1.1ZM8 4.75a4.25 4.25 0 1 0 0 8.5 4.25 4.25 0 0 0 0-8.5Zm0 1.5a2.75 2.75 0 1 1 0 5.5 2.75 2.75 0 0 1 0-5.5Z"/></svg>';
+        const TRANSLATE_LOADING_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="12" cy="8" r="1.5"/></svg>';
+        const TRANSLATE_BACK_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"/></svg>';
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
+        // Comment translation cache
+        const commentTranslationCache = {};
+
+        async function translateComment(commentId) {
+            const btn = document.getElementById(`comment-translate-btn-${commentId}`);
+            const label = document.getElementById(`comment-translate-label-${commentId}`);
+            const contentEl = document.getElementById(`comment-content-${commentId}`);
+            if (!contentEl) return;
+
+            if (commentTranslationCache[commentId] && commentTranslationCache[commentId].showingTranslation) {
+                contentEl.textContent = commentTranslationCache[commentId].original;
+                commentTranslationCache[commentId].showingTranslation = false;
+                label.innerHTML = TRANSLATE_GLOBE_SVG;
+                return;
+            }
+            if (commentTranslationCache[commentId] && commentTranslationCache[commentId].translated) {
+                contentEl.textContent = commentTranslationCache[commentId].translated;
+                commentTranslationCache[commentId].showingTranslation = true;
+                label.innerHTML = TRANSLATE_BACK_SVG;
+                return;
+            }
+
+            const originalText = contentEl.textContent;
+            commentTranslationCache[commentId] = { original: originalText, translated: null, showingTranslation: false };
+            const hasRussian = /[а-яА-ЯёЁ]/.test(originalText);
+            const targetLang = hasRussian ? 'en' : 'ru';
+
+            label.innerHTML = TRANSLATE_LOADING_SVG;
+            btn.disabled = true;
+            try {
+                const response = await fetch(`/api/comments/${commentId}/translate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ lang: targetLang })
+                });
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+                if (response.ok && data.translated) {
+                    commentTranslationCache[commentId].translated = data.translated;
+                    commentTranslationCache[commentId].showingTranslation = true;
+                    contentEl.textContent = data.translated;
+                    label.innerHTML = TRANSLATE_BACK_SVG;
+                } else {
+                    label.innerHTML = TRANSLATE_GLOBE_SVG;
+                    showNotification(t('err-translate') + ' ' + (data.error || t('err-unknown')), 'error');
+                }
+            } catch (error) {
+                label.innerHTML = TRANSLATE_GLOBE_SVG;
+                showNotification(t('err-translate-short'), 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
 
         async function translatePost(postId) {
             const btn = document.getElementById(`translate-btn-${postId}`);
@@ -3977,7 +4037,7 @@
             
             // Кнопки действий
             const isDelegatedToMe = task.delegated_by && task.delegation_status === 'pending';
-            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: column; margin-right: 8px;">';
+            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: row; margin-right: 8px; align-items: flex-start;">';
             
             if (isDelegatedToMe) {
                 // Задача делегирована МНЕ и ожидает моего принятия - только кнопки Принять и Отклонить (БЕЗ удаления)
