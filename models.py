@@ -52,6 +52,7 @@ class User(Base):
     language = Column(String(5), default='ru')  # User language: 'ru' or 'en'
     platform = Column(String(20), default='telegram')  # 'telegram' or 'discord'
     discord_id = Column(BigInteger, unique=True, nullable=True, index=True)  # Discord user ID
+    discord_username = Column(String(255), nullable=True)  # Discord username for display
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 

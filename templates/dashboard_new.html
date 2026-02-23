@@ -565,26 +565,12 @@
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения привлечённого пользователя</p>
 
-                            <!-- Connected accounts -->
-                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E8ECEF;">
-                                <p style="margin: 0 0 6px 0; font-weight: 500; color: #374151; font-size: 12px;" data-i18n="connected-accounts">Привязанные аккаунты</p>
-                                <div style="display: flex; flex-direction: column; gap: 4px;">
-                                    {% if telegram_linked %}
-                                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #374151;">
-                                        <span style="color: #26A5E4;">✔</span> Telegram
-                                    </div>
-                                    {% else %}
-                                    <a href="/?link_tg=1" id="link-telegram-btn" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #6C727F; text-decoration: none; cursor: pointer;" data-i18n="link-telegram">➕ Привязать Telegram</a>
-                                    {% endif %}
-                                    {% if discord_linked %}
-                                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #374151;">
-                                        <span style="color: #5865F2;">✔</span> Discord
-                                    </div>
-                                    {% else %}
-                                    <a href="/discord/link" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #6C727F; text-decoration: none;" data-i18n="link-discord">➕ Привязать Discord</a>
-                                    {% endif %}
-                                </div>
-                            </div>
+                            <!-- Discord link -->
+                            {% if discord_linked %}
+                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #374151;"><span style="color: #5865F2;">Discord</span> — {{ discord_username }}</p>
+                            {% else %}
+                            <p style="margin: 4px 0 0 0;"><a href="/discord/link" style="font-size: 12px; color: #6C727F; text-decoration: none;" data-i18n="link-discord">Привязать Discord</a></p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -6959,9 +6945,8 @@
       'rating-label':'Рекомендация:','no-ratings':'Нет рекомендаций',
       'referral-link':'Реферальная ссылка:','copy':'копировать','withdraw':'вывести',
       'referral-desc':'20% токенов с каждого пополнения привлечённого пользователя',
-      'connected-accounts':'Привязанные аккаунты',
-      'link-telegram':'➕ Привязать Telegram',
-      'link-discord':'➕ Привязать Discord',
+
+      'link-discord':'Привязать Discord',
       'statistics':'Статистика','task-stats':'Статистика по задачам:',
       'in-progress':'В работе:','overdue-stat':'С отставанием:','completed-stat':'Выполнено:',
       'users-online':'Пользователей на сайте:',
@@ -7122,9 +7107,7 @@
       'rating-label':'Rating:','no-ratings':'No ratings',
       'referral-link':'Referral link:','copy':'copy','withdraw':'withdraw',
       'referral-desc':'20% tokens from each top-up by referred user',
-      'connected-accounts':'Connected accounts',
-      'link-telegram':'➕ Link Telegram',
-      'link-discord':'➕ Link Discord',
+      'link-discord':'Link Discord',
       'statistics':'Statistics','task-stats':'Task statistics:',
       'in-progress':'In progress:','overdue-stat':'Overdue:','completed-stat':'Completed:',
       'users-online':'Users online:',

@@ -77,6 +77,7 @@ def _migrate_users(session, inspector):
         'language': "ALTER TABLE users ADD COLUMN language VARCHAR(5) DEFAULT 'ru'",
         'platform': "ALTER TABLE users ADD COLUMN platform VARCHAR(20) DEFAULT 'telegram'",
         'discord_id': "ALTER TABLE users ADD COLUMN discord_id BIGINT",
+        'discord_username': "ALTER TABLE users ADD COLUMN discord_username VARCHAR(255)",
     })
 
 
