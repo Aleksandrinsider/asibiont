@@ -5570,9 +5570,14 @@ async def api_search_contacts_handler(request):
 
         session_db = Session()
         try:
-            # Поиск пользователей по username (частичное совпадение)
+            # Поиск пользователей по username, discord_username и first_name (частичное совпадение)
+            from sqlalchemy import or_
             users = session_db.query(User).filter(
-                User.username.ilike(f'%{query}%')
+                or_(
+                    User.username.ilike(f'%{query}%'),
+                    User.discord_username.ilike(f'%{query}%'),
+                    User.first_name.ilike(f'%{query}%')
+                )
             ).limit(20).all()
 
             contacts_data = []
