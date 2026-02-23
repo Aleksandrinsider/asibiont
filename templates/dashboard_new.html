@@ -2166,13 +2166,10 @@
                                 </div>
                                 <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
                             </div>
-                            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
-                                <button id="comment-translate-btn-${comment.id}" onclick="translateComment(${comment.id})" class="delete-btn" title="${t('translate')}" style="margin-top: 3px;"><span id="comment-translate-label-${comment.id}">${TRANSLATE_GLOBE_SVG}</span></button>
-                                ${comment.author.is_current_user ? 
-                                    `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
-                                    : ''
-                                }
-                            </div>
+                            ${comment.author.is_current_user ? 
+                                `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                : ''
+                            }
                         `;
                         
                         commentsContainer.appendChild(commentDiv);
@@ -2243,13 +2240,10 @@
                                     </div>
                                     <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
                                 </div>
-                                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
-                                    <button id="comment-translate-btn-${comment.id}" onclick="translateComment(${comment.id})" class="delete-btn" title="${t('translate')}" style="margin-top: 3px;"><span id="comment-translate-label-${comment.id}">${TRANSLATE_GLOBE_SVG}</span></button>
-                                    ${comment.author.is_current_user ? 
-                                        `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
-                                        : ''
-                                    }
-                                </div>
+                                ${comment.author.is_current_user ? 
+                                    `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                    : ''
+                                }
                             `;
                             
                             commentsContainer.appendChild(commentDiv);
@@ -2303,60 +2297,6 @@
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
-        // Comment translation cache
-        const commentTranslationCache = {};
-
-        async function translateComment(commentId) {
-            const btn = document.getElementById(`comment-translate-btn-${commentId}`);
-            const label = document.getElementById(`comment-translate-label-${commentId}`);
-            const contentEl = document.getElementById(`comment-content-${commentId}`);
-            if (!contentEl) return;
-
-            if (commentTranslationCache[commentId] && commentTranslationCache[commentId].showingTranslation) {
-                contentEl.textContent = commentTranslationCache[commentId].original;
-                commentTranslationCache[commentId].showingTranslation = false;
-                label.innerHTML = TRANSLATE_GLOBE_SVG;
-                return;
-            }
-            if (commentTranslationCache[commentId] && commentTranslationCache[commentId].translated) {
-                contentEl.textContent = commentTranslationCache[commentId].translated;
-                commentTranslationCache[commentId].showingTranslation = true;
-                label.innerHTML = TRANSLATE_BACK_SVG;
-                return;
-            }
-
-            const originalText = contentEl.textContent;
-            commentTranslationCache[commentId] = { original: originalText, translated: null, showingTranslation: false };
-            const hasRussian = /[а-яА-ЯёЁ]/.test(originalText);
-            const targetLang = hasRussian ? 'en' : 'ru';
-
-            label.innerHTML = TRANSLATE_LOADING_SVG;
-            btn.disabled = true;
-            try {
-                const response = await fetch(`/api/comments/${commentId}/translate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ lang: targetLang })
-                });
-                if (!await checkAuth(response)) return;
-                const data = await response.json();
-                if (response.ok && data.translated) {
-                    commentTranslationCache[commentId].translated = data.translated;
-                    commentTranslationCache[commentId].showingTranslation = true;
-                    contentEl.textContent = data.translated;
-                    label.innerHTML = TRANSLATE_BACK_SVG;
-                } else {
-                    label.innerHTML = TRANSLATE_GLOBE_SVG;
-                    showNotification(t('err-translate') + ' ' + (data.error || t('err-unknown')), 'error');
-                }
-            } catch (error) {
-                label.innerHTML = TRANSLATE_GLOBE_SVG;
-                showNotification(t('err-translate-short'), 'error');
-            } finally {
-                btn.disabled = false;
-            }
-        }
 
         async function translatePost(postId) {
             const btn = document.getElementById(`translate-btn-${postId}`);
@@ -2368,54 +2308,101 @@
                 return;
             }
 
-            // If already translated, toggle back to original
+            // Helper: get all visible comment content elements for this post
+            function getCommentEls() {
+                const container = document.getElementById(`comments-${postId}`);
+                if (!container) return [];
+                return Array.from(container.querySelectorAll('[id^="comment-content-"]'));
+            }
+
+            // Toggle back to originals
             if (translationCache[postId] && translationCache[postId].showingTranslation) {
                 contentEl.textContent = translationCache[postId].original;
                 translationCache[postId].showingTranslation = false;
                 label.innerHTML = TRANSLATE_GLOBE_SVG;
+                // Restore comments
+                const comments = translationCache[postId].comments || {};
+                getCommentEls().forEach(el => {
+                    const cid = el.id.replace('comment-content-', '');
+                    if (comments[cid]) el.textContent = comments[cid].original;
+                });
                 return;
             }
 
-            // If we already have a cached translation, show it
+            // Show cached translation
             if (translationCache[postId] && translationCache[postId].translated) {
                 contentEl.textContent = translationCache[postId].translated;
                 translationCache[postId].showingTranslation = true;
                 label.innerHTML = TRANSLATE_BACK_SVG;
+                const comments = translationCache[postId].comments || {};
+                getCommentEls().forEach(el => {
+                    const cid = el.id.replace('comment-content-', '');
+                    if (comments[cid] && comments[cid].translated) el.textContent = comments[cid].translated;
+                });
                 return;
             }
 
             // Save original text
             const originalText = contentEl.textContent;
-            translationCache[postId] = { original: originalText, translated: null, showingTranslation: false };
-
-            // Detect target language: if text looks Russian, translate to English; otherwise to Russian
             const hasRussian = /[а-яА-ЯёЁ]/.test(originalText);
             const targetLang = hasRussian ? 'en' : 'ru';
+            translationCache[postId] = { original: originalText, translated: null, showingTranslation: false, comments: {} };
 
-            // Show loading state
+            // Save comment originals
+            const commentEls = getCommentEls();
+            commentEls.forEach(el => {
+                const cid = el.id.replace('comment-content-', '');
+                translationCache[postId].comments[cid] = { original: el.textContent, translated: null };
+            });
+
             label.innerHTML = TRANSLATE_LOADING_SVG;
             btn.disabled = true;
 
             try {
-                const response = await fetch(`/api/posts/${postId}/translate`, {
+                // Translate post + all comments in parallel
+                const postPromise = fetch(`/api/posts/${postId}/translate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({ lang: targetLang })
                 });
 
-                if (!await checkAuth(response)) return;
+                const commentPromises = commentEls.map(el => {
+                    const cid = el.id.replace('comment-content-', '');
+                    const text = translationCache[postId].comments[cid].original;
+                    if (!text || text.trim().length < 2) return Promise.resolve(null);
+                    return fetch(`/api/comments/${cid}/translate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ lang: targetLang })
+                    }).then(r => r.json()).then(d => ({ cid, translated: d.translated || null })).catch(() => null);
+                });
 
-                const data = await response.json();
+                const [postResponse, ...commentResults] = await Promise.all([postPromise, ...commentPromises]);
 
-                if (response.ok && data.translated) {
-                    translationCache[postId].translated = data.translated;
+                if (!await checkAuth(postResponse)) return;
+                const postData = await postResponse.json();
+
+                if (postResponse.ok && postData.translated) {
+                    translationCache[postId].translated = postData.translated;
                     translationCache[postId].showingTranslation = true;
-                    contentEl.textContent = data.translated;
+                    contentEl.textContent = postData.translated;
                     label.innerHTML = TRANSLATE_BACK_SVG;
+
+                    // Apply comment translations
+                    commentResults.forEach(result => {
+                        if (!result) return;
+                        const { cid, translated } = result;
+                        if (translated) {
+                            translationCache[postId].comments[cid].translated = translated;
+                            const el = document.getElementById(`comment-content-${cid}`);
+                            if (el) el.textContent = translated;
+                        }
+                    });
                 } else {
                     label.innerHTML = TRANSLATE_GLOBE_SVG;
-                    showNotification(t('err-translate') + ' ' + (data.error || t('err-unknown')), 'error');
+                    showNotification(t('err-translate') + ' ' + (postData.error || t('err-unknown')), 'error');
                 }
             } catch (error) {
                 console.error('Translation error:', error);
