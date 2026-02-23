@@ -281,10 +281,10 @@ async def discord_oauth_callback(request):
                     db.delete(discord_only_user)
                     logger.info(f"Merged Discord-only account (id={discord_only_user.id}) into TG account (id={user.id})")
 
-                    user.discord_id = discord_id
-                    user.discord_username = discord_username
-                    db.commit()
-                    logger.info(f"Linked discord_id={discord_id} ({discord_username}) to user telegram_id={existing_user_id}")
+                user.discord_id = discord_id
+                user.discord_username = discord_username
+                db.commit()
+                logger.info(f"Linked discord_id={discord_id} ({discord_username}) to user telegram_id={existing_user_id}")
         finally:
             db.close()
 
