@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang|default('ru') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -17,113 +17,59 @@
     <meta property="og:image" content="https://asibiont.com/static/asibiont-preview.png">
 
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="canonical" href="https://asibiont.com/faq">
+    <link rel="canonical" href="https://asibiont.com{% if lang == 'en' %}/en{% endif %}/faq">
+    <link rel="alternate" hreflang="ru" href="https://asibiont.com/faq">
+    <link rel="alternate" hreflang="en" href="https://asibiont.com/en/faq">
+    <link rel="alternate" hreflang="x-default" href="https://asibiont.com/faq">
 
     <!-- Structured Data: FAQPage -->
+    {% if lang == 'en' %}
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "FAQPage",
+        "inLanguage": "en",
         "mainEntity": [
-            {
-                "@type": "Question",
-                "name": "Что такое ASI Biont?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "ASI Biont — это AI-агент в Telegram, который автономно управляет вашими задачами, находит партнёров и исполнителей, делегирует поручения и публикует контент. Это не чат-бот — он сам действует, а не просто отвечает на вопросы. При регистрации — 1 500 бесплатных токенов."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Чем ASI Biont отличается от ChatGPT?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "ChatGPT только отвечает на вопросы. ASI Biont — действует: ставит напоминания, контролирует дедлайны, находит людей, делегирует задачи другим пользователям и публикует контент в каналы. Он проактивно пишет вам первым, когда есть важное."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Чем ASI Biont отличается от обычных Telegram-ботов?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "Обычные боты работают по командам (/start, /help) и шаблонным сценариям. ASI Biont понимает естественный язык, помнит контекст диалога, действует автономно и учится на ваших предпочтениях. Просто пишите, что нужно — без команд."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Сколько стоит ASI Biont?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "При регистрации — 1 500 бесплатных токенов. Все функции доступны сразу. 1 токен = 1 рубль. Пакеты пополнения: Стартовый 1 500₽ (1 500 токенов), Оптимальный 5 000₽ (5 500 токенов, +10%), Максимальный 15 000₽ (18 000 токенов, +20%)."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Как начать пользоваться ASI Biont?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "Откройте @asibiont_bot в Telegram, нажмите /start. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите боту, что нужно сделать. Также доступен веб-дашборд на asibiont.com."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Какой AI используется в ASI Biont?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "ASI Biont работает на DeepSeek V3 — одной из самых мощных открытых AI-моделей. Для сложных задач используется DeepSeek R1 (reasoning model). Весь интерфейс и промпты — на русском языке."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Что умеет ASI Biont?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "Управление задачами через естественный диалог, делегирование задач другим пользователям, поиск партнёров и исполнителей по навыкам и городу, автопостинг контента в Telegram-каналы, проактивные уведомления о дедлайнах и возможностях, веб-дашборд с аналитикой, голосовые команды."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Как работает делегирование задач?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "Скажите боту: 'Поручи @ivan подготовить отчёт до среды'. Агент отправит задачу исполнителю, поставит дедлайн на контроль и напомнит обеим сторонам. Исполнитель может принять или отклонить задачу."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Безопасны ли мои данные в ASI Biont?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "Описания задач шифруются. Данные хранятся на защищённых серверах в зашифрованной базе данных. ASI Biont не передаёт персональные данные третьим лицам."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "В каких городах работает ASI Biont?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "ASI Biont работает по всему миру. Поддерживает автоматическое определение часового пояса. Поиск партнёров доступен с фильтрацией по городу — Москва, Санкт-Петербург, Екатеринбург, Казань и другие."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Можно ли использовать ASI Biont для команды?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "Да. ASI Biont поддерживает делегирование задач между пользователями с контролем дедлайнов. Каждый участник видит свои задачи и поручения. Агент координирует работу и напоминает о сроках обеим сторонам."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Что такое проактивный агент?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "ASI Biont работает 24/7 и сам пишет вам первым: утренние сводки с планом дня, предупреждения о дедлайнах, алерты о новых контактах с релевантными навыками, напоминания о просроченных задачах. Учитывает ваш часовой пояс и не беспокоит ночью."
-                }
-            }
+            {"@type": "Question", "name": "What is ASI Biont?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont is a multilingual AI agent for Telegram and WhatsApp. It autonomously manages tasks, finds partners and contractors, delegates assignments, publishes content, and bridges people across languages. It's not a chatbot — it takes action. 1,500 free tokens on signup."}},
+            {"@type": "Question", "name": "How is ASI Biont different from ChatGPT?", "acceptedAnswer": {"@type": "Answer", "text": "ChatGPT only answers questions. ASI Biont takes action: sets reminders, tracks deadlines, finds people, delegates tasks, posts content to channels, and connects people across languages. It proactively messages you first."}},
+            {"@type": "Question", "name": "Which messengers does ASI Biont support?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont works in Telegram and WhatsApp. Telegram has full functionality: tasks, voice commands, delegation, auto-posting. WhatsApp supports task management and communication in any language. A web dashboard with a unified database is also available."}},
+            {"@type": "Question", "name": "Which languages does the agent support?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont understands and responds in any language — Russian, English, Spanish, Chinese, and more. It can act as a bridge between people speaking different languages: translating messages and coordinating tasks across countries."}},
+            {"@type": "Question", "name": "What can ASI Biont do?", "acceptedAnswer": {"@type": "Answer", "text": "Task management through natural dialogue in any language, delegating tasks, finding partners by skills and city, auto-posting to Telegram channels, multilingual communication bridge, Telegram and WhatsApp support, proactive notifications, web dashboard, voice commands."}},
+            {"@type": "Question", "name": "How much does ASI Biont cost?", "acceptedAnswer": {"@type": "Answer", "text": "1,500 free tokens on signup. All features available immediately. 1 token = 1 ruble. Packages: Starter 1,500₽, Optimal 5,000₽ (+10%), Maximum 15,000₽ (+20%)."}},
+            {"@type": "Question", "name": "How do I get started?", "acceptedAnswer": {"@type": "Answer", "text": "In Telegram: open @asibiont_bot, press /start. In WhatsApp: message the agent's number. The bot registers you and gives 1,500 free tokens. Just write what you need in any language. A web dashboard is also available."}},
+            {"@type": "Question", "name": "What AI is used?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont runs on DeepSeek V3 — one of the most powerful open AI models. For complex tasks, it uses DeepSeek R1 (reasoning model). Supports dialogue in any language."}},
+            {"@type": "Question", "name": "How does task delegation work?", "acceptedAnswer": {"@type": "Answer", "text": "Tell the bot: 'Ask @ivan to prepare the report by Wednesday.' The agent sends the task, tracks the deadline, and reminds both sides. Works across countries — the agent translates and coordinates."}},
+            {"@type": "Question", "name": "What is a proactive agent?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont works 24/7 and messages you first: morning briefings, deadline warnings, alerts about new contacts with relevant skills, reminders about overdue tasks. Respects your timezone."}},
+            {"@type": "Question", "name": "Is my data safe?", "acceptedAnswer": {"@type": "Answer", "text": "Task descriptions are encrypted. Data is stored on secure servers in an encrypted database. ASI Biont does not share personal data with third parties."}},
+            {"@type": "Question", "name": "Does ASI Biont work worldwide?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, ASI Biont works worldwide. Supports automatic timezone detection. The agent communicates in any language and coordinates teams across countries. Partner search available with city and skill filtering."}},
+            {"@type": "Question", "name": "Can it be used for a team?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. ASI Biont supports task delegation between users with deadline tracking. Each participant sees their tasks. The agent coordinates work, translates between languages, and reminds both sides about deadlines."}}
         ]
     }
     </script>
+    {% else %}
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "inLanguage": "ru",
+        "mainEntity": [
+            {"@type": "Question", "name": "Что такое ASI Biont?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont — мультиязычный AI-агент, который работает в Telegram и WhatsApp. Автономно управляет задачами, находит партнёров и исполнителей, делегирует поручения, публикует контент и связывает людей на разных языках. Это не чат-бот — он сам действует. При регистрации — 1 500 бесплатных токенов."}},
+            {"@type": "Question", "name": "Чем ASI Biont отличается от ChatGPT?", "acceptedAnswer": {"@type": "Answer", "text": "ChatGPT только отвечает на вопросы. ASI Biont — действует: ставит напоминания, контролирует дедлайны, находит людей, делегирует задачи, публикует контент в каналы и соединяет людей на разных языках. Он проактивно пишет вам первым, когда есть важное."}},
+            {"@type": "Question", "name": "В каких мессенджерах работает ASI Biont?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont работает в Telegram и WhatsApp. В Telegram — полный функционал: задачи, голосовые команды, делегирование, автопостинг. В WhatsApp — управление задачами и общение с агентом на любом языке. Также доступен веб-дашборд с единой базой данных."}},
+            {"@type": "Question", "name": "На каких языках работает агент?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont понимает и отвечает на любом языке — русский, английский, испанский, китайский и другие. Может выступать связующим звеном между людьми, говорящими на разных языках: переводит сообщения, координирует задачи между участниками из разных стран."}},
+            {"@type": "Question", "name": "Что умеет ASI Biont?", "acceptedAnswer": {"@type": "Answer", "text": "Управление задачами через естественный диалог на любом языке, делегирование задач, поиск партнёров по навыкам и городу, автопостинг в Telegram-каналы, мультиязычная коммуникация, работа в Telegram и WhatsApp, проактивные уведомления, веб-дашборд, голосовые команды."}},
+            {"@type": "Question", "name": "Сколько стоит ASI Biont?", "acceptedAnswer": {"@type": "Answer", "text": "При регистрации — 1 500 бесплатных токенов. Все функции доступны сразу. 1 токен = 1 рубль. Пакеты: Стартовый 1 500₽, Оптимальный 5 000₽ (+10%), Максимальный 15 000₽ (+20%)."}},
+            {"@type": "Question", "name": "Как начать пользоваться?", "acceptedAnswer": {"@type": "Answer", "text": "В Telegram: откройте @asibiont_bot, нажмите /start. В WhatsApp: напишите на номер агента. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите, что нужно — на любом языке. Также доступен веб-дашборд."}},
+            {"@type": "Question", "name": "Какой AI используется?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont работает на DeepSeek V3 — одной из самых мощных открытых AI-моделей. Для сложных задач используется DeepSeek R1 (reasoning model). Поддерживает диалог на любом языке мира."}},
+            {"@type": "Question", "name": "Как работает делегирование задач?", "acceptedAnswer": {"@type": "Answer", "text": "Скажите боту: «Поручи @ivan подготовить отчёт до среды». Агент отправит задачу исполнителю, поставит дедлайн на контроль и напомнит обеим сторонам. Работает между пользователями из разных стран — агент переведёт и скоординирует."}},
+            {"@type": "Question", "name": "Что такое проактивный агент?", "acceptedAnswer": {"@type": "Answer", "text": "ASI Biont работает 24/7 и сам пишет вам первым: утренние сводки с планом дня, предупреждения о дедлайнах, алерты о новых контактах с релевантными навыками, напоминания о просроченных задачах. Учитывает ваш часовой пояс и не беспокоит ночью."}},
+            {"@type": "Question", "name": "Безопасны ли мои данные?", "acceptedAnswer": {"@type": "Answer", "text": "Описания задач шифруются. Данные хранятся на защищённых серверах в зашифрованной базе данных. ASI Biont не передаёт персональные данные третьим лицам."}},
+            {"@type": "Question", "name": "ASI Biont работает по всему миру?", "acceptedAnswer": {"@type": "Answer", "text": "Да, ASI Biont работает по всему миру. Поддерживает автоматическое определение часового пояса. Агент общается на любом языке, координирует команды из разных стран. Поиск партнёров доступен с фильтрацией по городу и навыкам."}},
+            {"@type": "Question", "name": "Можно ли использовать для команды?", "acceptedAnswer": {"@type": "Answer", "text": "Да. ASI Biont поддерживает делегирование задач между пользователями с контролем дедлайнов. Каждый участник видит свои задачи и поручения. Агент координирует работу, переводит между языками и напоминает о сроках обеим сторонам."}}
+        ]
+    }
+    </script>
+    {% endif %}
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -258,41 +204,19 @@
             color: #6C727F;
             font-size: 13px;
         }
-        .lang-switcher {
-            display: flex;
-            justify-content: center;
-            gap: 4px;
-            margin: 8px 0 16px 0;
-            font-size: 20px;
-            color: #374151;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-        }
-        .lang-switcher span {
-            cursor: pointer;
-            transition: all 0.15s;
-            padding: 0 2px;
-        }
-        .lang-switcher span.active { font-weight: 700; }
-        .lang-switcher span:not(.active) { font-weight: 400; opacity: 0.5; }
-        .lang-switcher span:hover:not(.active) { opacity: 0.8; }
     </style>
 </head>
 <body>
     <div class="faq-container">
         <a href="/logout" class="back-link">← На главную</a>
         <h1>Частые вопросы</h1>
-        <div class="lang-switcher" id="lang-toggle">
-            <span id="lang-en" onclick="applyLang('en')">EN</span>
-            <span>/</span>
-            <span id="lang-ru" onclick="applyLang('ru')">RU</span>
-        </div>
-        <p class="faq-subtitle">Всё, что нужно знать об ASI Biont — AI-агенте в Telegram</p>
+        <p class="faq-subtitle">Всё, что нужно знать об ASI Biont — мультиязычном AI-агенте</p>
 
         <div class="faq-item open">
             <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">Что такое ASI Biont?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    ASI Biont — это AI-агент в Telegram, который автономно управляет вашими задачами, находит партнёров и исполнителей, делегирует поручения и публикует контент. Это не чат-бот — он сам действует, а не просто отвечает на вопросы. При регистрации — 1 500 бесплатных токенов.
+                    ASI Biont — мультиязычный AI-агент, который работает в Telegram и WhatsApp. Автономно управляет задачами, находит партнёров и исполнителей, делегирует поручения, публикует контент и связывает людей на разных языках. Это не чат-бот — он сам действует. При регистрации — 1 500 бесплатных токенов.
                 </div>
             </div>
         </div>
@@ -301,16 +225,25 @@
             <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">Чем ASI Biont отличается от ChatGPT?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    ChatGPT только отвечает на вопросы. ASI Biont — действует: ставит напоминания, контролирует дедлайны, находит людей, делегирует задачи другим пользователям и публикует контент в каналы. Он проактивно пишет вам первым, когда есть важное.
+                    ChatGPT только отвечает на вопросы. ASI Biont — действует: ставит напоминания, контролирует дедлайны, находит людей, делегирует задачи, публикует контент в каналы и соединяет людей на разных языках. Он проактивно пишет вам первым, когда есть важное.
                 </div>
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">Чем ASI Biont отличается от обычных Telegram-ботов?</div>
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">В каких мессенджерах работает ASI Biont?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Обычные боты работают по командам (/start, /help) и шаблонным сценариям. ASI Biont понимает естественный язык, помнит контекст диалога, действует автономно и учится на ваших предпочтениях. Просто пишите, что нужно — без команд.
+                    ASI Biont работает в Telegram и WhatsApp. В Telegram — полный функционал: задачи, голосовые команды, делегирование, автопостинг. В WhatsApp — управление задачами и общение с агентом на любом языке. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a> с единой базой данных.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">На каких языках работает агент?</div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    ASI Biont понимает и отвечает на любом языке — русский, английский, испанский, китайский и другие. Может выступать связующим звеном между людьми, говорящими на разных языках: переводит сообщения, координирует задачи между участниками из разных стран.
                 </div>
             </div>
         </div>
@@ -320,10 +253,12 @@
             <div class="faq-answer">
                 <div class="faq-answer-inner">
                     <ul style="padding-left: 20px; margin: 8px 0;">
-                        <li>Управление задачами через естественный диалог</li>
+                        <li>Управление задачами через естественный диалог на любом языке</li>
                         <li>Делегирование задач другим пользователям с контролем сроков</li>
                         <li>Поиск партнёров и исполнителей по навыкам и городу</li>
                         <li>Автопостинг контента в Telegram-каналы</li>
+                        <li>Мультиязычная коммуникация — мост между людьми на разных языках</li>
+                        <li>Работа в Telegram и WhatsApp одновременно</li>
                         <li>Проактивные уведомления о дедлайнах и возможностях</li>
                         <li>Веб-дашборд с задачами, контактами и аналитикой</li>
                         <li>Голосовые команды в Telegram</li>
@@ -352,7 +287,7 @@
             <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">Как начать пользоваться?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Откройте <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a> в Telegram, нажмите /start. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите боту, что нужно сделать — задачи, напоминания, поиск людей. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a>.
+                    В Telegram: откройте <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, нажмите /start. В WhatsApp: напишите на номер агента. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите, что нужно сделать — на любом языке. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a>.
                 </div>
             </div>
         </div>
@@ -361,7 +296,7 @@
             <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">Какой AI используется?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    ASI Biont работает на DeepSeek V3 — одной из самых мощных открытых AI-моделей. Для сложных задач используется DeepSeek R1 (reasoning model). Весь интерфейс и промпты — на русском языке.
+                    ASI Biont работает на DeepSeek V3 — одной из самых мощных открытых AI-моделей. Для сложных задач используется DeepSeek R1 (reasoning model). Поддерживает диалог на любом языке мира.
                 </div>
             </div>
         </div>
@@ -370,7 +305,7 @@
             <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">Как работает делегирование задач?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Скажите боту: «Поручи @ivan подготовить отчёт до среды». Агент отправит задачу исполнителю, поставит дедлайн на контроль и напомнит обеим сторонам. Исполнитель может принять или отклонить задачу.
+                    Скажите боту: «Поручи @ivan подготовить отчёт до среды». Агент отправит задачу исполнителю, поставит дедлайн на контроль и напомнит обеим сторонам. Работает между пользователями из разных стран — агент переведёт и скоординирует.
                 </div>
             </div>
         </div>
@@ -394,10 +329,10 @@
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">В каких городах работает ASI Biont?</div>
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">ASI Biont работает по всему миру?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    ASI Biont работает по всему миру. Поддерживает автоматическое определение часового пояса. Поиск партнёров доступен с фильтрацией по городу — Москва, Санкт-Петербург, Екатеринбург, Казань и другие.
+                    Да, ASI Biont работает по всему миру. Поддерживает автоматическое определение часового пояса. Агент общается на любом языке, координирует команды из разных стран. Поиск партнёров доступен с фильтрацией по городу и навыкам.
                 </div>
             </div>
         </div>
@@ -406,7 +341,7 @@
             <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">Можно ли использовать для команды?</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Да. ASI Biont поддерживает делегирование задач между пользователями с контролем дедлайнов. Каждый участник видит свои задачи и поручения. Агент координирует работу и напоминает о сроках обеим сторонам.
+                    Да. ASI Biont поддерживает делегирование задач между пользователями с контролем дедлайнов. Каждый участник видит свои задачи и поручения. Агент координирует работу, переводит между языками и напоминает о сроках обеим сторонам.
                 </div>
             </div>
         </div>
@@ -427,75 +362,75 @@
 (function() {
   var T = {
     ru: {
-      title: 'FAQ — ASI Biont | Частые вопросы об AI-агенте в Telegram',
+      title: 'FAQ — ASI Biont | Частые вопросы о мультиязычном AI-агенте',
       back: '← На главную',
       h1: 'Частые вопросы',
-      subtitle: 'Всё, что нужно знать об ASI Biont — AI-агенте в Telegram',
+      subtitle: 'Всё, что нужно знать об ASI Biont — мультиязычном AI-агенте',
       questions: [
-        ['Что такое ASI Biont?', 'ASI Biont — это AI-агент в Telegram, который автономно управляет вашими задачами, находит партнёров и исполнителей, делегирует поручения и публикует контент. Это не чат-бот — он сам действует, а не просто отвечает на вопросы. При регистрации — 1 500 бесплатных токенов.'],
-        ['Чем ASI Biont отличается от ChatGPT?', 'ChatGPT только отвечает на вопросы. ASI Biont — действует: ставит напоминания, контролирует дедлайны, находит людей, делегирует задачи другим пользователям и публикует контент в каналы. Он проактивно пишет вам первым, когда есть важное.'],
-        ['Чем ASI Biont отличается от обычных Telegram-ботов?', 'Обычные боты работают по командам (/start, /help) и шаблонным сценариям. ASI Biont понимает естественный язык, помнит контекст диалога, действует автономно и учится на ваших предпочтениях. Просто пишите, что нужно — без команд.'],
+        ['Что такое ASI Biont?', 'ASI Biont — мультиязычный AI-агент, который работает в Telegram и WhatsApp. Автономно управляет задачами, находит партнёров и исполнителей, делегирует поручения, публикует контент и связывает людей на разных языках. Это не чат-бот — он сам действует. При регистрации — 1 500 бесплатных токенов.'],
+        ['Чем ASI Biont отличается от ChatGPT?', 'ChatGPT только отвечает на вопросы. ASI Biont — действует: ставит напоминания, контролирует дедлайны, находит людей, делегирует задачи, публикует контент в каналы и соединяет людей на разных языках. Он проактивно пишет вам первым, когда есть важное.'],
+        ['В каких мессенджерах работает ASI Biont?', null],
+        ['На каких языках работает агент?', 'ASI Biont понимает и отвечает на любом языке — русский, английский, испанский, китайский и другие. Может выступать связующим звеном между людьми, говорящими на разных языках: переводит сообщения, координирует задачи между участниками из разных стран.'],
         ['Что умеет ASI Biont?', null],
         ['Сколько стоит ASI Biont?', null],
         ['Как начать пользоваться?', null],
-        ['Какой AI используется?', 'ASI Biont работает на DeepSeek V3 — одной из самых мощных открытых AI-моделей. Для сложных задач используется DeepSeek R1 (reasoning model). Весь интерфейс и промпты — на русском языке.'],
-        ['Как работает делегирование задач?', 'Скажите боту: «Поручи @ivan подготовить отчёт до среды». Агент отправит задачу исполнителю, поставит дедлайн на контроль и напомнит обеим сторонам. Исполнитель может принять или отклонить задачу.'],
+        ['Какой AI используется?', 'ASI Biont работает на DeepSeek V3 — одной из самых мощных открытых AI-моделей. Для сложных задач используется DeepSeek R1 (reasoning model). Поддерживает диалог на любом языке мира.'],
+        ['Как работает делегирование задач?', 'Скажите боту: «Поручи @ivan подготовить отчёт до среды». Агент отправит задачу исполнителю, поставит дедлайн на контроль и напомнит обеим сторонам. Работает между пользователями из разных стран — агент переведёт и скоординирует.'],
         ['Что такое проактивный агент?', 'ASI Biont работает 24/7 и сам пишет вам первым: утренние сводки с планом дня, предупреждения о дедлайнах, алерты о новых контактах с релевантными навыками, напоминания о просроченных задачах. Учитывает ваш часовой пояс и не беспокоит ночью.'],
         ['Безопасны ли мои данные?', 'Описания задач шифруются. Данные хранятся на защищённых серверах в зашифрованной базе данных. ASI Biont не передаёт персональные данные третьим лицам.'],
-        ['В каких городах работает ASI Biont?', 'ASI Biont работает по всему миру. Поддерживает автоматическое определение часового пояса. Поиск партнёров доступен с фильтрацией по городу — Москва, Санкт-Петербург, Екатеринбург, Казань и другие.'],
-        ['Можно ли использовать для команды?', 'Да. ASI Biont поддерживает делегирование задач между пользователями с контролем дедлайнов. Каждый участник видит свои задачи и поручения. Агент координирует работу и напоминает о сроках обеим сторонам.']
+        ['ASI Biont работает по всему миру?', 'Да, ASI Biont работает по всему миру. Поддерживает автоматическое определение часового пояса. Агент общается на любом языке, координирует команды из разных стран. Поиск партнёров доступен с фильтрацией по городу и навыкам.'],
+        ['Можно ли использовать для команды?', 'Да. ASI Biont поддерживает делегирование задач между пользователями с контролем дедлайнов. Каждый участник видит свои задачи и поручения. Агент координирует работу, переводит между языками и напоминает о сроках обеим сторонам.']
       ],
-      abilities: ['Управление задачами через естественный диалог','Делегирование задач другим пользователям с контролем сроков','Поиск партнёров и исполнителей по навыкам и городу','Автопостинг контента в Telegram-каналы','Проактивные уведомления о дедлайнах и возможностях','Веб-дашборд с задачами, контактами и аналитикой','Голосовые команды в Telegram'],
+      abilities: ['Управление задачами через естественный диалог на любом языке','Делегирование задач другим пользователям с контролем сроков','Поиск партнёров и исполнителей по навыкам и городу','Автопостинг контента в Telegram-каналы','Мультиязычная коммуникация — мост между людьми на разных языках','Работа в Telegram и WhatsApp одновременно','Проактивные уведомления о дедлайнах и возможностях','Веб-дашборд с задачами, контактами и аналитикой','Голосовые команды в Telegram'],
       pricingIntro: 'При регистрации вы получаете 1 500 бесплатных токенов. Все функции доступны сразу. 1 токен = 1 рубль.',
       pricingPlans: ['<b>Стартовый</b>: 1 500 токенов за 1 500₽','<b>Оптимальный</b>: 5 500 токенов за 5 000₽ (+10% бонус)','<b>Максимальный</b>: 18 000 токенов за 15 000₽ (+20% бонус)'],
       pricingLabel: 'Пакеты пополнения:',
-      howTo: 'Откройте <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a> в Telegram, нажмите /start. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите боту, что нужно сделать — задачи, напоминания, поиск людей. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a>.',
+      messengers: 'ASI Biont работает в Telegram и WhatsApp. В Telegram — полный функционал: задачи, голосовые команды, делегирование, автопостинг. В WhatsApp — управление задачами и общение с агентом на любом языке. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a> с единой базой данных.',
+      howTo: 'В Telegram: откройте <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, нажмите /start. В WhatsApp: напишите на номер агента. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите, что нужно сделать — на любом языке. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a>.',
       cta: 'Остались вопросы? Спросите у самого агента!',
       btnGuide: 'Руководство', btnPrice: 'Тарифы'
     },
     en: {
-      title: 'FAQ — ASI Biont | Frequently Asked Questions about AI Agent in Telegram',
+      title: 'FAQ — ASI Biont | Frequently Asked Questions about Multilingual AI Agent',
       back: '← Home',
       h1: 'FAQ',
-      subtitle: 'Everything you need to know about ASI Biont — an AI agent in Telegram',
+      subtitle: 'Everything you need to know about ASI Biont — a multilingual AI agent',
       questions: [
-        ['What is ASI Biont?', 'ASI Biont is an AI agent in Telegram that autonomously manages your tasks, finds partners and contractors, delegates assignments, and publishes content. It\'s not a chatbot — it takes action, not just answers questions. 1,500 free tokens on signup.'],
-        ['How is ASI Biont different from ChatGPT?', 'ChatGPT only answers questions. ASI Biont takes action: sets reminders, tracks deadlines, finds people, delegates tasks to other users, and posts content to channels. It proactively messages you first when something important comes up.'],
-        ['How is ASI Biont different from regular Telegram bots?', 'Regular bots work on commands (/start, /help) and template scenarios. ASI Biont understands natural language, remembers conversation context, acts autonomously and learns from your preferences. Just write what you need — no commands.'],
+        ['What is ASI Biont?', 'ASI Biont is a multilingual AI agent for Telegram and WhatsApp. It autonomously manages tasks, finds partners and contractors, delegates assignments, publishes content, and bridges people across languages. It\'s not a chatbot — it takes action. 1,500 free tokens on signup.'],
+        ['How is ASI Biont different from ChatGPT?', 'ChatGPT only answers questions. ASI Biont takes action: sets reminders, tracks deadlines, finds people, delegates tasks, posts content to channels, and connects people across languages. It proactively messages you first.'],
+        ['Which messengers does ASI Biont support?', null],
+        ['Which languages does the agent support?', 'ASI Biont understands and responds in any language — Russian, English, Spanish, Chinese, and more. It can act as a bridge between people speaking different languages: translating messages and coordinating tasks across countries.'],
         ['What can ASI Biont do?', null],
         ['How much does ASI Biont cost?', null],
         ['How do I get started?', null],
-        ['What AI is used?', 'ASI Biont runs on DeepSeek V3 — one of the most powerful open AI models. For complex tasks, it uses DeepSeek R1 (reasoning model). The interface supports multiple languages.'],
-        ['How does task delegation work?', 'Tell the bot: "Ask @ivan to prepare the report by Wednesday." The agent sends the task to the assignee, tracks the deadline, and reminds both sides. The assignee can accept or decline.'],
-        ['What is a proactive agent?', 'ASI Biont works 24/7 and messages you first: morning briefings with the day plan, deadline warnings, alerts about new contacts with relevant skills, reminders about overdue tasks. Respects your timezone and doesn\'t disturb you at night.'],
+        ['What AI is used?', 'ASI Biont runs on DeepSeek V3 — one of the most powerful open AI models. For complex tasks, it uses DeepSeek R1 (reasoning model). Supports dialogue in any language.'],
+        ['How does task delegation work?', 'Tell the bot: "Ask @ivan to prepare the report by Wednesday." The agent sends the task, tracks the deadline, and reminds both sides. Works across countries — the agent translates and coordinates.'],
+        ['What is a proactive agent?', 'ASI Biont works 24/7 and messages you first: morning briefings, deadline warnings, alerts about new contacts with relevant skills, reminders about overdue tasks. Respects your timezone.'],
         ['Is my data safe?', 'Task descriptions are encrypted. Data is stored on secure servers in an encrypted database. ASI Biont does not share personal data with third parties.'],
-        ['In which cities does ASI Biont work?', 'ASI Biont works worldwide. Supports automatic timezone detection. Partner search is available with city filtering — Moscow, St. Petersburg, Yekaterinburg, Kazan, and more.'],
-        ['Can it be used for a team?', 'Yes. ASI Biont supports task delegation between users with deadline tracking. Each participant sees their tasks and assignments. The agent coordinates work and reminds both sides about deadlines.']
+        ['Does ASI Biont work worldwide?', 'Yes, ASI Biont works worldwide. Supports automatic timezone detection. The agent communicates in any language and coordinates teams across countries. Partner search available with city and skill filtering.'],
+        ['Can it be used for a team?', 'Yes. ASI Biont supports task delegation between users with deadline tracking. Each participant sees their tasks. The agent coordinates work, translates between languages, and reminds both sides about deadlines.']
       ],
-      abilities: ['Task management through natural dialogue','Delegating tasks to other users with deadline tracking','Finding partners and contractors by skills and city','Auto-posting content to Telegram channels','Proactive notifications about deadlines and opportunities','Web dashboard with tasks, contacts, and analytics','Voice commands in Telegram'],
+      abilities: ['Task management through natural dialogue in any language','Delegating tasks to other users with deadline tracking','Finding partners and contractors by skills and city','Auto-posting content to Telegram channels','Multilingual communication — bridge between people speaking different languages','Telegram and WhatsApp support simultaneously','Proactive notifications about deadlines and opportunities','Web dashboard with tasks, contacts, and analytics','Voice commands in Telegram'],
       pricingIntro: 'You get 1,500 free tokens on signup. All features available immediately. 1 token = 1 ruble.',
       pricingPlans: ['<b>Starter</b>: 1,500 tokens for 1,500₽','<b>Optimal</b>: 5,500 tokens for 5,000₽ (+10% bonus)','<b>Maximum</b>: 18,000 tokens for 15,000₽ (+20% bonus)'],
       pricingLabel: 'Top-up packages:',
-      howTo: 'Open <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a> in Telegram, press /start. The bot will register you and give 1,500 free tokens. Just tell the bot what you need — tasks, reminders, people search. A <a href="/dashboard" style="color: #374151; font-weight: 500;">web dashboard</a> is also available.',
+      messengers: 'ASI Biont works in Telegram and WhatsApp. Telegram has full functionality: tasks, voice commands, delegation, auto-posting. WhatsApp supports task management and communication in any language. A <a href="/dashboard" style="color: #374151; font-weight: 500;">web dashboard</a> with a unified database is also available.',
+      howTo: 'In Telegram: open <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, press /start. In WhatsApp: message the agent\'s number. The bot registers you and gives 1,500 free tokens. Just write what you need in any language. A <a href="/dashboard" style="color: #374151; font-weight: 500;">web dashboard</a> is also available.',
       cta: 'Still have questions? Ask the agent itself!',
       btnGuide: 'Guide', btnPrice: 'Pricing'
     }
   };
+  var SERVER_LANG = '{{ lang|default("ru") }}';
   function detect() {
     var s = localStorage.getItem('asibiont_lang');
     if (s && T[s]) return s;
-    return (navigator.language || 'ru').startsWith('ru') ? 'ru' : 'en';
+    return SERVER_LANG;
   }
   function apply(lang) {
     var t = T[lang];
     localStorage.setItem('asibiont_lang', lang);
     document.documentElement.lang = lang;
     document.title = t.title;
-    // Toggle highlight
-    var enSpan = document.getElementById('lang-en');
-    var ruSpan = document.getElementById('lang-ru');
-    if (enSpan) enSpan.classList.toggle('active', lang === 'en');
-    if (ruSpan) ruSpan.classList.toggle('active', lang === 'ru');
     // Back link
     var back = document.querySelector('.back-link');
     if (back) back.textContent = t.back;
@@ -514,13 +449,16 @@
       var a = item.querySelector('.faq-answer-inner');
       if (a && t.questions[i][1]) {
         a.textContent = t.questions[i][1];
-      } else if (a && i === 3) {
+      } else if (a && i === 2) {
+        // Messengers
+        a.innerHTML = t.messengers;
+      } else if (a && i === 4) {
         // Abilities list
         a.innerHTML = '<ul style="padding-left: 20px; margin: 8px 0;">' + t.abilities.map(function(x){return '<li>'+x+'</li>';}).join('') + '</ul>';
-      } else if (a && i === 4) {
+      } else if (a && i === 5) {
         // Pricing
         a.innerHTML = t.pricingIntro + '<br><br>' + t.pricingLabel + '<ul style="padding-left: 20px; margin: 8px 0;">' + t.pricingPlans.map(function(x){return '<li>'+x+'</li>';}).join('') + '</ul>';
-      } else if (a && i === 5) {
+      } else if (a && i === 6) {
         // How to start
         a.innerHTML = t.howTo;
       }

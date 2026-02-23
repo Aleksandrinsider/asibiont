@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang|default('ru') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -24,7 +24,10 @@
     <meta property="twitter:title" content="ASI Biont — русский AI-агент, который действует">
     <meta property="twitter:description" content="Не чат-бот, а AI-агент. Ведёт задачи, находит людей, делегирует и постит контент автономно. 1 500 токенов бесплатно.">
     <meta property="twitter:image" content="https://asibiont.com/static/asibiont-preview.png">
-    <link rel="canonical" href="https://asibiont.com">
+    <link rel="canonical" href="https://asibiont.com{% if lang == 'en' %}/en{% endif %}">
+    <link rel="alternate" hreflang="ru" href="https://asibiont.com/">
+    <link rel="alternate" hreflang="en" href="https://asibiont.com/en/">
+    <link rel="alternate" hreflang="x-default" href="https://asibiont.com/">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 
     <!-- Structured Data: WebApplication -->
@@ -430,9 +433,9 @@
         <div class="auth-card">
             <h1>AI отвечают. ASI Biont — действует!</h1>
             <div class="lang-switcher" id="lang-toggle">
-                <span id="lang-en" onclick="applyLang('en')">EN</span>
+                <span id="lang-en" onclick="switchLang('en')">EN</span>
                 <span>/</span>
-                <span id="lang-ru" onclick="applyLang('ru')">RU</span>
+                <span id="lang-ru" onclick="switchLang('ru')">RU</span>
             </div>
             <p class="subtitle">Мультиязычный AI-агент. Ведёт задачи, находит исполнителей, делегирует и связывает людей на разных языках — в Telegram и WhatsApp. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.</p>
 
@@ -616,11 +619,11 @@
       fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing'
     }
   };
+  var SERVER_LANG = '{{ lang|default("ru") }}';
   function detectLang() {
     var s = localStorage.getItem('asibiont_lang');
     if (s && T[s]) return s;
-    var b = (navigator.language || 'ru').toLowerCase();
-    return b.startsWith('ru') ? 'ru' : 'en';
+    return SERVER_LANG;
   }
   function apply(lang) {
     var t = T[lang];
@@ -665,6 +668,12 @@
     }
   }
   window.applyLang = apply;
+  window.switchLang = function(lang) {
+    localStorage.setItem('asibiont_lang', lang);
+    var path = window.location.pathname.replace(/^\/en\/?/, '/');
+    if (path === '/') path = '';
+    window.location.href = lang === 'en' ? '/en' + (path || '/') : (path || '/');
+  };
   document.addEventListener('DOMContentLoaded', function() {
     apply(detectLang());
   });

@@ -402,6 +402,7 @@ async def login_handler(request):
         'logged_in': False,
         'bot_username': bot_user,
         'auth_url': auth_url,
+        'lang': request.match_info.get('lang', 'ru') if hasattr(request, 'match_info') and 'lang' in request.match_info else 'ru',
         'subscription_tier': 'Токены',
         'current_date': '',
         'current_time': '',
@@ -5630,18 +5631,27 @@ async def extend_subscription_handler(request):
 @aiohttp_jinja2.template('subscription_tiers.html')
 async def subscription_tiers_handler(request):
     """Страца ыбора тарифа подписки"""
-    return {}
+    lang = request.match_info.get('lang', 'ru')
+    if lang not in ('ru', 'en'):
+        lang = 'ru'
+    return {'lang': lang}
 
 
 async def faq_handler(request):
     """FAQ страница для AI SEO — AI-поиск цитирует ответы"""
-    return aiohttp_jinja2.render_template('faq.html', request, {})
+    lang = request.match_info.get('lang', 'ru')
+    if lang not in ('ru', 'en'):
+        lang = 'ru'
+    return aiohttp_jinja2.render_template('faq.html', request, {'lang': lang})
 
 
 @aiohttp_jinja2.template('tutorial.html')
 async def tutorial_handler(request):
     """Страница туториала со всеми командами"""
-    return {}
+    lang = request.match_info.get('lang', 'ru')
+    if lang not in ('ru', 'en'):
+        lang = 'ru'
+    return {'lang': lang}
 
 
 async def create_payment_handler(request):
@@ -5949,6 +5959,45 @@ app.router.add_get('/llms.txt', lambda r: web.FileResponse('static/llms.txt', he
 app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
 # AI SEO: FAQ page
 app.router.add_get('/faq', faq_handler)
+# i18n: English language routes (SEO — separate URLs per language)
+async def login_handler_en(request):
+    """English landing page"""
+    request._match_info = type('MI', (), {'get': lambda s, k, d=None: 'en' if k == 'lang' else d})()
+    # Reuse login_handler logic but we need to handle it directly
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if user_id:
+        try:
+            user_id = int(user_id)
+            return web.HTTPFound('/dashboard')
+        except (ValueError, TypeError):
+            pass
+    bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'asibiont_bot')
+    base_url = str(request.url.origin())
+    auth_url = f"{base_url}/tg_auth"
+    return aiohttp_jinja2.render_template('index.html', request, {
+        'logged_in': False, 'bot_username': bot_user, 'auth_url': auth_url,
+        'lang': 'en', 'subscription_tier': 'Токены',
+        'current_date': '', 'current_time': '', 'formatted_end_date': None,
+        'timestamp': int(time.time()), 'user_timezone': 'UTC',
+        'user': None, 'profile': None, 'tasks': [], 'messages': [], 'partners': [], 'subscription': None
+    })
+
+async def faq_handler_en(request):
+    return aiohttp_jinja2.render_template('faq.html', request, {'lang': 'en'})
+
+async def subscription_tiers_handler_en(request):
+    return aiohttp_jinja2.render_template('subscription_tiers.html', request, {'lang': 'en'})
+
+async def tutorial_handler_en(request):
+    return aiohttp_jinja2.render_template('tutorial.html', request, {'lang': 'en'})
+
+app.router.add_get('/en', login_handler_en)
+app.router.add_get('/en/', login_handler_en)
+app.router.add_get('/en/faq', faq_handler_en)
+app.router.add_get('/en/tutorial', tutorial_handler_en)
+app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
+app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # WhatsApp Cloud API webhook

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang|default('ru') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -20,7 +20,10 @@
     <meta property="og:image" content="https://asibiont.com/static/asibiont-pricing.png">
 
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="canonical" href="https://asibiont.com/subscription-tiers">
+    <link rel="canonical" href="https://asibiont.com{% if lang == 'en' %}/en{% endif %}/subscription-tiers">
+    <link rel="alternate" hreflang="ru" href="https://asibiont.com/subscription-tiers">
+    <link rel="alternate" hreflang="en" href="https://asibiont.com/en/subscription-tiers">
+    <link rel="alternate" hreflang="x-default" href="https://asibiont.com/subscription-tiers">
 
     <!-- Structured Data -->
     <script type="application/ld+json">
@@ -73,20 +76,7 @@
                 font-weight: 600;
             }
         }
-        .lang-toggle { display: none; }
-        .lang-switcher {
-            display: flex;
-            justify-content: center;
-            gap: 4px;
-            margin: 8px 0 16px 0;
-            font-size: 20px;
-            color: #374151;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-        }
-        .lang-switcher span { cursor: pointer; transition: all 0.15s; padding: 0 2px; }
-        .lang-switcher span.active { font-weight: 700; }
-        .lang-switcher span:not(.active) { font-weight: 400; opacity: 0.5; }
-        .lang-switcher span:hover:not(.active) { opacity: 0.8; }
+
     </style>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -124,11 +114,6 @@
         <div class="pricing-card">
             <div style="text-align: center; margin-bottom: 24px;">
                 <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 600; color: #374151;">Пополните баланс токенов</h1>
-                <div class="lang-switcher" id="lang-toggle">
-                    <span id="lang-en" onclick="applyLang('en')">EN</span>
-                    <span>/</span>
-                    <span id="lang-ru" onclick="applyLang('ru')">RU</span>
-                </div>
                 <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 8px auto;">
                     Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.
                 </div>
@@ -230,20 +215,17 @@
       topup: 'Top Up', home: 'Home', support: 'Support'
     }
   };
+  var SERVER_LANG = '{{ lang|default("ru") }}';
   function detect() {
     var s = localStorage.getItem('asibiont_lang');
     if (s && T[s]) return s;
-    return (navigator.language||'ru').startsWith('ru') ? 'ru' : 'en';
+    return SERVER_LANG;
   }
   function apply(lang) {
     var t = T[lang];
     localStorage.setItem('asibiont_lang', lang);
     document.documentElement.lang = lang;
     document.title = t.title;
-    var enSpan = document.getElementById('lang-en');
-    var ruSpan = document.getElementById('lang-ru');
-    if (enSpan) enSpan.classList.toggle('active', lang === 'en');
-    if (ruSpan) ruSpan.classList.toggle('active', lang === 'ru');
     // Back link
     var back = document.querySelector('a[href="/logout"]');
     if (back) back.textContent = t.back;
