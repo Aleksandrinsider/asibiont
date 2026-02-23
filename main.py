@@ -273,11 +273,11 @@ async def get_timezone_from_ip(ip_address):
 
 
 async def get_user_avatar_url(bot, user_id, force_refresh=False):
-    """Получает URL аватара пользователя из Telegram или БД
+    """Получает URL аватара пользователя из Telegram (или кэша для Discord-юзеров)
     
     Args:
         bot: Telegram bot instance
-        user_id: Telegram user ID
+        user_id: Telegram user ID (negative for Discord-only users)
         force_refresh: If True, always fetch fresh avatar from Telegram API, bypassing cache
     """
     try:
@@ -286,7 +286,13 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
             
-            # Если  требуется принудителье облее и есть кэшироаый аатар, озращаем его
+            # Discord-only users (negative telegram_id): return cached photo_url
+            if user_id < 0:
+                if user and user.photo_url:
+                    return user.photo_url
+                return None
+            
+            # Если не требуется принудительное обновление и есть кэшированный аватар, возвращаем его
             if not force_refresh and user and user.photo_url:
                 logger.debug(f"Returning cached avatar for user {user_id}")
                 return user.photo_url
@@ -4928,7 +4934,8 @@ async def translate_post_handler(request):
 
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id.
-    Проксирует аватар через сервер, чтобы не утекал Bot Token в Location header.
+    For Telegram users: proxies avatar via server to hide Bot Token.
+    For Discord users (negative id): serves cached Discord CDN avatar directly.
     """
     telegram_id = request.match_info.get('telegram_id')
 
@@ -4938,7 +4945,20 @@ async def api_avatar_handler(request):
     try:
         telegram_id = int(telegram_id)
 
-        # Check if bot is available
+        # Discord-only users: serve cached photo_url (Discord CDN)
+        if telegram_id < 0:
+            from models import User as _User
+            _db = Session()
+            try:
+                _user = _db.query(_User).filter_by(telegram_id=telegram_id).first()
+                if _user and _user.photo_url:
+                    # Discord CDN URLs are public, redirect directly
+                    return web.HTTPFound(_user.photo_url)
+                return web.Response(status=404, text='No avatar found')
+            finally:
+                _db.close()
+
+        # Telegram users: proxy through server
         if 'bot' not in request.app or not request.app['bot']:
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
             return web.Response(status=404, text='Avatar service unavailable')

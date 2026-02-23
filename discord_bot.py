@@ -261,11 +261,25 @@ async def discord_oauth_callback(request):
             return web.HTTPFound('/dashboard')
 
         # ── LINK Discord to existing logged-in user ──
-        from models import Session as DBSession, User
+        from models import Session as DBSession, User, Interaction
         db = DBSession()
         try:
             user = db.query(User).filter_by(telegram_id=existing_user_id).first()
             if user:
+                # Check if there's a separate Discord-only account that should be merged
+                discord_only_user = db.query(User).filter_by(discord_id=discord_id).first()
+                if discord_only_user and discord_only_user.id != user.id:
+                    # Merge: move all interactions from Discord account to TG account
+                    db.query(Interaction).filter_by(user_id=discord_only_user.id).update(
+                        {Interaction.user_id: user.id}, synchronize_session=False
+                    )
+                    # Transfer token balance if any
+                    if discord_only_user.token_balance and discord_only_user.token_balance > 0:
+                        user.token_balance = (user.token_balance or 0) + discord_only_user.token_balance
+                    # Delete the duplicate Discord-only account
+                    db.delete(discord_only_user)
+                    logger.info(f"Merged Discord-only account (id={discord_only_user.id}) into TG account (id={user.id})")
+
                 user.discord_id = discord_id
                 db.commit()
                 logger.info(f"Linked discord_id={discord_id} to user telegram_id={existing_user_id}")
@@ -312,23 +326,30 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
     from ai_integration import chat_with_ai
     import datetime
 
-    # Discord users stored with telegram_id = -discord_user_id
-    pseudo_telegram_id = -discord_user_id
-
     db = DBSession()
     try:
+        # 1) Lookup by discord_id (covers both linked TG users and pure Discord users)
         user = db.query(User).filter_by(discord_id=discord_user_id).first()
+
         if not user:
-            # Try legacy lookup by pseudo telegram_id
+            # 2) Legacy lookup by pseudo telegram_id
+            pseudo_telegram_id = -discord_user_id
             user = db.query(User).filter_by(telegram_id=pseudo_telegram_id).first()
 
         if not user:
+            # Build Discord avatar URL
+            avatar_url = None
+            if author.avatar:
+                avatar_url = str(author.avatar.url)
+
             # Register new Discord user
+            pseudo_telegram_id = -discord_user_id
             user = User(
                 telegram_id=pseudo_telegram_id,
                 discord_id=discord_user_id,
                 username=str(author),
                 first_name=author.display_name,
+                photo_url=avatar_url,
                 platform='discord',
                 language='en',
                 token_balance=1500,  # Welcome tokens
@@ -336,7 +357,17 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
             db.add(user)
             db.commit()
             db.refresh(user)
-            logger.info(f"[DISCORD] New user registered: discord_id={discord_user_id}")
+            logger.info(f"[DISCORD] New user registered: discord_id={discord_user_id}, avatar={'yes' if avatar_url else 'no'}")
+        else:
+            # Update avatar on every message (keep it fresh, like TG does on login)
+            if author.avatar:
+                new_avatar = str(author.avatar.url)
+                if user.photo_url != new_avatar:
+                    user.photo_url = new_avatar
+                    db.commit()
+
+        # The telegram_id to pass to AI (may be real TG id if account is linked)
+        ai_user_id = user.telegram_id
 
         # Save incoming message
         interaction = Interaction(
@@ -351,7 +382,7 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
         # Call AI agent
         result = await chat_with_ai(
             text,
-            user_id=pseudo_telegram_id,
+            user_id=ai_user_id,
             db_session=db,
         )
         response = result.get('response', 'Sorry, something went wrong.')
