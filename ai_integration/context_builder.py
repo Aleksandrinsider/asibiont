@@ -297,6 +297,15 @@ class ContextBuilder:
                             line += " ПРОСРОЧЕНО"
                         elif days is not None and days <= 7:
                             line += f" осталось {days}дн"
+                    # Показываем активные задачи привязанные к цели (goal_id)
+                    linked_tasks = session.query(Task).filter(
+                        Task.user_id == user.id,
+                        Task.goal_id == g.id,
+                        Task.status.in_(['pending', 'active', 'in_progress'])
+                    ).limit(3).all()
+                    if linked_tasks:
+                        task_titles = ', '.join(t.title for t in linked_tasks)
+                        line += f" [задачи: {task_titles}]"
                     goal_lines.append(line)
                 hints.append("Цели: " + "; ".join(goal_lines))
             else:
@@ -544,6 +553,8 @@ class ContextBuilder:
             if active_goals:
                 orphan_goals = []
                 for goal in active_goals:
+                    # Строго: считаем «без шагов» только если нет явно привязанных задач (goal_id)
+                    # и нет ни одной активной задачи вообще (не берём на себя семантический суд)
                     linked = session.query(Task).filter(
                         Task.user_id == user.id,
                         Task.goal_id == goal.id,
@@ -551,13 +562,12 @@ class ContextBuilder:
                     ).count()
                     if linked > 0:
                         continue
-                    goal_words = set(w for w in goal.title.lower().split() if len(w) > 3)
-                    task_text = ' '.join([(t.title or '') for t in (tasks or [])]).lower()
-                    if goal_words and any(w in task_text for w in goal_words):
+                    # Только если у пользователя вообще нет активных задач
+                    if tasks:
                         continue
                     orphan_goals.append(goal.title)
                 if orphan_goals:
-                    hints.append(f"ЦЕЛИ БЕЗ ШАГОВ: {', '.join(orphan_goals[:3])}")
+                    hints.append(f"ЦЕЛИ БЕЗ ШАГОВ (нет ни одной активной задачи): {', '.join(orphan_goals[:3])}")
 
                 # Прогресс целей
                 stale_goals = [g.title for g in active_goals
