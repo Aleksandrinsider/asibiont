@@ -1865,11 +1865,15 @@ async def logging_middleware(request, handler):
 
 @web.middleware
 async def redirect_to_root_middleware(request, handler):
-    """Redirect www subdomain to root domain"""
+    """Redirect www subdomain and old .ru domain to root domain"""
     host = request.host
     if host.startswith('www.asibiont.com'):
         new_url = f"https://asibiont.com{request.path_qs}"
         logger.info(f"Redirecting from {host} to asibiont.com")
+        return web.HTTPMovedPermanently(new_url)
+    if 'asibiont.ru' in host:
+        new_url = f"https://asibiont.com{request.path_qs}"
+        logger.info(f"Redirecting from {host} (old .ru domain) to asibiont.com")
         return web.HTTPMovedPermanently(new_url)
     return await handler(request)
 
