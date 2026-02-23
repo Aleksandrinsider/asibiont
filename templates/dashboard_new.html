@@ -3991,6 +3991,13 @@
             }
         }
         
+        function formatOverdueText(value, unit) {
+            if (unit === 'just_now') return t('just-now');
+            if (!value || !unit) return '';
+            const key = 'time-' + unit;
+            return value + ' ' + t(key);
+        }
+        
         function renderTaskItem(task) {
             let html = '';
             html += '<div style="flex: 1;">';
@@ -4080,7 +4087,7 @@
                 statusText = t('status-completed');
                 statusColor = '#068487';
             } else if (task.overdue) {
-                statusText = t('status-overdue') + ' ' + task.overdue_text;
+                statusText = t('status-overdue') + ' ' + formatOverdueText(task.overdue_value, task.overdue_unit);
                 statusColor = '#d73a49';
             }
             
@@ -7226,6 +7233,7 @@
       'status-in-progress':'В работе','status-pending-accept':'Ожидает принятия',
       'status-pending-confirm':'Ожидает подтверждения','status-rejected':'Отклонена',
       'status-accepted':'Принята','status-completed':'Выполнена','status-overdue':'С отставанием',
+      'time-days':'дн.','time-hours':'ч.','time-minutes':'мин.','just-now':'только что',
       'accept-task':'Принять задачу','reject-task':'Отклонить задачу',
       'cancel-delegation':'Отменить делегирование','complete-task':'Завершить задачу',
       'restore-task':'Восстановить задачу','delete-task':'Удалить задачу',
@@ -7394,6 +7402,7 @@
       'status-in-progress':'In progress','status-pending-accept':'Pending acceptance',
       'status-pending-confirm':'Pending confirmation','status-rejected':'Rejected',
       'status-accepted':'Accepted','status-completed':'Completed','status-overdue':'Overdue',
+      'time-days':'d','time-hours':'h','time-minutes':'min','just-now':'just now',
       'accept-task':'Accept task','reject-task':'Reject task',
       'cancel-delegation':'Cancel delegation','complete-task':'Complete task',
       'restore-task':'Restore task','delete-task':'Delete task',

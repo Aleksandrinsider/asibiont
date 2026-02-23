@@ -1007,22 +1007,25 @@ async def dashboard_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        day_word = "день" if days == 1 else "дня" if days < 5 else "дней"
-                        task.overdue_text = f"{days} {day_word}"
+                        task.overdue_value = days
+                        task.overdue_unit = 'days'
                     elif hours > 0:
-                        hour_word = "час" if hours == 1 else "часа" if hours < 5 else "часов"
-                        task.overdue_text = f"{hours} {hour_word}"
+                        task.overdue_value = hours
+                        task.overdue_unit = 'hours'
                     elif minutes > 0:
-                        min_word = "минуту" if minutes == 1 else "минуты" if minutes < 5 else "минут"
-                        task.overdue_text = f"{minutes} {min_word}"
+                        task.overdue_value = minutes
+                        task.overdue_unit = 'minutes'
                     else:
-                        task.overdue_text = "только что"
+                        task.overdue_value = 0
+                        task.overdue_unit = 'just_now'
                 else:
-                    task.overdue_text = None
+                    task.overdue_value = None
+                    task.overdue_unit = None
             else:
                 task.overdue = False
                 task.reminder_time_local = None
-                task.overdue_text = None
+                task.overdue_value = None
+                task.overdue_unit = None
 
         # Calculate metrics
         total_tasks = len(tasks)
@@ -1071,7 +1074,8 @@ async def dashboard_handler(request):
                 'reminder_time': reminder_time_iso,  #    JS
                 'reminder_time_local': getattr(task, 'reminder_time_local', None),
                 'overdue': getattr(task, 'overdue', False),
-                'overdue_text': getattr(task, 'overdue_text', None),
+                'overdue_value': getattr(task, 'overdue_value', None),
+                'overdue_unit': getattr(task, 'overdue_unit', None),
                 'recommendations': task.recommendations
             }
             tasks_dict.append(task_dict)
@@ -5366,7 +5370,8 @@ async def api_tasks_handler(request):
                 'reminder_time': None,
                 'reminder_time_local': None,
                 'overdue': False,
-                'overdue_text': None,
+                'overdue_value': None,
+                'overdue_unit': None,
                 'is_delegated': task.delegated_to_username is not None,
                 'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
                 'delegated_to': task.delegated_to_username,
@@ -5398,14 +5403,14 @@ async def api_tasks_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        day_word = "день" if days == 1 else "дня" if days < 5 else "дней"
-                        task_data['overdue_text'] = f'{days} {day_word}'
+                        task_data['overdue_value'] = days
+                        task_data['overdue_unit'] = 'days'
                     elif hours > 0:
-                        hour_word = "час" if hours == 1 else "часа" if hours < 5 else "часов"
-                        task_data['overdue_text'] = f'{hours} {hour_word}'
+                        task_data['overdue_value'] = hours
+                        task_data['overdue_unit'] = 'hours'
                     else:
-                        min_word = "минуту" if minutes == 1 else "минуты" if minutes < 5 else "минут"
-                        task_data['overdue_text'] = f'{minutes} {min_word}'
+                        task_data['overdue_value'] = minutes
+                        task_data['overdue_unit'] = 'minutes'
             tasks_data.append(task_data)
 
         return web.json_response({'tasks': tasks_data})
