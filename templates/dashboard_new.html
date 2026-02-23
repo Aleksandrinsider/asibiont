@@ -207,6 +207,7 @@
             if (!content) return; // nothing to toggle
             
             const peopleList = document.getElementById('people-list');
+            const contactFilter = document.getElementById('contact-filter-content');
             const isCollapsed = (content.style.display || '') === 'none';
             if (isCollapsed) {
                 content.style.display = 'block';
@@ -220,8 +221,9 @@
                 }
                 // Скрываем индикатор при разворачивании
                 if (indicator) indicator.style.display = 'none';
-                // Скрываем список контактов когда профиль развёрнут
+                // Скрываем список контактов и фильтры когда профиль развёрнут
                 if (peopleList) peopleList.style.display = 'none';
+                if (contactFilter) contactFilter.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
@@ -233,8 +235,9 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
-                // Показываем список контактов когда профиль свёрнут
+                // Показываем список контактов и фильтры когда профиль свёрнут
                 if (peopleList) peopleList.style.display = 'block';
+                if (contactFilter) contactFilter.style.display = 'block';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
@@ -1688,11 +1691,11 @@
                                         <button 
                                             id="translate-btn-${post.id}"
                                             onclick="translatePost(${post.id})"
-                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 15px; line-height: 1;"
+                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center;"
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                             title="${t('translate')}"
-                                        ><span id="translate-label-${post.id}">🌐</span></button>
+                                        ><span id="translate-label-${post.id}" style="display: flex; align-items: center;">${TRANSLATE_GLOBE_SVG}</span></button>
                                         <button 
                                             id="like-btn-${post.id}"
                                             onclick="toggleLike(${post.id})" 
@@ -2056,11 +2059,11 @@
                                 <button 
                                     id="translate-btn-${post.id}"
                                     onclick="translatePost(${post.id})"
-                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 15px; line-height: 1;"
+                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center;"
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                     title="${t('translate')}"
-                                ><span id="translate-label-${post.id}">🌐</span></button>
+                                ><span id="translate-label-${post.id}" style="display: flex; align-items: center;">${TRANSLATE_GLOBE_SVG}</span></button>
                                 <button 
                                     id="like-btn-${post.id}"
                                     onclick="toggleLike(${post.id})" 
@@ -2269,6 +2272,11 @@
             }
         }
 
+        // SVG icons for translate button (matching like button style)
+        const TRANSLATE_GLOBE_SVG = '<svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#374151" stroke-width="1.5"/><ellipse cx="8" cy="8" rx="2.5" ry="6" fill="none" stroke="#374151" stroke-width="1.5"/><line x1="2" y1="8" x2="14" y2="8" stroke="#374151" stroke-width="1.5"/></svg>';
+        const TRANSLATE_LOADING_SVG = '<svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#374151" stroke-width="1.5"/><path d="M8 4.5V8l2.5 2.5" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/></svg>';
+        const TRANSLATE_BACK_SVG = '<svg width="14" height="14" viewBox="0 0 16 16"><path d="M7 3L2.5 7.5 7 12" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.5H11c1.5 0 2.5 1 2.5 2.5v2" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/></svg>';
+
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
 
@@ -2286,7 +2294,7 @@
             if (translationCache[postId] && translationCache[postId].showingTranslation) {
                 contentEl.textContent = translationCache[postId].original;
                 translationCache[postId].showingTranslation = false;
-                label.textContent = '🌐';
+                label.innerHTML = TRANSLATE_GLOBE_SVG;
                 return;
             }
 
@@ -2294,7 +2302,7 @@
             if (translationCache[postId] && translationCache[postId].translated) {
                 contentEl.textContent = translationCache[postId].translated;
                 translationCache[postId].showingTranslation = true;
-                label.textContent = '↩️';
+                label.innerHTML = TRANSLATE_BACK_SVG;
                 return;
             }
 
@@ -2307,7 +2315,7 @@
             const targetLang = hasRussian ? 'en' : 'ru';
 
             // Show loading state
-            label.textContent = '⏳';
+            label.innerHTML = TRANSLATE_LOADING_SVG;
             btn.disabled = true;
 
             try {
@@ -2326,14 +2334,14 @@
                     translationCache[postId].translated = data.translated;
                     translationCache[postId].showingTranslation = true;
                     contentEl.textContent = data.translated;
-                    label.textContent = '↩️';
+                    label.innerHTML = TRANSLATE_BACK_SVG;
                 } else {
-                    label.textContent = '🌐';
+                    label.innerHTML = TRANSLATE_GLOBE_SVG;
                     showNotification(t('err-translate') + ' ' + (data.error || t('err-unknown')), 'error');
                 }
             } catch (error) {
                 console.error('Translation error:', error);
-                label.textContent = '🌐';
+                label.innerHTML = TRANSLATE_GLOBE_SVG;
                 showNotification(t('err-translate-short'), 'error');
             } finally {
                 btn.disabled = false;
@@ -3363,11 +3371,11 @@
                             <button 
                                 id="translate-btn-${post.id}"
                                 onclick="translatePost(${post.id})"
-                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 15px; line-height: 1;"
+                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center;"
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                 title="${t('translate')}"
-                            ><span id="translate-label-${post.id}">🌐</span></button>
+                            ><span id="translate-label-${post.id}" style="display: flex; align-items: center;">${TRANSLATE_GLOBE_SVG}</span></button>
                             <button 
                                 id="like-btn-${post.id}"
                                 onclick="toggleLike(${post.id})" 
