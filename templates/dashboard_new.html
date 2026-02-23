@@ -31,12 +31,20 @@
     <link rel="canonical" href="https://asibiont.com/dashboard">
     <style>
         /* Lang toggle */
-        .lang-toggle {
-            padding: 4px 10px; background: #FFFFFF; border: 1px solid #D1D9E0;
-            border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s;
-            font-weight: 500; color: #374151; font-family: inherit;
+        .lang-toggle { display: none; }
+        .lang-switcher {
+            display: flex;
+            gap: 3px;
+            margin-left: 8px;
+            font-size: 12px;
+            color: #374151;
+            font-family: inherit;
+            align-items: center;
         }
-        .lang-toggle:hover { border-color: #1F2328; background: #F6F8FA; }
+        .lang-switcher span { cursor: pointer; transition: all 0.15s; padding: 0 1px; }
+        .lang-switcher span.active { font-weight: 700; }
+        .lang-switcher span:not(.active) { font-weight: 400; opacity: 0.5; }
+        .lang-switcher span:hover:not(.active) { opacity: 0.8; }
         /* Основные стили для layout */
         .main-layout {
             display: flex;
@@ -485,7 +493,11 @@
                             <path d="M2 2.75C2 1.784 2.784 1 3.75 1h2.5a.75.75 0 0 1 0 1.5h-2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h2.5a.75.75 0 0 1 0 1.5h-2.5A1.75 1.75 0 0 1 2 13.25Zm10.44 4.5-1.97-1.97a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.97-1.97H6.75a.75.75 0 0 1 0-1.5Z"></path>
                         </svg>
                     </button>
-                    <button id="lang-toggle" class="lang-toggle" style="margin-left: 8px;">🇬🇧 EN</button>
+                    <div class="lang-switcher" id="lang-toggle">
+                        <span id="lang-en" onclick="applyLang('en')">EN</span>
+                        <span>/</span>
+                        <span id="lang-ru" onclick="applyLang('ru')">RU</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -6711,13 +6723,16 @@
   function detect(){var s=localStorage.getItem('asibiont_lang');if(s&&D[s])return s;return(navigator.language||'ru').startsWith('ru')?'ru':'en';}
   function apply(lang){
     var d=D[lang]; localStorage.setItem('asibiont_lang',lang); document.documentElement.lang=lang;
-    var tog=document.getElementById('lang-toggle'); if(tog) tog.textContent=lang==='ru'?'🇬🇧 EN':'🇷🇺 RU';
+    var enSpan=document.getElementById('lang-en');
+    var ruSpan=document.getElementById('lang-ru');
+    if(enSpan) enSpan.classList.toggle('active', lang==='en');
+    if(ruSpan) ruSpan.classList.toggle('active', lang==='ru');
     document.querySelectorAll('[data-i18n]').forEach(function(el){var k=el.getAttribute('data-i18n');if(d[k])el.textContent=d[k];});
     document.querySelectorAll('[data-i18n-ph]').forEach(function(el){var k=el.getAttribute('data-i18n-ph');if(d[k])el.placeholder=d[k];});
   }
+  window.applyLang=apply;
   document.addEventListener('DOMContentLoaded',function(){
     apply(detect());
-    var tog=document.getElementById('lang-toggle'); if(tog) tog.addEventListener('click',function(){apply(detect()==='ru'?'en':'ru');});
   });
 })();
 </script>

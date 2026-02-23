@@ -73,22 +73,20 @@
                 font-weight: 600;
             }
         }
-        .lang-toggle {
-            position: fixed;
-            top: 12px;
-            right: 12px;
-            z-index: 1000;
-            padding: 6px 12px;
-            background: #FFFFFF;
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-weight: 500;
+        .lang-toggle { display: none; }
+        .lang-switcher {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin: 8px 0 16px 0;
+            font-size: 20px;
             color: #374151;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
         }
-        .lang-toggle:hover { border-color: #1F2328; background: #F6F8FA; }
+        .lang-switcher span { cursor: pointer; transition: all 0.15s; padding: 0 2px; }
+        .lang-switcher span.active { font-weight: 700; }
+        .lang-switcher span:not(.active) { font-weight: 400; opacity: 0.5; }
+        .lang-switcher span:hover:not(.active) { opacity: 0.8; }
     </style>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -121,12 +119,16 @@
     </style>
 </head>
 <body class="subscription-page">
-    <button id="lang-toggle" class="lang-toggle">🇬🇧 EN</button>
     <div class="pricing-container">
         <a href="/logout" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">← На главную</a>
         <div class="pricing-card">
             <div style="text-align: center; margin-bottom: 24px;">
                 <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 600; color: #374151;">Пополните баланс токенов</h1>
+                <div class="lang-switcher" id="lang-toggle">
+                    <span id="lang-en" onclick="applyLang('en')">EN</span>
+                    <span>/</span>
+                    <span id="lang-ru" onclick="applyLang('ru')">RU</span>
+                </div>
                 <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 8px auto;">
                     Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.
                 </div>
@@ -238,8 +240,10 @@
     localStorage.setItem('asibiont_lang', lang);
     document.documentElement.lang = lang;
     document.title = t.title;
-    var tog = document.getElementById('lang-toggle');
-    if (tog) tog.textContent = lang==='ru'?'🇬🇧 EN':'🇷🇺 RU';
+    var enSpan = document.getElementById('lang-en');
+    var ruSpan = document.getElementById('lang-ru');
+    if (enSpan) enSpan.classList.toggle('active', lang === 'en');
+    if (ruSpan) ruSpan.classList.toggle('active', lang === 'ru');
     // Back link
     var back = document.querySelector('a[href="/logout"]');
     if (back) back.textContent = t.back;
@@ -269,12 +273,9 @@
     if (btns[0]) btns[0].textContent = t.home;
     if (btns[1]) btns[1].textContent = t.support;
   }
+  window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {
     apply(detect());
-    var tog = document.getElementById('lang-toggle');
-    if (tog) tog.addEventListener('click', function() {
-      apply(detect()==='ru'?'en':'ru');
-    });
   });
 })();
 </script>
