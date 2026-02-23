@@ -567,7 +567,8 @@
                                 <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="withdraw">вывести</a>
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения привлечённого пользователя</p>
-                            <p style="margin: 0; font-size: 12px; color: #374151;">{% if telegram_linked %}<span style="color: #26A5E4;">Telegram:</span> {{ telegram_username if telegram_username else user.first_name }}{% else %}<a href="/?link_tg=1" style="color: #6C727F; text-decoration: none;" data-i18n="link-telegram">Привязать Telegram</a>{% endif %} &nbsp; {% if discord_linked %}<span style="color: #5865F2;">Discord:</span> {{ discord_username }}{% else %}<a href="/discord/link" style="color: #6C727F; text-decoration: none;" data-i18n="link-discord">Привязать Discord</a>{% endif %}</p>
+                            <p><span>Telegram:</span> {% if telegram_linked %}@{{ telegram_username if telegram_username else user.first_name }}{% else %}<a href="/?link_tg=1" style="color: #6C727F; text-decoration: none;" data-i18n="link-telegram">Привязать</a>{% endif %}</p>
+                            <p><span>Discord:</span> {% if discord_linked %}{{ discord_username }}{% else %}<a href="/discord/link" style="color: #6C727F; text-decoration: none;" data-i18n="link-discord">Привязать</a>{% endif %}</p>
                         </div>
                     </div>
                 </div>
@@ -2273,7 +2274,7 @@
         }
 
         // SVG icons for translate button (matching like button style - fill-based, #374151)
-        const TRANSLATE_GLOBE_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM5.78 8.75a9.64 9.64 0 0 0 .2 2.014c.312 1.16.753 1.986 1.27 2.465.517.474.958.521 1.12.521h.26c.162 0 .603-.047 1.12-.521.517-.479.958-1.305 1.27-2.465a9.64 9.64 0 0 0 .2-2.014Zm4.44-1.5a9.64 9.64 0 0 0-.2-2.014c-.312-1.16-.753-1.986-1.27-2.465C8.233 2.297 7.792 2.25 7.63 2.25h-.26c-.162 0-.603.047-1.12.521-.517.479-.958 1.305-1.27 2.465a9.64 9.64 0 0 0-.2 2.014Zm1.5 1.5a11.05 11.05 0 0 1-.2 2.188 6.612 6.612 0 0 1-.558 1.638 6.51 6.51 0 0 0 2.484-3.826Zm.024-1.5h2.5a6.51 6.51 0 0 0-2.484-3.826c.244.502.432 1.05.558 1.638.13.698.21 1.432.237 2.188h-.811ZM4.258 8.75H1.756a6.51 6.51 0 0 0 2.484 3.826 6.612 6.612 0 0 1-.558-1.638 11.05 11.05 0 0 1-.202-2.188h.778Zm-.024-1.5a11.05 11.05 0 0 1 .237-2.188c.126-.588.314-1.136.558-1.638A6.51 6.51 0 0 0 1.756 7.25h2.478Z"/></svg>';
+        const TRANSLATE_GLOBE_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M1.99 2.5c0-.28.22-.5.5-.5h3c.28 0 .5.22.5.5v1c0 .28-.22.5-.5.5H4.74c-.15.58-.44 1.14-.84 1.68.23.2.48.38.76.53a.5.5 0 1 1-.46.89 4.4 4.4 0 0 1-.96-.68c-.35.34-.76.64-1.24.88a.5.5 0 0 1-.44-.9c.4-.2.73-.43 1-.7A4.4 4.4 0 0 1 2.99 4h-.5a.5.5 0 0 1-.5-.5v-1Zm1.5.5v.5h1V3h-1Zm5.01 2a.5.5 0 0 1 .47.33l3 8a.5.5 0 1 1-.94.34L10.4 12H7.6l-.63 1.67a.5.5 0 0 1-.94-.34l3-8A.5.5 0 0 1 9.5 5Zm0 2.36L8 10.5h2.6L9.5 7.36Z"/></svg>';
         const TRANSLATE_LOADING_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM8 4a.75.75 0 0 1 .75.75v2.69l1.78 1.78a.749.749 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 7.25 8V4.75A.75.75 0 0 1 8 4Z"/></svg>';
         const TRANSLATE_BACK_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"/></svg>';
 
@@ -6165,6 +6166,18 @@
                             html += '<p style="margin: 0; margin-bottom: 4px;">' + t('referral-link') + ' <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">' + t('copy') + '</a> <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">' + t('withdraw') + '</a></p>';
                             html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">' + t('referral-desc') + '</p>';
                         }
+                        // Telegram line
+                        if (data.telegram_linked) {
+                            html += '<p><span>Telegram:</span> @' + (data.telegram_username || data.first_name || '') + '</p>';
+                        } else {
+                            html += '<p><span>Telegram:</span> <a href="/?link_tg=1" style="color: #6C727F; text-decoration: none;">' + t('link-telegram') + '</a></p>';
+                        }
+                        // Discord line
+                        if (data.discord_linked) {
+                            html += '<p><span>Discord:</span> ' + (data.discord_username || '') + '</p>';
+                        } else {
+                            html += '<p><span>Discord:</span> <a href="/discord/link" style="color: #6C727F; text-decoration: none;">' + t('link-discord') + '</a></p>';
+                        }
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
@@ -6948,8 +6961,8 @@
       'referral-link':'Реферальная ссылка:','copy':'копировать','withdraw':'вывести',
       'referral-desc':'20% токенов с каждого пополнения привлечённого пользователя',
 
-      'link-discord':'Привязать Discord',
-      'link-telegram':'Привязать Telegram',
+      'link-discord':'Привязать',
+      'link-telegram':'Привязать',
       'statistics':'Статистика','task-stats':'Статистика по задачам:',
       'in-progress':'В работе:','overdue-stat':'С отставанием:','completed-stat':'Выполнено:',
       'users-online':'Пользователей на сайте:',
@@ -7110,8 +7123,8 @@
       'rating-label':'Rating:','no-ratings':'No ratings',
       'referral-link':'Referral link:','copy':'copy','withdraw':'withdraw',
       'referral-desc':'20% tokens from each top-up by referred user',
-      'link-discord':'Link Discord',
-      'link-telegram':'Link Telegram',
+      'link-discord':'Link',
+      'link-telegram':'Link',
       'statistics':'Statistics','task-stats':'Task statistics:',
       'in-progress':'In progress:','overdue-stat':'Overdue:','completed-stat':'Completed:',
       'users-online':'Users online:',

@@ -5767,7 +5767,11 @@ async def api_profile_handler(request):
             'telegram_id': user.telegram_id,
             'token_balance': user.token_balance or 0,
             'referral_balance': user.referral_balance,
-            'timezone': user.timezone or 'UTC'
+            'timezone': user.timezone or 'UTC',
+            'telegram_linked': user.telegram_id > 0,
+            'telegram_username': user.username if user.telegram_id > 0 else '',
+            'discord_linked': bool(user.discord_id),
+            'discord_username': (user.discord_username or (user.username if user.telegram_id < 0 else '') or str(user.discord_id)) if user.discord_id else '',
         }
 
         return web.json_response(response_data)
