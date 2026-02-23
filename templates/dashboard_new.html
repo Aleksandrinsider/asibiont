@@ -1709,11 +1709,11 @@
                                         <button 
                                             id="translate-btn-${post.id}"
                                             onclick="translatePost(${post.id})"
-                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;"
+                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                             title="${t('translate')}"
-                                        ><span id="translate-label-${post.id}" style="display:flex;align-items:center;">${TRANSLATE_GLOBE_SVG}</span></button>
+                                        ><span id="translate-label-${post.id}">${TRANSLATE_GLOBE_SVG}</span></button>
                                         <button 
                                             id="like-btn-${post.id}"
                                             onclick="toggleLike(${post.id})" 
@@ -2077,11 +2077,11 @@
                                 <button 
                                     id="translate-btn-${post.id}"
                                     onclick="translatePost(${post.id})"
-                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;"
+                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                     title="${t('translate')}"
-                                ><span id="translate-label-${post.id}" style="display:flex;align-items:center;">${TRANSLATE_GLOBE_SVG}</span></button>
+                                ><span id="translate-label-${post.id}">${TRANSLATE_GLOBE_SVG}</span></button>
                                 <button 
                                     id="like-btn-${post.id}"
                                     onclick="toggleLike(${post.id})" 
@@ -2291,9 +2291,9 @@
         }
 
         // SVG icons for translate button - text-based, matches like button height
-        const TRANSLATE_GLOBE_SVG = '<span style="font-size:13px;font-weight:600;letter-spacing:-0.5px;line-height:1;">A<span style="font-size:10px;vertical-align:baseline;">a</span></span>';
-        const TRANSLATE_LOADING_SVG = '<span style="font-size:13px;line-height:1;">···</span>';
-        const TRANSLATE_BACK_SVG = '<span style="font-size:13px;font-weight:600;letter-spacing:-0.5px;line-height:1;">↩<span style="font-size:10px;">a</span></span>';
+        const TRANSLATE_GLOBE_SVG = 'A<span style="font-size:10px;">a</span>';
+        const TRANSLATE_LOADING_SVG = '···';
+        const TRANSLATE_BACK_SVG = '↩<span style="font-size:10px;">a</span>';
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
@@ -3389,11 +3389,11 @@
                             <button 
                                 id="translate-btn-${post.id}"
                                 onclick="translatePost(${post.id})"
-                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;"
+                                style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;"
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                 title="${t('translate')}"
-                            ><span id="translate-label-${post.id}" style="display:flex;align-items:center;">${TRANSLATE_GLOBE_SVG}</span></button>
+                            ><span id="translate-label-${post.id}">${TRANSLATE_GLOBE_SVG}</span></button>
                             <button 
                                 id="like-btn-${post.id}"
                                 onclick="toggleLike(${post.id})" 
@@ -3977,7 +3977,7 @@
             
             // Кнопки действий
             const isDelegatedToMe = task.delegated_by && task.delegation_status === 'pending';
-            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: row;">';
+            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: column;">';
             
             if (isDelegatedToMe) {
                 // Задача делегирована МНЕ и ожидает моего принятия - только кнопки Принять и Отклонить (БЕЗ удаления)
