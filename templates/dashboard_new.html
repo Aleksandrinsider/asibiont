@@ -567,8 +567,6 @@
                                 <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="withdraw">вывести</a>
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения привлечённого пользователя</p>
-                            <p><span>Telegram:</span> {% if telegram_linked %}@{{ telegram_username if telegram_username else user.first_name }}{% else %}<a href="/?link_tg=1" style="color: #6C727F; text-decoration: none;" data-i18n="link-telegram">Привязать</a>{% endif %}</p>
-                            <p><span>Discord:</span> {% if discord_linked %}{{ discord_username }}{% else %}<a href="/discord/link" style="color: #6C727F; text-decoration: none;" data-i18n="link-discord">Привязать</a>{% endif %}</p>
                         </div>
                     </div>
                 </div>
@@ -974,6 +972,25 @@
                         <small style="font-size: 11px; color: #6B7280; margin-top: 4px; display: block;" data-i18n="tg-channel-desc">Для автопубликации постов из ленты (бот должен быть админом канала)</small>
                     </div>
                 </form>
+                <!-- Telegram & Discord accounts -->
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #D1D9E0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;">
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Telegram</label>
+                        {% if telegram_linked %}
+                        <div style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">@{{ telegram_username if telegram_username else user.first_name }}</div>
+                        {% else %}
+                        <a href="/?link_tg=1" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-telegram">Привязать</a>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Discord</label>
+                        {% if discord_linked %}
+                        <div style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">{{ discord_username }}</div>
+                        {% else %}
+                        <a href="/discord/link" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-discord">Привязать</a>
+                        {% endif %}
+                    </div>
+                </div>
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip">Пропустить</button>
                     <button onclick="submitQuickProfile()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;">
@@ -1696,7 +1713,7 @@
                                             onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                             title="${t('translate')}"
-                                        ><span id="translate-label-${post.id}" style="display: flex; align-items: center;">${TRANSLATE_GLOBE_SVG}</span></button>
+                                        ><span id="translate-label-${post.id}" style="display:flex;align-items:center;">${TRANSLATE_GLOBE_SVG}</span></button>
                                         <button 
                                             id="like-btn-${post.id}"
                                             onclick="toggleLike(${post.id})" 
@@ -2064,7 +2081,7 @@
                                     onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                     title="${t('translate')}"
-                                ><span id="translate-label-${post.id}" style="display: flex; align-items: center;">${TRANSLATE_GLOBE_SVG}</span></button>
+                                ><span id="translate-label-${post.id}" style="display:flex;align-items:center;">${TRANSLATE_GLOBE_SVG}</span></button>
                                 <button 
                                     id="like-btn-${post.id}"
                                     onclick="toggleLike(${post.id})" 
@@ -2273,10 +2290,10 @@
             }
         }
 
-        // SVG icons for translate button (Octicons style, matching like button)
-        const TRANSLATE_GLOBE_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM5.78 8.75a9.64 9.64 0 0 0 .2 2.014c.312 1.16.753 1.986 1.27 2.465.517.474.958.521 1.12.521h.26c.162 0 .603-.047 1.12-.521.517-.479.958-1.305 1.27-2.465a9.64 9.64 0 0 0 .2-2.014Zm4.44-1.5a9.64 9.64 0 0 0-.2-2.014c-.312-1.16-.753-1.986-1.27-2.465C8.233 2.297 7.792 2.25 7.63 2.25h-.26c-.162 0-.603.047-1.12.521-.517.479-.958 1.305-1.27 2.465a9.64 9.64 0 0 0-.2 2.014Zm1.5 1.5a11.05 11.05 0 0 1-.2 2.188 6.612 6.612 0 0 1-.558 1.638 6.51 6.51 0 0 0 2.484-3.826Zm.024-1.5h2.5a6.51 6.51 0 0 0-2.484-3.826c.244.502.432 1.05.558 1.638.13.698.21 1.432.237 2.188h-.811ZM4.258 8.75H1.756a6.51 6.51 0 0 0 2.484 3.826 6.612 6.612 0 0 1-.558-1.638 11.05 11.05 0 0 1-.202-2.188h.778Zm-.024-1.5a11.05 11.05 0 0 1 .237-2.188c.126-.588.314-1.136.558-1.638A6.51 6.51 0 0 0 1.756 7.25h2.478Z"/></svg>';
-        const TRANSLATE_LOADING_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM8 4a.75.75 0 0 1 .75.75v2.69l1.78 1.78a.749.749 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 7.25 8V4.75A.75.75 0 0 1 8 4Z"/></svg>';
-        const TRANSLATE_BACK_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"/></svg>';
+        // SVG icons for translate button - text-based, matches like button height
+        const TRANSLATE_GLOBE_SVG = '<span style="font-size:13px;font-weight:600;letter-spacing:-0.5px;line-height:1;">A<span style="font-size:10px;vertical-align:baseline;">a</span></span>';
+        const TRANSLATE_LOADING_SVG = '<span style="font-size:13px;line-height:1;">···</span>';
+        const TRANSLATE_BACK_SVG = '<span style="font-size:13px;font-weight:600;letter-spacing:-0.5px;line-height:1;">↩<span style="font-size:10px;">a</span></span>';
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
@@ -3376,7 +3393,7 @@
                                 onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
                                 title="${t('translate')}"
-                            ><span id="translate-label-${post.id}" style="display: flex; align-items: center;">${TRANSLATE_GLOBE_SVG}</span></button>
+                            ><span id="translate-label-${post.id}" style="display:flex;align-items:center;">${TRANSLATE_GLOBE_SVG}</span></button>
                             <button 
                                 id="like-btn-${post.id}"
                                 onclick="toggleLike(${post.id})" 
@@ -6169,14 +6186,10 @@
                         // Telegram line
                         if (data.telegram_linked) {
                             html += '<p><span>Telegram:</span> @' + (data.telegram_username || data.first_name || '') + '</p>';
-                        } else {
-                            html += '<p><span>Telegram:</span> <a href="/?link_tg=1" style="color: #6C727F; text-decoration: none;">' + t('link-telegram') + '</a></p>';
                         }
                         // Discord line
                         if (data.discord_linked) {
                             html += '<p><span>Discord:</span> ' + (data.discord_username || '') + '</p>';
-                        } else {
-                            html += '<p><span>Discord:</span> <a href="/discord/link" style="color: #6C727F; text-decoration: none;">' + t('link-discord') + '</a></p>';
                         }
                         html += '</div>';
                         html += '</div>';
