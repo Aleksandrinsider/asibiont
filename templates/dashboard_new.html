@@ -712,6 +712,13 @@
                                     <!-- Дни недели будут добавлены через JS -->
                                 </div>
                             </div>
+                            <!-- Цели пользователя -->
+                            <div id="goals-progress-section" style="display: none; border-top: 1px solid #D1D9E0; padding-top: 12px;">
+                                <div style="font-size: 13px; font-weight: 400; color: #374151; margin-bottom: 10px;" data-i18n="goal-progress-title">Прогресс по целям:</div>
+                                <div id="goals-progress-list">
+                                    <!-- Цели будут загружены динамически -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4170,6 +4177,63 @@
             updateWeekTimeline(allTasks);
         }
         
+        // Загрузка и отображение целей в блоке статистики
+        let goalsLoadedOnce = false;
+        async function loadGoalsProgress() {
+            try {
+                const response = await fetch('/api/goals', { credentials: 'include' });
+                if (!response.ok) return;
+                const data = await response.json();
+                const section = document.getElementById('goals-progress-section');
+                const list = document.getElementById('goals-progress-list');
+                if (!section || !list) return;
+                
+                const goals = (data.goals || []).filter(g => g.status === 'active');
+                if (goals.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+                
+                section.style.display = 'block';
+                let html = '';
+                goals.forEach(g => {
+                    const progress = Math.min(100, Math.max(0, g.progress || 0));
+                    const barColor = progress >= 100 ? '#068487' : (progress >= 50 ? '#068487' : '#D1D9E0');
+                    
+                    // Metric text
+                    let metricText = '';
+                    if (g.metric_target && g.metric_unit) {
+                        metricText = `${Math.round(g.metric_current || 0)}/${Math.round(g.metric_target)} ${g.metric_unit}`;
+                    } else if (g.total_tasks > 0) {
+                        metricText = `${t('tasks-short')} ${g.completed_tasks}/${g.total_tasks}`;
+                    }
+                    
+                    // Deadline
+                    let deadlineText = '';
+                    if (g.target_date) {
+                        deadlineText = ` · ${t('deadline-short')} ${g.target_date}`;
+                    }
+                    
+                    html += `<div style="margin-bottom: 10px;">`;
+                    html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">`;
+                    html += `<span style="font-size: 12px; color: #374151; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">🎯 ${g.title}</span>`;
+                    html += `<span style="font-size: 11px; color: #6C727F; white-space: nowrap;">${progress}%</span>`;
+                    html += `</div>`;
+                    html += `<div class="progress-bar" style="height: 6px; background: #F3F4F6; border-radius: 3px; overflow: hidden;">`;
+                    html += `<div style="width: ${progress}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.5s ease;"></div>`;
+                    html += `</div>`;
+                    if (metricText || deadlineText) {
+                        html += `<div style="font-size: 11px; color: #6C727F; margin-top: 2px;">${metricText}${deadlineText}</div>`;
+                    }
+                    html += `</div>`;
+                });
+                list.innerHTML = html;
+                goalsLoadedOnce = true;
+            } catch (e) {
+                console.error('Error loading goals:', e);
+            }
+        }
+        
         async function completeTask(taskId) {
             try {
                 const response = await fetch('/complete_task', {
@@ -6285,6 +6349,7 @@
         if (isLoggedIn) {
             loadInitialMessages();
             updateProfile();
+            loadGoalsProgress();
             
             // Auto-update every 30 seconds (reduced from 5s to lower DB load)
             setInterval(() => {
@@ -6295,6 +6360,7 @@
                 updatePeople();
                 updateProfile();
                 updateTokenBalance();
+                loadGoalsProgress();
                 // Обновляем чат только если он активен
                 if (chatView && chatView.classList.contains('active')) {
                     updateChat();
@@ -7056,6 +7122,7 @@
       'unlink-discord-confirm':'Отвязать Discord аккаунт?',
       'unlink-telegram-confirm':'Отвязать Telegram аккаунт?',
       'statistics':'Статистика','task-stats':'Статистика по задачам:',
+      'goal-progress-title':'Прогресс по целям:','tasks-short':'Задачи:','deadline-short':'до',
       'in-progress':'В работе:','overdue-stat':'С отставанием:','completed-stat':'Выполнено:',
       'users-online':'Пользователей на сайте:',
       'loading-contacts':'Загрузка контактов...','loading-tasks':'Загрузка задач...',
@@ -7222,6 +7289,7 @@
       'unlink-discord-confirm':'Unlink Discord account?',
       'unlink-telegram-confirm':'Unlink Telegram account?',
       'statistics':'Statistics','task-stats':'Task statistics:',
+      'goal-progress-title':'Goal progress:','tasks-short':'Tasks:','deadline-short':'by',
       'in-progress':'In progress:','overdue-stat':'Overdue:','completed-stat':'Completed:',
       'users-online':'Users online:',
       'loading-contacts':'Loading contacts...','loading-tasks':'Loading tasks...',

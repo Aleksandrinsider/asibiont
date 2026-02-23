@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -5699,6 +5699,58 @@ async def api_balance_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_goals_handler(request):
+    """API для получения целей пользователя с прогрессом"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            
+            goals = session_db.query(Goal).filter(
+                Goal.user_id == user.id,
+                Goal.status.in_(['active', 'completed'])
+            ).order_by(Goal.created_at.desc()).all()
+            
+            goals_data = []
+            for g in goals:
+                # Calculate progress: use metric if available, else progress_percentage
+                progress = g.progress_percentage or 0
+                if g.metric_target and g.metric_target > 0:
+                    progress = min(100, int((g.metric_current or 0) / g.metric_target * 100))
+                
+                # Count linked tasks
+                total_tasks = session_db.query(Task).filter(Task.goal_id == g.id).count()
+                completed_tasks = session_db.query(Task).filter(Task.goal_id == g.id, Task.status == 'completed').count()
+                
+                goals_data.append({
+                    'id': g.id,
+                    'title': g.title,
+                    'status': g.status,
+                    'progress': progress,
+                    'metric_current': g.metric_current,
+                    'metric_target': g.metric_target,
+                    'metric_unit': g.metric_unit,
+                    'category': g.category,
+                    'priority': g.priority,
+                    'target_date': g.target_date.strftime('%d.%m.%Y') if g.target_date else None,
+                    'total_tasks': total_tasks,
+                    'completed_tasks': completed_tasks,
+                })
+            
+            return web.json_response({'goals': goals_data})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_goals: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_profile_handler(request):
     """API для получения и обновления профиля пользователя"""
     try:
@@ -6328,6 +6380,7 @@ app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)
 app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 app.router.add_get('/api/balance', api_balance_handler)
+app.router.add_get('/api/goals', api_goals_handler)
 
 
 # Setup for production
