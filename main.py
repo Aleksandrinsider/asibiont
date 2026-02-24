@@ -3544,6 +3544,8 @@ async def api_contact_profile_handler(request):
                     'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None,
                     'discord_webhook': True if hasattr(contact_user, 'discord_webhook') and contact_user.discord_webhook else False,
                     'discord_server_name': contact_user.discord_server_name if hasattr(contact_user, 'discord_server_name') and contact_user.discord_server_name else None,
+                    'discord_guild_id': contact_user.discord_guild_id if hasattr(contact_user, 'discord_guild_id') and contact_user.discord_guild_id else None,
+                    'discord_channel_id': contact_user.discord_channel_id if hasattr(contact_user, 'discord_channel_id') and contact_user.discord_channel_id else None,
                     'platform': contact_user.platform if hasattr(contact_user, 'platform') else 'telegram',
                     'discord_id': str(contact_user.discord_id) if hasattr(contact_user, 'discord_id') and contact_user.discord_id else None
                 }
@@ -5847,12 +5849,21 @@ async def api_profile_handler(request):
                                         if guild_name:
                                             server_name = guild_name
                                         user.discord_server_name = server_name or 'Discord'
+                                        # Save guild_id and channel_id for building links
+                                        user.discord_guild_id = str(_wd.get('guild_id', '')) if _wd.get('guild_id') else (_wd.get('guild', {}).get('id') if isinstance(_wd.get('guild'), dict) else None)
+                                        user.discord_channel_id = str(_wd.get('channel_id', '')) if _wd.get('channel_id') else (_wd.get('channel', {}).get('id') if isinstance(_wd.get('channel'), dict) else None)
                                     else:
                                         user.discord_server_name = 'Discord'
+                                        user.discord_guild_id = None
+                                        user.discord_channel_id = None
                         except Exception:
                             user.discord_server_name = 'Discord'
+                            user.discord_guild_id = None
+                            user.discord_channel_id = None
                     else:
                         user.discord_server_name = None
+                        user.discord_guild_id = None
+                        user.discord_channel_id = None
 
                 session_db.commit()
                 logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")

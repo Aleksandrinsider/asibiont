@@ -1010,7 +1010,7 @@
                         <a href="/?link_tg=1" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-telegram">Привязать</a>
                         {% endif %}
                         <div style="margin-top: 8px;">
-                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="tg-channel">@ вашего канала для автопубликации постов (бот должен быть админом канала)</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="tg-channel">@ вашего канала для автопубликации постов (бот @asibiont_bot должен быть админом канала)</label>
                             <input type="text" id="quick-telegram-channel" placeholder="@your_channel" style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
                         </div>
                     </div>
@@ -5054,16 +5054,24 @@
                     html += `<p style="text-align: left;">${t('skills-label')} ${partner.skills || t('not-specified-pl')}</p>`;
                     html += `<p style="text-align: left;">${t('interests-label')} ${partner.interests || t('not-specified-pl')}</p>`;
                     
-                    // Telegram канал и Discord канал
-                    // Telegram канал
+                    // Telegram и Discord каналы в одну строку
+                    let channelParts = [];
                     if (partner.telegram_channel) {
                         const channelClean = partner.telegram_channel.replace(/^@/, '');
-                        html += `<p style="text-align: left;">${t('tg-channel-label')} <a href="https://t.me/${channelClean}" target="_blank" style="color: #068487; text-decoration: none;">@${channelClean}</a></p>`;
+                        channelParts.push(`${t('tg-channel-label')} <a href="https://t.me/${channelClean}" target="_blank" style="color: #068487; text-decoration: none;">@${channelClean}</a>`);
                     }
-                    // Discord канал
                     if (partner.discord_webhook) {
                         const discordName = partner.discord_server_name || 'Discord';
-                        html += `<p style="text-align: left;">Discord канал: <span style="color: #068487; font-weight: 500;">${discordName}</span></p>`;
+                        let discordHtml = '';
+                        if (partner.discord_guild_id && partner.discord_channel_id) {
+                            discordHtml = `${t('discord-channel-label')} <a href="https://discord.com/channels/${partner.discord_guild_id}/${partner.discord_channel_id}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500;">${discordName}</a>`;
+                        } else {
+                            discordHtml = `${t('discord-channel-label')} <span style="color: #068487; font-weight: 500;">${discordName}</span>`;
+                        }
+                        channelParts.push(discordHtml);
+                    }
+                    if (channelParts.length > 0) {
+                        html += `<p style="text-align: left;">${channelParts.join(' &nbsp;|&nbsp; ')}</p>`;
                     }
                     
                     // Рекомендация с цветом
@@ -7244,7 +7252,7 @@
       'company':'Компания','company-ph':'Название компании',
       'goals':'Цели','goals-ph':'Чего вы хотите достичь?',
       'position':'Должность','position-ph':'Ваша должность',
-      'tg-channel':'@ вашего канала для автопубликации постов (бот должен быть админом канала)',
+      'tg-channel':'@ вашего канала для автопубликации постов (бот @asibiont_bot должен быть админом канала)',
       'skip':'Пропустить',
       'thinking':'Думаю...','start-dialog':'Начните диалог с AI-ассистентом',
       'start-dialog-desc':'Задайте вопрос или создайте задачу в поле ниже...',
@@ -7263,7 +7271,7 @@
       'nothing-common':'Общего пока не найдено','blocked':'Заблокирован',
       'delegates-to-me':'Делегирует мне','i-delegate':'Делегирую я',
       'fav-contacts':'Избранных контактов:','delegated-to-me':'Делегировано мне','delegated-by-me':'Делегировано мной',
-      'tg-channel-label':'Telegram канал:','active-tasks':'Активных задач:',
+      'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','active-tasks':'Активных задач:',
       'nothing-found':'Ничего не найдено','min-2-chars':'Введите минимум 2 символа для поиска',
       'total-users':'Всего пользователей','in-24h':'За 24 часа','active-subs':'Активных подписок',
       'total-tasks':'Всего задач','total-requests':'Всего запросов','unique-ips':'Уникальных IP',
@@ -7413,7 +7421,7 @@
       'company':'Company','company-ph':'Company name',
       'goals':'Goals','goals-ph':'What do you want to achieve?',
       'position':'Position','position-ph':'Your position',
-      'tg-channel':'Your channel @ for auto-publishing posts (bot must be channel admin)',
+      'tg-channel':'Your channel @ for auto-publishing posts (bot @asibiont_bot must be channel admin)',
       'skip':'Skip',
       'thinking':'Thinking...','start-dialog':'Start a conversation with the AI assistant',
       'start-dialog-desc':'Ask a question or create a task below...',
@@ -7432,7 +7440,7 @@
       'nothing-common':'Nothing in common found yet','blocked':'Blocked',
       'delegates-to-me':'Delegates to me','i-delegate':'I delegate',
       'fav-contacts':'Favorite contacts:','delegated-to-me':'Delegated to me','delegated-by-me':'Delegated by me',
-      'tg-channel-label':'Telegram channel:','active-tasks':'Active tasks:',
+      'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','active-tasks':'Active tasks:',
       'nothing-found':'Nothing found','min-2-chars':'Enter at least 2 characters to search',
       'total-users':'Total users','in-24h':'In 24 hours','active-subs':'Active subscriptions',
       'total-tasks':'Total tasks','total-requests':'Total requests','unique-ips':'Unique IPs',
