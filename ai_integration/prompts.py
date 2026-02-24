@@ -29,10 +29,14 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
                 token_balance_info = f"\nToken balance: {balance} (1 token = 1₽). Each action costs tokens."
                 if balance < 100:
                     token_balance_info += " ⚠️ User has low tokens — warn about balance, but DON'T reduce response quality."
+                else:
+                    token_balance_info += " DO NOT mention token balance in your response unless user asks about it."
             else:
                 token_balance_info = f"\nБаланс токенов: {balance} (1 токен = 1₽). Каждое действие стоит токены."
                 if balance < 100:
                     token_balance_info += " ⚠️ У пользователя мало токенов — предупреди о балансе, но НЕ снижай качество ответа."
+                else:
+                    token_balance_info += " НЕ упоминай баланс токенов в ответе, если пользователь не спрашивает."
         except Exception:
             pass
 

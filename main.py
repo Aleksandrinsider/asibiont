@@ -3542,6 +3542,7 @@ async def api_contact_profile_handler(request):
                     'task_count': active_tasks,
                     'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
                     'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None,
+                    'discord_webhook': True if hasattr(contact_user, 'discord_webhook') and contact_user.discord_webhook else False,
                     'platform': contact_user.platform if hasattr(contact_user, 'platform') else 'telegram',
                     'discord_id': str(contact_user.discord_id) if hasattr(contact_user, 'discord_id') and contact_user.discord_id else None
                 }
