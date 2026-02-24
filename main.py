@@ -5990,6 +5990,43 @@ async def api_note_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_note_edit_handler(request):
+    """API for editing a note"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        note_id = int(request.match_info['note_id'])
+        data = await request.json()
+        content = (data.get('content') or '').strip()
+        if not content:
+            return web.json_response({'error': 'Content required'}, status=400)
+        if len(content) > 5000:
+            return web.json_response({'error': 'Note too long'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            note = session_db.query(Note).filter_by(id=note_id, user_id=user.id).first()
+            if not note:
+                return web.json_response({'error': 'Note not found'}, status=404)
+            note.content = content
+            session_db.commit()
+            return web.json_response({'success': True, 'note': {
+                'id': note.id,
+                'content': note.content,
+                'source': note.source,
+                'created_at': note.created_at.isoformat() if note.created_at else None,
+            }})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error editing note: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_profile_handler(request):
     """API для получения и обновления профиля пользователя"""
     try:
@@ -6044,7 +6081,9 @@ async def api_profile_handler(request):
                 if 'bio' in data:
                     profile.bio = data['bio'].strip() if data['bio'] and data['bio'].strip() else None
 
-                # Update user fields (telegram_channel хранится в User, не в UserProfile)
+                # Update user fields
+                if 'first_name' in data:
+                    user.first_name = data['first_name'].strip() if data['first_name'] and data['first_name'].strip() else user.first_name
                 if 'telegram_channel' in data:
                     user.telegram_channel = data['telegram_channel'].strip() if data['telegram_channel'] and data['telegram_channel'].strip() else None
                 if 'discord_webhook' in data:
@@ -6851,6 +6890,7 @@ app.router.add_get('/api/goals', api_goals_handler)
 app.router.add_get('/api/notes', api_notes_handler)
 app.router.add_post('/api/notes', api_notes_handler)
 app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
+app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 
 
 # Setup for production
