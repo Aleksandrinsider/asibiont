@@ -545,29 +545,6 @@
             </div>
         </div>
 
-        <!-- Email Contacts -->
-        <div class="email-contacts" style="margin-top: 8px;">
-            <p class="email-contacts-title" style="text-align: center; font-size: 13px; font-weight: 600; color: #1F2328; margin: 0 0 12px 0;">Свяжитесь с нами</p>
-            <div class="email-grid" style="display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;">
-                <a href="mailto:support@asibiont.com" style="text-decoration: none; text-align: center;" onmouseover="this.querySelector('div').style.color='#1F2328'" onmouseout="this.querySelector('div').style.color='#6C727F'">
-                    <div style="font-size: 12px; color: #6C727F; transition: color 0.2s;">support@</div>
-                    <div class="email-desc-support" style="font-size: 11px; color: #9CA3AF;">Поддержка</div>
-                </a>
-                <a href="mailto:info@asibiont.com" style="text-decoration: none; text-align: center;" onmouseover="this.querySelector('div').style.color='#1F2328'" onmouseout="this.querySelector('div').style.color='#6C727F'">
-                    <div style="font-size: 12px; color: #6C727F; transition: color 0.2s;">info@</div>
-                    <div class="email-desc-info" style="font-size: 11px; color: #9CA3AF;">Общие вопросы</div>
-                </a>
-                <a href="mailto:partners@asibiont.com" style="text-decoration: none; text-align: center;" onmouseover="this.querySelector('div').style.color='#1F2328'" onmouseout="this.querySelector('div').style.color='#6C727F'">
-                    <div style="font-size: 12px; color: #6C727F; transition: color 0.2s;">partners@</div>
-                    <div class="email-desc-partners" style="font-size: 11px; color: #9CA3AF;">Сотрудничество</div>
-                </a>
-                <a href="mailto:hr@asibiont.com" style="text-decoration: none; text-align: center;" onmouseover="this.querySelector('div').style.color='#1F2328'" onmouseout="this.querySelector('div').style.color='#6C727F'">
-                    <div style="font-size: 12px; color: #6C727F; transition: color 0.2s;">hr@</div>
-                    <div class="email-desc-hr" style="font-size: 11px; color: #9CA3AF;">Вакансии</div>
-                </a>
-            </div>
-        </div>
-
         <div class="footer-links" style="text-align: center; margin-top: 32px; padding-top: 24px; color: #6C727F; font-size: 13px;">
             <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Главная</a>
             <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
@@ -614,12 +591,7 @@
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
       btnTop: 'Пополнить баланс', btnGuide: 'Руководство',
       fHome: 'Главная', fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы', fSupport: 'Поддержка',
-      discordLogin: 'Войти через Discord',
-      emailTitle: 'Свяжитесь с нами',
-      emailSupport: 'Техническая поддержка и вопросы по работе сервиса',
-      emailInfo: 'Общие вопросы и информация о продукте',
-      emailPartners: 'Сотрудничество и партнёрские предложения',
-      emailHr: 'Вакансии и работа в команде'
+      discordLogin: 'Войти через Discord'
     },
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
@@ -654,12 +626,7 @@
       cta: '1,500 tokens on signup. All features available immediately.',
       btnTop: 'Top Up Balance', btnGuide: 'Guide',
       fHome: 'Home', fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing', fSupport: 'Support',
-      discordLogin: 'Sign in with Discord',
-      emailTitle: 'Contact Us',
-      emailSupport: 'Technical support and service questions',
-      emailInfo: 'General inquiries and product information',
-      emailPartners: 'Collaboration and partnership proposals',
-      emailHr: 'Careers and job opportunities'
+      discordLogin: 'Sign in with Discord'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -714,17 +681,6 @@
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');
     if (dcBtn) dcBtn.textContent = t.discordLogin;
-    // Email contacts
-    var ect = document.querySelector('.email-contacts-title');
-    if (ect) ect.textContent = t.emailTitle;
-    var eds = document.querySelector('.email-desc-support');
-    if (eds) eds.textContent = t.emailSupport;
-    var edi = document.querySelector('.email-desc-info');
-    if (edi) edi.textContent = t.emailInfo;
-    var edp = document.querySelector('.email-desc-partners');
-    if (edp) edp.textContent = t.emailPartners;
-    var edh = document.querySelector('.email-desc-hr');
-    if (edh) edh.textContent = t.emailHr;
   }
   window.applyLang = apply;
   window.switchLang = function(lang) {
