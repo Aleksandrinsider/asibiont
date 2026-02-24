@@ -394,11 +394,12 @@ async def send_email(to: str, subject: str, body: str):
                         'Content-Type': 'application/json'
                     },
                     json={
-                        'from': SMTP_FROM,
+                        'from': 'ASI Biont <onboarding@resend.dev>',
                         'to': [to],
                         'subject': subject,
                         'text': body,
-                        'html': html
+                        'html': html,
+                        'reply_to': SMTP_USER
                     },
                     timeout=aiohttp.ClientTimeout(total=15)
                 )
