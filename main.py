@@ -1792,6 +1792,42 @@ async def skip_task_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def edit_task_handler(request):
+    """Edit task title"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+
+    data = await request.json()
+    task_id = data.get('task_id')
+    new_title = (data.get('title') or '').strip()
+    if not task_id:
+        return web.json_response({'error': 'Task ID required'}, status=400)
+    if not new_title:
+        return web.json_response({'error': 'Title required'}, status=400)
+    if len(new_title) > 255:
+        return web.json_response({'error': 'Title too long'}, status=400)
+
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        task = session_db.query(Task).filter_by(id=task_id, user_id=user.id).first()
+        if not task:
+            return web.json_response({'error': 'Task not found'}, status=404)
+        task.title = new_title
+        session_db.commit()
+        logger.info(f"[EDIT_TASK] Task {task_id} title updated by user {user_id}")
+        return web.json_response({'success': True})
+    except Exception as e:
+        logger.error(f"Error editing task {task_id}: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+    finally:
+        session_db.close()
+
+
 async def delete_task_handler(request):
     """Удаляет задачу"""
     session = await get_session(request)
@@ -6017,7 +6053,7 @@ async def api_notes_handler(request):
                     'id': note.id,
                     'content': note.content,
                     'source': note.source,
-                    'created_at': note.created_at.isoformat() if note.created_at else None,
+                    'created_at': (note.created_at.isoformat() + 'Z') if note.created_at else None,
                 }})
 
             # GET
@@ -6026,7 +6062,7 @@ async def api_notes_handler(request):
                 'id': n.id,
                 'content': n.content,
                 'source': n.source,
-                'created_at': n.created_at.isoformat() if n.created_at else None,
+                'created_at': (n.created_at.isoformat() + 'Z') if n.created_at else None,
             } for n in notes]})
         finally:
             session_db.close()
@@ -6089,7 +6125,7 @@ async def api_note_edit_handler(request):
                 'id': note.id,
                 'content': note.content,
                 'source': note.source,
-                'created_at': note.created_at.isoformat() if note.created_at else None,
+                'created_at': (note.created_at.isoformat() + 'Z') if note.created_at else None,
             }})
         finally:
             session_db.close()
@@ -6934,6 +6970,7 @@ app.router.add_post('/complete_task', complete_task_handler)
 app.router.add_post('/restore_task', restore_task_handler)
 app.router.add_post('/skip_task', skip_task_handler)
 app.router.add_post('/delete_task', delete_task_handler)
+app.router.add_post('/api/edit_task', edit_task_handler)
 app.router.add_post('/reschedule_task', reschedule_task_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)

@@ -4390,7 +4390,7 @@
                 }
             }
             
-            html += '<div class="task-title" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + overdueIndicator + cleanTitle + '</div>';
+            html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + overdueIndicator + cleanTitle + '</div>';
             
             // Если есть делегирование, показываем отдельной строкой
             if (delegationInfo) {
@@ -4468,6 +4468,10 @@
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="' + t('complete-task') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
                 html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="' + t('restore-task') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12V4m0 0L4 8m4-4 4 4"/></svg></button>';
+            }
+            // Кнопка редактирования (только для собственных не-делегированных задач)
+            if (!isDelegatedToMe) {
+                html += '<button onclick="editTask(' + task.id + ')" class="quick-action" title="' + t('edit-task') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button>';
             }
             // Кнопка удаления только для не-делегированных задач
             if (!isDelegatedToMe) {
@@ -4811,6 +4815,104 @@
             } catch (error) {
                 console.error('Error restoring task:', error);
                 showNotification(t('err-restore-task'), 'error');
+            }
+        }
+        
+        function editTask(taskId) {
+            const titleEl = document.getElementById('task-title-' + taskId);
+            if (!titleEl) return;
+            if (titleEl.isContentEditable) return;
+            
+            // Remove overdue pulse indicator temporarily
+            const pulse = titleEl.querySelector('.overdue-pulse');
+            if (pulse) pulse.style.display = 'none';
+            
+            _editOriginals['task-' + taskId] = titleEl.textContent;
+            
+            titleEl.contentEditable = 'true';
+            titleEl.style.outline = '1px solid #D1D9E0';
+            titleEl.style.borderRadius = '4px';
+            titleEl.style.padding = '4px 8px';
+            titleEl.focus();
+            
+            // Place cursor at end
+            const range = document.createRange();
+            range.selectNodeContents(titleEl);
+            range.collapse(false);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            
+            // Add save/cancel buttons
+            const btnContainer = document.createElement('div');
+            btnContainer.id = 'edit-btns-task-' + taskId;
+            btnContainer.style.cssText = 'display: flex; gap: 6px; margin-top: 4px;';
+            btnContainer.innerHTML = `
+                <button onclick="saveEditTask(${taskId})" style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
+                <button onclick="cancelEditTask(${taskId})" style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">${t('cancel')}</button>
+            `;
+            titleEl.parentNode.insertBefore(btnContainer, titleEl.nextSibling);
+        }
+        
+        function cancelEditTask(taskId) {
+            const titleEl = document.getElementById('task-title-' + taskId);
+            if (titleEl) {
+                titleEl.textContent = _editOriginals['task-' + taskId] || titleEl.textContent;
+                titleEl.contentEditable = 'false';
+                titleEl.style.outline = '';
+                titleEl.style.padding = '';
+                const pulse = titleEl.querySelector('.overdue-pulse');
+                if (pulse) pulse.style.display = '';
+            }
+            const btns = document.getElementById('edit-btns-task-' + taskId);
+            if (btns) btns.remove();
+            delete _editOriginals['task-' + taskId];
+        }
+        
+        async function saveEditTask(taskId) {
+            const titleEl = document.getElementById('task-title-' + taskId);
+            if (!titleEl) return;
+            
+            const newTitle = titleEl.textContent.trim();
+            if (!newTitle) {
+                showNotification(t('err-task-empty'), 'error');
+                return;
+            }
+            if (newTitle.length > 255) {
+                showNotification(t('err-task-long'), 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/edit_task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: taskId, title: newTitle }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+                
+                if (response.ok) {
+                    titleEl.textContent = newTitle;
+                    titleEl.contentEditable = 'false';
+                    titleEl.style.outline = '';
+                    titleEl.style.padding = '';
+                    const btns = document.getElementById('edit-btns-task-' + taskId);
+                    if (btns) btns.remove();
+                    delete _editOriginals['task-' + taskId];
+                    // Update local cache
+                    const taskObj = allTasksData.find(t => t.id === taskId);
+                    if (taskObj) taskObj.title = newTitle;
+                    const taskServer = allTasksFromServer.find(t => t.id === taskId);
+                    if (taskServer) taskServer.title = newTitle;
+                    showNotification(t('ok-task-edit'), 'success');
+                } else {
+                    showNotification(data.error || t('err-edit-task'), 'error');
+                }
+            } catch (error) {
+                console.error('Error editing task:', error);
+                showNotification(t('err-edit-task'), 'error');
             }
         }
         
@@ -7647,7 +7749,8 @@
       'time-days':'дн.','time-hours':'ч.','time-minutes':'мин.','just-now':'только что',
       'accept-task':'Принять задачу','reject-task':'Отклонить задачу',
       'cancel-delegation':'Отменить делегирование','complete-task':'Завершить задачу',
-      'restore-task':'Восстановить задачу','delete-task':'Удалить задачу',
+      'restore-task':'Восстановить задачу','delete-task':'Удалить задачу','edit-task':'Редактировать задачу',
+      'ok-task-edit':'Задача обновлена','err-task-empty':'Название не может быть пустым','err-task-long':'Название слишком длинное','err-edit-task':'Ошибка редактирования задачи',
       'remove-fav':'Удалить из избранного','add-fav':'Добавить в избранное',
       'send-message':'Отправить сообщение','block-contact':'Заблокировать контакт','unblock-contact':'Разблокировать контакт',
       'common-interests':'Общие интересы:','common-skills':'Общие навыки:',
@@ -7822,7 +7925,8 @@
       'time-days':'d','time-hours':'h','time-minutes':'min','just-now':'just now',
       'accept-task':'Accept task','reject-task':'Reject task',
       'cancel-delegation':'Cancel delegation','complete-task':'Complete task',
-      'restore-task':'Restore task','delete-task':'Delete task',
+      'restore-task':'Restore task','delete-task':'Delete task','edit-task':'Edit task',
+      'ok-task-edit':'Task updated','err-task-empty':'Title cannot be empty','err-task-long':'Title is too long','err-edit-task':'Error editing task',
       'remove-fav':'Remove from favorites','add-fav':'Add to favorites',
       'send-message':'Send message','block-contact':'Block contact','unblock-contact':'Unblock contact',
       'common-interests':'Common interests:','common-skills':'Common skills:',
