@@ -6053,10 +6053,7 @@ async def create_payment_handler(request):
     logger.info(f"Create payment handler called with user_id: {user_id}")
 
     if not user_id:
-        pack = request.query.get('pack', 'small')
-        tier = request.query.get('tier', '')
-        next_url = f'/create_payment?pack={pack}' if pack else f'/create_payment?tier={tier}'
-        session_obj['next_url'] = next_url
+        session_obj['next_url'] = '/subscription-tiers'
         logger.warning("No user_id in session, saving next_url and redirecting to login")
         return web.HTTPFound('/')
 
@@ -6115,7 +6112,7 @@ async def create_crypto_payment_handler(request):
     if pack not in ('small', 'medium', 'large'):
         return web.HTTPFound('/subscription-tiers')
     if not user_id:
-        session_obj['next_url'] = f'/create_crypto_payment?pack={pack}'
+        session_obj['next_url'] = '/subscription-tiers'
         return web.HTTPFound('/')
     if not NOWPAYMENTS_API_KEY:
         return web.Response(text='Crypto payments not configured.', status=503)
