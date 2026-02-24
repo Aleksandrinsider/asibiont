@@ -397,12 +397,38 @@ async def send_email(to: str, subject: str, body: str):
 </body></html>"""
         msg.attach(MIMEText(html, 'html', 'utf-8'))
         
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, to, msg.as_string())
+        import ssl
+        # Try port 465 (SSL) first, then 587 (STARTTLS) as fallback
+        errors = []
+        
+        # Attempt 1: SMTP_SSL on port 465 (bypasses STARTTLS blocking)
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE  # reg.ru cert mismatch workaround
+            with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=30, context=ctx) as server:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, to, msg.as_string())
+                return  # Success
+        except Exception as e1:
+            errors.append(f"SSL/465: {e1}")
+        
+        # Attempt 2: STARTTLS on port 587
+        try:
+            ctx2 = ssl.create_default_context()
+            ctx2.check_hostname = False
+            ctx2.verify_mode = ssl.CERT_NONE
+            with smtplib.SMTP(SMTP_HOST, 587, timeout=30) as server:
+                server.ehlo()
+                server.starttls(context=ctx2)
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, to, msg.as_string())
+                return  # Success
+        except Exception as e2:
+            errors.append(f"STARTTLS/587: {e2}")
+        
+        raise RuntimeError(f"All SMTP attempts failed: {'; '.join(errors)}")
     
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _send)
