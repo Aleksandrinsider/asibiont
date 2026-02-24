@@ -1793,7 +1793,7 @@ async def skip_task_handler(request):
 
 
 async def edit_task_handler(request):
-    """Edit task title"""
+    """Edit task title and/or description"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -1809,6 +1809,13 @@ async def edit_task_handler(request):
     if len(new_title) > 255:
         return web.json_response({'error': 'Title too long'}, status=400)
 
+    # Description is optional
+    new_description = None
+    if 'description' in data:
+        new_description = (data.get('description') or '').strip()
+        if len(new_description) > 500:
+            return web.json_response({'error': 'Description too long'}, status=400)
+
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -1818,8 +1825,10 @@ async def edit_task_handler(request):
         if not task:
             return web.json_response({'error': 'Task not found'}, status=404)
         task.title = new_title
+        if new_description is not None:
+            task.description = new_description if new_description else None
         session_db.commit()
-        logger.info(f"[EDIT_TASK] Task {task_id} title updated by user {user_id}")
+        logger.info(f"[EDIT_TASK] Task {task_id} updated by user {user_id} (title + desc)")
         return web.json_response({'success': True})
     except Exception as e:
         logger.error(f"Error editing task {task_id}: {e}")

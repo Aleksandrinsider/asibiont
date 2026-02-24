@@ -4401,23 +4401,22 @@
                 html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #374151;">' + clickableDelegationInfo + '</span></div>';
             }
             
-            // Показываем описание задачи, если оно есть и это не устаревший текст делегирования
-            if (task.description && task.description.trim()) {
-                // Фильтруем устаревшие описания делегирования
-                const cleanDesc = task.description.trim();
-                // Ловим паттерны: "Задача от Имя", "Задача для Имя", "Задача на @username"
-                const isOldDelegationText = cleanDesc.match(/^(Задача|Task)\s+(от|для|на|from|for|to)\s+@?[\wА-Яа-яЁё]+$/i);
-                
-                if (!isOldDelegationText) {
-                    // Обрезаем длинные описания до 120 символов, убираем "Шаги выполнения" и т.д.
-                    let shortDesc = cleanDesc.split(/Шаги выполнения:|Steps:|Expected result:|Ожидаемый результат:|Tips:|Советы:/)[0].trim();
-                    if (shortDesc.length > 120) {
-                        shortDesc = shortDesc.substring(0, 120) + '...';
-                    }
-                    if (shortDesc) {
-                        html += '<div style="margin-top: 4px; font-size: 13px; color: #586069;">' + shortDesc + '</div>';
+            // Показываем описание задачи
+            {
+                let descText = '';
+                if (task.description && task.description.trim()) {
+                    const cleanDesc = task.description.trim();
+                    const isOldDelegationText = cleanDesc.match(/^(Задача|Task)\s+(от|для|на|from|for|to)\s+@?[\wА-Яа-яЁё]+$/i);
+                    if (!isOldDelegationText) {
+                        let shortDesc = cleanDesc.split(/Шаги выполнения:|Steps:|Expected result:|Ожидаемый результат:|Tips:|Советы:/)[0].trim();
+                        if (shortDesc.length > 120) {
+                            shortDesc = shortDesc.substring(0, 120) + '...';
+                        }
+                        descText = shortDesc;
                     }
                 }
+                // Всегда рендерим div с id для возможности редактирования
+                html += '<div id="task-desc-' + task.id + '" data-full="' + (task.description || '').replace(/"/g, '&quot;') + '" style="margin-top: 4px; font-size: 13px; color: #586069;' + (descText ? '' : ' display: none;') + '">' + descText + '</div>';
             }
             
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
@@ -4843,7 +4842,33 @@
             sel.removeAllRanges();
             sel.addRange(range);
             
-            // Add save/cancel buttons
+            // Описание — показываем и делаем редактируемым
+            const descEl = document.getElementById('task-desc-' + taskId);
+            if (descEl) {
+                const fullDesc = descEl.getAttribute('data-full') || '';
+                _editOriginals['task-desc-' + taskId] = fullDesc;
+                descEl.textContent = fullDesc;
+                descEl.style.display = 'block';
+                descEl.contentEditable = 'true';
+                descEl.style.outline = '1px solid #D1D9E0';
+                descEl.style.borderRadius = '4px';
+                descEl.style.padding = '4px 8px';
+                descEl.style.minHeight = '20px';
+                descEl.setAttribute('placeholder', t('task-desc-placeholder'));
+                if (!fullDesc) {
+                    descEl.style.color = '#9CA3AF';
+                    descEl.textContent = t('task-desc-placeholder');
+                    descEl.addEventListener('focus', function onFocus() {
+                        if (descEl.textContent === t('task-desc-placeholder')) {
+                            descEl.textContent = '';
+                            descEl.style.color = '#586069';
+                        }
+                        descEl.removeEventListener('focus', onFocus);
+                    });
+                }
+            }
+            
+            // Add save/cancel buttons after description
             const btnContainer = document.createElement('div');
             btnContainer.id = 'edit-btns-task-' + taskId;
             btnContainer.style.cssText = 'display: flex; gap: 6px; margin-top: 4px;';
@@ -4851,7 +4876,8 @@
                 <button onclick="saveEditTask(${taskId})" style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
                 <button onclick="cancelEditTask(${taskId})" style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">${t('cancel')}</button>
             `;
-            titleEl.parentNode.insertBefore(btnContainer, titleEl.nextSibling);
+            const insertAfter = descEl || titleEl;
+            insertAfter.parentNode.insertBefore(btnContainer, insertAfter.nextSibling);
         }
         
         function cancelEditTask(taskId) {
@@ -4864,9 +4890,29 @@
                 const pulse = titleEl.querySelector('.overdue-pulse');
                 if (pulse) pulse.style.display = '';
             }
+            // Восстанавливаем описание
+            const descEl = document.getElementById('task-desc-' + taskId);
+            if (descEl) {
+                const origDesc = _editOriginals['task-desc-' + taskId] || '';
+                descEl.contentEditable = 'false';
+                descEl.style.outline = '';
+                descEl.style.padding = '';
+                descEl.style.minHeight = '';
+                descEl.style.color = '#586069';
+                if (origDesc) {
+                    let shortDesc = origDesc.split(/Шаги выполнения:|Steps:|Expected result:|Ожидаемый результат:|Tips:|Советы:/)[0].trim();
+                    if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 120) + '...';
+                    descEl.textContent = shortDesc;
+                    descEl.style.display = 'block';
+                } else {
+                    descEl.textContent = '';
+                    descEl.style.display = 'none';
+                }
+            }
             const btns = document.getElementById('edit-btns-task-' + taskId);
             if (btns) btns.remove();
             delete _editOriginals['task-' + taskId];
+            delete _editOriginals['task-desc-' + taskId];
         }
         
         async function saveEditTask(taskId) {
@@ -4883,11 +4929,30 @@
                 return;
             }
             
+            // Описание
+            const descEl = document.getElementById('task-desc-' + taskId);
+            let newDesc = '';
+            if (descEl) {
+                newDesc = descEl.textContent.trim();
+                if (newDesc === t('task-desc-placeholder')) newDesc = '';
+                if (newDesc.length > 500) {
+                    showNotification(t('err-task-desc-long'), 'error');
+                    return;
+                }
+            }
+            
             try {
+                const body = { task_id: taskId, title: newTitle };
+                // Отправляем description только если оно изменилось
+                const origDesc = _editOriginals['task-desc-' + taskId] || '';
+                if (newDesc !== origDesc) {
+                    body.description = newDesc;
+                }
+                
                 const response = await fetch('/api/edit_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId, title: newTitle }),
+                    body: JSON.stringify(body),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
@@ -4898,14 +4963,33 @@
                     titleEl.contentEditable = 'false';
                     titleEl.style.outline = '';
                     titleEl.style.padding = '';
+                    // Обновляем описание
+                    if (descEl) {
+                        descEl.contentEditable = 'false';
+                        descEl.style.outline = '';
+                        descEl.style.padding = '';
+                        descEl.style.minHeight = '';
+                        descEl.style.color = '#586069';
+                        descEl.setAttribute('data-full', newDesc);
+                        if (newDesc) {
+                            let shortDesc = newDesc.split(/Шаги выполнения:|Steps:|Expected result:|Ожидаемый результат:|Tips:|Советы:/)[0].trim();
+                            if (shortDesc.length > 120) shortDesc = shortDesc.substring(0, 120) + '...';
+                            descEl.textContent = shortDesc;
+                            descEl.style.display = 'block';
+                        } else {
+                            descEl.textContent = '';
+                            descEl.style.display = 'none';
+                        }
+                    }
                     const btns = document.getElementById('edit-btns-task-' + taskId);
                     if (btns) btns.remove();
                     delete _editOriginals['task-' + taskId];
+                    delete _editOriginals['task-desc-' + taskId];
                     // Update local cache
                     const taskObj = allTasksData.find(t => t.id === taskId);
-                    if (taskObj) taskObj.title = newTitle;
+                    if (taskObj) { taskObj.title = newTitle; if (newDesc !== origDesc) taskObj.description = newDesc; }
                     const taskServer = allTasksFromServer.find(t => t.id === taskId);
-                    if (taskServer) taskServer.title = newTitle;
+                    if (taskServer) { taskServer.title = newTitle; if (newDesc !== origDesc) taskServer.description = newDesc; }
                     showNotification(t('ok-task-edit'), 'success');
                 } else {
                     showNotification(data.error || t('err-edit-task'), 'error');
@@ -7751,6 +7835,7 @@
       'cancel-delegation':'Отменить делегирование','complete-task':'Завершить задачу',
       'restore-task':'Восстановить задачу','delete-task':'Удалить задачу','edit-task':'Редактировать задачу',
       'ok-task-edit':'Задача обновлена','err-task-empty':'Название не может быть пустым','err-task-long':'Название слишком длинное','err-edit-task':'Ошибка редактирования задачи',
+      'task-desc-placeholder':'Добавить описание...','err-task-desc-long':'Описание слишком длинное (макс. 500)',
       'remove-fav':'Удалить из избранного','add-fav':'Добавить в избранное',
       'send-message':'Отправить сообщение','block-contact':'Заблокировать контакт','unblock-contact':'Разблокировать контакт',
       'common-interests':'Общие интересы:','common-skills':'Общие навыки:',
@@ -7927,6 +8012,7 @@
       'cancel-delegation':'Cancel delegation','complete-task':'Complete task',
       'restore-task':'Restore task','delete-task':'Delete task','edit-task':'Edit task',
       'ok-task-edit':'Task updated','err-task-empty':'Title cannot be empty','err-task-long':'Title is too long','err-edit-task':'Error editing task',
+      'task-desc-placeholder':'Add description...','err-task-desc-long':'Description is too long (max 500)',
       'remove-fav':'Remove from favorites','add-fav':'Add to favorites',
       'send-message':'Send message','block-contact':'Block contact','unblock-contact':'Unblock contact',
       'common-interests':'Common interests:','common-skills':'Common skills:',
