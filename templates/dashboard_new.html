@@ -125,10 +125,23 @@
             30% { opacity: 1; }
         }
 
+        /* Mobile header - only logo */
+        .mobile-header {
+            display: none;
+        }
         /* Mobile adjustments */
         @media (max-width: 768px) {
             .app-header {
                 display: none !important;
+            }
+            .mobile-header {
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                padding: 8px 0;
+                background: #fff;
+                border-bottom: 1px solid #D1D9E0;
+                width: 100vw;
             }
             body {
                 margin: 0 !important;
@@ -461,6 +474,12 @@
         </div>
     </div>
     {% if logged_in %}
+    <!-- Mobile-only header: logo = logout -->
+    <div class="mobile-header">
+        <a href="#" onclick="logout(); return false;" style="display: flex; align-items: center; text-decoration: none;">
+            <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 40px; width: auto;">
+        </a>
+    </div>
     <div class="app-header" style="margin-bottom: 0; padding-bottom: 0;">
         <div class="header-content" style="padding-bottom: 0;">
             <div class="header-left" style="display: flex; align-items: center; gap: 8px;">
