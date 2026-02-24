@@ -243,7 +243,7 @@
                 display: block;
                 align-items: unset;
                 justify-content: unset;
-                padding: 40px 12px;
+                padding: 15px 12px !important;
             }
         }
         @media (max-width: 768px) {
@@ -267,6 +267,11 @@
         @media (max-width: 768px) {
             .feature-card {
                 padding: 16px;
+            }
+        }
+        @media (max-width: 768px) {
+            .email-grid {
+                grid-template-columns: 1fr !important;
             }
         }
         @media (max-width: 400px) {
@@ -545,12 +550,35 @@
             </div>
         </div>
 
-        <div class="footer-links" style="text-align: center; margin-top: 32px; padding-top: 24px; padding-bottom: 32px; color: #6C727F; font-size: 13px;">
+        <div class="footer-links" style="text-align: center; margin-top: 32px; padding-top: 24px; color: #6C727F; font-size: 13px;">
             <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Главная</a>
             <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
             <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Руководство</a>
             <a href="/subscription-tiers" style="color: #59636E; text-decoration: none;">Тарифы</a>
             <div style="margin-top: 8px;">2026 ASI Biont</div>
+        </div>
+
+        <!-- Email Contacts -->
+        <div class="email-contacts" style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #D1D9E0;">
+            <p class="email-contacts-title" style="text-align: center; font-size: 15px; font-weight: 600; color: #1F2328; margin: 0 0 16px 0;">Свяжитесь с нами</p>
+            <div class="email-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                <a href="mailto:support@asibiont.com" style="display: block; border: 1px solid #D1D9E0; border-radius: 6px; padding: 16px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">
+                    <div style="font-size: 13px; font-weight: 600; color: #1F2328; margin-bottom: 4px;">support@asibiont.com</div>
+                    <div class="email-desc-support" style="font-size: 12px; color: #6C727F; line-height: 1.4;">Техническая поддержка и вопросы по работе сервиса</div>
+                </a>
+                <a href="mailto:info@asibiont.com" style="display: block; border: 1px solid #D1D9E0; border-radius: 6px; padding: 16px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">
+                    <div style="font-size: 13px; font-weight: 600; color: #1F2328; margin-bottom: 4px;">info@asibiont.com</div>
+                    <div class="email-desc-info" style="font-size: 12px; color: #6C727F; line-height: 1.4;">Общие вопросы и информация о продукте</div>
+                </a>
+                <a href="mailto:partners@asibiont.com" style="display: block; border: 1px solid #D1D9E0; border-radius: 6px; padding: 16px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">
+                    <div style="font-size: 13px; font-weight: 600; color: #1F2328; margin-bottom: 4px;">partners@asibiont.com</div>
+                    <div class="email-desc-partners" style="font-size: 12px; color: #6C727F; line-height: 1.4;">Сотрудничество и партнёрские предложения</div>
+                </a>
+                <a href="mailto:hr@asibiont.com" style="display: block; border: 1px solid #D1D9E0; border-radius: 6px; padding: 16px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">
+                    <div style="font-size: 13px; font-weight: 600; color: #1F2328; margin-bottom: 4px;">hr@asibiont.com</div>
+                    <div class="email-desc-hr" style="font-size: 12px; color: #6C727F; line-height: 1.4;">Вакансии и работа в команде</div>
+                </a>
+            </div>
         </div>
     </div>
 <!-- i18n Language Switcher -->
@@ -590,7 +618,12 @@
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
       btnTop: 'Пополнить баланс', btnGuide: 'Руководство',
       fHome: 'Главная', fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы',
-      discordLogin: 'Войти через Discord'
+      discordLogin: 'Войти через Discord',
+      emailTitle: 'Свяжитесь с нами',
+      emailSupport: 'Техническая поддержка и вопросы по работе сервиса',
+      emailInfo: 'Общие вопросы и информация о продукте',
+      emailPartners: 'Сотрудничество и партнёрские предложения',
+      emailHr: 'Вакансии и работа в команде'
     },
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
@@ -625,7 +658,12 @@
       cta: '1,500 tokens on signup. All features available immediately.',
       btnTop: 'Top Up Balance', btnGuide: 'Guide',
       fHome: 'Home', fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing',
-      discordLogin: 'Sign in with Discord'
+      discordLogin: 'Sign in with Discord',
+      emailTitle: 'Contact Us',
+      emailSupport: 'Technical support and service questions',
+      emailInfo: 'General inquiries and product information',
+      emailPartners: 'Collaboration and partnership proposals',
+      emailHr: 'Careers and job opportunities'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -679,6 +717,17 @@
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');
     if (dcBtn) dcBtn.textContent = t.discordLogin;
+    // Email contacts
+    var ect = document.querySelector('.email-contacts-title');
+    if (ect) ect.textContent = t.emailTitle;
+    var eds = document.querySelector('.email-desc-support');
+    if (eds) eds.textContent = t.emailSupport;
+    var edi = document.querySelector('.email-desc-info');
+    if (edi) edi.textContent = t.emailInfo;
+    var edp = document.querySelector('.email-desc-partners');
+    if (edp) edp.textContent = t.emailPartners;
+    var edh = document.querySelector('.email-desc-hr');
+    if (edh) edh.textContent = t.emailHr;
   }
   window.applyLang = apply;
   window.switchLang = function(lang) {
