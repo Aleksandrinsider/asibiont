@@ -155,14 +155,18 @@ If balance is low — warn and suggest /buy."""
                 if cleaned:
                     if lang == 'en':
                         memory_section = (
-                            f"\nNOTES FROM PAST CONVERSATIONS (these are NOT current tasks/goals — "
-                            f"current tasks and goals are in TASKS and GOALS sections above):\n"
+                            f"\nNOTES FROM PAST CONVERSATIONS (HISTORICAL context only — "
+                            f"tasks/goals mentioned here may be ALREADY COMPLETED or DELETED. "
+                            f"Do NOT claim the user has an active task based on these notes. "
+                            f"For actual current tasks ALWAYS call list_tasks()):\n"
                             f"{cleaned[:400]}"
                         )
                     else:
                         memory_section = (
-                            f"\nЗАМЕТКИ О ПРОШЛЫХ РАЗГОВОРАХ (это НЕ текущие задачи/цели — "
-                            f"текущие задачи и цели указаны в секциях ЗАДАЧИ и ЦЕЛИ выше):\n"
+                            f"\nЗАМЕТКИ О ПРОШЛЫХ РАЗГОВОРАХ (ИСТОРИЧЕСКИЙ контекст — "
+                            f"задачи/цели упомянутые здесь могут быть УЖЕ ЗАВЕРШЕНЫ или УДАЛЕНЫ. "
+                            f"НЕ утверждай что у пользователя есть активная задача на основе этих заметок. "
+                            f"Для проверки актуальных задач ВСЕГДА вызывай list_tasks()):\n"
                             f"{cleaned[:400]}"
                         )
         except Exception as e:
@@ -171,12 +175,24 @@ If balance is low — warn and suggest /buy."""
     # Current task
     task_section = ""
     if current_task_info:
-        if lang == 'en':
-            task_section = f"""
+        task_status = current_task_info.get('status', 'pending')
+        if task_status == 'completed':
+            # Задача завершена — показываем как историческую, не активную
+            if lang == 'en':
+                task_section = f"""
+LAST TASK (✅ COMPLETED): "{current_task_info['title']}" (ID: {current_task_info['id']})
+This task is DONE. Do NOT mention it as active or pending. For current tasks use list_tasks()."""
+            else:
+                task_section = f"""
+ПОСЛЕДНЯЯ ЗАДАЧА (✅ ЗАВЕРШЕНА): "{current_task_info['title']}" (ID: {current_task_info['id']})
+Эта задача УЖЕ ВЫПОЛНЕНА. НЕ упоминай её как активную или незавершённую. Для актуальных задач — list_tasks()."""
+        else:
+            if lang == 'en':
+                task_section = f"""
 ACTIVE TASK: "{current_task_info['title']}" (ID: {current_task_info['id']})
 If user says "done/finished/completed" → complete_task()"""
-        else:
-            task_section = f"""
+            else:
+                task_section = f"""
 АКТИВНАЯ ЗАДАЧА: "{current_task_info['title']}" (ID: {current_task_info['id']})
 Если пользователь говорит "сделал/готово/выполнил" → complete_task()"""
     else:
