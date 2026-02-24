@@ -1,0 +1,25 @@
+{
+  "name": "ASI Biont",
+  "short_name": "ASI Biont",
+  "description": "AI-партнёр для управления задачами и связями",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#068487",
+  "lang": "ru",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/static/asibiont-preview.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/favicon.ico",
+      "sizes": "32x32",
+      "type": "image/x-icon"
+    }
+  ]
+}

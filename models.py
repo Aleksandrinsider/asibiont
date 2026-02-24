@@ -57,6 +57,9 @@ class User(Base):
     platform = Column(String(20), default='telegram')  # 'telegram' or 'discord'
     discord_id = Column(BigInteger, unique=True, nullable=True, index=True)  # Discord user ID
     discord_username = Column(String(255), nullable=True)  # Discord username for display
+    email = Column(String(255), unique=True, nullable=True, index=True)  # Email for web login
+    password_hash = Column(String(500), nullable=True)  # PBKDF2 hash for email login
+    phone = Column(String(20), nullable=True, index=True)  # Phone number
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 
@@ -480,6 +483,20 @@ class Anchor(Base):
                                (self.created_at.replace(tzinfo=datetime.timezone.utc) if self.created_at.tzinfo is None else self.created_at)
                                ).total_seconds() / 60) if self.created_at else 0
         }
+
+
+class PushSubscription(Base):
+    """Web Push subscriptions for browser notifications"""
+    __tablename__ = 'push_subscriptions'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False)
+    keys_p256dh = Column(String(500), nullable=False)
+    keys_auth = Column(String(500), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="push_subscriptions")
 
 
 class TokenTransaction(Base):

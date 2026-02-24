@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -342,6 +342,27 @@ def check_telegram_authentication(data):
     return hash_computed == data.get('hash')
 
 
+# ═══ Password helpers for email auth ═══
+import base64
+
+def hash_password(password):
+    """Hash password with PBKDF2-SHA256 + random salt"""
+    salt = os.urandom(16)
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+    return base64.b64encode(salt + key).decode('utf-8')
+
+def verify_password(password, stored_hash):
+    """Verify password against stored PBKDF2 hash"""
+    try:
+        decoded = base64.b64decode(stored_hash)
+        salt = decoded[:16]
+        stored_key = decoded[16:]
+        key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        return key == stored_key
+    except Exception:
+        return False
+
+
 async def health_handler(request):
     """Health check endpoint for Railway"""
     return web.Response(text='OK', status=200)
@@ -596,6 +617,196 @@ async def auth_handler(request):
     except Exception as e:
         logger.error(f"CRITICAL ERROR in auth_handler: {e}", exc_info=True)
         return web.Response(text='Internal server error', status=500)
+
+
+# ═══ Email registration and login ═══
+
+async def email_register_handler(request):
+    """Register a new user with email + password"""
+    try:
+        data = await request.json()
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password', '')
+
+        if not email or '@' not in email or '.' not in email:
+            return web.json_response({'error': 'Некорректный email'}, status=400)
+        if len(password) < 6:
+            return web.json_response({'error': 'Пароль минимум 6 символов'}, status=400)
+
+        session_db = Session()
+        try:
+            existing = session_db.query(User).filter_by(email=email).first()
+            if existing:
+                return web.json_response({'error': 'Email уже зарегистрирован'}, status=409)
+
+            # Generate unique negative telegram_id for email-only users
+            import random
+            while True:
+                fake_tg_id = -random.randint(10**14, 10**15)
+                if not session_db.query(User).filter_by(telegram_id=fake_tg_id).first():
+                    break
+
+            # Detect timezone from IP
+            ip_address = request.headers.get('X-Forwarded-For', request.remote or '').split(',')[0].strip()
+            tz, city = await get_timezone_from_ip(ip_address)
+
+            user = User(
+                telegram_id=fake_tg_id,
+                email=email,
+                password_hash=hash_password(password),
+                first_name=email.split('@')[0],
+                platform='web',
+                timezone=tz,
+            )
+            session_db.add(user)
+            session_db.commit()
+
+            # Create profile with detected city
+            if city:
+                profile = UserProfile(user_id=user.id, city=city)
+                session_db.add(profile)
+                session_db.commit()
+
+            # Grant signup tokens
+            try:
+                from token_service import grant_signup_tokens
+                grant_signup_tokens(fake_tg_id, session=session_db)
+            except Exception as e:
+                logger.warning(f"Failed to grant signup tokens for email user: {e}")
+
+            # Log in immediately
+            session = await get_session(request)
+            session['user_id'] = fake_tg_id
+            logger.info(f"Email registration successful: {email}, user_id={user.id}")
+
+            return web.json_response({'success': True, 'redirect': '/dashboard'})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in email_register_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def email_login_handler(request):
+    """Login with email + password"""
+    try:
+        data = await request.json()
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password', '')
+
+        if not email or not password:
+            return web.json_response({'error': 'Укажите email и пароль'}, status=400)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(email=email).first()
+            if not user or not user.password_hash:
+                return web.json_response({'error': 'Неверный email или пароль'}, status=401)
+
+            if not verify_password(password, user.password_hash):
+                return web.json_response({'error': 'Неверный email или пароль'}, status=401)
+
+            session = await get_session(request)
+            session['user_id'] = user.telegram_id
+            logger.info(f"Email login successful: {email}")
+
+            return web.json_response({'success': True, 'redirect': '/dashboard'})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in email_login_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+# ═══ Push subscription ═══
+
+async def push_subscribe_handler(request):
+    """Save Web Push subscription for user"""
+    try:
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        data = await request.json()
+        endpoint = data.get('endpoint')
+        keys = data.get('keys', {})
+        p256dh = keys.get('p256dh')
+        auth = keys.get('auth')
+
+        if not endpoint or not p256dh or not auth:
+            return web.json_response({'error': 'Invalid subscription'}, status=400)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # Remove old subscription with same endpoint
+            session_db.query(PushSubscription).filter_by(
+                user_id=user.id, endpoint=endpoint
+            ).delete()
+
+            sub = PushSubscription(
+                user_id=user.id,
+                endpoint=endpoint,
+                keys_p256dh=p256dh,
+                keys_auth=auth,
+            )
+            session_db.add(sub)
+            session_db.commit()
+
+            return web.json_response({'success': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in push_subscribe_handler: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def push_vapid_key_handler(request):
+    """Return VAPID public key for push subscription"""
+    from config import VAPID_PUBLIC_KEY
+    if not VAPID_PUBLIC_KEY:
+        return web.json_response({'error': 'Push not configured'}, status=503)
+    return web.json_response({'publicKey': VAPID_PUBLIC_KEY})
+
+
+async def send_web_push(user_id_db, title, body, url='/dashboard'):
+    """Send Web Push notification to all user's subscriptions"""
+    try:
+        from config import VAPID_PRIVATE_KEY, VAPID_EMAIL, VAPID_PUBLIC_KEY
+        if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+            return
+
+        from pywebpush import webpush, WebPushException
+        session_db = Session()
+        try:
+            subs = session_db.query(PushSubscription).filter_by(user_id=user_id_db).all()
+            for sub in subs:
+                try:
+                    webpush(
+                        subscription_info={
+                            'endpoint': sub.endpoint,
+                            'keys': {'p256dh': sub.keys_p256dh, 'auth': sub.keys_auth}
+                        },
+                        data=json.dumps({'title': title, 'body': body, 'url': url}),
+                        vapid_private_key=VAPID_PRIVATE_KEY,
+                        vapid_claims={'sub': VAPID_EMAIL}
+                    )
+                except WebPushException as e:
+                    if '410' in str(e) or '404' in str(e):
+                        session_db.delete(sub)
+                        session_db.commit()
+                    logger.warning(f"Push failed for sub {sub.id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Push error for sub {sub.id}: {e}")
+        finally:
+            session_db.close()
+    except ImportError:
+        logger.debug("pywebpush not installed, skipping push notification")
+    except Exception as e:
+        logger.warning(f"send_web_push error: {e}")
 
 
 async def logout_handler(request):
@@ -6304,6 +6515,16 @@ async def api_profile_handler(request):
                 # Update user fields
                 if 'first_name' in data:
                     user.first_name = data['first_name'].strip() if data['first_name'] and data['first_name'].strip() else user.first_name
+                if 'email' in data:
+                    email_val = data['email'].strip().lower() if data['email'] and data['email'].strip() else None
+                    if email_val and '@' in email_val:
+                        existing_email = session_db.query(User).filter(User.email == email_val, User.id != user.id).first()
+                        if not existing_email:
+                            user.email = email_val
+                    elif not email_val:
+                        user.email = None
+                if 'phone' in data:
+                    user.phone = data['phone'].strip() if data['phone'] and data['phone'].strip() else None
                 if 'telegram_channel' in data:
                     user.telegram_channel = data['telegram_channel'].strip() if data['telegram_channel'] and data['telegram_channel'].strip() else None
                 if 'discord_webhook' in data:
@@ -6407,6 +6628,8 @@ async def api_profile_handler(request):
             'average_rating': profile.average_rating if profile else 0,
             'rating_count': profile.rating_count if profile else 0,
             'country': _pick_own('country') if profile and hasattr(profile, 'country') else None,
+            'email': user.email if hasattr(user, 'email') else None,
+            'phone': user.phone if hasattr(user, 'phone') else None,
         }
 
         # Get subscription and user data for additional fields
@@ -6981,6 +7204,10 @@ app.router.add_get('/', login_handler)
 app.router.add_get('/admin/index.html', lambda r: web.HTTPFound('/dashboard'))  # Redirect old admin URL
 app.router.add_get('/tg_auth', auth_handler)
 app.router.add_get('/telegram_auth', auth_handler)  # Keep old route for compatibility
+app.router.add_post('/api/register', email_register_handler)
+app.router.add_post('/api/login/email', email_login_handler)
+app.router.add_post('/api/push/subscribe', push_subscribe_handler)
+app.router.add_get('/api/push/vapid-key', push_vapid_key_handler)
 app.router.add_get('/logout', logout_handler)
 app.router.add_get('/dashboard', dashboard_handler)
 app.router.add_get('/tasks', tasks_handler)
@@ -7191,6 +7418,44 @@ async def ensure_database_schema(app):
             logger.info("✅ Successfully added goal_id column")
         else:
             logger.info("✅ goal_id column already exists")
+
+        # Migrate users table: email, password_hash, phone
+        user_columns = [col['name'] for col in inspector.get_columns('users')]
+        for col_name, col_def in [
+            ('email', 'VARCHAR(255) UNIQUE'),
+            ('password_hash', 'VARCHAR(500)'),
+            ('phone', 'VARCHAR(20)'),
+        ]:
+            if col_name not in user_columns:
+                logger.info(f"Adding {col_name} column to users table...")
+                try:
+                    with engine.connect() as conn:
+                        conn.execute(sql_text(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"))
+                        conn.commit()
+                    logger.info(f"Added {col_name} column")
+                except Exception as col_err:
+                    logger.warning(f"Could not add {col_name}: {col_err}")
+
+        # Create push_subscriptions table if not exists
+        if 'push_subscriptions' not in inspector.get_table_names():
+            logger.info("Creating push_subscriptions table...")
+            try:
+                with engine.connect() as conn:
+                    conn.execute(sql_text("""
+                        CREATE TABLE IF NOT EXISTS push_subscriptions (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id),
+                            endpoint TEXT NOT NULL,
+                            keys_p256dh VARCHAR(500) NOT NULL,
+                            keys_auth VARCHAR(500) NOT NULL,
+                            created_at TIMESTAMP DEFAULT NOW()
+                        )
+                    """))
+                    conn.execute(sql_text("CREATE INDEX IF NOT EXISTS ix_push_subscriptions_user_id ON push_subscriptions(user_id)"))
+                    conn.commit()
+                logger.info("Created push_subscriptions table")
+            except Exception as tbl_err:
+                logger.warning(f"Could not create push_subscriptions: {tbl_err}")
             
     except Exception as e:
         logger.error(f"Error during database schema check: {e}")

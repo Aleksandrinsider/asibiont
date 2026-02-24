@@ -29,6 +29,8 @@
     <link rel="alternate" hreflang="en" href="https://asibiont.com/en/">
     <link rel="alternate" hreflang="x-default" href="https://asibiont.com/">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#068487">
 
     <!-- Structured Data: WebApplication -->
     <script type="application/ld+json">
@@ -452,6 +454,21 @@
                 </script>
             </div>
         </div>
+        <!-- Email login/register -->
+        <div style="display: flex; justify-content: center; margin: 12px 0 0 0;">
+            <button onclick="document.getElementById('email-auth-form').style.display = document.getElementById('email-auth-form').style.display === 'none' ? 'block' : 'none'" style="background: none; border: none; cursor: pointer; color: #6C727F; font-size: 13px; font-family: inherit; text-decoration: underline;" id="email-auth-toggle" data-i18n="emailLogin">Войти по email</button>
+        </div>
+        <div id="email-auth-form" style="display: none; max-width: 340px; margin: 12px auto 0;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <input type="email" id="auth-email" placeholder="Email" style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                <input type="password" id="auth-password" placeholder="Пароль (мин. 6 символов)" data-i18n-ph="passwordPh" style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="emailAuth('login')" style="flex: 1; padding: 8px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit;" onmouseover="this.style.background='#1f2937'" onmouseout="this.style.background='#374151'" data-i18n="loginBtn">Войти</button>
+                    <button onclick="emailAuth('register')" style="flex: 1; padding: 8px; background: #068487; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit;" onmouseover="this.style.background='#056e70'" onmouseout="this.style.background='#068487'" data-i18n="registerBtn">Регистрация</button>
+                </div>
+                <p id="email-auth-error" style="display: none; color: #DC2626; font-size: 12px; margin: 0; text-align: center;"></p>
+            </div>
+        </div>
         <div class="auth-card">
             <h1>AI отвечают. ASI Biont действует!</h1>
             <div class="lang-switcher" id="lang-toggle">
@@ -686,7 +703,8 @@
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
       btnTop: 'Пополнить баланс', btnGuide: 'Руководство',
       fHome: 'Главная', fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение',
-      discordLogin: 'Войти через Discord'
+      discordLogin: 'Войти через Discord',
+      emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)'
     },
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
@@ -767,7 +785,8 @@
       cta: '1,500 tokens on signup. All features available immediately.',
       btnTop: 'Top Up Balance', btnGuide: 'Guide',
       fHome: 'Home', fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement',
-      discordLogin: 'Sign in with Discord'
+      discordLogin: 'Sign in with Discord',
+      emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -823,6 +842,15 @@
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');
     if (dcBtn) dcBtn.textContent = t.discordLogin;
+    // Email auth
+    var emBtn = document.querySelector('[data-i18n="emailLogin"]');
+    if (emBtn) emBtn.textContent = t.emailLogin;
+    var lBtn = document.querySelector('[data-i18n="loginBtn"]');
+    if (lBtn) lBtn.textContent = t.loginBtn;
+    var rBtn = document.querySelector('[data-i18n="registerBtn"]');
+    if (rBtn) rBtn.textContent = t.registerBtn;
+    var pPh = document.querySelector('[data-i18n-ph="passwordPh"]');
+    if (pPh) pPh.placeholder = t.passwordPh;
   }
   window.applyLang = apply;
   window.switchLang = function(lang) {
@@ -849,6 +877,24 @@
 </script>
 <noscript><div><img src="https://mc.yandex.ru/watch/106862663" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
 <!-- /Yandex.Metrika counter -->
+<!-- Email auth + PWA Service Worker -->
+<script>
+async function emailAuth(mode) {
+  var email = document.getElementById('auth-email').value.trim();
+  var password = document.getElementById('auth-password').value;
+  var errEl = document.getElementById('email-auth-error');
+  errEl.style.display = 'none';
+  if (!email || !password) { errEl.textContent = 'Укажите email и пароль'; errEl.style.display = 'block'; return; }
+  var url = mode === 'register' ? '/api/register' : '/api/login/email';
+  try {
+    var resp = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:email,password:password}), credentials:'include'});
+    var data = await resp.json();
+    if (data.success && data.redirect) { window.location.href = data.redirect; }
+    else { errEl.textContent = data.error || 'Ошибка'; errEl.style.display = 'block'; }
+  } catch(e) { errEl.textContent = 'Ошибка сети'; errEl.style.display = 'block'; }
+}
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js', {scope: '/'}).catch(function(){}); }
+</script>
 </body>
 </html>
 

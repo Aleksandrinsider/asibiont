@@ -105,6 +105,11 @@ if not SESSION_SECRET and not LOCAL:
 if not SESSION_SECRET:
     SESSION_SECRET = "local-dev-secret-key-not-for-production"
 
+# Web Push (VAPID)
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_EMAIL = os.getenv("VAPID_EMAIL", "mailto:admin@asibiont.com")
+
 # Reminder settings
 DAILY_REPORT_HOUR = int(os.getenv("DAILY_REPORT_HOUR", 22))
 PROACTIVE_CHECK_INTERVAL_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_MINUTES", 120))  # Каждые 2 часа вместо 30 минут
