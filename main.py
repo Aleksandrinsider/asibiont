@@ -3653,6 +3653,27 @@ async def api_contact_profile_handler(request):
                 else:
                     return getattr(profile, f'{field_name}_normalized_ru', None) or original
 
+            # Auto-renormalize contact profile if translated fields are missing
+            if profile:
+                _needs_norm = False
+                for _nf in ['city', 'country', 'company', 'position', 'goals', 'skills', 'interests']:
+                    _orig = getattr(profile, _nf, None)
+                    if _orig and _orig.strip():
+                        _en = getattr(profile, f'{_nf}_normalized', None)
+                        _ru = getattr(profile, f'{_nf}_normalized_ru', None)
+                        if not _en or not _ru:
+                            _needs_norm = True
+                            break
+                if _needs_norm:
+                    try:
+                        from ai_integration.utils import normalize_profile_fields
+                        _norm_ok = await normalize_profile_fields(profile)
+                        if _norm_ok:
+                            session_db.commit()
+                            logger.info(f"[CONTACT PROFILE] Auto-normalized profile for contact {contact_user.id}")
+                    except Exception as _ne:
+                        logger.warning(f"[CONTACT PROFILE] Auto-normalization failed: {_ne}")
+
             try:
                 profile_data = {
                     'contact_info': contact_user.username if hasattr(contact_user, 'username') else None,
@@ -5404,6 +5425,30 @@ async def on_startup(app):
         if session_db:
             session_db.close()
 
+    # One-time: clear all normalized profile fields so they re-translate with fixed prompts
+    session_db = None
+    try:
+        session_db = Session()
+        _norm_fields = ['city', 'country', 'company', 'position', 'goals', 'skills', 'interests', 'bio', 'status_text']
+        _cleared = 0
+        for _prof in session_db.query(UserProfile).all():
+            _had = False
+            for _f in _norm_fields:
+                if getattr(_prof, f'{_f}_normalized', None) or getattr(_prof, f'{_f}_normalized_ru', None):
+                    setattr(_prof, f'{_f}_normalized', None)
+                    setattr(_prof, f'{_f}_normalized_ru', None)
+                    _had = True
+            if _had:
+                _cleared += 1
+        if _cleared:
+            session_db.commit()
+            logger.info(f"✅ Reset normalized fields for {_cleared} profiles (prompt fix v2)")
+    except Exception as e:
+        logger.error(f"❌ Error resetting normalized fields: {e}")
+    finally:
+        if session_db:
+            session_db.close()
+
     # Очищаем накопленную историю диалогов (содержит галлюцинации)
     session_db = None
     try:
@@ -6046,6 +6091,71 @@ async def api_note_edit_handler(request):
     except Exception as e:
         logger.error(f"Error editing note: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def translate_note_handler(request):
+    """Translate a note to the specified language using DeepSeek"""
+    db_session = None
+    try:
+        user_session = await get_session(request)
+        user_id = user_session.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        note_id = int(request.match_info['note_id'])
+        data = await request.json()
+        target_lang = data.get('lang', 'en')
+
+        db_session = Session()
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        note = db_session.query(Note).filter_by(id=note_id, user_id=user.id).first()
+        if not note:
+            return web.json_response({'error': 'Note not found'}, status=404)
+
+        content = note.content
+        if not content or len(content.strip()) < 2:
+            return web.json_response({'error': 'Nothing to translate'}, status=400)
+
+        lang_names = {
+            'ru': 'Russian', 'en': 'English', 'es': 'Spanish', 'fr': 'French',
+            'de': 'German', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
+        }
+        lang_name = lang_names.get(target_lang, target_lang)
+
+        async with aiohttp.ClientSession() as session:
+            resp = await session.post(
+                'https://api.deepseek.com/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': DEEPSEEK_MODEL,
+                    'messages': [
+                        {'role': 'system', 'content': f'Translate the following text to {lang_name}. Return ONLY the translated text, nothing else. Preserve formatting and line breaks.'},
+                        {'role': 'user', 'content': content},
+                    ],
+                    'max_tokens': 2000,
+                    'temperature': 0.3,
+                },
+                timeout=aiohttp.ClientTimeout(total=30),
+            )
+            result = await resp.json()
+
+        translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        if not translated:
+            return web.json_response({'error': 'Translation failed'}, status=500)
+
+        return web.json_response({'success': True, 'translated': translated, 'lang': target_lang})
+
+    except Exception as e:
+        logger.error(f"Error translating note: {e}", exc_info=True)
+        return web.json_response({'error': 'Translation error'}, status=500)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 async def api_profile_handler(request):
@@ -6899,6 +7009,7 @@ app.router.add_delete('/api/comments/{comment_id}', delete_comment_handler)
 app.router.add_post('/api/posts/{post_id}/like', toggle_like_handler)
 app.router.add_post('/api/posts/{post_id}/translate', translate_post_handler)
 app.router.add_post('/api/comments/{comment_id}/translate', translate_comment_handler)
+app.router.add_post('/api/notes/{note_id}/translate', translate_note_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)

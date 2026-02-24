@@ -691,7 +691,11 @@
                             </div>
                             <div class="chat-input">
                                 <input type="text" id="note-input" placeholder="Текст заметки..." data-i18n-ph="note-placeholder" onkeypress="if(event.key==='Enter')addManualNote()">
+                                <input type="file" id="note-file-input" style="display: none;" accept="text/*,.pdf,.doc,.docx,.csv,.json,.xml,.md,.txt,.log">
                                 <div style="display: flex; gap: 4px; flex-direction: row;">
+                                    <button onclick="document.getElementById('note-file-input').click()" class="chat-action-btn" title="Прикрепить файл" data-i18n-title="attach-file">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
+                                    </button>
                                     <button onclick="addManualNote()" class="chat-action-btn" title="Добавить заметку" data-i18n-title="add-note">
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
                                     </button>
@@ -1786,6 +1790,7 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; gap: 4px;">
+                                    <button onclick="translateNote(${n.id})" class="delete-btn" id="translate-btn-note-${n.id}" title="${t('translate')}" style="margin-top: 3px;"><span id="translate-label-note-${n.id}">${TRANSLATE_GLOBE_SVG}</span></button>
                                     <button onclick="editNote(${n.id})" class="delete-btn" title="${t('edit-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button>
                                     <button onclick="deleteNote(${n.id})" class="delete-btn" title="${t('delete-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>
                                 </div>
@@ -1821,6 +1826,42 @@
                 showNotification(t('err-prefix') + ' ' + e.message, 'error');
             }
         }
+
+        // File attachment for notes
+        document.addEventListener('DOMContentLoaded', function() {
+            const noteFileInput = document.getElementById('note-file-input');
+            if (noteFileInput) {
+                noteFileInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    if (file.size > 500 * 1024) {
+                        showNotification(t('err-file-size') || 'File too large (max 500KB)', 'error');
+                        noteFileInput.value = '';
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = async function(ev) {
+                        const content = '📎 ' + file.name + '\n\n' + ev.target.result;
+                        try {
+                            const resp = await fetch('/api/notes', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ content: content.substring(0, 5000), source: 'manual' })
+                            });
+                            if (resp.ok) {
+                                showNotification(t('note-saved'), 'success');
+                                loadNotes();
+                            }
+                        } catch (err) {
+                            showNotification(t('err-prefix') + ' ' + err.message, 'error');
+                        }
+                    };
+                    reader.readAsText(file);
+                    noteFileInput.value = '';
+                });
+            }
+        });
 
         async function saveToNotes(text) {
             if (!text || !text.trim()) return;
@@ -2623,6 +2664,64 @@
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
+        const noteTranslationCache = {};
+
+        async function translateNote(noteId) {
+            const btn = document.getElementById(`translate-btn-note-${noteId}`);
+            const label = document.getElementById(`translate-label-note-${noteId}`);
+            const contentEl = document.getElementById('note-content-' + noteId);
+            if (!contentEl) return;
+
+            // Toggle back to original
+            if (noteTranslationCache[noteId] && noteTranslationCache[noteId].showingTranslation) {
+                contentEl.textContent = noteTranslationCache[noteId].original;
+                noteTranslationCache[noteId].showingTranslation = false;
+                label.innerHTML = TRANSLATE_GLOBE_SVG;
+                return;
+            }
+
+            // Show cached translation
+            if (noteTranslationCache[noteId] && noteTranslationCache[noteId].translated) {
+                contentEl.textContent = noteTranslationCache[noteId].translated;
+                noteTranslationCache[noteId].showingTranslation = true;
+                label.innerHTML = TRANSLATE_BACK_SVG;
+                return;
+            }
+
+            const originalText = contentEl.textContent;
+            const hasRussian = /[\u0430-\u044f\u0410-\u042f\u0451\u0401]/.test(originalText);
+            const targetLang = hasRussian ? 'en' : 'ru';
+            noteTranslationCache[noteId] = { original: originalText, translated: null, showingTranslation: false };
+
+            label.innerHTML = TRANSLATE_LOADING_SVG;
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch(`/api/notes/${noteId}/translate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ lang: targetLang })
+                });
+                if (!await checkAuth(resp)) return;
+                const data = await resp.json();
+                if (resp.ok && data.translated) {
+                    noteTranslationCache[noteId].translated = data.translated;
+                    noteTranslationCache[noteId].showingTranslation = true;
+                    contentEl.textContent = data.translated;
+                    label.innerHTML = TRANSLATE_BACK_SVG;
+                } else {
+                    label.innerHTML = TRANSLATE_GLOBE_SVG;
+                    showNotification(t('err-translate-short'), 'error');
+                }
+            } catch (e) {
+                console.error('Note translation error:', e);
+                label.innerHTML = TRANSLATE_GLOBE_SVG;
+                showNotification(t('err-translate-short'), 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
 
         async function translatePost(postId) {
             const btn = document.getElementById(`translate-btn-${postId}`);
