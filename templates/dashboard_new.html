@@ -1182,6 +1182,8 @@
             
             // Экранируем HTML для защиты от XSS
             processedText = escapeHtml(processedText);
+            // Делаем ссылки кликабельными (после escapeHtml для безопасности)
+            processedText = linkify(processedText);
             // Только сохраняем переносы строк как <br>
             processedText = processedText.replace(/\n/g, '<br>');
             // Убираем лишние пробелы в начале и конце
@@ -1798,7 +1800,7 @@
                                     <button onclick="deleteNote(${n.id})" class="delete-btn" title="${t('delete-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>
                                 </div>
                             </div>
-                            <p id="note-content-${n.id}" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(n.content)}</p>
+                            <p id="note-content-${n.id}" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${linkify(escapeHtml(n.content))}</p>
                         </div>`;
                     list.appendChild(card);
                 });
@@ -2055,7 +2057,7 @@
                                     </div>
                                 </div>
                                 
-                                <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                                <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${linkify(escapeHtml(post.content))}</p>
                                 ${post.image_url ? `<img src="${post.image_url}" style="max-width: 100%; border-radius: 8px; margin-bottom: 8px; cursor: pointer;" onclick="openImageOverlay(this.src)">` : ''}
                                 
                                 <!-- Comments section -->
@@ -2423,7 +2425,7 @@
                             </div>
                         </div>
                         
-                        <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                        <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${linkify(escapeHtml(post.content))}</p>
                         ${post.image_url ? `<img src="${post.image_url}" style="max-width: 100%; border-radius: 8px; margin-bottom: 8px; cursor: pointer;" onclick="openImageOverlay(this.src)">` : ''}
                         
                         <!-- Comments section -->
@@ -2534,7 +2536,7 @@
                                     }
                                     <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                 </div>
-                                <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
+                                <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${linkify(escapeHtml(comment.content))}</p>
                             </div>
                             ${comment.author.is_current_user ? 
                                 `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
@@ -2608,7 +2610,7 @@
                                         }
                                         <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                     </div>
-                                    <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
+                                    <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${linkify(escapeHtml(comment.content))}</p>
                                 </div>
                                 ${comment.author.is_current_user ? 
                                     `<button onclick="editComment(${comment.id}, ${postId})" class="delete-btn" title="${t('edit-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button><button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="${t('delete-comment')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
@@ -2677,7 +2679,7 @@
 
             // Toggle back to original
             if (noteTranslationCache[noteId] && noteTranslationCache[noteId].showingTranslation) {
-                contentEl.textContent = noteTranslationCache[noteId].original;
+                contentEl.innerHTML = linkify(escapeHtml(noteTranslationCache[noteId].original));
                 noteTranslationCache[noteId].showingTranslation = false;
                 label.innerHTML = TRANSLATE_GLOBE_SVG;
                 return;
@@ -2685,7 +2687,7 @@
 
             // Show cached translation
             if (noteTranslationCache[noteId] && noteTranslationCache[noteId].translated) {
-                contentEl.textContent = noteTranslationCache[noteId].translated;
+                contentEl.innerHTML = linkify(escapeHtml(noteTranslationCache[noteId].translated));
                 noteTranslationCache[noteId].showingTranslation = true;
                 label.innerHTML = TRANSLATE_BACK_SVG;
                 return;
@@ -2711,7 +2713,7 @@
                 if (resp.ok && data.translated) {
                     noteTranslationCache[noteId].translated = data.translated;
                     noteTranslationCache[noteId].showingTranslation = true;
-                    contentEl.textContent = data.translated;
+                    contentEl.innerHTML = linkify(escapeHtml(data.translated));
                     label.innerHTML = TRANSLATE_BACK_SVG;
                 } else {
                     label.innerHTML = TRANSLATE_GLOBE_SVG;
@@ -2745,27 +2747,27 @@
 
             // Toggle back to originals
             if (translationCache[postId] && translationCache[postId].showingTranslation) {
-                contentEl.textContent = translationCache[postId].original;
+                contentEl.innerHTML = linkify(escapeHtml(translationCache[postId].original));
                 translationCache[postId].showingTranslation = false;
                 label.innerHTML = TRANSLATE_GLOBE_SVG;
                 // Restore comments
                 const comments = translationCache[postId].comments || {};
                 getCommentEls().forEach(el => {
                     const cid = el.id.replace('comment-content-', '');
-                    if (comments[cid]) el.textContent = comments[cid].original;
+                    if (comments[cid]) el.innerHTML = linkify(escapeHtml(comments[cid].original));
                 });
                 return;
             }
 
             // Show cached translation
             if (translationCache[postId] && translationCache[postId].translated) {
-                contentEl.textContent = translationCache[postId].translated;
+                contentEl.innerHTML = linkify(escapeHtml(translationCache[postId].translated));
                 translationCache[postId].showingTranslation = true;
                 label.innerHTML = TRANSLATE_BACK_SVG;
                 const comments = translationCache[postId].comments || {};
                 getCommentEls().forEach(el => {
                     const cid = el.id.replace('comment-content-', '');
-                    if (comments[cid] && comments[cid].translated) el.textContent = comments[cid].translated;
+                    if (comments[cid] && comments[cid].translated) el.innerHTML = linkify(escapeHtml(comments[cid].translated));
                 });
                 return;
             }
@@ -2815,7 +2817,7 @@
                 if (postResponse.ok && postData.translated) {
                     translationCache[postId].translated = postData.translated;
                     translationCache[postId].showingTranslation = true;
-                    contentEl.textContent = postData.translated;
+                    contentEl.innerHTML = linkify(escapeHtml(postData.translated));
                     label.innerHTML = TRANSLATE_BACK_SVG;
 
                     // Apply comment translations
@@ -2825,7 +2827,7 @@
                         if (translated) {
                             translationCache[postId].comments[cid].translated = translated;
                             const el = document.getElementById(`comment-content-${cid}`);
-                            if (el) el.textContent = translated;
+                            if (el) el.innerHTML = linkify(escapeHtml(translated));
                         }
                     });
                 } else {
@@ -3067,6 +3069,11 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function linkify(text) {
+            // Convert URLs to clickable links (after escapeHtml)
+            return text.replace(/(https?:\/\/[^\s<>"']+)/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #068487; text-decoration: underline;">$1</a>');
         }
 
         // Favorite contacts management
@@ -3840,7 +3847,7 @@
                         </div>
                     </div>
                     
-                    <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                    <p id="post-content-${post.id}" style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${linkify(escapeHtml(post.content))}</p>
                     ${post.image_url ? `<img src="${post.image_url}" style="max-width: 100%; border-radius: 8px; margin-bottom: 8px; cursor: pointer;" onclick="openImageOverlay(this.src)">` : ''}
                     
                     <!-- Comments section -->
@@ -8135,10 +8142,14 @@
     document.querySelectorAll('[data-i18n-ph]').forEach(function(el){var k=el.getAttribute('data-i18n-ph');if(d[k])el.placeholder=d[k];});
     document.querySelectorAll('[data-i18n-title]').forEach(function(el){var k=el.getAttribute('data-i18n-title');if(d[k])el.title=d[k];});
     if (typeof updateHeaderTime === 'function') updateHeaderTime();
-    // Persist language to DB and re-fetch profile with translated values
-    fetch('/api/set_language', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lang:lang})}).catch(function(){});
-    if (typeof profileInitialLoad !== 'undefined') { profileInitialLoad = false; }
-    if (typeof updateProfile === 'function') { setTimeout(function(){ updateProfile(); }, 100); }
+    // Persist language to DB only if changed
+    var prevLang = localStorage.getItem('asibiont_lang_saved');
+    if (prevLang !== lang) {
+      localStorage.setItem('asibiont_lang_saved', lang);
+      fetch('/api/set_language', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lang:lang})}).catch(function(){});
+      if (typeof profileInitialLoad !== 'undefined') { profileInitialLoad = false; }
+      if (typeof updateProfile === 'function') { setTimeout(function(){ updateProfile(); }, 100); }
+    }
   }
   window.applyLang=apply;
   document.addEventListener('DOMContentLoaded',function(){

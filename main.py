@@ -721,7 +721,7 @@ async def dashboard_handler(request):
                 else:
                     return getattr(profile_obj, f'{field_name}_normalized_ru', None) or original
 
-            # Auto-renormalize profile if translated fields are missing
+            # Auto-renormalize profile if translated fields are missing (background, non-blocking)
             if profile and _dash_lang:
                 _needs_norm = False
                 for _nf in ['city', 'country', 'company', 'position', 'goals', 'skills', 'interests']:
@@ -733,14 +733,24 @@ async def dashboard_handler(request):
                             _needs_norm = True
                             break
                 if _needs_norm:
-                    try:
-                        from ai_integration.utils import normalize_profile_fields
-                        _norm_ok = await normalize_profile_fields(profile)
-                        if _norm_ok:
-                            session_db.commit()
-                            logger.info(f"[DASHBOARD] Auto-normalized profile for user {user.id}")
-                    except Exception as _ne:
-                        logger.warning(f"[DASHBOARD] Auto-normalization failed: {_ne}")
+                    _profile_id = profile.id
+                    async def _bg_normalize(pid):
+                        try:
+                            from ai_integration.utils import normalize_profile_fields
+                            _s = Session()
+                            try:
+                                _p = _s.query(UserProfile).filter_by(id=pid).first()
+                                if _p:
+                                    ok = await normalize_profile_fields(_p)
+                                    if ok:
+                                        _s.commit()
+                                        logger.info(f"[DASHBOARD] Background normalized profile id={pid}")
+                            finally:
+                                _s.close()
+                        except Exception as _ne:
+                            logger.warning(f"[DASHBOARD] Background normalization failed: {_ne}")
+                    import asyncio
+                    asyncio.ensure_future(_bg_normalize(_profile_id))
 
             # Получить контакты по делегироаю
             delegating_to_me = []  # Люди, которые делегироали м задачи
