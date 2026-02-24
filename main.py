@@ -783,11 +783,8 @@ async def password_reset_handler(request):
             import string
             alphabet = string.ascii_letters + string.digits
             new_password = ''.join(secrets.choice(alphabet) for _ in range(10))
-            user.password_hash = hash_password(new_password)
-            session_db.commit()
-            logger.info(f"Password reset for email: {email}")
 
-            # Send new password via email
+            # Send email FIRST, only save password if email succeeds
             try:
                 await send_email(
                     to=email,
@@ -808,7 +805,14 @@ https://asibiont.com"""
                 logger.info(f"Password reset email sent to {email}")
             except Exception as mail_err:
                 logger.error(f"Failed to send password reset email to {email}: {mail_err}")
-                # Password was already changed — still return success but warn internally
+                return web.json_response({
+                    'error': 'Не удалось отправить письмо. Попробуйте позже или обратитесь в поддержку.'
+                }, status=500)
+
+            # Email sent successfully — now save the new password
+            user.password_hash = hash_password(new_password)
+            session_db.commit()
+            logger.info(f"Password reset for email: {email}")
 
             return web.json_response({
                 'success': True,
