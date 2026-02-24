@@ -138,3 +138,14 @@ check_db.py
 debug_*.py
 debug_*.log
 ssl/
+
+# Local databases
+*.db
+
+# Test logs
+*.log
+
+# Temp/debug scripts
+_*.py
+_*.txt
+*.bak
