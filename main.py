@@ -3966,6 +3966,7 @@ async def api_contact_profile_handler(request):
                     'discord_server_name': contact_user.discord_server_name if hasattr(contact_user, 'discord_server_name') and contact_user.discord_server_name else None,
                     'discord_guild_id': contact_user.discord_guild_id if hasattr(contact_user, 'discord_guild_id') and contact_user.discord_guild_id else None,
                     'discord_channel_id': contact_user.discord_channel_id if hasattr(contact_user, 'discord_channel_id') and contact_user.discord_channel_id else None,
+                    'phone': contact_user.phone if hasattr(contact_user, 'phone') and contact_user.phone else None,
                     'platform': contact_user.platform if hasattr(contact_user, 'platform') else 'telegram',
                     'discord_id': str(contact_user.discord_id) if hasattr(contact_user, 'discord_id') and contact_user.discord_id else None
                 }
