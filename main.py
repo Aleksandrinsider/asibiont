@@ -363,46 +363,15 @@ def verify_password(password, stored_hash):
         return False
 
 
-# ═══ Email sending via SMTP ═══
+# ═══ Email sending (Resend HTTP API primary, SMTP fallback) ═══
 
 async def send_email(to: str, subject: str, body: str):
-    """Send email via SMTP with multi-port fallback, forced IPv4"""
-    import smtplib
-    import ssl
-    import socket
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-    from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+    """Send email via Resend HTTP API (primary) or SMTP (fallback)"""
+    from config import RESEND_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
     
-    if not SMTP_PASSWORD:
-        logger.warning("SMTP_PASSWORD not set — cannot send email")
-        raise RuntimeError("SMTP not configured")
-    
-    # Strip spaces from app passwords (Gmail: 'xxxx xxxx xxxx xxxx')
-    password = SMTP_PASSWORD.replace(' ', '')
-    
-    # Resolve hostname to IPv4 address to avoid IPv6 routing issues on Railway
-    def resolve_ipv4(host):
-        try:
-            infos = socket.getaddrinfo(host, None, socket.AF_INET)
-            if infos:
-                ip = infos[0][4][0]
-                logger.info(f"Resolved {host} to IPv4: {ip}")
-                return ip
-        except Exception as e:
-            logger.warning(f"IPv4 resolution failed for {host}: {e}")
-        return host
-    
-    def _send():
-        msg = MIMEMultipart('alternative')
-        msg['From'] = SMTP_FROM
-        msg['To'] = to
-        msg['Subject'] = subject
-        
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        
-        html_body = body.replace('\n', '<br>')
-        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
+    # Build HTML body
+    html_body = body.replace('\n', '<br>')
+    html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
 <div style="max-width: 500px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px;">
 <div style="text-align: center; margin-bottom: 16px;">
 <img src="https://asibiont.com/static/svg/asi-biont-logo.svg" alt="ASI Biont" style="height: 32px;">
@@ -410,47 +379,101 @@ async def send_email(to: str, subject: str, body: str):
 {html_body}
 </div>
 </body></html>"""
-        msg.attach(MIMEText(html, 'html', 'utf-8'))
-        msg_string = msg.as_string()
-        
-        # Force IPv4 to avoid Railway IPv6 routing issues
-        host_ip = resolve_ipv4(SMTP_HOST)
-        errors = []
-        
-        # Attempt 1: Port 587 STARTTLS
-        try:
-            logger.info(f"SMTP attempt 1: {SMTP_HOST}({host_ip}):587 STARTTLS")
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP(host_ip, 587, timeout=15) as server:
-                server.ehlo(SMTP_HOST)
-                server.starttls(context=ctx)
-                server.ehlo(SMTP_HOST)
-                server.login(SMTP_USER, password)
-                server.sendmail(SMTP_USER, to, msg_string)
-                logger.info("SMTP success via 587 STARTTLS")
-                return
-        except Exception as e:
-            errors.append(f"587/STARTTLS: {e}")
-            logger.warning(f"SMTP 587 failed: {e}")
-        
-        # Attempt 2: Port 465 SSL
-        try:
-            logger.info(f"SMTP attempt 2: {SMTP_HOST}({host_ip}):465 SSL")
-            with smtplib.SMTP_SSL(host_ip, 465, timeout=15) as server:
-                server.ehlo(SMTP_HOST)
-                server.login(SMTP_USER, password)
-                server.sendmail(SMTP_USER, to, msg_string)
-                logger.info("SMTP success via 465 SSL")
-                return
-        except Exception as e:
-            errors.append(f"465/SSL: {e}")
-            logger.warning(f"SMTP 465 failed: {e}")
-        
-        raise RuntimeError(f"All SMTP attempts failed: {'; '.join(errors)}")
     
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _send)
-    logger.info(f"Email sent to {to}: {subject}")
+    errors = []
+    
+    # Method 1: Resend HTTP API (works on Railway, no SMTP ports needed)
+    if RESEND_API_KEY:
+        try:
+            logger.info(f"Sending email via Resend API to {to}")
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(
+                    'https://api.resend.com/emails',
+                    headers={
+                        'Authorization': f'Bearer {RESEND_API_KEY}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        'from': SMTP_FROM,
+                        'to': [to],
+                        'subject': subject,
+                        'text': body,
+                        'html': html
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15)
+                )
+                resp_data = await resp.json()
+                if resp.status in (200, 201):
+                    logger.info(f"Email sent via Resend API to {to}: {resp_data.get('id', 'ok')}")
+                    return
+                else:
+                    err = resp_data.get('message', resp_data.get('error', str(resp_data)))
+                    errors.append(f"Resend API {resp.status}: {err}")
+                    logger.warning(f"Resend API failed: {resp.status} {err}")
+        except Exception as e:
+            errors.append(f"Resend API: {e}")
+            logger.warning(f"Resend API error: {e}")
+    
+    # Method 2: SMTP fallback (works when ports aren't blocked)
+    if SMTP_PASSWORD:
+        import smtplib, ssl, socket
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        password = SMTP_PASSWORD.replace(' ', '')
+        
+        # Resolve to IPv4
+        try:
+            infos = socket.getaddrinfo(SMTP_HOST, None, socket.AF_INET)
+            host_ip = infos[0][4][0] if infos else SMTP_HOST
+        except:
+            host_ip = SMTP_HOST
+        
+        def _smtp_send():
+            msg = MIMEMultipart('alternative')
+            msg['From'] = SMTP_FROM
+            msg['To'] = to
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+            msg.attach(MIMEText(html, 'html', 'utf-8'))
+            msg_string = msg.as_string()
+            
+            smtp_errors = []
+            for port, use_ssl in [(587, False), (465, True)]:
+                try:
+                    logger.info(f"SMTP attempt: {SMTP_HOST}({host_ip}):{port}")
+                    if use_ssl:
+                        with smtplib.SMTP_SSL(host_ip, port, timeout=10) as s:
+                            s.ehlo(SMTP_HOST)
+                            s.login(SMTP_USER, password)
+                            s.sendmail(SMTP_USER, to, msg_string)
+                            return
+                    else:
+                        ctx = ssl.create_default_context()
+                        with smtplib.SMTP(host_ip, port, timeout=10) as s:
+                            s.ehlo(SMTP_HOST)
+                            s.starttls(context=ctx)
+                            s.ehlo(SMTP_HOST)
+                            s.login(SMTP_USER, password)
+                            s.sendmail(SMTP_USER, to, msg_string)
+                            return
+                except Exception as e:
+                    smtp_errors.append(f"{port}: {e}")
+                    logger.warning(f"SMTP {port} failed: {e}")
+            raise RuntimeError('; '.join(smtp_errors))
+        
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _smtp_send)
+            logger.info(f"Email sent via SMTP to {to}")
+            return
+        except Exception as e:
+            errors.append(f"SMTP: {e}")
+    
+    if not RESEND_API_KEY and not SMTP_PASSWORD:
+        raise RuntimeError("Email not configured: set RESEND_API_KEY or SMTP_PASSWORD")
+    
+    raise RuntimeError(f"All email methods failed: {'; '.join(errors)}")
 
 
 async def health_handler(request):
@@ -458,69 +481,17 @@ async def health_handler(request):
     return web.Response(text='OK', status=200)
 
 async def smtp_check_handler(request):
-    """Diagnostic: check SMTP config and test connection (forced IPv4)"""
-    from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
-    import smtplib, ssl, socket
-    
-    password = (SMTP_PASSWORD or '').replace(' ', '')
-    
-    # Resolve to IPv4
-    try:
-        infos = socket.getaddrinfo(SMTP_HOST, None, socket.AF_INET)
-        host_ip = infos[0][4][0] if infos else SMTP_HOST
-    except:
-        host_ip = SMTP_HOST
-    
-    results = {
-        'config': {
-            'host': SMTP_HOST,
-            'resolved_ipv4': host_ip,
-            'port': SMTP_PORT,
-            'user': SMTP_USER,
-            'from': SMTP_FROM,
-            'password_set': bool(SMTP_PASSWORD),
-            'password_len': len(password) if password else 0
-        },
-        'tests': {}
-    }
-    
-    # Test TCP connectivity via IPv4
-    for port in [587, 465, 25]:
-        try:
-            sock = socket.create_connection((host_ip, port), timeout=5)
-            sock.close()
-            results['tests'][f'tcp_{port}_ipv4'] = 'reachable'
-        except Exception as e:
-            results['tests'][f'tcp_{port}_ipv4'] = f'unreachable: {str(e)[:100]}'
-    
-    # Test port 587 STARTTLS via IPv4
-    try:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP(host_ip, 587, timeout=10) as server:
-            server.ehlo(SMTP_HOST)
-            server.starttls(context=ctx)
-            server.ehlo(SMTP_HOST)
-            if password:
-                server.login(SMTP_USER, password)
-                results['tests']['587_starttls'] = 'OK - authenticated'
-            else:
-                results['tests']['587_starttls'] = 'OK - connected'
-    except Exception as e:
-        results['tests']['587_starttls'] = f'FAIL: {str(e)[:200]}'
-    
-    # Test port 465 SSL via IPv4
-    try:
-        with smtplib.SMTP_SSL(host_ip, 465, timeout=10) as server:
-            server.ehlo(SMTP_HOST)
-            if password:
-                server.login(SMTP_USER, password)
-                results['tests']['465_ssl'] = 'OK - authenticated'
-            else:
-                results['tests']['465_ssl'] = 'OK - connected'
-    except Exception as e:
-        results['tests']['465_ssl'] = f'FAIL: {str(e)[:200]}'
-    
-    return web.json_response(results)
+    """Diagnostic: check email config"""
+    from config import SMTP_HOST, SMTP_USER, SMTP_FROM, SMTP_PASSWORD, RESEND_API_KEY
+    return web.json_response({
+        'resend_configured': bool(RESEND_API_KEY),
+        'resend_key_prefix': RESEND_API_KEY[:8] + '...' if RESEND_API_KEY else None,
+        'smtp_host': SMTP_HOST,
+        'smtp_user': SMTP_USER,
+        'smtp_from': SMTP_FROM,
+        'smtp_password_set': bool(SMTP_PASSWORD),
+        'note': 'Railway blocks SMTP ports, use RESEND_API_KEY for email delivery'
+    })
 
 
 # ═══ IndexNow: мгновенное уведомление поисковиков ═══

@@ -117,6 +117,9 @@ SMTP_USER = os.getenv("SMTP_USER", "aleksandr.insider@gmail.com")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", "ASI Biont <aleksandr.insider@gmail.com>")
 
+# Resend.com HTTP Email API (fallback when SMTP ports are blocked)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+
 # Reminder settings
 DAILY_REPORT_HOUR = int(os.getenv("DAILY_REPORT_HOUR", 22))
 PROACTIVE_CHECK_INTERVAL_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_MINUTES", 120))  # Каждые 2 часа вместо 30 минут
