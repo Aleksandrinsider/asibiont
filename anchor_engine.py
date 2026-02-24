@@ -70,7 +70,7 @@ PRIORITY_COOLDOWN = {
     AnchorPriority.CRITICAL: 0.5,   # 30 мин
     AnchorPriority.HIGH: 1.5,
     AnchorPriority.MEDIUM: 3,
-    AnchorPriority.LOW: 8,
+    AnchorPriority.LOW: 4,
 }
 
 # Якоря, которые ВСЕГДА доставляются (кроме DND/ночь)
@@ -1509,13 +1509,21 @@ class AnchorEngine:
 
         feed_limit = MAX_FEED_PER_DAY
         if posts_today >= feed_limit:
+            logger.debug(f"[ANCHOR] User {user.telegram_id}: skip post — already {posts_today}/{feed_limit} today")
+            return anchors
+
+        # ── Проверяем рабочие часы (10:00–22:00) ──
+        current_hour = user_now.hour
+        if current_hour < 10 or current_hour >= 22:
+            logger.debug(f"[ANCHOR] User {user.telegram_id}: skip post — outside hours ({current_hour})")
             return anchors
 
         # ── Индивидуальное время для поста в ленту ──
-        # Каждый пользователь получает уникальное время на основе user.id
-        # Окно: 10:00–21:00 (660 минут), hash от id → стабильное смещение
+        # Каждый пользователь получает уникальное время на основе user.id + дня
+        # Окно: 10:00–21:00 (660 минут), hash от id+date → стабильное но разное каждый день
         import hashlib
-        uid_hash = int(hashlib.md5(str(user.id).encode()).hexdigest()[:8], 16)
+        day_seed = f"{user.id}:{user_now.strftime('%Y-%m-%d')}:{posts_today}"
+        uid_hash = int(hashlib.md5(day_seed.encode()).hexdigest()[:8], 16)
         feed_offset_minutes = uid_hash % 660  # 0..659 минут внутри окна 10:00-21:00
         preferred_hour = 10 + feed_offset_minutes // 60
         preferred_minute = feed_offset_minutes % 60
@@ -1523,8 +1531,9 @@ class AnchorEngine:
         current_minutes = user_now.hour * 60 + user_now.minute
         target_minutes = preferred_hour * 60 + preferred_minute
 
-        # Окно: ±30 мин от индивидуального времени
-        if abs(current_minutes - target_minutes) > 30:
+        # Окно: ±60 мин от индивидуального времени (расширено для надёжности)
+        if abs(current_minutes - target_minutes) > 60:
+            logger.debug(f"[ANCHOR] User {user.telegram_id}: skip post — window miss (now={current_minutes}, target={target_minutes}, preferred={preferred_hour}:{preferred_minute:02d})")
             return anchors
 
         # Собираем «материал» для AI:
@@ -1610,7 +1619,7 @@ class AnchorEngine:
             }, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=12),
-            cooldown_hours=8,
+            cooldown_hours=4,
             batch_group='posting',
         ))
 
