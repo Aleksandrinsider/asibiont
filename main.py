@@ -585,8 +585,10 @@ async def auth_handler(request):
             session['user_id'] = user_id
             logger.info(f"Session set with user_id: {user_id}, session keys: {list(session.keys())}")
 
-            response = web.HTTPFound('/dashboard')
-            logger.info("Redirecting to /dashboard after auth")
+            next_url = session.pop('next_url', None)
+            redirect_to = next_url if next_url else '/dashboard'
+            response = web.HTTPFound(redirect_to)
+            logger.info(f"Redirecting to {redirect_to} after auth")
             return response
         else:
             logger.error(f"Authentication failed for data: {data}")
@@ -6051,7 +6053,11 @@ async def create_payment_handler(request):
     logger.info(f"Create payment handler called with user_id: {user_id}")
 
     if not user_id:
-        logger.warning("No user_id in session, redirecting to login")
+        pack = request.query.get('pack', 'small')
+        tier = request.query.get('tier', '')
+        next_url = f'/create_payment?pack={pack}' if pack else f'/create_payment?tier={tier}'
+        session_obj['next_url'] = next_url
+        logger.warning("No user_id in session, saving next_url and redirecting to login")
         return web.HTTPFound('/')
 
     # Support both new token packs (?pack=small) and legacy tiers (?tier=light)
@@ -6105,13 +6111,14 @@ async def create_crypto_payment_handler(request):
     """Create NowPayments (USDT) invoice for international users"""
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
-    if not user_id:
-        return web.HTTPFound('/')
-    if not NOWPAYMENTS_API_KEY:
-        return web.Response(text='Crypto payments not configured.', status=503)
     pack = request.query.get('pack')
     if pack not in ('small', 'medium', 'large'):
         return web.HTTPFound('/subscription-tiers')
+    if not user_id:
+        session_obj['next_url'] = f'/create_crypto_payment?pack={pack}'
+        return web.HTTPFound('/')
+    if not NOWPAYMENTS_API_KEY:
+        return web.Response(text='Crypto payments not configured.', status=503)
     try:
         from crypto_payments import create_crypto_payment
         from config import WEB_APP_URL
