@@ -587,8 +587,8 @@
                             {% if discord_webhook and discord_server_name %}{% if discord_guild_id and discord_channel_id %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <a href="https://discord.com/channels/' ~ discord_guild_id ~ '/' ~ discord_channel_id ~ '" target="_blank" style="color: #068487; text-decoration: none;">' ~ discord_server_name ~ '</a>') %}{% endif %}{% else %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <span style="color: #068487;">' ~ discord_server_name ~ '</span>') %}{% endif %}{% endif %}{% endif %}
                             {% if channel_parts %}<p>{{ channel_parts | join(' &nbsp;|&nbsp; ') | safe }}</p>{% endif %}
                             {% set contact_parts = [] %}
-                            {% if user.email %}{% if contact_parts.append('<span data-i18n="email-label">Email:</span> <span style="color: #068487;">' ~ user.email ~ '</span>') %}{% endif %}{% endif %}
-                            {% if user.phone %}{% if contact_parts.append('<span data-i18n="phone-label">\u0422\u0435\u043b\u0435\u0444\u043e\u043d:</span> <span style="color: #068487;">' ~ user.phone ~ '</span>') %}{% endif %}{% endif %}
+                            {% if user.email %}{% if contact_parts.append('<span data-i18n="email-label">Email</span>: <span style="color: #068487;">' ~ user.email ~ '</span>') %}{% endif %}{% endif %}
+                            {% if user.phone %}{% if contact_parts.append('<span data-i18n="phone-label">\u0422\u0435\u043b\u0435\u0444\u043e\u043d</span>: <span style="color: #068487;">' ~ user.phone ~ '</span>') %}{% endif %}{% endif %}
                             {% if contact_parts %}<p>{{ contact_parts | join(' &nbsp;|&nbsp; ') | safe }}</p>{% endif %}
 
                             <p style="margin: 0; margin-bottom: 4px;"><span data-i18n="referral-link">Реферальная ссылка:</span> 
@@ -1023,11 +1023,11 @@
             <div class="rating-modal-body">
                 <form id="quick-profile-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;">
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="email-label">Email</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="email-label">Email</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="field-private">(не видно другим)</span></label>
                         <input type="email" id="quick-email" placeholder="user@example.com" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.email if user.email else '' }}" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="phone-label">Телефон</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="phone-label">Телефон</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="field-private">(не видно другим)</span></label>
                         <input type="tel" id="quick-phone" placeholder="+7 (999) 123-45-67" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.phone if user.phone else '' }}" />
                     </div>
                     <div>
@@ -7897,7 +7897,7 @@
       'delegates-to-me':'Делегирует мне','i-delegate':'Делегирую я',
       'fav-contacts':'Избранных контактов:','delegated-to-me':'Делегировано мне','delegated-by-me':'Делегировано мной',
       'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','active-tasks':'Активных задач:',
-      'email-label':'Email:','phone-label':'Телефон:',
+      'email-label':'Email','phone-label':'Телефон','field-private':'(не видно другим)',
       'nothing-found':'Ничего не найдено','min-2-chars':'Введите минимум 2 символа для поиска',
       'total-users':'Всего пользователей','in-24h':'За 24 часа','active-subs':'Активных подписок',
       'total-tasks':'Всего задач','total-requests':'Всего запросов','unique-ips':'Уникальных IP',
@@ -8075,7 +8075,7 @@
       'delegates-to-me':'Delegates to me','i-delegate':'I delegate',
       'fav-contacts':'Favorite contacts:','delegated-to-me':'Delegated to me','delegated-by-me':'Delegated by me',
       'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','active-tasks':'Active tasks:',
-      'email-label':'Email:','phone-label':'Phone:',
+      'email-label':'Email','phone-label':'Phone','field-private':'(not visible to others)',
       'nothing-found':'Nothing found','min-2-chars':'Enter at least 2 characters to search',
       'total-users':'Total users','in-24h':'In 24 hours','active-subs':'Active subscriptions',
       'total-tasks':'Total tasks','total-requests':'Total requests','unique-ips':'Unique IPs',
