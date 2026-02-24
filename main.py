@@ -2,7 +2,7 @@ from models import Base, engine, Session, Subscription, User, Task, UserProfile,
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
@@ -5978,13 +5978,47 @@ async def extend_subscription_handler(request):
     return web.HTTPFound('/subscription-tiers')
 
 
+# ── Geo detection for payment method selection ──────────────────────────────
+_geo_cache: dict = {}
+CIS_COUNTRIES = {'RU', 'BY', 'KZ', 'UA', 'UZ', 'AZ', 'AM', 'GE', 'TJ', 'TM', 'KG', 'MD'}
+
+async def get_country_by_ip(ip: str) -> str:
+    if ip in _geo_cache:
+        return _geo_cache[ip]
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"http://ip-api.com/json/{ip}?fields=countryCode",
+                timeout=aiohttp.ClientTimeout(total=2)
+            ) as r:
+                data = await r.json()
+                code = data.get("countryCode", "XX")
+    except Exception:
+        code = "XX"
+    _geo_cache[ip] = code
+    return code
+
+
+async def get_payment_flags(request) -> dict:
+    """Return show_yookassa / show_crypto based on user geo"""
+    ip = request.headers.get("X-Forwarded-For", request.remote or "")
+    ip = ip.split(",")[0].strip()
+    country = await get_country_by_ip(ip)
+    is_cis = country in CIS_COUNTRIES or country == "XX"
+    return {
+        "show_yookassa": is_cis,
+        "show_crypto": not is_cis and bool(NOWPAYMENTS_API_KEY),
+    }
+
+
 @aiohttp_jinja2.template('subscription_tiers.html')
 async def subscription_tiers_handler(request):
-    """Страца ыбора тарифа подписки"""
+    """Страца выбора тарифа подписки"""
     lang = request.match_info.get('lang', 'ru')
     if lang not in ('ru', 'en'):
         lang = 'ru'
-    return {'lang': lang}
+    flags = await get_payment_flags(request)
+    return {'lang': lang, **flags}
 
 
 async def faq_handler(request):
@@ -6060,6 +6094,121 @@ async def create_payment_handler(request):
     except Exception as e:
         logger.error(f"Error creating payment: {e}")
         return web.Response(text='Ошибка создания платежа. Попробуйте позже.', status=500)
+
+
+async def create_crypto_payment_handler(request):
+    """Create NowPayments (USDT) invoice for international users"""
+    session_obj = await get_session(request)
+    user_id = session_obj.get('user_id')
+    if not user_id:
+        return web.HTTPFound('/')
+    if not NOWPAYMENTS_API_KEY:
+        return web.Response(text='Crypto payments not configured.', status=503)
+    pack = request.query.get('pack')
+    if pack not in ('small', 'medium', 'large'):
+        return web.HTTPFound('/subscription-tiers')
+    try:
+        from crypto_payments import create_crypto_payment
+        from config import WEB_APP_URL
+        payment_url = await create_crypto_payment(pack, int(user_id), NOWPAYMENTS_API_KEY, WEB_APP_URL)
+        return web.HTTPFound(payment_url)
+    except Exception as e:
+        logger.error(f"[NOWPAYMENTS] Error creating payment: {e}")
+        return web.Response(text='Payment error. Please try again later.', status=500)
+
+
+async def nowpayments_webhook(request):
+    """NowPayments IPN webhook — credits tokens on successful crypto payment"""
+    try:
+        payload_bytes = await request.read()
+        signature = request.headers.get('x-nowpayments-sig', '')
+
+        # Verify signature if IPN secret is configured
+        if NOWPAYMENTS_IPN_SECRET and signature:
+            from crypto_payments import verify_nowpayments_signature
+            data = json.loads(payload_bytes)
+            sorted_payload = json.dumps(dict(sorted(data.items())), separators=(',', ':'))
+            if not verify_nowpayments_signature(sorted_payload, signature, NOWPAYMENTS_IPN_SECRET):
+                logger.warning('[NOWPAYMENTS] Invalid webhook signature')
+                return web.Response(text='Invalid signature', status=400)
+        else:
+            data = json.loads(payload_bytes)
+
+        status = data.get('payment_status', '')
+        if status not in ('finished', 'confirmed'):
+            return web.Response(text='OK')
+
+        order_id = data.get('order_id', '')
+        payment_id = str(data.get('payment_id', ''))
+        parts = order_id.split('_')
+        if len(parts) < 2:
+            logger.warning(f'[NOWPAYMENTS] Bad order_id: {order_id}')
+            return web.Response(text='OK')
+
+        tg_user_id = int(parts[0])
+        pack = parts[1]
+
+        from crypto_payments import CRYPTO_PACK_PRICES
+        pack_info = CRYPTO_PACK_PRICES.get(pack)
+        if not pack_info:
+            return web.Response(text='OK')
+        tokens_to_add = pack_info['tokens']
+
+        session = Session()
+        try:
+            user = session.query(User).filter_by(telegram_id=tg_user_id).first()
+            if not user:
+                return web.Response(text='OK')
+
+            existing = session.query(PaymentHistory).filter_by(payment_id=payment_id).first()
+            if existing:
+                logger.info(f'[NOWPAYMENTS] Duplicate webhook for {payment_id}, skipping')
+                return web.Response(text='OK')
+
+            from token_service import add_tokens
+            result = add_tokens(tg_user_id, tokens_to_add, reason='purchase', session=session)
+            logger.info(f'[NOWPAYMENTS] Credited {tokens_to_add} tokens to user {tg_user_id}')
+
+            history = PaymentHistory(
+                user_id=user.id,
+                telegram_username=user.username,
+                action='token_purchase',
+                tier='LIGHT',
+                amount=str(data.get('price_amount', 0)),
+                payment_id=payment_id,
+                duration_days=0,
+                start_date=datetime.now(pytz.UTC),
+                end_date=datetime.now(pytz.UTC),
+                details=json.dumps({
+                    'type': 'crypto_purchase',
+                    'pack': pack,
+                    'tokens_added': tokens_to_add,
+                    'balance_after': result.get('balance', 0),
+                    'payment_method': 'nowpayments',
+                    'currency': data.get('pay_currency'),
+                    'status': status,
+                })
+            )
+            session.add(history)
+            session.commit()
+
+            if bot:
+                try:
+                    await bot.send_message(
+                        tg_user_id,
+                        f"✅ Crypto payment confirmed!\n\n"
+                        f"➕ Added: {tokens_to_add} tokens\n"
+                        f"💰 Balance: {result.get('balance', 0)} tokens"
+                    )
+                except Exception as e:
+                    logger.warning(f'[NOWPAYMENTS] Could not notify user: {e}')
+        finally:
+            session.close()
+
+        return web.Response(text='OK')
+    except Exception as e:
+        logger.error(f'[NOWPAYMENTS] Webhook error: {e}')
+        return web.Response(text='OK')
 
 
 async def clear_database_handler(request):
@@ -6335,7 +6484,8 @@ async def faq_handler_en(request):
     return aiohttp_jinja2.render_template('faq.html', request, {'lang': 'en'})
 
 async def subscription_tiers_handler_en(request):
-    return aiohttp_jinja2.render_template('subscription_tiers.html', request, {'lang': 'en'})
+    flags = await get_payment_flags(request)
+    return aiohttp_jinja2.render_template('subscription_tiers.html', request, {'lang': 'en', **flags})
 
 async def tutorial_handler_en(request):
     return aiohttp_jinja2.render_template('tutorial.html', request, {'lang': 'en'})
@@ -6348,6 +6498,8 @@ app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
+app.router.add_get('/create_crypto_payment', create_crypto_payment_handler)
+app.router.add_post('/webhook/nowpayments', nowpayments_webhook)
 # Discord OAuth2 callback + login/link redirects
 try:
     from discord_bot import discord_oauth_callback, discord_login_redirect, discord_link_redirect

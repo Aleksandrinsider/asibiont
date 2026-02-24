@@ -90,6 +90,10 @@ YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 
+# NowPayments (crypto — international)
+NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
+NOWPAYMENTS_IPN_SECRET = os.getenv("NOWPAYMENTS_IPN_SECRET")
+
 # Validate Yookassa configuration if not in local mode
 if not LOCAL and (not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY):
     raise ValueError("YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY are required in production mode")
