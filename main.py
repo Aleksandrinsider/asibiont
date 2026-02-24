@@ -6991,6 +6991,7 @@ app.router.add_get('/create_payment', create_payment_handler)
 app.router.add_get('/direct_login', direct_login_handler)
 # SEO: verification files
 app.router.add_get('/yandex_48ffa2026650f03f.html', lambda r: web.FileResponse('static/yandex_48ffa2026650f03f.html'))
+app.router.add_get('/yandex_05efc1780770a3e1.html', lambda r: web.FileResponse('static/yandex_05efc1780770a3e1.html'))
 app.router.add_get('/BingSiteAuth.xml', lambda r: web.FileResponse('static/BingSiteAuth.xml'))
 # SEO: robots.txt и sitemap.xml в корне (поисковые ищут именно тут)
 app.router.add_get('/robots.txt', lambda r: web.FileResponse('static/robots.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
