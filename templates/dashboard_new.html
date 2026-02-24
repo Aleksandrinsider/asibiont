@@ -552,8 +552,7 @@
                             {% else %}
                             <p><span data-i18n="birthday-label">День рождения:</span> <span data-i18n="not-specified-f">Не указана</span></p>
                             {% endif %}
-                            <p><span data-i18n="company-label">Компания:</span> {% if profile_i18n and profile_i18n.company %}{{ profile_i18n.company }}{% elif profile.company %}{{ profile.company }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
-                            <p><span data-i18n="position-label">Должность:</span> {% if profile_i18n and profile_i18n.position %}{{ profile_i18n.position }}{% elif profile.position %}{{ profile.position }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
+                            <p><span data-i18n="company-label">Компания:</span> {% if profile_i18n and profile_i18n.company %}{{ profile_i18n.company }}{% elif profile.company %}{{ profile.company }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %} &nbsp;|&nbsp; <span data-i18n="position-label">Должность:</span> {% if profile_i18n and profile_i18n.position %}{{ profile_i18n.position }}{% elif profile.position %}{{ profile.position }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
                             <p><span data-i18n="goals-label">Цели:</span> {% if profile_i18n and profile_i18n.goals %}{{ profile_i18n.goals }}{% elif profile.goals %}{{ profile.goals }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             <p><span data-i18n="skills-label">Навыки:</span> {% if profile_i18n and profile_i18n.skills %}{{ profile_i18n.skills }}{% elif profile.skills %}{{ profile.skills }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             <p><span data-i18n="interests-label">Интересы:</span> {% if profile_i18n and profile_i18n.interests %}{{ profile_i18n.interests|unique_interests }}{% elif profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
@@ -5412,8 +5411,7 @@
                     } else {
                         html += `<p style="text-align: left;">${t('birthday-label')} ${t('not-specified-f')}</p>`;
                     }
-                    html += `<p style="text-align: left;">${t('company-label')} ${partner.company || t('not-specified-f')}</p>`;
-                    html += `<p style="text-align: left;">${t('position-label')} ${partner.position || t('not-specified-f')}</p>`;
+                    html += `<p style="text-align: left;">${t('company-label')} ${partner.company || t('not-specified-f')} &nbsp;|&nbsp; ${t('position-label')} ${partner.position || t('not-specified-f')}</p>`;
                     html += `<p style="text-align: left;">${t('goals-label')} ${partner.goals || t('not-specified-pl')}</p>`;
                     html += `<p style="text-align: left;">${t('skills-label')} ${partner.skills || t('not-specified-pl')}</p>`;
                     html += `<p style="text-align: left;">${t('interests-label')} ${partner.interests || t('not-specified-pl')}</p>`;
@@ -6784,8 +6782,7 @@
                             }
                             html += '<p>' + t('birthday-label') + ' ' + data.profile.birthdate + ' (' + age + ')</p>';
                         }
-                        html += '<p>' + t('company-label') + ' ' + (data.profile.company || t('not-specified-f')) + '</p>';
-                        html += '<p>' + t('position-label') + ' ' + (data.profile.position || t('not-specified-f')) + '</p>';
+                        html += '<p>' + t('company-label') + ' ' + (data.profile.company || t('not-specified-f')) + ' &nbsp;|&nbsp; ' + t('position-label') + ' ' + (data.profile.position || t('not-specified-f')) + '</p>';
                         html += '<p>' + t('goals-label') + ' ' + (data.profile.goals || t('not-specified-pl')) + '</p>';
                         html += '<p>' + t('skills-label') + ' ' + (data.profile.skills || t('not-specified-pl')) + '</p>';
                         html += '<p>' + t('interests-label') + ' ' + (data.profile.interests || t('not-specified-pl')) + '</p>';
