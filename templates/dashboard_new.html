@@ -1102,6 +1102,27 @@
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="phone-label">Телефон</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="phone-hint">(для связи, видно в профиле)</span></label>
                         <input type="tel" id="quick-phone" placeholder="+7 (999) 123-45-67" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.phone if user.phone else '' }}" />
                     </div>
+                    <!-- Password change section -->
+                    <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 12px; margin-top: 4px;">
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 8px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end;">
+                            <div>
+                                <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="current-password-label">Текущий пароль</label>
+                                <input type="password" id="pwd-current" placeholder="••••••" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" {{ 'disabled' if not user.password_hash else '' }} />
+                                {% if not user.password_hash %}
+                                <span style="font-size: 10px; color: #9CA3AF;" data-i18n="no-password-yet">Пароль ещё не задан</span>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="new-password-label">Новый пароль (мин. 6)</label>
+                                <input type="password" id="pwd-new" placeholder="Мин. 6 символов" data-i18n-ph="new-password-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                            </div>
+                            <div>
+                                <button onclick="changePassword()" style="width: 100%; padding: 8px 12px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'" data-i18n="change-password-btn">Сменить</button>
+                            </div>
+                        </div>
+                        <p id="pwd-change-msg" style="display: none; font-size: 12px; margin: 6px 0 0 0; text-align: center;"></p>
+                    </div>
                     <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="name-label">Имя</label>
                         <input type="text" id="quick-first-name" placeholder="Ваше имя" data-i18n-ph="name-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
@@ -5450,6 +5471,47 @@
             }
         }
         
+        async function changePassword() {
+            const currentPwd = document.getElementById('pwd-current').value;
+            const newPwd = document.getElementById('pwd-new').value;
+            const msgEl = document.getElementById('pwd-change-msg');
+            msgEl.style.display = 'none';
+
+            if (!newPwd || newPwd.length < 6) {
+                msgEl.textContent = t('err-pwd-min6') || 'Новый пароль минимум 6 символов';
+                msgEl.style.color = '#DC2626';
+                msgEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/password/change', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ current_password: currentPwd, new_password: newPwd }),
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    msgEl.textContent = t('pwd-changed-ok') || 'Пароль успешно изменён';
+                    msgEl.style.color = '#166534';
+                    msgEl.style.display = 'block';
+                    document.getElementById('pwd-current').value = '';
+                    document.getElementById('pwd-new').value = '';
+                    // Enable current password field if it was disabled (first time setting)
+                    document.getElementById('pwd-current').disabled = false;
+                } else {
+                    msgEl.textContent = data.error || 'Ошибка смены пароля';
+                    msgEl.style.color = '#DC2626';
+                    msgEl.style.display = 'block';
+                }
+            } catch (e) {
+                msgEl.textContent = 'Ошибка сети';
+                msgEl.style.color = '#DC2626';
+                msgEl.style.display = 'block';
+            }
+        }
+
         async function submitQuickProfile() {
             const firstName = document.getElementById('quick-first-name').value.trim();
             const country = document.getElementById('quick-country').value.trim();
@@ -8056,7 +8118,10 @@
       'years-old':'лет',
       'day-names':'Вс,Пн,Вт,Ср,Чт,Пт,Сб',
       'month-names':'янв,фев,мар,апр,мая,июн,июл,авг,сен,окт,ноя,дек',
-      'support':'Поддержка','admin-panel':'Панель администратора'
+      'support':'Поддержка','admin-panel':'Панель администратора',
+      'change-password-title':'Сменить пароль','current-password-label':'Текущий пароль','new-password-label':'Новый пароль (мин. 6)',
+      'new-password-ph':'Мин. 6 символов','change-password-btn':'Сменить','no-password-yet':'Пароль ещё не задан',
+      'err-pwd-min6':'Новый пароль минимум 6 символов','pwd-changed-ok':'Пароль успешно изменён'
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
@@ -8234,7 +8299,10 @@
       'years-old':'y.o.',
       'day-names':'Sun,Mon,Tue,Wed,Thu,Fri,Sat',
       'month-names':'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec',
-      'support':'Support','admin-panel':'Admin panel'
+      'support':'Support','admin-panel':'Admin panel',
+      'change-password-title':'Change password','current-password-label':'Current password','new-password-label':'New password (min 6)',
+      'new-password-ph':'Min. 6 characters','change-password-btn':'Change','no-password-yet':'No password set yet',
+      'err-pwd-min6':'New password must be at least 6 characters','pwd-changed-ok':'Password changed successfully'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';

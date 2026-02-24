@@ -718,6 +718,80 @@ async def email_login_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def password_reset_handler(request):
+    """Reset password — generate new random password for email user"""
+    try:
+        data = await request.json()
+        email = (data.get('email') or '').strip().lower()
+        if not email or '@' not in email:
+            return web.json_response({'error': 'Укажите корректный email'}, status=400)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(email=email).first()
+            if not user:
+                # Don't reveal whether email exists
+                return web.json_response({'success': True, 'message': 'Если аккаунт с таким email существует, новый пароль будет показан.', 'new_password': None})
+
+            import secrets
+            import string
+            alphabet = string.ascii_letters + string.digits
+            new_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+            user.password_hash = hash_password(new_password)
+            session_db.commit()
+            logger.info(f"Password reset for email: {email}")
+
+            return web.json_response({
+                'success': True,
+                'new_password': new_password,
+                'message': 'Пароль сброшен'
+            })
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in password_reset_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def password_change_handler(request):
+    """Change password for logged-in user"""
+    try:
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        data = await request.json()
+        current_password = data.get('current_password', '')
+        new_password = data.get('new_password', '')
+
+        if not new_password or len(new_password) < 6:
+            return web.json_response({'error': 'Новый пароль минимум 6 символов'}, status=400)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # If user already has a password, verify current
+            if user.password_hash:
+                if not current_password:
+                    return web.json_response({'error': 'Введите текущий пароль'}, status=400)
+                if not verify_password(current_password, user.password_hash):
+                    return web.json_response({'error': 'Неверный текущий пароль'}, status=401)
+
+            user.password_hash = hash_password(new_password)
+            session_db.commit()
+            logger.info(f"Password changed for user_id: {user_id}")
+
+            return web.json_response({'success': True, 'message': 'Пароль изменён'})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in password_change_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 # ═══ Push subscription ═══
 
 async def push_subscribe_handler(request):
@@ -7197,6 +7271,8 @@ app.router.add_get('/tg_auth', auth_handler)
 app.router.add_get('/telegram_auth', auth_handler)  # Keep old route for compatibility
 app.router.add_post('/api/register', email_register_handler)
 app.router.add_post('/api/login/email', email_login_handler)
+app.router.add_post('/api/password/reset', password_reset_handler)
+app.router.add_post('/api/password/change', password_change_handler)
 app.router.add_post('/api/push/subscribe', push_subscribe_handler)
 app.router.add_get('/api/push/vapid-key', push_vapid_key_handler)
 app.router.add_get('/logout', logout_handler)

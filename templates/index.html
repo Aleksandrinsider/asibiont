@@ -480,6 +480,10 @@
                     <button onclick="emailAuth('login')" style="flex: 1; padding: 8px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'" data-i18n="loginBtn">Войти</button>
                     <button onclick="emailAuth('register')" style="flex: 1; padding: 8px; background: #068487; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#056e70'" onmouseout="this.style.background='#068487'" data-i18n="registerBtn">Регистрация</button>
                 </div>
+                <div style="text-align: center; margin-top: 12px;">
+                    <a href="#" onclick="resetPassword(); return false;" style="font-size: 12px; color: #6C727F; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='#068487'" onmouseout="this.style.color='#6C727F'" data-i18n="forgotPassword">Забыли пароль?</a>
+                </div>
+                <div id="reset-result" style="display: none; margin-top: 12px; padding: 10px 14px; background: #F0FFF4; border: 1px solid #86EFAC; border-radius: 6px; font-size: 12px; color: #166534; text-align: center;"></div>
             </div>
         </div>
     </div>
@@ -718,7 +722,7 @@
       btnTop: 'Пополнить баланс', btnGuide: 'Руководство',
       fHome: 'Главная', fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение',
       discordLogin: 'Войти через Discord',
-      emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена'
+      emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена', forgotPassword: 'Забыли пароль?'
     },
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
@@ -800,7 +804,7 @@
       btnTop: 'Top Up Balance', btnGuide: 'Guide',
       fHome: 'Home', fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement',
       discordLogin: 'Sign in with Discord',
-      emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel'
+      emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel', forgotPassword: 'Forgot password?'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -865,6 +869,9 @@
     // Email button title
     var emBtnIcon = document.getElementById('email-login-btn');
     if (emBtnIcon) emBtnIcon.title = t.emailLogin;
+    // Forgot password link
+    var fpLink = document.querySelector('[data-i18n="forgotPassword"]');
+    if (fpLink) fpLink.textContent = t.forgotPassword;
     // Cancel button
     var cBtns = document.querySelectorAll('[data-i18n="cancel"]');
     cBtns.forEach(function(el){ el.textContent = t.cancel || 'Отмена'; });
@@ -911,6 +918,7 @@ async function emailAuth(mode) {
   var password = document.getElementById('auth-password').value;
   var errEl = document.getElementById('email-auth-error');
   errEl.style.display = 'none';
+  document.getElementById('reset-result').style.display = 'none';
   if (!email || !password) { errEl.textContent = 'Укажите email и пароль'; errEl.style.display = 'block'; return; }
   var url = mode === 'register' ? '/api/register' : '/api/login/email';
   try {
@@ -918,6 +926,35 @@ async function emailAuth(mode) {
     var data = await resp.json();
     if (data.success && data.redirect) { window.location.href = data.redirect; }
     else { errEl.textContent = data.error || 'Ошибка'; errEl.style.display = 'block'; }
+  } catch(e) { errEl.textContent = 'Ошибка сети'; errEl.style.display = 'block'; }
+}
+async function resetPassword() {
+  var email = document.getElementById('auth-email').value.trim();
+  var errEl = document.getElementById('email-auth-error');
+  var resultEl = document.getElementById('reset-result');
+  errEl.style.display = 'none';
+  resultEl.style.display = 'none';
+  if (!email || email.indexOf('@') === -1) {
+    errEl.textContent = 'Введите email для сброса пароля';
+    errEl.style.display = 'block';
+    return;
+  }
+  try {
+    var resp = await fetch('/api/password/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:email})});
+    var data = await resp.json();
+    if (data.success && data.new_password) {
+      resultEl.innerHTML = '<b>Новый пароль:</b> <span style="font-family: monospace; font-size: 14px; user-select: all; background: #DCFCE7; padding: 2px 6px; border-radius: 3px;">' + data.new_password + '</span><br><span style="color: #6B7280; font-size: 11px; margin-top: 4px; display: inline-block;">Скопируйте и используйте для входа. Рекомендуем сменить пароль в профиле.</span>';
+      resultEl.style.display = 'block';
+    } else if (data.success && !data.new_password) {
+      resultEl.style.background = '#FEF3C7';
+      resultEl.style.borderColor = '#FCD34D';
+      resultEl.style.color = '#92400E';
+      resultEl.textContent = 'Аккаунт с таким email не найден';
+      resultEl.style.display = 'block';
+    } else {
+      errEl.textContent = data.error || 'Ошибка сброса пароля';
+      errEl.style.display = 'block';
+    }
   } catch(e) { errEl.textContent = 'Ошибка сети'; errEl.style.display = 'block'; }
 }
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js', {scope: '/'}).catch(function(){}); }
