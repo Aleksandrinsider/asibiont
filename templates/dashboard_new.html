@@ -562,7 +562,7 @@
                             <p><span data-i18n="interests-label">Интересы:</span> {% if profile_i18n and profile_i18n.interests %}{{ profile_i18n.interests|unique_interests }}{% elif profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             {% set channel_parts = [] %}
                             {% if telegram_channel %}{% set tg_clean = telegram_channel.replace('@', '') %}{% if channel_parts.append('<span data-i18n="tg-channel-label">Telegram:</span> <a href="https://t.me/' ~ tg_clean ~ '" target="_blank" style="color: #068487; text-decoration: none;">@' ~ tg_clean ~ '</a>') %}{% endif %}{% endif %}
-                            {% if discord_webhook and discord_server_name %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <span style="color: #068487;">' ~ discord_server_name ~ '</span>') %}{% endif %}{% endif %}
+                            {% if discord_webhook and discord_server_name %}{% if discord_guild_id and discord_channel_id %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <a href="https://discord.com/channels/' ~ discord_guild_id ~ '/' ~ discord_channel_id ~ '" target="_blank" style="color: #068487; text-decoration: none;">' ~ discord_server_name ~ '</a>') %}{% endif %}{% else %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <span style="color: #068487;">' ~ discord_server_name ~ '</span>') %}{% endif %}{% endif %}{% endif %}
                             {% if channel_parts %}<p>{{ channel_parts | join(' &nbsp;|&nbsp; ') }}</p>{% endif %}
 
                             <p style="margin: 0; margin-bottom: 4px;"><span data-i18n="referral-link">Реферальная ссылка:</span> 
@@ -1786,7 +1786,7 @@
                             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #F6F8FA;">
                                 <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
                                     <div style="display: flex; align-items: center; gap: 6px;">
-                                        <span style="font-size: 13px; color: #1F2328; font-weight: 400;">${src}</span>
+                                        <span style="font-size: 13px; color: #1F2328; font-weight: 600;">${src}</span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8C959F; opacity: 0.7; font-weight: 400;">
                                         ${dateStr} ${timeStr}
@@ -6994,7 +6994,11 @@
                             channelParts.push(t('tg-channel-label') + ' <a href="https://t.me/' + tgClean + '" target="_blank" style="color: #068487; text-decoration: none;">@' + tgClean + '</a>');
                         }
                         if (data.discord_server_name) {
-                            channelParts.push(t('discord-channel-label') + ' <span style="color: #068487;">' + data.discord_server_name + '</span>');
+                            if (data.discord_guild_id && data.discord_channel_id) {
+                                channelParts.push(t('discord-channel-label') + ' <a href="https://discord.com/channels/' + data.discord_guild_id + '/' + data.discord_channel_id + '" target="_blank" style="color: #068487; text-decoration: none;">' + data.discord_server_name + '</a>');
+                            } else {
+                                channelParts.push(t('discord-channel-label') + ' <span style="color: #068487;">' + data.discord_server_name + '</span>');
+                            }
                         }
                         if (channelParts.length > 0) {
                             html += '<p>' + channelParts.join(' &nbsp;|&nbsp; ') + '</p>';

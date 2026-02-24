@@ -1202,6 +1202,8 @@ async def dashboard_handler(request):
             'telegram_channel': user.telegram_channel if user else None,
             'discord_webhook': user.discord_webhook if user else None,
             'discord_server_name': user.discord_server_name if user and hasattr(user, 'discord_server_name') else None,
+            'discord_guild_id': user.discord_guild_id if user and hasattr(user, 'discord_guild_id') else None,
+            'discord_channel_id': user.discord_channel_id if user and hasattr(user, 'discord_channel_id') else None,
             'interactions': interactions,
             'partners': partners,
             'delegating_to_me': delegating_to_me,
@@ -6451,6 +6453,8 @@ async def api_profile_handler(request):
             'discord_username': ('@' + (user.discord_username or user.username or user.first_name or '')) if user.discord_id else '',
             'telegram_channel': user.telegram_channel or None,
             'discord_server_name': user.discord_server_name if hasattr(user, 'discord_server_name') else None,
+            'discord_guild_id': str(user.discord_guild_id) if hasattr(user, 'discord_guild_id') and user.discord_guild_id else None,
+            'discord_channel_id': str(user.discord_channel_id) if hasattr(user, 'discord_channel_id') and user.discord_channel_id else None,
         }
 
         return web.json_response(response_data)
