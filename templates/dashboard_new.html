@@ -1959,7 +1959,7 @@
                     const card = document.createElement('div');
                     card.className = 'note-card';
                     card.setAttribute('data-note-id', n.id);
-                    card.style.cssText = 'display: flex; gap: 14px; margin-bottom: 8px; padding: 8px 0;';
+                    card.style.cssText = 'display: flex; gap: 14px; margin-bottom: 0; padding: 8px;';
                     const noteTime = n.created_at ? new Date(n.created_at) : new Date();
                     const dateStr = noteTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
                     const timeStr = noteTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
@@ -2194,8 +2194,8 @@
                         postDiv.style.cssText = `
                             display: flex; 
                             gap: 14px; 
-                            margin-bottom: 8px; 
-                            padding: 8px 0;
+                            margin-bottom: 0; 
+                            padding: 8px;
                         `;
 
                         const postTime = new Date(post.created_at);
