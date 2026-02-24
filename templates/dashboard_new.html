@@ -996,9 +996,8 @@
                         <input type="text" id="quick-position" placeholder="Ваша должность" data-i18n-ph="position-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="tg-channel">Telegram канал</label>
-                        <input type="text" id="quick-telegram-channel" placeholder="@your_channel" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                        <small style="font-size: 11px; color: #6B7280; margin-top: 4px; display: block;" data-i18n="tg-channel-desc">Для автопубликации постов из ленты (бот должен быть админом канала)</small>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="status">Статус</label>
+                        <input type="text" id="quick-status" placeholder="Например: Ищу партнёра, Инвестор, Фрилансер" data-i18n-ph="status-ph" maxlength="100" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                 </form>
                 <!-- Telegram & Discord accounts -->
@@ -1010,6 +1009,11 @@
                         {% else %}
                         <a href="/?link_tg=1" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-telegram">Привязать</a>
                         {% endif %}
+                        <div style="margin-top: 8px;">
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="tg-channel">Канал для автопостинга</label>
+                            <input type="text" id="quick-telegram-channel" placeholder="@your_channel" style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
+                            <small style="font-size: 10px; color: #6B7280; margin-top: 2px; display: block;" data-i18n="tg-channel-desc">Бот должен быть админом канала</small>
+                        </div>
                     </div>
                     <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Discord</label>
@@ -1018,6 +1022,11 @@
                         {% else %}
                         <a href="/discord/link" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-discord">Привязать</a>
                         {% endif %}
+                        <div style="margin-top: 8px;">
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="discord-webhook">Webhook для автопостинга</label>
+                            <input type="text" id="quick-discord-webhook" placeholder="https://discord.com/api/webhooks/..." style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
+                            <small style="font-size: 10px; color: #6B7280; margin-top: 2px; display: block;" data-i18n="discord-webhook-desc">Для автопубликации в ваш канал</small>
+                        </div>
                     </div>
                 </div>
                 <div class="rating-modal-actions" style="margin-top: 16px;">
@@ -4699,7 +4708,9 @@
                 const interestsField = document.getElementById('quick-interests');
                 const skillsField = document.getElementById('quick-skills');
                 const goalsField = document.getElementById('quick-goals');
+                const statusField = document.getElementById('quick-status');
                 const telegramChannelField = document.getElementById('quick-telegram-channel');
+                const discordWebhookField = document.getElementById('quick-discord-webhook');
                 
                 // Получаем текущие данные из профиля
                 {% if profile %}
@@ -4712,9 +4723,13 @@
                 if (interestsField) interestsField.value = '{{ profile.interests or "" }}';
                 if (skillsField) skillsField.value = '{{ profile.skills or "" }}';
                 if (goalsField) goalsField.value = '{{ profile.goals or "" }}';
+                if (statusField) statusField.value = '{{ profile.status_text or "" }}';
                 {% endif %}
                 {% if telegram_channel %}
                 if (telegramChannelField) telegramChannelField.value = '{{ telegram_channel or "" }}';
+                {% endif %}
+                {% if discord_webhook %}
+                if (discordWebhookField) discordWebhookField.value = '{{ discord_webhook or "" }}';
                 {% endif %}
                 
                 modal.style.display = 'flex';
@@ -4788,7 +4803,9 @@
             const interests = document.getElementById('quick-interests').value.trim();
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
+            const statusText = document.getElementById('quick-status').value.trim();
             const telegramChannel = document.getElementById('quick-telegram-channel').value.trim();
+            const discordWebhook = document.getElementById('quick-discord-webhook').value.trim();
 
             // Проверяем обязательные поля
             if (!city) {
@@ -4819,7 +4836,9 @@
                 profileData.goals = goals;
                 profileData.company = company;
                 profileData.position = position;
+                profileData.status_text = statusText;
                 profileData.telegram_channel = telegramChannel;
+                profileData.discord_webhook = discordWebhook;
                 
                 if (birthdate) {
                     profileData.birthdate = birthdate;
@@ -5013,11 +5032,6 @@
                         html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     }
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
-                    
-                    // Город контакта
-                    if (partner.city) {
-                        html += `<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">${partner.city}</p>`;
-                    }
                     
                     html += '</div>';
                     

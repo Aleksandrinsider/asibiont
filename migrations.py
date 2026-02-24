@@ -79,6 +79,7 @@ def _migrate_users(session, inspector):
         'platform': "ALTER TABLE users ADD COLUMN platform VARCHAR(20) DEFAULT 'telegram'",
         'discord_id': "ALTER TABLE users ADD COLUMN discord_id BIGINT",
         'discord_username': "ALTER TABLE users ADD COLUMN discord_username VARCHAR(255)",
+        'discord_webhook': "ALTER TABLE users ADD COLUMN discord_webhook VARCHAR(500)",
     })
 
 

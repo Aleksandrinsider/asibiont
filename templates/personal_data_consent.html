@@ -137,5 +137,156 @@
             <div style="margin-top: 8px;">2026 ASI Biont</div>
         </div>
     </div>
+<script>
+(function(){
+  var T = {
+    ru: {
+      title: 'Соглашение об обработке персональных данных | ASI Biont',
+      back: '← Главная',
+      h1: 'Соглашение об обработке персональных данных',
+      subtitle: 'Редакция от 1 января 2026 г.',
+      sections: [
+        { h: '1. Общие положения', p: 'Настоящее Соглашение определяет порядок обработки персональных данных пользователей сервиса ASI Biont (далее — «Сервис», «Оператор») в соответствии с Федеральным законом от 27.07.2006 № 152-ФЗ «О персональных данных».' },
+        { h: '2. Оператор персональных данных', p: 'Оператором является физическое лицо — разработчик Сервиса. Контакт для обращений по вопросам персональных данных: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' },
+        { h: '3. Какие данные мы обрабатываем', list: [
+          'Идентификатор Telegram (user_id) и имя пользователя (username) — при регистрации через Telegram-бот',
+          'Идентификатор Discord (user_id) и имя пользователя — при регистрации через Discord-бот',
+          'Содержание задач, напоминаний и сообщений, которые вы передаёте боту',
+          'Часовой пояс и предпочтения уведомлений',
+          'История платежей (без данных карты — платёжные данные обрабатываются YooKassa и NowPayments)',
+          'IP-адрес при обращении к веб-интерфейсу для определения региона'
+        ]},
+        { h: '4. Цели обработки данных', list: [
+          'Предоставление функций Сервиса: управление задачами, напоминания, делегирование',
+          'Обработка платежей и начисление токенов',
+          'Отправка уведомлений в Telegram / Discord',
+          'Техническое обеспечение безопасности и работоспособности Сервиса',
+          'Определение режима отображения (язык, валюта оплаты) по IP-адресу'
+        ]},
+        { h: '5. Правовые основания обработки', p: 'Обработка осуществляется на основании:', list: [
+          'Согласия субъекта персональных данных (начало использования Сервиса означает принятие настоящего Соглашения)',
+          'Исполнения договора, стороной которого является пользователь (оказание услуг)'
+        ]},
+        { h: '6. Хранение и защита данных', p: 'Данные хранятся на защищённых серверах. Содержание задач шифруется. Доступ к данным имеет только Оператор. Данные не передаются третьим лицам, за исключением:', list: [
+          'Платёжных систем — только необходимый минимум для проведения платежа',
+          'Функции поиска партнёров — при активации поиска ваше имя, навыки и город могут быть показаны другим пользователям Сервиса как потенциальное совпадение. Бот может уведомить другого пользователя о том, что у вас схожие интересы или задачи. Эта функция работает только в рамках Сервиса и только между его зарегистрированными пользователями'
+        ]},
+        { h: '7. Срок хранения данных', p: 'Данные хранятся в течение всего срока использования Сервиса. При удалении аккаунта данные удаляются в течение 30 дней. Для удаления аккаунта обратитесь к Оператору: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' },
+        { h: '8. Права пользователя', p: 'В соответствии с ФЗ-152 вы вправе:', list: [
+          'Получить информацию об обрабатываемых персональных данных',
+          'Потребовать исправления неточных данных',
+          'Отозвать согласие на обработку с последующим удалением данных',
+          'Обратиться с жалобой в Роскомнадзор'
+        ], after: 'Для реализации прав направьте обращение: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' },
+        { h: '9. Файлы cookie и аналитика', p: 'Веб-интерфейс использует Яндекс.Метрику для анализа посещаемости. Метрика может устанавливать файлы cookie. Вы можете отключить сбор данных, используя настройки браузера или расширение Яндекс Браузера.' },
+        { h: '10. Изменения Соглашения', p: 'Оператор вправе вносить изменения в настоящее Соглашение. Актуальная версия всегда размещена по адресу <a href="/privacy">/privacy</a>. Продолжение использования Сервиса после публикации изменений означает их принятие.' }
+      ],
+      fHome: 'Главная', fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение'
+    },
+    en: {
+      title: 'Personal Data Processing Agreement | ASI Biont',
+      back: '← Home',
+      h1: 'Personal Data Processing Agreement',
+      subtitle: 'Effective January 1, 2026',
+      sections: [
+        { h: '1. General Provisions', p: 'This Agreement defines the procedure for processing personal data of ASI Biont service users (hereinafter — "Service", "Operator") in accordance with applicable data protection laws.' },
+        { h: '2. Data Controller', p: 'The data controller is an individual — the developer of the Service. Contact for personal data inquiries: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' },
+        { h: '3. Data We Process', list: [
+          'Telegram identifier (user_id) and username — upon registration via the Telegram bot',
+          'Discord identifier (user_id) and username — upon registration via the Discord bot',
+          'Content of tasks, reminders, and messages you send to the bot',
+          'Timezone and notification preferences',
+          'Payment history (no card data — payment details are processed by YooKassa and NowPayments)',
+          'IP address when accessing the web interface for region detection'
+        ]},
+        { h: '4. Purposes of Data Processing', list: [
+          'Providing Service features: task management, reminders, delegation',
+          'Processing payments and crediting tokens',
+          'Sending notifications via Telegram / Discord',
+          'Technical support for security and functionality of the Service',
+          'Determining display settings (language, payment currency) based on IP address'
+        ]},
+        { h: '5. Legal Basis for Processing', p: 'Processing is carried out based on:', list: [
+          'Consent of the data subject (using the Service constitutes acceptance of this Agreement)',
+          'Performance of a contract to which the user is a party (provision of services)'
+        ]},
+        { h: '6. Data Storage and Security', p: 'Data is stored on secure servers. Task content is encrypted. Only the Operator has access to the data. Data is not shared with third parties, except:', list: [
+          'Payment systems — only the minimum data necessary for payment processing',
+          'Partner search feature — when you activate search, your name, skills, and city may be shown to other Service users as a potential match. The bot may notify another user about shared interests or tasks. This feature works only within the Service and only between its registered users'
+        ]},
+        { h: '7. Data Retention Period', p: 'Data is retained for the entire duration of Service use. Upon account deletion, data is removed within 30 days. To delete your account, contact the Operator: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' },
+        { h: '8. User Rights', p: 'You have the right to:', list: [
+          'Request information about your processed personal data',
+          'Request correction of inaccurate data',
+          'Withdraw consent to processing with subsequent data deletion',
+          'File a complaint with the relevant data protection authority'
+        ], after: 'To exercise your rights, contact: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' },
+        { h: '9. Cookies and Analytics', p: 'The web interface uses Yandex.Metrica for traffic analysis. Metrica may set cookies. You can disable data collection using your browser settings or a browser extension.' },
+        { h: '10. Changes to the Agreement', p: 'The Operator reserves the right to amend this Agreement. The current version is always available at <a href="/privacy">/privacy</a>. Continued use of the Service after changes are published constitutes acceptance.' }
+      ],
+      fHome: 'Home', fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement'
+    }
+  };
+  function detect() {
+    var s = localStorage.getItem('asibiont_lang');
+    if (s && T[s]) return s;
+    var n = (navigator.language || '').slice(0,2);
+    return (n === 'ru') ? 'ru' : 'en';
+  }
+  function apply(lang) {
+    var t = T[lang];
+    document.documentElement.lang = lang;
+    document.title = t.title;
+    // Back link
+    var back = document.querySelector('a[href="/"]');
+    if (back) back.textContent = t.back;
+    // H1
+    var h1 = document.querySelector('h1');
+    if (h1) h1.textContent = t.h1;
+    // Subtitle
+    var sub = document.querySelector('.subtitle');
+    if (sub) sub.textContent = t.subtitle;
+    // Sections: h2 + p/ul pairs
+    var h2s = document.querySelectorAll('h2');
+    h2s.forEach(function(h2, i) {
+      if (!t.sections[i]) return;
+      var sec = t.sections[i];
+      h2.textContent = sec.h;
+      // Collect elements between this h2 and next h2 (or footer)
+      var el = h2.nextElementSibling;
+      var elements = [];
+      while (el && el.tagName !== 'H2' && !el.classList.contains('footer-links')) {
+        elements.push(el);
+        el = el.nextElementSibling;
+      }
+      var pIdx = 0, ulIdx = 0;
+      elements.forEach(function(e) {
+        if (e.tagName === 'P') {
+          if (pIdx === 0 && sec.p) {
+            e.innerHTML = sec.p;
+          } else if (sec.after) {
+            e.innerHTML = sec.after;
+          }
+          pIdx++;
+        } else if (e.tagName === 'UL' && sec.list) {
+          e.innerHTML = sec.list.map(function(li) { return '<li>' + li + '</li>'; }).join('');
+          ulIdx++;
+        }
+      });
+    });
+    // Footer
+    var fl = document.querySelectorAll('.footer-links a');
+    if (fl[0]) fl[0].textContent = t.fHome;
+    if (fl[1]) fl[1].textContent = t.fFaq;
+    if (fl[2]) fl[2].textContent = t.fGuide;
+    if (fl[3]) fl[3].textContent = t.fPrice;
+    if (fl[4]) fl[4].textContent = t.fSupport;
+    if (fl[5]) fl[5].textContent = t.fPrivacy;
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    apply(detect());
+  });
+})();
+</script>
 </body>
 </html>
