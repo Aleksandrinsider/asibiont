@@ -110,12 +110,12 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.getenv("VAPID_EMAIL", "mailto:admin@asibiont.com")
 
-# SMTP (email sending)
-SMTP_HOST = os.getenv("SMTP_HOST", "sm36.hosting.reg.ru")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER", "support@asibiont.com")
+# SMTP (email sending) — Gmail with App Password
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
+SMTP_USER = os.getenv("SMTP_USER", "aleksandr.insider@gmail.com")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", "ASI Biont <support@asibiont.com>")
+SMTP_FROM = os.getenv("SMTP_FROM", "ASI Biont <aleksandr.insider@gmail.com>")
 
 # Reminder settings
 DAILY_REPORT_HOUR = int(os.getenv("DAILY_REPORT_HOUR", 22))
