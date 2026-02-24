@@ -14,6 +14,8 @@ Discord users are stored in the DB with:
 import logging
 import asyncio
 import aiohttp
+import time as _time
+from datetime import datetime, timezone as _tz
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -22,27 +24,42 @@ _discord_bot = None
 _discord_task: Optional[asyncio.Task] = None
 _processed_msg_ids: set[int] = set()       # dedup guard
 _DEDUP_MAX = 500                           # ring-buffer size
+_bot_ready_ts: float = 0.0                 # epoch when on_ready fired
+_starting = False                          # guard against double start
+_active_requests: set[int] = set()         # per-user concurrency guard
 
 
 async def start_discord_bot():
     """Start the Discord bot as a background asyncio task."""
-    global _discord_bot, _discord_task
+    global _discord_bot, _discord_task, _starting, _bot_ready_ts
+
+    # Prevent double start
+    if _starting or (_discord_bot is not None and not _discord_bot.is_closed()):
+        logger.warning("[DISCORD] Bot already starting/running — skipping duplicate start")
+        return
+    _starting = True
 
     try:
         from config import DISCORD_BOT_TOKEN, DISCORD_ENABLED
     except ImportError:
         logger.warning("Discord config not available")
+        _starting = False
         return
 
     if not DISCORD_ENABLED:
         logger.info("Discord bot disabled — DISCORD_BOT_TOKEN not set")
+        _starting = False
         return
 
     try:
         import discord
     except ImportError:
         logger.error("discord.py not installed — run: pip install discord.py")
+        _starting = False
         return
+
+    # Small delay to let old instance shut down during rolling deploy
+    await asyncio.sleep(3)
 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -53,6 +70,8 @@ async def start_discord_bot():
 
     @bot.event
     async def on_ready():
+        global _bot_ready_ts
+        _bot_ready_ts = _time.time()
         logger.info(f"✅ Discord bot connected as {bot.user} (id={bot.user.id})")
 
     @bot.event
@@ -65,36 +84,54 @@ async def start_discord_bot():
         if not isinstance(message.channel, discord.DMChannel):
             return
 
+        # Skip messages that arrived before this bot instance was ready
+        # (prevents processing messages from old instance / gateway replay)
+        msg_epoch = message.created_at.replace(tzinfo=_tz.utc).timestamp()
+        if _bot_ready_ts and msg_epoch < _bot_ready_ts - 2:
+            logger.info(f"[DISCORD] Skipping old msg {message.id} (msg_ts={msg_epoch:.0f} < ready_ts={_bot_ready_ts:.0f})")
+            return
+
         # ── Dedup guard (reconnect / gateway replay) ──
         if message.id in _processed_msg_ids:
             logger.debug(f"[DISCORD] Skipping duplicate msg {message.id}")
             return
         _processed_msg_ids.add(message.id)
         if len(_processed_msg_ids) > _DEDUP_MAX:
-            # drop oldest half to keep memory bounded
             to_drop = sorted(_processed_msg_ids)[:_DEDUP_MAX // 2]
             _processed_msg_ids.difference_update(to_drop)
 
+        # ── Per-user concurrency guard — one request at a time ──
         discord_user_id = message.author.id
+        if discord_user_id in _active_requests:
+            logger.warning(f"[DISCORD] User {discord_user_id} already has active request — skipping")
+            return
+        _active_requests.add(discord_user_id)
+
         text = message.content.strip()
         if not text:
+            _active_requests.discard(discord_user_id)
             return
 
         logger.info(f"[DISCORD] DM from {message.author} ({discord_user_id}): {text[:80]}")
 
-        # Indicate typing
-        async with message.channel.typing():
-            reply = await _handle_discord_message(discord_user_id, message.author, text)
+        try:
+            # Indicate typing
+            async with message.channel.typing():
+                reply = await _handle_discord_message(discord_user_id, message.author, text)
 
-        # Split long messages (Discord max 2000 chars)
-        for chunk in _split_message(reply):
-            await message.channel.send(chunk)
+            # Split long messages (Discord max 2000 chars)
+            for chunk in _split_message(reply):
+                await message.channel.send(chunk)
+        finally:
+            _active_requests.discard(discord_user_id)
 
     async def runner():
         try:
             await bot.start(DISCORD_BOT_TOKEN)
         except Exception as e:
             logger.error(f"Discord bot error: {e}", exc_info=True)
+        finally:
+            _starting = False
 
     _discord_task = asyncio.create_task(runner())
     logger.info("Discord bot task started")
@@ -102,10 +139,11 @@ async def start_discord_bot():
 
 async def stop_discord_bot():
     """Gracefully stop the Discord bot."""
-    global _discord_bot, _discord_task
+    global _discord_bot, _discord_task, _starting
     if _discord_bot and not _discord_bot.is_closed():
         await _discord_bot.close()
         logger.info("Discord bot closed")
+    _starting = False
     if _discord_task and not _discord_task.done():
         _discord_task.cancel()
         try:
