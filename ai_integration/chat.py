@@ -36,6 +36,390 @@ logger = logging.getLogger(__name__)
 # Базовый системный промпт для простых сообщений
 system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
 
+# ── Bilingual labels for proactive context & situation prompt ──
+def _t(key, lang='ru'):
+    """Get a translated label by key."""
+    return _T.get(key, {}).get(lang, _T.get(key, {}).get('ru', key))
+
+_T = {
+    'months': {
+        'ru': ['января','февраля','марта','апреля','мая','июня',
+               'июля','августа','сентября','октября','ноября','декабря'],
+        'en': ['January','February','March','April','May','June',
+               'July','August','September','October','November','December'],
+    },
+    'user_info': {'ru': 'Информация о пользователе', 'en': 'User information'},
+    'profile': {'ru': 'Профиль', 'en': 'Profile'},
+    'profile_fields': {
+        'ru': [('city','Город'),('company','Компания'),('position','Должность'),
+               ('languages','Языки'),('skills','Навыки'),('interests','Интересы'),('goals','Цели')],
+        'en': [('city','City'),('company','Company'),('position','Position'),
+               ('languages','Languages'),('skills','Skills'),('interests','Interests'),('goals','Goals')],
+    },
+    'stats_label': {'ru': '📊 Статистика', 'en': '📊 Stats'},
+    'tasks_created': {'ru': 'создано задач', 'en': 'tasks created'},
+    'completed': {'ru': 'завершено', 'en': 'completed'},
+    'skipped': {'ru': 'пропущено', 'en': 'skipped'},
+    'avg_time': {'ru': 'ср. время выполнения', 'en': 'avg completion time'},
+    'key_interests': {'ru': '🎯 Устойчивые интересы', 'en': '🎯 Key interests'},
+    'recent_searches': {'ru': '🔍 Недавно искал', 'en': '🔍 Recent searches'},
+    'projects_label': {'ru': '📁 Проекты', 'en': '📁 Projects'},
+    'humidity': {'ru': 'влажность', 'en': 'humidity'},
+    'wind': {'ru': 'ветер', 'en': 'wind'},
+    'wind_unit': {'ru': 'м/с', 'en': 'm/s'},
+    'news_city': {'ru': 'Новости {city}', 'en': '{city} news'},
+    'news_general': {'ru': 'Свежие новости России', 'en': 'Latest news'},
+    'weather_hdr': {'ru': '🌤 ПОГОДА', 'en': '🌤 WEATHER'},
+    'news_hdr': {'ru': '📰 НОВОСТИ', 'en': '📰 NEWS'},
+    'insights_hdr': {'ru': '🔥 ИНСАЙТЫ', 'en': '🔥 INSIGHTS'},
+    'partners_hdr': {'ru': '👥 ПАРТНЁРЫ', 'en': '👥 PARTNERS'},
+    'overdue_mark': {'ru': '⚠️ПРОСРОЧЕНО', 'en': '⚠️OVERDUE'},
+    'days_short': {'ru': 'дн', 'en': 'd'},
+    'goals_hdr': {'ru': '🎯 ЦЕЛИ', 'en': '🎯 GOALS'},
+    'active_tasks': {'ru': 'Активных задач', 'en': 'Active tasks'},
+    'overdue_hdr': {'ru': 'ПРОСРОЧЕННЫЕ', 'en': 'OVERDUE'},
+    'deadline_soon': {'ru': '⏰ СКОРО ДЕДЛАЙН', 'en': '⏰ DEADLINE SOON'},
+    'in_hours': {'ru': 'через {h}ч', 'en': 'in {h}h'},
+    'goal_alerts_hdr': {'ru': '🎯 АЛЕРТЫ ЦЕЛЕЙ', 'en': '🎯 GOAL ALERTS'},
+    'deadline_in': {'ru': 'дедлайн через {d}дн ({p}%)', 'en': 'deadline in {d}d ({p}%)'},
+    'almost_done': {'ru': 'почти готово ({p}%)', 'en': 'almost done ({p}%)'},
+    'no_progress': {'ru': 'нет прогресса {d}дн', 'en': 'no progress {d}d'},
+    'stale_tasks': {'ru': '📋 ЗАСТОЙ: {n} задач висят больше недели без выполнения',
+                    'en': '📋 STALE: {n} tasks pending for over a week'},
+    'recent_topics': {'ru': 'Недавние темы', 'en': 'Recent topics'},
+    'productive': {'ru': 'продуктивный', 'en': 'productive'},
+    'delegates_pat': {'ru': 'делегирует', 'en': 'delegates'},
+    'patterns_lbl': {'ru': 'Паттерны', 'en': 'Patterns'},
+    'active_morning': {'ru': 'активен утром', 'en': 'active in the morning'},
+    'active_evening': {'ru': 'активен вечером', 'en': 'active in the evening'},
+    'insights_section': {'ru': '💡 ИНСАЙТЫ', 'en': '💡 INSIGHTS'},
+    # ── _build_situation_prompt labels ──
+    'sit_opening': {
+        'ru': 'Ты пишешь проактивное сообщение пользователю. Не в ответ на его запрос — ты сам решил написать.',
+        'en': 'You are writing a proactive message to the user. Not in response to their request — you decided to reach out.',
+    },
+    'time_morning': {'ru': 'Утро', 'en': 'Morning'},
+    'time_afternoon': {'ru': 'День', 'en': 'Afternoon'},
+    'time_evening': {'ru': 'Вечер', 'en': 'Evening'},
+    'time_late': {'ru': 'Позднее время', 'en': 'Late night'},
+    'sit_situation': {'ru': '=== СИТУАЦИЯ ===', 'en': '=== SITUATION ==='},
+    'sit_time': {'ru': 'Время', 'en': 'Time'},
+    'sit_tasks': {'ru': 'Задач', 'en': 'Tasks'},
+    'sit_overdue': {'ru': 'Просроченных', 'en': 'Overdue'},
+    'sit_profile_ok': {'ru': 'Профиль заполнен', 'en': 'Profile filled'},
+    'sit_goals_ok': {'ru': 'Цели заданы', 'en': 'Goals set'},
+    'yes': {'ru': 'Да', 'en': 'Yes'},
+    'no': {'ru': 'НЕТ', 'en': 'NO'},
+    'sit_obs': {'ru': '=== НАБЛЮДЕНИЯ ===', 'en': '=== OBSERVATIONS ==='},
+    'obs_no_profile': {'ru': 'Профиль не заполнен — не знаешь этого человека',
+                       'en': "Profile not filled — you don't know this person"},
+    'obs_no_goals': {'ru': 'Целей нет', 'en': 'No goals set'},
+    'obs_overdue': {'ru': 'Просроченных задач: {n}', 'en': 'Overdue tasks: {n}'},
+    'sit_resources': {'ru': '=== РЕСУРСЫ ===', 'en': '=== RESOURCES ==='},
+    'res_role': {'ru': 'Роль', 'en': 'Role'},
+    'res_skills': {'ru': 'Навыки', 'en': 'Skills'},
+    'res_interests': {'ru': 'Интересы', 'en': 'Interests'},
+    'res_goals': {'ru': 'Цели', 'en': 'Goals'},
+    'sit_data': {'ru': '=== ДОСТУПНЫЕ ДАННЫЕ ===', 'en': '=== AVAILABLE DATA ==='},
+    'data_weather': {'ru': 'Погода', 'en': 'Weather'},
+    'data_news': {'ru': 'Новости', 'en': 'News'},
+    'data_partners': {'ru': 'Партнёры/контакты', 'en': 'Partners/contacts'},
+    'data_obs': {'ru': 'Наблюдения', 'en': 'Observations'},
+    'data_goals': {'ru': 'Цели', 'en': 'Goals'},
+    'data_interests': {'ru': 'Устойчивые интересы', 'en': 'Key interests'},
+    'data_searches': {'ru': 'Недавние поиски', 'en': 'Recent searches'},
+    'data_projects': {'ru': 'Проекты', 'en': 'Projects'},
+    'sit_tasks_hdr': {'ru': 'ЗАДАЧИ', 'en': 'TASKS'},
+    'sit_overdue_hdr': {'ru': '⚠️ ПРОСРОЧЕННЫЕ', 'en': '⚠️ OVERDUE'},
+    'sit_overdue_tasks': {'ru': '⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ', 'en': '⚠️ OVERDUE TASKS'},
+    'sit_accent': {'ru': 'Акцент', 'en': 'Focus'},
+    'sit_type': {'ru': '=== ТИП СООБЩЕНИЯ: {t} ===', 'en': '=== MESSAGE TYPE: {t} ==='},
+    'sit_no_plan': {
+        'ru': '⛔ НЕ предлагай план дня / список задач. Сегодня другой тип сообщения.',
+        'en': '⛔ Do NOT suggest a daily plan / task list. Today is a different message type.',
+    },
+    'sit_reacts': {'ru': 'Реагирует на', 'en': 'Reacts to'},
+    'sit_ignores': {
+        'ru': 'Часто игнорирует — пиши только с реальной пользой',
+        'en': 'Often ignores — only write with real value',
+    },
+    'sit_rules': {
+        'ru': """
+Ты — помощник, который отчитывается. Посмотри на ВСЕ данные.
+Ответ должен содержать: что ты проверил/нашёл + конкретное предложение + вопрос для уточнения.
+5-10 предложений. Деловой тон. Конкретика. Не придумывай данные. Не перечисляй функции.
+
+⚠️ ПРАВИЛО ВЕРИФИКАЦИИ: упоминай задачи/цели ТОЛЬКО если получил их из инструментов (list_tasks, list_goals).
+НЕ бери задачи/цели/посты из памяти или истории — они могут быть удалены.
+
+🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском языке.""",
+        'en': """
+You are an assistant reporting in. Review ALL the data.
+Your response must contain: what you checked/found + a specific suggestion + a clarifying question.
+5-10 sentences. Professional tone. Be specific. Don't invent data. Don't list features.
+
+⚠️ VERIFICATION RULE: mention tasks/goals ONLY if you got them from tools (list_tasks, list_goals).
+Do NOT take tasks/goals/posts from memory or history — they may have been deleted.
+
+🗣️ LANGUAGE: Write ONLY in English. Even if tool results or context data are in Russian, you MUST respond in English.""",
+    },
+    # ── generate_proactive_message labels ──
+    'pro_instruction': {
+        'ru': "Напиши проактивное сообщение пользователю на основе анализа ситуации выше. "
+              "Используй инструменты если нужны актуальные данные (задачи, новости, погода).",
+        'en': "Write a proactive message to the user based on the situation analysis above. "
+              "Use tools if you need current data (tasks, news, weather).",
+    },
+    'pro_task_help': {
+        'ru': "Помоги пользователю решить задачу из контекста выше. "
+              "ОБЯЗАТЕЛЬНО используй инструменты (research_topic, find_relevant_contacts_for_task, get_news_trends) "
+              "чтобы дать КОНКРЕТНЫЙ результат. Не предлагай помощь — СДЕЛАЙ работу.",
+        'en': "Help the user solve the task from the context above. "
+              "You MUST use tools (research_topic, find_relevant_contacts_for_task, get_news_trends) "
+              "to deliver a CONCRETE result. Don't offer help — DO the work.",
+    },
+    'anti_repeat_intro': {
+        'ru': "\n\nЗАПРЕЩЕНО повторять эти фразы (твои последние ответы):\n",
+        'en': "\n\nDo NOT repeat these phrases (your recent responses):\n",
+    },
+    'anti_repeat_suffix': {'ru': "\nГенерируй УНИКАЛЬНЫЙ ответ!", 'en': "\nGenerate a UNIQUE response!"},
+    'fallback_short': {
+        'ru': "Привет! Готов помочь. Что обсудим?",
+        'en': "Hey! Ready to help. What shall we discuss?",
+    },
+    'fallback_full': {
+        'ru': "Привет! Готов помочь с задачами и целями. Что обсудим?",
+        'en': "Hey! Ready to help with tasks and goals. What shall we discuss?",
+    },
+    'error_user_not_found': {
+        'ru': "Ошибка: пользователь не найден",
+        'en': "Error: user not found",
+    },
+    'error_processing': {
+        'ru': "Извините, произошла ошибка при обработке запроса. Попробуйте ещё раз.",
+        'en': "Sorry, an error occurred while processing your request. Please try again.",
+    },
+}
+
+# Intent labels (bilingual)
+_INTENT_LABELS = {
+    'ru': {
+        'morning': "Утро — план дня", 'evening': "Вечер — итоги",
+        'overdue': "Просроченные задачи", 'insight': "Находка по интересам",
+        'trend': "Тренд/новость", 'weather': "Погода + активность",
+        'contact': "Партнёр/контакт", 'productivity': "Продуктивность",
+    },
+    'en': {
+        'morning': "Morning — daily plan", 'evening': "Evening — wrap-up",
+        'overdue': "Overdue tasks", 'insight': "Interest-based discovery",
+        'trend': "Trend/news", 'weather': "Weather + activity",
+        'contact': "Partner/contact", 'productivity': "Productivity",
+    },
+}
+
+# Topic keywords (bilingual keys, mixed word lists for matching)
+_TOPIC_KW = {
+    'ru': {
+        'работа/задачи': ['задач','task','дел','работ','проект'],
+        'нетворкинг': ['знаком','партнер','контакт','встреч'],
+        'цели/рост': ['цель','goal','план','развити','рост'],
+        'продуктивность': ['врем','time','продуктив','эффект'],
+        'здоровье': ['здоров','спорт','тренир','сон','питан'],
+        'финансы': ['деньг','финанс','инвест','бюджет','доход'],
+        'обучение': ['учи','курс','книг','навык','изуч'],
+    },
+    'en': {
+        'work/tasks': ['task','work','project','deadline','deliver','задач'],
+        'networking': ['partner','contact','meeting','connect','знаком'],
+        'goals/growth': ['goal','plan','develop','grow','цель'],
+        'productivity': ['time','productive','efficient','focus','продуктив'],
+        'health': ['health','sport','workout','sleep','diet','здоров'],
+        'finance': ['money','finance','invest','budget','income','финанс'],
+        'learning': ['learn','course','book','skill','study','учи','курс'],
+    },
+}
+
+def _msg_type_instructions(lang, ctx, rotation_hash):
+    """Build message_types list with bilingual instructions."""
+    task_count = ctx.get('task_count', 0)
+    L = lang  # shortcut
+
+    if L == 'en':
+        q_variants = [
+            'Ask the user ONE precise question about their current work. Not about plans — what are they doing right now and what is blocking them.',
+            'Ask about a result. Not "how are you?" — what specifically worked/didn\'t work on the latest topic. Reference recent tasks/goals.',
+            'Ask a provocative question about their field — one that makes them want to answer. Not generic, but with your own observation from the data.',
+        ]
+    else:
+        q_variants = [
+            'Задай пользователю ОДИН точный вопрос про его текущую работу. Не о планах — а что конкретно делает сейчас и что мешает.',
+            'Спроси про результат. Не "как дела?" — а что конкретно получилось/не получилось по последней теме. Опирайся на недавние задачи/цели.',
+            'Задай провокационный вопрос по его сфере — от которого хочется ответить. Не банальный, а со своим наблюдением из данных.',
+        ]
+    message_types = [{'type': 'question', 'instruction': q_variants[rotation_hash % len(q_variants)]}]
+
+    if ctx.get('goals') or task_count > 0:
+        if L == 'en':
+            stat_variants = [
+                'Look at tasks and goals and make ONE specific observation — a pattern, bottleneck, or unexpected connection. Don\'t recap the task list — give an insight.',
+                'Compare the current situation with the goals. Where is the gap between what they want and what they do? Say it gently but specifically.',
+                'Look at progress and find what is going well. Praise a specific achievement and suggest the next step.',
+            ]
+        else:
+            stat_variants = [
+                'Посмотри на задачи и цели и сделай ОДНО конкретное наблюдение — паттерн, узкое место, неожиданная связь. Не пересказывай список задач — дай инсайт.',
+                'Сравни текущую ситуацию с целями. Где разрыв между тем что хочет и тем что делает? Скажи это мягко но конкретно.',
+                'Посмотри на прогресс и найди что идёт хорошо. Похвали за конкретное достижение и предложи следующий шаг.',
+            ]
+        message_types.append({'type': 'analysis', 'instruction': stat_variants[rotation_hash % len(stat_variants)]})
+
+    if ctx.get('partners'):
+        instr = ('Tell about a SPECIFIC relevant contact from the partner data. Who they are, how they can help, why worth connecting. Use ONLY real @username from data.'
+                 if L == 'en' else
+                 'Расскажи о КОНКРЕТНОМ релевантном контакте из данных партнёров. Кто это, чем полезен, почему стоит связаться. Используй ТОЛЬКО реальные @username из данных.')
+        message_types.append({'type': 'contact', 'instruction': instr})
+
+    if ctx.get('news'):
+        if L == 'en':
+            news_variants = [
+                'Find something in the news that DIRECTLY affects the user. Don\'t summarize the news — explain how it changes their situation. Ask their opinion.',
+                'Connect a news item/trend with the user\'s tasks or goals. Show an opportunity or risk. Suggest an action.',
+                'Use research_topic to dig deeper into news related to the user\'s field. Bring facts not in the headlines. Show what you found and ask their opinion.',
+            ]
+        else:
+            news_variants = [
+                'Найди в новостях то, что ПРЯМО влияет на пользователя. Не пересказывай новость — объясни как это меняет его ситуацию. Спроси мнение.',
+                'Свяжи новость/тренд с задачами или целями пользователя. Покажи возможность или риск. Предложи действие.',
+                'Используй research_topic чтобы углубиться в новость по сфере пользователя. Принеси факты, которых нет в новостях. Покажи что накопал и спроси мнение.',
+            ]
+        message_types.append({'type': 'discussion', 'instruction': news_variants[rotation_hash % len(news_variants)]})
+
+    if task_count == 0:
+        instr = ('Ask what the user is working on RIGHT NOW. Offer help in the current moment — analysis, research, planning. Do NOT suggest "create a task for tomorrow". Focus on TODAY and NOW.'
+                 if L == 'en' else
+                 'Спроси над чем пользователь работает СЕЙЧАС. Предложи помощь в текущем моменте — анализ, исследование, планирование. НЕ предлагай "создать задачу на завтра". Фокус на СЕГОДНЯ и СЕЙЧАС.')
+        message_types.append({'type': 'plan', 'instruction': instr})
+
+    if ctx.get('weather'):
+        instr = ('Brief weather update + a specific activity suggestion tied to their interests. Not just "nice weather" — what specifically can they do.'
+                 if L == 'en' else
+                 'Коротко о погоде + конкретное предложение активности, связанное с интересами. Не просто "хорошая погода" — а что конкретно можно сделать.')
+        message_types.append({'type': 'weather', 'instruction': instr})
+
+    if task_count > 0:
+        if L == 'en':
+            task_variants = [
+                'Pick the most important task and HELP with it — research the topic (research_topic), find a contact (find_relevant_contacts_for_task). Come with a result, not a reminder.',
+                'Look at tasks: which can be combined, which depend on each other, which one unblocks the rest. Give one specific piece of advice.',
+                'Find a task that can be closed right now — small, quick. Suggest starting with it to build momentum.',
+            ]
+        else:
+            task_variants = [
+                'Выдели самую важную задачу и ПОМОГИ с ней — исследуй тему (research_topic), найди контакт (find_relevant_contacts_for_task). Приди с результатом, не с напоминанием.',
+                'Посмотри на задачи: какие можно объединить, какие зависят друг от друга, какая разблокирует остальные. Дай один конкретный совет.',
+                'Найди задачу которую можно закрыть прямо сейчас — маленькую, быструю. Предложи начать с неё чтобы набрать темп.',
+            ]
+        message_types.append({'type': 'tasks', 'instruction': task_variants[rotation_hash % len(task_variants)]})
+
+    if ctx.get('deadline_soon'):
+        tasks_soon = ctx['deadline_soon']
+        task_names = ', '.join(t.title for t in tasks_soon[:3])
+        instr = (f'DEADLINE ALERT: tasks due soon: {task_names}. Remind specifically — what needs to be done, offer help (break down, reschedule, finish). Tone: gentle but specific.'
+                 if L == 'en' else
+                 f'АЛЕРТ ДЕДЛАЙНА: скоро срок у задач: {task_names}. Напомни конкретно — что по ним нужно сделать, предложи помощь (разбить, перенести, доделать). Тон мягкий но конкретный.')
+        message_types.append({'type': 'deadline_alert', 'instruction': instr})
+
+    if ctx.get('goals_alert'):
+        alerts = ctx['goals_alert']
+        almost_done = [a for a in alerts if a['type'] == 'almost_done']
+        stagnant = [a for a in alerts if a['type'] == 'stagnant']
+        deadline_close = [a for a in alerts if a['type'] == 'deadline_close']
+        if almost_done:
+            gn = almost_done[0]['goal']; gp = almost_done[0]['progress']
+            instr = (f'PROGRESS ALERT: goal "{gn}" at {gp}%! Congratulate on the progress, ask what remains to reach 100%, suggest a concrete next step to finish.'
+                     if L == 'en' else
+                     f'АЛЕРТ ПРОГРЕССА: цель "{gn}" на {gp}%! Поздравь с прогрессом, спроси что осталось до 100%, предложи конкретный следующий шаг чтобы добить цель.')
+            message_types.append({'type': 'goal_milestone', 'instruction': instr})
+        if stagnant:
+            gn = stagnant[0]['goal']; gd = stagnant[0]['days_old']
+            instr = (f'STAGNATION ALERT: goal "{gn}" created {gd} days ago, but progress is 0%. Gently ask — is it still relevant? Maybe break into steps? Or rephrase?'
+                     if L == 'en' else
+                     f'АЛЕРТ ЗАСТОЯ: цель "{gn}" создана {gd} дней назад, но прогресс 0%. Мягко спроси — актуальна ли ещё? Может разбить на шаги? Или пересмотреть формулировку?')
+            message_types.append({'type': 'goal_stagnation', 'instruction': instr})
+        if deadline_close:
+            gn = deadline_close[0]['goal']; gd2 = deadline_close[0]['days']; gp2 = deadline_close[0]['progress']
+            instr = (f'ALERT: goal "{gn}" — deadline in {gd2} days, progress {gp2}%. Help plan the final push — what specifically remains?'
+                     if L == 'en' else
+                     f'АЛЕРТ: цель "{gn}" — дедлайн через {gd2} дн, прогресс {gp2}%. Помоги спланировать финишный рывок — что конкретно остаётся сделать?')
+            message_types.append({'type': 'goal_deadline', 'instruction': instr})
+
+    if ctx.get('stale_task_count', 0) >= 3:
+        n = ctx['stale_task_count']
+        instr = (f'STAGNATION ALERT: {n} tasks pending for over a week. Suggest sorting them out — what is still relevant, what to cancel, what to reschedule. Specifically: "Let\'s review the old tasks? Some have been sitting for a week with no progress."'
+                 if L == 'en' else
+                 f'АЛЕРТ ЗАСТОЯ: {n} задач висят больше недели. Предложи разобрать — что ещё актуально, что отменить, что перенести. Конкретно: "Давай разберём старые задачи? Некоторые уже неделю без движения."')
+        message_types.append({'type': 'task_cleanup', 'instruction': instr})
+
+    if ctx.get('pending_tasks_full'):
+        tasks = ctx['pending_tasks_full']
+        task_idx = rotation_hash % len(tasks)
+        task = tasks[task_idx]
+        task_desc = f" — {task.description[:100]}" if task.description else ""
+        if L == 'en':
+            help_variants = [
+                f'Help solve task "{task.title}"{task_desc}. Use research_topic to find useful information. Show the result and suggest an action.',
+                f'Task "{task.title}"{task_desc}. Find a contact from the network who can help (find_relevant_contacts_for_task). Show who you found and why they fit.',
+                f'Task "{task.title}"{task_desc}. Break it into 2-3 concrete steps and suggest starting with the first. If info is needed — research right away.',
+            ]
+        else:
+            help_variants = [
+                f'Помоги решить задачу "{task.title}"{task_desc}. Используй research_topic чтобы найти полезную информацию. Покажи результат и предложи действие.',
+                f'Задача "{task.title}"{task_desc}. Найди контакт из сети кто может помочь (find_relevant_contacts_for_task). Покажи кого нашёл и почему он подходит.',
+                f'Задача "{task.title}"{task_desc}. Разбей её на 2-3 конкретных шага и предложи начать с первого. Если нужна информация — исследуй сразу.',
+            ]
+        message_types.append({'type': 'task_help', 'instruction': help_variants[rotation_hash % len(help_variants)]})
+
+    # ── Extended types ──
+    if ctx.get('pending_tasks_full') and ctx.get('partners'):
+        tasks = ctx['pending_tasks_full']
+        task_idx = (rotation_hash + 1) % len(tasks)
+        task = tasks[task_idx]
+        instr = (f'Task "{task.title}" — find a suitable executor among contacts (use find_relevant_contacts_for_task). Show who you found and suggest delegating: "Found @username, they know this area. Delegate to them?"'
+                 if L == 'en' else
+                 f'Задача "{task.title}" — найди подходящего исполнителя среди контактов (используй find_relevant_contacts_for_task). Покажи кого нашёл и предложи делегировать: "Нашёл @username, он разбирается в этом. Делегировать ему?"')
+        message_types.append({'type': 'delegation_suggest', 'instruction': instr})
+
+    instr = ('Check delegated task status (get_delegation_progress). If there are unaccepted ones — suggest an alternative candidate. If there is progress — inform the user.'
+             if L == 'en' else
+             'Проверь статус делегированных задач (get_delegation_progress). Если есть непринятые — предложи альтернативного кандидата. Если есть прогресс — сообщи пользователю.')
+    message_types.append({'type': 'delegation_status', 'instruction': instr})
+
+    if ctx.get('news') or ctx.get('long_term_data', {}).get('interests'):
+        instr = ('Suggest an idea for a channel post. Research the trend via tools (research_topic, get_news_trends). Show the result and suggest: "Here\'s a topic for a post — shall I write and publish it?"'
+                 if L == 'en' else
+                 'Предложи идею для поста в канал. Исследуй тренд через инструменты (research_topic, get_news_trends). Покажи результат и предложи: "Вот тема для поста — написать и опубликовать?"')
+        message_types.append({'type': 'content_idea', 'instruction': instr})
+
+    profile_obj = ctx.get('profile')
+    has_profile = bool(profile_obj and (getattr(profile_obj, 'goals', None) or getattr(profile_obj, 'interests', None) or getattr(profile_obj, 'skills', None)))
+    if has_profile:
+        prof_interests = getattr(profile_obj, 'interests', '') or ''
+        prof_goals_str = getattr(profile_obj, 'goals', '') or ''
+        niche = prof_interests[:80] or prof_goals_str[:80] or ('their field' if L == 'en' else 'его сфера')
+        instr = (f'MARKET MONITORING. Research via research_topic and get_news_trends what is happening in the user\'s niche ({niche}). Find a specific insight: new competitor, regulation change, demand shift, new technology. Show what you found and explain how it affects the user. Suggest an action.'
+                 if L == 'en' else
+                 f'МОНИТОРИНГ РЫНКА. Исследуй через research_topic и get_news_trends что происходит в нише пользователя ({niche}). Найди конкретный инсайт: новый конкурент, изменение регуляций, сдвиг спроса, новая технология. Покажи что нашёл и объясни как это влияет на пользователя. Предложи действие.')
+        message_types.append({'type': 'market_monitor', 'instruction': instr})
+
+    if ctx.get('goals'):
+        goal = ctx['goals'][rotation_hash % len(ctx['goals'])]
+        instr = (f'CONTENT FOR GOAL. User\'s goal: "{goal.title}" ({goal.progress_percentage}%). Come up with a channel post that ADVANCES this goal: attracts partners, clients, or attention. Research the topic (research_topic). Show the idea and suggest: "Here\'s a post. It will help with the goal — shall I publish it?"'
+                 if L == 'en' else
+                 f'КОНТЕНТ ДЛЯ ЦЕЛИ. Цель пользователя: "{goal.title}" ({goal.progress_percentage}%). Придумай пост для канала, который ПРОДВИНЕТ эту цель: привлечёт партнёров, клиентов, или внимание. Исследуй тему (research_topic). Покажи идею и предложи: "Вот пост. Он поможет с целью — опубликовать?"')
+        message_types.append({'type': 'goal_content', 'instruction': instr})
+
+    return message_types
+
 
 def _build_session_summary(user_db_id, session):
     """Строит краткую сводку предыдущих сессий для контекстного окна чата.
@@ -108,7 +492,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
     if user_id is None:
         logger.error("[CHAT_WITH_AI] ERROR: user_id is None!")
-        return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
+        return {'response': _t('error_user_not_found', 'ru'), 'tool_calls': []}
 
     try:
         # Делегируем в автономный агент — он сам строит контекст,
@@ -133,8 +517,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         logger.error(f"[CHAT_WITH_AI] ERROR: {e}")
         import traceback
         traceback.print_exc()
+        try:
+            from i18n import get_user_lang
+            _err_lang = get_user_lang(user_id) if user_id else 'ru'
+        except Exception:
+            _err_lang = 'ru'
         return {
-            'response': "Извините, произошла ошибка при обработке запроса. Попробуйте ещё раз.",
+            'response': _t('error_processing', _err_lang),
             'tool_calls': []
         }
 
@@ -329,13 +718,10 @@ def _analyze_proactive_engagement(user_db_id, session):
         return {}
 
 
-async def _build_proactive_context(user_id):
+async def _build_proactive_context(user_id, lang='ru'):
     """Собирает полный контекст пользователя для проактивного сообщения.
     Возвращает dict со всеми данными или None если пользователь не найден."""
-    months = [
-        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-    ]
+    months = _T['months'].get(lang, _T['months']['ru'])
     
     db_session = Session()
     try:
@@ -383,7 +769,7 @@ async def _build_proactive_context(user_id):
                 decrypted = _TOOL_JUNK_RE.sub('', decrypted).strip()
                 decrypted = '\n'.join(line for line in decrypted.split('\n') if line.strip())
                 if decrypted:
-                    user_memory = f"\nИнформация о пользователе: {decrypted}"
+                    user_memory = f"\n{_t('user_info', lang)}: {decrypted}"
             except Exception as e:
                 logger.warning(f"Failed to decrypt user memory for user {user.id}: {e}")
         
@@ -393,26 +779,25 @@ async def _build_proactive_context(user_id):
         
         if profile:
             profile_parts = []
-            for field, label in [('city', 'Город'), ('company', 'Компания'), ('position', 'Должность'),
-                                  ('languages', 'Языки'), ('skills', 'Навыки'), ('interests', 'Интересы'), ('goals', 'Цели')]:
+            for field, label in _T['profile_fields'].get(lang, _T['profile_fields']['ru']):
                 val = getattr(profile, field, None)
                 if val:
                     profile_parts.append(f"{label}: {val}")
             if profile_parts:
-                user_memory += f"\nПрофиль: {', '.join(profile_parts)}"
+                user_memory += f"\n{_t('profile', lang)}: {', '.join(profile_parts)}"
             
             # Статистика продуктивности
             stats_parts = []
             if profile.total_tasks_created:
-                stats_parts.append(f"создано задач: {profile.total_tasks_created}")
+                stats_parts.append(f"{_t('tasks_created', lang)}: {profile.total_tasks_created}")
             if profile.completed_tasks:
-                stats_parts.append(f"завершено: {profile.completed_tasks}")
+                stats_parts.append(f"{_t('completed', lang)}: {profile.completed_tasks}")
             if profile.skipped_tasks:
-                stats_parts.append(f"пропущено: {profile.skipped_tasks}")
+                stats_parts.append(f"{_t('skipped', lang)}: {profile.skipped_tasks}")
             if profile.average_completion_time:
-                stats_parts.append(f"ср. время выполнения: {profile.average_completion_time}")
+                stats_parts.append(f"{_t('avg_time', lang)}: {profile.average_completion_time}")
             if stats_parts:
-                user_memory += f"\n📊 Статистика: {', '.join(stats_parts)}"
+                user_memory += f"\n{_t('stats_label', lang)}: {', '.join(stats_parts)}"
         
         # Долгосрочная память (интересы, проекты, поисковые паттерны)
         ctx['long_term_data'] = {}
@@ -426,19 +811,19 @@ async def _build_proactive_context(user_id):
                 if interests:
                     sorted_interests = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:5]
                     interest_str = ", ".join(f"{topic} ({count})" for topic, count in sorted_interests)
-                    user_memory += f"\n🎯 Устойчивые интересы: {interest_str}"
+                    user_memory += f"\n{_t('key_interests', lang)}: {interest_str}"
                 
                 # Последние поисковые запросы — что волнует прямо сейчас
                 searches = ltm.get('search_history', [])
                 if searches:
                     recent_queries = [s['query'] for s in searches[-5:]]
-                    user_memory += f"\n🔍 Недавно искал: {', '.join(recent_queries)}"
+                    user_memory += f"\n{_t('recent_searches', lang)}: {', '.join(recent_queries)}"
                 
                 # Проекты — долгосрочные активности
                 projects = ltm.get('projects', {})
                 if projects:
                     project_names = list(projects.keys())[-3:]
-                    user_memory += f"\n📁 Проекты: {', '.join(project_names)}"
+                    user_memory += f"\n{_t('projects_label', lang)}: {', '.join(project_names)}"
             except Exception as e:
                 logger.warning(f"[PROACTIVE] Could not parse long_term_memory: {e}")
         
@@ -453,14 +838,14 @@ async def _build_proactive_context(user_id):
                 if weather_data:
                     ctx['weather'] = (
                         f"{weather_data['city_name']}: {weather_data['temp']:.0f}°C, "
-                        f"{weather_data['description']}, влажность {weather_data['humidity']}%, "
-                        f"ветер {weather_data['wind_speed']} м/с"
+                        f"{weather_data['description']}, {_t('humidity', lang)} {weather_data['humidity']}%, "
+                        f"{_t('wind', lang)} {weather_data['wind_speed']} {_t('wind_unit', lang)}"
                     )
                 news_articles = await api.get_news(topic=profile.city, page_size=3, cache_ttl=900)
                 if news_articles:
                     titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
                     if titles:
-                        ctx['news'] = f"Новости {profile.city}:\n" + "\n".join(titles)
+                        ctx['news'] = f"{_t('news_city', lang).format(city=profile.city)}:\n" + "\n".join(titles)
             if not ctx['news']:
                 news_articles = await api.get_news(page_size=3, cache_ttl=900)
                 if news_articles:
@@ -469,9 +854,9 @@ async def _build_proactive_context(user_id):
                         ctx['news'] = "Свежие новости России:\n" + "\n".join(titles)
             
             if ctx['weather']:
-                user_memory += f"\n\n🌤 ПОГОДА: {ctx['weather']}"
+                user_memory += f"\n\n{_t('weather_hdr', lang)}: {ctx['weather']}"
             if ctx['news']:
-                user_memory += f"\n\n📰 НОВОСТИ:\n{ctx['news']}"
+                user_memory += f"\n\n{_t('news_hdr', lang)}:\n{ctx['news']}"
         except Exception as e:
             logger.warning(f"[PROACTIVE] Could not load weather/news: {e}")
         
@@ -486,12 +871,12 @@ async def _build_proactive_context(user_id):
                 insights_ctx = None
             if insights_ctx and isinstance(insights_ctx, str) and insights_ctx.strip():
                 ctx['partners'] = insights_ctx
-                user_memory += f"\n\n🔥 ИНСАЙТЫ:\n{insights_ctx}"
+                user_memory += f"\n\n{_t('insights_hdr', lang)}:\n{insights_ctx}"
             else:
                 partner_ctx = manage_recommendations(user_id, 'get', session=db_session)
                 if partner_ctx and partner_ctx.strip():
                     ctx['partners'] = partner_ctx
-                    user_memory += f"\n\n👥 ПАРТНЁРЫ:\n{partner_ctx}"
+                    user_memory += f"\n\n{_t('partners_hdr', lang)}:\n{partner_ctx}"
         except Exception as e:
             logger.warning(f"[PROACTIVE] Could not load partners: {e}")
         
@@ -505,17 +890,17 @@ async def _build_proactive_context(user_id):
                 if g.target_date:
                     days = g.days_until_target()
                     if days is not None and days < 0:
-                        line += " ⚠️ПРОСРОЧЕНО"
+                        line += f" {_t('overdue_mark', lang)}"
                     elif days is not None and days <= 7:
-                        line += f" ⏳{days}дн"
+                        line += f" ⏳{days}{_t('days_short', lang)}"
                 goal_lines.append(line)
-            user_memory += f"\n\n🎯 ЦЕЛИ:\n" + "\n".join(f"- {l}" for l in goal_lines)
+            user_memory += f"\n\n{_t('goals_hdr', lang)}:\n" + "\n".join(f"- {l}" for l in goal_lines)
         
         # Задачи — сводка
         pending_count = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
         ctx['task_count'] = pending_count
         if pending_count:
-            user_memory += f"\nАктивных задач: {pending_count}"
+            user_memory += f"\n{_t('active_tasks', lang)}: {pending_count}"
         
         # Задачи с деталями для автономной помощи
         pending_tasks_full = db_session.query(Task).filter(
@@ -533,7 +918,7 @@ async def _build_proactive_context(user_id):
         ctx['overdue_count'] = len(overdue)
         ctx['overdue_titles'] = [t.title for t in overdue]
         if overdue:
-            user_memory += f"\nПРОСРОЧЕННЫЕ: {', '.join(ctx['overdue_titles'])}"
+            user_memory += f"\n{_t('overdue_hdr', lang)}: {', '.join(ctx['overdue_titles'])}"
         
         # === АЛЕРТЫ: задачи с приближающимся дедлайном (в ближайшие 24 часа) ===
         deadline_soon = db_session.query(Task).filter(
@@ -545,8 +930,8 @@ async def _build_proactive_context(user_id):
         ).order_by(Task.reminder_time).limit(5).all()
         ctx['deadline_soon'] = deadline_soon
         if deadline_soon:
-            titles = [f"{t.title} (через {max(1, int((t.reminder_time.replace(tzinfo=pytz.UTC) - base_now).total_seconds() / 3600))}ч)" for t in deadline_soon]
-            user_memory += f"\n⏰ СКОРО ДЕДЛАЙН: {', '.join(titles)}"
+            titles = [f"{t.title} ({_t('in_hours', lang).format(h=max(1, int((t.reminder_time.replace(tzinfo=pytz.UTC) - base_now).total_seconds() / 3600)))})" for t in deadline_soon]
+            user_memory += f"\n{_t('deadline_soon', lang)}: {', '.join(titles)}"
         
         # === АЛЕРТЫ: цели с приближающейся датой или высоким прогрессом ===
         ctx['goals_alert'] = []
@@ -563,12 +948,12 @@ async def _build_proactive_context(user_id):
                 alert_strs = []
                 for a in ctx['goals_alert']:
                     if a['type'] == 'deadline_close':
-                        alert_strs.append(f"{a['goal']} — дедлайн через {a['days']}дн ({a['progress']}%)")
+                        alert_strs.append(f"{a['goal']} — {_t('deadline_in', lang).format(d=a['days'], p=a['progress'])}")
                     elif a['type'] == 'almost_done':
-                        alert_strs.append(f"{a['goal']} — почти готово ({a['progress']}%)")
+                        alert_strs.append(f"{a['goal']} — {_t('almost_done', lang).format(p=a['progress'])}")
                     elif a['type'] == 'stagnant':
-                        alert_strs.append(f"{a['goal']} — нет прогресса {a['days_old']}дн")
-                user_memory += f"\n🎯 АЛЕРТЫ ЦЕЛЕЙ: {'; '.join(alert_strs)}"
+                        alert_strs.append(f"{a['goal']} — {_t('no_progress', lang).format(d=a['days_old'])}")
+                user_memory += f"\n{_t('goal_alerts_hdr', lang)}: {'; '.join(alert_strs)}"
         
         # === АЛЕРТЫ: застой задач (много pending без движения) ===
         stale_tasks = db_session.query(Task).filter(
@@ -578,7 +963,7 @@ async def _build_proactive_context(user_id):
         ).count()
         ctx['stale_task_count'] = stale_tasks
         if stale_tasks >= 3:
-            user_memory += f"\n📋 ЗАСТОЙ: {stale_tasks} задач висят больше недели без выполнения"
+            user_memory += f"\n{_t('stale_tasks', lang).format(n=stale_tasks)}"
         
         # Поведенческий анализ
         insights = []
@@ -586,15 +971,7 @@ async def _build_proactive_context(user_id):
             user_id=user.id
         ).order_by(Interaction.created_at.desc()).limit(10).all()
         
-        topic_keywords = {
-            'работа/задачи': ['задач', 'task', 'дел', 'работ', 'проект'],
-            'нетворкинг': ['знаком', 'партнер', 'контакт', 'встреч'],
-            'цели/рост': ['цель', 'goal', 'план', 'развити', 'рост'],
-            'продуктивность': ['врем', 'time', 'продуктив', 'эффект'],
-            'здоровье': ['здоров', 'спорт', 'тренир', 'сон', 'питан'],
-            'финансы': ['деньг', 'финанс', 'инвест', 'бюджет', 'доход'],
-            'обучение': ['учи', 'курс', 'книг', 'навык', 'изуч'],
-        }
+        topic_keywords = _TOPIC_KW.get(lang, _TOPIC_KW['ru'])
         
         recent_topics = set()
         last_user_msg = ""
@@ -608,7 +985,7 @@ async def _build_proactive_context(user_id):
                         recent_topics.add(topic)
         
         if recent_topics:
-            insights.append(f"Недавние темы: {', '.join(recent_topics)}")
+            insights.append(f"{_t('recent_topics', lang)}: {', '.join(recent_topics)}")
         ctx['recent_topics'] = recent_topics
         ctx['last_user_msg'] = last_user_msg
         
@@ -620,22 +997,22 @@ async def _build_proactive_context(user_id):
             delegated = sum(1 for t in all_tasks if t.delegated_to_username)
             patterns = []
             if completed > pending * 0.7:
-                patterns.append("продуктивный")
+                patterns.append(_t('productive', lang))
             if delegated > len(all_tasks) * 0.3:
-                patterns.append("делегирует")
+                patterns.append(_t('delegates_pat', lang))
             if patterns:
-                insights.append(f"Паттерны: {', '.join(patterns)}")
+                insights.append(f"{_t('patterns_lbl', lang)}: {', '.join(patterns)}")
         
         # Время активности
         if user.last_interaction_at:
             h = user.last_interaction_at.hour
             if 6 <= h <= 10:
-                insights.append("активен утром")
+                insights.append(_t('active_morning', lang))
             elif 18 <= h <= 23:
-                insights.append("активен вечером")
+                insights.append(_t('active_evening', lang))
         
         if insights:
-            user_memory += f"\n\n💡 ИНСАЙТЫ:\n" + "\n".join(f"- {i}" for i in insights)
+            user_memory += f"\n\n{_t('insights_section', lang)}:\n" + "\n".join(f"- {i}" for i in insights)
         ctx['insights'] = insights
         
         # Последние ответы агента — для антиповторов
@@ -652,6 +1029,7 @@ async def _build_proactive_context(user_id):
             insights.append(engagement['summary'])
         
         ctx['user_memory'] = user_memory
+        ctx['lang'] = lang
         return ctx
     
     finally:
@@ -666,19 +1044,20 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
     """
     import random
     
+    lang = ctx.get('lang', 'ru')
     parts = []
-    parts.append("Ты пишешь проактивное сообщение пользователю. Не в ответ на его запрос — ты сам решил написать.")
+    parts.append(_t('sit_opening', lang))
     
     # === АНАЛИЗ СИТУАЦИИ ===
     hour = ctx['user_now'].hour
     if 6 <= hour < 12:
-        time_of_day = "Утро"
+        time_of_day = _t('time_morning', lang)
     elif 12 <= hour < 18:
-        time_of_day = "День"
+        time_of_day = _t('time_afternoon', lang)
     elif 18 <= hour < 22:
-        time_of_day = "Вечер"
+        time_of_day = _t('time_evening', lang)
     else:
-        time_of_day = "Позднее время"
+        time_of_day = _t('time_late', lang)
     
     task_count = ctx.get('task_count', 0)
     overdue_count = ctx.get('overdue_count', 0)
@@ -687,30 +1066,30 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
     profile_obj = ctx.get('profile')
     has_profile = bool(profile_obj and (getattr(profile_obj, 'goals', None) or getattr(profile_obj, 'interests', None) or getattr(profile_obj, 'skills', None)))
     
-    parts.append(f"\n=== СИТУАЦИЯ ===")
-    parts.append(f"Время: {time_of_day} ({ctx['user_now'].strftime('%H:%M')})")
-    parts.append(f"Задач: {task_count}")
+    parts.append(f"\n{_t('sit_situation', lang)}")
+    parts.append(f"{_t('sit_time', lang)}: {time_of_day} ({ctx['user_now'].strftime('%H:%M')})")
+    parts.append(f"{_t('sit_tasks', lang)}: {task_count}")
     if overdue_count > 0:
-        parts.append(f"Просроченных: {overdue_count}")
-    parts.append(f"Профиль заполнен: {'Да' if has_profile else 'НЕТ'}")
-    parts.append(f"Цели заданы: {'Да' if has_goals else 'НЕТ'}")
+        parts.append(f"{_t('sit_overdue', lang)}: {overdue_count}")
+    parts.append(f"{_t('sit_profile_ok', lang)}: {_t('yes', lang) if has_profile else _t('no', lang)}")
+    parts.append(f"{_t('sit_goals_ok', lang)}: {_t('yes', lang) if has_goals else _t('no', lang)}")
     if ctx.get('recent_topics'):
-        parts.append(f"Недавние темы: {', '.join(list(ctx['recent_topics'])[:3])}")
+        parts.append(f"{_t('recent_topics', lang)}: {', '.join(list(ctx['recent_topics'])[:3])}")
     
     # === НАБЛЮДЕНИЯ ===
     observations = []
     
     if not has_profile:
-        observations.append("Профиль не заполнен — не знаешь этого человека")
+        observations.append(_t('obs_no_profile', lang))
     
     if not has_goals and has_profile:
-        observations.append("Целей нет")
+        observations.append(_t('obs_no_goals', lang))
     
     if overdue_count > 0:
-        observations.append(f"Просроченных задач: {overdue_count}")
+        observations.append(_t('obs_overdue', lang).format(n=overdue_count))
     
     if observations:
-        parts.append("\n=== НАБЛЮДЕНИЯ ===")
+        parts.append(f"\n{_t('sit_obs', lang)}")
         parts.extend(observations)
     
     # === РЕСУРСЫ ЧЕЛОВЕКА ===
@@ -721,24 +1100,24 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
         prof_goals = getattr(profile_obj, 'goals', None) or ''
         
         resources = []
-        if position: resources.append(f"Роль: {position}")
-        if skills: resources.append(f"Навыки: {skills[:60]}")
-        if interests: resources.append(f"Интересы: {interests[:60]}")
-        if prof_goals: resources.append(f"Цели: {prof_goals[:60]}")
+        if position: resources.append(f"{_t('res_role', lang)}: {position}")
+        if skills: resources.append(f"{_t('res_skills', lang)}: {skills[:60]}")
+        if interests: resources.append(f"{_t('res_interests', lang)}: {interests[:60]}")
+        if prof_goals: resources.append(f"{_t('res_goals', lang)}: {prof_goals[:60]}")
         
         if resources:
-            parts.append("\n=== РЕСУРСЫ ===\n" + "\n".join(resources))
+            parts.append(f"\n{_t('sit_resources', lang)}\n" + "\n".join(resources))
     
     # === ДОСТУПНЫЕ ДАННЫЕ ===
     available = []
     if ctx.get('weather'):
-        available.append(f"Погода: {ctx['weather']}")
+        available.append(f"{_t('data_weather', lang)}: {ctx['weather']}")
     if ctx.get('news'):
-        available.append(f"Новости: {str(ctx['news'])[:400]}")
+        available.append(f"{_t('data_news', lang)}: {str(ctx['news'])[:400]}")
     if ctx.get('partners'):
-        available.append(f"Партнёры/контакты: {str(ctx['partners'])[:300]}")
+        available.append(f"{_t('data_partners', lang)}: {str(ctx['partners'])[:300]}")
     if ctx.get('insights'):
-        available.append(f"Наблюдения: {'; '.join(ctx['insights'])}")
+        available.append(f"{_t('data_obs', lang)}: {'; '.join(ctx['insights'])}")
     
     if ctx.get('goals'):
         goal_lines = []
@@ -747,25 +1126,25 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
             if g.target_date:
                 days = g.days_until_target()
                 if days is not None and days < 0:
-                    line += " ⚠️просрочено"
+                    line += f" {_t('overdue_mark', lang).lower()}"
                 elif days is not None and days <= 7:
-                    line += f" ⏳{days}дн"
+                    line += f" ⏳{days}{_t('days_short', lang)}"
             goal_lines.append(line)
-        available.append(f"Цели: " + ", ".join(goal_lines))
+        available.append(f"{_t('data_goals', lang)}: " + ", ".join(goal_lines))
     
     # Долгосрочные данные
     ltm_data = ctx.get('long_term_data', {})
     if ltm_data.get('interests'):
         sorted_ints = sorted(ltm_data['interests'].items(), key=lambda x: x[1], reverse=True)[:5]
-        available.append(f"Устойчивые интересы: {', '.join(f'{t}({c})' for t, c in sorted_ints)}")
+        available.append(f"{_t('data_interests', lang)}: {', '.join(f'{t}({c})' for t, c in sorted_ints)}")
     if ltm_data.get('search_history'):
         recent_q = [s['query'] for s in ltm_data['search_history'][-3:]]
-        available.append(f"Недавние поиски: {', '.join(recent_q)}")
+        available.append(f"{_t('data_searches', lang)}: {', '.join(recent_q)}")
     if ltm_data.get('projects'):
-        available.append(f"Проекты: {', '.join(list(ltm_data['projects'].keys())[-3:])}")
+        available.append(f"{_t('data_projects', lang)}: {', '.join(list(ltm_data['projects'].keys())[-3:])}")
     
     if available:
-        parts.append("\n=== ДОСТУПНЫЕ ДАННЫЕ ===\n" + "\n".join(available))
+        parts.append(f"\n{_t('sit_data', lang)}\n" + "\n".join(available))
     
     # === ЗАДАЧИ ===
     if tasks_list:
@@ -784,250 +1163,64 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
                     if rt < now_utc:
                         overdue_found.append(t.title)
                         continue
-                    time_str = f" (на {rt.astimezone(user_tz).strftime('%H:%M')})"
+                    at_label = "at" if lang == 'en' else "на"
+                    time_str = f" ({at_label} {rt.astimezone(user_tz).strftime('%H:%M')})"
                 except Exception as e:
                     logger.debug(f"Failed to format reminder time for task '{t.title}': {e}")
             desc = f" — {t.description[:80]}" if t.description else ""
             upcoming.append(f"• {t.title}{time_str}{desc}")
         
         if upcoming:
-            parts.append("\nЗАДАЧИ:\n" + "\n".join(upcoming[:5]))
+            parts.append(f"\n{_t('sit_tasks_hdr', lang)}:\n" + "\n".join(upcoming[:5]))
         if overdue_found:
-            parts.append("\n⚠️ ПРОСРОЧЕННЫЕ: " + ", ".join(overdue_found[:5]))
+            parts.append(f"\n{_t('sit_overdue_hdr', lang)}: " + ", ".join(overdue_found[:5]))
     elif ctx.get('overdue_titles'):
-        parts.append("\n⚠️ ПРОСРОЧЕННЫЕ: " + ", ".join(ctx['overdue_titles']))
+        parts.append(f"\n{_t('sit_overdue_hdr', lang)}: " + ", ".join(ctx['overdue_titles']))
     
     # Специальные задачи если переданы отдельно
     if overdue_tasks_list:
         if hasattr(overdue_tasks_list[0], 'title'):
             titles = [t.title for t in overdue_tasks_list[:5]]
         else:
-            titles = [t.get('title', 'Задача') for t in overdue_tasks_list[:5]]
-        parts.append(f"\n⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ ({len(overdue_tasks_list)}):\n" + "\n".join(f"• {t}" for t in titles))
+            task_lbl = 'Task' if lang == 'en' else 'Задача'
+            titles = [t.get('title', task_lbl) for t in overdue_tasks_list[:5]]
+        parts.append(f"\n{_t('sit_overdue_tasks', lang)} ({len(overdue_tasks_list)}):\n" + "\n".join(f"• {t}" for t in titles))
     
     # === АКЦЕНТ ===
     if intent:
-        intent_labels = {
-            'morning': "Утро — план дня",
-            'evening': "Вечер — итоги",
-            'overdue': "Просроченные задачи",
-            'insight': "Находка по интересам",
-            'trend': "Тренд/новость",
-            'weather': "Погода + активность",
-            'contact': "Партнёр/контакт",
-            'productivity': "Продуктивность",
-        }
+        intent_labels = _INTENT_LABELS.get(lang, _INTENT_LABELS['ru'])
         if intent in intent_labels:
-            parts.append(f"\nАкцент: {intent_labels[intent]}")
+            parts.append(f"\n{_t('sit_accent', lang)}: {intent_labels[intent]}")
     
     # === РОТАЦИЯ ТИПОВ СООБЩЕНИЙ ===
-    # Каждое проактивное сообщение должно быть ДРУГОГО типа.
-    # Используем хеш от даты+часа чтобы тип был детерминированным но разным.
     import hashlib
     uid = ctx['user'].telegram_id if ctx.get('user') else 0
     rotation_seed = f"{ctx['user_now'].strftime('%Y-%m-%d-%H')}_{uid}"
     rotation_hash = int(hashlib.md5(rotation_seed.encode()).hexdigest(), 16)
     
-    # Доступные типы сообщений с условиями
-    message_types = []
+    # Доступные типы сообщений — собираем через bilingual helper
+    message_types = _msg_type_instructions(lang, ctx, rotation_hash)
     
-    # Тип 1: Вопрос о планах/мнении (всегда доступен)
-    # Вариация вопроса зависит от времени суток и контекста
-    q_variants = [
-        'Задай пользователю ОДИН точный вопрос про его текущую работу. Не о планах — а что конкретно делает сейчас и что мешает.',
-        'Спроси про результат. Не "как дела?" — а что конкретно получилось/не получилось по последней теме. Опирайся на недавние задачи/цели.',
-        'Задай провокационный вопрос по его сфере — от которого хочется ответить. Не банальный, а со своим наблюдением из данных.',
-    ]
-    message_types.append({
-        'type': 'question',
-        'instruction': q_variants[rotation_hash % len(q_variants)]
-    })
-    
-    # Тип 2: Анализ/наблюдение (если есть данные)
-    if ctx.get('goals') or ctx.get('task_count', 0) > 0:
-        stat_variants = [
-            'Посмотри на задачи и цели и сделай ОДНО конкретное наблюдение — паттерн, узкое место, неожиданная связь. Не пересказывай список задач — дай инсайт.',
-            'Сравни текущую ситуацию с целями. Где разрыв между тем что хочет и тем что делает? Скажи это мягко но конкретно.',
-            'Посмотри на прогресс и найди что идёт хорошо. Похвали за конкретное достижение и предложи следующий шаг.',
-        ]
-        message_types.append({
-            'type': 'analysis',
-            'instruction': stat_variants[rotation_hash % len(stat_variants)]
-        })
-    
-    # Тип 3: Релевантный контакт/партнёр (если есть партнёры)
-    if ctx.get('partners'):
-        message_types.append({
-            'type': 'contact',
-            'instruction': 'Расскажи о КОНКРЕТНОМ релевантном контакте из данных партнёров. Кто это, чем полезен, почему стоит связаться. Используй ТОЛЬКО реальные @username из данных.'
-        })
-    
-    # Тип 4: Новость/тренд по интересам (если есть новости)
-    if ctx.get('news'):
-        news_variants = [
-            'Найди в новостях то, что ПРЯМО влияет на пользователя. Не пересказывай новость — объясни как это меняет его ситуацию. Спроси мнение.',
-            'Свяжи новость/тренд с задачами или целями пользователя. Покажи возможность или риск. Предложи действие.',
-            'Используй research_topic чтобы углубиться в новость по сфере пользователя. Принеси факты, которых нет в новостях. Покажи что накопал и спроси мнение.',
-        ]
-        message_types.append({
-            'type': 'discussion',
-            'instruction': news_variants[rotation_hash % len(news_variants)]
-        })
-    
-    # Тип 5: Фокус на текущем моменте (если задач 0)
-    if task_count == 0:
-        message_types.append({
-            'type': 'plan',
-            'instruction': 'Спроси над чем пользователь работает СЕЙЧАС. Предложи помощь в текущем моменте — анализ, исследование, планирование. НЕ предлагай "создать задачу на завтра". Фокус на СЕГОДНЯ и СЕЙЧАС.'
-        })
-    
-    # Тип 6: Погода + активность (если есть погода)
-    if ctx.get('weather'):
-        message_types.append({
-            'type': 'weather',
-            'instruction': 'Коротко о погоде + конкретное предложение активности, связанное с интересами. Не просто "хорошая погода" — а что конкретно можно сделать.'
-        })
-    
-    # Тип 7: Задачи — не просто напоминание, а помощь
-    if task_count > 0:
-        task_variants = [
-            'Выдели самую важную задачу и ПОМОГИ с ней — исследуй тему (research_topic), найди контакт (find_relevant_contacts_for_task). Приди с результатом, не с напоминанием.',
-            'Посмотри на задачи: какие можно объединить, какие зависят друг от друга, какая разблокирует остальные. Дай один конкретный совет.',
-            'Найди задачу которую можно закрыть прямо сейчас — маленькую, быструю. Предложи начать с неё чтобы набрать темп.',
-        ]
-        message_types.append({
-            'type': 'tasks',
-            'instruction': task_variants[rotation_hash % len(task_variants)]
-        })
-    
-    # Тип 8: Алерт приближающегося дедлайна (если есть задачи в ближайшие 24ч)
-    if ctx.get('deadline_soon'):
-        tasks_soon = ctx['deadline_soon']
-        task_names = ', '.join(t.title for t in tasks_soon[:3])
-        message_types.append({
-            'type': 'deadline_alert',
-            'instruction': f'АЛЕРТ ДЕДЛАЙНА: скоро срок у задач: {task_names}. Напомни конкретно — что по ним нужно сделать, предложи помощь (разбить, перенести, доделать). Тон мягкий но конкретный.'
-        })
-    
-    # Тип 9: Алерт прогресса целей (если цели почти готовы или застряли)
-    if ctx.get('goals_alert'):
-        alerts = ctx['goals_alert']
-        almost_done = [a for a in alerts if a['type'] == 'almost_done']
-        stagnant = [a for a in alerts if a['type'] == 'stagnant']
-        deadline_close = [a for a in alerts if a['type'] == 'deadline_close']
-        
-        if almost_done:
-            goal_name = almost_done[0]['goal']
-            message_types.append({
-                'type': 'goal_milestone',
-                'instruction': f'АЛЕРТ ПРОГРЕССА: цель "{goal_name}" на {almost_done[0]["progress"]}%! Поздравь с прогрессом, спроси что осталось до 100%, предложи конкретный следующий шаг чтобы добить цель.'
-            })
-        if stagnant:
-            goal_name = stagnant[0]['goal']
-            message_types.append({
-                'type': 'goal_stagnation',
-                'instruction': f'АЛЕРТ ЗАСТОЯ: цель "{goal_name}" создана {stagnant[0]["days_old"]} дней назад, но прогресс 0%. Мягко спроси — актуальна ли ещё? Может разбить на шаги? Или пересмотреть формулировку?'
-            })
-        if deadline_close:
-            goal_name = deadline_close[0]['goal']
-            message_types.append({
-                'type': 'goal_deadline',
-                'instruction': f'АЛЕРТ: цель "{goal_name}" — дедлайн через {deadline_close[0]["days"]} дн, прогресс {deadline_close[0]["progress"]}%. Помоги спланировать финишный рывок — что конкретно остаётся сделать?'
-            })
-    
-    # Тип 10: Алерт застоя задач (много старых pending задач)
-    if ctx.get('stale_task_count', 0) >= 3:
-        message_types.append({
-            'type': 'task_cleanup',
-            'instruction': f'АЛЕРТ ЗАСТОЯ: {ctx["stale_task_count"]} задач висят больше недели. Предложи разобрать — что ещё актуально, что отменить, что перенести. Конкретно: "Давай разберём старые задачи? Некоторые уже неделю без движения."'
-        })
-    
-    # Тип 11: Автономная помощь с задачей (если есть задачи, где агент может помочь)
-    if ctx.get('pending_tasks_full'):
-        tasks = ctx['pending_tasks_full']
-        task_idx = rotation_hash % len(tasks)
-        task = tasks[task_idx]
-        task_desc = f" — {task.description[:100]}" if task.description else ""
-        help_variants = [
-            f'Помоги решить задачу "{task.title}"{task_desc}. Используй research_topic чтобы найти полезную информацию. Покажи результат и предложи действие.',
-            f'Задача "{task.title}"{task_desc}. Найди контакт из сети кто может помочь (find_relevant_contacts_for_task). Покажи кого нашёл и почему он подходит.',
-            f'Задача "{task.title}"{task_desc}. Разбей её на 2-3 конкретных шага и предложи начать с первого. Если нужна информация — исследуй сразу.',
-        ]
-        message_types.append({
-            'type': 'task_help',
-            'instruction': help_variants[rotation_hash % len(help_variants)]
-        })
-    
-    # === РАСШИРЕННЫЕ ТИПЫ (доступны всем, оплата токенами) ===
-    
-    # Предложение делегирования (если есть задачи и контакты)
-    if ctx.get('pending_tasks_full') and ctx.get('partners'):
-        tasks = ctx['pending_tasks_full']
-        task_idx = (rotation_hash + 1) % len(tasks)
-        task = tasks[task_idx]
-        message_types.append({
-            'type': 'delegation_suggest',
-            'instruction': f'Задача "{task.title}" — найди подходящего исполнителя среди контактов (используй find_relevant_contacts_for_task). Покажи кого нашёл и предложи делегировать: "Нашёл @username, он разбирается в этом. Делегировать ему?"'
-        })
-    
-    # Статус делегированных задач
-    message_types.append({
-        'type': 'delegation_status',
-        'instruction': 'Проверь статус делегированных задач (get_delegation_progress). Если есть непринятые — предложи альтернативного кандидата. Если есть прогресс — сообщи пользователю.'
-    })
-    
-    # Идея для контента на основе трендов
-    if ctx.get('news') or ctx.get('long_term_data', {}).get('interests'):
-        message_types.append({
-            'type': 'content_idea',
-            'instruction': 'Предложи идею для поста в канал. Исследуй тренд через инструменты (research_topic, get_news_trends). Покажи результат и предложи: "Вот тема для поста — написать и опубликовать?"'
-        })
-    
-    # Мониторинг рынка/ниши — инсайты по сфере пользователя
-    if has_profile:
-        prof_interests = getattr(profile_obj, 'interests', '') or ''
-        prof_goals_str = getattr(profile_obj, 'goals', '') or ''
-        niche = prof_interests[:80] or prof_goals_str[:80] or 'его сфера'
-        message_types.append({
-            'type': 'market_monitor',
-            'instruction': f'МОНИТОРИНГ РЫНКА. Исследуй через research_topic и get_news_trends что происходит в нише пользователя ({niche}). Найди конкретный инсайт: новый конкурент, изменение регуляций, сдвиг спроса, новая технология. Покажи что нашёл и объясни как это влияет на пользователя. Предложи действие.'
-        })
-    
-    # Контент привязанный к целям — пост который продвигает цель
-    if ctx.get('goals'):
-        goal = ctx['goals'][rotation_hash % len(ctx['goals'])]
-        message_types.append({
-            'type': 'goal_content',
-            'instruction': f'КОНТЕНТ ДЛЯ ЦЕЛИ. Цель пользователя: "{goal.title}" ({goal.progress_percentage}%). Придумай пост для канала, который ПРОДВИНЕТ эту цель: привлечёт партнёров, клиентов, или внимание. Исследуй тему (research_topic). Покажи идею и предложи: "Вот пост. Он поможет с целью — опубликовать?"'
-        })
-    
-    # Выбираем тип по ротации (детерминированно, не случайно — чтобы не повторялся)
+    # Выбираем тип по ротации
     selected = message_types[rotation_hash % len(message_types)]
     
-    parts.append(f"\n=== ТИП СООБЩЕНИЯ: {selected['type'].upper()} ===")
+    parts.append(f"\n{_t('sit_type', lang).format(t=selected['type'].upper())}")
     parts.append(selected['instruction'])
     
-    # Если не выбран 'plan' — явно запрещаем предлагать план дня
     if selected['type'] != 'plan':
-        parts.append("\n⛔ НЕ предлагай план дня / список задач. Сегодня другой тип сообщения.")
+        parts.append(f"\n{_t('sit_no_plan', lang)}")
     
     # === ВОВЛЕЧЁННОСТЬ ===
     engagement = ctx.get('proactive_engagement', {})
     if engagement.get('engaged_topics'):
         from collections import Counter
         top = Counter(engagement['engaged_topics']).most_common(3)
-        parts.append(f"\nРеагирует на: {', '.join(t for t, _ in top)}")
+        parts.append(f"\n{_t('sit_reacts', lang)}: {', '.join(t for t, _ in top)}")
     if engagement.get('ignored_count', 0) > engagement.get('total_proactive', 0) * 0.6:
-        parts.append("Часто игнорирует — пиши только с реальной пользой")
+        parts.append(_t('sit_ignores', lang))
     
     # === КАК РАБОТАТЬ ===
-    parts.append("""
-Ты — помощник, который отчитывается. Посмотри на ВСЕ данные.
-Ответ должен содержать: что ты проверил/нашёл + конкретное предложение + вопрос для уточнения.
-5-10 предложений. Деловой тон. Конкретика. Не придумывай данные. Не перечисляй функции.
-
-⚠️ ПРАВИЛО ВЕРИФИКАЦИИ: упоминай задачи/цели ТОЛЬКО если получил их из инструментов (list_tasks, list_goals).
-НЕ бери задачи/цели/посты из памяти или истории — они могут быть удалены.""")
+    parts.append(_t('sit_rules', lang))
     
     return "\n".join(parts), selected['type']
 
@@ -1040,11 +1233,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
     """
     try:
         # 1. Собираем полный контекст ситуации
-        ctx = await _build_proactive_context(user_id)
+        from i18n import get_user_lang
+        lang = get_user_lang(user_id)
+        ctx = await _build_proactive_context(user_id, lang=lang)
         if not ctx:
-            from i18n import get_user_lang
-            lang = get_user_lang(user_id)
-            return "Hey! Ready to help. What shall we discuss?" if lang == 'en' else "Привет! Готов помочь. Что обсудим?"
+            return _t('fallback_short', lang)
         
         # 2. Определяем intent
         intent = None
@@ -1063,29 +1256,22 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         # 4. Антиповтор — запрещаем повторять последние ответы
         anti_repeat = ""
         if ctx.get('last_responses'):
-            anti_repeat = "\n\nЗАПРЕЩЕНО повторять эти фразы (твои последние ответы):\n"
+            anti_repeat = _t('anti_repeat_intro', lang)
             anti_repeat += "\n".join(f"- {r}" for r in ctx['last_responses'])
-            anti_repeat += "\nГенерируй УНИКАЛЬНЫЙ ответ!"
+            anti_repeat += _t('anti_repeat_suffix', lang)
         
         # 5. Генерируем через единый мозг агента
         from .autonomous_agent import get_autonomous_agent
         agent = get_autonomous_agent()
 
-        instruction = (
-            "Напиши проактивное сообщение пользователю на основе анализа ситуации выше. "
-            "Используй инструменты если нужны актуальные данные (задачи, новости, погода)."
-        )
+        instruction = _t('pro_instruction', lang)
 
         # Для task_help используем режим task_assist с увеличенными лимитами
         if selected_type == 'task_help':
             mode = 'task_assist'
             max_tokens = 1500
             max_iterations = 3
-            instruction = (
-                "Помоги пользователю решить задачу из контекста выше. "
-                "ОБЯЗАТЕЛЬНО используй инструменты (research_topic, find_relevant_contacts_for_task, get_news_trends) "
-                "чтобы дать КОНКРЕТНЫЙ результат. Не предлагай помощь — СДЕЛАЙ работу."
-            )
+            instruction = _t('pro_task_help', lang)
         else:
             mode = 'proactive'
             max_tokens = 1200
@@ -1109,9 +1295,9 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             from .utils import generate_unified_recommendations
             return generate_unified_recommendations('fallback', task_count=task_count, overdue_count=overdue_count)
         except Exception:
-            from i18n import get_user_lang
-            lang = get_user_lang(user_id)
-            return "Hey! Ready to help with tasks and goals. What shall we discuss?" if lang == 'en' else "Привет! Готов помочь с задачами и целями. Что обсудим?"
+            from i18n import get_user_lang as _gul
+            _lang = _gul(user_id)
+            return _t('fallback_full', _lang)
 
 
 async def generate_daily_report(user_id):

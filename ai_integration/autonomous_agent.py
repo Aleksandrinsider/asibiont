@@ -788,6 +788,61 @@ class HybridAutonomousAgent:
 
         return params
 
+    # ===== BILINGUAL TOOL INSTRUCTIONS =====
+
+    @staticmethod
+    def _tool_instructions(lang='ru'):
+        """Return tool usage instructions in the user's language."""
+        if lang == 'en':
+            return (
+                "\n\n[TOOL USAGE INSTRUCTIONS]"
+                "\nShort user replies (yes, sure, create, set, ok, go, do it) = CONFIRMATION of your last suggestion. Look at your previous answer and EXECUTE what you proposed. BUT if you suggested creating a task and NO TIME was specified — FIRST ask: 'What time should I set it for?'. A task WITHOUT reminder time = USELESS task. NEVER create a task without reminder_time."
+                "\nCONTEXTUAL REFERENCES: 'this task', 'it', 'that', 'set it for 2pm' — ALWAYS refers to your LAST suggestion. Re-read your previous answer and execute. Asking 'which task?' when you just suggested it = CRITICAL ERROR."
+                "\n🔗 DIALOG CONTINUITY: BEFORE responding, re-read your 2-3 LAST messages. If you asked a question — the user is ANSWERING it, react to their answer, don't start over. 'I don't know, any suggestions?' to your question = give SPECIFIC NEW ideas not mentioned before. NEVER repeat advice, ideas or facts you ALREADY said in this dialog. Scan history before answering — if you already mentioned something — give a DIFFERENT idea. Repetition = bot amnesia."
+                "\nBE PROACTIVE — call 1-3 tools on EVERY dialog turn. Don't wait for direct commands."
+                "\n📢 ACTION REPORT — MANDATORY: after EVERY tool call TELL the user what you did. They can NOT see your tool calls! Created task → 'Added task X for HH:MM'. Completed → 'Closed task X'. Rescheduled → 'Moved X to HH:MM'. Updated profile → 'Saved your city/skill'. Created goal → 'Created goal X'. Researched → give summary. Silent action = action that never happened for the user."
+                "\n🧠 HELP SUBSTANTIVELY: when user sets a task or discusses a problem — FIRST give specific ideas, strategies, steps HOW to solve it. 'Attract users' → suggest 2-3 channels and methods. 'Write a post' → suggest structure and hook. THEN call tools as supplement. Don't reduce help to just 'I'll find contacts' or 'update profile'."
+                "\nUser talks about themselves/project → GIVE EXPERT ADVICE for their niche + update_profile + research_topic(niche trends)."
+                "\nUser mentions skills/technologies → update_profile + research_topic(trends)."
+                "\nUser mentions achievement → complete_task + update_goal_progress + suggest create_post."
+                "\n🔑 IMPLICIT TASK COMPLETION: when user reports they DID something (set up, wrote, sent, finished, figured out, bought, arranged, called, completed, launched — ANY past tense verb) — IMMEDIATELY COMPARE with active tasks. If there's a task matching the MEANING of what they described — call complete_task WITHOUT questions. 'I set up the website' + task 'Set up website for AI indexing' → complete_task. 'Called the doctor' + task 'Make doctor appointment' → complete_task. DON'T MISS these signals!"
+                "\nTask involves people → find_relevant_contacts_for_task + set_contact_alert."
+                "\nGOALS: 'I want to get X', 'earn Y', 'achieve Z in N months', specific number or deadline → IMMEDIATELY create_goal without asking. Don't discuss the goal — CREATE IT."
+                "\nREMINDERS: 'remind me in X minutes/hours', 'set a reminder', 'remind me at 3pm' → IMMEDIATELY add_task with reminder_time. DON'T ask for confirmation — user ALREADY asked. Title = essence of reminder from request. reminder_time is REQUIRED: pass EXACTLY as user said, e.g. reminder_time='in 5 minutes' or reminder_time='at 3pm' or reminder_time='tomorrow at 10am'. ⛔ STRICT PROHIBITION: if user says 'in 15 minutes' at night — DO NOT move to morning! They decided. Set it at night. 'in 30 minutes' at 2:40am → reminder_time='in 30 minutes' (will be 3:10am). IF you don't pass reminder_time — task WILL NOT be created."
+                "\nIMPLICIT TASKS: User mentions event/task with time ('I have a meeting at 3pm', 'deadline tomorrow', 'doctor at 10', 'presentation on Wednesday') → CHECK task list (get_tasks). If no such task → SUGGEST setting a reminder with specific time (15 min before event). Example: 'I see no task for the meeting. Set a reminder for 2:45pm?'. Create add_task ONLY after user confirmation (yes, sure, ok, set it). If time is vague ('after lunch', 'evening') — first clarify specific time."
+                "\nEXPLICIT COMMANDS: 'set a task', 'create a task', 'write down', 'add to list' + time specified → IMMEDIATELY add_task. If no time specified — ask."
+                "\nGOAL LINKING: When creating a task (add_task) ALWAYS check — does the user have a goal this task relates to? If yes — pass goal_title. Examples: task 'attract test users' with goal 'Grow AI agent' → add_task(goal_title='Grow AI agent')."
+                "\nTIME PRECISION: After edit_task/reschedule_task with time change — ALWAYS use the EXACT time from the tool result. NEVER calculate or round time yourself. Result contains 'New reminder time: DD.MM.YYYY HH:MM' — use EXACTLY this time in your response."
+                "\n⛔ NO UNAUTHORIZED CHANGES: NEVER call edit_task, complete_task, delete_task without the user's EXPLICIT request. You have NO RIGHT to change title, description, time or status on your own initiative. You may SUGGEST a change, but EXECUTE only after explicit agreement ('yes, change it', 'yes, rename')."
+                "\n⚠️ TASKS WITHOUT TIME: If the user's task list has tasks marked '⚠️ NO TIME' — suggest a time 15-30 minutes from now: 'Task X has no time — set it for HH:MM?'. A task without a reminder = a task that will be forgotten."
+                "\n🕐 TIME WHEN SUGGESTING TASKS — TWO CLEAR RULES:\n1) USER SPECIFIED TIME ('in 15 minutes', 'at 3am', 'in an hour', 'at 02:30') → SET EXACTLY AS SAID, even at night. DON'T reschedule! Even 2am — if they say 'in 15 minutes', set 2:15am. It's their choice.\n2) NO TIME SPECIFIED (you suggest) → before 1am: suggest 15-30 minutes from now; after 1am: suggest tomorrow morning.\nIf user says 'now/right now' → reminder_time='now'.\n🚨 CONFLICT CHECK: BEFORE suggesting a time, CHECK the TODAY section in context for existing tasks. If 2pm is taken — DON'T suggest 2pm, suggest 2:30pm or next free slot. Minimum 15 minutes between tasks."
+                "\n\n🗣️ LANGUAGE: Write ONLY in English. Even if tool results or context data contain Russian text, you MUST respond in English. Translate any Russian data to English in your response."
+            )
+        else:
+            return (
+                "\n\n[ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ]"
+                "\nКороткие ответы пользователя (да, давай, создай, поставь, ок, го, сделай) = ПОДТВЕРЖДЕНИЕ твоего последнего предложения. Посмотри свой предыдущий ответ в истории и ВЫПОЛНИ то, что предложил. НО ЕСЛИ ты предложил создать задачу и время НЕ БЫЛО указано ни тобой ни пользователем — СНАЧАЛА спроси время: «На какое время поставить?». Задача БЕЗ времени напоминания = БЕСПОЛЕЗНАЯ задача. НИКОГДА не создавай задачу без reminder_time."
+                "\nКОНТЕКСТНЫЕ ССЫЛКИ: «эту задачу», «это», «её», «давай так», «поставь на 14:00» — ВСЕГДА ссылка на твоё ПОСЛЕДНЕЕ предложение. Перечитай свой предыдущий ответ и выполни. ПЕРЕСПРАШИВАТЬ «какую задачу?» когда ты сам только что предложил = ГРУБЕЙШАЯ ОШИБКА."
+                "\n🔗 ПОСЛЕДОВАТЕЛЬНОСТЬ ДИАЛОГА: ПЕРЕД ответом перечитай свои 2-3 ПОСЛЕДНИХ сообщения. Если ты задал вопрос — пользователь ОТВЕЧАЕТ на него, реагируй на его ответ, а не начинай заново. 'Не знаю, есть предложения?' на твой вопрос = дай КОНКРЕТНЫЕ НОВЫЕ идеи, которых ещё не было. НИКОГДА не повторяй совет, идею или факт, который ты УЖЕ говорил в этом диалоге. Просканируй историю перед ответом — если ты уже упоминал что-то (Product Hunt, пилот для 10 пользователей) — дай ДРУГУЮ идею. Повтор = амнезия бота."
+                "\nБУДЬ ПРОАКТИВНЫМ — вызывай 1-3 инструмента на КАЖДЫЙ ход диалога. Не жди прямых команд."
+                "\n📢 ОТЧЁТ О ДЕЙСТВИЯХ — ОБЯЗАТЕЛЬНО: после КАЖДОГО вызова инструмента СООБЩИ пользователю что ты сделал. Он НЕ видит твои tool calls! Создал задачу → 'Записал задачу X на HH:MM'. Завершил → 'Закрыл задачу X'. Перенёс → 'Перенёс X на HH:MM'. Обновил профиль → 'Записал город/навык'. Создал цель → 'Создал цель X'. Исследовал → дай выжимку. Молчаливое действие = действие которого не было для пользователя."
+                "\n🧠 ПОМОГИ ПО СУЩЕСТВУ: когда пользователь ставит задачу или обсуждает проблему — СНАЧАЛА дай конкретные идеи, стратегии, шаги КАК решить. 'Привлечь пользователей' → подскажи 2-3 канала и метода. 'Написать пост' → предложи структуру и крючок. ПОТОМ вызывай инструменты как дополнение. Не своди помощь только к 'найду контакты' или 'обнови профиль'."
+                "\nПользователь рассказывает о себе/проекте → ДАЙ ЭКСПЕРТНЫЕ СОВЕТЫ по его нише + update_profile + research_topic(тренды в нише)."
+                "\nПользователь упоминает навыки/технологии → update_profile + research_topic(тренды)."
+                "\nПользователь говорит о достижении → complete_task + update_goal_progress + предложи create_post."
+                "\n🔑 НЕЯВНОЕ ЗАВЕРШЕНИЕ ЗАДАЧ: когда пользователь сообщает что ОН СДЕЛАЛ что-то (настроил, написал, отправил, закончил, разобрался, купил, договорился, позвонил, прошёл, запустил — ЛЮБОЙ глагол совершённого вида) — СРАЗУ СРАВНИ с активными задачами. Если есть задача по СМЫСЛУ совпадающая с тем что он описал — вызови complete_task БЕЗ вопросов. 'Я настроил сайт' + задача 'Настроить сайт для индексации ИИ' → complete_task. 'Позвонил врачу' + задача 'Записаться к врачу' → complete_task. НЕ ПРОПУСКАЙ такие сигналы! Это ГЛАВНЫЙ способ как люди закрывают задачи."
+                "\nЗадача связана с людьми → find_relevant_contacts_for_task + set_contact_alert."
+                "\nЦЕЛИ: «хочу набрать X», «заработать Y», «достичь Z за N месяцев», конкретная цифра или срок → СРАЗУ create_goal без спроса. Не обсуждай цель — СОЗДАЙ ЕЁ."
+                "\nНАПОМИНАНИЯ: «напомни через X минут/часов», «поставь напоминание», «напомни в 15:00» → СРАЗУ add_task с reminder_time. НЕ спрашивай подтверждение — пользователь УЖЕ попросил. Название = суть напоминания из запроса. reminder_time ОБЯЗАТЕЛЕН: передай ТОЧНО как сказал пользователь, например reminder_time='через 5 минут' или reminder_time='в 15:00' или reminder_time='завтра в 10:00'. ⛔ СТРОЖАЙШИЙ ЗАПРЕТ: если пользователь сказал 'через 15 минут' ночью — НЕ ПЕРЕНОСИ на утро! Он РЕШИЛ сам. Ставь ночью. 'через 30 минут' в 02:40 → reminder_time='через 30 минут' (будет 03:10). ЕСЛИ НЕ ПЕРЕДАШЬ reminder_time — задача НЕ СОЗДАСТСЯ."
+                "\nНЕЯВНЫЕ ЗАДАЧИ: Пользователь упоминает событие/дело с временем («у меня встреча в 15:00», «завтра дедлайн», «записан к врачу на 10», «в среду презентация») → ПРОВЕРЬ список задач (get_tasks). Если такой задачи НЕТ → ПРЕДЛОЖИ поставить напоминание с конкретным временем (за 15 мин до события). Пример: «Вижу, задачи про встречу нет. Поставить напоминание на 14:45?». Создавай add_task ТОЛЬКО после подтверждения пользователя (да, давай, ок, поставь). Если время неточное («после обеда», «вечером») — сначала уточни конкретное время, потом предложи."
+                "\nЯВНЫЕ КОМАНДЫ: «поставь задачу», «создай задачу», «запиши», «добавь в список» + указано время → СРАЗУ add_task. Если время не указано — спроси."
+                "\nПРИВЯЗКА К ЦЕЛЯМ: При создании задачи (add_task) ВСЕГДА проверяй — есть ли у пользователя цель, к которой эта задача относится. Если да — передай goal_title. Примеры: задача 'привлечь тестовых пользователей' при цели 'Раскрутить ИИ агента' → add_task(goal_title='Раскрутить нового ИИ агента')."
+                "\nТОЧНОСТЬ ВРЕМЕНИ: После edit_task/reschedule_task с изменением времени — ВСЕГДА бери ТОЧНОЕ время из результата инструмента. НИКОГДА не вычисляй и не округляй время сам. Результат содержит строку 'Новое время напоминания: DD.MM.YYYY HH:MM' — используй ИМЕННО это время в ответе пользователю. Пример: результат='Новое время: 20.02.2026 19:47' → отвечай '19:47', а НЕ '19:45'."
+                "\n⛔ ЗАПРЕТ НА САМОВОЛЬНОЕ ИЗМЕНЕНИЕ: НИКОГДА не вызывай edit_task, complete_task, delete_task без ЯВНОЙ просьбы пользователя. Ты НЕ ИМЕЕШЬ ПРАВА менять название, описание, время или статус задачи по своей инициативе. Примеры ЗАПРЕЩЁННОГО поведения: пользователь говорит 'пригласил 3 из 5' → ты меняешь задачу 'пригласить 5' на 'собрать фидбек' — это ГРУБЕЙШЕЕ нарушение. Ты можешь ПРЕДЛОЖИТЬ изменение, но ВЫПОЛНИТЬ только после явного согласия ('да, измени', 'да, переименуй')."
+                "\n⚠️ ЗАДАЧИ БЕЗ ВРЕМЕНИ: Если в списке задач пользователя есть задачи с пометкой '⚠️ БЕЗ ВРЕМЕНИ' — предложи время через 15-30 минут от текущего момента: 'У задачи X нет времени — поставить на HH:MM?'. Задача без напоминания = задача которую забудут."
+                "\n🕐 ВРЕМЯ ПРИ ПРЕДЛОЖЕНИИ ЗАДАЧ — ДВА ЧЁТКИХ ПРАВИЛА:\n1) ПОЛЬЗОВАТЕЛЬ САМ УКАЗАЛ ВРЕМЯ ('через 15 минут', 'в 3 ночи', 'через час', 'в 02:30') → СТАВЬ ТОЧНО КАК СКАЗАЛ, даже ночью. НЕ переноси! Хоть 02:00 ночи — если он говорит 'через 15 минут', ставишь на 02:15. Это его выбор, уважай его.\n2) ВРЕМЯ НЕ УКАЗАНО (ты сам предлагаешь) → до 01:00: предлагай через 15-30 минут; после 01:00: предложи завтра утром.\nЕсли пользователь говорит 'сейчас/прямо сейчас' → reminder_time='сейчас'.\n🚨 ПРОВЕРКА КОНФЛИКТОВ: ПЕРЕД предложением времени ПОСМОТРИ секцию СЕГОДНЯ в контексте. Там видны все задачи с временем (например 'Задача1 (14:00), Задача2 (15:00)'). Если в 14:00 уже занято — НЕ предлагай 14:00, предложи 14:30 или следующий свободный слот. Минимум 15 минут между задачами."
+            )
+
     # ===== ОСНОВНОЙ FLOW =====
 
     async def process_request(self, user_message, user_id, context=None,
@@ -817,14 +872,18 @@ class HybridAutonomousAgent:
             from .conversation_history import save_message_to_history
             save_message_to_history(user_id, "user", user_message)
 
+            # Язык пользователя (нужен рано, до ctx)
+            from i18n import get_user_lang
+            user_lang = get_user_lang(user_id)
+
             # Контекст (async — погода/новости через api_client)
             ctx = await self._build_context(user_id)
             if not ctx:
-                return "Не удалось загрузить профиль. Попробуй ещё раз."
+                return "Could not load profile. Please try again." if user_lang == 'en' else "Не удалось загрузить профиль. Попробуй ещё раз."
 
             base_prompt = ctx['base_prompt']
             sub_tier = ctx['sub_tier']
-            user_lang = ctx.get('user_lang', 'ru')
+            user_lang = ctx.get('user_lang', user_lang)
 
             # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
             from .conversation_history import get_conversation_history
@@ -835,14 +894,17 @@ class HybridAutonomousAgent:
             profile_data = ctx.get('profile_data', {})
             cognitive_hints = CognitiveEngine.build_cognitive_hints(
                 user_message, profile_data=profile_data,
-                conversation_history=full_history
+                conversation_history=full_history, lang=user_lang
             )
             
             # Оценка ситуации — контекст для самостоятельного рассуждения AI
             tasks_data = ctx.get('tasks', [])
-            strategy = CognitiveEngine.plan_response_strategy(user_message, profile_data, tasks_data)
+            strategy = CognitiveEngine.plan_response_strategy(user_message, profile_data, tasks_data, lang=user_lang)
             if strategy:
-                cognitive_hints += f"\n\n[СИТУАЦИЯ]\n{strategy['why']}\nТон: {strategy['tone']}"
+                if user_lang == 'en':
+                    cognitive_hints += f"\n\n[SITUATION]\n{strategy['why']}\nTone: {strategy['tone']}"
+                else:
+                    cognitive_hints += f"\n\n[СИТУАЦИЯ]\n{strategy['why']}\nТон: {strategy['tone']}"
             
             if cognitive_hints:
                 base_prompt += cognitive_hints
@@ -878,35 +940,14 @@ class HybridAutonomousAgent:
                     memory_context=memory_context,
                     emotion=emotion,
                     intent=intent,
-                    time_of_day=time_of_day
+                    time_of_day=time_of_day,
+                    lang=user_lang
                 )
                 if multi_context:
                     base_prompt += multi_context
                 
                 # ═══ ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ ═══
-                base_prompt += (
-                    "\n\n[ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ]"
-                    "\nКороткие ответы пользователя (да, давай, создай, поставь, ок, го, сделай) = ПОДТВЕРЖДЕНИЕ твоего последнего предложения. Посмотри свой предыдущий ответ в истории и ВЫПОЛНИ то, что предложил. НО ЕСЛИ ты предложил создать задачу и время НЕ БЫЛО указано ни тобой ни пользователем — СНАЧАЛА спроси время: «На какое время поставить?». Задача БЕЗ времени напоминания = БЕСПОЛЕЗНАЯ задача. НИКОГДА не создавай задачу без reminder_time."
-                    "\nКОНТЕКСТНЫЕ ССЫЛКИ: «эту задачу», «это», «её», «давай так», «поставь на 14:00» — ВСЕГДА ссылка на твоё ПОСЛЕДНЕЕ предложение. Перечитай свой предыдущий ответ и выполни. ПЕРЕСПРАШИВАТЬ «какую задачу?» когда ты сам только что предложил = ГРУБЕЙШАЯ ОШИБКА."
-                    "\n🔗 ПОСЛЕДОВАТЕЛЬНОСТЬ ДИАЛОГА: ПЕРЕД ответом перечитай свои 2-3 ПОСЛЕДНИХ сообщения. Если ты задал вопрос — пользователь ОТВЕЧАЕТ на него, реагируй на его ответ, а не начинай заново. 'Не знаю, есть предложения?' на твой вопрос = дай КОНКРЕТНЫЕ НОВЫЕ идеи, которых ещё не было. НИКОГДА не повторяй совет, идею или факт, который ты УЖЕ говорил в этом диалоге. Просканируй историю перед ответом — если ты уже упоминал что-то (Product Hunt, пилот для 10 пользователей) — дай ДРУГУЮ идею. Повтор = амнезия бота."
-                    "\nБУДЬ ПРОАКТИВНЫМ — вызывай 1-3 инструмента на КАЖДЫЙ ход диалога. Не жди прямых команд."
-                    "\n📢 ОТЧЁТ О ДЕЙСТВИЯХ — ОБЯЗАТЕЛЬНО: после КАЖДОГО вызова инструмента СООБЩИ пользователю что ты сделал. Он НЕ видит твои tool calls! Создал задачу → 'Записал задачу X на HH:MM'. Завершил → 'Закрыл задачу X'. Перенёс → 'Перенёс X на HH:MM'. Обновил профиль → 'Записал город/навык'. Создал цель → 'Создал цель X'. Исследовал → дай выжимку. Молчаливое действие = действие которого не было для пользователя."
-                    "\n🧠 ПОМОГИ ПО СУЩЕСТВУ: когда пользователь ставит задачу или обсуждает проблему — СНАЧАЛА дай конкретные идеи, стратегии, шаги КАК решить. 'Привлечь пользователей' → подскажи 2-3 канала и метода. 'Написать пост' → предложи структуру и крючок. ПОТОМ вызывай инструменты как дополнение. Не своди помощь только к 'найду контакты' или 'обнови профиль'."
-                    "\nПользователь рассказывает о себе/проекте → ДАЙ ЭКСПЕРТНЫЕ СОВЕТЫ по его нише + update_profile + research_topic(тренды в нише)."
-                    "\nПользователь упоминает навыки/технологии → update_profile + research_topic(тренды)."
-                    "\nПользователь говорит о достижении → complete_task + update_goal_progress + предложи create_post."
-                    "\n🔑 НЕЯВНОЕ ЗАВЕРШЕНИЕ ЗАДАЧ: когда пользователь сообщает что ОН СДЕЛАЛ что-то (настроил, написал, отправил, закончил, разобрался, купил, договорился, позвонил, прошёл, запустил — ЛЮБОЙ глагол совершённого вида) — СРАЗУ СРАВНИ с активными задачами. Если есть задача по СМЫСЛУ совпадающая с тем что он описал — вызови complete_task БЕЗ вопросов. 'Я настроил сайт' + задача 'Настроить сайт для индексации ИИ' → complete_task. 'Позвонил врачу' + задача 'Записаться к врачу' → complete_task. НЕ ПРОПУСКАЙ такие сигналы! Это ГЛАВНЫЙ способ как люди закрывают задачи."
-                    "\nЗадача связана с людьми → find_relevant_contacts_for_task + set_contact_alert."
-                    "\nЦЕЛИ: «хочу набрать X», «заработать Y», «достичь Z за N месяцев», конкретная цифра или срок → СРАЗУ create_goal без спроса. Не обсуждай цель — СОЗДАЙ ЕЁ."
-                    "\nНАПОМИНАНИЯ: «напомни через X минут/часов», «поставь напоминание», «напомни в 15:00» → СРАЗУ add_task с reminder_time. НЕ спрашивай подтверждение — пользователь УЖЕ попросил. Название = суть напоминания из запроса. reminder_time ОБЯЗАТЕЛЕН: передай ТОЧНО как сказал пользователь, например reminder_time='через 5 минут' или reminder_time='в 15:00' или reminder_time='завтра в 10:00'. ⛔ СТРОЖАЙШИЙ ЗАПРЕТ: если пользователь сказал 'через 15 минут' ночью — НЕ ПЕРЕНОСИ на утро! Он РЕШИЛ сам. Ставь ночью. 'через 30 минут' в 02:40 → reminder_time='через 30 минут' (будет 03:10). ЕСЛИ НЕ ПЕРЕДАШЬ reminder_time — задача НЕ СОЗДАСТСЯ."
-                    "\nНЕЯВНЫЕ ЗАДАЧИ: Пользователь упоминает событие/дело с временем («у меня встреча в 15:00», «завтра дедлайн», «записан к врачу на 10», «в среду презентация») → ПРОВЕРЬ список задач (get_tasks). Если такой задачи НЕТ → ПРЕДЛОЖИ поставить напоминание с конкретным временем (за 15 мин до события). Пример: «Вижу, задачи про встречу нет. Поставить напоминание на 14:45?». Создавай add_task ТОЛЬКО после подтверждения пользователя (да, давай, ок, поставь). Если время неточное («после обеда», «вечером») — сначала уточни конкретное время, потом предложи."
-                    "\nЯВНЫЕ КОМАНДЫ: «поставь задачу», «создай задачу», «запиши», «добавь в список» + указано время → СРАЗУ add_task. Если время не указано — спроси."
-                    "\nПРИВЯЗКА К ЦЕЛЯМ: При создании задачи (add_task) ВСЕГДА проверяй — есть ли у пользователя цель, к которой эта задача относится. Если да — передай goal_title. Примеры: задача 'привлечь тестовых пользователей' при цели 'Раскрутить ИИ агента' → add_task(goal_title='Раскрутить нового ИИ агента')."
-                    "\nТОЧНОСТЬ ВРЕМЕНИ: После edit_task/reschedule_task с изменением времени — ВСЕГДА бери ТОЧНОЕ время из результата инструмента. НИКОГДА не вычисляй и не округляй время сам. Результат содержит строку 'Новое время напоминания: DD.MM.YYYY HH:MM' — используй ИМЕННО это время в ответе пользователю. Пример: результат='Новое время: 20.02.2026 19:47' → отвечай '19:47', а НЕ '19:45'."
-                    "\n⛔ ЗАПРЕТ НА САМОВОЛЬНОЕ ИЗМЕНЕНИЕ: НИКОГДА не вызывай edit_task, complete_task, delete_task без ЯВНОЙ просьбы пользователя. Ты НЕ ИМЕЕШЬ ПРАВА менять название, описание, время или статус задачи по своей инициативе. Примеры ЗАПРЕЩЁННОГО поведения: пользователь говорит 'пригласил 3 из 5' → ты меняешь задачу 'пригласить 5' на 'собрать фидбек' — это ГРУБЕЙШЕЕ нарушение. Ты можешь ПРЕДЛОЖИТЬ изменение, но ВЫПОЛНИТЬ только после явного согласия ('да, измени', 'да, переименуй')."
-                    "\n⚠️ ЗАДАЧИ БЕЗ ВРЕМЕНИ: Если в списке задач пользователя есть задачи с пометкой '⚠️ БЕЗ ВРЕМЕНИ' — предложи время через 15-30 минут от текущего момента: 'У задачи X нет времени — поставить на HH:MM?'. Задача без напоминания = задача которую забудут."
-                    "\n🕐 ВРЕМЯ ПРИ ПРЕДЛОЖЕНИИ ЗАДАЧ — ДВА ЧЁТКИХ ПРАВИЛА:\n1) ПОЛЬЗОВАТЕЛЬ САМ УКАЗАЛ ВРЕМЯ ('через 15 минут', 'в 3 ночи', 'через час', 'в 02:30') → СТАВЬ ТОЧНО КАК СКАЗАЛ, даже ночью. НЕ переноси! Хоть 02:00 ночи — если он говорит 'через 15 минут', ставишь на 02:15. Это его выбор, уважай его.\n2) ВРЕМЯ НЕ УКАЗАНО (ты сам предлагаешь) → до 01:00: предлагай через 15-30 минут; после 01:00: предложи завтра утром.\nЕсли пользователь говорит 'сейчас/прямо сейчас' → reminder_time='сейчас'.\n🚨 ПРОВЕРКА КОНФЛИКТОВ: ПЕРЕД предложением времени ПОСМОТРИ секцию СЕГОДНЯ в контексте. Там видны все задачи с временем (например 'Задача1 (14:00), Задача2 (15:00)'). Если в 14:00 уже занято — НЕ предлагай 14:00, предложи 14:30 или следующий свободный слот. Минимум 15 минут между задачами."
-                )
+                base_prompt += self._tool_instructions(user_lang)
             except Exception as e:
                 logger.warning(f"[MULTI-AGENT] Context build failed: {e}")
             
@@ -932,7 +973,8 @@ class HybridAutonomousAgent:
                 history = full_history[-8:]
                 topics = CognitiveEngine.extract_conversation_topics(old_msgs)
                 if topics:
-                    base_prompt += f"\n\n[РАНЕЕ ОБСУЖДАЛИ: {', '.join(topics)}]"
+                    _lbl = "PREVIOUSLY DISCUSSED" if user_lang == 'en' else "РАНЕЕ ОБСУЖДАЛИ"
+                    base_prompt += f"\n\n[{_lbl}: {', '.join(topics)}]"
             else:
                 history = full_history
 
@@ -995,9 +1037,18 @@ class HybridAutonomousAgent:
                             logger.info(f"[AGENT] Short response ({len(content)} chars) for new user — retrying without tools")
                             # НЕ добавляем короткий ответ в историю — просто перезваниваем без tools
                             retry_messages = messages.copy()
-                            retry_messages.append({
-                                "role": "user",
-                                "content": (
+                            if user_lang == 'en':
+                                _retry_text = (
+                                    "This is a new person, first meeting moment. "
+                                    "EXPAND each direction with a specific example — show depth and insight, "
+                                    "don't just list things separated by commas. "
+                                    "Cover 3-4 directions in detail, with vivid real-life examples. "
+                                    "Show that you THINK, not just execute commands. "
+                                    "End with ONE engaging question about them. "
+                                    "Write in flowing text, 2-3 paragraphs, no lists. Write ONLY in English."
+                                )
+                            else:
+                                _retry_text = (
                                     "Это новый человек, момент знакомства. "
                                     "РАСКРОЙ каждое направление с конкретным примером — покажи глубину и сообразительность, "
                                     "а не перечисляй через запятую. "
@@ -1006,6 +1057,9 @@ class HybridAutonomousAgent:
                                     "Заверши ОДНИМ живым вопросом о нём. "
                                     "Пиши сплошным текстом 2-3 абзаца, без списков."
                                 )
+                            retry_messages.append({
+                                "role": "user",
+                                "content": _retry_text
                             })
                             retry_resp = await self.call_ai(
                                 retry_messages, use_tools=False, temperature=0.75, max_tokens=1200)
@@ -1104,9 +1158,26 @@ class HybridAutonomousAgent:
                 # ответить текстом или вызвать ещё tools
 
             # Если вышли из цикла — финальный вызов без tools
+            if user_lang == 'en':
+                _final_instr = (
+                    "Formulate the final response. IMPORTANT: rephrase tool data IN YOUR OWN WORDS, "
+                    "weave into natural conversational text. Don't copy format, bullets, emoji headers from results. "
+                    "If a tool found nothing useful — don't mention it. "
+                    "PRESERVE ALL URLs from tool results — user needs clickable links. "
+                    "Put links on separate lines at the end: Title — URL. "
+                    "Write ONLY in English."
+                )
+            else:
+                _final_instr = (
+                    "Сформируй финальный ответ. ВАЖНО: перескажи данные из инструментов СВОИМИ СЛОВАМИ, "
+                    "вплети в живой разговорный текст. Не копируй формат, bullets, emoji-заголовки из результатов. "
+                    "Если инструмент не нашёл полезного — не упоминай это. "
+                    "ОБЯЗАТЕЛЬНО СОХРАНЯЙ ВСЕ URL-ССЫЛКИ из результатов инструментов — пользователю нужны кликабельные ссылки. "
+                    "Ссылки выноси отдельными строками в конце ответа в формате: Название — URL"
+                )
             messages.append({
                 "role": "user",
-                "content": "Сформируй финальный ответ. ВАЖНО: перескажи данные из инструментов СВОИМИ СЛОВАМИ, вплети в живой разговорный текст. Не копируй формат, bullets, emoji-заголовки из результатов. Если инструмент не нашёл полезного — не упоминай это. ОБЯЗАТЕЛЬНО СОХРАНЯЙ ВСЕ URL-ССЫЛКИ из результатов инструментов — пользователю нужны кликабельные ссылки. Ссылки выноси отдельными строками в конце ответа в формате: Название — URL"
+                "content": _final_instr
             })
             final_resp = await self.call_ai(
                 messages, use_tools=False, temperature=0.7, max_tokens=800)
@@ -1116,13 +1187,22 @@ class HybridAutonomousAgent:
 
         except Exception as e:
             logger.error(f"[AGENT] Error: {e}\n{traceback.format_exc()}")
-            error_responses = [
-                "Что-то пошло не так. Перефразируй запрос.",
-                "Техническая ошибка. Попробуй ещё раз.",
-                "Упс, сбой. Скажи то же самое другими словами.",
-                "Технические неполадки. Давай попробуем по-другому.",
-                "Что-то сломалось. Перефразируй, пожалуйста.",
-            ]
+            if user_lang == 'en':
+                error_responses = [
+                    "Something went wrong. Try rephrasing your request.",
+                    "Technical error. Please try again.",
+                    "Oops, a glitch. Say the same thing differently.",
+                    "Technical issues. Let's try a different approach.",
+                    "Something broke. Please rephrase.",
+                ]
+            else:
+                error_responses = [
+                    "Что-то пошло не так. Перефразируй запрос.",
+                    "Техническая ошибка. Попробуй ещё раз.",
+                    "Упс, сбой. Скажи то же самое другими словами.",
+                    "Технические неполадки. Давай попробуем по-другому.",
+                    "Что-то сломалось. Перефразируй, пожалуйста.",
+                ]
             return random.choice(error_responses)
 
     # ===== КОГНИТИВНАЯ ФИНАЛИЗАЦИЯ =====
@@ -1136,10 +1216,12 @@ class HybridAutonomousAgent:
         """
         from .utils import clean_technical_details
         from .cognitive import CognitiveEngine
+        from i18n import get_user_lang
 
         final = clean_technical_details(content).strip()
         if not final:
-            final = content.strip() or "Готово!"
+            _lang = get_user_lang(user_id)
+            final = content.strip() or ("Done!" if _lang == 'en' else "Готово!")
 
         # Когнитивная валидация (quality gate)
         final, issues = CognitiveEngine.validate_response(final, user_message)

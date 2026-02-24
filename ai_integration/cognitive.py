@@ -314,12 +314,8 @@ class CognitiveEngine:
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def build_cognitive_hints(user_message, profile_data=None, conversation_history=None):
-        """Строит карту ситуации — целостную картину для AI.
-        
-        Не шаблонные команды, а контекст: что известно, что происходит,
-        что стоит учесть. AI сам решит что с этим делать.
-        """
+    def build_cognitive_hints(user_message, profile_data=None, conversation_history=None, lang='ru'):
+        """Строит карту ситуации — целостную картину для AI."""
         emotion = CognitiveEngine.detect_emotion(user_message)
         intent = CognitiveEngine.classify_intent(user_message)
         is_active = CognitiveEngine.detect_active_work(user_message)
@@ -328,14 +324,15 @@ class CognitiveEngine:
 
         # --- Эмоциональный фон ---
         if emotion != 'neutral':
-            signals.append(f"Эмоция: {emotion}")
+            _lbl = "Emotion" if lang == 'en' else "Эмоция"
+            signals.append(f"{_lbl}: {emotion}")
 
         # --- Активность ---
         if is_active:
-            signals.append("Работает прямо сейчас")
+            signals.append("Working right now" if lang == 'en' else "Работает прямо сейчас")
 
         # --- Anti-repetition ---
-        anti_rep = CognitiveEngine._build_anti_repetition(conversation_history)
+        anti_rep = CognitiveEngine._build_anti_repetition(conversation_history, lang=lang)
         if anti_rep:
             signals.append(anti_rep)
 
@@ -343,10 +340,16 @@ class CognitiveEngine:
         if profile_data:
             known_parts = []
             gaps = []
-            field_map = {
-                'position': 'роль', 'company': 'компания', 'city': 'город',
-                'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы'
-            }
+            if lang == 'en':
+                field_map = {
+                    'position': 'role', 'company': 'company', 'city': 'city',
+                    'goals': 'goals', 'skills': 'skills', 'interests': 'interests'
+                }
+            else:
+                field_map = {
+                    'position': 'роль', 'company': 'компания', 'city': 'город',
+                    'goals': 'цели', 'skills': 'навыки', 'interests': 'интересы'
+                }
             for k, label in field_map.items():
                 val = profile_data.get(k)
                 if val:
@@ -355,25 +358,28 @@ class CognitiveEngine:
                     gaps.append(label)
             
             if gaps:
-                signals.append(f"Неизвестно: {', '.join(gaps)}")
+                _lbl = "Unknown" if lang == 'en' else "Неизвестно"
+                signals.append(f"{_lbl}: {', '.join(gaps)}")
         else:
-            signals.append("Профиль пуст — узнай кто этот человек")
+            signals.append("Profile empty — find out who this person is" if lang == 'en' else "Профиль пуст — узнай кто этот человек")
 
         # --- Намерение (только если не очевидно) ---
         if intent not in ('general', 'greeting', 'farewell'):
-            signals.append(f"Намерение: {intent}")
+            _lbl = "Intent" if lang == 'en' else "Намерение"
+            signals.append(f"{_lbl}: {intent}")
 
         if not signals:
             return ""
 
-        return "\n\n[СИТУАЦИЯ]\n" + " | ".join(signals)
+        _section = "SITUATION" if lang == 'en' else "СИТУАЦИЯ"
+        return f"\n\n[{_section}]\n" + " | ".join(signals)
 
     # ═══════════════════════════════════════════════════════════════
     # ANTI-REPETITION & TARGETED PROFILE QUESTIONS
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def _build_anti_repetition(conversation_history):
+    def _build_anti_repetition(conversation_history, lang='ru'):
         """Анализирует последний ответ бота и возвращает антиповтор-подсказку."""
         if not conversation_history:
             return None
@@ -422,6 +428,11 @@ class CognitiveEngine:
                     repeated_patterns.append('начало ответа повторяет предыдущее из предыдущих ответов')
 
         if repeated_patterns:
+            if lang == 'en':
+                return (
+                    f"⚠️ ANTI-REPEAT: in your last reply you ALREADY said: {', '.join(repeated_patterns)}. "
+                    f"DO NOT REPEAT. Different structure, different question, different opening. Give NEW value"
+                )
             return (
                 f"⚠️ АНТИПОВТОР: в прошлом ответе ты УЖЕ говорил: {', '.join(repeated_patterns)}. "
                 f"НЕ ПОВТОРЯЙ. Другая структура, другой вопрос, другое начало. Дай НОВУЮ ценность"
@@ -722,7 +733,7 @@ class CognitiveEngine:
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def plan_response_strategy(user_message, profile_data, tasks_data):
+    def plan_response_strategy(user_message, profile_data, tasks_data, lang='ru'):
         """Оценка ситуации — целостная картина, не шаблон.
         
         Собирает контекст для AI: кто человек, что происходит, что важно.
@@ -732,14 +743,24 @@ class CognitiveEngine:
         is_active = CognitiveEngine.detect_active_work(user_message)
         
         # --- Тон ---
-        if emotion in ('tired', 'sad', 'anxious'):
-            tone = 'мягкий но деловой'
-        elif emotion == 'frustrated':
-            tone = 'конструктивный — помоги решить'
-        elif emotion == 'excited':
-            tone = 'энергичный'
+        if lang == 'en':
+            if emotion in ('tired', 'sad', 'anxious'):
+                tone = 'soft but professional'
+            elif emotion == 'frustrated':
+                tone = 'constructive — help solve'
+            elif emotion == 'excited':
+                tone = 'energetic'
+            else:
+                tone = 'professional'
         else:
-            tone = 'деловой'
+            if emotion in ('tired', 'sad', 'anxious'):
+                tone = 'мягкий но деловой'
+            elif emotion == 'frustrated':
+                tone = 'конструктивный — помоги решить'
+            elif emotion == 'excited':
+                tone = 'энергичный'
+            else:
+                tone = 'деловой'
         
         # --- Собираем факты о ситуации ---
         facts = []
@@ -750,19 +771,22 @@ class CognitiveEngine:
                      if v and k in ('position', 'company', 'city', 'goals', 'skills', 'interests')}
             missing = [k for k in ('position', 'goals', 'skills') if k not in known]
             if missing:
-                facts.append(f"Неизвестно: {', '.join(missing)}")
+                _lbl = "Unknown" if lang == 'en' else "Неизвестно"
+                facts.append(f"{_lbl}: {', '.join(missing)}")
         else:
-            facts.append("Профиль пуст")
+            facts.append("Profile empty" if lang == 'en' else "Профиль пуст")
         
         # Задачи
         if tasks_data:
-            facts.append(f"Задач: {len(tasks_data)}")
+            _lbl = "Tasks" if lang == 'en' else "Задач"
+            facts.append(f"{_lbl}: {len(tasks_data)}")
         
         # Активная работа
         if is_active:
-            facts.append("Работает сейчас")
+            facts.append("Working now" if lang == 'en' else "Работает сейчас")
         
-        situation = '; '.join(facts) if facts else 'обычный разговор'
+        _default = 'normal conversation' if lang == 'en' else 'обычный разговор'
+        situation = '; '.join(facts) if facts else _default
         
         return {
             'tone': tone,
