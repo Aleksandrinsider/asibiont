@@ -1004,3 +1004,141 @@ def _normalize_company_name(company: str) -> str:
     if result and result[0].islower():
         result = result[0].upper() + result[1:]
     return result
+
+
+# =============================================
+# Cross-language profile normalization
+# =============================================
+
+# Fields to normalize for cross-language matching
+_NORMALIZE_FIELDS = [
+    'skills', 'interests', 'goals', 'city', 'company',
+    'position', 'bio', 'status_text', 'current_plans'
+]
+
+
+def _is_ascii_only(text: str) -> bool:
+    """Check if text contains only ASCII characters (likely already English)."""
+    try:
+        text.encode('ascii')
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+async def normalize_profile_fields(profile) -> bool:
+    """
+    Normalize all profile text fields to English for cross-language matching.
+    Sends one DeepSeek API call with all non-empty fields.
+    
+    Returns True if normalization was performed, False otherwise.
+    """
+    # Collect non-empty fields
+    fields = {}
+    for field in _NORMALIZE_FIELDS:
+        value = getattr(profile, field, None)
+        if value and value.strip():
+            fields[field] = value.strip()
+
+    if not fields:
+        # Clear all normalized fields
+        for field in _NORMALIZE_FIELDS:
+            setattr(profile, f'{field}_normalized', None)
+        return False
+
+    # If all fields are pure ASCII → just lowercase, skip API call
+    if all(_is_ascii_only(v) for v in fields.values()):
+        for field, value in fields.items():
+            setattr(profile, f'{field}_normalized', value.lower())
+        return True
+
+    # Build prompt for DeepSeek
+    prompt = (
+        "Translate these user profile fields to English. "
+        "Return ONLY a valid JSON object with the same keys. "
+        "For comma-separated lists, translate each item individually and keep commas. "
+        "For semicolon-separated lists, translate each item individually and keep semicolons. "
+        "Lowercase everything. Do not add or remove items. "
+        "If a value is already in English, keep it as-is but lowercase.\n\n"
+        + json.dumps(fields, ensure_ascii=False)
+    )
+
+    try:
+        import aiohttp
+        if not DEEPSEEK_API_KEY:
+            # Fallback: lowercase originals
+            for field, value in fields.items():
+                setattr(profile, f'{field}_normalized', value.lower())
+            return True
+
+        timeout = aiohttp.ClientTimeout(total=30, connect=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                'https://api.deepseek.com/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    "model": DEEPSEEK_MODEL,
+                    "messages": [
+                        {"role": "system", "content": "You are a translator. Return only valid JSON with translated fields. Lowercase all values. No markdown, no explanation."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.1,
+                    "max_tokens": 800
+                }
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    content = data['choices'][0]['message']['content'].strip()
+                    # Parse JSON from response
+                    start = content.find('{')
+                    end = content.rfind('}') + 1
+                    if start != -1 and end > start:
+                        result = json.loads(content[start:end])
+                        for field in _NORMALIZE_FIELDS:
+                            if field in result and field in fields:
+                                setattr(profile, f'{field}_normalized', str(result[field]).lower().strip())
+                            elif field not in fields:
+                                setattr(profile, f'{field}_normalized', None)
+                        logger.info(f"[NORMALIZE] Profile {profile.user_id} normalized: {list(result.keys())}")
+                        return True
+                    else:
+                        logger.warning(f"[NORMALIZE] No JSON in response: {content[:200]}")
+                else:
+                    logger.warning(f"[NORMALIZE] API returned {response.status}")
+    except Exception as e:
+        logger.error(f"[NORMALIZE] Error normalizing profile {profile.user_id}: {e}")
+
+    # Fallback: use lowercase originals
+    for field, value in fields.items():
+        setattr(profile, f'{field}_normalized', value.lower())
+    # Clear fields that are None in original
+    for field in _NORMALIZE_FIELDS:
+        if field not in fields:
+            setattr(profile, f'{field}_normalized', None)
+    return True
+
+
+async def normalize_profile_background(internal_user_id: int):
+    """
+    Background task: normalize profile fields for a given internal user_id.
+    Creates its own DB session.
+    """
+    session = None
+    try:
+        session = Session()
+        profile = session.query(UserProfile).filter_by(user_id=internal_user_id).first()
+        if profile:
+            success = await normalize_profile_fields(profile)
+            if success:
+                session.commit()
+                logger.info(f"[NORMALIZE BG] Profile {internal_user_id} normalized successfully")
+    except Exception as e:
+        logger.error(f"[NORMALIZE BG] Error for user {internal_user_id}: {e}")
+        if session:
+            session.rollback()
+    finally:
+        if session:
+            session.close()

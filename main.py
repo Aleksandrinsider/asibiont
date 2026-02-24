@@ -896,24 +896,37 @@ async def dashboard_handler(request):
             delegating_by_me = []
 
         # Add common interests, skills, goals and recommendation reason
+        # Uses normalized (English) fields for cross-language matching with fallback to originals
         if profile and partners:
-            user_interests = set(i.strip().lower()
-                                 for i in profile.interests.split(',')) if profile.interests else set()
-            user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
-            user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
+            def _get_match_set(obj, field):
+                """Get set of items from normalized field, falling back to original."""
+                normalized = getattr(obj, f'{field}_normalized', None)
+                original = getattr(obj, field, None)
+                source = normalized or original
+                if source:
+                    items = set()
+                    for item in source.replace(';', ',').split(','):
+                        item = item.strip().lower()
+                        if item:
+                            items.add(item)
+                    return items
+                return set()
 
-            # Получаем список контакто, с которыми уже общались
+            user_interests = _get_match_set(profile, 'interests')
+            user_skills = _get_match_set(profile, 'skills')
+            user_goals = _get_match_set(profile, 'goals')
+
+            # Получаем список контактов, с которыми уже общались
             contacted_usernames = set()
             for interaction in interactions:
                 mentions = re.findall(r'@(\w+)', interaction.content)
                 contacted_usernames.update(mentions)
 
             for p in partners:
-                # Common interests - improved matching with partial string matching
-                if p.interests:
-                    partner_interests = set(i.strip().lower() for i in p.interests.split(',') if i.strip())
+                # Common interests - cross-language matching via normalized fields
+                partner_interests = _get_match_set(p, 'interests')
+                if partner_interests:
                     common = user_interests & partner_interests
-                    # Also check for partial matches (e.g., "спорт" matches "спорт, футбол")
                     if not common:
                         for ui in user_interests:
                             for pi in partner_interests:
@@ -923,19 +936,29 @@ async def dashboard_handler(request):
                 else:
                     p.common_interests = None
 
-                # Common skills
-                if p.skills:
-                    partner_skills = set(s.strip().lower() for s in p.skills.split(','))
+                # Common skills - cross-language matching
+                partner_skills = _get_match_set(p, 'skills')
+                if partner_skills:
                     common_skills = user_skills & partner_skills
-                    p.common_skills = ', '.join(common_skills) if common_skills else None
+                    if not common_skills:
+                        for us in user_skills:
+                            for ps in partner_skills:
+                                if us and ps and (us in ps or ps in us):
+                                    common_skills.add(ps)
+                    p.common_skills = ', '.join(sorted(common_skills)) if common_skills else None
                 else:
                     p.common_skills = None
 
-                # Common goals
-                if p.goals:
-                    partner_goals = set(g.strip().lower() for g in p.goals.split(','))
+                # Common goals - cross-language matching
+                partner_goals = _get_match_set(p, 'goals')
+                if partner_goals:
                     common_goals = user_goals & partner_goals
-                    p.common_goals = ', '.join(common_goals) if common_goals else None
+                    if not common_goals:
+                        for ug in user_goals:
+                            for pg in partner_goals:
+                                if ug and pg and (ug in pg or pg in ug):
+                                    common_goals.add(pg)
+                    p.common_goals = ', '.join(sorted(common_goals)) if common_goals else None
                 else:
                     p.common_goals = None
 
@@ -951,7 +974,9 @@ async def dashboard_handler(request):
                     reasons.append('общие интересы')
                 if p.common_goals:
                     reasons.append('общие цели')
-                if p.city and profile.city and p.city.lower() == profile.city.lower():
+                user_city = (getattr(profile, 'city_normalized', None) or profile.city or '').lower()
+                partner_city = (getattr(p, 'city_normalized', None) or getattr(p, 'city', None) or '').lower()
+                if user_city and partner_city and user_city == partner_city:
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
@@ -2407,24 +2432,37 @@ async def api_partners_handler(request):
             interactions = []
 
         # Add common interests, skills, goals and recommendation reason
+        # Uses normalized (English) fields for cross-language matching with fallback to originals
         if profile and partners:
-            user_interests = set(i.strip().lower()
-                                 for i in profile.interests.split(',')) if profile.interests else set()
-            user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
-            user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
+            def _get_match_set2(obj, field):
+                """Get set of items from normalized field, falling back to original."""
+                normalized = getattr(obj, f'{field}_normalized', None)
+                original = getattr(obj, field, None)
+                source = normalized or original
+                if source:
+                    items = set()
+                    for item in source.replace(';', ',').split(','):
+                        item = item.strip().lower()
+                        if item:
+                            items.add(item)
+                    return items
+                return set()
 
-            # Получаем список контакто, с которыми уже общались
+            user_interests = _get_match_set2(profile, 'interests')
+            user_skills = _get_match_set2(profile, 'skills')
+            user_goals = _get_match_set2(profile, 'goals')
+
+            # Получаем список контактов, с которыми уже общались
             contacted_usernames = set()
             for interaction in interactions:
                 mentions = re.findall(r'@(\w+)', interaction.content)
                 contacted_usernames.update(mentions)
 
             for p in partners:
-                # Common interests - improved matching with partial string matching
-                if p.interests:
-                    partner_interests = set(i.strip().lower() for i in p.interests.split(',') if i.strip())
+                # Common interests - cross-language matching via normalized fields
+                partner_interests = _get_match_set2(p, 'interests')
+                if partner_interests:
                     common = user_interests & partner_interests
-                    # Also check for partial matches (e.g., "спорт" matches "спорт, футбол")
                     if not common:
                         for ui in user_interests:
                             for pi in partner_interests:
@@ -2434,19 +2472,29 @@ async def api_partners_handler(request):
                 else:
                     p.common_interests = None
 
-                # Common skills
-                if p.skills:
-                    partner_skills = set(s.strip().lower() for s in p.skills.split(','))
+                # Common skills - cross-language matching
+                partner_skills = _get_match_set2(p, 'skills')
+                if partner_skills:
                     common_skills = user_skills & partner_skills
-                    p.common_skills = ', '.join(common_skills) if common_skills else None
+                    if not common_skills:
+                        for us in user_skills:
+                            for ps in partner_skills:
+                                if us and ps and (us in ps or ps in us):
+                                    common_skills.add(ps)
+                    p.common_skills = ', '.join(sorted(common_skills)) if common_skills else None
                 else:
                     p.common_skills = None
 
-                # Common goals
-                if p.goals:
-                    partner_goals = set(g.strip().lower() for g in p.goals.split(','))
+                # Common goals - cross-language matching
+                partner_goals = _get_match_set2(p, 'goals')
+                if partner_goals:
                     common_goals = user_goals & partner_goals
-                    p.common_goals = ', '.join(common_goals) if common_goals else None
+                    if not common_goals:
+                        for ug in user_goals:
+                            for pg in partner_goals:
+                                if ug and pg and (ug in pg or pg in ug):
+                                    common_goals.add(pg)
+                    p.common_goals = ', '.join(sorted(common_goals)) if common_goals else None
                 else:
                     p.common_goals = None
 
@@ -2462,7 +2510,9 @@ async def api_partners_handler(request):
                     reasons.append('общие интересы')
                 if p.common_goals:
                     reasons.append('общие цели')
-                if p.city and profile.city and p.city.lower() == profile.city.lower():
+                user_city = (getattr(profile, 'city_normalized', None) or profile.city or '').lower()
+                partner_city = (getattr(p, 'city_normalized', None) or getattr(p, 'city', None) or '').lower()
+                if user_city and partner_city and user_city == partner_city:
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
@@ -4254,6 +4304,19 @@ async def api_update_profile_handler(request):
                         profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
                         session_db.commit()
 
+            # Normalize profile for cross-language matching
+            try:
+                user_obj = session_db.query(User).filter_by(telegram_id=user_id).first()
+                if user_obj:
+                    prof = session_db.query(UserProfile).filter_by(user_id=user_obj.id).first()
+                    if prof:
+                        from ai_integration.utils import normalize_profile_fields
+                        normalized = await normalize_profile_fields(prof)
+                        if normalized:
+                            session_db.commit()
+            except Exception as norm_err:
+                logger.warning(f"[API UPDATE PROFILE] Normalization failed (non-critical): {norm_err}")
+
             return web.json_response({
                 'success': True,
                 'message': 'Профиль обновлён'
@@ -5867,7 +5930,17 @@ async def api_profile_handler(request):
 
                 session_db.commit()
                 logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")
-                
+
+                # Background normalization for cross-language matching
+                try:
+                    from ai_integration.utils import normalize_profile_fields
+                    normalized = await normalize_profile_fields(profile)
+                    if normalized:
+                        session_db.commit()
+                        logger.info(f"[API PROFILE POST] Profile normalized for user {user_id}")
+                except Exception as norm_err:
+                    logger.warning(f"[API PROFILE POST] Normalization failed (non-critical): {norm_err}")
+
                 return web.json_response({'success': True, 'message': 'Profile updated'})
             finally:
                 session_db.close()

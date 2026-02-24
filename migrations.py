@@ -46,6 +46,16 @@ def _migrate_user_profiles(session, inspector):
         'auto_delegation_enabled': 'ALTER TABLE user_profiles ADD COLUMN auto_delegation_enabled BOOLEAN DEFAULT TRUE',
         'auto_post_time': "ALTER TABLE user_profiles ADD COLUMN auto_post_time VARCHAR(5) DEFAULT '12:00'",
         'status_text': 'ALTER TABLE user_profiles ADD COLUMN status_text VARCHAR(100)',
+        # Normalized (English) fields for cross-language contact matching
+        'skills_normalized': 'ALTER TABLE user_profiles ADD COLUMN skills_normalized TEXT',
+        'interests_normalized': 'ALTER TABLE user_profiles ADD COLUMN interests_normalized TEXT',
+        'goals_normalized': 'ALTER TABLE user_profiles ADD COLUMN goals_normalized TEXT',
+        'city_normalized': 'ALTER TABLE user_profiles ADD COLUMN city_normalized VARCHAR(100)',
+        'company_normalized': 'ALTER TABLE user_profiles ADD COLUMN company_normalized VARCHAR(255)',
+        'position_normalized': 'ALTER TABLE user_profiles ADD COLUMN position_normalized VARCHAR(255)',
+        'bio_normalized': 'ALTER TABLE user_profiles ADD COLUMN bio_normalized TEXT',
+        'status_text_normalized': 'ALTER TABLE user_profiles ADD COLUMN status_text_normalized VARCHAR(100)',
+        'current_plans_normalized': 'ALTER TABLE user_profiles ADD COLUMN current_plans_normalized TEXT',
     })
 
     # subscription_tier — особая обработка для PostgreSQL enum

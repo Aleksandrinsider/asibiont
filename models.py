@@ -145,6 +145,17 @@ class UserProfile(Base):
     auto_post_time = Column(String(5), default='12:00')  # Preferred time for auto-posting in HH:MM format (Premium)
     status_text = Column(String(100))  # User status: 'Инвестор', 'Ищу работу', 'Ищу партнёра', etc.
 
+    # Normalized (English) versions of profile fields for cross-language matching
+    skills_normalized = Column(Text)
+    interests_normalized = Column(Text)
+    goals_normalized = Column(Text)
+    city_normalized = Column(String(100))
+    company_normalized = Column(String(255))
+    position_normalized = Column(String(255))
+    bio_normalized = Column(Text)
+    status_text_normalized = Column(String(100))
+    current_plans_normalized = Column(Text)
+
     user = relationship("User", backref="profile")
 
 

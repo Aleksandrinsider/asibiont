@@ -3747,6 +3747,13 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
             if content.lower() not in existing:
                 profile.interests = (profile.interests + ', ' + content) if profile.interests else content
                 session.commit()
+                # Schedule normalization
+                try:
+                    import asyncio
+                    from .utils import normalize_profile_background
+                    asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
+                except Exception:
+                    pass
                 return f"✅ Добавлен интерес: {content}"
             return f"Интерес '{content}' уже есть в профиле."
 
@@ -3755,6 +3762,13 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
             if content.lower() not in existing:
                 profile.skills = (profile.skills + ', ' + content) if profile.skills else content
                 session.commit()
+                # Schedule normalization
+                try:
+                    import asyncio
+                    from .utils import normalize_profile_background
+                    asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
+                except Exception:
+                    pass
                 return f"✅ Добавлен навык: {content}"
             return f"Навык '{content}' уже есть в профиле."
 
@@ -3763,6 +3777,13 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
             if content.lower() not in existing:
                 profile.goals = (profile.goals + ', ' + content) if profile.goals else content
                 session.commit()
+                # Schedule normalization
+                try:
+                    import asyncio
+                    from .utils import normalize_profile_background
+                    asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
+                except Exception:
+                    pass
                 return f"✅ Добавлена цель: {content}"
             return f"Цель '{content}' уже есть в профиле."
 
@@ -5431,6 +5452,16 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
 
         session.commit()
 
+        # Schedule background normalization for cross-language matching
+        if added or updates:
+            try:
+                import asyncio
+                from .utils import normalize_profile_background
+                loop = asyncio.get_running_loop()
+                loop.create_task(normalize_profile_background(profile.user_id))
+            except Exception:
+                pass  # Non-critical: normalization will happen on next web save
+
         result_parts = []
         if added:
             result_parts.append(f"✅ Добавлено: {', '.join(added)}")
@@ -5532,7 +5563,16 @@ def smart_update_profile(user_id: int, field: str, value: str, action: str = 'ad
         # Обновляем время последнего обновления
         profile.updated_at = datetime.utcnow()
         session.commit()
-        
+
+        # Schedule background normalization for cross-language matching
+        try:
+            import asyncio
+            from .utils import normalize_profile_background
+            loop = asyncio.get_running_loop()
+            loop.create_task(normalize_profile_background(profile.user_id))
+        except Exception:
+            pass  # Non-critical
+
         return result
 
     except Exception as e:
