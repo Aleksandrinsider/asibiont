@@ -1519,7 +1519,10 @@
                     return;
                 }
                 if (response.ok) {
-                    // updateChat() каждые 3 сек подгрузит сообщения
+                    // Показываем ответ ИИ сразу
+                    if (data.response) {
+                        addMessage(data.response, 'ai');
+                    }
                     
                     // Обновить список задач, профиль и контакты после отправки сообщения
                     setTimeout(async () => {
