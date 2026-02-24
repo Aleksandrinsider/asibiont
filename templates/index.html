@@ -441,8 +441,12 @@
     <div class="auth-container">
         <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 300px; height: 300px; display: block; margin: 0 auto 20px; max-width: 100%;">
         <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 0;">
+            <!-- Email login button -->
+            <button onclick="openEmailModal()" id="email-login-btn" title="Войти по email" data-i18n-title="emailLogin" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: #374151; color: white; border: none; border-radius: 50%; cursor: pointer; flex-shrink: 0;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">
+                <svg width="18" height="14" viewBox="0 0 20 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 0H2C0.9 0 0 0.9 0 2V14C0 15.1 0.9 16 2 16H18C19.1 16 20 15.1 20 14V2C20 0.9 19.1 0 18 0ZM18 4L10 9L2 4V2L10 7L18 2V4Z" fill="white"/></svg>
+            </button>
             <!-- Discord login button -->
-            <a href="/discord/login" id="discord-login-btn" title="Войти через Discord" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: #374151; color: white; text-decoration: none; border-radius: 50%; cursor: pointer; flex-shrink: 0;" onmouseover="this.style.background='#1f2937'" onmouseout="this.style.background='#374151'">
+            <a href="/discord/login" id="discord-login-btn" title="Войти через Discord" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: #374151; color: white; text-decoration: none; border-radius: 50%; cursor: pointer; flex-shrink: 0;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">
                 <svg width="20" height="16" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M60.1 4.6A58.5 58.5 0 0 0 45.4.2a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.2 0A37.3 37.3 0 0 0 25.4.3a.2.2 0 0 0-.2-.1A58.4 58.4 0 0 0 10.5 4.6a.2.2 0 0 0-.1.1C1.5 18.3-.9 31.6.3 44.7v.2a58.7 58.7 0 0 0 17.7 9a.2.2 0 0 0 .3-.1 42 42 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.6 38.6 0 0 1-5.5-2.6.2.2 0 0 1 0-.4l1.1-.9a.2.2 0 0 1 .2 0 41.9 41.9 0 0 0 35.6 0 .2.2 0 0 1 .2 0l1.1.9a.2.2 0 0 1 0 .4 36.3 36.3 0 0 1-5.5 2.6.2.2 0 0 0-.1.3 47.1 47.1 0 0 0 3.6 5.9.2.2 0 0 0 .3.1A58.5 58.5 0 0 0 70.4 45v-.2C71.9 29.7 67.9 16.5 60.2 4.7a.2.2 0 0 0-.1-.1ZM23.7 36.7c-3.5 0-6.3-3.2-6.3-7.1s2.8-7.1 6.3-7.1 6.4 3.2 6.3 7.1c0 3.9-2.8 7.1-6.3 7.1Zm23.2 0c-3.5 0-6.3-3.2-6.3-7.1s2.8-7.1 6.3-7.1 6.4 3.2 6.3 7.1c0 3.9-2.7 7.1-6.3 7.1Z" fill="white"/></svg>
             </a>
             <div id="telegram-login-container">
@@ -454,21 +458,29 @@
                 </script>
             </div>
         </div>
-        <!-- Email login/register -->
-        <div style="display: flex; justify-content: center; margin: 12px 0 0 0;">
-            <button onclick="document.getElementById('email-auth-form').style.display = document.getElementById('email-auth-form').style.display === 'none' ? 'block' : 'none'" style="background: none; border: none; cursor: pointer; color: #6C727F; font-size: 13px; font-family: inherit; text-decoration: underline;" id="email-auth-toggle" data-i18n="emailLogin">Войти по email</button>
-        </div>
-        <div id="email-auth-form" style="display: none; max-width: 340px; margin: 12px auto 0;">
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-                <input type="email" id="auth-email" placeholder="Email" style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                <input type="password" id="auth-password" placeholder="Пароль (мин. 6 символов)" data-i18n-ph="passwordPh" style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="emailAuth('login')" style="flex: 1; padding: 8px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit;" onmouseover="this.style.background='#1f2937'" onmouseout="this.style.background='#374151'" data-i18n="loginBtn">Войти</button>
-                    <button onclick="emailAuth('register')" style="flex: 1; padding: 8px; background: #068487; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit;" onmouseover="this.style.background='#056e70'" onmouseout="this.style.background='#068487'" data-i18n="registerBtn">Регистрация</button>
+    <!-- Email Auth Modal -->
+    <div id="email-auth-modal" style="display: none; position: fixed; z-index: 6000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(255,255,255,0.7); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); align-items: center; justify-content: center;" onclick="closeEmailModal()">
+        <div onclick="event.stopPropagation()" style="background: #FFFFFF; border-radius: 6px; width: 90%; max-width: 420px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; font-size: 13px; color: #374151;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #D1D9E0;">
+                <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151;" data-i18n="emailLogin">Войти по email</h3>
+                <button onclick="closeEmailModal()" style="background: #FFFFFF; border: 1px solid #D1D9E0; font-size: 24px; color: #374151; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>
+                </button>
+            </div>
+            <div style="padding: 16px 20px;">
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <input type="email" id="auth-email" placeholder="Email" style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; width: 100%; box-sizing: border-box;" />
+                    <input type="password" id="auth-password" placeholder="Пароль (мин. 6 символов)" data-i18n-ph="passwordPh" style="padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; width: 100%; box-sizing: border-box;" />
+                    <p id="email-auth-error" style="display: none; color: #DC2626; font-size: 12px; margin: 0; text-align: center;"></p>
                 </div>
-                <p id="email-auth-error" style="display: none; color: #DC2626; font-size: 12px; margin: 0; text-align: center;"></p>
+                <div style="display: flex; gap: 8px; margin-top: 16px;">
+                    <button onclick="closeEmailModal()" style="flex: 1; padding: 8px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'" data-i18n="cancel">Отмена</button>
+                    <button onclick="emailAuth('login')" style="flex: 1; padding: 8px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'" data-i18n="loginBtn">Войти</button>
+                    <button onclick="emailAuth('register')" style="flex: 1; padding: 8px; background: #068487; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#056e70'" onmouseout="this.style.background='#068487'" data-i18n="registerBtn">Регистрация</button>
+                </div>
             </div>
         </div>
+    </div>
         <div class="auth-card">
             <h1>AI отвечают. ASI Biont действует!</h1>
             <div class="lang-switcher" id="lang-toggle">
@@ -704,7 +716,7 @@
       btnTop: 'Пополнить баланс', btnGuide: 'Руководство',
       fHome: 'Главная', fFaq: 'FAQ', fGuide: 'Руководство', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение',
       discordLogin: 'Войти через Discord',
-      emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)'
+      emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена'
     },
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
@@ -786,7 +798,7 @@
       btnTop: 'Top Up Balance', btnGuide: 'Guide',
       fHome: 'Home', fFaq: 'FAQ', fGuide: 'Guide', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement',
       discordLogin: 'Sign in with Discord',
-      emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)'
+      emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -842,15 +854,18 @@
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');
     if (dcBtn) dcBtn.textContent = t.discordLogin;
-    // Email auth
-    var emBtn = document.querySelector('[data-i18n="emailLogin"]');
-    if (emBtn) emBtn.textContent = t.emailLogin;
-    var lBtn = document.querySelector('[data-i18n="loginBtn"]');
-    if (lBtn) lBtn.textContent = t.loginBtn;
-    var rBtn = document.querySelector('[data-i18n="registerBtn"]');
-    if (rBtn) rBtn.textContent = t.registerBtn;
+    // Email auth modal
+    document.querySelectorAll('[data-i18n="emailLogin"]').forEach(function(el){ el.textContent = t.emailLogin; });
+    document.querySelectorAll('[data-i18n="loginBtn"]').forEach(function(el){ el.textContent = t.loginBtn; });
+    document.querySelectorAll('[data-i18n="registerBtn"]').forEach(function(el){ el.textContent = t.registerBtn; });
     var pPh = document.querySelector('[data-i18n-ph="passwordPh"]');
     if (pPh) pPh.placeholder = t.passwordPh;
+    // Email button title
+    var emBtnIcon = document.getElementById('email-login-btn');
+    if (emBtnIcon) emBtnIcon.title = t.emailLogin;
+    // Cancel button
+    var cBtns = document.querySelectorAll('[data-i18n="cancel"]');
+    cBtns.forEach(function(el){ el.textContent = t.cancel || 'Отмена'; });
   }
   window.applyLang = apply;
   window.switchLang = function(lang) {
@@ -879,6 +894,16 @@
 <!-- /Yandex.Metrika counter -->
 <!-- Email auth + PWA Service Worker -->
 <script>
+function openEmailModal() {
+  var m = document.getElementById('email-auth-modal');
+  if (m) { m.style.display = 'flex'; }
+}
+function closeEmailModal() {
+  var m = document.getElementById('email-auth-modal');
+  if (m) { m.style.display = 'none'; }
+  var errEl = document.getElementById('email-auth-error');
+  if (errEl) { errEl.style.display = 'none'; }
+}
 async function emailAuth(mode) {
   var email = document.getElementById('auth-email').value.trim();
   var password = document.getElementById('auth-password').value;

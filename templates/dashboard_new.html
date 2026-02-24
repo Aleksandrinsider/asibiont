@@ -741,11 +741,7 @@
                             <div class="stats-text" style="margin-top: 8px;">
                                 <div id="today-stats">{% if tasks %}<span><span data-i18n="in-progress">В работе:</span> {{ tasks|selectattr('status', 'in', ['pending', 'in_progress'])|rejectattr('overdue', 'equalto', true)|list|length }} · <span style="color: #d73a49;"><span data-i18n="overdue-stat">С отставанием:</span> {{ tasks|selectattr('overdue', 'equalto', true)|selectattr('status', 'in', ['pending', 'in_progress'])|list|length }}</span> · <span data-i18n="completed-stat">Выполнено:</span> {{ tasks|selectattr('status', 'equalto', 'completed')|list|length }}</span>{% endif %}</div>
                             </div>
-                            {% if user and user.username == 'aleksandrinsider' %}
-                            <div class="stats-text" style="margin-top: 8px;">
-                                <span data-i18n="users-online">Пользователей на сайте:</span> {{ total_users_count|default(0) }}
-                            </div>
-                            {% endif %}
+
                             <div class="week-timeline" style="margin-top: 24px; margin-bottom: 20px;">
                                 <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
                                     <!-- Дни недели будут добавлены через JS -->
@@ -7829,7 +7825,7 @@
       'statistics':'Статистика','task-stats':'Статистика по задачам:',
       'goal-progress-title':'Прогресс по целям:','tasks-short':'Задачи:','deadline-short':'до',
       'in-progress':'В работе:','overdue-stat':'С отставанием:','completed-stat':'Выполнено:',
-      'users-online':'Пользователей на сайте:',
+
       'loading-contacts':'Загрузка контактов...','loading-tasks':'Загрузка задач...',
       'remove-image':'Убрать картинку','write-something':'Напишите что-нибудь...',
       'insert-image':'Вставить картинку','add-emoji':'Добавить эмодзи','publish-post':'Опубликовать пост',
@@ -8007,7 +8003,7 @@
       'statistics':'Statistics','task-stats':'Task statistics:',
       'goal-progress-title':'Goal progress:','tasks-short':'Tasks:','deadline-short':'by',
       'in-progress':'In progress:','overdue-stat':'Overdue:','completed-stat':'Completed:',
-      'users-online':'Users online:',
+
       'loading-contacts':'Loading contacts...','loading-tasks':'Loading tasks...',
       'remove-image':'Remove image','write-something':'Write something...',
       'insert-image':'Insert image','add-emoji':'Add emoji','publish-post':'Publish post',
