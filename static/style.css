@@ -2358,6 +2358,9 @@ details[open] .details-content {
     .left-column, .right-column {
         display: none !important;
     }
+    #quick-profile-form {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 

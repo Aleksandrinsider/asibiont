@@ -1138,7 +1138,7 @@
 
     <!-- Quick Profile Setup Modal -->
     <div id="quick-profile-modal" class="rating-modal" style="display: none;">
-        <div class="rating-modal-content" style="max-width: 1100px;">
+        <div class="rating-modal-content" style="max-width: 1100px; max-height: 90vh; overflow-y: auto;">
             <div class="rating-modal-header">
                 <h3 data-i18n="quick-setup">Быстрая настройка профиля</h3>
                 <button onclick="closeQuickProfileModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
@@ -1148,79 +1148,79 @@
                 </button>
             </div>
             <div class="rating-modal-body">
-                <form id="quick-profile-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;">
+                <form id="quick-profile-form" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 14px;">
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="email-label">Email</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="email-hint">(для входа в систему)</span></label>
-                        <input type="email" id="quick-email" placeholder="user@example.com" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.email if user.email else '' }}" />
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="email-label">Email</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="email-hint">(для входа)</span></label>
+                        <input type="email" id="quick-email" placeholder="user@example.com" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.email if user.email else '' }}" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="phone-label">Телефон</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="phone-hint">(для связи, видно в профиле)</span></label>
-                        <input type="tel" id="quick-phone" placeholder="+7 (999) 123-45-67" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.phone if user.phone else '' }}" />
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="phone-label">Телефон</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="phone-hint">(для связи)</span></label>
+                        <input type="tel" id="quick-phone" placeholder="+7 (999) 123-45-67" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.phone if user.phone else '' }}" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="name-label">Имя</label>
+                        <input type="text" id="quick-first-name" placeholder="Ваше имя" data-i18n-ph="name-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="country-label2">Страна</label>
+                        <input type="text" id="quick-country" placeholder="Например: Россия" data-i18n-ph="country-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="city-req">Город <span style="color: #DC2626; font-weight: 500;">*</span></label>
+                        <input type="text" id="quick-city" placeholder="Например: Москва" data-i18n-ph="city-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="interests-req">Интересы <span style="color: #DC2626; font-weight: 500;">*</span></label>
+                        <input type="text" id="quick-interests" placeholder="спорт, программирование..." data-i18n-ph="interests-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="dob">Дата рождения</label>
+                        <input type="text" id="quick-birthdate" placeholder="ДД.ММ.ГГГГ" data-i18n-ph="dob-ph" maxlength="10" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="skills">Навыки</label>
+                        <input type="text" id="quick-skills" placeholder="Python, дизайн..." data-i18n-ph="skills-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="company">Компания</label>
+                        <input type="text" id="quick-company" placeholder="Название" data-i18n-ph="company-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="goals">Цели</label>
+                        <input type="text" id="quick-goals" placeholder="Чего хотите достичь?" data-i18n-ph="goals-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="position">Должность</label>
+                        <input type="text" id="quick-position" placeholder="Ваша должность" data-i18n-ph="position-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="status">Статус</label>
+                        <input type="text" id="quick-status" placeholder="Инвестор, Фрилансер..." data-i18n-ph="status-ph" maxlength="100" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <!-- Password change section -->
-                    <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 12px; margin-top: 4px;">
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 8px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
+                    <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 10px; margin-top: 2px;">
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end;">
                             <div>
                                 <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="current-password-label">Текущий пароль</label>
-                                <input type="password" id="pwd-current" placeholder="••••••" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" {{ 'disabled' if not user.password_hash else '' }} />
+                                <input type="password" id="pwd-current" placeholder="••••••" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" {{ 'disabled' if not user.password_hash else '' }} />
                                 {% if not user.password_hash %}
                                 <span style="font-size: 10px; color: #9CA3AF;" data-i18n="no-password-yet">Пароль ещё не задан</span>
                                 {% endif %}
                             </div>
                             <div>
                                 <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="new-password-label">Новый пароль (мин. 6)</label>
-                                <input type="password" id="pwd-new" placeholder="Мин. 6 символов" data-i18n-ph="new-password-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                                <input type="password" id="pwd-new" placeholder="Мин. 6 символов" data-i18n-ph="new-password-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                             </div>
                             <div>
-                                <button onclick="changePassword()" style="width: 100%; padding: 8px 12px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'" data-i18n="change-password-btn">Сменить</button>
+                                <button onclick="changePassword()" style="width: 100%; padding: 7px 10px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'" data-i18n="change-password-btn">Сменить</button>
                             </div>
                         </div>
                         <p id="pwd-change-msg" style="display: none; font-size: 12px; margin: 6px 0 0 0; text-align: center;"></p>
                     </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="name-label">Имя</label>
-                        <input type="text" id="quick-first-name" placeholder="Ваше имя" data-i18n-ph="name-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="country-label2">Страна</label>
-                        <input type="text" id="quick-country" placeholder="Например: Россия" data-i18n-ph="country-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="city-req">Город <span style="color: #DC2626; font-weight: 500;">*</span></label>
-                        <input type="text" id="quick-city" placeholder="Например: Москва" data-i18n-ph="city-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="interests-req">Интересы <span style="color: #DC2626; font-weight: 500;">*</span></label>
-                        <input type="text" id="quick-interests" placeholder="Например: спорт, программирование, путешествия" data-i18n-ph="interests-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="dob">Дата рождения</label>
-                        <input type="text" id="quick-birthdate" placeholder="ДД.ММ.ГГГГ (например: 15.03.1990)" data-i18n-ph="dob-ph" maxlength="10" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="skills">Навыки</label>
-                        <input type="text" id="quick-skills" placeholder="Например: Python, менеджмент, дизайн" data-i18n-ph="skills-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="company">Компания</label>
-                        <input type="text" id="quick-company" placeholder="Название компании" data-i18n-ph="company-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="goals">Цели</label>
-                        <input type="text" id="quick-goals" placeholder="Чего вы хотите достичь?" data-i18n-ph="goals-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="position">Должность</label>
-                        <input type="text" id="quick-position" placeholder="Ваша должность" data-i18n-ph="position-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="status">Статус</label>
-                        <input type="text" id="quick-status" placeholder="Например: Ищу партнёра, Инвестор, Фрилансер" data-i18n-ph="status-ph" maxlength="100" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
                 </form>
                 <!-- Telegram & Discord accounts -->
-                <div style="margin-top: 16px; padding-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;">
+                <div style="margin-top: 12px; padding-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;">
                     <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Telegram</label>
                         {% if telegram_linked %}
