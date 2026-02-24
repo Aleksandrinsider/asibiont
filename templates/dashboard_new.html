@@ -1865,27 +1865,39 @@
         function editNote(noteId) {
             const contentEl = document.getElementById('note-content-' + noteId);
             if (!contentEl) return;
-            const currentText = contentEl.innerText;
-            const card = contentEl.closest('.note-card');
-            if (!card) return;
-            // Replace content with textarea
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'margin-top: 8px;';
-            wrapper.innerHTML = `
-                <textarea id="note-edit-${noteId}" style="width: 100%; min-height: 60px; padding: 8px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical; outline: none;">${escapeHtml(currentText)}</textarea>
-                <div style="display: flex; gap: 6px; margin-top: 6px;">
-                    <button onclick="submitEditNote(${noteId})" style="padding: 4px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; color: #374151;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
-                    <button onclick="cancelEditNote(${noteId})" style="padding: 4px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; color: #6C727F;" onmouseover="this.style.background='#F6F8FA'" onmouseout="this.style.background='#FFFFFF'">${t('cancel')}</button>
-                </div>`;
-            contentEl.style.display = 'none';
-            contentEl.after(wrapper);
-            wrapper.querySelector('textarea').focus();
+            if (contentEl.isContentEditable) return;
+            
+            contentEl._originalText = contentEl.textContent;
+            
+            contentEl.contentEditable = 'true';
+            contentEl.style.outline = '1px solid #D1D9E0';
+            contentEl.style.borderRadius = '4px';
+            contentEl.style.padding = '6px 10px';
+            contentEl.focus();
+            
+            // Place cursor at end
+            const range = document.createRange();
+            range.selectNodeContents(contentEl);
+            range.collapse(false);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            
+            // Add save/cancel buttons
+            const btnContainer = document.createElement('div');
+            btnContainer.id = `edit-btns-note-${noteId}`;
+            btnContainer.style.cssText = 'display: flex; gap: 6px; margin-top: 4px;';
+            btnContainer.innerHTML = `
+                <button onclick="submitEditNote(${noteId})" style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">${t('save')}</button>
+                <button onclick="cancelEditNote(${noteId})" style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">${t('cancel')}</button>
+            `;
+            contentEl.parentNode.insertBefore(btnContainer, contentEl.nextSibling);
         }
 
         async function submitEditNote(noteId) {
-            const textarea = document.getElementById('note-edit-' + noteId);
-            if (!textarea) return;
-            const newContent = textarea.value.trim();
+            const contentEl = document.getElementById('note-content-' + noteId);
+            if (!contentEl) return;
+            const newContent = contentEl.textContent.trim();
             if (!newContent) return;
             try {
                 const resp = await fetch('/api/notes/' + noteId, {
@@ -1895,8 +1907,12 @@
                     body: JSON.stringify({ content: newContent })
                 });
                 if (resp.ok) {
+                    contentEl.contentEditable = 'false';
+                    contentEl.style.outline = '';
+                    contentEl.style.padding = '';
+                    const btns = document.getElementById('edit-btns-note-' + noteId);
+                    if (btns) btns.remove();
                     showNotification(t('note-saved'), 'success');
-                    loadNotes();
                 }
             } catch (e) {
                 showNotification(t('err-prefix') + ' ' + e.message, 'error');
@@ -1906,9 +1922,12 @@
         function cancelEditNote(noteId) {
             const contentEl = document.getElementById('note-content-' + noteId);
             if (contentEl) {
-                contentEl.style.display = '';
-                const wrapper = contentEl.nextElementSibling;
-                if (wrapper) wrapper.remove();
+                contentEl.textContent = contentEl._originalText || contentEl.textContent;
+                contentEl.contentEditable = 'false';
+                contentEl.style.outline = '';
+                contentEl.style.padding = '';
+                const btns = document.getElementById('edit-btns-note-' + noteId);
+                if (btns) btns.remove();
             }
         }
 

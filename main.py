@@ -721,6 +721,27 @@ async def dashboard_handler(request):
                 else:
                     return getattr(profile_obj, f'{field_name}_normalized_ru', None) or original
 
+            # Auto-renormalize profile if translated fields are missing
+            if profile and _dash_lang:
+                _needs_norm = False
+                for _nf in ['city', 'country', 'company', 'position', 'goals', 'skills', 'interests']:
+                    _orig = getattr(profile, _nf, None)
+                    if _orig and _orig.strip():
+                        _en = getattr(profile, f'{_nf}_normalized', None)
+                        _ru = getattr(profile, f'{_nf}_normalized_ru', None)
+                        if not _en or not _ru:
+                            _needs_norm = True
+                            break
+                if _needs_norm:
+                    try:
+                        from ai_integration.utils import normalize_profile_fields
+                        _norm_ok = await normalize_profile_fields(profile)
+                        if _norm_ok:
+                            session_db.commit()
+                            logger.info(f"[DASHBOARD] Auto-normalized profile for user {user.id}")
+                    except Exception as _ne:
+                        logger.warning(f"[DASHBOARD] Auto-normalization failed: {_ne}")
+
             # Получить контакты по делегироаю
             delegating_to_me = []  # Люди, которые делегироали м задачи
             delegating_by_me = []  # Люди, которым я делегироал задачи

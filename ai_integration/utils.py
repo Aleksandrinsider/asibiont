@@ -1133,11 +1133,14 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
             "Return ONLY a valid JSON object with the same keys. "
             "For comma-separated lists, translate each item individually and keep commas. "
             "For semicolon-separated lists, translate each item individually and keep semicolons. "
-            "Lowercase everything. Do not add or remove items. "
-            "If a value is already in English, keep it as-is but lowercase.\n\n"
+            "Lowercase everything EXCEPT proper nouns, brand names, and company names — keep their original casing. "
+            "Do NOT transliterate brand/company names — keep them exactly as written (e.g. 'АСИ Бионт' stays 'АСИ Бионт'). "
+            "Translate common words: cities (Пермь→perm, Москва→moscow), professions, skills, interests. "
+            "Do not add or remove items. "
+            "If a value is already in English, keep it as-is but lowercase (except proper nouns).\n\n"
             + json.dumps(fields, ensure_ascii=False)
         )
-        system = "You are a translator. Return only valid JSON with translated fields. Lowercase all values. No markdown, no explanation."
+        system = "You are a translator. Return only valid JSON with translated fields. Lowercase common words, preserve brand/company names exactly as written. No markdown, no explanation."
     else:
         prompt = (
             "Переведи эти поля профиля пользователя на русский язык. "
@@ -1145,10 +1148,11 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
             "Для списков через запятую — переведи каждый элемент отдельно, сохрани запятые. "
             "Для списков через точку с запятой — переведи каждый элемент, сохрани точки с запятой. "
             "Не добавляй и не удаляй элементы. "
-            "Если значение уже на русском — оставь как есть. Сохраняй естественный регистр (с заглавной буквы для городов, компаний).\n\n"
+            "НЕ переводи и НЕ транслитерируй названия компаний и брендов — оставь как есть (например 'ASI Biont' остаётся 'ASI Biont'). "
+            "Если значение уже на русском — оставь как есть. Сохраняй естественный регистр (с заглавной буквы для городов).\n\n"
             + json.dumps(fields, ensure_ascii=False)
         )
-        system = "Ты переводчик. Верни только валидный JSON с переведёнными полями. Без markdown, без пояснений."
+        system = "Ты переводчик. Верни только валидный JSON с переведёнными полями. Не переводи названия компаний и брендов. Без markdown, без пояснений."
 
     try:
         import aiohttp
