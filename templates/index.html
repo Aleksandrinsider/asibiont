@@ -942,14 +942,11 @@ async function resetPassword() {
   try {
     var resp = await fetch('/api/password/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:email})});
     var data = await resp.json();
-    if (data.success && data.new_password) {
-      resultEl.innerHTML = '<b>Новый пароль:</b> <span style="font-family: monospace; font-size: 14px; user-select: all; background: #DCFCE7; padding: 2px 6px; border-radius: 3px;">' + data.new_password + '</span><br><span style="color: #6B7280; font-size: 11px; margin-top: 4px; display: inline-block;">Скопируйте и используйте для входа. Рекомендуем сменить пароль в профиле.</span>';
-      resultEl.style.display = 'block';
-    } else if (data.success && !data.new_password) {
-      resultEl.style.background = '#FEF3C7';
-      resultEl.style.borderColor = '#FCD34D';
-      resultEl.style.color = '#92400E';
-      resultEl.textContent = 'Аккаунт с таким email не найден';
+    if (data.success) {
+      resultEl.style.background = '#F0FFF4';
+      resultEl.style.borderColor = '#86EFAC';
+      resultEl.style.color = '#166534';
+      resultEl.innerHTML = '✉️ ' + (data.message || 'Новый пароль отправлен на вашу почту') + '<br><span style="color: #6B7280; font-size: 11px; margin-top: 4px; display: inline-block;">Проверьте входящие и папку Спам.</span>';
       resultEl.style.display = 'block';
     } else {
       errEl.textContent = data.error || 'Ошибка сброса пароля';

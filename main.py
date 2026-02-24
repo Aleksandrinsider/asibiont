@@ -363,6 +363,49 @@ def verify_password(password, stored_hash):
         return False
 
 
+# ═══ Email sending via SMTP ═══
+
+async def send_email(to: str, subject: str, body: str):
+    """Send email via SMTP (runs blocking smtplib in executor)"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+    
+    if not SMTP_PASSWORD:
+        logger.warning("SMTP_PASSWORD not set — cannot send email")
+        raise RuntimeError("SMTP not configured")
+    
+    def _send():
+        msg = MIMEMultipart('alternative')
+        msg['From'] = SMTP_FROM
+        msg['To'] = to
+        msg['Subject'] = subject
+        
+        # Plain text
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # HTML version
+        html_body = body.replace('\n', '<br>')
+        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
+<div style="max-width: 500px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px;">
+<div style="text-align: center; margin-bottom: 16px;">
+<img src="https://asibiont.com/static/svg/asi-biont-logo.svg" alt="ASI Biont" style="height: 32px;">
+</div>
+{html_body}
+</div>
+</body></html>"""
+        msg.attach(MIMEText(html, 'html', 'utf-8'))
+        
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, to, msg.as_string())
+    
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send)
+    logger.info(f"Email sent to {to}: {subject}")
+
+
 async def health_handler(request):
     """Health check endpoint for Railway"""
     return web.Response(text='OK', status=200)
@@ -719,7 +762,7 @@ async def email_login_handler(request):
 
 
 async def password_reset_handler(request):
-    """Reset password — generate new random password for email user"""
+    """Reset password — generate new random password and send it to email"""
     try:
         data = await request.json()
         email = (data.get('email') or '').strip().lower()
@@ -730,8 +773,8 @@ async def password_reset_handler(request):
         try:
             user = session_db.query(User).filter_by(email=email).first()
             if not user:
-                # Don't reveal whether email exists
-                return web.json_response({'success': True, 'message': 'Если аккаунт с таким email существует, новый пароль будет показан.', 'new_password': None})
+                # Don't reveal whether email exists — always say "sent"
+                return web.json_response({'success': True, 'message': 'Если аккаунт с таким email существует, новый пароль будет отправлен на почту.'})
 
             import secrets
             import string
@@ -741,10 +784,32 @@ async def password_reset_handler(request):
             session_db.commit()
             logger.info(f"Password reset for email: {email}")
 
+            # Send new password via email
+            try:
+                await send_email(
+                    to=email,
+                    subject='Сброс пароля — ASI Biont',
+                    body=f"""Здравствуйте!
+
+Вы запросили сброс пароля для аккаунта ASI Biont.
+
+Ваш новый пароль: {new_password}
+
+Рекомендуем сменить пароль в настройках профиля после входа.
+
+Если вы не запрашивали сброс пароля, проигнорируйте это письмо.
+
+— ASI Biont
+https://asibiont.com"""
+                )
+                logger.info(f"Password reset email sent to {email}")
+            except Exception as mail_err:
+                logger.error(f"Failed to send password reset email to {email}: {mail_err}")
+                # Password was already changed — still return success but warn internally
+
             return web.json_response({
                 'success': True,
-                'new_password': new_password,
-                'message': 'Пароль сброшен'
+                'message': 'Новый пароль отправлен на вашу почту'
             })
         finally:
             session_db.close()
