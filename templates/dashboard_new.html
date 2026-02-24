@@ -560,6 +560,10 @@
                             <p><span data-i18n="goals-label">Цели:</span> {% if profile_i18n and profile_i18n.goals %}{{ profile_i18n.goals }}{% elif profile.goals %}{{ profile.goals }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             <p><span data-i18n="skills-label">Навыки:</span> {% if profile_i18n and profile_i18n.skills %}{{ profile_i18n.skills }}{% elif profile.skills %}{{ profile.skills }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             <p><span data-i18n="interests-label">Интересы:</span> {% if profile_i18n and profile_i18n.interests %}{{ profile_i18n.interests|unique_interests }}{% elif profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
+                            {% set channel_parts = [] %}
+                            {% if telegram_linked and telegram_username %}{% if channel_parts.append('<span data-i18n="tg-channel-label">Telegram:</span> <a href="https://t.me/' ~ telegram_username ~ '" target="_blank" style="color: #068487; text-decoration: none;">@' ~ telegram_username ~ '</a>') %}{% endif %}{% endif %}
+                            {% if discord_linked and discord_username %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <span style="color: #068487;">' ~ discord_username ~ '</span>') %}{% endif %}{% endif %}
+                            {% if channel_parts %}<p>{{ channel_parts | join(' &nbsp;|&nbsp; ') }}</p>{% endif %}
 
                             <p style="margin: 0; margin-bottom: 4px;"><span data-i18n="referral-link">Реферальная ссылка:</span> 
                                 <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="copy">копировать</a>
@@ -6983,13 +6987,16 @@
                             html += '<p style="margin: 0; margin-bottom: 4px;">' + t('referral-link') + ' <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">' + t('copy') + '</a> <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">' + t('withdraw') + '</a></p>';
                             html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">' + t('referral-desc') + '</p>';
                         }
-                        // Telegram line
-                        if (data.telegram_linked) {
-                            html += '<p><span>Telegram:</span> @' + (data.telegram_username || data.first_name || '') + '</p>';
+                        // Telegram | Discord — одна строка со ссылками
+                        var channelParts = [];
+                        if (data.telegram_linked && data.telegram_username) {
+                            channelParts.push(t('tg-channel-label') + ' <a href="https://t.me/' + data.telegram_username + '" target="_blank" style="color: #068487; text-decoration: none;">@' + data.telegram_username + '</a>');
                         }
-                        // Discord line
-                        if (data.discord_linked) {
-                            html += '<p><span>Discord:</span> ' + (data.discord_username || '') + '</p>';
+                        if (data.discord_linked && data.discord_username) {
+                            channelParts.push(t('discord-channel-label') + ' <span style="color: #068487;">' + data.discord_username + '</span>');
+                        }
+                        if (channelParts.length > 0) {
+                            html += '<p>' + channelParts.join(' &nbsp;|&nbsp; ') + '</p>';
                         }
                         html += '</div>';
                         html += '</div>';
