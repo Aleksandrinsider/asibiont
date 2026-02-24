@@ -372,10 +372,7 @@ async def send_email(to: str, subject: str, body: str):
     # Build HTML body
     html_body = body.replace('\n', '<br>')
     html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
-<div style="max-width: 500px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px;">
-<div style="text-align: center; margin-bottom: 16px;">
-<img src="https://asibiont.com/static/svg/asi-biont-logo.svg" alt="ASI Biont" style="height: 32px;">
-</div>
+<div style="max-width: 500px; margin: 0 auto; padding: 24px;">
 {html_body}
 </div>
 </body></html>"""

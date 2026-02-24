@@ -943,11 +943,8 @@ async function resetPassword() {
     var resp = await fetch('/api/password/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:email})});
     var data = await resp.json();
     if (data.success) {
-      resultEl.style.background = '#F0FFF4';
-      resultEl.style.borderColor = '#86EFAC';
-      resultEl.style.color = '#166534';
-      resultEl.innerHTML = '✉️ ' + (data.message || 'Новый пароль отправлен на вашу почту') + '<br><span style="color: #6B7280; font-size: 11px; margin-top: 4px; display: inline-block;">Проверьте входящие и папку Спам.</span>';
       resultEl.style.display = 'block';
+      resultEl.textContent = data.message || 'Новый пароль отправлен на вашу почту';
     } else {
       errEl.textContent = data.error || 'Ошибка сброса пароля';
       errEl.style.display = 'block';
