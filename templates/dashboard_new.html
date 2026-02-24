@@ -159,6 +159,11 @@
             return window.innerWidth <= 768;
         }
 
+        function closeMobileModal() {
+            var modal = document.getElementById('mobile-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
         function disableProblematicScripts() {
             // Disable CSSPeeper and similar inspector tools that cause errors
             if (typeof window.csspeeper !== 'undefined') {
@@ -185,6 +190,21 @@
                 const modal = document.getElementById('mobile-modal');
                 if (modal) {
                     modal.style.display = 'flex';
+                }
+                // Prepare mobile layout: hide left/right columns
+                document.querySelectorAll('.left-column, .right-column').forEach(function(col) {
+                    col.style.display = 'none';
+                });
+                var centerCol = document.querySelector('.center-column');
+                if (centerCol) {
+                    centerCol.style.flex = '1 1 100%';
+                    centerCol.style.maxWidth = '100%';
+                    centerCol.style.minWidth = '0';
+                }
+                var mainLayout = document.querySelector('.main-layout');
+                if (mainLayout) {
+                    mainLayout.style.padding = '0';
+                    mainLayout.style.gap = '0';
                 }
             } else {
                 console.log('Desktop device detected - no mobile fixes applied');
@@ -387,13 +407,13 @@
     <!-- Mobile Modal -->
     <div id="mobile-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 10000; display: none; justify-content: center; align-items: center;">
         <div style="background: white; border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; max-width: 500px; width: 95%; text-align: center; box-shadow: 0 6px 18px rgba(31,35,40,0.08); margin: 20px;">
-            <h3 style="margin: 0 0 16px 0; color: #374151; font-size: 20px;" data-i18n="mobile-unavail">Мобильная версия недоступна</h3>
-            <p style="margin: 0 0 8px 0; color: #374151; line-height: 1.5; font-size: 16px;" data-i18n="mobile-desc">На данный момент панель управления доступна только для десктопов.</p>
-            <p style="margin: 0 0 16px 0; color: #374151; line-height: 1.5; font-size: 16px;" data-i18n="mobile-bot">С мобильного устройства пользуйтесь нашим Telegram ботом:</p>
+            <h3 style="margin: 0 0 16px 0; color: #374151; font-size: 20px;" data-i18n="mobile-unavail">Ограниченный функционал</h3>
+            <p style="margin: 0 0 8px 0; color: #374151; line-height: 1.5; font-size: 16px;" data-i18n="mobile-desc">В мобильной версии доступен только чат и лента. Для полного функционала используйте десктоп.</p>
+            <p style="margin: 0 0 16px 0; color: #374151; line-height: 1.5; font-size: 16px;" data-i18n="mobile-bot">Также можно пользоваться нашим Telegram ботом:</p>
             <img src="/static/asibiont.svg" alt="ASI Biont Logo" style="width: 120px; height: 120px; margin-bottom: 20px;">
             <a href="https://t.me/{{ bot_username }}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500; font-size: 16px;">https://t.me/{{ bot_username }}</a>
             <br><br>
-            <a href="/logout" style="color: #6B7280; text-decoration: none; font-weight: 400; font-size: 14px;" data-i18n="back">Назад</a>
+            <a href="#" onclick="closeMobileModal(); return false;" style="color: #6B7280; text-decoration: none; font-weight: 400; font-size: 14px;" data-i18n="close">Закрыть</a>
         </div>
     </div>
     {% if logged_in %}
@@ -7791,9 +7811,9 @@
       'msg-placeholder':'Сообщение...',
       'opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
-      'mobile-unavail':'Мобильная версия недоступна',
-      'mobile-desc':'На данный момент панель управления доступна только для десктопов.',
-      'mobile-bot':'С мобильного устройства пользуйтесь нашим Telegram ботом:',
+      'mobile-unavail':'Ограниченный функционал',
+      'mobile-desc':'В мобильной версии доступен только чат и лента. Для полного функционала используйте десктоп.',
+      'mobile-bot':'Также можно пользоваться нашим Telegram ботом:',
       'back':'Назад',
       'search-contacts':'Поиск контактов',
       'search-contacts-title':'Поиск контактов',
@@ -7970,9 +7990,9 @@
       'msg-placeholder':'Message...',
       'opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
-      'mobile-unavail':'Mobile version unavailable',
-      'mobile-desc':'The dashboard is currently available only on desktops.',
-      'mobile-bot':'On mobile devices, use our Telegram bot:',
+      'mobile-unavail':'Limited functionality',
+      'mobile-desc':'In the mobile version, only chat and feed are available. For full functionality, use a desktop.',
+      'mobile-bot':'You can also use our Telegram bot:',
       'back':'Back',
       'search-contacts':'Search contacts',
       'search-contacts-title':'Search contacts',
