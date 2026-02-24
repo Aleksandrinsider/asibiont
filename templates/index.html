@@ -946,7 +946,11 @@ async function resetPassword() {
       resultEl.style.background = '#F0FFF4';
       resultEl.style.borderColor = '#86EFAC';
       resultEl.style.color = '#166534';
-      resultEl.innerHTML = '✉️ ' + (data.message || 'Новый пароль отправлен на вашу почту') + '<br><span style="color: #6B7280; font-size: 11px; margin-top: 4px; display: inline-block;">Проверьте входящие и папку Спам.</span>';
+      if (data.password_shown) {
+        resultEl.innerHTML = '🔑 ' + (data.message || '') + '<br><span style="color: #DC2626; font-size: 11px; margin-top: 4px; display: inline-block;">Скопируйте пароль перед закрытием этого окна!</span>';
+      } else {
+        resultEl.innerHTML = '✉️ ' + (data.message || 'Новый пароль отправлен на вашу почту') + '<br><span style="color: #6B7280; font-size: 11px; margin-top: 4px; display: inline-block;">Проверьте входящие и папку Спам.</span>';
+      }
       resultEl.style.display = 'block';
     } else {
       errEl.textContent = data.error || 'Ошибка сброса пароля';

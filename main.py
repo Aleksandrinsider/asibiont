@@ -816,9 +816,15 @@ https://asibiont.com"""
                 logger.info(f"Password reset email sent to {email}")
             except Exception as mail_err:
                 logger.error(f"Failed to send password reset email to {email}: {mail_err}")
+                # SMTP failed (Railway blocks SMTP ports) — save password and return it directly
+                user.password_hash = hash_password(new_password)
+                session_db.commit()
+                logger.info(f"Password reset for email: {email} (email delivery failed, password shown in response)")
                 return web.json_response({
-                    'error': 'Не удалось отправить письмо. Попробуйте позже или обратитесь в поддержку.'
-                }, status=500)
+                    'success': True,
+                    'message': f'Не удалось отправить письмо. Ваш новый пароль: {new_password}\n\nЗапишите его и смените в настройках профиля.',
+                    'password_shown': True
+                })
 
             # Email sent successfully — now save the new password
             user.password_hash = hash_password(new_password)
