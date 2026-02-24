@@ -543,8 +543,12 @@
                                 
                                 <!-- Имя и ник под аватаром -->
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %} <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
-                                <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
-                                
+                                <p style="margin: 0; color: #374151; font-size: 13px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
+                                {% if profile.average_rating is defined and profile.average_rating > 0 %}
+                                <p style="margin: 4px 0 0 0; font-size: 12px;{% if profile.average_rating < 5 %} color: #d73a49;{% elif profile.average_rating >= 8 %} color: #068487;{% else %} color: #6C727F;{% endif %}"><span data-i18n="rating-label">Рекомендация:</span> {{ profile.average_rating }}/10</p>
+                                {% else %}
+                                <p style="margin: 4px 0 0 0; font-size: 12px; color: #6C727F;" data-i18n="no-ratings">Нет рекомендаций</p>
+                                {% endif %}
                             </div>
                             <p>{% if profile_i18n and profile_i18n.country or profile.country %}<span data-i18n="country-label">Страна:</span> {{ profile_i18n.country if profile_i18n and profile_i18n.country else profile.country }} &nbsp;|&nbsp; {% endif %}<span data-i18n="city-label">Город:</span> {% if profile_i18n and profile_i18n.city %}{{ profile_i18n.city }}{% elif profile.city %}{{ profile.city }}{% else %}<span data-i18n="not-specified">Не указан</span>{% endif %}</p>
                             {% if profile.birthdate %}
@@ -556,11 +560,7 @@
                             <p><span data-i18n="goals-label">Цели:</span> {% if profile_i18n and profile_i18n.goals %}{{ profile_i18n.goals }}{% elif profile.goals %}{{ profile.goals }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             <p><span data-i18n="skills-label">Навыки:</span> {% if profile_i18n and profile_i18n.skills %}{{ profile_i18n.skills }}{% elif profile.skills %}{{ profile.skills }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             <p><span data-i18n="interests-label">Интересы:</span> {% if profile_i18n and profile_i18n.interests %}{{ profile_i18n.interests|unique_interests }}{% elif profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
-                            {% if profile.average_rating is defined and profile.average_rating > 0 %}
-                            <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 8 %}style="color: #068487;"{% endif %}><span data-i18n="rating-label">Рекомендация:</span> {{ profile.average_rating }}/10</p>
-                            {% else %}
-                            <p data-i18n="no-ratings">Нет рекомендаций</p>
-                            {% endif %}
+
                             <p style="margin: 0; margin-bottom: 4px;"><span data-i18n="referral-link">Реферальная ссылка:</span> 
                                 <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="copy">копировать</a>
                                 <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="withdraw">вывести</a>
@@ -5577,6 +5577,16 @@
                     }
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
                     
+                    // Рекомендация под ником — по центру
+                    if (partner.average_rating > 0) {
+                        let rColor = '#6C727F';
+                        if (partner.average_rating < 5) rColor = '#d73a49';
+                        else if (partner.average_rating >= 8) rColor = '#068487';
+                        html += `<p style="margin: 4px 0 0 0; font-size: 12px; color: ${rColor};">${t('rating-label')} ${partner.average_rating}/10</p>`;
+                    } else {
+                        html += `<p style="margin: 4px 0 0 0; font-size: 12px; color: #6C727F;">${t('no-ratings')}</p>`;
+                    }
+                    
                     html += '</div>';
                     
                     // Profile details - текст слева, отступы как в блоке профиля
@@ -5623,18 +5633,7 @@
                         html += `<p style="text-align: left;">${channelParts.join(' &nbsp;|&nbsp; ')}</p>`;
                     }
                     
-                    // Рекомендация с цветом
-                    if (partner.average_rating > 0) {
-                        let ratingStyle = 'text-align: left;';
-                        if (partner.average_rating < 5) {
-                            ratingStyle = 'text-align: left; color: #d73a49;';
-                        } else if (partner.average_rating >= 8) {
-                            ratingStyle = 'text-align: left; color: #068487;';
-                        }
-                        html += `<p style="${ratingStyle}">${t('rating-label')} ${partner.average_rating}/10</p>`;
-                    } else {
-                        html += `<p style="text-align: left;">${t('no-ratings')}</p>`;
-                    }
+
                     
                     // Активные задачи с отступом снизу
                     if (partner.task_count) {
