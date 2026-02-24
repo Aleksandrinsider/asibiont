@@ -7044,10 +7044,6 @@
                         if (channelParts.length > 0) {
                             html += '<p>' + channelParts.join(' &nbsp;|&nbsp; ') + '</p>';
                         }
-                        var contactParts = [];
-                        if (data.profile.email) { contactParts.push(t('email-label') + ' <span style="color: #068487;">' + data.profile.email + '</span>'); }
-                        if (data.profile.phone) { contactParts.push(t('phone-label') + ' <span style="color: #068487;">' + data.profile.phone + '</span>'); }
-                        if (contactParts.length > 0) { html += '<p>' + contactParts.join(' &nbsp;|&nbsp; ') + '</p>'; }
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
