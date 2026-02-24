@@ -2470,10 +2470,16 @@ def get_partners_list(user_id=None, session=None):
         has_match = False
         match_reasons = []  # Для логирования причин совпадения
 
-        # Check skills - улучшенная логика с частичным совпадением
-        if user_profile.skills and profile.skills:
-            user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
-            profile_skills = set(s.strip().lower() for s in profile.skills.split(","))
+        # Helper: get normalized field value or fallback to original
+        def _norm(obj, field):
+            return getattr(obj, f'{field}_normalized', None) or getattr(obj, field, None)
+
+        # Check skills - улучшенная логика с частичным совпадением (cross-language via normalized)
+        _u_skills = _norm(user_profile, 'skills')
+        _p_skills = _norm(profile, 'skills')
+        if _u_skills and _p_skills:
+            user_skills = set(s.strip().lower() for s in _u_skills.replace(';', ',').split(","))
+            profile_skills = set(s.strip().lower() for s in _p_skills.replace(';', ',').split(","))
             
             # Стоп-слова
             stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
@@ -2504,10 +2510,12 @@ def get_partners_list(user_id=None, session=None):
                     if has_match:
                         break
 
-        # Check interests - улучшенная логика с частичным совпадением
-        if user_profile.interests and profile.interests:
-            user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
-            profile_interests = set(i.strip().lower() for i in profile.interests.split(","))
+        # Check interests - улучшенная логика с частичным совпадением (cross-language via normalized)
+        _u_interests = _norm(user_profile, 'interests')
+        _p_interests = _norm(profile, 'interests')
+        if _u_interests and _p_interests:
+            user_interests = set(i.strip().lower() for i in _u_interests.replace(';', ',').split(","))
+            profile_interests = set(i.strip().lower() for i in _p_interests.replace(';', ',').split(","))
             
             # Стоп-слова которые игнорируем при частичном совпадении
             stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
@@ -2576,20 +2584,24 @@ def get_partners_list(user_id=None, session=None):
                         if has_match:
                             break
 
-        # Check current_plans for interest matches
-        if user_profile.interests and profile.current_plans:
-            user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
+        # Check current_plans for interest matches (cross-language via normalized)
+        _u_interests2 = _norm(user_profile, 'interests')
+        _p_plans = _norm(profile, 'current_plans')
+        if _u_interests2 and _p_plans:
+            user_interests = set(i.strip().lower() for i in _u_interests2.replace(';', ',').split(","))
             for interest in user_interests:
                 interest_words = interest.strip().lower().split()
-                if any(word in profile.current_plans.lower() for word in interest_words):
+                if any(word in _p_plans.lower() for word in interest_words):
                     has_match = True
                     match_reasons.append(f"current_plans: {interest}")
                     break
 
-        # Check goals (text from UserProfile)
-        if user_profile.goals and profile.goals:
-            user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
-            profile_goals = set(g.strip().lower() for g in profile.goals.split(","))
+        # Check goals (text from UserProfile, cross-language via normalized)
+        _u_goals = _norm(user_profile, 'goals')
+        _p_goals = _norm(profile, 'goals')
+        if _u_goals and _p_goals:
+            user_goals = set(g.strip().lower() for g in _u_goals.replace(';', ',').split(","))
+            profile_goals = set(g.strip().lower() for g in _p_goals.replace(';', ',').split(","))
             if user_goals & profile_goals:
                 has_match = True
                 match_reasons.append(f"goals: {user_goals & profile_goals}")
@@ -2630,10 +2642,11 @@ def get_partners_list(user_id=None, session=None):
             except Exception as e:
                 logger.debug(f"[PARTNERS] Goal table check error: {e}")
 
-        # Check company
-        if hasattr(user_profile, "company") and hasattr(profile, "company"):
-            if user_profile.company and profile.company:
-                if user_profile.company.lower() == profile.company.lower():
+        # Check company (cross-language via normalized)
+        _u_company = _norm(user_profile, 'company')
+        _p_company = _norm(profile, 'company')
+        if _u_company and _p_company:
+            if _u_company.lower() == _p_company.lower():
                     has_match = True
                     match_reasons.append(f"company: {profile.company}")
 
@@ -2663,31 +2676,37 @@ def get_partners_list(user_id=None, session=None):
 
 # НОВАЯ ЛОГИКА СОРТИРОВКИ: способствовать росту пользователя через всю базу данных
     # Приоритет: (1) релевантность, (2) город (бонус, но не ограничение), (3) Premium, (4) рейтинг
-    user_city = user_profile.city.lower() if user_profile.city else None
+    user_city = (user_profile.city_normalized or user_profile.city or '').lower() or None
 
     def sort_key(p):
         relevance_score = 0  # Инициализируем счетчик релевантности
         
-        # Совпадения навыков дают высокий балл
-        if user_profile.skills and p.skills:
-            user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
-            profile_skills = set(s.strip().lower() for s in p.skills.split(","))
+        # Совпадения навыков дают высокий балл (cross-language via normalized)
+        _us = _norm(user_profile, 'skills')
+        _ps = _norm(p, 'skills')
+        if _us and _ps:
+            user_skills = set(s.strip().lower() for s in _us.replace(';', ',').split(","))
+            profile_skills = set(s.strip().lower() for s in _ps.replace(';', ',').split(","))
             skill_matches = len(user_skills & profile_skills)
-            relevance_score += skill_matches * 3  # Каждый совпадающий навык = 3 балла
+            relevance_score += skill_matches * 3
 
-        # Совпадения интересов дают средний балл
-        if user_profile.interests and p.interests:
-            user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
-            profile_interests = set(i.strip().lower() for i in p.interests.split(","))
+        # Совпадения интересов дают средний балл (cross-language)
+        _ui = _norm(user_profile, 'interests')
+        _pi = _norm(p, 'interests')
+        if _ui and _pi:
+            user_interests = set(i.strip().lower() for i in _ui.replace(';', ',').split(","))
+            profile_interests = set(i.strip().lower() for i in _pi.replace(';', ',').split(","))
             interest_matches = len(user_interests & profile_interests)
-            relevance_score += interest_matches * 2  # Каждый совпадающий интерес = 2 балла
+            relevance_score += interest_matches * 2
 
-        # Совпадения целей дают высокий балл
-        if user_profile.goals and p.goals:
-            user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
-            profile_goals = set(g.strip().lower() for g in p.goals.split(","))
+        # Совпадения целей дают высокий балл (cross-language)
+        _ug = _norm(user_profile, 'goals')
+        _pg = _norm(p, 'goals')
+        if _ug and _pg:
+            user_goals = set(g.strip().lower() for g in _ug.replace(';', ',').split(","))
+            profile_goals = set(g.strip().lower() for g in _pg.replace(';', ',').split(","))
             goal_matches = len(user_goals & profile_goals)
-            relevance_score += goal_matches * 4  # Каждая совпадающая цель = 4 балла
+            relevance_score += goal_matches * 4
 
         # Бонус за совпадение структурированных целей (Goal table)
         try:
@@ -2704,9 +2723,9 @@ def get_partners_list(user_id=None, session=None):
         except Exception as e:
             logger.debug(f"Failed to compare goal categories: {e}")
 
-        # Бонус за тот же город (но не блокировка)
+        # Бонус за тот же город (но не блокировка, cross-language)
         city_bonus = 0
-        partner_city = p.city.lower() if p.city else None
+        partner_city = (p.city_normalized or p.city or '').lower() or None
         if user_city and partner_city == user_city:
             city_bonus = 1  # Небольшой бонус за локальность
 

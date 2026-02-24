@@ -3554,13 +3554,23 @@ async def api_contact_profile_handler(request):
             current_profile = session_db.query(UserProfile).filter_by(
                 user_id=current_user.id).first() if current_user else None
 
-            # Calculate common interests/skills
+            # Calculate common interests/skills (cross-language via normalized fields)
             common_interests = None
-            if profile and current_profile and current_profile.interests and profile.interests:
-                current_interests = set(i.strip().lower() for i in current_profile.interests.split(','))
-                profile_interests = set(i.strip().lower() for i in profile.interests.split(','))
-                common = current_interests & profile_interests
-                common_interests = ', '.join(common) if common else None
+            if profile and current_profile:
+                # Use normalized fields for cross-language matching, fallback to originals
+                ci = getattr(current_profile, 'interests_normalized', None) or (current_profile.interests if current_profile.interests else None)
+                pi = getattr(profile, 'interests_normalized', None) or (profile.interests if profile.interests else None)
+                if ci and pi:
+                    current_interests = set(i.strip().lower() for i in ci.replace(';', ',').split(',') if i.strip())
+                    profile_interests = set(i.strip().lower() for i in pi.replace(';', ',').split(',') if i.strip())
+                    common = current_interests & profile_interests
+                    # Also partial matching
+                    if not common:
+                        for ciu in current_interests:
+                            for piu in profile_interests:
+                                if ciu and piu and (ciu in piu or piu in ciu):
+                                    common.add(piu)
+                    common_interests = ', '.join(sorted(common)) if common else None
 
             # Get active task count
             active_tasks = session_db.query(Task).filter(
