@@ -695,7 +695,7 @@
                                 
                                 <!-- Имя и ник под аватаром -->
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %} <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
-                                <p style="margin: 0; color: #374151; font-size: 13px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
+                                <p style="margin: 4px 0 0 0; color: #374151; font-size: 13px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
                                 {% if profile.average_rating is defined and profile.average_rating > 0 %}
                                 <p style="margin: 4px 0 0 0; font-size: 12px;{% if profile.average_rating < 5 %} color: #d73a49;{% elif profile.average_rating >= 8 %} color: #068487;{% else %} color: #6C727F;{% endif %}"><span data-i18n="rating-label">Рекомендация:</span> {{ profile.average_rating }}/10</p>
                                 {% else %}
@@ -5812,7 +5812,7 @@
                     } else {
                         html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     }
-                    html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
+                    html += `<p style="margin: 4px 0 0 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
                     
                     // Рекомендация под ником — по центру
                     if (partner.average_rating > 0) {
@@ -7190,7 +7190,7 @@
                             html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;">' + initial + '</div>';
                         }
                         html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || t('user')) + ' <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">' + (data.profile.status_text || t('status-set')) + '</a></p>';
-                        html += '<p style="margin: 0; color: #374151; font-size: 13px;">@' + (data.profile.username || t('unknown-user')) + '</p>';
+                        html += '<p style="margin: 4px 0 0 0; color: #374151; font-size: 13px;">@' + (data.profile.username || t('unknown-user')) + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const rColor = data.profile.average_rating < 5 ? '#d73a49' : (data.profile.average_rating >= 8 ? '#068487' : '#6C727F');
                             html += '<p style="margin: 4px 0 0 0; font-size: 12px; color: ' + rColor + ';">' + t('rating-label') + ' ' + data.profile.average_rating + '/10</p>';
