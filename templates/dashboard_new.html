@@ -182,6 +182,21 @@
                 width: 100% !important;
                 max-width: 100% !important;
                 box-sizing: border-box !important;
+                height: 100% !important;
+            }
+            .view-container {
+                flex: 1 !important;
+                min-height: 0 !important;
+            }
+            .view-panel.active {
+                height: 100% !important;
+            }
+            .chat-input {
+                position: sticky !important;
+                bottom: 0 !important;
+                z-index: 10 !important;
+                background: #fff !important;
+                flex-shrink: 0 !important;
             }
             .left-column, .right-column {
                 display: none !important;
@@ -275,6 +290,46 @@
                     mainLayout.style.width = '100%';
                     mainLayout.style.boxSizing = 'border-box';
                 }
+
+                // Fix mobile virtual keyboard causing input to jump
+                // Store initial height and prevent resize from changing layout
+                var initialHeight = window.innerHeight;
+                document.documentElement.style.setProperty('--app-height', initialHeight + 'px');
+
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener('resize', function() {
+                        // When keyboard opens, viewport shrinks — keep layout stable
+                        var chatSection = document.querySelector('.chat-section');
+                        if (chatSection) {
+                            chatSection.style.height = window.visualViewport.height + 'px';
+                        }
+                    });
+                    window.visualViewport.addEventListener('scroll', function() {
+                        // Prevent viewport scroll offset from misplacing elements
+                        document.documentElement.style.setProperty('--vv-offset', window.visualViewport.offsetTop + 'px');
+                    });
+                }
+                
+                // Prevent focus scroll jump on inputs
+                document.querySelectorAll('.chat-input input').forEach(function(input) {
+                    input.addEventListener('focus', function() {
+                        setTimeout(function() {
+                            window.scrollTo(0, 0);
+                            document.body.scrollTop = 0;
+                        }, 100);
+                    });
+                    input.addEventListener('blur', function() {
+                        setTimeout(function() {
+                            window.scrollTo(0, 0);
+                            document.body.scrollTop = 0;
+                            // Restore chat-section height
+                            var chatSection = document.querySelector('.chat-section');
+                            if (chatSection) {
+                                chatSection.style.height = '';
+                            }
+                        }, 100);
+                    });
+                });
             } else {
                 console.log('Desktop device detected - no mobile fixes applied');
             }
@@ -784,7 +839,7 @@
                         <!-- Заметки -->
                         {% if logged_in %}
                         <div id="notes-view" class="view-panel">
-                            <div id="notes-list" class="chat-messages" style="padding: 12px;">
+                            <div id="notes-list" class="chat-messages">
                                 <div id="notes-empty" style="text-align: center; padding: 40px 20px; color: #8B949E;">
                                     <svg width="32" height="32" viewBox="0 0 16 16" fill="#8B949E" style="margin-bottom: 8px;"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Z"/></svg>
                                     <div data-i18n="notes-empty">Заметок пока нет</div>

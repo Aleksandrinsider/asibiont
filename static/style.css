@@ -253,6 +253,7 @@ body {
     width: calc(100% - 40px);
     max-width: none; /* Allow full width */
     height: calc(100vh - var(--header-height) - 16px);
+    height: calc(100dvh - var(--header-height) - 16px);
     overflow: visible;
     display: flex;
     flex-direction: column;
@@ -285,6 +286,7 @@ body {
 .main-layout {
     display: flex;
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
+    height: calc((100dvh - var(--header-height) - 16px) * 0.98);
     gap: 4px;
     overflow: visible;
     align-items: stretch;
@@ -2296,6 +2298,7 @@ details[open] .details-content {
         max-width: 100% !important;
         height: auto !important;
         min-height: 100vh !important;
+        min-height: 100dvh !important;
         overflow-x: hidden !important;
     }
     .main-layout {
@@ -2303,6 +2306,7 @@ details[open] .details-content {
         gap: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
+        height: 100% !important;
     }
     .center-column {
         flex: 1 1 100% !important;
@@ -2327,6 +2331,16 @@ details[open] .details-content {
     }
     .chat-input {
         padding: 8px !important;
+        position: sticky !important;
+        bottom: 0 !important;
+        background: #fff !important;
+        z-index: 10 !important;
+        flex-shrink: 0 !important;
+    }
+    .chat-section {
+        height: var(--app-height, 100dvh) !important;
+        max-height: var(--app-height, 100dvh) !important;
+        transition: none !important;
     }
     .view-panel {
         width: 100% !important;
