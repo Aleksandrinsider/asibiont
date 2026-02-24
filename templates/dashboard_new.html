@@ -6,7 +6,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="theme-color" content="#068487">
+    <meta name="theme-color" content="#ffffff">
     <link rel="manifest" href="/static/manifest.json">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
@@ -124,7 +124,33 @@
         }
 
         /* Mobile adjustments */
-        
+        @media (max-width: 768px) {
+            .app-header {
+                display: none !important;
+            }
+            .container {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .main-layout {
+                padding: 0 !important;
+                gap: 0 !important;
+            }
+            .center-column {
+                flex: 1 1 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                border-radius: 0 !important;
+            }
+            .center-column .chat-section {
+                border-radius: 0 !important;
+                border-left: none !important;
+                border-right: none !important;
+            }
+            .left-column, .right-column {
+                display: none !important;
+            }
+        }
     </style>
 
     <!-- Structured Data -->
@@ -162,6 +188,9 @@
         function closeMobileModal() {
             var modal = document.getElementById('mobile-modal');
             if (modal) modal.style.display = 'none';
+            // Hide header on mobile
+            var header = document.querySelector('.app-header');
+            if (header) header.style.display = 'none';
         }
 
         function disableProblematicScripts() {
