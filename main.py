@@ -398,9 +398,10 @@ async def send_email(to: str, subject: str, body: str):
         msg.attach(MIMEText(html, 'html', 'utf-8'))
         
         # Gmail SMTP SSL on port 465
+        logger.info(f"SMTP connecting to {SMTP_HOST}:{SMTP_PORT} as {SMTP_USER}")
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, to, msg.as_string())
+            server.sendmail(SMTP_USER, to, msg.as_string())
     
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _send)
@@ -410,6 +411,18 @@ async def send_email(to: str, subject: str, body: str):
 async def health_handler(request):
     """Health check endpoint for Railway"""
     return web.Response(text='OK', status=200)
+
+async def smtp_check_handler(request):
+    """Diagnostic: check SMTP config (no secrets)"""
+    from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+    return web.json_response({
+        'host': SMTP_HOST,
+        'port': SMTP_PORT,
+        'user': SMTP_USER,
+        'from': SMTP_FROM,
+        'password_set': bool(SMTP_PASSWORD),
+        'password_len': len(SMTP_PASSWORD) if SMTP_PASSWORD else 0
+    })
 
 
 # ═══ IndexNow: мгновенное уведомление поисковиков ═══
@@ -7335,6 +7348,7 @@ async def withdraw_handler(request):
 
 # Routes
 app.router.add_get('/health', health_handler)
+app.router.add_get('/api/smtp-check', smtp_check_handler)
 app.router.add_get('/', login_handler)
 app.router.add_get('/admin/index.html', lambda r: web.HTTPFound('/dashboard'))  # Redirect old admin URL
 app.router.add_get('/tg_auth', auth_handler)
