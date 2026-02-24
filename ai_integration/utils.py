@@ -1012,7 +1012,7 @@ def _normalize_company_name(company: str) -> str:
 
 # Fields to normalize for cross-language matching
 _NORMALIZE_FIELDS = [
-    'skills', 'interests', 'goals', 'city', 'company',
+    'skills', 'interests', 'goals', 'city', 'country', 'company',
     'position', 'bio', 'status_text', 'current_plans'
 ]
 

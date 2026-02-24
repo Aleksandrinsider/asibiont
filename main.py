@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -1157,6 +1157,18 @@ async def dashboard_handler(request):
 
         logger.info(f"Rendering dashboard for user {user.id}")
 
+        # Pre-translate profile fields for the template
+        _profile_i18n = {
+            'city': _pick_dash(profile, 'city'),
+            'company': _pick_dash(profile, 'company'),
+            'position': _pick_dash(profile, 'position'),
+            'goals': _pick_dash(profile, 'goals'),
+            'skills': _pick_dash(profile, 'skills'),
+            'interests': _pick_dash(profile, 'interests'),
+            'status_text': _pick_dash(profile, 'status_text'),
+            'country': _pick_dash(profile, 'country') if profile and hasattr(profile, 'country') else None,
+        }
+
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
             'bot_username': 'asibiont_bot',
@@ -1164,6 +1176,8 @@ async def dashboard_handler(request):
             'user': user,
             'total_users_count': total_users_count,
             'profile': profile,
+            'profile_i18n': _profile_i18n,
+            'lang': _dash_lang,
             'telegram_channel': user.telegram_channel if user else None,
             'discord_webhook': user.discord_webhook if user else None,
             'interactions': interactions,
@@ -3625,6 +3639,7 @@ async def api_contact_profile_handler(request):
                     'last_name': getattr(contact_user, 'last_name', None),
                     'photo_url': safe_avatar_url(contact_user.telegram_id) if hasattr(contact_user, 'telegram_id') else None,
                     'city': _pick('city'),
+                    'country': _pick('country') if profile and hasattr(profile, 'country') else None,
                     'company': _pick('company'),
                     'position': _pick('position'),
                     'goals': _pick('goals'),
@@ -5901,6 +5916,80 @@ async def api_goals_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_notes_handler(request):
+    """API for getting and creating notes"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            if request.method == 'POST':
+                data = await request.json()
+                content = (data.get('content') or '').strip()
+                if not content:
+                    return web.json_response({'error': 'Content required'}, status=400)
+                if len(content) > 5000:
+                    return web.json_response({'error': 'Note too long'}, status=400)
+                source = data.get('source', 'manual')
+                if source not in ('manual', 'chat'):
+                    source = 'manual'
+                note = Note(user_id=user.id, content=content, source=source)
+                session_db.add(note)
+                session_db.commit()
+                return web.json_response({'success': True, 'note': {
+                    'id': note.id,
+                    'content': note.content,
+                    'source': note.source,
+                    'created_at': note.created_at.isoformat() if note.created_at else None,
+                }})
+
+            # GET
+            notes = session_db.query(Note).filter_by(user_id=user.id).order_by(Note.created_at.desc()).limit(100).all()
+            return web.json_response({'notes': [{
+                'id': n.id,
+                'content': n.content,
+                'source': n.source,
+                'created_at': n.created_at.isoformat() if n.created_at else None,
+            } for n in notes]})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_notes: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_note_delete_handler(request):
+    """API for deleting a note"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        note_id = int(request.match_info['note_id'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            note = session_db.query(Note).filter_by(id=note_id, user_id=user.id).first()
+            if not note:
+                return web.json_response({'error': 'Note not found'}, status=404)
+            session_db.delete(note)
+            session_db.commit()
+            return web.json_response({'success': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error deleting note: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_profile_handler(request):
     """API для получения и обновления профиля пользователя"""
     try:
@@ -5934,6 +6023,8 @@ async def api_profile_handler(request):
                 # Update profile fields (пустые строки удаляют данные)
                 if 'city' in data:
                     profile.city = data['city'].strip() if data['city'] and data['city'].strip() else None
+                if 'country' in data:
+                    profile.country = data['country'].strip() if data['country'] and data['country'].strip() else None
                 if 'birthdate' in data:
                     profile.birthdate = data['birthdate'].strip() if data['birthdate'] and data['birthdate'].strip() else None
                 if 'zodiac_sign' in data:
@@ -6021,23 +6112,39 @@ async def api_profile_handler(request):
 
         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
 
+        # Determine viewer language for field translation
+        viewer_lang = user.language if hasattr(user, 'language') and user.language else 'ru'
+
+        def _pick_own(field_name):
+            """Pick translated or original profile field based on user language."""
+            if not profile:
+                return None
+            original = getattr(profile, field_name, None)
+            if not original:
+                return None
+            if viewer_lang == 'en':
+                return getattr(profile, f'{field_name}_normalized', None) or original
+            else:
+                return getattr(profile, f'{field_name}_normalized_ru', None) or original
+
         profile_data = {
             'username': user.username,
             'telegram_channel': user.telegram_channel,
             'discord_webhook': user.discord_webhook if hasattr(user, 'discord_webhook') else None,
-            'city': profile.city if profile else None,
+            'city': _pick_own('city'),
             'birthdate': profile.birthdate if profile else None,
             'zodiac_sign': profile.zodiac_sign if profile else None,
-            'company': profile.company if profile else None,
-            'position': profile.position if profile else None,
-            'goals': profile.goals if profile else None,
-            'skills': profile.skills if profile else None,
-            'interests': profile.interests if profile else None,
+            'company': _pick_own('company'),
+            'position': _pick_own('position'),
+            'goals': _pick_own('goals'),
+            'skills': _pick_own('skills'),
+            'interests': _pick_own('interests'),
             'languages': profile.languages if profile else None,
-            'bio': profile.bio if profile else None,
-            'status_text': profile.status_text if profile else None,
+            'bio': _pick_own('bio'),
+            'status_text': _pick_own('status_text'),
             'average_rating': profile.average_rating if profile else 0,
-            'rating_count': profile.rating_count if profile else 0
+            'rating_count': profile.rating_count if profile else 0,
+            'country': _pick_own('country') if profile and hasattr(profile, 'country') else None,
         }
 
         # Get subscription and user data for additional fields
@@ -6741,6 +6848,9 @@ app.router.add_get('/api/interactions', api_interactions_handler)
 app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 app.router.add_get('/api/balance', api_balance_handler)
 app.router.add_get('/api/goals', api_goals_handler)
+app.router.add_get('/api/notes', api_notes_handler)
+app.router.add_post('/api/notes', api_notes_handler)
+app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 
 
 # Setup for production

@@ -119,6 +119,12 @@ BATCH_GROUPS = {
 }
 
 
+def _t(user, ru: str, en: str) -> str:
+    """Pick anchor topic string based on user language."""
+    lang = getattr(user, 'language', 'ru') or 'ru'
+    return en if lang == 'en' else ru
+
+
 class AnchorEngine:
     """
     Единый движок автономии. Сканирует → Оценивает → Доставляет.
@@ -373,6 +379,28 @@ class AnchorEngine:
         if not ready:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ после is_deliverable() — 0 ready (expired/suppressed)")
             return
+
+        # ── STALENESS CHECK: задача могла быть выполнена/удалена после создания якоря ──
+        task_anchor_types = {'task_overdue', 'task_deadline_soon', 'task_stale', 'task_reminder', 'task_result_check'}
+        stale_ids = []
+        for a in ready:
+            if a.anchor_type in task_anchor_types and a.source and a.source.startswith('task:'):
+                try:
+                    tid = int(a.source.split(':')[1])
+                except (ValueError, IndexError):
+                    continue
+                src_task = session.query(Task).filter_by(id=tid).first()
+                if not src_task or src_task.status in ('completed', 'deleted', 'cancelled'):
+                    a.delivered_at = datetime.now(timezone.utc)  # auto-expire
+                    stale_ids.append(a.id)
+        if stale_ids:
+            session.commit()
+            ready = [a for a in ready if a.id not in stale_ids]
+            logger.info(f"[ANCHOR] User {user_id}: ♻️ auto-expired {len(stale_ids)} stale task anchors")
+            if not ready:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ все якоря были stale")
+                return
+
         ready = self._apply_cooldowns(ready, user, session)
         if not ready:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ после _apply_cooldowns — 0 ready")
@@ -535,10 +563,13 @@ class AnchorEngine:
                     except Exception:
                         sched_time_str = '??:??'
                     if scan_delay <= 2:
-                        reminder_topic = f'Напоминание: задача «{task.title}» — запланировано {sched_time_str}, сработало точно по расписанию'
+                        reminder_topic = _t(user,
+                            f'Напоминание: задача «{task.title}» — запланировано {sched_time_str}, сработало точно по расписанию',
+                            f'Reminder: task «{task.title}» — scheduled {sched_time_str}, triggered on time')
                     else:
-                        reminder_topic = (f'Напоминание: задача «{task.title}» — запланировано {sched_time_str}, '
-                                         f'задержка {scan_delay} мин из-за шага сканирования (НЕ просрочено)')
+                        reminder_topic = _t(user,
+                            f'Напоминание: задача «{task.title}» — запланировано {sched_time_str}, задержка {scan_delay} мин из-за шага сканирования (НЕ просрочено)',
+                            f'Reminder: task «{task.title}» — scheduled {sched_time_str}, {scan_delay}min scan delay (NOT overdue)')
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_reminder',
@@ -571,7 +602,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='task_overdue',
                         source=f'task:{task.id}',
-                        topic=f'Задача «{task.title}» просрочена на {int(hours_overdue)}ч',
+                        topic=_t(user, f'Задача «{task.title}» просрочена на {int(hours_overdue)}ч', f'Task «{task.title}» overdue by {int(hours_overdue)}h'),
                         priority=AnchorPriority.CRITICAL,
                         data=json.dumps({'task_id': task.id, 'title': task.title,
                                         'hours_overdue': round(hours_overdue, 1),
@@ -589,7 +620,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='task_deadline_soon',
                         source=f'task:{task.id}',
-                        topic=f'Задача «{task.title}» — дедлайн через {int(hours_left)}ч',
+                        topic=_t(user, f'Задача «{task.title}» — дедлайн через {int(hours_left)}ч', f'Task «{task.title}» — deadline in {int(hours_left)}h'),
                         priority=AnchorPriority.HIGH,
                         data=json.dumps({'task_id': task.id, 'title': task.title,
                                         'hours_left': round(hours_left, 1)}),
@@ -610,7 +641,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='task_stale',
                         source=f'task:{task.id}',
-                        topic=f'Задача «{task.title}» висит уже {age_days} дней',
+                        topic=_t(user, f'Задача «{task.title}» висит уже {age_days} дней', f'Task «{task.title}» stale for {age_days} days'),
                         priority=AnchorPriority.LOW,
                         data=json.dumps({'task_id': task.id, 'title': task.title, 'age_days': age_days}),
                         triggered_at=now_utc,
@@ -633,7 +664,7 @@ class AnchorEngine:
                             user_id=user.id,
                             anchor_type='task_result_check',
                             source=f'task:{task.id}:result',
-                            topic=f'Время проверить результат задачи «{task.title}»',
+                            topic=_t(user, f'Время проверить результат задачи «{task.title}»', f'Time to check results for task «{task.title}»'),
                             priority=AnchorPriority.MEDIUM,
                             data=json.dumps({'task_id': task.id, 'title': task.title,
                                             'estimated_duration': task.estimated_duration}),
@@ -691,7 +722,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='recurring_task_due',
                         source=f'task:{rtask.id}:recurring',
-                        topic=f'Повторяющаяся задача «{rtask.title}» — создан новый экземпляр',
+                        topic=_t(user, f'Повторяющаяся задача «{rtask.title}» — создан новый экземпляр', f'Recurring task «{rtask.title}» — new instance created'),
                         priority=AnchorPriority.MEDIUM,
                         data=json.dumps({'task_id': rtask.id, 'title': rtask.title,
                                         'pattern': rtask.recurrence_pattern,
@@ -714,7 +745,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='task_completed_streak',
                 source=f'streak:{recent_completed}',
-                topic=f'За последние 24ч завершено {recent_completed} задач',
+                topic=_t(user, f'За последние 24ч завершено {recent_completed} задач', f'{recent_completed} tasks completed in the last 24h'),
                 priority=AnchorPriority.MEDIUM,
                 data=json.dumps({'completed_count': recent_completed}),
                 triggered_at=now_utc,
@@ -741,7 +772,7 @@ class AnchorEngine:
                     user_id=user.id,
                     anchor_type='goal_progress',
                     source=f'goal:{goal.id}',
-                    topic=f'Цель «{goal.title}» на {goal.progress_percentage}% — почти!',
+                    topic=_t(user, f'Цель «{goal.title}» на {goal.progress_percentage}% — почти!', f'Goal «{goal.title}» at {goal.progress_percentage}% — almost there!'),
                     priority=AnchorPriority.MEDIUM,
                     data=json.dumps({'goal_id': goal.id, 'title': goal.title,
                                     'progress': goal.progress_percentage}),
@@ -762,7 +793,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='goal_stagnation',
                         source=f'goal:{goal.id}',
-                        topic=f'Цель «{goal.title}» — {age_days} дней без прогресса',
+                        topic=_t(user, f'Цель «{goal.title}» — {age_days} дней без прогресса', f'Goal «{goal.title}» — {age_days} days without progress'),
                         priority=AnchorPriority.LOW,
                         data=json.dumps({'goal_id': goal.id, 'title': goal.title,
                                         'age_days': age_days}),
@@ -783,7 +814,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='goal_deadline',
                         source=f'goal:{goal.id}',
-                        topic=f'Цель «{goal.title}» — дедлайн через {days_left} дн, прогресс {goal.progress_percentage}%',
+                        topic=_t(user, f'Цель «{goal.title}» — дедлайн через {days_left} дн, прогресс {goal.progress_percentage}%', f'Goal «{goal.title}» — deadline in {days_left}d, progress {goal.progress_percentage}%'),
                         priority=AnchorPriority.HIGH,
                         data=json.dumps({'goal_id': goal.id, 'title': goal.title,
                                         'days_left': days_left, 'progress': goal.progress_percentage}),
@@ -805,7 +836,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='profile_gap',
                 source='profile:empty',
-                topic='Профиль не заполнен — агент не может эффективно помогать',
+                topic='Профиль не заполнен — агент не может эффективно помогать' if getattr(user, 'language', 'ru') != 'en' else 'Profile is empty — agent cannot help effectively',
                 priority=AnchorPriority.MEDIUM,
                 data=json.dumps({'missing': ['skills', 'interests', 'goals', 'city', 'position']}),
                 triggered_at=now_utc,
@@ -816,19 +847,20 @@ class AnchorEngine:
             return anchors
 
         missing = []
+        _is_en = getattr(user, 'language', 'ru') == 'en'
         if not profile.skills or not profile.skills.strip():
-            missing.append('навыки')
+            missing.append('skills' if _is_en else 'навыки')
         if not profile.interests or not profile.interests.strip():
-            missing.append('интересы')
+            missing.append('interests' if _is_en else 'интересы')
         if not profile.goals or not profile.goals.strip():
-            missing.append('цели')
+            missing.append('goals' if _is_en else 'цели')
 
         if len(missing) >= 2:
             anchors.append(Anchor(
                 user_id=user.id,
                 anchor_type='profile_gap',
                 source=f'profile:missing:{",".join(missing)}',
-                topic=f'В профиле не хватает: {", ".join(missing)}',
+                topic=_t(user, f'В профиле не хватает: {", ".join(missing)}', f'Profile missing: {", ".join(missing)}'),
                 priority=AnchorPriority.LOW,
                 data=json.dumps({'missing': missing}),
                 triggered_at=now_utc,
@@ -862,7 +894,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='delegation_pending',
                         source=f'task:{task.id}:delegation',
-                        topic=f'Делегированная задача «{task.title}» → @{task.delegated_to_username} — ждёт ответа {int(hours_waiting)}ч',
+                        topic=_t(user, f'Делегированная задача «{task.title}» → @{task.delegated_to_username} — ждёт ответа {int(hours_waiting)}ч', f'Delegated task «{task.title}» → @{task.delegated_to_username} — waiting {int(hours_waiting)}h'),
                         priority=AnchorPriority.HIGH,
                         data=json.dumps({'task_id': task.id, 'title': task.title,
                                         'delegated_to': task.delegated_to_username,
@@ -886,7 +918,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='delegation_update',
                 source=f'task:{task.id}:status:{task.delegation_status}',
-                topic=f'Задача «{task.title}» — @{task.delegated_to_username} {task.delegation_status}',
+                topic=_t(user, f'Задача «{task.title}» — @{task.delegated_to_username} {task.delegation_status}', f'Task «{task.title}» — @{task.delegated_to_username} {task.delegation_status}'),
                 priority=AnchorPriority.MEDIUM,
                 data=json.dumps({'task_id': task.id, 'title': task.title,
                                 'delegated_to': task.delegated_to_username,
@@ -935,7 +967,7 @@ class AnchorEngine:
                             user_id=user.id,
                             anchor_type='contact_match',
                             source=f'contact:@{prof_user.username}',
-                            topic=f'Новый специалист @{prof_user.username} ({detail})',
+                            topic=_t(user, f'Новый специалист @{prof_user.username} ({detail})', f'New specialist @{prof_user.username} ({detail})'),
                             priority=AnchorPriority.MEDIUM,
                             data=json.dumps({
                                 'username': prof_user.username,
@@ -981,7 +1013,7 @@ class AnchorEngine:
                     user_id=user.id,
                     anchor_type='dialog_followup',
                     source=f'dialog:{last_user_msg.id}',
-                    topic=f'Последнее сообщение {int(hours_since)}ч назад: «{content_preview[:60]}...»',
+                    topic=_t(user, f'Последнее сообщение {int(hours_since)}ч назад: «{content_preview[:60]}...»', f'Last message {int(hours_since)}h ago: «{content_preview[:60]}...»'),
                     priority=AnchorPriority.LOW,
                     data=json.dumps({
                         'last_message': content_preview,
@@ -1007,7 +1039,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='morning_plan',
                 source=f'daily:morning:{user_now.strftime("%Y-%m-%d")}',
-                topic='Утро — время для обзора дня',
+                topic=_t(user, 'Утро — время для обзора дня', 'Morning — time to review the day'),
                 priority=AnchorPriority.MEDIUM,
                 data=json.dumps({'hour': hour, 'date': user_now.strftime('%Y-%m-%d')}),
                 triggered_at=now_utc,
@@ -1022,7 +1054,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='evening_review',
                 source=f'daily:evening:{user_now.strftime("%Y-%m-%d")}',
-                topic='Вечер — время для подведения итогов',
+                topic=_t(user, 'Вечер — время для подведения итогов', 'Evening — time to wrap up'),
                 priority=AnchorPriority.LOW,
                 data=json.dumps({'hour': hour, 'date': user_now.strftime('%Y-%m-%d')}),
                 triggered_at=now_utc,
@@ -1050,7 +1082,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='market_insight',
                 source=f'market:{now_utc.strftime("%Y-%m-%d")}',
-                topic=f'Время проверить события в нише: {niche[:60]}',
+                topic=_t(user, f'Время проверить события в нише: {niche[:60]}', f'Time to check events in niche: {niche[:60]}'),
                 priority=AnchorPriority.LOW,
                 data=json.dumps({'niche': niche, 'goals': goals[:200]}),
                 triggered_at=now_utc,
@@ -1064,7 +1096,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='content_opportunity',
                 source=f'content:{now_utc.strftime("%Y-%m-%d")}',
-                topic='Время для контент-идеи',
+                topic=_t(user, 'Время для контент-идеи', 'Time for a content idea'),
                 priority=AnchorPriority.LOW,
                 data=json.dumps({
                     'content_strategy': content_strategy[:300],
@@ -1097,7 +1129,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='event_discovery',
                 source=f'events:{now_utc.strftime("%Y-%m-%d")}',
-                topic=f'Поиск актуальных мероприятий по теме: {niche[:60]}',
+                topic=_t(user, f'Поиск актуальных мероприятий по теме: {niche[:60]}', f'Searching for events on topic: {niche[:60]}'),
                 priority=AnchorPriority.LOW,
                 data=json.dumps({
                     'niche': niche,
@@ -1207,7 +1239,7 @@ class AnchorEngine:
                         user_id=user.id,
                         anchor_type='contact_activity',
                         source=f'contact_activity:{now_utc.strftime("%Y-%m-%d")}',
-                        topic=f'Активности контактов в {city} совпадают с вашим профилем ({len(contact_activities)} чел)',
+                        topic=_t(user, f'Активности контактов в {city} совпадают с вашим профилем ({len(contact_activities)} чел)', f'Contact activities in {city} match your profile ({len(contact_activities)} people)'),
                         priority=AnchorPriority.MEDIUM,
                         data=json.dumps({
                             'city': city,
@@ -1253,14 +1285,15 @@ class AnchorEngine:
             senders[uname].append(msg.message_text[:80])
 
         summaries = []
+        _msg_suffix = 'msg' if getattr(user, 'language', 'ru') == 'en' else 'сообщ.'
         for uname, texts in list(senders.items())[:5]:
-            summaries.append(f'@{uname}: {len(texts)} сообщ.')
+            summaries.append(f'@{uname}: {len(texts)} {_msg_suffix}')
 
         anchors.append(Anchor(
             user_id=user.id,
             anchor_type='incoming_message',
             source=f'messages:unread:{now_utc.strftime("%Y-%m-%d-%H")}',
-            topic=f'{len(unread)} непрочитанных сообщений от {len(senders)} чел: {", ".join(summaries)}',
+            topic=_t(user, f'{len(unread)} непрочитанных сообщений от {len(senders)} чел: {", ".join(summaries)}', f'{len(unread)} unread messages from {len(senders)} people: {", ".join(summaries)}'),
             priority=AnchorPriority.HIGH,
             data=json.dumps({
                 'total': len(unread),
@@ -1293,7 +1326,7 @@ class AnchorEngine:
             user_id=user.id,
             anchor_type='token_low_balance',
             source=f'tokens:low:{balance}',
-            topic=f'Баланс токенов: {balance} — хватит на ~{msgs_left} сообщений',
+            topic=_t(user, f'Баланс токенов: {balance} — хватит на ~{msgs_left} сообщений', f'Token balance: {balance} — enough for ~{msgs_left} messages'),
             priority=AnchorPriority.HIGH,
             data=json.dumps({
                 'balance': balance,
@@ -1330,7 +1363,7 @@ class AnchorEngine:
                     user_id=user.id,
                     anchor_type='delegation_overdue',
                     source=f'task:{task.id}:delegation_overdue',
-                    topic=f'Делегированная задача «{task.title}» → @{task.delegated_to_username} просрочена на {int(hours_overdue)}ч',
+                    topic=_t(user, f'Делегированная задача «{task.title}» → @{task.delegated_to_username} просрочена на {int(hours_overdue)}ч', f'Delegated task «{task.title}» → @{task.delegated_to_username} overdue by {int(hours_overdue)}h'),
                     priority=AnchorPriority.HIGH,
                     data=json.dumps({
                         'task_id': task.id,
@@ -1379,7 +1412,7 @@ class AnchorEngine:
                 user_id=user.id,
                 anchor_type='goal_decomposition',
                 source=f'goal:{goal.id}:no_tasks',
-                topic=f'Цель «{goal.title}» — нет активных задач, нужна декомпозиция',
+                topic=_t(user, f'Цель «{goal.title}» — нет активных задач, нужна декомпозиция', f'Goal «{goal.title}» — no active tasks, needs breakdown'),
                 priority=AnchorPriority.MEDIUM,
                 data=json.dumps({
                     'goal_id': goal.id,
@@ -1432,7 +1465,7 @@ class AnchorEngine:
             user_id=user.id,
             anchor_type='inactivity_reengagement',
             source=f'inactivity:{days_inactive}d:{now_utc.strftime("%Y-%m-%d")}',
-            topic=f'Не заходил {days_inactive} дней — {pending_tasks} задач и {active_goals} целей ждут',
+            topic=_t(user, f'Не заходил {days_inactive} дней — {pending_tasks} задач и {active_goals} целей ждут', f'Inactive for {days_inactive} days — {pending_tasks} tasks and {active_goals} goals waiting'),
             priority=AnchorPriority.MEDIUM,
             data=json.dumps({
                 'days_inactive': days_inactive,
@@ -1567,7 +1600,7 @@ class AnchorEngine:
             user_id=user.id,
             anchor_type='post_opportunity',
             source=source_key,
-            topic=f'Есть материал для {len(signals)} потенциальных постов в ленту',
+            topic=_t(user, f'Есть материал для {len(signals)} потенциальных постов в ленту', f'Material available for {len(signals)} potential feed posts'),
             priority=AnchorPriority.LOW,
             data=json.dumps({
                 'signals': signals,
@@ -1638,7 +1671,7 @@ class AnchorEngine:
             user_id=user.id,
             anchor_type='channel_post',
             source=f'channel:{user_now.strftime("%Y-%m-%d")}',
-            topic=f'Время для поста в канал {channel}',
+            topic=_t(user, f'Время для поста в канал {channel}', f'Time for a post in channel {channel}'),
             priority=AnchorPriority.LOW,
             data=json.dumps({
                 'channel': channel,

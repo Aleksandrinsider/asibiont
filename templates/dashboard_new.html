@@ -546,17 +546,20 @@
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
                                 
                             </div>
-                            <p><span data-i18n="city-label">Город:</span> {% if profile.city %}{{ profile.city }}{% else %}<span data-i18n="not-specified">Не указан</span>{% endif %}</p>
+                            {% if profile_i18n and profile_i18n.country or profile.country %}
+                            <p><span data-i18n="country-label">Страна:</span> {{ profile_i18n.country if profile_i18n and profile_i18n.country else profile.country }}</p>
+                            {% endif %}
+                            <p><span data-i18n="city-label">Город:</span> {% if profile_i18n and profile_i18n.city %}{{ profile_i18n.city }}{% elif profile.city %}{{ profile.city }}{% else %}<span data-i18n="not-specified">Не указан</span>{% endif %}</p>
                             {% if profile.birthdate %}
                             <p><span data-i18n="birthday-label">День рождения:</span> {{ profile.birthdate }} ({{ ((current_date | strptime('%d.%m.%Y')).year - (profile.birthdate | strptime('%d.%m.%Y')).year - (((current_date | strptime('%d.%m.%Y')).month, (current_date | strptime('%d.%m.%Y')).day) < ((profile.birthdate | strptime('%d.%m.%Y')).month, (profile.birthdate | strptime('%d.%m.%Y')).day)) | int) }} <span data-i18n="years-old">лет</span>)</p>
                             {% else %}
                             <p><span data-i18n="birthday-label">День рождения:</span> <span data-i18n="not-specified-f">Не указана</span></p>
                             {% endif %}
-                            <p><span data-i18n="company-label">Компания:</span> {% if profile.company %}{{ profile.company }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
-                            <p><span data-i18n="position-label">Должность:</span> {% if profile.position %}{{ profile.position }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
-                            <p><span data-i18n="goals-label">Цели:</span> {% if profile.goals %}{{ profile.goals }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
-                            <p><span data-i18n="skills-label">Навыки:</span> {% if profile.skills %}{{ profile.skills }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
-                            <p><span data-i18n="interests-label">Интересы:</span> {% if profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
+                            <p><span data-i18n="company-label">Компания:</span> {% if profile_i18n and profile_i18n.company %}{{ profile_i18n.company }}{% elif profile.company %}{{ profile.company }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
+                            <p><span data-i18n="position-label">Должность:</span> {% if profile_i18n and profile_i18n.position %}{{ profile_i18n.position }}{% elif profile.position %}{{ profile.position }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
+                            <p><span data-i18n="goals-label">Цели:</span> {% if profile_i18n and profile_i18n.goals %}{{ profile_i18n.goals }}{% elif profile.goals %}{{ profile.goals }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
+                            <p><span data-i18n="skills-label">Навыки:</span> {% if profile_i18n and profile_i18n.skills %}{{ profile_i18n.skills }}{% elif profile.skills %}{{ profile.skills }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
+                            <p><span data-i18n="interests-label">Интересы:</span> {% if profile_i18n and profile_i18n.interests %}{{ profile_i18n.interests|unique_interests }}{% elif profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 8 %}style="color: #068487;"{% endif %}><span data-i18n="rating-label">Рекомендация:</span> {{ profile.average_rating }}/10</p>
                             {% else %}
@@ -612,6 +615,12 @@
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="news-feed">Лента новостей</span>
                                 </span>
+                                {% if logged_in %}
+                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span id="notes-link" onclick="event.stopPropagation(); switchToNotes()" style="cursor: pointer; opacity: 0.5;">
+                                    <span data-i18n="notes">Заметки</span>
+                                </span>
+                                {% endif %}
                             </h3>
                         </div>
                     </div>
@@ -673,6 +682,26 @@
                         </div>
                         {% endif %}
                         </div>
+
+                        <!-- Заметки -->
+                        {% if logged_in %}
+                        <div id="notes-view" class="view-panel">
+                            <div id="notes-list" class="chat-messages" style="padding: 12px;">
+                                <div id="notes-empty" style="text-align: center; padding: 40px 20px; color: #8B949E;">
+                                    <svg width="32" height="32" viewBox="0 0 16 16" fill="#8B949E" style="margin-bottom: 8px;"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Z"/></svg>
+                                    <div data-i18n="notes-empty">Заметок пока нет</div>
+                                </div>
+                            </div>
+                            <div class="chat-input">
+                                <input type="text" id="note-input" placeholder="Текст заметки..." data-i18n-ph="note-placeholder" onkeypress="if(event.key==='Enter')addManualNote()">
+                                <div style="display: flex; gap: 4px; flex-direction: row;">
+                                    <button onclick="addManualNote()" class="chat-action-btn" title="Добавить заметку" data-i18n-title="add-note">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -968,6 +997,10 @@
             <div class="rating-modal-body">
                 <form id="quick-profile-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;">
                     <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="country-label2">Страна</label>
+                        <input type="text" id="quick-country" placeholder="Например: Россия" data-i18n-ph="country-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="city-req">Город <span style="color: #DC2626; font-weight: 500;">*</span></label>
                         <input type="text" id="quick-city" placeholder="Например: Москва" data-i18n-ph="city-ph" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
@@ -1184,12 +1217,15 @@
                 }
             }
             
+            // "Save to Notes" button for AI messages
+            const saveBtn = normalizedSender === 'ai' ? `<button onclick="saveToNotes(this.closest('.message').querySelector('.message-text').innerText)" style="background: none; border: none; cursor: pointer; padding: 2px 6px; margin-top: 4px; opacity: 0.4; font-size: 11px; color: #374151; display: inline-flex; align-items: center; gap: 3px;" title="${t('save-to-notes')}" onmouseenter="this.style.opacity='0.8'" onmouseleave="this.style.opacity='0.4'"><svg width="12" height="12" viewBox="0 0 16 16" fill="#374151"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>${t('save-to-notes')}</button>` : '';
+            
             messageDiv.innerHTML = `
                 <div style="display: flex; align-items: flex-start; gap: 0;">
                     ${avatarHtml}
                     <div style="flex: 1; min-width: 0;">
                         <div class="message-text">${processedText}</div>
-                        <div class="message-time">${dateString} ${timeString}</div>
+                        <div class="message-time">${dateString} ${timeString} ${saveBtn}</div>
                     </div>
                 </div>
             `;
@@ -1454,6 +1490,7 @@
                     const display = document.getElementById('status-display');
                     if (display) display.textContent = statusText || t('status-set');
                     showNotification(t('save') + '!', 'success');
+                    setTimeout(() => location.reload(), 600);
                 }
             } catch(e) {
                 console.error('Save status error:', e);
@@ -1641,29 +1678,39 @@
         function switchToChat() {
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
+            const notesView = document.getElementById('notes-view');
             if (!chatView || !feedView) return;
             
             currentView = 'chat';
             feedView.classList.remove('active');
             chatView.classList.add('active');
+            if (notesView) notesView.classList.remove('active');
             chatView.style.zIndex = '1';
             feedView.style.zIndex = '0';
+            if (notesView) notesView.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
+            const notesLink = document.getElementById('notes-link');
+            if (notesLink) notesLink.style.opacity = '0.5';
         }
 
         function switchToFeed() {
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
+            const notesView = document.getElementById('notes-view');
             if (!chatView || !feedView) return;
             
             currentView = 'feed';
             chatView.classList.remove('active');
             feedView.classList.add('active');
+            if (notesView) notesView.classList.remove('active');
             feedView.style.zIndex = '1';
             chatView.style.zIndex = '0';
+            if (notesView) notesView.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
+            const notesLink = document.getElementById('notes-link');
+            if (notesLink) notesLink.style.opacity = '0.5';
             
             // Скрыть индикатор новых постов и обновить lastSeenPostId
             const indicator = document.getElementById('new-posts-indicator');
@@ -1676,6 +1723,127 @@
         function handlePostKeyPress(event) {
             if (event.key === 'Enter') {
                 createPost();
+            }
+        }
+
+        // ====== Notes functions ======
+        function switchToNotes() {
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            const notesView = document.getElementById('notes-view');
+            if (!chatView || !feedView || !notesView) return;
+
+            currentView = 'notes';
+            chatView.classList.remove('active');
+            feedView.classList.remove('active');
+            notesView.classList.add('active');
+            notesView.style.zIndex = '1';
+            chatView.style.zIndex = '0';
+            feedView.style.zIndex = '0';
+            document.getElementById('chat-link').style.opacity = '0.5';
+            document.getElementById('feed-link').style.opacity = '0.5';
+            const notesLink = document.getElementById('notes-link');
+            if (notesLink) notesLink.style.opacity = '1';
+
+            loadNotes();
+        }
+
+        let _notesLoaded = false;
+        async function loadNotes() {
+            try {
+                const resp = await fetch('/api/notes?t=' + Date.now(), { credentials: 'include' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const list = document.getElementById('notes-list');
+                const emptyEl = document.getElementById('notes-empty');
+                if (!list) return;
+                // Clear existing except empty placeholder
+                list.querySelectorAll('.note-card').forEach(el => el.remove());
+                if (!data.notes || data.notes.length === 0) {
+                    if (emptyEl) emptyEl.style.display = '';
+                    return;
+                }
+                if (emptyEl) emptyEl.style.display = 'none';
+                data.notes.forEach(n => {
+                    const card = document.createElement('div');
+                    card.className = 'note-card';
+                    card.setAttribute('data-note-id', n.id);
+                    card.style.cssText = 'background: #f6f8fa; border: 1px solid #D1D9E0; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; position: relative;';
+                    const dt = n.created_at ? new Date(n.created_at).toLocaleString() : '';
+                    const src = n.source === 'chat' ? ('💬 ' + t('from-chat')) : ('📝 ' + t('manual-note'));
+                    card.innerHTML = `
+                        <div style="font-size: 12px; color: #8B949E; margin-bottom: 4px;">${src} · ${dt}</div>
+                        <div style="font-size: 13px; color: #374151; white-space: pre-wrap;">${escapeHtml(n.content)}</div>
+                        <button onclick="deleteNote(${n.id})" style="position: absolute; top: 8px; right: 8px; background: none; border: none; cursor: pointer; padding: 2px; opacity: 0.5;" title="${t('delete-note')}">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="#d73a49"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+                        </button>`;
+                    list.appendChild(card);
+                });
+                _notesLoaded = true;
+            } catch (e) {
+                console.error('Error loading notes:', e);
+            }
+        }
+
+        async function addManualNote() {
+            const inp = document.getElementById('note-input');
+            if (!inp) return;
+            const text = inp.value.trim();
+            if (!text) return;
+            try {
+                const resp = await fetch('/api/notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ content: text, source: 'manual' })
+                });
+                if (resp.ok) {
+                    inp.value = '';
+                    showNotification(t('note-saved'), 'success');
+                    loadNotes();
+                }
+            } catch (e) {
+                showNotification(t('err-prefix') + ' ' + e.message, 'error');
+            }
+        }
+
+        async function saveToNotes(text) {
+            if (!text || !text.trim()) return;
+            try {
+                const resp = await fetch('/api/notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ content: text.trim(), source: 'chat' })
+                });
+                if (resp.ok) {
+                    showNotification(t('note-saved'), 'success');
+                    if (_notesLoaded) loadNotes();
+                }
+            } catch (e) {
+                showNotification(t('err-prefix') + ' ' + e.message, 'error');
+            }
+        }
+
+        async function deleteNote(noteId) {
+            try {
+                const resp = await fetch('/api/notes/' + noteId, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    showNotification(t('note-deleted'), 'success');
+                    const card = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                    if (card) card.remove();
+                    // Check if empty
+                    const remaining = document.querySelectorAll('.note-card');
+                    if (remaining.length === 0) {
+                        const emptyEl = document.getElementById('notes-empty');
+                        if (emptyEl) emptyEl.style.display = '';
+                    }
+                }
+            } catch (e) {
+                showNotification(t('err-prefix') + ' ' + e.message, 'error');
             }
         }
 
@@ -4794,6 +4962,7 @@
         }
         
         async function submitQuickProfile() {
+            const country = document.getElementById('quick-country').value.trim();
             const city = document.getElementById('quick-city').value.trim();
             const birthdate = document.getElementById('quick-birthdate').value.trim();
             const company = document.getElementById('quick-company').value.trim();
@@ -4829,6 +4998,7 @@
                 const profileData = {};
                 // Всегда отправляем все поля, даже если они пустые (для удаления)
                 profileData.city = city;
+                profileData.country = country;
                 profileData.interests = interests;
                 profileData.skills = skills;
                 profileData.goals = goals;
@@ -5036,6 +5206,9 @@
                     // Profile details - текст слева, отступы как в блоке профиля
                     html += '<div class="context-item">';
                     
+                    if (partner.country) {
+                        html += `<p style="text-align: left;">${t('country-label')} ${partner.country}</p>`;
+                    }
                     html += `<p style="text-align: left;">${t('city-label')} ${partner.city || t('not-specified')}</p>`;
                     if (partner.birthdate) {
                         console.log('partner.birthdate:', partner.birthdate);
@@ -6402,6 +6575,9 @@
                         html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || t('user')) + ' <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">' + (data.profile.status_text || t('status-set')) + '</a></p>';
                         html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || t('unknown-user')) + '</p>';
                         html += '</div>';
+                        if (data.profile.country) {
+                            html += '<p>' + t('country-label') + ' ' + data.profile.country + '</p>';
+                        }
                         html += '<p>' + t('city-label') + ' ' + (data.profile.city || t('not-specified')) + '</p>';
                         if (data.profile.birthdate) {
                             // Calculate age
@@ -7216,7 +7392,7 @@
       'open-tg-bot':'Открыть Telegram бота',
       'logout':'Выход',
       'user':'Пользователь',
-      'city-label':'Город:','not-specified':'Не указан','not-specified-f':'Не указана','not-specified-pl':'Не указаны',
+      'city-label':'Город:','country-label':'Страна:','country-label2':'Страна','country-ph':'Например: Россия','not-specified':'Не указан','not-specified-f':'Не указана','not-specified-pl':'Не указаны',
       'birthday-label':'День рождения:','company-label':'Компания:','position-label':'Должность:',
       'goals-label':'Цели:','skills-label':'Навыки:','interests-label':'Интересы:',
       'rating-label':'Рекомендация:','no-ratings':'Нет рекомендаций',
@@ -7242,6 +7418,9 @@
       'translate':'Перевести','original':'Оригинал',
       'feed-empty':'Лента новостей пуста',
       'feed-empty-desc':'Здесь будут отображаться публикации ваших избранных контактов. Добавьте контакты в избранное, чтобы видеть их посты.',
+      'notes':'Заметки','notes-empty':'Заметок пока нет','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
+      'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
+      'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку',
       'save':'Сохранить','cancel':'Отмена',
       'rate-contact':'Рекомендовать контакт','you-rate':'Рекомендуете',
       'rate-scale':'1 - очень плохая рекомендация, 10 - отличная рекомендация',
@@ -7264,6 +7443,8 @@
       'goals':'Цели','goals-ph':'Чего вы хотите достичь?',
       'position':'Должность','position-ph':'Ваша должность',
       'tg-channel':'@ вашего канала для автопубликации постов (бот @asibiont_bot должен быть админом канала)',
+      'discord-webhook':'Webhook вашего канала для автопубликации постов',
+      'status':'Статус',
       'skip':'Пропустить',
       'thinking':'Думаю...','start-dialog':'Начните диалог с AI-ассистентом',
       'start-dialog-desc':'Задайте вопрос или создайте задачу в поле ниже...',
@@ -7386,7 +7567,7 @@
       'open-tg-bot':'Open Telegram bot',
       'logout':'Logout',
       'user':'User',
-      'city-label':'City:','not-specified':'Not specified','not-specified-f':'Not specified','not-specified-pl':'Not specified',
+      'city-label':'City:','country-label':'Country:','country-label2':'Country','country-ph':'e.g., Russia','not-specified':'Not specified','not-specified-f':'Not specified','not-specified-pl':'Not specified',
       'birthday-label':'Birthday:','company-label':'Company:','position-label':'Position:',
       'goals-label':'Goals:','skills-label':'Skills:','interests-label':'Interests:',
       'rating-label':'Rating:','no-ratings':'No ratings',
@@ -7411,6 +7592,9 @@
       'translate':'Translate','original':'Original',
       'feed-empty':'News feed is empty',
       'feed-empty-desc':'Posts from your favorite contacts will appear here. Add contacts to favorites to see their posts.',
+      'notes':'Notes','notes-empty':'No notes yet','note-saved':'Note saved!','note-deleted':'Note deleted',
+      'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
+      'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note',
       'save':'Save','cancel':'Cancel',
       'rate-contact':'Rate contact','you-rate':'You rate',
       'rate-scale':'1 - very poor rating, 10 - excellent rating',
@@ -7433,6 +7617,8 @@
       'goals':'Goals','goals-ph':'What do you want to achieve?',
       'position':'Position','position-ph':'Your position',
       'tg-channel':'Your channel @ for auto-publishing posts (bot @asibiont_bot must be channel admin)',
+      'discord-webhook':'Your channel webhook for auto-publishing posts',
+      'status':'Status',
       'skip':'Skip',
       'thinking':'Thinking...','start-dialog':'Start a conversation with the AI assistant',
       'start-dialog-desc':'Ask a question or create a task below...',

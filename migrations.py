@@ -66,6 +66,10 @@ def _migrate_user_profiles(session, inspector):
         'bio_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN bio_normalized_ru TEXT',
         'status_text_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN status_text_normalized_ru VARCHAR(100)',
         'current_plans_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN current_plans_normalized_ru TEXT',
+        # Country field
+        'country': 'ALTER TABLE user_profiles ADD COLUMN country VARCHAR(100)',
+        'country_normalized': 'ALTER TABLE user_profiles ADD COLUMN country_normalized VARCHAR(100)',
+        'country_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN country_normalized_ru VARCHAR(100)',
     })
 
     # subscription_tier — особая обработка для PostgreSQL enum
@@ -300,6 +304,28 @@ def _migrate_goals(session, inspector):
     })
 
 
+def _migrate_notes(session, inspector):
+    """Create notes table if not exists"""
+    if not inspector.has_table('notes'):
+        try:
+            session.execute(text("""
+                CREATE TABLE notes (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    content TEXT NOT NULL,
+                    source VARCHAR(20) DEFAULT 'manual',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            session.execute(text("CREATE INDEX ix_notes_user_id ON notes(user_id)"))
+            session.execute(text("CREATE INDEX ix_notes_created_at ON notes(created_at)"))
+            session.commit()
+            logger.info("Migration: notes table created")
+        except Exception as e:
+            logger.error(f"Failed to create notes table: {e}")
+            session.rollback()
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -316,6 +342,7 @@ def run_migrations():
         _migrate_anchors(session, inspector)
         _migrate_token_transactions(session, inspector)
         _migrate_goals(session, inspector)
+        _migrate_notes(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

@@ -109,6 +109,18 @@ class Interaction(Base):
     user = relationship("User", backref="interactions")
 
 
+class Note(Base):
+    __tablename__ = 'notes'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    source = Column(String(20), default='manual')  # 'manual' or 'chat'
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+
+    user = relationship("User", backref="notes")
+
+
 class UserProfile(Base):
     __tablename__ = 'user_profiles'
 
@@ -119,6 +131,7 @@ class UserProfile(Base):
     goals = Column(Text)  # User's goals
     contact_info = Column(String(255))  # Telegram username or other contact
     city = Column(String(100))  # City for location-based matching
+    country = Column(String(100))  # Country
     birthdate = Column(String(10))  # Date of birth in DD.MM.YYYY format
     zodiac_sign = Column(String(20))  # Zodiac sign (auto-calculated)
     company = Column(String(255))  # Company name
@@ -150,6 +163,7 @@ class UserProfile(Base):
     interests_normalized = Column(Text)
     goals_normalized = Column(Text)
     city_normalized = Column(String(100))
+    country_normalized = Column(String(100))
     company_normalized = Column(String(255))
     position_normalized = Column(String(255))
     bio_normalized = Column(Text)
@@ -161,6 +175,7 @@ class UserProfile(Base):
     interests_normalized_ru = Column(Text)
     goals_normalized_ru = Column(Text)
     city_normalized_ru = Column(String(100))
+    country_normalized_ru = Column(String(100))
     company_normalized_ru = Column(String(255))
     position_normalized_ru = Column(String(255))
     bio_normalized_ru = Column(Text)
