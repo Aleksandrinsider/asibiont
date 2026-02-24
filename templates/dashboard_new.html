@@ -5064,9 +5064,9 @@
                         const discordName = partner.discord_server_name || 'Discord';
                         let discordHtml = '';
                         if (partner.discord_guild_id && partner.discord_channel_id) {
-                            discordHtml = `${t('discord-channel-label')} <a href="https://discord.com/channels/${partner.discord_guild_id}/${partner.discord_channel_id}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500;">${discordName}</a>`;
+                            discordHtml = `${t('discord-channel-label')} <a href="https://discord.com/channels/${partner.discord_guild_id}/${partner.discord_channel_id}" target="_blank" style="color: #068487; text-decoration: none;">${discordName}</a>`;
                         } else {
-                            discordHtml = `${t('discord-channel-label')} <span style="color: #068487; font-weight: 500;">${discordName}</span>`;
+                            discordHtml = `${t('discord-channel-label')} <span style="color: #068487;">${discordName}</span>`;
                         }
                         channelParts.push(discordHtml);
                     }
