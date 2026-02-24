@@ -56,6 +56,16 @@ def _migrate_user_profiles(session, inspector):
         'bio_normalized': 'ALTER TABLE user_profiles ADD COLUMN bio_normalized TEXT',
         'status_text_normalized': 'ALTER TABLE user_profiles ADD COLUMN status_text_normalized VARCHAR(100)',
         'current_plans_normalized': 'ALTER TABLE user_profiles ADD COLUMN current_plans_normalized TEXT',
+        # Normalized (Russian) fields for displaying to RU users
+        'skills_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN skills_normalized_ru TEXT',
+        'interests_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN interests_normalized_ru TEXT',
+        'goals_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN goals_normalized_ru TEXT',
+        'city_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN city_normalized_ru VARCHAR(100)',
+        'company_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN company_normalized_ru VARCHAR(255)',
+        'position_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN position_normalized_ru VARCHAR(255)',
+        'bio_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN bio_normalized_ru TEXT',
+        'status_text_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN status_text_normalized_ru VARCHAR(100)',
+        'current_plans_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN current_plans_normalized_ru TEXT',
     })
 
     # subscription_tier — особая обработка для PostgreSQL enum

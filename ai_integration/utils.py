@@ -1026,10 +1026,19 @@ def _is_ascii_only(text: str) -> bool:
         return False
 
 
+def _has_cyrillic(text: str) -> bool:
+    """Check if text contains Cyrillic characters (likely Russian)."""
+    return bool(re.search(r'[а-яА-ЯёЁ]', text))
+
+
 async def normalize_profile_fields(profile) -> bool:
     """
-    Normalize all profile text fields to English for cross-language matching.
-    Sends one DeepSeek API call with all non-empty fields.
+    Normalize all profile text fields bidirectionally:
+    - _normalized (EN) for cross-language matching
+    - _normalized_ru (RU) for displaying to Russian users
+    
+    Sends two DeepSeek API calls: one for EN, one for RU.
+    Skips translation if text is already in the target language.
     
     Returns True if normalization was performed, False otherwise.
     """
@@ -1041,36 +1050,108 @@ async def normalize_profile_fields(profile) -> bool:
             fields[field] = value.strip()
 
     if not fields:
-        # Clear all normalized fields
         for field in _NORMALIZE_FIELDS:
             setattr(profile, f'{field}_normalized', None)
+            setattr(profile, f'{field}_normalized_ru', None)
         return False
 
-    # If all fields are pure ASCII → just lowercase, skip API call
-    if all(_is_ascii_only(v) for v in fields.values()):
+    # Split fields by language
+    ru_fields = {}  # Need EN translation
+    en_fields = {}  # Need RU translation
+    mixed_fields = {}  # Need both
+
+    for field, value in fields.items():
+        is_ascii = _is_ascii_only(value)
+        has_cyr = _has_cyrillic(value)
+        if is_ascii and not has_cyr:
+            en_fields[field] = value
+        elif has_cyr and not is_ascii:
+            ru_fields[field] = value
+        else:
+            mixed_fields[field] = value
+
+    # For pure EN fields: _normalized = lowercase, _normalized_ru needs translation
+    for field, value in en_fields.items():
+        setattr(profile, f'{field}_normalized', value.lower())
+
+    # For pure RU fields: _normalized_ru = original, _normalized needs translation
+    for field, value in ru_fields.items():
+        setattr(profile, f'{field}_normalized_ru', value)
+
+    # For mixed: need both translations
+    for field, value in mixed_fields.items():
+        pass  # Will be handled by API calls
+
+    import aiohttp
+    if not DEEPSEEK_API_KEY:
+        # Fallback: just lowercase
         for field, value in fields.items():
             setattr(profile, f'{field}_normalized', value.lower())
+            setattr(profile, f'{field}_normalized_ru', value)
         return True
 
-    # Build prompt for DeepSeek
-    prompt = (
-        "Translate these user profile fields to English. "
-        "Return ONLY a valid JSON object with the same keys. "
-        "For comma-separated lists, translate each item individually and keep commas. "
-        "For semicolon-separated lists, translate each item individually and keep semicolons. "
-        "Lowercase everything. Do not add or remove items. "
-        "If a value is already in English, keep it as-is but lowercase.\n\n"
-        + json.dumps(fields, ensure_ascii=False)
-    )
+    # Translate RU+mixed → EN
+    to_translate_en = {**ru_fields, **mixed_fields}
+    if to_translate_en:
+        en_result = await _translate_fields(to_translate_en, target_lang='en')
+        if en_result:
+            for field, translated in en_result.items():
+                setattr(profile, f'{field}_normalized', str(translated).lower().strip())
+        else:
+            for field, value in to_translate_en.items():
+                setattr(profile, f'{field}_normalized', value.lower())
+
+    # Translate EN+mixed → RU
+    to_translate_ru = {**en_fields, **mixed_fields}
+    if to_translate_ru:
+        ru_result = await _translate_fields(to_translate_ru, target_lang='ru')
+        if ru_result:
+            for field, translated in ru_result.items():
+                setattr(profile, f'{field}_normalized_ru', str(translated).strip())
+        else:
+            for field, value in to_translate_ru.items():
+                setattr(profile, f'{field}_normalized_ru', value)
+
+    # Clear fields that are None in original
+    for field in _NORMALIZE_FIELDS:
+        if field not in fields:
+            setattr(profile, f'{field}_normalized', None)
+            setattr(profile, f'{field}_normalized_ru', None)
+
+    logger.info(f"[NORMALIZE] Profile {profile.user_id} normalized: EN={list(to_translate_en.keys()) if to_translate_en else 'skip'}, RU={list(to_translate_ru.keys()) if to_translate_ru else 'skip'}")
+    return True
+
+
+async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
+    """
+    Translate profile fields to target language via DeepSeek.
+    Returns dict with translated values, or None on failure.
+    """
+    if target_lang == 'en':
+        prompt = (
+            "Translate these user profile fields to English. "
+            "Return ONLY a valid JSON object with the same keys. "
+            "For comma-separated lists, translate each item individually and keep commas. "
+            "For semicolon-separated lists, translate each item individually and keep semicolons. "
+            "Lowercase everything. Do not add or remove items. "
+            "If a value is already in English, keep it as-is but lowercase.\n\n"
+            + json.dumps(fields, ensure_ascii=False)
+        )
+        system = "You are a translator. Return only valid JSON with translated fields. Lowercase all values. No markdown, no explanation."
+    else:
+        prompt = (
+            "Переведи эти поля профиля пользователя на русский язык. "
+            "Верни ТОЛЬКО валидный JSON объект с теми же ключами. "
+            "Для списков через запятую — переведи каждый элемент отдельно, сохрани запятые. "
+            "Для списков через точку с запятой — переведи каждый элемент, сохрани точки с запятой. "
+            "Не добавляй и не удаляй элементы. "
+            "Если значение уже на русском — оставь как есть. Сохраняй естественный регистр (с заглавной буквы для городов, компаний).\n\n"
+            + json.dumps(fields, ensure_ascii=False)
+        )
+        system = "Ты переводчик. Верни только валидный JSON с переведёнными полями. Без markdown, без пояснений."
 
     try:
         import aiohttp
-        if not DEEPSEEK_API_KEY:
-            # Fallback: lowercase originals
-            for field, value in fields.items():
-                setattr(profile, f'{field}_normalized', value.lower())
-            return True
-
         timeout = aiohttp.ClientTimeout(total=30, connect=5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
@@ -1082,7 +1163,7 @@ async def normalize_profile_fields(profile) -> bool:
                 json={
                     "model": DEEPSEEK_MODEL,
                     "messages": [
-                        {"role": "system", "content": "You are a translator. Return only valid JSON with translated fields. Lowercase all values. No markdown, no explanation."},
+                        {"role": "system", "content": system},
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.1,
@@ -1092,33 +1173,17 @@ async def normalize_profile_fields(profile) -> bool:
                 if response.status == 200:
                     data = await response.json()
                     content = data['choices'][0]['message']['content'].strip()
-                    # Parse JSON from response
                     start = content.find('{')
                     end = content.rfind('}') + 1
                     if start != -1 and end > start:
-                        result = json.loads(content[start:end])
-                        for field in _NORMALIZE_FIELDS:
-                            if field in result and field in fields:
-                                setattr(profile, f'{field}_normalized', str(result[field]).lower().strip())
-                            elif field not in fields:
-                                setattr(profile, f'{field}_normalized', None)
-                        logger.info(f"[NORMALIZE] Profile {profile.user_id} normalized: {list(result.keys())}")
-                        return True
+                        return json.loads(content[start:end])
                     else:
-                        logger.warning(f"[NORMALIZE] No JSON in response: {content[:200]}")
+                        logger.warning(f"[TRANSLATE] No JSON in response for {target_lang}: {content[:200]}")
                 else:
-                    logger.warning(f"[NORMALIZE] API returned {response.status}")
+                    logger.warning(f"[TRANSLATE] API returned {response.status} for {target_lang}")
     except Exception as e:
-        logger.error(f"[NORMALIZE] Error normalizing profile {profile.user_id}: {e}")
-
-    # Fallback: use lowercase originals
-    for field, value in fields.items():
-        setattr(profile, f'{field}_normalized', value.lower())
-    # Clear fields that are None in original
-    for field in _NORMALIZE_FIELDS:
-        if field not in fields:
-            setattr(profile, f'{field}_normalized', None)
-    return True
+        logger.error(f"[TRANSLATE] Error translating to {target_lang}: {e}")
+    return None
 
 
 async def normalize_profile_background(internal_user_id: int):

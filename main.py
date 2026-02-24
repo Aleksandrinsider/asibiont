@@ -708,6 +708,19 @@ async def dashboard_handler(request):
             # Get user token balance for display
             display_tier = 'Токены'  # Унифицированная модель
 
+            # Helper: pick translated field based on viewer language
+            _dash_lang = user.language if user and hasattr(user, 'language') and user.language else 'ru'
+            def _pick_dash(profile_obj, field_name):
+                if not profile_obj:
+                    return None
+                original = getattr(profile_obj, field_name, None)
+                if not original:
+                    return None
+                if _dash_lang == 'en':
+                    return getattr(profile_obj, f'{field_name}_normalized', None) or original
+                else:
+                    return getattr(profile_obj, f'{field_name}_normalized_ru', None) or original
+
             # Получить контакты по делегироаю
             delegating_to_me = []  # Люди, которые делегироали м задачи
             delegating_by_me = []  # Люди, которым я делегироал задачи
@@ -844,7 +857,7 @@ async def dashboard_handler(request):
                             'common_tasks': partner.common_tasks if hasattr(partner, 'common_tasks') else None,
                             'contact_info': partner_user.username if partner_user.username else None,
                             'photo_url': safe_avatar_url(partner_user.telegram_id),
-                            'city': partner.city if hasattr(partner, 'city') else None,
+                            'city': _pick_dash(partner, 'city'),
                             'average_rating': partner.average_rating if hasattr(partner, 'average_rating') else 0
                         })
 
@@ -2340,6 +2353,20 @@ async def api_partners_handler(request):
                 user_id=user.id).order_by(
                 Interaction.created_at).all() if user else []
 
+            # Helper: pick translated field based on viewer language
+            viewer_lang = user.language if user and hasattr(user, 'language') and user.language else 'ru'
+            def _pick_field(profile_obj, field_name):
+                """Return translated profile field based on viewer language."""
+                if not profile_obj:
+                    return None
+                original = getattr(profile_obj, field_name, None)
+                if not original:
+                    return None
+                if viewer_lang == 'en':
+                    return getattr(profile_obj, f'{field_name}_normalized', None) or original
+                else:
+                    return getattr(profile_obj, f'{field_name}_normalized_ru', None) or original
+
             # Получить контакты по делегироаю
             delegating_to_me = []  # Люди, которые делегироали м задачи
             delegating_by_me = []  # Люди, которым я делегироал задачи
@@ -2369,10 +2396,10 @@ async def api_partners_handler(request):
                                 'id': delegator.id,
                                 'username': delegator.username,
                                 'first_name': delegator.first_name,
-                                'position': delegator_profile.position if delegator_profile else None,
-                                'interests': delegator_profile.interests if delegator_profile else None,
-                                'city': delegator_profile.city if delegator_profile else None,
-                                'company': delegator_profile.company if delegator_profile else None,
+                                'position': _pick_field(delegator_profile, 'position'),
+                                'interests': _pick_field(delegator_profile, 'interests'),
+                                'city': _pick_field(delegator_profile, 'city'),
+                                'company': _pick_field(delegator_profile, 'company'),
                                 'task_count': len(task_titles),
                                 'reason': f'делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
@@ -2403,10 +2430,10 @@ async def api_partners_handler(request):
                                 'id': delegatee.id,
                                 'username': delegatee.username,
                                 'first_name': delegatee.first_name,
-                                'position': delegatee_profile.position if delegatee_profile else None,
-                                'interests': delegatee_profile.interests if delegatee_profile else None,
-                                'city': delegatee_profile.city if delegatee_profile else None,
-                                'company': delegatee_profile.company if delegatee_profile else None,
+                                'position': _pick_field(delegatee_profile, 'position'),
+                                'interests': _pick_field(delegatee_profile, 'interests'),
+                                'city': _pick_field(delegatee_profile, 'city'),
+                                'company': _pick_field(delegatee_profile, 'company'),
                                 'task_count': len(task_titles),
                                 'reason': f'я делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
@@ -2598,10 +2625,7 @@ async def api_partners_handler(request):
                             'first_name': partner_user.first_name,
                             'can_access': can_access,
                             'subscription_tier': 'tokens',  # Токенная модель, тарифы убраны
-                            'city': getattr(
-                                p,
-                                'city',
-                                None),
+                            'city': _pick_field(p, 'city'),
                             'common_interests': getattr(
                                 p,
                                 'common_interests',
@@ -2738,10 +2762,10 @@ async def api_partners_handler(request):
                 'subscription_tier': 'tokens',  # Токенная модель
                 'photo_url': photo_url,
                 'first_name': contact['first_name'],
-                'position': contact.get('position'),
-                'interests': contact.get('interests'),
-                'city': contact.get('city'),
-                'company': contact.get('company'),
+                'position': _pick_field(delegator_profile, 'position'),
+                'interests': _pick_field(delegator_profile, 'interests'),
+                'city': _pick_field(delegator_profile, 'city'),
+                'company': _pick_field(delegator_profile, 'company'),
                 'common_interests': common_interests,
                 'common_skills': common_skills,
                 'common_goals': common_goals,
@@ -2860,10 +2884,10 @@ async def api_partners_handler(request):
                 'can_access': True,
                 'photo_url': photo_url,
                 'first_name': contact['first_name'],
-                'position': contact.get('position'),
-                'interests': contact.get('interests'),
-                'city': contact.get('city'),
-                'company': contact.get('company'),
+                'position': _pick_field(delegatee_profile, 'position'),
+                'interests': _pick_field(delegatee_profile, 'interests'),
+                'city': _pick_field(delegatee_profile, 'city'),
+                'company': _pick_field(delegatee_profile, 'company'),
                 'common_interests': common_interests,
                 'common_skills': common_skills,
                 'common_goals': common_goals,
@@ -2957,10 +2981,10 @@ async def api_partners_handler(request):
                                 'required_tier': required_tier,
                                 'subscription_tier': 'tokens',  # Токенная модель
                                 'first_name': favorite_user.first_name,
-                                'position': favorite_profile.position if favorite_profile else None,
-                                'interests': favorite_profile.interests if favorite_profile else None,
-                                'city': favorite_profile.city if favorite_profile else None,
-                                'company': favorite_profile.company if favorite_profile else None,
+                                'position': _pick_field(favorite_profile, 'position'),
+                                'interests': _pick_field(favorite_profile, 'interests'),
+                                'city': _pick_field(favorite_profile, 'city'),
+                                'company': _pick_field(favorite_profile, 'company'),
                                 'common_interests': None,  # Will be calculated later if needed
                                 'common_skills': None,
                                 'common_goals': None,
@@ -3579,26 +3603,41 @@ async def api_contact_profile_handler(request):
             ).count()
 
             # Prepare profile data (use defaults if profile doesn't exist)
+            # Translate fields based on viewer's language
+            viewer_lang = current_user.language if current_user and hasattr(current_user, 'language') and current_user.language else 'ru'
+            
+            def _pick(field_name):
+                """Pick translated or original field based on viewer language."""
+                if not profile:
+                    return None
+                original = getattr(profile, field_name, None)
+                if not original:
+                    return None
+                if viewer_lang == 'en':
+                    return getattr(profile, f'{field_name}_normalized', None) or original
+                else:
+                    return getattr(profile, f'{field_name}_normalized_ru', None) or original
+
             try:
                 profile_data = {
                     'contact_info': contact_user.username if hasattr(contact_user, 'username') else None,
                     'first_name': getattr(contact_user, 'first_name', None),
                     'last_name': getattr(contact_user, 'last_name', None),
                     'photo_url': safe_avatar_url(contact_user.telegram_id) if hasattr(contact_user, 'telegram_id') else None,
-                    'city': getattr(profile, 'city', None) if profile else None,
-                    'company': getattr(profile, 'company', None) if profile else None,
-                    'position': getattr(profile, 'position', None) if profile else None,
-                    'goals': getattr(profile, 'goals', None) if profile else None,
-                    'skills': getattr(profile, 'skills', None) if profile else None,
-                    'interests': getattr(profile, 'interests', None) if profile else None,
+                    'city': _pick('city'),
+                    'company': _pick('company'),
+                    'position': _pick('position'),
+                    'goals': _pick('goals'),
+                    'skills': _pick('skills'),
+                    'interests': _pick('interests'),
                     'languages': getattr(profile, 'languages', None) if profile else None,
-                    'bio': getattr(profile, 'bio', None) if profile else None,
-                    'current_plans': getattr(profile, 'current_plans', None) if profile else None,
+                    'bio': _pick('bio'),
+                    'current_plans': _pick('current_plans'),
                     'birthdate': getattr(profile, 'birthdate', None) if profile else None,
                     'zodiac_sign': getattr(profile, 'zodiac_sign', None) if profile else None,
                     'common_interests': common_interests,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
-                    'status_text': getattr(profile, 'status_text', None) if profile else None,
+                    'status_text': _pick('status_text'),
                     'task_count': active_tasks,
                     'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
                     'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None,
@@ -5666,6 +5705,20 @@ async def api_search_contacts_handler(request):
 
         session_db = Session()
         try:
+            # Determine viewer language for translation
+            current_user_for_lang = session_db.query(User).filter_by(telegram_id=user_id).first()
+            _search_lang = current_user_for_lang.language if current_user_for_lang and hasattr(current_user_for_lang, 'language') and current_user_for_lang.language else 'ru'
+            def _pick_search(profile_obj, field_name):
+                if not profile_obj:
+                    return None
+                original = getattr(profile_obj, field_name, None)
+                if not original:
+                    return None
+                if _search_lang == 'en':
+                    return getattr(profile_obj, f'{field_name}_normalized', None) or original
+                else:
+                    return getattr(profile_obj, f'{field_name}_normalized_ru', None) or original
+
             # Поиск пользователей по username, discord_username и first_name (частичное совпадение)
             from sqlalchemy import or_
             users = session_db.query(User).filter(
@@ -5701,10 +5754,11 @@ async def api_search_contacts_handler(request):
                     'first_name': user.first_name,
                     'telegram_id': user.telegram_id,
                     'photo_url': photo_url,
-                    'city': profile.city if profile else None,
-                    'company': profile.company if profile else None,
-                    'position': profile.position if profile else None,
-                    'interests': profile.interests if profile else None,
+                    'city': _pick_search(profile, 'city'),
+                    'company': _pick_search(profile, 'company'),
+                    'position': _pick_search(profile, 'position'),
+                    'interests': _pick_search(profile, 'interests'),
+                    'bio': _pick_search(profile, 'bio'),
                     'average_rating': profile.average_rating if profile else 0,
                     'rating_count': profile.rating_count if profile else 0
                 })

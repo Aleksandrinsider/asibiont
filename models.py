@@ -156,6 +156,17 @@ class UserProfile(Base):
     status_text_normalized = Column(String(100))
     current_plans_normalized = Column(Text)
 
+    # Normalized (Russian) versions for displaying to RU users
+    skills_normalized_ru = Column(Text)
+    interests_normalized_ru = Column(Text)
+    goals_normalized_ru = Column(Text)
+    city_normalized_ru = Column(String(100))
+    company_normalized_ru = Column(String(255))
+    position_normalized_ru = Column(String(255))
+    bio_normalized_ru = Column(Text)
+    status_text_normalized_ru = Column(String(100))
+    current_plans_normalized_ru = Column(Text)
+
     user = relationship("User", backref="profile")
 
 
