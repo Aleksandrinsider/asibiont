@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 _discord_bot = None
 _discord_task: Optional[asyncio.Task] = None
+_processed_msg_ids: set[int] = set()       # dedup guard
+_DEDUP_MAX = 500                           # ring-buffer size
 
 
 async def start_discord_bot():
@@ -62,6 +64,16 @@ async def start_discord_bot():
         # Only handle DMs
         if not isinstance(message.channel, discord.DMChannel):
             return
+
+        # ── Dedup guard (reconnect / gateway replay) ──
+        if message.id in _processed_msg_ids:
+            logger.debug(f"[DISCORD] Skipping duplicate msg {message.id}")
+            return
+        _processed_msg_ids.add(message.id)
+        if len(_processed_msg_ids) > _DEDUP_MAX:
+            # drop oldest half to keep memory bounded
+            to_drop = sorted(_processed_msg_ids)[:_DEDUP_MAX // 2]
+            _processed_msg_ids.difference_update(to_drop)
 
         discord_user_id = message.author.id
         text = message.content.strip()
@@ -431,11 +443,46 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
 
 
 def _split_message(text: str, max_len: int = 1990) -> list[str]:
-    """Split a long message into chunks respecting Discord's 2000-char limit."""
+    """Split a long message into chunks respecting Discord's 2000-char limit.
+    
+    Tries to split at paragraph breaks, then newlines, then sentence ends,
+    then spaces — falling back to hard cut only as last resort.
+    """
     if len(text) <= max_len:
         return [text]
-    chunks = []
+
+    chunks: list[str] = []
     while text:
-        chunks.append(text[:max_len])
-        text = text[max_len:]
+        if len(text) <= max_len:
+            chunks.append(text)
+            break
+        # Try split points in priority order
+        cut = -1
+        segment = text[:max_len]
+        # 1) double newline (paragraph break)
+        idx = segment.rfind('\n\n')
+        if idx > max_len // 3:
+            cut = idx + 2
+        # 2) single newline
+        if cut < 0:
+            idx = segment.rfind('\n')
+            if idx > max_len // 3:
+                cut = idx + 1
+        # 3) sentence end (. ! ?)
+        if cut < 0:
+            for sep in ('. ', '! ', '? '):
+                idx = segment.rfind(sep)
+                if idx > max_len // 3:
+                    cut = max(cut, idx + len(sep))
+        # 4) space
+        if cut < 0:
+            idx = segment.rfind(' ')
+            if idx > max_len // 4:
+                cut = idx + 1
+        # 5) hard cut
+        if cut < 0:
+            cut = max_len
+
+        chunks.append(text[:cut].rstrip())
+        text = text[cut:].lstrip()
     return chunks
