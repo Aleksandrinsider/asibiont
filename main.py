@@ -2389,7 +2389,9 @@ async def api_partners_handler(request):
                 Interaction.created_at).all() if user else []
 
             # Helper: pick translated field based on viewer language
-            viewer_lang = user.language if user and hasattr(user, 'language') and user.language else 'ru'
+            viewer_lang = request.query.get('lang') or (user.language if user and hasattr(user, 'language') and user.language else 'ru')
+            if viewer_lang not in ('ru', 'en'):
+                viewer_lang = 'ru'
             def _pick_field(profile_obj, field_name):
                 """Return translated profile field based on viewer language."""
                 if not profile_obj:
@@ -3639,7 +3641,10 @@ async def api_contact_profile_handler(request):
 
             # Prepare profile data (use defaults if profile doesn't exist)
             # Translate fields based on viewer's language
-            viewer_lang = current_user.language if current_user and hasattr(current_user, 'language') and current_user.language else 'ru'
+            # Accept ?lang= query param from client-side language switch
+            viewer_lang = request.query.get('lang') or (current_user.language if current_user and hasattr(current_user, 'language') and current_user.language else 'ru')
+            if viewer_lang not in ('ru', 'en'):
+                viewer_lang = 'ru'
             
             def _pick(field_name):
                 """Pick translated or original field based on viewer language."""
@@ -6158,6 +6163,32 @@ async def translate_note_handler(request):
             db_session.close()
 
 
+async def api_set_language_handler(request):
+    """Save user language preference to database"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        lang = data.get('lang', 'ru')
+        if lang not in ('ru', 'en'):
+            lang = 'ru'
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                user.language = lang
+                session_db.commit()
+                logger.info(f"[SET_LANG] User {user_id} language set to {lang}")
+            return web.json_response({'success': True, 'lang': lang})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[SET_LANG] Error: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_profile_handler(request):
     """API для получения и обновления профиля пользователя"""
     try:
@@ -6283,7 +6314,10 @@ async def api_profile_handler(request):
         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
 
         # Determine viewer language for field translation
-        viewer_lang = user.language if hasattr(user, 'language') and user.language else 'ru'
+        # Accept ?lang= query param from client-side language switch
+        viewer_lang = request.query.get('lang') or (user.language if hasattr(user, 'language') and user.language else 'ru')
+        if viewer_lang not in ('ru', 'en'):
+            viewer_lang = 'ru'
 
         def _pick_own(field_name):
             """Pick translated or original profile field based on user language."""
@@ -7013,6 +7047,7 @@ app.router.add_post('/api/notes/{note_id}/translate', translate_note_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)
+app.router.add_post('/api/set_language', api_set_language_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)

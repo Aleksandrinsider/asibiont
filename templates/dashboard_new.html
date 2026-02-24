@@ -5348,7 +5348,8 @@
             
             try {
                 // Get contact profile data
-                const response = await fetch(`/api/contact_profile?username=${encodeURIComponent(cleanUsername)}`, {
+                const _cpLang = (typeof _currentLang !== 'undefined' && _currentLang) ? _currentLang : (localStorage.getItem('asibiont_lang') || 'ru');
+                const response = await fetch(`/api/contact_profile?username=${encodeURIComponent(cleanUsername)}&lang=${_cpLang}`, {
                     credentials: 'include'
                 });
                 
@@ -5813,7 +5814,8 @@
                     cachedBlocked = blockedContacts;
                 }
                 
-                const response = await fetch('/api/partners', {
+                const _pLang = (typeof _currentLang !== 'undefined' && _currentLang) ? _currentLang : (localStorage.getItem('asibiont_lang') || 'ru');
+                const response = await fetch('/api/partners?lang=' + _pLang, {
                     credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
@@ -6658,7 +6660,8 @@
             lastProfileUpdate = now;
             
             try {
-                const response = await fetch('/api/profile', {
+                const _profileLang = (typeof _currentLang !== 'undefined' && _currentLang) ? _currentLang : (localStorage.getItem('asibiont_lang') || 'ru');
+                const response = await fetch('/api/profile?lang=' + _profileLang, {
                     credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
@@ -7933,6 +7936,10 @@
     document.querySelectorAll('[data-i18n-ph]').forEach(function(el){var k=el.getAttribute('data-i18n-ph');if(d[k])el.placeholder=d[k];});
     document.querySelectorAll('[data-i18n-title]').forEach(function(el){var k=el.getAttribute('data-i18n-title');if(d[k])el.title=d[k];});
     if (typeof updateHeaderTime === 'function') updateHeaderTime();
+    // Persist language to DB and re-fetch profile with translated values
+    fetch('/api/set_language', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lang:lang})}).catch(function(){});
+    if (typeof profileInitialLoad !== 'undefined') { profileInitialLoad = false; }
+    if (typeof updateProfile === 'function') { setTimeout(function(){ updateProfile(); }, 100); }
   }
   window.applyLang=apply;
   document.addEventListener('DOMContentLoaded',function(){
