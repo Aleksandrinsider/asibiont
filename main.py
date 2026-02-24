@@ -366,8 +366,9 @@ def verify_password(password, stored_hash):
 # ═══ Email sending via SMTP ═══
 
 async def send_email(to: str, subject: str, body: str):
-    """Send email via SMTP (runs blocking smtplib in executor)"""
+    """Send email via SMTP with multi-port fallback (587 STARTTLS → 465 SSL)"""
     import smtplib
+    import ssl
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
     from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
@@ -375,6 +376,9 @@ async def send_email(to: str, subject: str, body: str):
     if not SMTP_PASSWORD:
         logger.warning("SMTP_PASSWORD not set — cannot send email")
         raise RuntimeError("SMTP not configured")
+    
+    # Strip spaces from app passwords (Gmail app passwords: 'xxxx xxxx xxxx xxxx')
+    password = SMTP_PASSWORD.replace(' ', '')
     
     def _send():
         msg = MIMEMultipart('alternative')
@@ -396,12 +400,52 @@ async def send_email(to: str, subject: str, body: str):
 </div>
 </body></html>"""
         msg.attach(MIMEText(html, 'html', 'utf-8'))
+        msg_string = msg.as_string()
         
-        # Gmail SMTP SSL on port 465
-        logger.info(f"SMTP connecting to {SMTP_HOST}:{SMTP_PORT} as {SMTP_USER}")
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, to, msg.as_string())
+        errors = []
+        
+        # Attempt 1: Port 587 STARTTLS (most commonly allowed on cloud platforms)
+        try:
+            logger.info(f"SMTP attempt 1: {SMTP_HOST}:587 STARTTLS as {SMTP_USER}")
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP(SMTP_HOST, 587, timeout=15) as server:
+                server.ehlo()
+                server.starttls(context=ctx)
+                server.ehlo()
+                server.login(SMTP_USER, password)
+                server.sendmail(SMTP_USER, to, msg_string)
+                logger.info("SMTP success via port 587 STARTTLS")
+                return
+        except Exception as e:
+            errors.append(f"587/STARTTLS: {e}")
+            logger.warning(f"SMTP 587 failed: {e}")
+        
+        # Attempt 2: Port 465 SSL (classic)
+        try:
+            logger.info(f"SMTP attempt 2: {SMTP_HOST}:465 SSL as {SMTP_USER}")
+            with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=15) as server:
+                server.login(SMTP_USER, password)
+                server.sendmail(SMTP_USER, to, msg_string)
+                logger.info("SMTP success via port 465 SSL")
+                return
+        except Exception as e:
+            errors.append(f"465/SSL: {e}")
+            logger.warning(f"SMTP 465 failed: {e}")
+        
+        # Attempt 3: Configured port (if different from 587/465)
+        if SMTP_PORT not in (587, 465):
+            try:
+                logger.info(f"SMTP attempt 3: {SMTP_HOST}:{SMTP_PORT} as {SMTP_USER}")
+                with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                    server.login(SMTP_USER, password)
+                    server.sendmail(SMTP_USER, to, msg_string)
+                    logger.info(f"SMTP success via port {SMTP_PORT}")
+                    return
+            except Exception as e:
+                errors.append(f"{SMTP_PORT}: {e}")
+                logger.warning(f"SMTP {SMTP_PORT} failed: {e}")
+        
+        raise RuntimeError(f"All SMTP attempts failed: {'; '.join(errors)}")
     
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _send)
@@ -413,16 +457,59 @@ async def health_handler(request):
     return web.Response(text='OK', status=200)
 
 async def smtp_check_handler(request):
-    """Diagnostic: check SMTP config (no secrets)"""
+    """Diagnostic: check SMTP config and test connection"""
     from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
-    return web.json_response({
-        'host': SMTP_HOST,
-        'port': SMTP_PORT,
-        'user': SMTP_USER,
-        'from': SMTP_FROM,
-        'password_set': bool(SMTP_PASSWORD),
-        'password_len': len(SMTP_PASSWORD) if SMTP_PASSWORD else 0
-    })
+    import smtplib, ssl, socket
+    
+    password = (SMTP_PASSWORD or '').replace(' ', '')
+    results = {
+        'config': {
+            'host': SMTP_HOST,
+            'port': SMTP_PORT,
+            'user': SMTP_USER,
+            'from': SMTP_FROM,
+            'password_set': bool(SMTP_PASSWORD),
+            'password_len': len(password) if password else 0
+        },
+        'tests': {}
+    }
+    
+    # Test port 587 STARTTLS
+    try:
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP(SMTP_HOST, 587, timeout=10) as server:
+            server.ehlo()
+            server.starttls(context=ctx)
+            server.ehlo()
+            if password:
+                server.login(SMTP_USER, password)
+                results['tests']['587_starttls'] = 'OK - connected and authenticated'
+            else:
+                results['tests']['587_starttls'] = 'OK - connected (no password to test login)'
+    except Exception as e:
+        results['tests']['587_starttls'] = f'FAIL: {str(e)[:200]}'
+    
+    # Test port 465 SSL
+    try:
+        with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=10) as server:
+            if password:
+                server.login(SMTP_USER, password)
+                results['tests']['465_ssl'] = 'OK - connected and authenticated'
+            else:
+                results['tests']['465_ssl'] = 'OK - connected (no password to test login)'
+    except Exception as e:
+        results['tests']['465_ssl'] = f'FAIL: {str(e)[:200]}'
+    
+    # Test basic TCP connectivity
+    for port in [587, 465, 25]:
+        try:
+            sock = socket.create_connection((SMTP_HOST, port), timeout=5)
+            sock.close()
+            results['tests'][f'tcp_{port}'] = 'reachable'
+        except Exception as e:
+            results['tests'][f'tcp_{port}'] = f'unreachable: {str(e)[:100]}'
+    
+    return web.json_response(results)
 
 
 # ═══ IndexNow: мгновенное уведомление поисковиков ═══
@@ -816,15 +903,9 @@ https://asibiont.com"""
                 logger.info(f"Password reset email sent to {email}")
             except Exception as mail_err:
                 logger.error(f"Failed to send password reset email to {email}: {mail_err}")
-                # SMTP failed (Railway blocks SMTP ports) — save password and return it directly
-                user.password_hash = hash_password(new_password)
-                session_db.commit()
-                logger.info(f"Password reset for email: {email} (email delivery failed, password shown in response)")
                 return web.json_response({
-                    'success': True,
-                    'message': f'Не удалось отправить письмо. Ваш новый пароль: {new_password}\n\nЗапишите его и смените в настройках профиля.',
-                    'password_shown': True
-                })
+                    'error': 'Не удалось отправить письмо. Попробуйте позже или обратитесь в поддержку.'
+                }, status=500)
 
             # Email sent successfully — now save the new password
             user.password_hash = hash_password(new_password)
