@@ -6950,7 +6950,13 @@
                             html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;">' + initial + '</div>';
                         }
                         html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || t('user')) + ' <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">' + (data.profile.status_text || t('status-set')) + '</a></p>';
-                        html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || t('unknown-user')) + '</p>';
+                        html += '<p style="margin: 0; color: #374151; font-size: 13px;">@' + (data.profile.username || t('unknown-user')) + '</p>';
+                        if (data.profile.average_rating && data.profile.average_rating > 0) {
+                            const rColor = data.profile.average_rating < 5 ? '#d73a49' : (data.profile.average_rating >= 8 ? '#068487' : '#6C727F');
+                            html += '<p style="margin: 4px 0 0 0; font-size: 12px; color: ' + rColor + ';">' + t('rating-label') + ' ' + data.profile.average_rating + '/10</p>';
+                        } else {
+                            html += '<p style="margin: 4px 0 0 0; font-size: 12px; color: #6C727F;">' + t('no-ratings') + '</p>';
+                        }
                         html += '</div>';
                         if (data.profile.country) {
                             html += '<p>' + t('country-label') + ' ' + data.profile.country + ' &nbsp;|&nbsp; ' + t('city-label') + ' ' + (data.profile.city || t('not-specified')) + '</p>';
@@ -6972,12 +6978,6 @@
                         html += '<p>' + t('goals-label') + ' ' + (data.profile.goals || t('not-specified-pl')) + '</p>';
                         html += '<p>' + t('skills-label') + ' ' + (data.profile.skills || t('not-specified-pl')) + '</p>';
                         html += '<p>' + t('interests-label') + ' ' + (data.profile.interests || t('not-specified-pl')) + '</p>';
-                        if (data.profile.average_rating && data.profile.average_rating > 0) {
-                            const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 8 ? 'color: #068487;' : '');
-                            html += '<p style="' + ratingColor + '">' + t('rating-label') + ' ' + data.profile.average_rating + '/10</p>';
-                        } else {
-                            html += '<p>' + t('no-ratings') + '</p>';
-                        }
                         if (true) {
                             const refLink = 'https://t.me/{{ bot_username }}?start=ref' + data.telegram_id;
                             html += '<p style="margin: 0; margin-bottom: 4px;">' + t('referral-link') + ' <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">' + t('copy') + '</a> <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">' + t('withdraw') + '</a></p>';
