@@ -65,6 +65,9 @@ SCAN_INTERVAL_MINUTES = 5
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
 
+# Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
+ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
+
 # Cooldown по приоритету (часы)
 PRIORITY_COOLDOWN = {
     AnchorPriority.CRITICAL: 0.5,   # 30 мин
@@ -340,6 +343,22 @@ class AnchorEngine:
             else:
                 dialog_count += 1
 
+        # ── Подавление проактивных во время активного диалога ──
+        last_user_msg = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type == 'user'
+        ).order_by(Interaction.created_at.desc()).first()
+
+        active_dialog = False
+        if last_user_msg:
+            lm_time = last_user_msg.created_at
+            if lm_time.tzinfo is None:
+                lm_time = lm_time.replace(tzinfo=timezone.utc)
+            since_last_msg = datetime.now(timezone.utc) - lm_time
+            if since_last_msg < timedelta(minutes=ACTIVE_DIALOG_SUPPRESS_MINUTES):
+                active_dialog = True
+                logger.info(f"[ANCHOR] User {user_id}: 💬 active dialog ({since_last_msg.total_seconds():.0f}s ago) — suppress regular proactive")
+
         # ── Последнее проактивное сообщение (gap между ними, но НЕ блокирует CRITICAL) ──
         last_proactive = session.query(Interaction).filter(
             Interaction.user_id == user.id,
@@ -420,10 +439,10 @@ class AnchorEngine:
             # Ночью — только CRITICAL/ALWAYS_DELIVER (task_reminder, task_overdue и т.д.)
             if regular_anchors:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (night hours)")
-        elif regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok:
+        elif regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok and not active_dialog:
             all_dialog_anchors.extend(regular_anchors)
         elif regular_anchors:
-            logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok})")
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok}, active_dialog={active_dialog})")
 
         if all_dialog_anchors:
             anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
