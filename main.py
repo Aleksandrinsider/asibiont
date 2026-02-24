@@ -3543,6 +3543,7 @@ async def api_contact_profile_handler(request):
                     'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'light',
                     'telegram_channel': contact_user.telegram_channel if hasattr(contact_user, 'telegram_channel') else None,
                     'discord_webhook': True if hasattr(contact_user, 'discord_webhook') and contact_user.discord_webhook else False,
+                    'discord_server_name': contact_user.discord_server_name if hasattr(contact_user, 'discord_server_name') and contact_user.discord_server_name else None,
                     'platform': contact_user.platform if hasattr(contact_user, 'platform') else 'telegram',
                     'discord_id': str(contact_user.discord_id) if hasattr(contact_user, 'discord_id') and contact_user.discord_id else None
                 }
@@ -5831,6 +5832,27 @@ async def api_profile_handler(request):
                     if webhook and not webhook.startswith('https://discord.com/api/webhooks/'):
                         return web.json_response({'error': 'Invalid Discord webhook URL'}, status=400)
                     user.discord_webhook = webhook
+                    # Fetch server name from Discord webhook
+                    if webhook:
+                        try:
+                            import aiohttp as _aiohttp
+                            async with _aiohttp.ClientSession() as _ws:
+                                async with _ws.get(webhook) as _wr:
+                                    if _wr.status == 200:
+                                        _wd = await _wr.json()
+                                        guild_name = _wd.get('guild', {}).get('name') if isinstance(_wd.get('guild'), dict) else None
+                                        channel_name = _wd.get('channel', {}).get('name') if isinstance(_wd.get('channel'), dict) else None
+                                        # Try name from webhook response
+                                        server_name = _wd.get('name', '')
+                                        if guild_name:
+                                            server_name = guild_name
+                                        user.discord_server_name = server_name or 'Discord'
+                                    else:
+                                        user.discord_server_name = 'Discord'
+                        except Exception:
+                            user.discord_server_name = 'Discord'
+                    else:
+                        user.discord_server_name = None
 
                 session_db.commit()
                 logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")

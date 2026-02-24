@@ -1010,9 +1010,8 @@
                         <a href="/?link_tg=1" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-telegram">Привязать</a>
                         {% endif %}
                         <div style="margin-top: 8px;">
-                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="tg-channel">Канал для автопостинга</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="tg-channel">@ вашего канала для автопубликации постов (бот должен быть админом канала)</label>
                             <input type="text" id="quick-telegram-channel" placeholder="@your_channel" style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
-                            <small style="font-size: 10px; color: #6B7280; margin-top: 2px; display: block;" data-i18n="tg-channel-desc">Бот должен быть админом канала</small>
                         </div>
                     </div>
                     <div>
@@ -1023,9 +1022,8 @@
                         <a href="/discord/link" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-discord">Привязать</a>
                         {% endif %}
                         <div style="margin-top: 8px;">
-                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="discord-webhook">Webhook для автопостинга</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="discord-webhook">Webhook вашего канала для автопубликации постов</label>
                             <input type="text" id="quick-discord-webhook" placeholder="https://discord.com/api/webhooks/..." style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
-                            <small style="font-size: 10px; color: #6B7280; margin-top: 2px; display: block;" data-i18n="discord-webhook-desc">Для автопубликации в ваш канал</small>
                         </div>
                     </div>
                 </div>
@@ -5057,16 +5055,15 @@
                     html += `<p style="text-align: left;">${t('interests-label')} ${partner.interests || t('not-specified-pl')}</p>`;
                     
                     // Telegram канал и Discord канал
-                    if (partner.telegram_channel || partner.discord_webhook) {
-                        let channelLinks = [];
-                        if (partner.telegram_channel) {
-                            const channelClean = partner.telegram_channel.replace(/^@/, '');
-                            channelLinks.push(`<a href="https://t.me/${channelClean}" target="_blank" style="color: #068487; text-decoration: none;">@${channelClean}</a>`);
-                        }
-                        if (partner.discord_webhook) {
-                            channelLinks.push(`<span style="color: #5865F2;">Discord ✔</span>`);
-                        }
-                        html += `<p style="text-align: left;">${t('tg-channel-label')} ${channelLinks.join(' · ')}</p>`;
+                    // Telegram канал
+                    if (partner.telegram_channel) {
+                        const channelClean = partner.telegram_channel.replace(/^@/, '');
+                        html += `<p style="text-align: left;">${t('tg-channel-label')} <a href="https://t.me/${channelClean}" target="_blank" style="color: #068487; text-decoration: none;">@${channelClean}</a></p>`;
+                    }
+                    // Discord канал
+                    if (partner.discord_webhook) {
+                        const discordName = partner.discord_server_name || 'Discord';
+                        html += `<p style="text-align: left;">Discord канал: <span style="color: #068487; font-weight: 500;">${discordName}</span></p>`;
                     }
                     
                     // Рекомендация с цветом
@@ -5273,7 +5270,8 @@
             // Use server-provided time with user timezone
             try {
                 const now = new Date();
-                const lang = (typeof _currentLang !== 'undefined' && _currentLang === 'en') ? 'en-US' : 'ru-RU';
+                const detectedLang = (typeof _currentLang !== 'undefined' && _currentLang) ? _currentLang : (typeof detect === 'function' ? detect() : 'ru');
+                const lang = detectedLang === 'en' ? 'en-US' : 'ru-RU';
                 // Используем правильную конвертацию в user timezone
                 const formatter = new Intl.DateTimeFormat(lang, {
                     timeZone: window.USER_TIMEZONE,
@@ -7246,7 +7244,7 @@
       'company':'Компания','company-ph':'Название компании',
       'goals':'Цели','goals-ph':'Чего вы хотите достичь?',
       'position':'Должность','position-ph':'Ваша должность',
-      'tg-channel':'Telegram канал','tg-channel-desc':'Для автопубликации постов из ленты (бот должен быть админом канала)',
+      'tg-channel':'@ вашего канала для автопубликации постов (бот должен быть админом канала)',
       'skip':'Пропустить',
       'thinking':'Думаю...','start-dialog':'Начните диалог с AI-ассистентом',
       'start-dialog-desc':'Задайте вопрос или создайте задачу в поле ниже...',
@@ -7415,7 +7413,7 @@
       'company':'Company','company-ph':'Company name',
       'goals':'Goals','goals-ph':'What do you want to achieve?',
       'position':'Position','position-ph':'Your position',
-      'tg-channel':'Telegram channel','tg-channel-desc':'For auto-publishing feed posts (bot must be channel admin)',
+      'tg-channel':'Your channel @ for auto-publishing posts (bot must be channel admin)',
       'skip':'Skip',
       'thinking':'Thinking...','start-dialog':'Start a conversation with the AI assistant',
       'start-dialog-desc':'Ask a question or create a task below...',
@@ -7536,6 +7534,7 @@
     document.querySelectorAll('[data-i18n]').forEach(function(el){var k=el.getAttribute('data-i18n');if(d[k])el.textContent=d[k];});
     document.querySelectorAll('[data-i18n-ph]').forEach(function(el){var k=el.getAttribute('data-i18n-ph');if(d[k])el.placeholder=d[k];});
     document.querySelectorAll('[data-i18n-title]').forEach(function(el){var k=el.getAttribute('data-i18n-title');if(d[k])el.title=d[k];});
+    if (typeof updateHeaderTime === 'function') updateHeaderTime();
   }
   window.applyLang=apply;
   document.addEventListener('DOMContentLoaded',function(){

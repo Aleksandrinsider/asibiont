@@ -80,6 +80,7 @@ def _migrate_users(session, inspector):
         'discord_id': "ALTER TABLE users ADD COLUMN discord_id BIGINT",
         'discord_username': "ALTER TABLE users ADD COLUMN discord_username VARCHAR(255)",
         'discord_webhook': "ALTER TABLE users ADD COLUMN discord_webhook VARCHAR(500)",
+        'discord_server_name': "ALTER TABLE users ADD COLUMN discord_server_name VARCHAR(255)",
     })
 
 
