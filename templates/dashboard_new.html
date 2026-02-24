@@ -5278,7 +5278,18 @@
             // Use server-provided time with user timezone
             try {
                 const now = new Date();
-                const detectedLang = (typeof _currentLang !== 'undefined' && _currentLang) ? _currentLang : (typeof detect === 'function' ? detect() : 'ru');
+                // Detect language: check _currentLang, localStorage, then SERVER_LANG
+                let detectedLang = 'ru';
+                if (typeof _currentLang !== 'undefined' && _currentLang) {
+                    detectedLang = _currentLang;
+                } else {
+                    const stored = localStorage.getItem('asibiont_lang');
+                    if (stored && (stored === 'en' || stored === 'ru')) {
+                        detectedLang = stored;
+                    } else if (typeof SERVER_LANG !== 'undefined' && SERVER_LANG) {
+                        detectedLang = SERVER_LANG;
+                    }
+                }
                 const lang = detectedLang === 'en' ? 'en-US' : 'ru-RU';
                 // Используем правильную конвертацию в user timezone
                 const formatter = new Intl.DateTimeFormat(lang, {
