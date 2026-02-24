@@ -366,9 +366,10 @@ def verify_password(password, stored_hash):
 # ═══ Email sending via SMTP ═══
 
 async def send_email(to: str, subject: str, body: str):
-    """Send email via SMTP with multi-port fallback (587 STARTTLS → 465 SSL)"""
+    """Send email via SMTP with multi-port fallback, forced IPv4"""
     import smtplib
     import ssl
+    import socket
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
     from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
@@ -377,8 +378,20 @@ async def send_email(to: str, subject: str, body: str):
         logger.warning("SMTP_PASSWORD not set — cannot send email")
         raise RuntimeError("SMTP not configured")
     
-    # Strip spaces from app passwords (Gmail app passwords: 'xxxx xxxx xxxx xxxx')
+    # Strip spaces from app passwords (Gmail: 'xxxx xxxx xxxx xxxx')
     password = SMTP_PASSWORD.replace(' ', '')
+    
+    # Resolve hostname to IPv4 address to avoid IPv6 routing issues on Railway
+    def resolve_ipv4(host):
+        try:
+            infos = socket.getaddrinfo(host, None, socket.AF_INET)
+            if infos:
+                ip = infos[0][4][0]
+                logger.info(f"Resolved {host} to IPv4: {ip}")
+                return ip
+        except Exception as e:
+            logger.warning(f"IPv4 resolution failed for {host}: {e}")
+        return host
     
     def _send():
         msg = MIMEMultipart('alternative')
@@ -386,10 +399,8 @@ async def send_email(to: str, subject: str, body: str):
         msg['To'] = to
         msg['Subject'] = subject
         
-        # Plain text
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
         
-        # HTML version
         html_body = body.replace('\n', '<br>')
         html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
 <div style="max-width: 500px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px;">
@@ -402,48 +413,38 @@ async def send_email(to: str, subject: str, body: str):
         msg.attach(MIMEText(html, 'html', 'utf-8'))
         msg_string = msg.as_string()
         
+        # Force IPv4 to avoid Railway IPv6 routing issues
+        host_ip = resolve_ipv4(SMTP_HOST)
         errors = []
         
-        # Attempt 1: Port 587 STARTTLS (most commonly allowed on cloud platforms)
+        # Attempt 1: Port 587 STARTTLS
         try:
-            logger.info(f"SMTP attempt 1: {SMTP_HOST}:587 STARTTLS as {SMTP_USER}")
+            logger.info(f"SMTP attempt 1: {SMTP_HOST}({host_ip}):587 STARTTLS")
             ctx = ssl.create_default_context()
-            with smtplib.SMTP(SMTP_HOST, 587, timeout=15) as server:
-                server.ehlo()
+            with smtplib.SMTP(host_ip, 587, timeout=15) as server:
+                server.ehlo(SMTP_HOST)
                 server.starttls(context=ctx)
-                server.ehlo()
+                server.ehlo(SMTP_HOST)
                 server.login(SMTP_USER, password)
                 server.sendmail(SMTP_USER, to, msg_string)
-                logger.info("SMTP success via port 587 STARTTLS")
+                logger.info("SMTP success via 587 STARTTLS")
                 return
         except Exception as e:
             errors.append(f"587/STARTTLS: {e}")
             logger.warning(f"SMTP 587 failed: {e}")
         
-        # Attempt 2: Port 465 SSL (classic)
+        # Attempt 2: Port 465 SSL
         try:
-            logger.info(f"SMTP attempt 2: {SMTP_HOST}:465 SSL as {SMTP_USER}")
-            with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=15) as server:
+            logger.info(f"SMTP attempt 2: {SMTP_HOST}({host_ip}):465 SSL")
+            with smtplib.SMTP_SSL(host_ip, 465, timeout=15) as server:
+                server.ehlo(SMTP_HOST)
                 server.login(SMTP_USER, password)
                 server.sendmail(SMTP_USER, to, msg_string)
-                logger.info("SMTP success via port 465 SSL")
+                logger.info("SMTP success via 465 SSL")
                 return
         except Exception as e:
             errors.append(f"465/SSL: {e}")
             logger.warning(f"SMTP 465 failed: {e}")
-        
-        # Attempt 3: Configured port (if different from 587/465)
-        if SMTP_PORT not in (587, 465):
-            try:
-                logger.info(f"SMTP attempt 3: {SMTP_HOST}:{SMTP_PORT} as {SMTP_USER}")
-                with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                    server.login(SMTP_USER, password)
-                    server.sendmail(SMTP_USER, to, msg_string)
-                    logger.info(f"SMTP success via port {SMTP_PORT}")
-                    return
-            except Exception as e:
-                errors.append(f"{SMTP_PORT}: {e}")
-                logger.warning(f"SMTP {SMTP_PORT} failed: {e}")
         
         raise RuntimeError(f"All SMTP attempts failed: {'; '.join(errors)}")
     
@@ -457,14 +458,23 @@ async def health_handler(request):
     return web.Response(text='OK', status=200)
 
 async def smtp_check_handler(request):
-    """Diagnostic: check SMTP config and test connection"""
+    """Diagnostic: check SMTP config and test connection (forced IPv4)"""
     from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
     import smtplib, ssl, socket
     
     password = (SMTP_PASSWORD or '').replace(' ', '')
+    
+    # Resolve to IPv4
+    try:
+        infos = socket.getaddrinfo(SMTP_HOST, None, socket.AF_INET)
+        host_ip = infos[0][4][0] if infos else SMTP_HOST
+    except:
+        host_ip = SMTP_HOST
+    
     results = {
         'config': {
             'host': SMTP_HOST,
+            'resolved_ipv4': host_ip,
             'port': SMTP_PORT,
             'user': SMTP_USER,
             'from': SMTP_FROM,
@@ -474,40 +484,41 @@ async def smtp_check_handler(request):
         'tests': {}
     }
     
-    # Test port 587 STARTTLS
+    # Test TCP connectivity via IPv4
+    for port in [587, 465, 25]:
+        try:
+            sock = socket.create_connection((host_ip, port), timeout=5)
+            sock.close()
+            results['tests'][f'tcp_{port}_ipv4'] = 'reachable'
+        except Exception as e:
+            results['tests'][f'tcp_{port}_ipv4'] = f'unreachable: {str(e)[:100]}'
+    
+    # Test port 587 STARTTLS via IPv4
     try:
         ctx = ssl.create_default_context()
-        with smtplib.SMTP(SMTP_HOST, 587, timeout=10) as server:
-            server.ehlo()
+        with smtplib.SMTP(host_ip, 587, timeout=10) as server:
+            server.ehlo(SMTP_HOST)
             server.starttls(context=ctx)
-            server.ehlo()
+            server.ehlo(SMTP_HOST)
             if password:
                 server.login(SMTP_USER, password)
-                results['tests']['587_starttls'] = 'OK - connected and authenticated'
+                results['tests']['587_starttls'] = 'OK - authenticated'
             else:
-                results['tests']['587_starttls'] = 'OK - connected (no password to test login)'
+                results['tests']['587_starttls'] = 'OK - connected'
     except Exception as e:
         results['tests']['587_starttls'] = f'FAIL: {str(e)[:200]}'
     
-    # Test port 465 SSL
+    # Test port 465 SSL via IPv4
     try:
-        with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=10) as server:
+        with smtplib.SMTP_SSL(host_ip, 465, timeout=10) as server:
+            server.ehlo(SMTP_HOST)
             if password:
                 server.login(SMTP_USER, password)
-                results['tests']['465_ssl'] = 'OK - connected and authenticated'
+                results['tests']['465_ssl'] = 'OK - authenticated'
             else:
-                results['tests']['465_ssl'] = 'OK - connected (no password to test login)'
+                results['tests']['465_ssl'] = 'OK - connected'
     except Exception as e:
         results['tests']['465_ssl'] = f'FAIL: {str(e)[:200]}'
-    
-    # Test basic TCP connectivity
-    for port in [587, 465, 25]:
-        try:
-            sock = socket.create_connection((SMTP_HOST, port), timeout=5)
-            sock.close()
-            results['tests'][f'tcp_{port}'] = 'reachable'
-        except Exception as e:
-            results['tests'][f'tcp_{port}'] = f'unreachable: {str(e)[:100]}'
     
     return web.json_response(results)
 
