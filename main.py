@@ -6029,6 +6029,11 @@ async def faq_handler(request):
     return aiohttp_jinja2.render_template('faq.html', request, {'lang': lang})
 
 
+async def privacy_handler(request):
+    """Страница соглашения об обработке персональных данных"""
+    return aiohttp_jinja2.render_template('personal_data_consent.html', request, {})
+
+
 @aiohttp_jinja2.template('tutorial.html')
 async def tutorial_handler(request):
     """Страница туториала со всеми командами"""
@@ -6458,6 +6463,8 @@ app.router.add_get('/llms.txt', lambda r: web.FileResponse('static/llms.txt', he
 app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
 # AI SEO: FAQ page
 app.router.add_get('/faq', faq_handler)
+# Privacy / personal data consent
+app.router.add_get('/privacy', privacy_handler)
 # i18n: English language routes (SEO — separate URLs per language)
 async def login_handler_en(request):
     """English landing page"""
