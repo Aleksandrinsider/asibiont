@@ -2308,7 +2308,7 @@ details[open] .details-content {
     html, body {
         overflow: hidden !important;
         width: 100% !important;
-        max-width: 100vw !important;
+        max-width: 100% !important;
         height: 100dvh !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -2324,7 +2324,7 @@ details[open] .details-content {
         padding: 0 !important;
         margin: 0 !important;
         width: 100% !important;
-        max-width: 100vw !important;
+        max-width: 100% !important;
         flex: 1 !important;
         height: auto !important;
         min-height: 0 !important;
@@ -2334,14 +2334,14 @@ details[open] .details-content {
         padding: 0 !important;
         gap: 0 !important;
         width: 100% !important;
-        max-width: 100vw !important;
+        max-width: 100% !important;
         overflow-x: hidden !important;
         height: 100% !important;
         margin-top: 0 !important;
     }
     .center-column {
         flex: 1 1 100% !important;
-        max-width: 100vw !important;
+        max-width: 100% !important;
         min-width: 0 !important;
         width: 100% !important;
         padding: 0 !important;
@@ -2351,7 +2351,7 @@ details[open] .details-content {
     }
     .left-column, .right-column {
         display: none !important;
-        max-width: 100vw !important;
+        max-width: 100% !important;
         min-width: 0 !important;
         border-radius: 0 !important;
         overflow-x: hidden !important;
@@ -2371,7 +2371,7 @@ details[open] .details-content {
         padding: 0 !important;
         margin: 0 !important;
         width: 100% !important;
-        max-width: 100vw !important;
+        max-width: 100% !important;
         overflow: hidden !important;
         height: 100% !important;
         max-height: 100% !important;
@@ -2380,7 +2380,7 @@ details[open] .details-content {
         flex-direction: column !important;
     }
     .chat-messages {
-        padding: 16px 12px !important;
+        padding: 16px 4px !important;
         width: 100% !important;
         max-width: 100% !important;
         overflow-x: hidden !important;
@@ -2389,7 +2389,7 @@ details[open] .details-content {
         overflow-y: auto !important;
     }
     .chat-input {
-        padding: 12px 12px !important;
+        padding: 12px 4px !important;
         background: #fff !important;
         z-index: 10 !important;
         flex-shrink: 0 !important;
@@ -2397,7 +2397,7 @@ details[open] .details-content {
         position: relative !important;
     }
     .feed-container, .notes-container {
-        padding: 0 12px !important;
+        padding: 0 4px !important;
     }
     .view-panel, .view-container {
         width: 100% !important;
