@@ -2380,7 +2380,7 @@ details[open] .details-content {
         flex-direction: column !important;
     }
     .chat-messages {
-        padding: 16px 4px !important;
+        padding: 16px 12px !important;
         width: 100% !important;
         max-width: 100% !important;
         overflow-x: hidden !important;
@@ -2389,7 +2389,7 @@ details[open] .details-content {
         overflow-y: auto !important;
     }
     .chat-input {
-        padding: 12px 4px !important;
+        padding: 12px 12px !important;
         background: #fff !important;
         z-index: 10 !important;
         flex-shrink: 0 !important;
@@ -2397,7 +2397,7 @@ details[open] .details-content {
         position: relative !important;
     }
     .feed-container, .notes-container {
-        padding: 0 4px !important;
+        padding: 0 12px !important;
     }
     .view-panel, .view-container {
         width: 100% !important;
