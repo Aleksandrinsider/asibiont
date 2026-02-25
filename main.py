@@ -1780,6 +1780,8 @@ async def chat_handler(request):
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            # Запоминаем user.id ДО вызова AI — после него сессия может быть в состоянии expunged
+            user_db_id = user.id if user else None
 
             # Сохраняем сообщение пользователя ДО вызова AI
             save_context_to_db(user_id, message, None)
@@ -1798,10 +1800,10 @@ async def chat_handler(request):
                 response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
 
             # Save agent response to Interaction table
-            if user:
+            if user_db_id:
                 agent_response_timestamp = datetime.now(dt_timezone.utc)
                 interaction_agent = Interaction(
-                    user_id=user.id,
+                    user_id=user_db_id,
                     message_type='ai',
                     content=response,
                     created_at=agent_response_timestamp

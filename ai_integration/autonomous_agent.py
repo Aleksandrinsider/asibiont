@@ -508,6 +508,9 @@ class HybridAutonomousAgent:
                 sig = inspect.signature(handler_func)
                 if 'session' in sig.parameters:
                     params['session'] = session
+                    # Не закрываем переданную извне сессию — это ответственность вызывающего
+                    if 'close_session' in sig.parameters:
+                        params['close_session'] = False
 
                 # === Parameter auto-fix для известных quirks ===
                 params = self._fix_tool_params(tool_name, params, user_message)
