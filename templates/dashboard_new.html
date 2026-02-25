@@ -355,9 +355,11 @@
                 }
                 // Скрываем индикатор при разворачивании
                 if (indicator) indicator.style.display = 'none';
-                // Скрываем список контактов и фильтры когда профиль развёрнут
+                // Скрываем список контактов, фильтры и email-контакты когда профиль развёрнут
                 if (peopleList) peopleList.style.display = 'none';
                 if (contactFilter) contactFilter.style.display = 'none';
+                const emailContactsContent = document.getElementById('email-contacts-content');
+                if (emailContactsContent) emailContactsContent.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
@@ -369,9 +371,11 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
-                // Показываем список контактов и фильтры когда профиль свёрнут
+                // Показываем список контактов, фильтры и email-контакты когда профиль свёрнут
                 if (peopleList) peopleList.style.display = 'block';
                 if (contactFilter) contactFilter.style.display = 'block';
+                const emailContactsContentC = document.getElementById('email-contacts-content');
+                if (emailContactsContentC) emailContactsContentC.style.display = 'block';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
@@ -762,7 +766,8 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="email-contacts-title">Email-контакты</h3>
                         </div>
                     </div>
-                    <!-- Форма добавления -->
+                    <!-- Форма добавления и список (скрываются пока профиль развёрнут) -->
+                    <div id="email-contacts-content" style="display: none;">
                     <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
                         <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                         <div style="display: flex; gap: 6px; align-items: center;">
@@ -777,6 +782,7 @@
                     <div id="contacts-list" style="max-height: 300px; overflow-y: auto;">
                         <div id="contacts-empty" style="padding: 20px 0; text-align: center; color: #6C727F; font-size: 13px;" data-i18n="contacts-empty-short">Нет контактов</div>
                     </div>
+                    </div><!-- /email-contacts-content -->
                 </div>
                 {% endif %}
             </div>
