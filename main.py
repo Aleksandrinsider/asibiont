@@ -6753,14 +6753,96 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading campaigns: {e}")
 
+            # Auto-sync outreach statuses from Resend API (non-blocking)
+            try:
+                from config import RESEND_API_KEY
+                if RESEND_API_KEY:
+                    import aiohttp as _aiohttp
+                    synced = 0
+                    for c_data in campaigns_data:
+                        for o_data in c_data.get('outreach', []):
+                            if o_data.get('status') in ('sent', 'delivered') and o_data.get('id'):
+                                outreach_obj = session_db.query(EmailOutreach).filter_by(id=o_data['id']).first()
+                                if outreach_obj and outreach_obj.resend_id:
+                                    try:
+                                        async with _aiohttp.ClientSession() as http:
+                                            resp = await http.get(
+                                                f'https://api.resend.com/emails/{outreach_obj.resend_id}',
+                                                headers={'Authorization': f'Bearer {RESEND_API_KEY}'},
+                                                timeout=_aiohttp.ClientTimeout(total=5),
+                                            )
+                                            if resp.status == 200:
+                                                r_data = await resp.json()
+                                                last_event = None
+                                                for evt in r_data.get('events', []):
+                                                    evt_type = evt.get('type', '')
+                                                    if evt_type in ('email.opened',):
+                                                        last_event = 'opened'
+                                                    elif evt_type == 'email.delivered' and last_event != 'opened':
+                                                        last_event = 'delivered'
+                                                if last_event:
+                                                    status_priority = {'draft': 0, 'sent': 1, 'delivered': 2, 'opened': 3, 'replied': 4}
+                                                    if status_priority.get(last_event, 0) > status_priority.get(outreach_obj.status, 0):
+                                                        outreach_obj.status = last_event
+                                                        o_data['status'] = last_event
+                                                        synced += 1
+                                    except Exception:
+                                        pass
+                    if synced > 0:
+                        session_db.commit()
+                        logger.info(f"[API_REPORTS] Synced {synced} outreach statuses from Resend")
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Status sync error: {e}")
+
             return web.json_response({
                 'campaigns': campaigns_data,
-                'emails': [],  # Standalone emails will be added when we have a log table
+                'emails': [],
             })
         finally:
             session_db.close()
     except Exception as e:
         logger.error(f"Error in api_reports: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_outreach_reply_handler(request):
+    """Manually mark an outreach as replied with reply text."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        outreach_id = int(request.match_info['outreach_id'])
+        reply_text = (data.get('reply_text', '') or '').strip()
+        if not reply_text:
+            return web.json_response({'error': 'reply_text is required'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import EmailOutreach, EmailCampaign
+            outreach = session_db.query(EmailOutreach).filter_by(id=outreach_id, user_id=user.id).first()
+            if not outreach:
+                return web.json_response({'error': 'Outreach not found'}, status=404)
+            was_replied = outreach.status == 'replied'
+            outreach.status = 'replied'
+            if outreach.reply_text:
+                outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + reply_text)[:5000]
+            else:
+                outreach.reply_text = reply_text[:5000]
+            outreach.reply_at = datetime.now(timezone.utc)
+            if not was_replied:
+                campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+                if campaign:
+                    campaign.emails_replied = (campaign.emails_replied or 0) + 1
+            session_db.commit()
+            return web.json_response({'status': 'ok'})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_outreach_reply: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
@@ -7901,6 +7983,7 @@ app.router.add_post('/api/notes', api_notes_handler)
 app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 app.router.add_get('/api/reports', api_reports_handler)
+app.router.add_post('/api/outreach/{outreach_id}/reply', api_outreach_reply_handler)
 app.router.add_get('/api/email-contacts', api_email_contacts_handler)
 app.router.add_post('/api/email-contacts', api_email_contacts_handler)
 app.router.add_put('/api/email-contacts/{contact_id}', api_email_contact_edit_handler)
