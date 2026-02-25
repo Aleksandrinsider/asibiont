@@ -6215,11 +6215,6 @@
                         html += `<p style="text-align: left;">${channelParts.join(' &nbsp;|&nbsp; ')}</p>`;
                     }
                     
-                    // Телефон контакта
-                    if (partner.phone) {
-                        html += `<p style="text-align: left;">${t('phone-label')}: <span style="color: #068487;">${partner.phone}</span></p>`;
-                    }
-                    
                     // Активные задачи с отступом снизу
                     if (partner.task_count) {
                         html += `<p style="text-align: left; margin-bottom: 20px;">${t('active-tasks')} ${partner.task_count}</p>`;
