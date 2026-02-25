@@ -717,21 +717,28 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="contacts">Контакты</h3>
                         </div>
+                        <button onclick="toggleContactsSection()" class="section-toggle-btn" id="contacts-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
                     </div>
-                    <div id="contact-filter-content" style="margin-bottom: 15px;">
-                        <div style="position: relative; width: 100%;">
-                            <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-                                <option value="favorite" data-i18n="opt-fav">Избранное</option>
-                                <option value="recommended" selected data-i18n="opt-rec">Рекомендуемые</option>
-                                <option value="delegating_to_me" data-i18n="opt-del-me">Поручают мне</option>
-                                <option value="delegating_by_me" data-i18n="opt-del-by">Поручаю я</option>
-                                <option value="blocked" data-i18n="opt-blocked">Заблокировано</option>
-                            </select>
+                    <div id="contacts-content" style="display: block; padding: 0 4px;">
+                        <div id="contact-filter-content" style="margin-bottom: 15px;">
+                            <div style="position: relative; width: 100%;">
+                                <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
+                                    <option value="favorite" data-i18n="opt-fav">Избранное</option>
+                                    <option value="recommended" selected data-i18n="opt-rec">Рекомендуемые</option>
+                                    <option value="delegating_to_me" data-i18n="opt-del-me">Поручают мне</option>
+                                    <option value="delegating_by_me" data-i18n="opt-del-by">Поручаю я</option>
+                                    <option value="blocked" data-i18n="opt-blocked">Заблокировано</option>
+                                </select>
+                            </div>
                         </div>
-                    </div>
-                    <div class="people-list" id="people-list" style="padding: 0 4px;">
-                        <!-- Контакты будут загружены динамически -->
-                        <div style="padding: 20px; text-align: center; color: #6C727F;" data-i18n="loading-contacts">Загрузка контактов...</div>
+                        <div class="people-list" id="people-list" style="padding: 0 4px;">
+                            <!-- Контакты будут загружены динамически -->
+                            <div style="padding: 20px; text-align: center; color: #6C727F;" data-i18n="loading-contacts">Загрузка контактов...</div>
+                        </div>
                     </div>
                 </div>
 
