@@ -64,7 +64,7 @@
         
         .left-column .context-section,
         .left-column .people-section {
-            flex: 1 1 auto; /* Секции растягиваются внутри колонки */
+            flex: 0 0 auto; /* Секции НЕ конкурируют за пространство — каждая занимает свою высоту */
         }
         
         .center-column .chat-section {
@@ -224,7 +224,9 @@
                 left.style.maxWidth = '100%';
                 left.style.minWidth = '0';
                 left.style.flex = '1 1 100%';
-                left.style.height = '100%';
+                left.style.height = 'auto';
+                left.style.minHeight = '100%';
+                left.style.overflowY = 'auto';
                 left.style.padding = '16px 12px';
             } else if (col === 'center' && center) {
                 center.style.setProperty('display', 'flex', 'important');
@@ -237,7 +239,9 @@
                 right.style.maxWidth = '100%';
                 right.style.minWidth = '0';
                 right.style.flex = '1 1 100%';
-                right.style.height = '100%';
+                right.style.height = 'auto';
+                right.style.minHeight = '100%';
+                right.style.overflowY = 'auto';
                 right.style.padding = '16px 12px';
             }
 
@@ -2043,94 +2047,84 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                // === Campaign cards ===
+                // === Кампании — простой текстовый формат ===
                 campaigns.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'report-card';
-                    card.style.cssText = 'padding: 14px 0; border-bottom: 1px solid #F0F3F5;';
+                    card.style.cssText = 'padding: 12px 0; border-bottom: 1px solid #E8ECEF;';
 
                     const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', year:'numeric', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-                    const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d97706' : '#9CA3AF';
-                    const statusBg = c.status === 'active' || c.status === 'running' ? '#F0FAFA' : c.status === 'paused' ? '#FFF8ED' : '#F6F8FA';
                     const statusLabel = c.status === 'active' || c.status === 'running' ? 'активна' : c.status === 'paused' ? 'на паузе' : (c.status || 'завершена');
 
                     const sent = c.emails_sent || 0;
                     const replied = c.emails_replied || 0;
                     const conv = sent > 0 ? Math.round(replied / sent * 100) : 0;
-                    const repliedColor = replied > 0 ? '#068487' : '#374151';
 
-                    // Outreach rows
-                    let outreachHtml = '';
+                    // Заголовок кампании
+                    let html = '<div style="font-size: 14px; font-weight: 600; color: #1F2328; margin-bottom: 4px;">' + (c.name || 'Кампания') + '</div>';
+                    html += '<div style="font-size: 12px; color: #6C727F; margin-bottom: 6px;">';
+                    html += statusLabel;
+                    if (createdDate) html += ' · ' + createdDate;
+                    html += ' · отправлено: ' + sent + ', ответов: ' + replied + ', конверсия: ' + conv + '%';
+                    html += '</div>';
+                    if (c.goal) {
+                        html += '<div style="font-size: 13px; color: #374151; margin-bottom: 8px;">' + c.goal + '</div>';
+                    }
+
+                    // Письма кампании — простой список
                     if (c.outreach && c.outreach.length > 0) {
-                        outreachHtml = '<div style="margin-top: 10px; border-top: 1px solid #F0F3F5; padding-top: 4px;">';
+                        html += '<div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #F0F3F5;">';
                         c.outreach.forEach(o => {
-                            const oStatusColor = o.status === 'replied' || o.status === 'interested' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#9CA3AF';
                             const oStatusLabel = o.status === 'replied' ? 'ответил' : o.status === 'interested' ? 'заинтересован' : o.status === 'bounced' ? 'отклонено' : o.status === 'failed' ? 'ошибка' : o.status === 'sent' ? 'отправлено' : (o.status || '');
                             const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                             const recipientLabel = o.recipient_name ? (o.recipient_name + ' &lt;' + o.recipient_email + '&gt;') : (o.recipient_email || '');
-                            const subjectHtml = o.subject ? '<div style="font-size: 12px; color: #6C727F; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📧 ' + o.subject + '</div>' : '';
-                            const replyHtml = o.reply_text ? '<div style="margin-top: 6px; padding: 8px 10px; background: #F0FAFA; border-radius: 6px; border-left: 2px solid #068487;"><div style="font-size: 11px; color: #068487; font-weight: 600; margin-bottom: 3px;">Ответ:</div><div style="font-size: 12px; color: #374151; white-space: pre-wrap; word-break: break-word;">' + o.reply_text + '</div></div>' : '';
 
-                            outreachHtml += '<div style="display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F6F8FA; align-items: flex-start;">' +
-                                '<div style="width: 7px; height: 7px; border-radius: 50%; background: ' + oStatusColor + '; flex-shrink: 0; margin-top: 5px;"></div>' +
-                                '<div style="flex: 1; min-width: 0;">' +
-                                    '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
-                                        '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + recipientLabel + '</span>' +
-                                        '<span style="font-size: 11px; color: ' + oStatusColor + '; flex-shrink: 0;">' + oStatusLabel + '</span>' +
-                                        (oDate ? '<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">' + oDate + '</span>' : '') +
-                                    '</div>' +
-                                    subjectHtml +
-                                    replyHtml +
-                                '</div>' +
-                            '</div>';
+                            html += '<div style="padding: 6px 0; border-bottom: 1px solid #F6F8FA;">';
+                            html += '<div style="font-size: 13px; color: #374151;">' + recipientLabel;
+                            if (oStatusLabel) html += ' — ' + oStatusLabel;
+                            if (oDate) html += ' (' + oDate + ')';
+                            html += '</div>';
+                            if (o.subject) {
+                                html += '<div style="font-size: 13px; color: #374151; margin-top: 2px;">Тема: ' + o.subject + '</div>';
+                            }
+                            if (o.body_text || o.body) {
+                                html += '<div style="font-size: 13px; color: #374151; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">' + (o.body_text || o.body) + '</div>';
+                            }
+                            if (o.reply_text) {
+                                html += '<div style="margin-top: 6px; padding: 6px 10px; background: #F6F8FA; border-left: 2px solid #068487; font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word;"><b>Ответ:</b> ' + o.reply_text + '</div>';
+                            }
+                            html += '</div>';
                         });
-                        outreachHtml += '</div>';
+                        html += '</div>';
                     }
 
-                    card.innerHTML =
-                        '<div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;">' +
-                            '<div style="width: 34px; height: 34px; border-radius: 8px; background: #068487; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; font-weight: 700; color: #fff; letter-spacing: -0.5px;">AI</div>' +
-                            '<div style="flex: 1; min-width: 0;">' +
-                                '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
-                                    '<span style="font-size: 14px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">' + (c.name || 'Кампания') + '</span>' +
-                                    '<span style="font-size: 11px; color: ' + statusColor + '; background: ' + statusBg + '; padding: 2px 8px; border-radius: 10px; border: 1px solid ' + statusColor + '22; flex-shrink: 0;">' + statusLabel + '</span>' +
-                                    (createdDate ? '<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">' + createdDate + '</span>' : '') +
-                                '</div>' +
-                                (c.goal ? '<div style="font-size: 12px; color: #6C727F; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + c.goal + '</div>' : '') +
-                            '</div>' +
-                        '</div>' +
-                        '<div style="display: flex; gap: 16px; padding: 8px 0; border-top: 1px solid #F0F3F5; border-bottom: 1px solid #F0F3F5; flex-wrap: wrap;">' +
-                            '<span style="font-size: 12px; color: #6C727F;">Отправлено: <b style="color: #374151;">' + sent + '</b></span>' +
-                            '<span style="font-size: 12px; color: #6C727F;">Ответов: <b style="color: ' + repliedColor + ';">' + replied + '</b></span>' +
-                            '<span style="font-size: 12px; color: #6C727F;">Конверсия: <b style="color: ' + (conv > 0 ? '#068487' : '#374151') + ';">' + conv + '%</b></span>' +
-                        '</div>' +
-                        outreachHtml;
-
+                    card.innerHTML = html;
                     list.appendChild(card);
                 });
 
-                // === Standalone emails ===
+                // === Отдельные письма ===
                 if (emails.length > 0) {
                     const sectionHeader = document.createElement('div');
                     sectionHeader.className = 'report-card';
-                    sectionHeader.style.cssText = 'padding: 14px 0 6px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.8px;';
+                    sectionHeader.style.cssText = 'padding: 12px 0 4px; font-size: 12px; font-weight: 600; color: #6C727F;';
                     sectionHeader.textContent = 'Отдельные письма';
                     list.appendChild(sectionHeader);
 
                     emails.forEach(e => {
                         const card = document.createElement('div');
                         card.className = 'report-card';
-                        card.style.cssText = 'display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #F0F3F5; align-items: flex-start;';
+                        card.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
                         const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-                        card.innerHTML =
-                            '<div style="width: 7px; height: 7px; border-radius: 50%; background: #9CA3AF; flex-shrink: 0; margin-top: 5px;"></div>' +
-                            '<div style="flex: 1; min-width: 0;">' +
-                                '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
-                                    '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">→ ' + (e.to || '') + '</span>' +
-                                    (dateStr ? '<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">' + dateStr + '</span>' : '') +
-                                '</div>' +
-                                (e.subject ? '<div style="font-size: 12px; color: #6C727F; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📧 ' + e.subject + '</div>' : '') +
-                            '</div>';
+                        let eHtml = '<div style="font-size: 13px; color: #374151;">' + (e.to || '');
+                        if (dateStr) eHtml += ' (' + dateStr + ')';
+                        eHtml += '</div>';
+                        if (e.subject) {
+                            eHtml += '<div style="font-size: 13px; color: #374151; margin-top: 2px;">Тема: ' + e.subject + '</div>';
+                        }
+                        if (e.body_text || e.body) {
+                            eHtml += '<div style="font-size: 13px; color: #374151; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">' + (e.body_text || e.body) + '</div>';
+                        }
+                        card.innerHTML = eHtml;
                         list.appendChild(card);
                     });
                 }
