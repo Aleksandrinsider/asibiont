@@ -6581,6 +6581,63 @@ async def api_note_edit_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_reports_handler(request):
+    """API for getting email reports — campaigns + standalone emails."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # Campaigns with outreach
+            campaigns_data = []
+            try:
+                campaigns = session_db.query(EmailCampaign).filter_by(
+                    user_id=user.id
+                ).order_by(EmailCampaign.created_at.desc()).limit(20).all()
+                for c in campaigns:
+                    outreach = session_db.query(EmailOutreach).filter_by(
+                        campaign_id=c.id
+                    ).order_by(EmailOutreach.sent_at.desc()).limit(50).all()
+                    opened_count = sum(1 for o in outreach if o.status in ('opened', 'replied'))
+                    campaigns_data.append({
+                        'id': c.id,
+                        'name': c.name,
+                        'goal': c.goal,
+                        'status': c.status,
+                        'emails_sent': c.emails_sent or 0,
+                        'emails_replied': c.emails_replied or 0,
+                        'emails_opened': opened_count,
+                        'created_at': (c.created_at.isoformat() + 'Z') if c.created_at else None,
+                        'outreach': [{
+                            'id': o.id,
+                            'recipient_email': o.recipient_email,
+                            'recipient_name': o.recipient_name,
+                            'subject': o.subject,
+                            'status': o.status,
+                            'sent_at': (o.sent_at.isoformat() + 'Z') if o.sent_at else None,
+                            'reply_text': (o.reply_text[:200] + '...') if o.reply_text and len(o.reply_text) > 200 else o.reply_text,
+                        } for o in outreach],
+                    })
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading campaigns: {e}")
+
+            return web.json_response({
+                'campaigns': campaigns_data,
+                'emails': [],  # Standalone emails will be added when we have a log table
+            })
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_reports: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def translate_note_handler(request):
     """Translate a note to the specified language using DeepSeek"""
     db_session = None
@@ -7684,6 +7741,7 @@ app.router.add_get('/api/notes', api_notes_handler)
 app.router.add_post('/api/notes', api_notes_handler)
 app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
+app.router.add_get('/api/reports', api_reports_handler)
 
 
 # Setup for production
