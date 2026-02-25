@@ -351,39 +351,18 @@
             const svg = button ? button.querySelector('svg') : null;
             const profileSection = document.querySelector('.context-section');
             const indicator = document.getElementById('profile-update-indicator');
-            const contactsContent = document.getElementById('contacts-content');
-            const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
-            const emailContactsContent = document.getElementById('email-contacts-content');
-            const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
-            const contactsSection = contactsContent ? contactsContent.parentElement : null;
-            const emailSection = emailContactsContent ? emailContactsContent.parentElement : null;
             if (!content) return;
 
-            const isCollapsed = (content.style.display || '') === 'none';
-            if (isCollapsed) {
-                // Разворачиваем профиль: сворачиваем другие
+            if ((content.style.display || '') === 'none') {
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (profileSection) profileSection.classList.remove('collapsed');
                 if (indicator) indicator.style.display = 'none';
-                if (contactsContent) contactsContent.style.display = 'none';
-                if (contactsSection) contactsSection.classList.add('collapsed');
-                if (emailContactsContent) emailContactsContent.style.display = 'none';
-                if (emailSection) emailSection.classList.add('collapsed');
-                if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
-                if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
-                // Сворачиваем профиль: разворачиваем контакты
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (profileSection) profileSection.classList.add('collapsed');
-                if (contactsContent) contactsContent.style.display = 'block';
-                if (contactsSection) contactsSection.classList.remove('collapsed');
-                if (emailContactsContent) emailContactsContent.style.display = 'none';
-                if (emailSection) emailSection.classList.add('collapsed');
-                if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
-                if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
@@ -809,74 +788,38 @@
 
             <script>
                 function toggleContactsSection() {
-                    const contactsContent = document.getElementById('contacts-content');
-                    const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
-                    const emailContactsContent = document.getElementById('email-contacts-content');
-                    const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
-                    const profileContent = document.getElementById('profile-content');
-                    const profileToggleBtn = document.getElementById('profile-toggle-btn');
-                    const profileSection = document.querySelector('.context-section');
-                    const contactsSection = contactsContent ? contactsContent.parentElement : null;
-                    const emailSection = emailContactsContent ? emailContactsContent.parentElement : null;
+                    const content = document.getElementById('contacts-content');
+                    const btn = document.getElementById('contacts-toggle-btn');
+                    const svg = btn ? btn.querySelector('svg') : null;
+                    const section = content ? content.parentElement : null;
+                    if (!content) return;
 
-                    if (contactsContent.style.display === 'none') {
-                        // Разворачиваем контакты: сворачиваем другие
-                        contactsContent.style.display = 'block';
-                        if (contactsSection) contactsSection.classList.remove('collapsed');
-                        if (emailContactsContent) emailContactsContent.style.display = 'none';
-                        if (emailSection) emailSection.classList.add('collapsed');
-                        if (profileContent) profileContent.style.display = 'none';
-                        if (profileSection) profileSection.classList.add('collapsed');
-                        contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
-                        if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
-                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                    if (content.style.display === 'none') {
+                        content.style.display = 'block';
+                        if (svg) svg.style.transform = 'rotate(0deg)';
+                        if (section) section.classList.remove('collapsed');
                     } else {
-                        // Сворачиваем контакты: разворачиваем email
-                        contactsContent.style.display = 'none';
-                        if (contactsSection) contactsSection.classList.add('collapsed');
-                        if (emailContactsContent) emailContactsContent.style.display = 'block';
-                        if (emailSection) emailSection.classList.remove('collapsed');
-                        if (profileContent) profileContent.style.display = 'none';
-                        if (profileSection) profileSection.classList.add('collapsed');
-                        contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
-                        if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
-                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        content.style.display = 'none';
+                        if (svg) svg.style.transform = 'rotate(-90deg)';
+                        if (section) section.classList.add('collapsed');
                     }
                 }
 
                 function toggleEmailContactsSection() {
-                    const emailContactsContent = document.getElementById('email-contacts-content');
-                    const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
-                    const contactsContent = document.getElementById('contacts-content');
-                    const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
-                    const profileContent = document.getElementById('profile-content');
-                    const profileToggleBtn = document.getElementById('profile-toggle-btn');
-                    const profileSection = document.querySelector('.context-section');
-                    const contactsSection = contactsContent ? contactsContent.parentElement : null;
-                    const emailSection = emailContactsContent ? emailContactsContent.parentElement : null;
+                    const content = document.getElementById('email-contacts-content');
+                    const btn = document.getElementById('email-contacts-toggle-btn');
+                    const svg = btn ? btn.querySelector('svg') : null;
+                    const section = content ? content.parentElement : null;
+                    if (!content) return;
 
-                    if (emailContactsContent.style.display === 'none') {
-                        // Разворачиваем email: сворачиваем другие
-                        emailContactsContent.style.display = 'block';
-                        if (emailSection) emailSection.classList.remove('collapsed');
-                        if (contactsContent) contactsContent.style.display = 'none';
-                        if (contactsSection) contactsSection.classList.add('collapsed');
-                        if (profileContent) profileContent.style.display = 'none';
-                        if (profileSection) profileSection.classList.add('collapsed');
-                        emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
-                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
-                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                    if (content.style.display === 'none') {
+                        content.style.display = 'block';
+                        if (svg) svg.style.transform = 'rotate(0deg)';
+                        if (section) section.classList.remove('collapsed');
                     } else {
-                        // Сворачиваем email: разворачиваем профиль
-                        emailContactsContent.style.display = 'none';
-                        if (emailSection) emailSection.classList.add('collapsed');
-                        if (contactsContent) contactsContent.style.display = 'none';
-                        if (contactsSection) contactsSection.classList.add('collapsed');
-                        if (profileContent) profileContent.style.display = 'block';
-                        if (profileSection) profileSection.classList.remove('collapsed');
-                        emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
-                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
-                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                        content.style.display = 'none';
+                        if (svg) svg.style.transform = 'rotate(-90deg)';
+                        if (section) section.classList.add('collapsed');
                     }
                 }
             </script>
