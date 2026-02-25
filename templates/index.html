@@ -625,8 +625,7 @@
             <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
                 <a href="/subscription-tiers" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Пополнить баланс</a>
                 <a href="/tutorial" style="display: inline-block; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Руководство</a>
-                <button id="pwa-install-btn" style="display: none; padding: 10px 16px; background: #068487; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#056e70'" onmouseout="this.style.background='#068487'">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="white" style="vertical-align: -2px; margin-right: 6px;"><path d="M4.406 1.342A5.53 5.53 0 0 1 8 0c2.69 0 4.923 2 5.166 4.579C14.758 4.804 16 6.137 16 7.773 16 9.569 14.502 11 12.687 11H10a.75.75 0 0 1 0-1.5h2.688c1.072 0 1.812-.724 1.812-1.727C14.5 6.744 13.68 6 12.687 6h-.498a.75.75 0 0 1-.747-.695C11.3 3.166 9.87 1.5 8 1.5a4.03 4.03 0 0 0-2.625.971.75.75 0 0 1-.507.196 3.177 3.177 0 0 0-2.894 3.049.75.75 0 0 1-.631.672A2.072 2.072 0 0 0 0 8.438C0 9.666.964 10.5 2.073 10.5H6a.75.75 0 0 1 0 1.5H2.073C.39 12-1 10.592-1 8.438a3.572 3.572 0 0 1 2.26-3.327 4.677 4.677 0 0 1 3.146-3.769ZM8.75 6v5.19l1.72-1.72a.749.749 0 1 1 1.06 1.06l-3 3a.749.749 0 0 1-1.06 0l-3-3a.749.749 0 1 1 1.06-1.06l1.72 1.72V6a.75.75 0 0 1 1.5 0Z"/></svg>Установить приложение</button>
+                <button id="pwa-install-btn" style="display: inline-flex; align-items: center; padding: 10px 16px; background: #068487; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#056e70'" onmouseout="this.style.background='#068487'">Установить приложение</button>
             </div>
         </div>
 
@@ -960,37 +959,21 @@ var deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', function(e) {
   e.preventDefault();
   deferredPrompt = e;
-  var btn = document.getElementById('pwa-install-btn');
-  if (btn) btn.style.display = 'inline-flex';
 });
 var pwaBtn = document.getElementById('pwa-install-btn');
 if (pwaBtn) {
   pwaBtn.addEventListener('click', function() {
-    if (!deferredPrompt) {
-      // If already installed or prompt not available, show hint
-      alert('Приложение уже установлено или откройте сайт в браузере Chrome/Edge/Safari');
-      return;
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function(result) {
+        deferredPrompt = null;
+      });
+    } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document)) {
+      alert('Нажмите кнопку «Поделиться» (⬆) внизу Safari, затем «На экран Домой»');
+    } else {
+      alert('Нажмите ⋮ в правом верхнем углу браузера → «Установить приложение»');
     }
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function(result) {
-      if (result.outcome === 'accepted') {
-        pwaBtn.style.display = 'none';
-      }
-      deferredPrompt = null;
-    });
   });
-}
-// Also show install button on iOS (no beforeinstallprompt)
-if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document)) {
-  var iosBtn = document.getElementById('pwa-install-btn');
-  if (iosBtn && !window.navigator.standalone) {
-    iosBtn.style.display = 'inline-flex';
-    iosBtn.addEventListener('click', function() {
-      if (!deferredPrompt) {
-        alert('Нажмите кнопку «Поделиться» (⬆) внизу Safari, затем «На экран Домой»');
-      }
-    });
-  }
 }
 </script>
 </body>
