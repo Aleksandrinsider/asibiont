@@ -2218,9 +2218,8 @@
                     header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                     header.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
-                            <span style="font-size: 13px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.name || t('report-campaign')}</span>
-                            <span style="font-size: 12px; color: ${statusColor}; font-weight: 500; flex-shrink: 0;">${statusLabel}</span>
-                            ${createdDate ? `<span style="font-size: 12px; color: #9CA3AF; flex-shrink: 0;">${createdDate}</span>` : ''}
+                            <span style="font-size: 13px; font-weight: 400; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.name || t('report-campaign')}</span>
+                            <span style="font-size: 12px; color: ${statusColor}; flex-shrink: 0;">${statusLabel}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: 12px;">
                             <span style="font-size: 12px; color: #6C727F;">${sent} → ${replied}</span>
