@@ -1305,7 +1305,10 @@
     <div id="quick-profile-modal" class="rating-modal" style="display: none;">
         <div class="rating-modal-content" style="max-width: 1100px; max-height: 90vh; overflow-y: auto;">
             <div class="rating-modal-header">
-                <h3 data-i18n="quick-setup">Быстрая настройка профиля</h3>
+                <div>
+                    <h3 data-i18n="quick-setup">Быстрая настройка профиля</h3>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #9CA3AF; font-weight: 400;" data-i18n-html="quick-setup-desc">ИИ-агент может использовать предоставленную информацию в соответствии с <a href="https://asibiont.com/terms" target="_blank" style="color: #9CA3AF; text-decoration: underline;">Правилами</a></p>
+                </div>
                 <button onclick="closeQuickProfileModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
@@ -1315,15 +1318,15 @@
             <div class="rating-modal-body">
                 <form id="quick-profile-form" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 14px;">
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="email-label">Email</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="email-hint">(вход + используется агентом)</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="email-label">Email</label>
                         <input type="email" id="quick-email" placeholder="user@example.com" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.email if user.email else '' }}" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="phone-label">Телефон</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="phone-hint">(используется агентом для задач)</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="phone-label">Телефон</label>
                         <input type="tel" id="quick-phone" placeholder="+7 (999) 123-45-67" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.phone if user.phone else '' }}" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="name-label">Имя</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="name-hint">(используется агентом при выполнении задач)</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="name-label">Имя</label>
                         <input type="text" id="quick-first-name" placeholder="Ваше имя" data-i18n-ph="name-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
@@ -8604,7 +8607,7 @@
       'token-rate':'1 токен = 1 рубль. Минимальная сумма вывода: 100 токенов',
       'card-number':'Номер карты','amount-tokens':'Сумма (токенов)','submit-request':'Отправить заявку',
       'contact-profile':'Профиль контакта','close':'Закрыть','write-msg':'Написать',
-      'quick-setup':'Быстрая настройка профиля',
+      'quick-setup':'Быстрая настройка профиля','quick-setup-desc':'ИИ-агент может использовать предоставленную информацию в соответствии с <a href="https://asibiont.com/terms" target="_blank" style="color: #9CA3AF; text-decoration: underline;">Правилами</a>',
       'city-req':'Город *','city-ph':'Например: Москва',
       'interests-req':'Интересы *','interests-ph':'Например: спорт, программирование, путешествия',
       'dob':'Дата рождения','dob-ph':'ДД.ММ.ГГГГ (например: 15.03.1990)',
@@ -8789,7 +8792,7 @@
       'token-rate':'1 token = 1 ruble. Minimum withdrawal: 100 tokens',
       'card-number':'Card number','amount-tokens':'Amount (tokens)','submit-request':'Submit request',
       'contact-profile':'Contact profile','close':'Close','write-msg':'Write',
-      'quick-setup':'Quick profile setup',
+      'quick-setup':'Quick profile setup','quick-setup-desc':'The AI agent may use the provided information in accordance with the <a href="https://asibiont.com/terms" target="_blank" style="color: #9CA3AF; text-decoration: underline;">Terms</a>',
       'city-req':'City *','city-ph':'e.g., New York',
       'interests-req':'Interests *','interests-ph':'e.g., sports, coding, travel',
       'dob':'Date of birth','dob-ph':'DD.MM.YYYY (e.g., 15.03.1990)',
@@ -8924,6 +8927,7 @@
     _currentLang = lang;
     var d=D[lang]; localStorage.setItem('asibiont_lang',lang); document.documentElement.lang=lang;
     document.querySelectorAll('[data-i18n]').forEach(function(el){var k=el.getAttribute('data-i18n');if(d[k])el.textContent=d[k];});
+    document.querySelectorAll('[data-i18n-html]').forEach(function(el){var k=el.getAttribute('data-i18n-html');if(d[k])el.innerHTML=d[k];});
     document.querySelectorAll('[data-i18n-ph]').forEach(function(el){var k=el.getAttribute('data-i18n-ph');if(d[k])el.placeholder=d[k];});
     document.querySelectorAll('[data-i18n-title]').forEach(function(el){var k=el.getAttribute('data-i18n-title');if(d[k])el.title=d[k];});
     if (typeof updateHeaderTime === 'function') updateHeaderTime();
