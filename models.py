@@ -530,6 +530,95 @@ class AnchorDeliveryLog(Base):
     user = relationship("User", backref="anchor_logs")
 
 
+class EmailCampaign(Base):
+    """
+    Email-кампания для автономного привлечения клиентов.
+
+    Пользователь описывает цель (напр. "найти клиентов для AI-сервиса"),
+    агент автономно ищет email-адреса, отправляет предложения через Resend API,
+    отвечает на входящие письма в рамках заданной цели.
+    """
+    __tablename__ = 'email_campaigns'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Конфигурация кампании
+    name = Column(String(300))              # "Привлечение клиентов для AI-сервиса"
+    goal = Column(Text)                      # Подробная цель кампании (промпт для AI)
+    target_audience = Column(Text)           # Описание целевой аудитории
+    offer = Column(Text)                     # Что предлагаем (продукт/услуга/ценностное предложение)
+    tone = Column(String(50), default='professional')  # professional, friendly, formal
+    sender_name = Column(String(200))        # Имя отправителя
+    sender_email = Column(String(200))       # Email (верифицирован в Resend)
+
+    # Лимиты
+    max_emails = Column(Integer, default=50)    # Макс. писем в кампании
+    daily_limit = Column(Integer, default=10)   # Макс. писем в день
+    max_follow_ups = Column(Integer, default=2) # Макс. фоллоу-апов на одно письмо
+
+    # Статус
+    status = Column(String(50), default='active', index=True)  # active, paused, completed, cancelled
+    emails_sent = Column(Integer, default=0)
+    emails_replied = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="email_campaigns")
+
+
+class EmailOutreach(Base):
+    """
+    Отдельное письмо в рамках email-кампании.
+
+    Жизненный цикл: draft → sent → delivered → opened → replied / bounced / failed
+    AI-агент может автоматически отвечать на reply в рамках цели кампании.
+    """
+    __tablename__ = 'email_outreach'
+
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey('email_campaigns.id'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Получатель
+    recipient_email = Column(String(300), nullable=False)
+    recipient_name = Column(String(200))
+    recipient_company = Column(String(200))
+    recipient_context = Column(Text)         # Почему этот контакт релевантен
+
+    # Контент письма
+    subject = Column(String(500))
+    body = Column(Text)                      # HTML тело письма
+
+    # Статус и трекинг
+    status = Column(String(50), default='draft', index=True)  # draft, sent, delivered, opened, replied, bounced, failed
+    resend_id = Column(String(200))          # ID письма в Resend API
+
+    # Ответы
+    reply_text = Column(Text)                # Текст входящего ответа
+    reply_at = Column(DateTime)
+    ai_reply_text = Column(Text)             # Ответ агента
+    ai_reply_sent_at = Column(DateTime)
+
+    # Follow-up
+    follow_up_count = Column(Integer, default=0)
+    last_follow_up_at = Column(DateTime)
+    next_follow_up_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    sent_at = Column(DateTime)
+
+    campaign = relationship("EmailCampaign", backref="emails")
+    user = relationship("User", backref="email_outreach")
+
+    __table_args__ = (
+        Index('ix_email_outreach_campaign_status', 'campaign_id', 'status'),
+        Index('ix_email_outreach_user_status', 'user_id', 'status'),
+    )
+
+
 class UserMessage(Base):
     """
     Сообщения между пользователями через AI-агента.

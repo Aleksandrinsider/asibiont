@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 import aiohttp
-from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage
+from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
@@ -7961,3 +7961,666 @@ def get_message_status(
         if close_session:
             session.close()
 
+
+# ═══════════════════════════════════════════════════════════════════
+# EMAIL OUTREACH — Автономное привлечение клиентов через Resend API
+# ═══════════════════════════════════════════════════════════════════
+
+async def start_email_campaign(
+    name: str,
+    goal: str,
+    target_audience: str,
+    offer: str,
+    sender_name: str = None,
+    sender_email: str = None,
+    tone: str = 'professional',
+    max_emails: int = 50,
+    daily_limit: int = 10,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создать email-кампанию для автономного привлечения клиентов.
+
+    AI-агент будет автономно:
+    1. Искать email-адреса через web_search
+    2. Генерировать персонализированные письма
+    3. Отправлять через Resend API
+    4. Отвечать на replies в рамках заданной цели
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        # Fallback sender info
+        if not sender_name:
+            sender_name = user.first_name or user.username or 'Team'
+        if not sender_email:
+            sender_email = 'outreach@asibiont.com'
+
+        campaign = EmailCampaign(
+            user_id=user.id,
+            name=name[:300],
+            goal=goal[:2000],
+            target_audience=target_audience[:1000],
+            offer=offer[:2000],
+            tone=tone,
+            sender_name=sender_name,
+            sender_email=sender_email,
+            max_emails=min(max_emails, 200),
+            daily_limit=min(daily_limit, 20),
+            status='active',
+        )
+        session.add(campaign)
+        session.commit()
+
+        lang = _get_lang(user_id)
+        if lang == 'en':
+            return (
+                f"📧 Email campaign #{campaign.id} «{name}» created!\n\n"
+                f"🎯 Goal: {goal[:200]}\n"
+                f"👥 Audience: {target_audience[:200]}\n"
+                f"💼 Offer: {offer[:200]}\n"
+                f"📨 Daily limit: {daily_limit} emails/day, max {max_emails} total\n\n"
+                f"The agent will autonomously search for relevant contacts, "
+                f"compose personalized emails, and handle replies within the campaign goal.\n"
+                f"Use /email_status to check progress."
+            )
+        return (
+            f"📧 Email-кампания #{campaign.id} «{name}» создана!\n\n"
+            f"🎯 Цель: {goal[:200]}\n"
+            f"👥 Аудитория: {target_audience[:200]}\n"
+            f"💼 Предложение: {offer[:200]}\n"
+            f"📨 Лимит: {daily_limit} писем/день, макс. {max_emails} всего\n\n"
+            f"Агент будет автономно искать релевантные контакты, "
+            f"писать персонализированные письма и отвечать на ответы в рамках цели кампании.\n"
+            f"Статус: спроси «статус email кампании»."
+        )
+    except Exception as e:
+        logger.error(f"[EMAIL_CAMPAIGN] Error creating campaign: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка создания кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def send_outreach_email(
+    campaign_id: int = None,
+    recipient_email: str = None,
+    recipient_name: str = None,
+    recipient_company: str = None,
+    recipient_context: str = None,
+    subject: str = None,
+    body: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Отправить email в рамках кампании через Resend API.
+
+    Может вызываться вручную или автономно агентом (через якорь email_outreach_send).
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import RESEND_API_KEY
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        if not RESEND_API_KEY:
+            return "❌ Resend API не настроен. Установите RESEND_API_KEY."
+
+        # Найти кампанию
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            # Берём последнюю активную кампанию
+            campaign = session.query(EmailCampaign).filter_by(
+                user_id=user.id, status='active'
+            ).order_by(EmailCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return "❌ Нет активной email-кампании. Сначала создай кампанию (start_email_campaign)."
+
+        # Проверка лимитов
+        if campaign.emails_sent >= campaign.max_emails:
+            campaign.status = 'completed'
+            session.commit()
+            return f"⚠️ Кампания #{campaign.id} достигла лимита ({campaign.max_emails} писем). Статус: completed."
+
+        # Дневной лимит
+        from datetime import datetime as dt, timezone as tz
+        today_start = dt.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        sent_today = session.query(EmailOutreach).filter(
+            EmailOutreach.campaign_id == campaign.id,
+            EmailOutreach.sent_at >= today_start,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        ).count()
+        if sent_today >= campaign.daily_limit:
+            return f"⚠️ Дневной лимит ({campaign.daily_limit} писем) исчерпан. Попробуй завтра."
+
+        # Проверка дубликата (не слать дважды одному recipient в одной кампании)
+        existing = session.query(EmailOutreach).filter_by(
+            campaign_id=campaign.id,
+            recipient_email=recipient_email,
+        ).first()
+        if existing and existing.status != 'draft':
+            return f"⚠️ Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}."
+
+        if not subject or not body:
+            return "❌ Нужны subject и body письма."
+
+        # Формируем HTML
+        html_body = body.replace('\n', '<br>')
+        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
+<div style="max-width: 600px; margin: 0 auto; padding: 24px;">
+{html_body}
+</div>
+</body></html>"""
+
+        # Отправляем через Resend
+        import aiohttp as _aiohttp
+        resend_id = None
+        try:
+            async with _aiohttp.ClientSession() as http:
+                from_header = f"{campaign.sender_name} <{campaign.sender_email}>"
+                resp = await http.post(
+                    'https://api.resend.com/emails',
+                    headers={
+                        'Authorization': f'Bearer {RESEND_API_KEY}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={
+                        'from': from_header,
+                        'to': [recipient_email],
+                        'subject': subject,
+                        'text': body,
+                        'html': html,
+                    },
+                    timeout=_aiohttp.ClientTimeout(total=15),
+                )
+                resp_data = await resp.json()
+                if resp.status in (200, 201):
+                    resend_id = resp_data.get('id')
+                    logger.info(f"[EMAIL_OUTREACH] Sent to {recipient_email}: {resend_id}")
+                else:
+                    err = resp_data.get('message', str(resp_data))
+                    logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
+                    return f"❌ Ошибка Resend API: {err}"
+        except Exception as e:
+            logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
+            return f"❌ Ошибка отправки: {str(e)}"
+
+        # Сохраняем в БД (обновляем draft или создаём новый)
+        if existing and existing.status == 'draft':
+            outreach = existing
+            outreach.subject = subject
+            outreach.body = body
+            outreach.status = 'sent'
+            outreach.resend_id = resend_id
+            outreach.sent_at = dt.now(tz.utc)
+        else:
+            outreach = EmailOutreach(
+                campaign_id=campaign.id,
+                user_id=user.id,
+                recipient_email=recipient_email,
+                recipient_name=recipient_name,
+                recipient_company=recipient_company,
+                recipient_context=recipient_context,
+                subject=subject,
+                body=body,
+                status='sent',
+                resend_id=resend_id,
+                sent_at=dt.now(tz.utc),
+            )
+            session.add(outreach)
+        campaign.emails_sent = (campaign.emails_sent or 0) + 1
+        # Ставим follow-up через 3 дня
+        outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=3)
+        session.commit()
+
+        # Списание токенов
+        try:
+            from token_service import deduct_tokens
+            deduct_tokens(user_id, 'email_send', session=session)
+        except Exception:
+            pass
+
+        lang = _get_lang(user_id)
+        name_str = f" ({recipient_name})" if recipient_name else ""
+        if lang == 'en':
+            return f"✅ Email sent to {recipient_email}{name_str}\nSubject: {subject}\nCampaign #{campaign.id} — {campaign.emails_sent}/{campaign.max_emails} sent"
+        return f"✅ Письмо отправлено: {recipient_email}{name_str}\nТема: {subject}\nКампания #{campaign.id} — {campaign.emails_sent}/{campaign.max_emails} отправлено"
+
+    except Exception as e:
+        logger.error(f"[EMAIL_OUTREACH] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def reply_to_outreach_email(
+    outreach_id: int = None,
+    recipient_email: str = None,
+    reply_body: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Ответить на входящий reply от получателя (AI автоматически или по запросу)."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import RESEND_API_KEY
+        from datetime import datetime as dt, timezone as tz
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        if not RESEND_API_KEY:
+            return "❌ Resend API не настроен."
+
+        # Найти письмо
+        outreach = None
+        if outreach_id:
+            outreach = session.query(EmailOutreach).filter_by(
+                id=outreach_id, user_id=user.id
+            ).first()
+        elif recipient_email:
+            outreach = session.query(EmailOutreach).filter_by(
+                user_id=user.id, recipient_email=recipient_email, status='replied'
+            ).order_by(EmailOutreach.reply_at.desc()).first()
+
+        if not outreach:
+            return "❌ Не найдено письмо для ответа."
+
+        campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+        if not campaign:
+            return "❌ Кампания не найдена."
+
+        if not reply_body:
+            return "❌ Нужен текст ответа (reply_body)."
+
+        # Отправляем reply через Resend
+        import aiohttp as _aiohttp
+        html_body = reply_body.replace('\n', '<br>')
+        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
+<div style="max-width: 600px; margin: 0 auto; padding: 24px;">
+{html_body}
+</div>
+</body></html>"""
+
+        subject = f"Re: {outreach.subject}" if outreach.subject else "Re: Your inquiry"
+        try:
+            async with _aiohttp.ClientSession() as http:
+                from_header = f"{campaign.sender_name} <{campaign.sender_email}>"
+                resp = await http.post(
+                    'https://api.resend.com/emails',
+                    headers={
+                        'Authorization': f'Bearer {RESEND_API_KEY}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={
+                        'from': from_header,
+                        'to': [outreach.recipient_email],
+                        'subject': subject,
+                        'text': reply_body,
+                        'html': html,
+                    },
+                    timeout=_aiohttp.ClientTimeout(total=15),
+                )
+                resp_data = await resp.json()
+                if resp.status not in (200, 201):
+                    err = resp_data.get('message', str(resp_data))
+                    return f"❌ Ошибка Resend API: {err}"
+        except Exception as e:
+            return f"❌ Ошибка отправки: {str(e)}"
+
+        outreach.ai_reply_text = reply_body
+        outreach.ai_reply_sent_at = dt.now(tz.utc)
+        session.commit()
+
+        try:
+            from token_service import deduct_tokens
+            deduct_tokens(user_id, 'email_reply', session=session)
+        except Exception:
+            pass
+
+        return f"✅ Ответ отправлен на {outreach.recipient_email}\nТема: {subject}"
+    except Exception as e:
+        logger.error(f"[EMAIL_REPLY] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def add_email_leads(
+    campaign_id: int = None,
+    leads: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Добавить email-адреса в кампанию (найденные через web_search или указанные вручную).
+
+    leads — JSON-массив: [{"email": "a@b.com", "name": "Name", "company": "Co", "context": "why relevant"}]
+    или простой список email через запятую.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            campaign = session.query(EmailCampaign).filter_by(
+                user_id=user.id, status='active'
+            ).order_by(EmailCampaign.created_at.desc()).first()
+        if not campaign:
+            return "❌ Нет активной кампании."
+
+        # Парсим leads
+        parsed = []
+        try:
+            parsed = json.loads(leads) if leads.strip().startswith('[') else []
+        except Exception:
+            parsed = []
+
+        if not parsed:
+            # Простой список email через запятую/перенос строки
+            for line in re.split(r'[,\n;]+', leads):
+                email = line.strip()
+                if '@' in email and '.' in email:
+                    parsed.append({'email': email})
+
+        if not parsed:
+            return "❌ Не удалось распарсить email-адреса. Укажи JSON или через запятую."
+
+        added = 0
+        skipped = 0
+        for lead in parsed:
+            email = lead.get('email', '').strip().lower()
+            if not email or '@' not in email:
+                continue
+            # Дубль-проверка
+            exists = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id, recipient_email=email
+            ).first()
+            if exists:
+                skipped += 1
+                continue
+            outreach = EmailOutreach(
+                campaign_id=campaign.id,
+                user_id=user.id,
+                recipient_email=email,
+                recipient_name=lead.get('name'),
+                recipient_company=lead.get('company'),
+                recipient_context=lead.get('context'),
+                status='draft',
+            )
+            session.add(outreach)
+            added += 1
+        session.commit()
+
+        return f"✅ Добавлено {added} email-адресов в кампанию #{campaign.id}" + (f" (пропущено {skipped} дублей)" if skipped else "")
+    except Exception as e:
+        logger.error(f"[EMAIL_LEADS] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def get_email_campaign_status(
+    campaign_id: int = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Получить статус email-кампании: сколько отправлено, ответов, ожидающих."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        campaigns = []
+        if campaign_id:
+            c = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+            if c:
+                campaigns = [c]
+        else:
+            campaigns = session.query(EmailCampaign).filter_by(
+                user_id=user.id
+            ).order_by(EmailCampaign.created_at.desc()).limit(5).all()
+
+        if not campaigns:
+            return "📭 Нет email-кампаний. Создай кампанию: «запусти email-кампанию для привлечения клиентов»."
+
+        result = []
+        for c in campaigns:
+            emails = session.query(EmailOutreach).filter_by(campaign_id=c.id).all()
+            draft = sum(1 for e in emails if e.status == 'draft')
+            sent = sum(1 for e in emails if e.status == 'sent')
+            delivered = sum(1 for e in emails if e.status == 'delivered')
+            replied = sum(1 for e in emails if e.status == 'replied')
+            bounced = sum(1 for e in emails if e.status in ('bounced', 'failed'))
+
+            status_emoji = {'active': '🟢', 'paused': '⏸️', 'completed': '✅', 'cancelled': '❌'}.get(c.status, '❓')
+
+            block = (
+                f"{status_emoji} Кампания #{c.id}: «{c.name}»\n"
+                f"📊 Статус: {c.status}\n"
+                f"📧 Всего: {len(emails)} | Черновики: {draft} | Отправлено: {sent + delivered}\n"
+                f"💬 Ответов: {replied} | Ошибки: {bounced}\n"
+                f"📨 Лимит: {c.emails_sent}/{c.max_emails} (макс {c.daily_limit}/день)"
+            )
+            if replied > 0:
+                recent_replies = [e for e in emails if e.status == 'replied' and e.reply_text]
+                for r in recent_replies[:3]:
+                    block += f"\n  → {r.recipient_email}: «{r.reply_text[:80]}...»"
+            result.append(block)
+
+        return "\n\n".join(result)
+    except Exception as e:
+        logger.error(f"[EMAIL_STATUS] Error: {e}", exc_info=True)
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def pause_email_campaign(
+    campaign_id: int = None,
+    action: str = 'pause',
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Поставить на паузу или возобновить email-кампанию."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            campaign = session.query(EmailCampaign).filter_by(
+                user_id=user.id, status='active' if action == 'pause' else 'paused'
+            ).order_by(EmailCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return "❌ Кампания не найдена."
+
+        if action == 'pause':
+            campaign.status = 'paused'
+            session.commit()
+            return f"⏸️ Кампания #{campaign.id} «{campaign.name}» поставлена на паузу."
+        elif action == 'resume':
+            campaign.status = 'active'
+            session.commit()
+            return f"▶️ Кампания #{campaign.id} «{campaign.name}» возобновлена."
+        elif action == 'cancel':
+            campaign.status = 'cancelled'
+            session.commit()
+            return f"❌ Кампания #{campaign.id} «{campaign.name}» отменена."
+        else:
+            return f"❌ Неизвестное действие: {action}. Допустимо: pause, resume, cancel."
+    except Exception as e:
+        logger.error(f"[EMAIL_PAUSE] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def send_follow_up_email(
+    outreach_id: int = None,
+    recipient_email: str = None,
+    subject: str = None,
+    body: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Отправить follow-up email (агент вызывает автономно при якоре email_follow_up).
+
+    Обновляет follow_up_count, next_follow_up_at и отправляет через Resend.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import RESEND_API_KEY
+        from datetime import datetime as dt, timezone as tz
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+        if not RESEND_API_KEY:
+            return "❌ Resend API не настроен."
+
+        # Найти письмо
+        outreach = None
+        if outreach_id:
+            outreach = session.query(EmailOutreach).filter_by(
+                id=outreach_id, user_id=user.id
+            ).first()
+        elif recipient_email:
+            outreach = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == recipient_email,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+            ).order_by(EmailOutreach.sent_at.desc()).first()
+
+        if not outreach:
+            return "❌ Не найдено письмо для follow-up."
+
+        campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+        if not campaign:
+            return "❌ Кампания не найдена."
+
+        max_follow_ups = campaign.max_follow_ups or 2
+        if outreach.follow_up_count >= max_follow_ups:
+            return f"⚠️ Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}."
+
+        if not subject:
+            subject = f"Re: {outreach.subject}" if outreach.subject else "Following up"
+        if not body:
+            return "❌ Нужен текст follow-up (body)."
+
+        # Отправляем через Resend
+        import aiohttp as _aiohttp
+        html_body = body.replace('\n', '<br>')
+        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
+<div style="max-width: 600px; margin: 0 auto; padding: 24px;">
+{html_body}
+</div>
+</body></html>"""
+
+        try:
+            async with _aiohttp.ClientSession() as http:
+                from_header = f"{campaign.sender_name} <{campaign.sender_email}>"
+                resp = await http.post(
+                    'https://api.resend.com/emails',
+                    headers={
+                        'Authorization': f'Bearer {RESEND_API_KEY}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={
+                        'from': from_header,
+                        'to': [outreach.recipient_email],
+                        'subject': subject,
+                        'text': body,
+                        'html': html,
+                    },
+                    timeout=_aiohttp.ClientTimeout(total=15),
+                )
+                resp_data = await resp.json()
+                if resp.status not in (200, 201):
+                    err = resp_data.get('message', str(resp_data))
+                    return f"❌ Ошибка Resend API: {err}"
+        except Exception as e:
+            return f"❌ Ошибка отправки: {str(e)}"
+
+        # Обновляем запись
+        outreach.follow_up_count = (outreach.follow_up_count or 0) + 1
+        outreach.last_follow_up_at = dt.now(tz.utc)
+        # Следующий follow-up через 5 дней (экспоненциальное замедление)
+        next_gap_days = 3 + (outreach.follow_up_count * 2)
+        outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=next_gap_days)
+        session.commit()
+
+        try:
+            from token_service import deduct_tokens
+            deduct_tokens(user_id, 'email_follow_up', session=session)
+        except Exception:
+            pass
+
+        return f"✅ Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
+    except Exception as e:
+        logger.error(f"[EMAIL_FOLLOWUP] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()

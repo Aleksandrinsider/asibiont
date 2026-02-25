@@ -326,6 +326,26 @@ def _migrate_notes(session, inspector):
             session.rollback()
 
 
+def _migrate_email_campaigns(session, inspector):
+    """Миграции email_campaigns + email_outreach (создание через Base.metadata.create_all, только добавляем колонки если нужно)"""
+    # Таблицы создаются автоматически через Base.metadata.create_all в models.py
+    # Здесь только миграции колонок для существующих таблиц
+    if inspector.has_table('email_campaigns'):
+        cols = [col['name'] for col in inspector.get_columns('email_campaigns')]
+        _add_columns(session, 'email_campaigns', cols, {
+            'max_follow_ups': 'ALTER TABLE email_campaigns ADD COLUMN max_follow_ups INTEGER DEFAULT 2',
+        })
+    if inspector.has_table('email_outreach'):
+        cols = [col['name'] for col in inspector.get_columns('email_outreach')]
+        _add_columns(session, 'email_outreach', cols, {
+            'follow_up_count': 'ALTER TABLE email_outreach ADD COLUMN follow_up_count INTEGER DEFAULT 0',
+            'last_follow_up_at': 'ALTER TABLE email_outreach ADD COLUMN last_follow_up_at TIMESTAMP',
+            'next_follow_up_at': 'ALTER TABLE email_outreach ADD COLUMN next_follow_up_at TIMESTAMP',
+            'ai_reply_text': 'ALTER TABLE email_outreach ADD COLUMN ai_reply_text TEXT',
+            'ai_reply_sent_at': 'ALTER TABLE email_outreach ADD COLUMN ai_reply_sent_at TIMESTAMP',
+        })
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -343,6 +363,7 @@ def run_migrations():
         _migrate_token_transactions(session, inspector)
         _migrate_goals(session, inspector)
         _migrate_notes(session, inspector)
+        _migrate_email_campaigns(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

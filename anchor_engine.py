@@ -42,6 +42,7 @@ from models import (
     Session, User, UserProfile, Task, Goal, Interaction, Post,
     Anchor, AnchorDeliveryLog, AnchorPriority,
     ActivityAlert, ContactAlert, UserMessage,
+    EmailCampaign, EmailOutreach,
 )
 from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR
 
@@ -85,6 +86,7 @@ ALWAYS_DELIVER_TYPES = {
     'goal_deadline',          # Горящий дедлайн цели
     'incoming_message',       # Непрочитанные входящие сообщения
     'token_low_balance',      # Критически низкий баланс токенов
+    'email_reply_received',   # Входящий ответ на email-кампанию — критически важно
 }
 
 # Группы батчинга
@@ -119,6 +121,11 @@ BATCH_GROUPS = {
     'delegation_overdue': 'delegation',
     'goal_decomposition': 'goals',
     'inactivity_reengagement': 'engagement',
+    # Email outreach
+    'email_outreach_send': 'email',
+    'email_follow_up': 'email',
+    'email_reply_received': 'email',
+    'email_campaign_report': 'email',
 }
 
 
@@ -426,12 +433,15 @@ class AnchorEngine:
             return
 
         # ── Разделяем потоки ──
+        EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up'}
+        EMAIL_NOTIFY_TYPES = {'email_reply_received', 'email_campaign_report'}
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
-        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors]
+        email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
+        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors]
 
-        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
+        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
         # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
         all_dialog_anchors = critical_anchors.copy()
@@ -472,6 +482,13 @@ class AnchorEngine:
                         await self._process_post_anchor(user, pa, session)
         elif post_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ posts blocked (night hours)")
+
+        # ── 3e. EMAIL SILENT — автономная отправка/follow-up (не ночью, без сообщений юзеру) ──
+        if not is_night and email_silent_anchors:
+            logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors...")
+            for ea in email_silent_anchors[:3]:  # макс 3 за цикл
+                async with self._ai_semaphore:
+                    await self._process_email_silent_anchor(user, ea, session)
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
@@ -539,6 +556,9 @@ class AnchorEngine:
         # --- ПОСТЫ В КАНАЛ (если указан канал) ---
         if user.telegram_channel:
             anchors.extend(self._scan_channel_post(user, profile, session, now_utc))
+
+        # --- EMAIL OUTREACH (автономная отправка + фоллоу-апы + уведомления о reply) ---
+        anchors.extend(self._scan_email_outreach(user, session, now_utc))
 
         # Дедупликация: не создаём якорь если уже есть недоставленный с тем же type+source
         existing = session.query(Anchor).filter(
@@ -1501,6 +1521,184 @@ class AnchorEngine:
         return anchors
 
     # ═══════════════════════════════════════════════════════
+    # EMAIL OUTREACH SCANNER — автономная email-кампания
+    # ═══════════════════════════════════════════════════════
+
+    def _scan_email_outreach(self, user, session, now_utc) -> list:
+        """Сканирует email-кампании:
+        1. Активные кампании с черновиками (draft) → якорь email_outreach_send (агент отправит)
+        2. Отправленные без ответа > 3 дней → якорь email_follow_up
+        3. Входящие ответы → якорь email_reply_received (CRITICAL)
+        4. Ежедневный отчёт по активным кампаниям → email_campaign_report
+        """
+        anchors = []
+
+        # Все активные кампании пользователя
+        campaigns = session.query(EmailCampaign).filter_by(
+            user_id=user.id, status='active'
+        ).all()
+
+        if not campaigns:
+            return anchors
+
+        for campaign in campaigns:
+            # --- 1. Есть черновики (draft) — агент должен написать и отправить ---
+            drafts = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id, status='draft'
+            ).limit(5).all()
+
+            # Дневной лимит
+            today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+            sent_today = session.query(EmailOutreach).filter(
+                EmailOutreach.campaign_id == campaign.id,
+                EmailOutreach.sent_at >= today_start,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).count()
+
+            remaining_daily = max(0, campaign.daily_limit - sent_today)
+            remaining_total = max(0, campaign.max_emails - (campaign.emails_sent or 0))
+
+            if drafts and remaining_daily > 0 and remaining_total > 0:
+                draft_emails = [d.recipient_email for d in drafts[:3]]
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='email_outreach_send',
+                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d")}',
+                    topic=_t(user,
+                        f'Email-кампания «{campaign.name}» — {len(drafts)} черновиков ждут отправки ({remaining_daily} осталось сегодня)',
+                        f'Email campaign «{campaign.name}» — {len(drafts)} drafts pending ({remaining_daily} remaining today)'),
+                    priority=AnchorPriority.MEDIUM,
+                    data=json.dumps({
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'campaign_goal': campaign.goal[:500] if campaign.goal else '',
+                        'target_audience': campaign.target_audience[:300] if campaign.target_audience else '',
+                        'offer': campaign.offer[:500] if campaign.offer else '',
+                        'tone': campaign.tone,
+                        'sender_name': campaign.sender_name,
+                        'sender_email': campaign.sender_email,
+                        'drafts': [{'id': d.id, 'email': d.recipient_email,
+                                    'name': d.recipient_name,
+                                    'company': d.recipient_company,
+                                    'context': d.recipient_context} for d in drafts[:5]],
+                        'remaining_daily': remaining_daily,
+                        'remaining_total': remaining_total,
+                    }),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=12),
+                    cooldown_hours=2,
+                    batch_group='email',
+                ))
+
+            # --- 2. Follow-up: отправлено > 3 дней назад, без ответа, follow_up_count < max ---
+            max_follow_ups = campaign.max_follow_ups or 2
+            stale_emails = session.query(EmailOutreach).filter(
+                EmailOutreach.campaign_id == campaign.id,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                EmailOutreach.follow_up_count < max_follow_ups,
+                EmailOutreach.next_follow_up_at <= now_utc,
+            ).limit(5).all()
+
+            for email in stale_emails:
+                days_since = 0
+                if email.sent_at:
+                    sa = email.sent_at
+                    if sa.tzinfo is None:
+                        sa = sa.replace(tzinfo=timezone.utc)
+                    days_since = (now_utc - sa).days
+
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='email_follow_up',
+                    source=f'email:{email.id}:follow_up:{email.follow_up_count + 1}',
+                    topic=_t(user,
+                        f'Follow-up #{email.follow_up_count + 1} для {email.recipient_email} ({days_since}д без ответа) — кампания «{campaign.name}»',
+                        f'Follow-up #{email.follow_up_count + 1} for {email.recipient_email} ({days_since}d no reply) — campaign «{campaign.name}»'),
+                    priority=AnchorPriority.MEDIUM,
+                    data=json.dumps({
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'campaign_goal': campaign.goal[:500] if campaign.goal else '',
+                        'outreach_id': email.id,
+                        'recipient_email': email.recipient_email,
+                        'recipient_name': email.recipient_name,
+                        'recipient_company': email.recipient_company,
+                        'original_subject': email.subject,
+                        'original_body': email.body[:500] if email.body else '',
+                        'follow_up_number': email.follow_up_count + 1,
+                        'days_since_sent': days_since,
+                    }),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(days=2),
+                    cooldown_hours=24,
+                    batch_group='email',
+                ))
+
+            # --- 3. Входящие ответы (reply_text заполнен, но ai_reply не отправлен) ---
+            unreplied = session.query(EmailOutreach).filter(
+                EmailOutreach.campaign_id == campaign.id,
+                EmailOutreach.status == 'replied',
+                EmailOutreach.reply_text.isnot(None),
+                EmailOutreach.ai_reply_sent_at.is_(None),
+            ).all()
+
+            for email in unreplied:
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='email_reply_received',
+                    source=f'email:{email.id}:reply',
+                    topic=_t(user,
+                        f'📩 Ответ от {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — кампания «{campaign.name}»',
+                        f'📩 Reply from {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — campaign «{campaign.name}»'),
+                    priority=AnchorPriority.CRITICAL,
+                    data=json.dumps({
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'campaign_goal': campaign.goal[:500] if campaign.goal else '',
+                        'outreach_id': email.id,
+                        'recipient_email': email.recipient_email,
+                        'recipient_name': email.recipient_name,
+                        'recipient_company': email.recipient_company,
+                        'original_subject': email.subject,
+                        'original_body': email.body[:300] if email.body else '',
+                        'reply_text': email.reply_text[:1000] if email.reply_text else '',
+                    }),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=24),
+                    cooldown_hours=0.5,
+                    batch_group='email',
+                ))
+
+            # --- 4. Дневной отчёт по кампании (если есть активность) ---
+            total_sent = campaign.emails_sent or 0
+            total_replied = campaign.emails_replied or 0
+            if total_sent > 0 and sent_today > 0:
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='email_campaign_report',
+                    source=f'email_campaign:{campaign.id}:report:{now_utc.strftime("%Y-%m-%d")}',
+                    topic=_t(user,
+                        f'📊 Отчёт email-кампании «{campaign.name}»: {total_sent} отправлено, {total_replied} ответов, {sent_today} сегодня',
+                        f'📊 Email campaign «{campaign.name}» report: {total_sent} sent, {total_replied} replies, {sent_today} today'),
+                    priority=AnchorPriority.LOW,
+                    data=json.dumps({
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'total_sent': total_sent,
+                        'total_replied': total_replied,
+                        'sent_today': sent_today,
+                        'remaining_daily': remaining_daily,
+                        'remaining_total': remaining_total,
+                    }),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=18),
+                    cooldown_hours=20,
+                    batch_group='email',
+                ))
+
+        return anchors
+
+    # ═══════════════════════════════════════════════════════
     # POST SCANNERS — ленточный автопостинг + канал
     # ═══════════════════════════════════════════════════════
 
@@ -1956,6 +2154,114 @@ class AnchorEngine:
             logger.error(f"[ANCHOR] _process_post_anchor error: {e}\n{traceback.format_exc()}")
             session.rollback()
 
+    async def _process_email_silent_anchor(self, user, anchor, session):
+        """Обрабатывает email-якорь МОЛЧА: AI вызывает send_outreach_email / send_follow_up_email.
+
+        Не отправляет сообщение пользователю — только выполняет email-действие.
+        """
+        try:
+            # ── ЗАЩИТА ОТ ДУБЛЕЙ ──
+            fresh = session.query(Anchor).filter_by(id=anchor.id).with_for_update(skip_locked=True).first()
+            if not fresh or fresh.delivered_at is not None:
+                logger.info(f"[ANCHOR] Email anchor #{anchor.id} already delivered by another process, skip")
+                return
+            anchor = fresh
+
+            # Проверяем и списываем токены
+            from token_service import spend_tokens, has_enough_tokens
+            from config import FREE_ACCESS_MODE
+            action = 'email_send' if anchor.anchor_type == 'email_outreach_send' else 'email_follow_up'
+            if not FREE_ACCESS_MODE:
+                if not has_enough_tokens(user.telegram_id, action, session=session):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск email — нет токенов")
+                    return
+
+            anchor_data = json.loads(anchor.data) if anchor.data else {}
+
+            # Используем AI агента с tool calling для автономного выполнения
+            from ai_integration.autonomous_agent import get_autonomous_agent
+            agent = get_autonomous_agent()
+
+            if anchor.anchor_type == 'email_outreach_send':
+                # AI должен написать персонализированные письма для черновиков
+                drafts = anchor_data.get('drafts', [])
+                if not drafts:
+                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no drafts, skip")
+                    return
+
+                instruction = (
+                    f"Тебе нужно отправить email-письма в рамках кампании.\n\n"
+                    f"Кампания: {anchor_data.get('campaign_name', '')}\n"
+                    f"Цель: {anchor_data.get('campaign_goal', '')}\n"
+                    f"Аудитория: {anchor_data.get('target_audience', '')}\n"
+                    f"Предложение: {anchor_data.get('offer', '')}\n"
+                    f"Тон: {anchor_data.get('tone', 'professional')}\n"
+                    f"Отправитель: {anchor_data.get('sender_name', '')}\n\n"
+                    f"Черновики для отправки (ID кампании: {anchor_data.get('campaign_id')}):\n"
+                )
+                for d in drafts:
+                    instruction += (
+                        f"  - {d.get('email')} ({d.get('name', '?')}, {d.get('company', '?')})"
+                        f" контекст: {d.get('context', 'нет')}\n"
+                    )
+                instruction += (
+                    f"\nДля каждого черновика вызови send_outreach_email с campaign_id={anchor_data.get('campaign_id')}, "
+                    f"персонализированными subject и body. Пиши УНИКАЛЬНО для каждого! "
+                    f"Учитывай контекст получателя. Максимум {anchor_data.get('remaining_daily', 5)} сегодня.\n"
+                    f"После отправки НЕ пиши сообщение пользователю — просто выполни и верни SKIP."
+                )
+
+            elif anchor.anchor_type == 'email_follow_up':
+                instruction = (
+                    f"Отправь follow-up email.\n\n"
+                    f"Кампания: {anchor_data.get('campaign_name', '')}\n"
+                    f"Цель: {anchor_data.get('campaign_goal', '')}\n"
+                    f"Получатель: {anchor_data.get('recipient_email')} ({anchor_data.get('recipient_name', '')})\n"
+                    f"Компания: {anchor_data.get('recipient_company', '')}\n"
+                    f"Оригинальная тема: {anchor_data.get('original_subject', '')}\n"
+                    f"Оригинальное письмо: {anchor_data.get('original_body', '')[:300]}\n"
+                    f"Follow-up #: {anchor_data.get('follow_up_number', 1)}\n"
+                    f"Дней с отправки: {anchor_data.get('days_since_sent', 0)}\n\n"
+                    f"Вызови send_follow_up_email с outreach_id={anchor_data.get('outreach_id')} и "
+                    f"коротким ненавязчивым follow-up body с новой ценностью."
+                    f"\nПосле отправки верни SKIP."
+                )
+            else:
+                return
+
+            # Выполняем через агента
+            result = await agent.generate_system_message(
+                user_id=user.telegram_id,
+                mode='email_silent',
+                instruction=instruction,
+                extra_context='',
+                max_tokens=2000,
+                max_iterations=5,  # больше итераций для нескольких send_outreach_email
+            )
+
+            logger.info(f"[ANCHOR] Email silent result for {user.telegram_id}: {(result or 'None')[:100]}")
+
+            # Списываем оставшийся cost
+            if not FREE_ACCESS_MODE:
+                spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}', session=session, auto_commit=False)
+
+            # Помечаем якорь как доставленный
+            anchor.delivered_at = datetime.now(timezone.utc)
+            log = AnchorDeliveryLog(
+                user_id=user.id,
+                anchor_ids=json.dumps([anchor.id]),
+                message_text=f'[EMAIL_SILENT] {anchor.anchor_type}: {(result or "executed")[:200]}',
+                anchor_types=json.dumps([anchor.anchor_type]),
+            )
+            session.add(log)
+            session.commit()
+
+            logger.info(f"[ANCHOR] ✅ Email silent anchor #{anchor.id} processed for {user.telegram_id}")
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _process_email_silent_anchor error: {e}\n{traceback.format_exc()}")
+            session.rollback()
+
     async def _ai_compose_post(self, user, anchor_data: dict, session, mode: str = 'feed') -> str | None:
         """Просит AI создать пост на основе данных пользователя.
 
@@ -2233,6 +2539,12 @@ class AnchorEngine:
                 "— task_reminder: ЗАПЛАНИРОВАННОЕ напоминание сработало по расписанию. Задержка до 30 мин в топике — это шаг сканирования, а НЕ просрочка задачи. НИКОГДА не называй задачу просроченной при task_reminder. Пиши только напоминание о задаче и уточни готовность.",
                 "— task_overdue: задача РЕАЛЬНО просрочена (прошло >30 мин после дедлайна). Только тут уместно говорить о просрочке.",
                 "— task_deadline_soon: дедлайн ещё не наступил, но приближается.",
+                "",
+                "ПРАВИЛА ДЛЯ EMAIL-ЯКОРЕЙ:",
+                "— email_outreach_send: Отправь письма из черновиков кампании. В data будут drafts с email-адресами, именами, контекстом. Для каждого draft используй send_outreach_email с персонализированным subject и body. Пиши уникально для каждого получателя! Учитывай goal и offer кампании. Не уведомляй пользователя о каждом отправленном письме — просто делай молча (верни SKIP).",
+                "— email_follow_up: Отправь follow-up письмо. В data будет original_subject, original_body, follow_up_number. Используй send_outreach_email или reply_to_outreach_email. Будь ненавязчив. Верни SKIP.",
+                "— email_reply_received: КРИТИЧНО! Кто-то ответил на наше письмо. В data — reply_text. Используй reply_to_outreach_email чтобы продолжить диалог в рамках campaign_goal. ОБЯЗАТЕЛЬНО уведоми пользователя о полученном ответе! ЭТО ЕДИНСТВЕННЫЙ email-якорь где надо НАПИСАТЬ пользователю.",
+                "— email_campaign_report: Отчёт по кампании. Напиши пользователю краткую сводку: отправлено, ответов, что дальше.",
                 "",
                 "ПРИНЦИПЫ:",
                 "— НЕ НАЧИНАЙ С ПРИВЕТСТВИЯ: никаких 'Привет!', 'Здравствуй!', 'Доброе утро!' и т.п. Сразу по делу — с факта, вопроса или наблюдения. Ты не здороваешься каждый раз, ты уже рядом.",

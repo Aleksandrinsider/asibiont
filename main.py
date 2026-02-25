@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -7412,6 +7412,123 @@ async def withdraw_handler(request):
         return web.json_response({'error': 'Ошибка сервера'}, status=500)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Resend Webhook — входящие ответы на email-кампании + статус-события
+# ═══════════════════════════════════════════════════════════════════
+
+async def resend_webhook_handler(request):
+    """Обрабатывает webhooks от Resend API:
+    - email.delivered — обновляем статус
+    - email.opened — обновляем статус
+    - email.bounced — помечаем ошибку
+    - email.complained — помечаем жалобу
+    - inbound email (reply) — сохраняем текст ответа, агент автономно отвечает через якорь
+    """
+    try:
+        data = await request.json()
+        event_type = data.get('type', '')
+        payload = data.get('data', {})
+
+        logger.info(f"[RESEND_WEBHOOK] Event: {event_type}, payload keys: {list(payload.keys())}")
+
+        session_db = Session()
+        try:
+            # --- Tracking events (delivered, opened, bounced, complained) ---
+            if event_type in ('email.delivered', 'email.opened', 'email.bounced', 'email.complained'):
+                email_id = payload.get('email_id', '')
+                if email_id:
+                    from models import EmailOutreach
+                    outreach = session_db.query(EmailOutreach).filter_by(resend_id=email_id).first()
+                    if outreach:
+                        status_map = {
+                            'email.delivered': 'delivered',
+                            'email.opened': 'opened',
+                            'email.bounced': 'bounced',
+                            'email.complained': 'failed',
+                        }
+                        new_status = status_map.get(event_type, outreach.status)
+                        # Не понижаем статус (replied > opened > delivered > sent)
+                        status_priority = {'draft': 0, 'sent': 1, 'delivered': 2, 'opened': 3, 'replied': 4, 'bounced': 5, 'failed': 5}
+                        if status_priority.get(new_status, 0) > status_priority.get(outreach.status, 0):
+                            outreach.status = new_status
+                            session_db.commit()
+                            logger.info(f"[RESEND_WEBHOOK] Updated outreach #{outreach.id} → {new_status}")
+
+                        # Bounced → увеличиваем счётчик ошибок
+                        if event_type == 'email.bounced':
+                            campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+                            if campaign:
+                                # Не считаем bounced в sent
+                                pass
+
+            # --- Inbound email (reply) ---
+            elif event_type == 'email.received' or 'from' in payload:
+                # Resend inbound webhook format
+                from_email = payload.get('from', '')
+                to_email = payload.get('to', [''])[0] if isinstance(payload.get('to'), list) else payload.get('to', '')
+                subject = payload.get('subject', '')
+                text_body = payload.get('text', '') or payload.get('html', '')
+                # Clean HTML
+                if '<' in text_body and '>' in text_body:
+                    import re as _re
+                    text_body = _re.sub(r'<[^>]+>', '', text_body).strip()
+
+                logger.info(f"[RESEND_WEBHOOK] Inbound email from={from_email} to={to_email} subject={subject[:80]}")
+
+                if from_email and text_body:
+                    from models import EmailOutreach, EmailCampaign
+                    # Ищем outreach по email отправителя
+                    outreach = session_db.query(EmailOutreach).filter(
+                        EmailOutreach.recipient_email == from_email,
+                        EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                    ).order_by(EmailOutreach.sent_at.desc()).first()
+
+                    if outreach:
+                        outreach.status = 'replied'
+                        outreach.reply_text = text_body[:5000]
+                        outreach.reply_at = datetime.now(timezone.utc)
+                        # Обновляем счётчик ответов в кампании
+                        campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+                        if campaign:
+                            campaign.emails_replied = (campaign.emails_replied or 0) + 1
+                        session_db.commit()
+                        logger.info(f"[RESEND_WEBHOOK] Reply saved for outreach #{outreach.id} from {from_email}")
+
+                        # Уведомим пользователя через TG если возможно
+                        try:
+                            user = session_db.query(User).filter_by(id=outreach.user_id).first()
+                            if user and user.telegram_id:
+                                tg_text = (
+                                    f"📩 Новый ответ на email-кампанию!\n\n"
+                                    f"От: {from_email}\n"
+                                    f"Тема: {subject[:100]}\n"
+                                    f"Текст: {text_body[:300]}{'...' if len(text_body) > 300 else ''}\n\n"
+                                    f"Агент автоматически подготовит ответ в рамках цели кампании."
+                                )
+                                from config import BOT_TOKEN
+                                if BOT_TOKEN:
+                                    import aiohttp as _aiohttp
+                                    async with _aiohttp.ClientSession() as http:
+                                        await http.post(
+                                            f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
+                                            json={'chat_id': user.telegram_id, 'text': tg_text, 'parse_mode': 'HTML'},
+                                            timeout=_aiohttp.ClientTimeout(total=10),
+                                        )
+                        except Exception as e:
+                            logger.warning(f"[RESEND_WEBHOOK] Failed to notify user via TG: {e}")
+                    else:
+                        logger.info(f"[RESEND_WEBHOOK] No matching outreach for reply from {from_email}")
+
+        finally:
+            session_db.close()
+
+        return web.json_response({'status': 'ok'})
+
+    except Exception as e:
+        logger.error(f"[RESEND_WEBHOOK] Error: {e}", exc_info=True)
+        return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)
@@ -7508,6 +7625,7 @@ app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
 app.router.add_get('/create_crypto_payment', create_crypto_payment_handler)
 app.router.add_post('/webhook/nowpayments', nowpayments_webhook)
+app.router.add_post('/webhook/resend', resend_webhook_handler)
 # Discord OAuth2 callback + login/link redirects
 try:
     from discord_bot import discord_oauth_callback, discord_login_redirect, discord_link_redirect

@@ -79,6 +79,17 @@ ACTION_COSTS = {
     'research_topic':    10,   # Глубокое исследование
     'get_crypto_price':   2,   # Котировки
 
+    # ── Email-аутрич ──
+    'start_email_campaign':     15,  # Создание email-кампании
+    'send_outreach_email':      10,  # Отправка email
+    'email_send':               10,  # Alias для send_outreach_email
+    'reply_to_outreach_email':   8,  # Ответ на reply
+    'email_reply':               8,  # Alias для reply
+    'add_email_leads':           5,  # Добавление лидов
+    'get_email_campaign_status': 2,  # Просмотр статуса
+    'pause_email_campaign':      2,  # Пауза/возобновление
+    'email_follow_up':          10,  # Фоллоу-ап
+
     # ── Проактивные (от агента) ──
     'proactive_message':  7,   # Проактивное сообщение
     'proactive_post':    10,   # Проактивный пост в ленту
