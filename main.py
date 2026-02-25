@@ -7651,7 +7651,16 @@ async def resend_webhook_handler(request):
             # --- Inbound email (reply) ---
             elif event_type == 'email.received' or 'from' in payload:
                 # Resend inbound webhook format
-                from_email = payload.get('from', '')
+                raw_from = payload.get('from', '')
+                if isinstance(raw_from, dict):
+                    from_email = raw_from.get('email', '') or raw_from.get('address', '')
+                elif isinstance(raw_from, list) and raw_from:
+                    first = raw_from[0]
+                    from_email = first.get('email', '') if isinstance(first, dict) else str(first)
+                else:
+                    from_email = str(raw_from)
+                from_email = from_email.strip().lower()
+
                 to_email = payload.get('to', [''])[0] if isinstance(payload.get('to'), list) else payload.get('to', '')
                 subject = payload.get('subject', '')
                 text_body = payload.get('text', '') or payload.get('html', '')
@@ -7664,22 +7673,26 @@ async def resend_webhook_handler(request):
 
                 if from_email and text_body:
                     from models import EmailOutreach, EmailCampaign
-                    # Ищем outreach по email отправителя
+                    # Ищем outreach по email отправителя (включая уже replied)
                     outreach = session_db.query(EmailOutreach).filter(
                         EmailOutreach.recipient_email == from_email,
-                        EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                        EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
                     ).order_by(EmailOutreach.sent_at.desc()).first()
 
                     if outreach:
+                        was_replied = outreach.status == 'replied'
                         outreach.status = 'replied'
-                        outreach.reply_text = text_body[:5000]
+                        if outreach.reply_text:
+                            outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + text_body)[:5000]
+                        else:
+                            outreach.reply_text = text_body[:5000]
                         outreach.reply_at = datetime.now(timezone.utc)
-                        # Обновляем счётчик ответов в кампании
-                        campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
-                        if campaign:
-                            campaign.emails_replied = (campaign.emails_replied or 0) + 1
+                        if not was_replied:
+                            campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+                            if campaign:
+                                campaign.emails_replied = (campaign.emails_replied or 0) + 1
                         session_db.commit()
-                        logger.info(f"[RESEND_WEBHOOK] Reply saved for outreach #{outreach.id} from {from_email}")
+                        logger.info(f"[RESEND_WEBHOOK] Reply saved for outreach #{outreach.id} from {from_email} (was_replied={was_replied})")
 
                         # Уведомим пользователя через TG если возможно
                         try:
