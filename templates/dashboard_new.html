@@ -2237,10 +2237,10 @@
                     inner += `
                         <div style="padding: 10px 0; border-bottom: 1px solid #F0F3F5;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                <span style="font-size: 12px; color: #6C727F;" data-i18n="report-conversion">${t('report-conversion')}</span>
-                                <span style="font-size: 12px; font-weight: 600; color: #374151;">${conv}%</span>
+                                <span style="font-size: 13px; color: #374151; font-weight: 400;" data-i18n="report-conversion">${t('report-conversion')}</span>
+                                <span style="font-size: 13px; color: #374151;">${conv}%</span>
                             </div>
-                            <div style="height: 4px; background: #F3F4F6; border-radius: 2px; overflow: hidden;">
+                            <div class="progress-bar">
                                 <div style="height: 100%; width: ${conv}%; background: ${conv > 20 ? '#068487' : '#D1D9E0'}; border-radius: 2px; transition: width 0.3s;"></div>
                             </div>
                         </div>
@@ -5448,11 +5448,11 @@
                     
                     html += `<div style="margin-bottom: 10px;">`;
                     html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">`;
-                    html += `<span style="font-size: 12px; color: #374151; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${g.title}</span>`;
-                    html += `<span style="font-size: 12px; color: #6C727F; white-space: nowrap;">${progress}%</span>`;
+                    html += `<span style="font-size: 13px; color: #374151; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${g.title}</span>`;
+                    html += `<span style="font-size: 13px; color: #374151; white-space: nowrap;">${progress}%</span>`;
                     html += `</div>`;
-                    html += `<div class="progress-bar" style="height: 6px; background: #F3F4F6; border-radius: 3px; overflow: hidden;">`;
-                    html += `<div style="width: ${progress}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.5s ease;"></div>`;
+                    html += `<div class="progress-bar">`;
+                    html += `<div style="width: ${progress}%; height: 100%; background: ${barColor}; border-radius: 2px; transition: width 0.3s ease;"></div>`;
                     html += `</div>`;
                     html += `</div>`;
                 });
