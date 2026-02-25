@@ -186,13 +186,7 @@
             return window.innerWidth <= 768;
         }
 
-        function closeMobileModal() {
-            var modal = document.getElementById('mobile-modal');
-            if (modal) modal.style.display = 'none';
-            // Hide header on mobile
-            var header = document.querySelector('.app-header');
-            if (header) header.style.display = 'none';
-        }
+
 
         // Mobile column switching
         function toggleMobileColumnMenu() {
@@ -286,10 +280,6 @@
         document.addEventListener('DOMContentLoaded', function() {
             if (isMobileDevice()) {
                 console.log('Mobile device detected');
-                const modal = document.getElementById('mobile-modal');
-                if (modal) {
-                    modal.style.display = 'flex';
-                }
 
                 // Fix mobile virtual keyboard causing input to jump
                 var initialHeight = window.innerHeight;
@@ -527,21 +517,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
-    <!-- Mobile Modal -->
-    <div id="mobile-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 10000; display: none; justify-content: center; align-items: center;">
-        <div style="background: white; border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; max-width: 500px; width: 95%; text-align: center; box-shadow: 0 6px 18px rgba(31,35,40,0.08); margin: 20px;">
-            <h3 style="margin: 0 0 16px 0; color: #374151; font-size: 20px;" data-i18n="mobile-unavail">Ограниченный функционал</h3>
-            <p style="margin: 0 0 8px 0; color: #374151; line-height: 1.5; font-size: 16px;" data-i18n="mobile-desc">В мобильной версии доступен только чат и лента. Для полного функционала используйте десктоп.</p>
-            <p style="margin: 0 0 16px 0; color: #374151; line-height: 1.5; font-size: 16px;" data-i18n="mobile-bot">Также можно пользоваться нашим Telegram ботом:</p>
-            <img src="/static/asibiont.svg" alt="ASI Biont Logo" style="width: 120px; height: 120px; margin-bottom: 20px;">
-            <a href="https://t.me/{{ bot_username }}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500; font-size: 16px;">https://t.me/{{ bot_username }}</a>
-            <br><br>
-            <a href="#" onclick="closeMobileModal(); return false;" style="color: #6B7280; text-decoration: none; font-weight: 400; font-size: 14px;" data-i18n="close">Закрыть</a>
-        </div>
-    </div>
+
     {% if logged_in %}
     <!-- Mobile-only header: logo + column switcher -->
     <div class="mobile-header">
+        <div style="position: absolute; left: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px;">
+            <button onclick="showSearchModal()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Поиск контактов" data-i18n-title="search-contacts">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+            </button>
+            <button onclick="window.open('https://t.me/{{ bot_username }}', '_blank')" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Telegram бот" data-i18n-title="open-tg-bot">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg>
+            </button>
+        </div>
         <a href="#" onclick="logout(); return false;" style="display: flex; align-items: center; text-decoration: none;">
             <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 40px; width: auto;">
         </a>
@@ -8037,9 +8024,7 @@
       'msg-placeholder':'Сообщение...',
       'opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
-      'mobile-unavail':'Ограниченный функционал',
-      'mobile-desc':'В мобильной версии доступен только чат и лента. Для полного функционала используйте десктоп.',
-      'mobile-bot':'Также можно пользоваться нашим Telegram ботом:',
+
       'back':'Назад',
       'search-contacts':'Поиск контактов',
       'search-contacts-title':'Поиск контактов',
@@ -8222,9 +8207,7 @@
       'msg-placeholder':'Message...',
       'opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
-      'mobile-unavail':'Limited functionality',
-      'mobile-desc':'In the mobile version, only chat and feed are available. For full functionality, use a desktop.',
-      'mobile-bot':'You can also use our Telegram bot:',
+
       'back':'Back',
       'search-contacts':'Search contacts',
       'search-contacts-title':'Search contacts',
