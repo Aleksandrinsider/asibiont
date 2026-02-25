@@ -445,6 +445,8 @@ body {
     flex-direction: column;
     height: 100%;
     width: 100%;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .view-panel.active {
@@ -599,9 +601,12 @@ details[open] .details-content {
     flex-direction: column;
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 12px;
     border-radius: 0;
     margin-bottom: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .message {
