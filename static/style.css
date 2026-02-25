@@ -2412,6 +2412,15 @@ details[open] .details-content {
     #quick-profile-form {
         grid-template-columns: 1fr !important;
     }
+    #quick-profile-pwd-grid {
+        grid-template-columns: 1fr !important;
+    }
+    #quick-profile-socials {
+        grid-template-columns: 1fr !important;
+    }
+    #quick-profile-modal .rating-modal-content {
+        max-width: 95vw !important;
+    }
 }
 
 
