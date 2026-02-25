@@ -533,12 +533,11 @@
             <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 40px; width: auto;">
         </a>
         <div style="position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px;">
-            <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; gap: 4px; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm.25-14.75v1.5a4.75 4.75 0 0 1 0 9.5v1.5a6.25 6.25 0 0 0 0-12.5ZM7.75 12v-1.525a3.18 3.18 0 0 1-1.886-.96l1.06-1.06a1.75 1.75 0 0 0 2.56-.19H7.75v-1.5h1.734a1.75 1.75 0 0 0-2.56-.19l-1.06-1.06a3.18 3.18 0 0 1 1.886-.96V3.03a4.75 4.75 0 0 0 0 8.94Z"/></svg>
+            <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
                 <span>{{ token_balance or 0 }}</span>
             </button>
-            <button id="mobile-menu-btn" onclick="toggleMobileColumnMenu()" style="background: none; border: none; cursor: pointer; padding: 6px; display: flex; align-items: center;">
-                <svg width="20" height="20" viewBox="0 0 16 16" fill="#374151"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
+            <button id="mobile-menu-btn" onclick="toggleMobileColumnMenu()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
             </button>
             <div id="mobile-column-menu" style="display: none; position: absolute; right: 0; top: 100%; background: #fff; border: 1px solid #D1D9E0; border-radius: 8px; box-shadow: 0 6px 18px rgba(31,35,40,0.08); min-width: 180px; z-index: 5000; overflow: hidden;">
                 <button onclick="switchMobileColumn('left')" class="mobile-col-btn" data-col="left" style="width: 100%; padding: 10px 14px; background: none; border: none; border-bottom: 1px solid #F0F0F0; cursor: pointer; font-size: 13px; color: #374151; text-align: left; font-family: inherit;">
