@@ -354,26 +354,6 @@
             }
         }
 
-        function toggleContactsSection() {
-            const content = document.getElementById('contacts-section-content');
-            const btn = document.getElementById('contacts-toggle-btn');
-            const svg = btn ? btn.querySelector('svg') : null;
-            if (!content) return;
-            const isCollapsed = (content.style.display || '') === 'none';
-            content.style.display = isCollapsed ? 'block' : 'none';
-            if (svg) svg.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
-        }
-
-        function toggleEmailContactsSection() {
-            const content = document.getElementById('email-contacts-content');
-            const btn = document.getElementById('email-contacts-toggle-btn');
-            const svg = btn ? btn.querySelector('svg') : null;
-            if (!content) return;
-            const isCollapsed = (content.style.display || '') === 'none';
-            content.style.display = isCollapsed ? 'block' : 'none';
-            if (svg) svg.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
-        }
-
         // Error notification functions
         function showErrorNotification(message, type = 'error', duration = 5000) {
             const notification = document.getElementById('error-notification');
@@ -2063,88 +2043,93 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                // === Feed-style campaign cards (expandable) ===
-                campaigns.forEach((c, ci) => {
-                    const cid = 'rpt-' + (c.id || ci);
-                    const hasOutreach = c.outreach && c.outreach.length > 0;
-                    const statusDot = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d97706' : '#9CA3AF';
-                    const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', year:'numeric', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-
-                    // Build outreach HTML separately to allow nesting template literals
-                    let outreachHtml = '';
-                    if (hasOutreach) {
-                        outreachHtml = c.outreach.map(o => {
-                            const oColor = o.status === 'replied' || o.status === 'interested' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#9CA3AF';
-                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-                            const recipientLabel = o.recipient_name ? (o.recipient_name + ' &lt;' + o.recipient_email + '&gt;') : o.recipient_email;
-                            const replyBlock = o.reply_text ? '<div style="margin-top: 6px; padding: 8px 10px; background: #F0FAFA; border-radius: 6px; border-left: 2px solid #068487;"><span style="font-size: 11px; color: #068487; font-weight: 600; display: block; margin-bottom: 3px;">Ответ получателя:</span><span style="font-size: 12px; color: #374151; white-space: pre-wrap;">' + o.reply_text + '</span></div>' : '';
-                            const subjectLine = o.subject ? '<div style="font-size: 12px; color: #6C727F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: ' + (o.reply_text ? '4px' : '0') + ';">📧 ' + o.subject + '</div>' : '';
-                            return '<div style="display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F6F8FA; align-items: flex-start;">' +
-                                '<div style="width: 28px; height: 28px; border-radius: 50%; background: #F6F8FA; border: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;">' +
-                                '<svg width="13" height="13" viewBox="0 0 16 16" fill="' + oColor + '"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>' +
-                                '</div>' +
-                                '<div style="flex: 1; min-width: 0;">' +
-                                '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + (o.subject || o.reply_text ? '4px' : '0') + ';">' +
-                                '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + recipientLabel + '</span>' +
-                                (oDate ? '<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">' + oDate + '</span>' : '') +
-                                '</div>' +
-                                subjectLine +
-                                replyBlock +
-                                '</div>' +
-                                '</div>';
-                        }).join('');
-                    }
-
+                // === Campaign cards ===
+                campaigns.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'report-card';
-                    card.style.cssText = 'display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #F6F8FA;';
-                    const datePart = createdDate ? '<span style="font-size: 12px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">' + createdDate + '</span>' : '';
-                    const btnPart = hasOutreach ? '<button id="' + cid + '-btn" onclick="(function(btn){var el=document.getElementById(\'' + cid + '-outreach\');var isOpen=el.style.display!==\'none\';el.style.display=isOpen?\'none\':\'block\';btn.querySelector(\'svg\').style.transform=isOpen?\'rotate(-90deg)\':\'rotate(0deg)\'})(this)" style="background:none;border:none;cursor:pointer;padding:3px 5px;display:flex;align-items:center;color:#6C727F;border-radius:4px;flex-shrink:0;" title="\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="transform:rotate(0deg);transition:transform 0.2s;"><path d="M4.427 7.427l3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427z"/></svg></button>' : '';
-                    const marginBot = hasOutreach ? '8px' : '0';
-                    const goalPart = c.goal ? '<span style="font-size: 12px; color: #6C727F; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">' + c.goal + '</span>' : '';
-                    const repliedColor = (c.emails_replied || 0) > 0 ? '#068487' : '#1F2328';
-                    const outreachPart = hasOutreach ? '<div id="' + cid + '-outreach" style="display: block;">' + outreachHtml + '</div>' : '';
-                    card.innerHTML = '<div style="width: 38px; height: 38px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: -0.5px; margin-top: 2px;">AI</div>' +
-                        '<div style="flex: 1; min-width: 0;">' +
-                            '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">' +
-                                '<span style="font-size: 14px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">' + (c.name || '') + '</span>' +
-                                datePart + btnPart +
+                    card.style.cssText = 'padding: 14px 0; border-bottom: 1px solid #F0F3F5;';
+
+                    const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', year:'numeric', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                    const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d97706' : '#9CA3AF';
+                    const statusBg = c.status === 'active' || c.status === 'running' ? '#F0FAFA' : c.status === 'paused' ? '#FFF8ED' : '#F6F8FA';
+                    const statusLabel = c.status === 'active' || c.status === 'running' ? 'активна' : c.status === 'paused' ? 'на паузе' : (c.status || 'завершена');
+
+                    const sent = c.emails_sent || 0;
+                    const replied = c.emails_replied || 0;
+                    const conv = sent > 0 ? Math.round(replied / sent * 100) : 0;
+                    const repliedColor = replied > 0 ? '#068487' : '#374151';
+
+                    // Outreach rows
+                    let outreachHtml = '';
+                    if (c.outreach && c.outreach.length > 0) {
+                        outreachHtml = '<div style="margin-top: 10px; border-top: 1px solid #F0F3F5; padding-top: 4px;">';
+                        c.outreach.forEach(o => {
+                            const oStatusColor = o.status === 'replied' || o.status === 'interested' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#9CA3AF';
+                            const oStatusLabel = o.status === 'replied' ? 'ответил' : o.status === 'interested' ? 'заинтересован' : o.status === 'bounced' ? 'отклонено' : o.status === 'failed' ? 'ошибка' : o.status === 'sent' ? 'отправлено' : (o.status || '');
+                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                            const recipientLabel = o.recipient_name ? (o.recipient_name + ' &lt;' + o.recipient_email + '&gt;') : (o.recipient_email || '');
+                            const subjectHtml = o.subject ? '<div style="font-size: 12px; color: #6C727F; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📧 ' + o.subject + '</div>' : '';
+                            const replyHtml = o.reply_text ? '<div style="margin-top: 6px; padding: 8px 10px; background: #F0FAFA; border-radius: 6px; border-left: 2px solid #068487;"><div style="font-size: 11px; color: #068487; font-weight: 600; margin-bottom: 3px;">Ответ:</div><div style="font-size: 12px; color: #374151; white-space: pre-wrap; word-break: break-word;">' + o.reply_text + '</div></div>' : '';
+
+                            outreachHtml += '<div style="display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F6F8FA; align-items: flex-start;">' +
+                                '<div style="width: 7px; height: 7px; border-radius: 50%; background: ' + oStatusColor + '; flex-shrink: 0; margin-top: 5px;"></div>' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                    '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+                                        '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + recipientLabel + '</span>' +
+                                        '<span style="font-size: 11px; color: ' + oStatusColor + '; flex-shrink: 0;">' + oStatusLabel + '</span>' +
+                                        (oDate ? '<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">' + oDate + '</span>' : '') +
+                                    '</div>' +
+                                    subjectHtml +
+                                    replyHtml +
+                                '</div>' +
+                            '</div>';
+                        });
+                        outreachHtml += '</div>';
+                    }
+
+                    card.innerHTML =
+                        '<div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;">' +
+                            '<div style="width: 34px; height: 34px; border-radius: 8px; background: #068487; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; font-weight: 700; color: #fff; letter-spacing: -0.5px;">AI</div>' +
+                            '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+                                    '<span style="font-size: 14px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">' + (c.name || 'Кампания') + '</span>' +
+                                    '<span style="font-size: 11px; color: ' + statusColor + '; background: ' + statusBg + '; padding: 2px 8px; border-radius: 10px; border: 1px solid ' + statusColor + '22; flex-shrink: 0;">' + statusLabel + '</span>' +
+                                    (createdDate ? '<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">' + createdDate + '</span>' : '') +
+                                '</div>' +
+                                (c.goal ? '<div style="font-size: 12px; color: #6C727F; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + c.goal + '</div>' : '') +
                             '</div>' +
-                            '<div style="border-bottom: 1px solid #F6F8FA; padding-bottom: 8px; margin-bottom: ' + marginBot + '; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">' +
-                                goalPart +
-                                '<span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e: <b style="color:#1F2328">' + (c.emails_sent || 0) + '</b></span>' +
-                                '<span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">\u041e\u0442\u0432\u0435\u0442\u043e\u0432: <b style="color:' + repliedColor + '">' + (c.emails_replied || 0) + '</b></span>' +
-                                '<span style="display:flex;align-items:center;gap:3px;font-size:11px;color:' + statusDot + ';white-space:nowrap;flex-shrink:0;"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="' + statusDot + '"/></svg>' + (c.status || '') + '</span>' +
-                            '</div>' +
-                            outreachPart +
-                        '</div>';
+                        '</div>' +
+                        '<div style="display: flex; gap: 16px; padding: 8px 0; border-top: 1px solid #F0F3F5; border-bottom: 1px solid #F0F3F5; flex-wrap: wrap;">' +
+                            '<span style="font-size: 12px; color: #6C727F;">Отправлено: <b style="color: #374151;">' + sent + '</b></span>' +
+                            '<span style="font-size: 12px; color: #6C727F;">Ответов: <b style="color: ' + repliedColor + ';">' + replied + '</b></span>' +
+                            '<span style="font-size: 12px; color: #6C727F;">Конверсия: <b style="color: ' + (conv > 0 ? '#068487' : '#374151') + ';">' + conv + '%</b></span>' +
+                        '</div>' +
+                        outreachHtml;
+
                     list.appendChild(card);
                 });
 
-                // === Standalone emails section ===
+                // === Standalone emails ===
                 if (emails.length > 0) {
                     const sectionHeader = document.createElement('div');
                     sectionHeader.className = 'report-card';
-                    sectionHeader.style.cssText = 'padding: 12px 0 6px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.8px;';
-                    sectionHeader.textContent = 'Письма';
+                    sectionHeader.style.cssText = 'padding: 14px 0 6px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.8px;';
+                    sectionHeader.textContent = 'Отдельные письма';
                     list.appendChild(sectionHeader);
 
                     emails.forEach(e => {
                         const card = document.createElement('div');
                         card.className = 'report-card';
-                        card.style.cssText = 'display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #F6F8FA;';
+                        card.style.cssText = 'display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #F0F3F5; align-items: flex-start;';
                         const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-                        const eDatePart = dateStr ? '<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">' + dateStr + '</span>' : '';
-                        const eSubjectPart = e.subject ? '<div style="font-size: 12px; color: #6C727F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">\uD83D\uDCE7 ' + e.subject + '</div>' : '';
-                        card.innerHTML = '<div style="width: 38px; height: 38px; border-radius: 50%; background: #F6F8FA; border: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">' +
-                            '<svg width="16" height="16" viewBox="0 0 16 16" fill="#6C727F"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>' +
-                            '</div>' +
-                            '<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; justify-content: center;">' +
-                                '<div style="display: flex; align-items: center; gap: 8px;">' +
-                                    '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\u2192 ' + (e.to || '') + '</span>' +
-                                    eDatePart +
+                        card.innerHTML =
+                            '<div style="width: 7px; height: 7px; border-radius: 50%; background: #9CA3AF; flex-shrink: 0; margin-top: 5px;"></div>' +
+                            '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+                                    '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">→ ' + (e.to || '') + '</span>' +
+                                    (dateStr ? '<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">' + dateStr + '</span>' : '') +
                                 '</div>' +
-                                eSubjectPart +
+                                (e.subject ? '<div style="font-size: 12px; color: #6C727F; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📧 ' + e.subject + '</div>' : '') +
                             '</div>';
                         list.appendChild(card);
                     });
