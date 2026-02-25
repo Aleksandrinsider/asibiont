@@ -6748,6 +6748,7 @@ async def api_reports_handler(request):
                             'status': o.status,
                             'sent_at': (o.sent_at.isoformat() + 'Z') if o.sent_at else None,
                             'reply_text': (o.reply_text[:200] + '...') if o.reply_text and len(o.reply_text) > 200 else o.reply_text,
+                            'reply_at': (o.reply_at.isoformat() + 'Z') if o.reply_at else None,
                         } for o in outreach],
                     })
             except Exception as e:
@@ -7691,10 +7692,13 @@ async def resend_webhook_handler(request):
     - email.opened — обновляем статус
     - email.bounced — помечаем ошибку
     - email.complained — помечаем жалобу
-    - inbound email (reply) — сохраняем текст ответа, агент автономно отвечает через якорь
+    - email.received (inbound reply) — сохраняем текст ответа, агент автономно отвечает через якорь
     """
     try:
-        data = await request.json()
+        raw_body = await request.text()
+        logger.info(f"[RESEND_WEBHOOK] Raw body (first 2000): {raw_body[:2000]}")
+        import json as _json
+        data = _json.loads(raw_body)
         event_type = data.get('type', '')
         payload = data.get('data', {})
 
@@ -7703,7 +7707,7 @@ async def resend_webhook_handler(request):
             payload = data
             event_type = 'email.received'
 
-        logger.info(f"[RESEND_WEBHOOK] Event: {event_type}, payload keys: {list(payload.keys())}, raw keys: {list(data.keys())}")
+        logger.info(f"[RESEND_WEBHOOK] Event: {event_type}, payload keys: {list(payload.keys())}, data keys: {list(data.keys())}")
 
         session_db = Session()
         try:
@@ -7734,13 +7738,16 @@ async def resend_webhook_handler(request):
 
             # --- Inbound email (reply) ---
             elif event_type == 'email.received' or 'from' in payload:
-                # Resend sends only metadata in webhook; body must be fetched via API
+                # Resend webhook does NOT include email body — must fetch via API
                 email_id = payload.get('email_id', '') or data.get('email_id', '')
                 raw_from = payload.get('from', '') or data.get('from', '')
                 subject = payload.get('subject', '') or data.get('subject', '')
                 text_body = payload.get('text', '') or payload.get('html', '') or data.get('text', '') or data.get('html', '')
+                
+                logger.info(f"[RESEND_WEBHOOK] Inbound: email_id={email_id}, raw_from={raw_from}, subject={subject[:80] if subject else ''}, has_body={bool(text_body)}")
 
-                if email_id and not text_body:
+                # Always try to fetch body from Resend API for inbound emails
+                if email_id:
                     try:
                         from config import RESEND_API_KEY
                         if RESEND_API_KEY:
@@ -7751,13 +7758,20 @@ async def resend_webhook_handler(request):
                                     headers={'Authorization': f'Bearer {RESEND_API_KEY}'},
                                     timeout=_aiohttp.ClientTimeout(total=10),
                                 )
+                                resp_text = await r.text()
+                                logger.info(f"[RESEND_WEBHOOK] Receiving API status={r.status}, body (first 500): {resp_text[:500]}")
                                 if r.status == 200:
-                                    rec = await r.json()
-                                    text_body = rec.get('text') or rec.get('html') or ''
+                                    import json as _json2
+                                    rec = _json2.loads(resp_text)
+                                    fetched_body = rec.get('text') or rec.get('html') or ''
+                                    if fetched_body:
+                                        text_body = fetched_body
                                     if not raw_from:
                                         raw_from = rec.get('from', '')
                                     if not subject:
                                         subject = rec.get('subject', '')
+                                else:
+                                    logger.warning(f"[RESEND_WEBHOOK] Receiving API returned {r.status}")
                     except Exception as e:
                         logger.warning(f"[RESEND_WEBHOOK] Failed to fetch received email body: {e}")
 
@@ -7780,13 +7794,20 @@ async def resend_webhook_handler(request):
 
                 to_raw = payload.get('to', '') or data.get('to', '')
                 to_email = to_raw[0] if isinstance(to_raw, list) and to_raw else str(to_raw)
-                logger.info(f"[RESEND_WEBHOOK] Inbound email from={from_email} subject={subject[:80] if subject else ''} body_len={len(text_body or '')}")
+                logger.info(f"[RESEND_WEBHOOK] Parsed: from_email={from_email}, to={to_email}, subject={subject[:80] if subject else ''}, body_len={len(text_body or '')}")
 
                 if from_email:
                     if not text_body:
                         text_body = '(письмо без текста)'
                     from models import EmailOutreach, EmailCampaign
                     from sqlalchemy import func
+                    
+                    # Проверим все outreach для этого email
+                    all_outreach = session_db.query(EmailOutreach).filter(
+                        func.lower(EmailOutreach.recipient_email) == from_email,
+                    ).order_by(EmailOutreach.sent_at.desc()).all()
+                    logger.info(f"[RESEND_WEBHOOK] Found {len(all_outreach)} total outreach records for {from_email}: {[(o.id, o.status, o.recipient_email) for o in all_outreach[:5]]}")
+                    
                     outreach = session_db.query(EmailOutreach).filter(
                         func.lower(EmailOutreach.recipient_email) == from_email,
                         EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
