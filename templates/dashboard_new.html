@@ -2280,9 +2280,9 @@
 
                     if (c.outreach && c.outreach.length > 0) {
                         c.outreach.forEach(o => {
-                            const oLbl = o.status === 'replied' ? 'Ответил' : o.status === 'interested' ? 'Заинтересован' : o.status === 'opened' ? 'Открыто' : o.status === 'bounced' ? 'Отклонено' : o.status === 'failed' ? 'Ошибка' : o.status === 'sent' ? 'Отправлено' : (o.status || '');
-                            const oClr = o.status === 'replied' ? '#068487' : o.status === 'interested' ? '#28A745' : o.status === 'opened' ? '#bf8700' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
-                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                            const oLbl = o.status === 'replied' ? 'Ответил' : o.status === 'interested' ? 'Заинтересован' : o.status === 'opened' ? 'Открыто' : o.status === 'delivered' ? 'Доставлено' : o.status === 'bounced' ? 'Отклонено' : o.status === 'failed' ? 'Ошибка' : o.status === 'sent' ? 'Отправлено' : (o.status || '');
+                            const oClr = o.status === 'replied' ? '#068487' : o.status === 'interested' ? '#28A745' : o.status === 'opened' ? '#bf8700' : o.status === 'delivered' ? '#6C727F' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
+                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                             const rcpt = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
 
                             inner += `
@@ -2327,7 +2327,7 @@
                     emailsSec.appendChild(emailsHdr);
 
                     emails.forEach(e => {
-                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                         const item = document.createElement('div');
                         item.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
                         item.innerHTML = `
@@ -8597,7 +8597,7 @@
       'feed-empty-desc':'Здесь будут отображаться публикации ваших избранных контактов. Добавьте контакты в избранное, чтобы видеть их посты.',
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Отчёты агента','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
-      'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-opened':'Открыто','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
+      'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-opened':'Открыто','report-delivered':'Доставлено','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
@@ -8782,7 +8782,7 @@
       'feed-empty-desc':'Posts from your favorite contacts will appear here. Add contacts to favorites to see their posts.',
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Agent Reports','reports-empty':'No agent activity yet','reports-empty-desc':'Campaigns will appear here: who the agent contacted, what they replied, negotiation status.',
-      'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-opened':'Opened','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
+      'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-opened':'Opened','report-delivered':'Delivered','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
       'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
