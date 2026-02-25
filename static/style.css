@@ -2296,7 +2296,7 @@ details[open] .details-content {
 }
 
 /* Mobile overrides */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     *, *::before, *::after {
         box-sizing: border-box !important;
     }
@@ -2400,25 +2400,7 @@ details[open] .details-content {
     }
 }
 
-/* Tablet overrides */
-@media (min-width: 769px) and (max-width: 1024px) {
-    .main-layout {
-        gap: 4px !important;
-    }
-    .left-column {
-        flex: 0 0 260px !important;
-        min-width: 260px !important;
-        max-width: 260px !important;
-    }
-    .center-column {
-        flex: 1 1 auto !important;
-    }
-    .right-column {
-        flex: 0 0 280px !important;
-        min-width: 280px !important;
-        max-width: 280px !important;
-    }
-}
+
 
 
 
