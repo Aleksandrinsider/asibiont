@@ -2422,9 +2422,10 @@
                 if (emptyEl) emptyEl.style.display = 'none';
 
                 contacts.forEach(c => {
+                    if (c.status === 'blocked') return;
                     const card = document.createElement('div');
                     card.className = 'contact-card';
-                    card.style.cssText = 'display: flex; gap: 14px; padding: 10px 14px; margin: 4px 0; background: #fff; border: 1px solid #D1D9E0; border-radius: 8px; font-size: 13px;';
+                    card.style.cssText = 'display: flex; gap: 10px; padding: 8px 4px; margin: 0; font-size: 13px; border-bottom: 1px solid #F0F3F5;';
                     const statusColor = c.status === 'replied' || c.status === 'interested' ? '#068487' : c.status === 'bounced' || c.status === 'unsubscribed' ? '#d73a49' : c.status === 'contacted' ? '#bf8700' : '#6C727F';
                     const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
@@ -2436,12 +2437,16 @@
                         ((c.name || c.company) ? '<div style="font-size: 12px; color: #6C727F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + [c.name, c.company].filter(Boolean).join(' · ') + '</div>' : '') +
                         (c.notes ? '<div style="font-size: 12px; color: #9CA3AF; margin-top: 2px;">' + c.notes + '</div>' : '') +
                         '</div>' +
-                        '<button onclick="deleteContact(' + c.id + ')" style="background: none; border: none; cursor: pointer; padding: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; align-self: flex-start;" title="' + t('delete-contact') + '">' +
-                            '<svg width="12" height="12" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>' +
-                        '</button>';
-                    // Show delete button on card hover
-                    card.addEventListener('mouseenter', () => { const btn = card.querySelector('button'); if (btn) btn.style.opacity = '0.4'; });
-                    card.addEventListener('mouseleave', () => { const btn = card.querySelector('button'); if (btn) btn.style.opacity = '0'; });
+                        '<div class="contact-actions" style="display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; align-self: flex-start;">' +
+                            '<button onclick="editContactInline(' + c.id + ', this)" style="background: none; border: none; cursor: pointer; padding: 2px;" title="' + t('edit-contact') + '">' +
+                                '<svg width="12" height="12" viewBox="0 0 16 16" fill="#6C727F"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"/></svg>' +
+                            '</button>' +
+                            '<button onclick="blockContact(' + c.id + ')" style="background: none; border: none; cursor: pointer; padding: 2px;" title="' + t('block-contact') + '">' +
+                                '<svg width="12" height="12" viewBox="0 0 16 16" fill="#d73a49"><path d="M4.467.22a.749.749 0 0 1 .53-.22h6.006c.199 0 .39.079.53.22l4.247 4.247c.141.14.22.331.22.53v6.006a.749.749 0 0 1-.22.53l-4.247 4.247a.749.749 0 0 1-.53.22H4.997a.749.749 0 0 1-.53-.22L.22 11.533a.749.749 0 0 1-.22-.53V4.997c0-.199.079-.39.22-.53Zm.84 1.28L1.5 5.308v5.384L5.308 14.5h5.384l3.808-3.808V5.308L10.692 1.5ZM4 7.75A.75.75 0 0 1 4.75 7h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 4 7.75Z"/></svg>' +
+                            '</button>' +
+                        '</div>';
+                    card.addEventListener('mouseenter', () => { const a = card.querySelector('.contact-actions'); if (a) a.style.opacity = '0.5'; });
+                    card.addEventListener('mouseleave', () => { const a = card.querySelector('.contact-actions'); if (a) a.style.opacity = '0'; });
                     list.appendChild(card);
                 });
                 if (window.applyLang) applyLang();
@@ -2482,19 +2487,84 @@
             }
         }
 
-        async function deleteContact(id) {
+        async function blockContact(id) {
             try {
                 const resp = await fetch('/api/email-contacts/' + id, {
-                    method: 'DELETE',
-                    credentials: 'include'
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ status: 'blocked' })
                 });
                 if (resp.ok) {
-                    showNotification(t('contact-deleted'), 'success');
+                    showNotification(t('contact-blocked'), 'success');
                     loadContacts();
                 }
             } catch (err) {
-                console.error('Failed to delete contact:', err);
+                console.error('Failed to block contact:', err);
             }
+        }
+
+        function editContactInline(id, btnEl) {
+            const card = btnEl.closest('.contact-card');
+            if (!card || card.dataset.editing) return;
+            card.dataset.editing = '1';
+
+            const list = document.getElementById('contacts-list');
+            const allCards = list ? list.querySelectorAll('.contact-card') : [];
+            let contactData = null;
+            allCards.forEach(cd => { if (cd === card) contactData = true; });
+            if (!contactData) return;
+
+            const infoDiv = card.querySelector('div');
+            const emailSpan = infoDiv.querySelector('span[style*="font-weight: 500"]');
+            const detailDiv = infoDiv.querySelector('div[style*="font-size: 12px"][style*="color: #6C727F"]');
+            const notesDiv = infoDiv.querySelector('div[style*="color: #9CA3AF"]');
+
+            const currentEmail = emailSpan ? emailSpan.textContent.trim() : '';
+            const detailText = detailDiv ? detailDiv.textContent.trim() : '';
+            const parts = detailText.split(' · ');
+            const currentName = parts[0] || '';
+            const currentCompany = parts[1] || '';
+
+            const form = document.createElement('div');
+            form.style.cssText = 'display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;';
+            form.innerHTML =
+                '<input type="email" value="' + currentEmail.replace(/"/g, '&quot;') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
+                '<input type="text" value="' + currentName.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-name-ph') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
+                '<input type="text" value="' + currentCompany.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-company-ph') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
+                '<div style="display: flex; gap: 6px; margin-top: 2px;">' +
+                    '<button class="ec-save-btn" style="padding: 3px 10px; font-size: 11px; background: #068487; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="save">' + t('save') + '</button>' +
+                    '<button class="ec-cancel-btn" style="padding: 3px 10px; font-size: 11px; background: #F3F4F6; color: #374151; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="cancel">' + t('cancel') + '</button>' +
+                '</div>';
+
+            const origHTML = card.innerHTML;
+            card.innerHTML = '';
+            card.appendChild(form);
+
+            const inputs = form.querySelectorAll('input');
+            form.querySelector('.ec-save-btn').onclick = async () => {
+                const newEmail = inputs[0].value.trim();
+                const newName = inputs[1].value.trim();
+                const newCompany = inputs[2].value.trim();
+                if (!newEmail || !newEmail.includes('@')) { showNotification(t('contact-invalid-email'), 'error'); return; }
+                try {
+                    const resp = await fetch('/api/email-contacts/' + id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ email: newEmail, name: newName, company: newCompany })
+                    });
+                    if (resp.ok) {
+                        showNotification(t('contact-saved'), 'success');
+                        loadContacts();
+                    } else {
+                        const data = await resp.json();
+                        showNotification(data.error || t('err-unknown'), 'error');
+                    }
+                } catch (err) { showNotification(t('err-prefix') + ' ' + err.message, 'error'); }
+            };
+            form.querySelector('.ec-cancel-btn').onclick = () => { loadContacts(); };
+            inputs[0].focus();
         }
 
         async function saveContactFromReport(email, name, company) {
@@ -8647,7 +8717,7 @@
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Отчёты агента','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-conversion':'Конверсия','report-opened':'Открыто','report-delivered':'Доставлено','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
-      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
+      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
       'save':'Сохранить','cancel':'Отмена',
@@ -8832,7 +8902,7 @@
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Agent Reports','reports-empty':'No agent activity yet','reports-empty-desc':'Campaigns will appear here: who the agent contacted, what they replied, negotiation status.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-conversion':'Conversion','report-opened':'Opened','report-delivered':'Delivered','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
-      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
+      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-blocked':'Contact blocked','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','block-contact':'Block contact','edit-contact':'Edit contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
       'save':'Save','cancel':'Cancel',

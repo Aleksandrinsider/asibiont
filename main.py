@@ -6643,6 +6643,41 @@ async def api_email_contacts_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_email_contact_edit_handler(request):
+    """Edit an email contact (PUT)."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        contact_id = int(request.match_info['contact_id'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            contact = session_db.query(EmailContact).filter_by(
+                id=contact_id, user_id=user.id
+            ).first()
+            if not contact:
+                return web.json_response({'error': 'Contact not found'}, status=404)
+            data = await request.json()
+            for field in ('name', 'company', 'position', 'notes', 'status'):
+                if field in data:
+                    setattr(contact, field, (data[field] or '').strip() or None)
+            if 'email' in data:
+                new_email = (data['email'] or '').strip().lower()
+                if new_email and '@' in new_email:
+                    contact.email = new_email
+            session_db.commit()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_email_contact_edit: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_email_contact_delete_handler(request):
     """Delete an email contact."""
     try:
@@ -7841,6 +7876,7 @@ app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 app.router.add_get('/api/reports', api_reports_handler)
 app.router.add_get('/api/email-contacts', api_email_contacts_handler)
 app.router.add_post('/api/email-contacts', api_email_contacts_handler)
+app.router.add_put('/api/email-contacts/{contact_id}', api_email_contact_edit_handler)
 app.router.add_delete('/api/email-contacts/{contact_id}', api_email_contact_delete_handler)
 
 
