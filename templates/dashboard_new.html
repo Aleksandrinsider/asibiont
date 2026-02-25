@@ -2116,7 +2116,7 @@
                     });
                 }
 
-                applyTranslations();
+                if (window.applyLang) applyLang();
             } catch (err) {
                 console.error('Failed to load reports:', err);
             }
@@ -2197,7 +2197,7 @@
                     `;
                     list.appendChild(card);
                 });
-                applyTranslations();
+                if (window.applyLang) applyLang();
             } catch (err) {
                 console.error('Failed to load contacts:', err);
             }
