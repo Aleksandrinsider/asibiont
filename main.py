@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, EmailContact, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -6581,6 +6581,94 @@ async def api_note_edit_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_email_contacts_handler(request):
+    """API for managing email contacts — GET (list), POST (create)."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            if request.method == 'GET':
+                contacts = session_db.query(EmailContact).filter_by(
+                    user_id=user.id
+                ).order_by(EmailContact.created_at.desc()).limit(200).all()
+                return web.json_response({'contacts': [{
+                    'id': c.id,
+                    'email': c.email,
+                    'name': c.name,
+                    'company': c.company,
+                    'position': c.position,
+                    'notes': c.notes,
+                    'source': c.source,
+                    'status': c.status,
+                    'last_contacted_at': (c.last_contacted_at.isoformat() + 'Z') if c.last_contacted_at else None,
+                    'created_at': (c.created_at.isoformat() + 'Z') if c.created_at else None,
+                } for c in contacts]})
+
+            elif request.method == 'POST':
+                data = await request.json()
+                email = (data.get('email') or '').strip().lower()
+                if not email or '@' not in email:
+                    return web.json_response({'error': 'Invalid email'}, status=400)
+                # Check duplicate
+                existing = session_db.query(EmailContact).filter_by(
+                    user_id=user.id, email=email
+                ).first()
+                if existing:
+                    return web.json_response({'error': 'Contact already exists'}, status=409)
+                contact = EmailContact(
+                    user_id=user.id,
+                    email=email,
+                    name=data.get('name', '').strip() or None,
+                    company=data.get('company', '').strip() or None,
+                    position=data.get('position', '').strip() or None,
+                    notes=data.get('notes', '').strip() or None,
+                    source=data.get('source', 'manual'),
+                )
+                session_db.add(contact)
+                session_db.commit()
+                return web.json_response({'ok': True, 'id': contact.id})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_email_contacts: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_email_contact_delete_handler(request):
+    """Delete an email contact."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        contact_id = int(request.match_info['contact_id'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            contact = session_db.query(EmailContact).filter_by(
+                id=contact_id, user_id=user.id
+            ).first()
+            if not contact:
+                return web.json_response({'error': 'Contact not found'}, status=404)
+            session_db.delete(contact)
+            session_db.commit()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error deleting email contact: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_reports_handler(request):
     """API for getting email reports — campaigns + standalone emails."""
     try:
@@ -7742,6 +7830,9 @@ app.router.add_post('/api/notes', api_notes_handler)
 app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 app.router.add_get('/api/reports', api_reports_handler)
+app.router.add_get('/api/email-contacts', api_email_contacts_handler)
+app.router.add_post('/api/email-contacts', api_email_contacts_handler)
+app.router.add_delete('/api/email-contacts/{contact_id}', api_email_contact_delete_handler)
 
 
 # Setup for production

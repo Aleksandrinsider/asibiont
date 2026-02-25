@@ -530,6 +530,35 @@ class AnchorDeliveryLog(Base):
     user = relationship("User", backref="anchor_logs")
 
 
+class EmailContact(Base):
+    """
+    Справочник email-контактов пользователя.
+    Централизованное хранение: добавлять вручную, из кампаний, из отчётов.
+    """
+    __tablename__ = 'email_contacts'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    email = Column(String(300), nullable=False)
+    name = Column(String(200))
+    company = Column(String(200))
+    position = Column(String(200))
+    notes = Column(Text)                     # Контекст от юзера или AI
+    source = Column(String(50), default='manual')  # manual / campaign / import
+    status = Column(String(50), default='new', index=True)  # new / contacted / replied / interested / unsubscribed / bounced
+    last_contacted_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="email_contacts")
+
+    __table_args__ = (
+        Index('ix_email_contacts_user_email', 'user_id', 'email', unique=True),
+    )
+
+
 class EmailCampaign(Base):
     """
     Email-кампания для автономного привлечения клиентов.

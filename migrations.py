@@ -346,6 +346,16 @@ def _migrate_email_campaigns(session, inspector):
         })
 
 
+def _migrate_email_contacts(session, inspector):
+    """Миграции email_contacts (создание через Base.metadata.create_all, только добавляем колонки если нужно)"""
+    if inspector.has_table('email_contacts'):
+        cols = [col['name'] for col in inspector.get_columns('email_contacts')]
+        _add_columns(session, 'email_contacts', cols, {
+            'position': 'ALTER TABLE email_contacts ADD COLUMN position VARCHAR(200)',
+            'updated_at': 'ALTER TABLE email_contacts ADD COLUMN updated_at TIMESTAMP',
+        })
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -364,6 +374,7 @@ def run_migrations():
         _migrate_goals(session, inspector)
         _migrate_notes(session, inspector)
         _migrate_email_campaigns(session, inspector)
+        _migrate_email_contacts(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

@@ -8713,3 +8713,111 @@ async def send_email(
     finally:
         if close_session:
             session.close()
+
+
+async def save_email_contact(
+    email: str = None,
+    name: str = None,
+    company: str = None,
+    position: str = None,
+    notes: str = None,
+    source: str = 'manual',
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Сохранить email-контакт в справочник пользователя."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import User, EmailContact
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        email_clean = (email or '').strip().lower()
+        if not email_clean or '@' not in email_clean:
+            return "❌ Некорректный email"
+
+        # Check duplicate
+        existing = session.query(EmailContact).filter_by(
+            user_id=user.id, email=email_clean
+        ).first()
+        if existing:
+            # Update existing
+            if name:
+                existing.name = name.strip()
+            if company:
+                existing.company = company.strip()
+            if position:
+                existing.position = position.strip()
+            if notes:
+                existing.notes = notes.strip()
+            session.commit()
+            return f"📇 Контакт {email_clean} обновлён"
+
+        contact = EmailContact(
+            user_id=user.id,
+            email=email_clean,
+            name=(name or '').strip() or None,
+            company=(company or '').strip() or None,
+            position=(position or '').strip() or None,
+            notes=(notes or '').strip() or None,
+            source=source or 'manual',
+        )
+        session.add(contact)
+        session.commit()
+        return f"📇 Контакт сохранён: {email_clean}" + (f" ({name.strip()})" if name else "")
+    except Exception as e:
+        logger.error(f"[SAVE_EMAIL_CONTACT] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def list_email_contacts(
+    status_filter: str = 'all',
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Список email-контактов из справочника пользователя."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import User, EmailContact
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        query = session.query(EmailContact).filter_by(user_id=user.id)
+        if status_filter and status_filter != 'all':
+            query = query.filter_by(status=status_filter)
+        contacts = query.order_by(EmailContact.created_at.desc()).limit(100).all()
+
+        if not contacts:
+            return "📇 Справочник контактов пуст. Добавь через save_email_contact или на дашборде → Контакты."
+
+        lines = [f"📇 Email-контакты ({len(contacts)}):"]
+        for c in contacts:
+            parts = [c.email]
+            if c.name:
+                parts.append(c.name)
+            if c.company:
+                parts.append(c.company)
+            status_emoji = {'new': '🆕', 'contacted': '📨', 'replied': '💬', 'interested': '⭐', 'bounced': '❌', 'unsubscribed': '🚫'}.get(c.status, '➖')
+            line = f"{status_emoji} {' — '.join(parts)}"
+            if c.notes:
+                line += f" ({c.notes[:50]})"
+            lines.append(line)
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"[LIST_EMAIL_CONTACTS] Error: {e}", exc_info=True)
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()

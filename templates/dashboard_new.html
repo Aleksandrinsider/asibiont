@@ -778,6 +778,10 @@
                                 <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="reports">Отчёты</span>
                                 </span>
+                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span id="contacts-link" onclick="event.stopPropagation(); switchToContacts()" style="cursor: pointer; opacity: 0.5;">
+                                    <span data-i18n="contacts-tab">Контакты</span>
+                                </span>
                                 {% endif %}
                             </h3>
                         </div>
@@ -845,10 +849,10 @@
                         {% if logged_in %}
                         <div id="notes-view" class="view-panel">
                             <div id="notes-list" class="chat-messages">
-                                <div id="notes-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
-                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Z"/></svg>
+                                <div id="notes-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; min-height: 300px;">
+                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914ZM5.5 8.75a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5h2.5a.75.75 0 0 0 0-1.5Z"/></svg>
                                     <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="notes-empty">Заметок пока нет</h3>
-                                    <p style="margin: 0; font-size: 14px; color: #6C727F; max-width: 400px;" data-i18n="notes-empty-desc">Добавьте заметку в поле ниже...</p>
+                                    <p style="margin: 0 auto; font-size: 14px; color: #6C727F; max-width: 400px; text-align: center;" data-i18n="notes-empty-desc">Добавьте заметку в поле ниже...</p>
                                 </div>
                             </div>
                             <div class="chat-input">
@@ -870,10 +874,31 @@
                         {% if logged_in %}
                         <div id="reports-view" class="view-panel">
                             <div id="reports-list" class="chat-messages">
-                                <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
-                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M1.75 1h8.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 10.25 10H7.061l-2.574 2.573A1.458 1.458 0 0 1 2 11.543V10h-.25A1.75 1.75 0 0 1 0 8.25v-5.5C0 1.784.784 1 1.75 1ZM1.5 2.75v5.5c0 .138.112.25.25.25h1a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h3.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13 2a.25.25 0 0 0-.25-.25h-.5a.75.75 0 0 1 0-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.25 12H14v1.543a1.458 1.458 0 0 1-2.487 1.03L9.22 12.28a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l2.22 2.22v-2.19a.75.75 0 0 1 .75-.75h1a.25.25 0 0 0 .25-.25Z"/></svg>
+                                <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; min-height: 300px;">
+                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>
                                     <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="reports-empty">Отчётов пока нет</h3>
-                                    <p style="margin: 0; font-size: 14px; color: #6C727F; max-width: 400px;" data-i18n="reports-empty-desc">Здесь будут отображаться действия агента: отправленные письма, ответы, кампании.</p>
+                                    <p style="margin: 0 auto; font-size: 14px; color: #6C727F; max-width: 400px; text-align: center;" data-i18n="reports-empty-desc">Здесь будут отображаться действия агента: отправленные письма, ответы, кампании.</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Контакты -->
+                        {% if logged_in %}
+                        <div id="contacts-view" class="view-panel">
+                            <div id="contacts-list" class="chat-messages">
+                                <div id="contacts-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; min-height: 300px;">
+                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
+                                    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="contacts-empty">Контактов пока нет</h3>
+                                    <p style="margin: 0 auto; font-size: 14px; color: #6C727F; max-width: 400px; text-align: center;" data-i18n="contacts-empty-desc">Добавьте контакт вручную или сохраните из отчётов.</p>
+                                </div>
+                            </div>
+                            <div class="chat-input">
+                                <input type="text" id="contact-input" placeholder="email@example.com, Имя, Компания" data-i18n-ph="contact-placeholder" onkeypress="if(event.key==='Enter')addManualContact()">
+                                <div style="display: flex; gap: 4px; flex-direction: row;">
+                                    <button onclick="addManualContact()" class="chat-action-btn" title="Добавить контакт" data-i18n-title="add-contact">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1897,16 +1922,21 @@
             if (notesView) notesView.classList.remove('active');
             const reportsView = document.getElementById('reports-view');
             if (reportsView) reportsView.classList.remove('active');
+            const contactsView = document.getElementById('contacts-view');
+            if (contactsView) contactsView.classList.remove('active');
             chatView.style.zIndex = '1';
             feedView.style.zIndex = '0';
             if (notesView) notesView.style.zIndex = '0';
             if (reportsView) reportsView.style.zIndex = '0';
+            if (contactsView) contactsView.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
             const notesLink = document.getElementById('notes-link');
             if (notesLink) notesLink.style.opacity = '0.5';
             const reportsLink = document.getElementById('reports-link');
             if (reportsLink) reportsLink.style.opacity = '0.5';
+            const contactsLink = document.getElementById('contacts-link');
+            if (contactsLink) contactsLink.style.opacity = '0.5';
         }
 
         function switchToFeed() {
@@ -1921,16 +1951,21 @@
             if (notesView) notesView.classList.remove('active');
             const reportsViewF = document.getElementById('reports-view');
             if (reportsViewF) reportsViewF.classList.remove('active');
+            const contactsViewF = document.getElementById('contacts-view');
+            if (contactsViewF) contactsViewF.classList.remove('active');
             feedView.style.zIndex = '1';
             chatView.style.zIndex = '0';
             if (notesView) notesView.style.zIndex = '0';
             if (reportsViewF) reportsViewF.style.zIndex = '0';
+            if (contactsViewF) contactsViewF.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
             const notesLink = document.getElementById('notes-link');
             if (notesLink) notesLink.style.opacity = '0.5';
             const reportsLinkF = document.getElementById('reports-link');
             if (reportsLinkF) reportsLinkF.style.opacity = '0.5';
+            const contactsLinkF = document.getElementById('contacts-link');
+            if (contactsLinkF) contactsLinkF.style.opacity = '0.5';
             
             // Скрыть индикатор новых постов и обновить lastSeenPostId
             const indicator = document.getElementById('new-posts-indicator');
@@ -1962,12 +1997,16 @@
             feedView.style.zIndex = '0';
             const reportsViewN = document.getElementById('reports-view');
             if (reportsViewN) { reportsViewN.classList.remove('active'); reportsViewN.style.zIndex = '0'; }
+            const contactsViewN = document.getElementById('contacts-view');
+            if (contactsViewN) { contactsViewN.classList.remove('active'); contactsViewN.style.zIndex = '0'; }
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '0.5';
             const notesLink = document.getElementById('notes-link');
             if (notesLink) notesLink.style.opacity = '1';
             const reportsLinkN = document.getElementById('reports-link');
             if (reportsLinkN) reportsLinkN.style.opacity = '0.5';
+            const contactsLinkN = document.getElementById('contacts-link');
+            if (contactsLinkN) contactsLinkN.style.opacity = '0.5';
 
             loadNotes();
         }
@@ -1984,6 +2023,8 @@
             chatView.classList.remove('active');
             feedView.classList.remove('active');
             if (notesView) { notesView.classList.remove('active'); notesView.style.zIndex = '0'; }
+            const contactsViewR = document.getElementById('contacts-view');
+            if (contactsViewR) { contactsViewR.classList.remove('active'); contactsViewR.style.zIndex = '0'; }
             reportsView.classList.add('active');
             reportsView.style.zIndex = '1';
             chatView.style.zIndex = '0';
@@ -1994,6 +2035,8 @@
             if (notesLink) notesLink.style.opacity = '0.5';
             const reportsLink = document.getElementById('reports-link');
             if (reportsLink) reportsLink.style.opacity = '1';
+            const contactsLinkR = document.getElementById('contacts-link');
+            if (contactsLinkR) contactsLinkR.style.opacity = '0.5';
 
             loadReports();
         }
@@ -2036,7 +2079,10 @@
                         ${c.outreach && c.outreach.length > 0 ? '<div style="margin-top: 10px; border-top: 1px solid #E5E7EB; padding-top: 8px;">' + c.outreach.map(o => `
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px;">
                                 <span style="color: #374151;">${o.recipient_email}</span>
-                                <span style="color: ${o.status === 'replied' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F'}; font-weight: 500;">${o.status}</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="color: ${o.status === 'replied' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F'}; font-weight: 500;">${o.status}</span>
+                                    <button onclick="saveContactFromReport('${o.recipient_email}', '${(o.recipient_name || '').replace(/'/g, "\\'")}', '')" style="background: none; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; padding: 1px 6px; font-size: 10px; color: #6C727F;" title="${t('save-contact')}">+📇</button>
+                                </div>
                             </div>
                         `).join('') + '</div>' : ''}
                     `;
@@ -2073,6 +2119,151 @@
                 applyTranslations();
             } catch (err) {
                 console.error('Failed to load reports:', err);
+            }
+        }
+
+        // ====== Contacts functions ======
+        function switchToContacts() {
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            const notesView = document.getElementById('notes-view');
+            const reportsView = document.getElementById('reports-view');
+            const contactsView = document.getElementById('contacts-view');
+            if (!chatView || !feedView || !contactsView) return;
+
+            currentView = 'contacts';
+            chatView.classList.remove('active');
+            feedView.classList.remove('active');
+            if (notesView) { notesView.classList.remove('active'); notesView.style.zIndex = '0'; }
+            if (reportsView) { reportsView.classList.remove('active'); reportsView.style.zIndex = '0'; }
+            contactsView.classList.add('active');
+            contactsView.style.zIndex = '1';
+            chatView.style.zIndex = '0';
+            feedView.style.zIndex = '0';
+            document.getElementById('chat-link').style.opacity = '0.5';
+            document.getElementById('feed-link').style.opacity = '0.5';
+            const notesLink = document.getElementById('notes-link');
+            if (notesLink) notesLink.style.opacity = '0.5';
+            const reportsLink = document.getElementById('reports-link');
+            if (reportsLink) reportsLink.style.opacity = '0.5';
+            const contactsLink = document.getElementById('contacts-link');
+            if (contactsLink) contactsLink.style.opacity = '1';
+
+            loadContacts();
+        }
+
+        async function loadContacts() {
+            try {
+                const resp = await fetch('/api/email-contacts?t=' + Date.now(), { credentials: 'include' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const list = document.getElementById('contacts-list');
+                const emptyEl = document.getElementById('contacts-empty');
+                if (!list) return;
+                list.querySelectorAll('.contact-card').forEach(el => el.remove());
+
+                const contacts = data.contacts || [];
+                if (contacts.length === 0) {
+                    if (emptyEl) emptyEl.style.display = '';
+                    return;
+                }
+                if (emptyEl) emptyEl.style.display = 'none';
+
+                contacts.forEach(c => {
+                    const card = document.createElement('div');
+                    card.className = 'contact-card';
+                    card.style.cssText = 'padding: 10px 14px; margin: 4px 0; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 13px;';
+                    const statusColor = c.status === 'replied' || c.status === 'interested' ? '#068487' : c.status === 'bounced' || c.status === 'unsubscribed' ? '#d73a49' : c.status === 'contacted' ? '#bf8700' : '#6C727F';
+                    const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString() : '';
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="${statusColor}"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
+                                <div>
+                                    <span style="font-weight: 500; color: #1F2328;">${c.email}</span>
+                                    ${c.name ? `<span style="color: #6C727F; margin-left: 6px;">${c.name}</span>` : ''}
+                                    ${c.company ? `<span style="color: #9CA3AF; margin-left: 6px;">${c.company}</span>` : ''}
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 11px; padding: 2px 8px; border-radius: 12px; background: ${statusColor}15; color: ${statusColor}; font-weight: 500;">${c.status}</span>
+                                ${dateStr ? `<span style="color: #9CA3AF; font-size: 11px;">${dateStr}</span>` : ''}
+                                <button onclick="deleteContact(${c.id})" style="background: none; border: none; cursor: pointer; padding: 2px; opacity: 0.4;" title="${t('delete-contact')}">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        ${c.notes ? `<p style="margin: 4px 0 0 22px; font-size: 12px; color: #6C727F;">${c.notes}</p>` : ''}
+                    `;
+                    list.appendChild(card);
+                });
+                applyTranslations();
+            } catch (err) {
+                console.error('Failed to load contacts:', err);
+            }
+        }
+
+        async function addManualContact() {
+            const input = document.getElementById('contact-input');
+            if (!input || !input.value.trim()) return;
+            const parts = input.value.trim().split(',').map(s => s.trim());
+            const email = parts[0] || '';
+            if (!email.includes('@')) {
+                showNotification(t('contact-invalid-email'), 'error');
+                return;
+            }
+            const body = { email: email, name: parts[1] || '', company: parts[2] || '', source: 'manual' };
+            try {
+                const resp = await fetch('/api/email-contacts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(body)
+                });
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    showNotification(data.error || t('err-unknown'), 'error');
+                    return;
+                }
+                input.value = '';
+                showNotification(t('contact-saved'), 'success');
+                loadContacts();
+            } catch (err) {
+                showNotification(t('err-prefix') + ' ' + err.message, 'error');
+            }
+        }
+
+        async function deleteContact(id) {
+            try {
+                const resp = await fetch('/api/email-contacts/' + id, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    showNotification(t('contact-deleted'), 'success');
+                    loadContacts();
+                }
+            } catch (err) {
+                console.error('Failed to delete contact:', err);
+            }
+        }
+
+        async function saveContactFromReport(email, name, company) {
+            try {
+                const resp = await fetch('/api/email-contacts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email, name: name || '', company: company || '', source: 'campaign' })
+                });
+                if (resp.ok) {
+                    showNotification(t('contact-saved'), 'success');
+                } else {
+                    const data = await resp.json();
+                    showNotification(data.error || t('err-unknown'), 'error');
+                }
+            } catch (err) {
+                showNotification(t('err-prefix') + ' ' + err.message, 'error');
             }
         }
 
@@ -8208,6 +8399,7 @@
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Отчёты','reports-empty':'Отчётов пока нет','reports-empty-desc':'Здесь будут отображаться действия агента: отправленные письма, ответы, кампании.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-opened':'Открыто','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
+      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
       'save':'Сохранить','cancel':'Отмена',
@@ -8392,6 +8584,7 @@
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Reports','reports-empty':'No reports yet','reports-empty-desc':'Agent actions will appear here: emails sent, replies, campaigns.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-opened':'Opened','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
+      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','delete-contact':'Delete contact','save-contact':'Save to contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
       'save':'Save','cancel':'Cancel',

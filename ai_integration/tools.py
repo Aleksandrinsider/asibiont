@@ -1120,4 +1120,58 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_email_contact",
+            "description": "📇 СОХРАНИТЬ email-контакт в справочник пользователя. Вызывай когда пользователь даёт email для будущих рассылок или после отправки письма.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "description": "Email-адрес контакта"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Имя контакта"
+                    },
+                    "company": {
+                        "type": "string",
+                        "description": "Компания"
+                    },
+                    "position": {
+                        "type": "string",
+                        "description": "Должность"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Заметки — почему контакт релевантен"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Источник: manual / campaign / import"
+                    }
+                },
+                "required": ["email"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_email_contacts",
+            "description": "📋 СПИСОК email-контактов пользователя из справочника. Показывает все сохранённые контакты с их статусами.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status_filter": {
+                        "type": "string",
+                        "description": "Фильтр по статусу: all / new / contacted / replied / interested / bounced"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
 ]
