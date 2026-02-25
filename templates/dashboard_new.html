@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -1013,11 +1013,11 @@
                         <!-- Отчёты -->
                         {% if logged_in %}
                         <div id="reports-view" class="view-panel">
-                            <div id="reports-list" class="chat-messages" style="padding: 12px 0;">
-                                <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; min-height: 300px;">
-                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>
-                                    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="reports-empty">Отчётов пока нет</h3>
-                                    <p style="margin: 0 auto; font-size: 14px; color: #6C727F; max-width: 400px; text-align: center;" data-i18n="reports-empty-desc">Здесь будут отображаться кампании агента: кому писал, что ответили, статус переговоров.</p>
+                            <div id="reports-list" style="display: flex; flex-direction: column; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0;">
+                                <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 20px; text-align: center; flex: 1;">
+                                    <svg width="48" height="48" viewBox="0 0 16 16" fill="#D1D9E0" style="margin-bottom: 16px;"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>
+                                    <h3 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 500; color: #374151;" data-i18n="reports-empty">Действий агента пока нет</h3>
+                                    <p style="margin: 0 auto; font-size: 13px; color: #6C727F; max-width: 340px; line-height: 1.5;" data-i18n="reports-empty-desc">Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.</p>
                                 </div>
                             </div>
                         </div>
@@ -2170,7 +2170,7 @@
                 const list = document.getElementById('reports-list');
                 const emptyEl = document.getElementById('reports-empty');
                 if (!list) return;
-                list.innerHTML = ''; // Clear existing content
+                list.innerHTML = '';
 
                 const campaigns = data.campaigns || [];
                 const emails = data.emails || [];
@@ -2180,120 +2180,158 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                // === Кампании ===
+                // === Summary stats ===
+                let totalSent = 0, totalReplied = 0, totalBounced = 0;
                 campaigns.forEach(c => {
-                    const campaignSection = document.createElement('div');
-                    campaignSection.style.cssText = 'margin-bottom: 16px; border: 1px solid #D1D9E0; border-radius: 8px; background: #FFFFFF; overflow: hidden;';
+                    totalSent += (c.emails_sent || 0);
+                    totalReplied += (c.emails_replied || 0);
+                    totalBounced += (c.emails_bounced || 0);
+                });
+                totalSent += emails.length;
+                const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
-                    const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', year:'numeric', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                const statsRow = document.createElement('div');
+                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px; border-bottom: 1px solid #D1D9E0;';
+                statsRow.innerHTML = `
+                    <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: #1F2328; line-height: 1.2;">${totalSent}</div>
+                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;" data-i18n="report-sent">${t('report-sent')}</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: #068487; line-height: 1.2;">${totalReplied}</div>
+                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;" data-i18n="report-replied">${t('report-replied')}</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: ${totalConv > 0 ? '#068487' : '#374151'}; line-height: 1.2;">${totalConv}%</div>
+                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;">Conversion</div>
+                    </div>
+                `;
+                list.appendChild(statsRow);
+
+                // === Campaigns ===
+                campaigns.forEach((c, idx) => {
+                    const section = document.createElement('div');
+                    section.style.cssText = 'padding: 0 12px;';
+
                     const statusLabel = c.status === 'active' || c.status === 'running' ? 'активна' : c.status === 'paused' ? 'на паузе' : (c.status || 'завершена');
-                    const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#D73A49' : '#6C727F';
-
+                    const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d73a49' : '#6C727F';
                     const sent = c.emails_sent || 0;
                     const replied = c.emails_replied || 0;
                     const conv = sent > 0 ? Math.round(replied / sent * 100) : 0;
+                    const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
 
-                    // Заголовок кампании
                     const header = document.createElement('div');
-                    header.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #E8ECEF;';
+                    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                     header.innerHTML = `
-                        <svg width="20" height="20" viewBox="0 0 16 16" fill="${statusColor}" style="opacity: 0.8;">
-                            <path d="M1.5 2.5a.5.5 0 0 1 .5-.5h12a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-12a.5.5 0 0 1-.5-.5v-9zM0 2.5A1.5 1.5 0 0 1 1.5 1h12A1.5 1.5 0 0 1 15 2.5v9a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 0 11.5v-9z"/>
-                            <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3z"/>
-                        </svg>
-                        <div style="flex: 1;">
-                            <div style="font-size: 16px; font-weight: 600; color: #1F2328;">${c.name || 'Кампания'}</div>
-                            <div style="font-size: 12px; color: #6C727F; margin-top: 2px;">
-                                <span style="color: ${statusColor};">${statusLabel}</span>
-                                ${createdDate ? ' · ' + createdDate : ''}
-                                · Отправлено: ${sent}, Ответов: ${replied}, Конверсия: ${conv}%
+                        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                            <div style="width: 6px; height: 6px; border-radius: 50%; background: ${statusColor}; flex-shrink: 0;"></div>
+                            <span style="font-size: 13px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.name || t('report-campaign')}</span>
+                            <span style="font-size: 11px; color: ${statusColor}; font-weight: 500; flex-shrink: 0;">${statusLabel}</span>
+                            ${createdDate ? `<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">${createdDate}</span>` : ''}
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: 12px;">
+                            <span style="font-size: 11px; color: #6C727F;">${sent} → ${replied}</span>
+                            <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(0deg);">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </div>
+                    `;
+                    section.appendChild(header);
+
+                    const details = document.createElement('div');
+                    details.style.cssText = 'overflow: hidden; max-height: 0; transition: max-height 0.3s ease;';
+
+                    header.onclick = () => {
+                        const chev = header.querySelector('.rpt-chev');
+                        if (details.style.maxHeight === '0px' || !details.style.maxHeight) {
+                            details.style.maxHeight = details.scrollHeight + 'px';
+                            if (chev) chev.style.transform = 'rotate(180deg)';
+                        } else {
+                            details.style.maxHeight = '0px';
+                            if (chev) chev.style.transform = 'rotate(0deg)';
+                        }
+                    };
+
+                    let inner = '';
+
+                    inner += `
+                        <div style="padding: 10px 0; border-bottom: 1px solid #F0F3F5;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="font-size: 12px; color: #6C727F;">Conversion</span>
+                                <span style="font-size: 12px; font-weight: 600; color: #374151;">${conv}%</span>
+                            </div>
+                            <div style="height: 4px; background: #F3F4F6; border-radius: 2px; overflow: hidden;">
+                                <div style="height: 100%; width: ${conv}%; background: ${conv > 20 ? '#068487' : '#D1D9E0'}; border-radius: 2px; transition: width 0.3s;"></div>
                             </div>
                         </div>
                     `;
-                    campaignSection.appendChild(header);
 
-                    // Цель кампании
                     if (c.goal) {
-                        const goalDiv = document.createElement('div');
-                        goalDiv.style.cssText = 'padding: 12px 16px; background: #F6F8FA; border-bottom: 1px solid #E8ECEF;';
-                        goalDiv.innerHTML = `<div style="font-size: 14px; color: #374151;"><strong>Цель:</strong> ${c.goal}</div>`;
-                        campaignSection.appendChild(goalDiv);
+                        inner += `<div style="padding: 8px 0; border-bottom: 1px solid #F0F3F5; font-size: 12px; color: #6C727F;"><span style="font-weight: 500; color: #374151;">Цель:</span> ${c.goal}</div>`;
                     }
 
-                    // Outreach письма
                     if (c.outreach && c.outreach.length > 0) {
-                        const outreachList = document.createElement('div');
-                        outreachList.style.cssText = 'padding: 0;';
-
                         c.outreach.forEach(o => {
-                            const oStatusLabel = o.status === 'replied' ? 'Ответил' : o.status === 'interested' ? 'Заинтересован' : o.status === 'bounced' ? 'Отклонено' : o.status === 'failed' ? 'Ошибка' : o.status === 'sent' ? 'Отправлено' : (o.status || '');
-                            const oStatusColor = o.status === 'replied' ? '#068487' : o.status === 'interested' ? '#28A745' : o.status === 'bounced' || o.status === 'failed' ? '#D73A49' : '#6C727F';
+                            const oLbl = o.status === 'replied' ? 'Ответил' : o.status === 'interested' ? 'Заинтересован' : o.status === 'bounced' ? 'Отклонено' : o.status === 'failed' ? 'Ошибка' : o.status === 'sent' ? 'Отправлено' : (o.status || '');
+                            const oClr = o.status === 'replied' ? '#068487' : o.status === 'interested' ? '#28A745' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
                             const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-                            const recipientLabel = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
+                            const rcpt = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
 
-                            const outreachItem = document.createElement('div');
-                            outreachItem.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid #F0F3F5; display: flex; align-items: flex-start; gap: 12px;';
-
-                            outreachItem.innerHTML = `
-                                <div style="flex: 1;">
-                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                        <div style="width: 8px; height: 8px; border-radius: 50%; background: ${oStatusColor};"></div>
-                                        <div style="font-size: 14px; font-weight: 500; color: #1F2328;">${recipientLabel}</div>
-                                        <div style="font-size: 12px; color: ${oStatusColor}; font-weight: 500;">${oStatusLabel}</div>
-                                        ${oDate ? `<div style="font-size: 12px; color: #6C727F;">${oDate}</div>` : ''}
+                            inner += `
+                                <div style="padding: 8px 0; border-bottom: 1px solid #F0F3F5; display: flex; align-items: flex-start; gap: 10px;">
+                                    <div style="width: 6px; height: 6px; border-radius: 50%; background: ${oClr}; margin-top: 5px; flex-shrink: 0;"></div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${rcpt}</span>
+                                            <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: ${oClr}18; color: ${oClr}; font-weight: 500; line-height: 1.6;">${oLbl}</span>
+                                            ${oDate ? `<span style="font-size: 11px; color: #9CA3AF;">${oDate}</span>` : ''}
+                                        </div>
+                                        ${o.subject ? `<div style="font-size: 12px; color: #6C727F; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${o.subject}</div>` : ''}
+                                        ${o.reply_text ? `<div style="margin-top: 6px; padding: 6px 10px; background: #F6F8FA; border-left: 2px solid #068487; border-radius: 0 4px 4px 0; font-size: 12px; color: #374151; white-space: pre-wrap; word-break: break-word;">${o.reply_text}</div>` : ''}
                                     </div>
-                                    ${o.subject ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;"><strong>Тема:</strong> ${o.subject}</div>` : ''}
-                                    ${o.body_text || o.body ? `<div style="font-size: 13px; color: #374151; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word;">${o.body_text || o.body}</div>` : ''}
-                                    ${o.reply_text ? `<div style="padding: 8px 12px; background: #F0F9FF; border-left: 3px solid #068487; font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word;"><strong>Ответ:</strong> ${o.reply_text}</div>` : ''}
                                 </div>
                             `;
-                            outreachList.appendChild(outreachItem);
                         });
-
-                        campaignSection.appendChild(outreachList);
                     }
 
-                    list.appendChild(campaignSection);
+                    details.innerHTML = inner;
+                    section.appendChild(details);
+                    list.appendChild(section);
                 });
 
-                // === Отдельные письма ===
+                // === Individual emails ===
                 if (emails.length > 0) {
-                    const emailsSection = document.createElement('div');
-                    emailsSection.style.cssText = 'margin-bottom: 16px; border: 1px solid #D1D9E0; border-radius: 8px; background: #FFFFFF; overflow: hidden;';
+                    const emailsSec = document.createElement('div');
+                    emailsSec.style.cssText = 'padding: 0 12px;';
 
-                    const emailsHeader = document.createElement('div');
-                    emailsHeader.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #E8ECEF;';
-                    emailsHeader.innerHTML = `
-                        <svg width="20" height="20" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.8;">
+                    const emailsHdr = document.createElement('div');
+                    emailsHdr.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #D1D9E0;';
+                    emailsHdr.innerHTML = `
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                             <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.758 2.855L15 11.114v-5.73zm-.034 6.878L9.271 8.82 8 9.583 6.728 8.82l-5.694 3.44A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.739zM1 11.114l4.758-2.876L1 5.383v5.73z"/>
                         </svg>
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2328;">Отдельные письма</div>
+                        <span style="font-size: 13px; font-weight: 600; color: #1F2328;" data-i18n="report-generic">${t('report-generic')}</span>
                     `;
-                    emailsSection.appendChild(emailsHeader);
-
-                    const emailsList = document.createElement('div');
-                    emailsList.style.cssText = 'padding: 0;';
+                    emailsSec.appendChild(emailsHdr);
 
                     emails.forEach(e => {
-                        const emailItem = document.createElement('div');
-                        emailItem.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid #F0F3F5;';
-
                         const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-
-                        emailItem.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #6C727F;"></div>
-                                <div style="font-size: 14px; font-weight: 500; color: #1F2328;">${e.to || ''}</div>
-                                ${dateStr ? `<div style="font-size: 12px; color: #6C727F;">${dateStr}</div>` : ''}
+                        const item = document.createElement('div');
+                        item.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5; display: flex; align-items: flex-start; gap: 10px;';
+                        item.innerHTML = `
+                            <div style="width: 6px; height: 6px; border-radius: 50%; background: #6C727F; margin-top: 5px; flex-shrink: 0;"></div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${e.to || ''}</span>
+                                    ${dateStr ? `<span style="font-size: 11px; color: #9CA3AF;">${dateStr}</span>` : ''}
+                                </div>
+                                ${e.subject ? `<div style="font-size: 12px; color: #6C727F; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.subject}</div>` : ''}
                             </div>
-                            ${e.subject ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;"><strong>Тема:</strong> ${e.subject}</div>` : ''}
-                            ${e.body_text || e.body ? `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word;">${e.body_text || e.body}</div>` : ''}
                         `;
-                        emailsList.appendChild(emailItem);
+                        emailsSec.appendChild(item);
                     });
 
-                    emailsSection.appendChild(emailsList);
-                    list.appendChild(emailsSection);
+                    list.appendChild(emailsSec);
                 }
 
                 if (window.applyLang) applyLang();
