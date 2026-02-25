@@ -2181,19 +2181,19 @@
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
                 const statsRow = document.createElement('div');
-                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px;';
+                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 12px;';
                 statsRow.innerHTML = `
-                    <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: #1F2328; line-height: 1.2;">${totalSent}</div>
-                        <div style="font-size: 12px; color: #6C727F; margin-top: 3px;" data-i18n="report-sent">${t('report-sent')}</div>
+                    <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 16px; font-weight: 600; color: #1F2328; line-height: 1.2;">${totalSent}</div>
+                        <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-sent">${t('report-sent')}</div>
                     </div>
-                    <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: #068487; line-height: 1.2;">${totalReplied}</div>
-                        <div style="font-size: 12px; color: #6C727F; margin-top: 3px;" data-i18n="report-replied">${t('report-replied')}</div>
+                    <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 16px; font-weight: 600; color: #068487; line-height: 1.2;">${totalReplied}</div>
+                        <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-replied">${t('report-replied')}</div>
                     </div>
-                    <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: ${totalConv > 0 ? '#068487' : '#374151'}; line-height: 1.2;">${totalConv}%</div>
-                        <div style="font-size: 12px; color: #6C727F; margin-top: 3px;" data-i18n="report-conversion">${t('report-conversion')}</div>
+                    <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 16px; font-weight: 600; color: ${totalConv > 0 ? '#068487' : '#374151'}; line-height: 1.2;">${totalConv}%</div>
+                        <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-conversion">${t('report-conversion')}</div>
                     </div>
                 `;
                 list.appendChild(statsRow);
