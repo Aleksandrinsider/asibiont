@@ -896,8 +896,9 @@
                             <div class="chat-input">
                                 <input type="text" id="contact-input" placeholder="email@example.com, Имя, Компания" data-i18n-ph="contact-placeholder" onkeypress="if(event.key==='Enter')addManualContact()">
                                 <div style="display: flex; gap: 4px; flex-direction: row;">
-                                    <button onclick="addManualContact()" class="chat-action-btn" title="Добавить контакт" data-i18n-title="add-contact">
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+                                    <button onclick="addManualContact()" style="padding: 0 14px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: inherit; white-space: nowrap;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+                                        <span data-i18n="add-contact-btn">Добавить</span>
                                     </button>
                                 </div>
                             </div>
@@ -2059,57 +2060,72 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                // Render campaigns
+                // Render campaigns as conversation threads
                 campaigns.forEach(c => {
-                    const card = document.createElement('div');
-                    card.className = 'report-card';
-                    const statusColor = c.status === 'active' ? '#068487' : c.status === 'paused' ? '#bf8700' : '#6C727F';
-                    card.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="${statusColor}"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
-                            <span style="font-weight: 500; color: #1F2328; font-size: 14px;">${c.name}</span>
-                            <span style="font-size: 11px; padding: 2px 8px; border-radius: 12px; background: ${statusColor}15; color: ${statusColor}; font-weight: 500;">${c.status}</span>
-                        </div>
-                        <p style="margin: 0 0 8px; font-size: 13px; color: #6C727F;">${c.goal ? c.goal.substring(0, 200) : ''}</p>
-                        <div style="display: flex; gap: 16px; font-size: 12px; color: #374151;">
-                            <span>📨 ${t('report-sent')}: <b>${c.emails_sent || 0}</b></span>
-                            <span>💬 ${t('report-replied')}: <b>${c.emails_replied || 0}</b></span>
-                            <span>📬 ${t('report-opened')}: <b>${c.emails_opened || 0}</b></span>
-                        </div>
-                        ${c.outreach && c.outreach.length > 0 ? '<div style="margin-top: 10px; border-top: 1px solid #E5E7EB; padding-top: 8px;">' + c.outreach.map(o => `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px;">
-                                <span style="color: #374151;">${o.recipient_email}</span>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="color: ${o.status === 'replied' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F'}; font-weight: 500;">${o.status}</span>
-                                    <button onclick="saveContactFromReport('${o.recipient_email}', '${(o.recipient_name || '').replace(/'/g, "\\'")}', '')" style="background: none; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; padding: 1px 6px; font-size: 10px; color: #6C727F;" title="${t('save-contact')}">+📇</button>
-                                </div>
+                    // Шапка кампании (задача пользователя)
+                    const header = document.createElement('div');
+                    header.className = 'report-card';
+                    header.style.cssText = 'display: flex; gap: 14px; padding: 10px 14px; margin: 8px 0 1px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 8px 8px ' + (c.outreach && c.outreach.length > 0 ? '0 0' : '8px 8px') + '; font-size: 13px;';
+                    header.innerHTML = `
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${c.goal ? '6px' : '0'};">
+                                <span style="font-size: 13px; color: #1F2328; font-weight: 500;">${c.name}</span>
+                                <span style="font-size: 12px; color: #6C727F; margin-left: auto; white-space: nowrap;">${t('report-sent')}: ${c.emails_sent || 0} &middot; ${t('report-replied')}: ${c.emails_replied || 0}</span>
                             </div>
-                        `).join('') + '</div>' : ''}
+                            ${c.goal ? `<div style="font-size: 12px; color: #6C727F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.goal}</div>` : ''}
+                        </div>
                     `;
-                    card.style.cssText = 'padding: 14px; margin: 8px 0; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px;';
-                    list.appendChild(card);
+                    list.appendChild(header);
+
+                    // Каждое письмо как строчка переписки
+                    if (c.outreach && c.outreach.length > 0) {
+                        c.outreach.forEach((o, idx) => {
+                            const isLast = idx === c.outreach.length - 1;
+                            const statusColor = o.status === 'replied' || o.status === 'interested' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
+                            const sentDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                            const msgCard = document.createElement('div');
+                            msgCard.className = 'report-card';
+                            msgCard.style.cssText = `display: flex; gap: 14px; padding: 10px 14px; margin: 0; background: #fff; border: 1px solid #D1D9E0; border-top: none; border-left: 3px solid ${statusColor}; border-radius: ${isLast ? '0 0 8px 8px' : '0'}; font-size: 13px;`;
+                            msgCard.innerHTML = `
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: ${(o.subject || o.reply_text) ? '4px' : '0'};">
+                                        <span style="font-size: 12px; color: #9CA3AF;">→</span>
+                                        <span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${o.recipient_name ? o.recipient_name + ' &lt;' + o.recipient_email + '&gt;' : o.recipient_email}</span>
+                                        ${sentDate ? `<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">${sentDate}</span>` : ''}
+                                    </div>
+                                    ${o.subject ? `<div style="font-size: 12px; color: #374151; margin-bottom: ${o.reply_text ? '6px' : '0'};">${o.subject}</div>` : ''}
+                                    ${o.reply_text ? `
+                                        <div style="margin-top: 6px; padding: 8px 10px; background: #F6F8FA; border-radius: 6px; border-left: 2px solid #068487;">
+                                            <span style="font-size: 11px; color: #068487; font-weight: 500; display: block; margin-bottom: 4px;">Ответ:</span>
+                                            <span style="font-size: 12px; color: #374151;">${o.reply_text}</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                            list.appendChild(msgCard);
+                        });
+                    }
                 });
 
                 // Render standalone emails
                 if (emails.length > 0) {
-                    const header = document.createElement('div');
-                    header.className = 'report-card';
-                    header.style.cssText = 'padding: 10px 14px; margin: 12px 0 4px; font-weight: 500; font-size: 13px; color: #374151;';
-                    header.innerHTML = `<span>📧 ${t('report-generic')}</span>`;
-                    list.appendChild(header);
+                    const sectionHeader = document.createElement('div');
+                    sectionHeader.className = 'report-card';
+                    sectionHeader.style.cssText = 'padding: 8px 14px; margin: 12px 0 4px; font-size: 12px; font-weight: 500; color: #6C727F; text-transform: uppercase; letter-spacing: 0.5px;';
+                    sectionHeader.textContent = t('report-generic') || 'Письма';
+                    list.appendChild(sectionHeader);
 
                     emails.forEach(e => {
                         const card = document.createElement('div');
                         card.className = 'report-card';
-                        card.style.cssText = 'padding: 10px 14px; margin: 4px 0; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 13px;';
-                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString() : '';
+                        card.style.cssText = 'display: flex; gap: 14px; padding: 10px 14px; margin: 4px 0; background: #fff; border: 1px solid #D1D9E0; border-radius: 8px; font-size: 13px;';
+                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
                         card.innerHTML = `
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span style="color: #374151; font-weight: 500;">${e.to}</span>
-                                    <span style="color: #6C727F; margin-left: 8px;">${e.subject || ''}</span>
-                                </div>
-                                <span style="color: #9CA3AF; font-size: 11px;">${dateStr}</span>
+                            <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;">
+                                <span style="color: #9CA3AF; font-size: 12px;">→</span>
+                                <span style="color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.to}</span>
+                                ${e.subject ? `<span style="color: #6C727F; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">${e.subject}</span>` : ''}
+                                ${dateStr ? `<span style="color: #9CA3AF; font-size: 11px; white-space: nowrap; flex-shrink: 0;">${dateStr}</span>` : ''}
                             </div>
                         `;
                         list.appendChild(card);
@@ -2172,29 +2188,26 @@
                 contacts.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'contact-card';
-                    card.style.cssText = 'padding: 10px 14px; margin: 4px 0; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 13px;';
+                    card.style.cssText = 'display: flex; gap: 14px; padding: 10px 14px; margin: 4px 0; background: #fff; border: 1px solid #D1D9E0; border-radius: 8px; font-size: 13px;';
                     const statusColor = c.status === 'replied' || c.status === 'interested' ? '#068487' : c.status === 'bounced' || c.status === 'unsubscribed' ? '#d73a49' : c.status === 'contacted' ? '#bf8700' : '#6C727F';
-                    const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString() : '';
+                    const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="${statusColor}"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
-                                <div>
-                                    <span style="font-weight: 500; color: #1F2328;">${c.email}</span>
-                                    ${c.name ? `<span style="color: #6C727F; margin-left: 6px;">${c.name}</span>` : ''}
-                                    ${c.company ? `<span style="color: #9CA3AF; margin-left: 6px;">${c.company}</span>` : ''}
-                                </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: ${(c.name || c.company || c.notes) ? '4px' : '0'};">
+                                <span style="font-weight: 500; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.email}</span>
+                                <span style="flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: ${statusColor}; margin-left: 2px;" title="${c.status}"></span>
+                                ${dateStr ? `<span style="font-size: 11px; color: #9CA3AF; margin-left: auto; white-space: nowrap; flex-shrink: 0;">${dateStr}</span>` : ''}
                             </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 11px; padding: 2px 8px; border-radius: 12px; background: ${statusColor}15; color: ${statusColor}; font-weight: 500;">${c.status}</span>
-                                ${dateStr ? `<span style="color: #9CA3AF; font-size: 11px;">${dateStr}</span>` : ''}
-                                <button onclick="deleteContact(${c.id})" style="background: none; border: none; cursor: pointer; padding: 2px; opacity: 0.4;" title="${t('delete-contact')}">
-                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>
-                                </button>
-                            </div>
+                            ${(c.name || c.company) ? `<div style="font-size: 12px; color: #6C727F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${[c.name, c.company].filter(Boolean).join(' · ')}</div>` : ''}
+                            ${c.notes ? `<div style="font-size: 12px; color: #9CA3AF; margin-top: 2px;">${c.notes}</div>` : ''}
                         </div>
-                        ${c.notes ? `<p style="margin: 4px 0 0 22px; font-size: 12px; color: #6C727F;">${c.notes}</p>` : ''}
+                        <button onclick="deleteContact(${c.id})" style="background: none; border: none; cursor: pointer; padding: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; align-self: flex-start;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'" title="${t('delete-contact')}">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>
+                        </button>
                     `;
+                    // Show delete button on card hover
+                    card.addEventListener('mouseenter', () => { const btn = card.querySelector('button'); if (btn) btn.style.opacity = '0.4'; });
+                    card.addEventListener('mouseleave', () => { const btn = card.querySelector('button'); if (btn) btn.style.opacity = '0'; });
                     list.appendChild(card);
                 });
                 if (window.applyLang) applyLang();
@@ -7603,6 +7616,9 @@
                 }
                 // Проверяем наличие новых постов, но НЕ перезагружаем ленту полностью
                 checkNewPosts();
+                // Обновляем email-контакты и отчёты если они активны
+                if (currentView === 'contacts') loadContacts();
+                if (currentView === 'reports') loadReports();
             }, 30000);
             
             // Отдельный интервал для проверки новых сообщений из Telegram независимо от активного view
@@ -7677,8 +7693,8 @@
 
         async function updateChat() {
             try {
-                // Не обновляем чат, если активна лента новостей
-                if (currentView === 'feed') {
+                // Обновляем только когда активен чат
+                if (currentView !== 'chat') {
                     return;
                 }
                 
@@ -8399,7 +8415,7 @@
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Отчёты','reports-empty':'Отчётов пока нет','reports-empty-desc':'Здесь будут отображаться действия агента: отправленные письма, ответы, кампании.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-opened':'Открыто','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
-      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты',
+      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
       'save':'Сохранить','cancel':'Отмена',
@@ -8584,7 +8600,7 @@
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Reports','reports-empty':'No reports yet','reports-empty-desc':'Agent actions will appear here: emails sent, replies, campaigns.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-opened':'Opened','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
-      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','delete-contact':'Delete contact','save-contact':'Save to contacts',
+      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','save-contact':'Save to contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
       'save':'Save','cancel':'Cancel',
