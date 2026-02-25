@@ -260,11 +260,11 @@ body {
 }
 
 .container {
-    margin: calc(var(--header-height) + 16px) 20px 0 20px; /* Add 20px side margins */
-    width: calc(100% - 40px);
-    max-width: none; /* Allow full width */
-    height: calc(100vh - var(--header-height) - 16px);
-    height: calc(100dvh - var(--header-height) - 16px);
+    margin: calc(var(--header-height) + 10px) 10px 10px 10px;
+    width: calc(100% - 20px);
+    max-width: none;
+    height: calc(100vh - var(--header-height) - 20px);
+    height: calc(100dvh - var(--header-height) - 20px);
     overflow: visible;
     display: flex;
     flex-direction: column;
@@ -296,13 +296,12 @@ body {
 
 .main-layout {
     display: flex;
-    height: calc((100vh - var(--header-height) - 16px) * 0.98);
-    height: calc((100dvh - var(--header-height) - 16px) * 0.98);
-    gap: 4px;
+    height: 100%;
+    gap: 10px;
     overflow: visible;
     align-items: stretch;
     width: 100%;
-    margin-top: 15px;
+    margin-top: 0;
     padding: 0;
 }
 
@@ -2173,7 +2172,7 @@ details[open] .details-content {
 /* Десктопные стили для .main-layout */
 @media (min-width: 769px) {
     .main-layout {
-        margin-top: 2px;
+        margin-top: 0;
     }
 }
 
