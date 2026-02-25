@@ -349,6 +349,7 @@
 
             const isCollapsed = (content.style.display || '') === 'none';
             if (isCollapsed) {
+                // Разворачиваем профиль: сворачиваем другие
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (profileSection) profileSection.classList.remove('collapsed');
@@ -359,9 +360,14 @@
                 if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
+                // Сворачиваем профиль: разворачиваем контакты
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (profileSection) profileSection.classList.add('collapsed');
+                if (contactsContent) contactsContent.style.display = 'block';
+                if (emailContactsContent) emailContactsContent.style.display = 'none';
+                if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
@@ -795,6 +801,7 @@
                     const profileToggleBtn = document.getElementById('profile-toggle-btn');
 
                     if (contactsContent.style.display === 'none') {
+                        // Разворачиваем контакты: сворачиваем другие
                         contactsContent.style.display = 'block';
                         if (emailContactsContent) emailContactsContent.style.display = 'none';
                         if (profileContent) profileContent.style.display = 'none';
@@ -802,6 +809,7 @@
                         if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
+                        // Сворачиваем контакты: разворачиваем email
                         contactsContent.style.display = 'none';
                         if (emailContactsContent) emailContactsContent.style.display = 'block';
                         if (profileContent) profileContent.style.display = 'none';
@@ -820,6 +828,7 @@
                     const profileToggleBtn = document.getElementById('profile-toggle-btn');
 
                     if (emailContactsContent.style.display === 'none') {
+                        // Разворачиваем email: сворачиваем другие
                         emailContactsContent.style.display = 'block';
                         if (contactsContent) contactsContent.style.display = 'none';
                         if (profileContent) profileContent.style.display = 'none';
@@ -827,12 +836,13 @@
                         if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
+                        // Сворачиваем email: разворачиваем профиль
                         emailContactsContent.style.display = 'none';
-                        if (contactsContent) contactsContent.style.display = 'block';
-                        if (profileContent) profileContent.style.display = 'none';
+                        if (contactsContent) contactsContent.style.display = 'none';
+                        if (profileContent) profileContent.style.display = 'block';
                         emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
-                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
-                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                     }
                 }
             </script>
@@ -845,10 +855,10 @@
                     const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
 
                     if (contactsContent && emailContactsContent) {
-                        // По умолчанию контакты развернуты, email свернуты
-                        contactsContent.style.display = 'block';
+                        // По умолчанию профиль развернут, контакты и email свернуты
+                        contactsContent.style.display = 'none';
                         emailContactsContent.style.display = 'none';
-                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     }
                 })();
