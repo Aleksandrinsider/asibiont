@@ -841,9 +841,10 @@
                         {% if logged_in %}
                         <div id="notes-view" class="view-panel">
                             <div id="notes-list" class="chat-messages">
-                                <div id="notes-empty" style="text-align: center; padding: 40px 20px; color: #8B949E;">
-                                    <svg width="32" height="32" viewBox="0 0 16 16" fill="#8B949E" style="margin-bottom: 8px;"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Z"/></svg>
-                                    <div data-i18n="notes-empty">Заметок пока нет</div>
+                                <div id="notes-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
+                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Z"/></svg>
+                                    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="notes-empty">Заметок пока нет</h3>
+                                    <p style="margin: 0; font-size: 14px; color: #6C727F; max-width: 400px;" data-i18n="notes-empty-desc">Добавьте заметку в поле ниже...</p>
                                 </div>
                             </div>
                             <div class="chat-input">
@@ -8069,7 +8070,7 @@
       'translate':'Перевести','original':'Оригинал',
       'feed-empty':'Лента новостей пуста',
       'feed-empty-desc':'Здесь будут отображаться публикации ваших избранных контактов. Добавьте контакты в избранное, чтобы видеть их посты.',
-      'notes':'Заметки','notes-empty':'Заметок пока нет','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
+      'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
       'save':'Сохранить','cancel':'Отмена',
@@ -8251,7 +8252,7 @@
       'translate':'Translate','original':'Original',
       'feed-empty':'News feed is empty',
       'feed-empty-desc':'Posts from your favorite contacts will appear here. Add contacts to favorites to see their posts.',
-      'notes':'Notes','notes-empty':'No notes yet','note-saved':'Note saved!','note-deleted':'Note deleted',
+      'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
       'save':'Save','cancel':'Cancel',
