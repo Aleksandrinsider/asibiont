@@ -729,7 +729,7 @@
                             {% if channel_parts %}<p>{{ channel_parts | join(' &nbsp;|&nbsp; ') | safe }}</p>{% endif %}
 
                             <p style="margin: 0; margin-bottom: 4px;"><span data-i18n="referral-link">Реферальная ссылка:</span> 
-                                <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="copy">копировать</a>
+                                <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: none; margin-left: 8px;" data-i18n="copy">копировать</a>
                                 <a href="#" onclick="openWithdrawModal(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="withdraw">вывести</a>
                             </p>
                             <p style="color: #6C727F; font-size: 12px;" data-i18n="referral-desc">20% токенов с каждого пополнения</p>
