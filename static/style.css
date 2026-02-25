@@ -1392,7 +1392,7 @@ details[open] .details-content {
 
 .chat-action-btn {
     transition: all 0.2s;
-    padding: 8px;
+    padding: 6px;
     color: #374151;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
