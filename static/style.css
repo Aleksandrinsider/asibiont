@@ -2324,7 +2324,7 @@ details[open] .details-content {
         width: 100% !important;
         max-width: 100vw !important;
         overflow-x: hidden !important;
-        height: calc(100dvh - 45px) !important;
+        height: calc(100dvh - 57px) !important;
         margin-top: 0 !important;
     }
     .center-column {
@@ -2336,6 +2336,21 @@ details[open] .details-content {
         border-radius: 0 !important;
         overflow-x: hidden !important;
         height: 100% !important;
+    }
+    .left-column, .right-column {
+        max-width: 100vw !important;
+        min-width: 0 !important;
+        border-radius: 0 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+    }
+    .left-column .context-section,
+    .left-column .people-section,
+    .right-column .task-stats-block,
+    .right-column .tasks-section-wrapper {
+        border: none !important;
+        border-radius: 0 !important;
+        border-bottom: 1px solid #D1D9E0 !important;
     }
     .chat-section {
         border: none !important;
@@ -2380,11 +2395,28 @@ details[open] .details-content {
         overflow-wrap: break-word !important;
         word-break: break-word !important;
     }
-    .left-column, .right-column {
-        display: none !important;
-    }
     #quick-profile-form {
         grid-template-columns: 1fr !important;
+    }
+}
+
+/* Tablet overrides */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .main-layout {
+        gap: 4px !important;
+    }
+    .left-column {
+        flex: 0 0 260px !important;
+        min-width: 260px !important;
+        max-width: 260px !important;
+    }
+    .center-column {
+        flex: 1 1 auto !important;
+    }
+    .right-column {
+        flex: 0 0 280px !important;
+        min-width: 280px !important;
+        max-width: 280px !important;
     }
 }
 

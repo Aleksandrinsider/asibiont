@@ -142,9 +142,13 @@
                 background: #fff;
                 border-bottom: 1px solid #D1D9E0;
                 width: 100%;
+                position: relative;
             }
-            .left-column, .right-column {
-                display: none !important;
+            .left-column {
+                display: none;
+            }
+            .right-column {
+                display: none;
             }
         }
     </style>
@@ -187,6 +191,75 @@
             // Hide header on mobile
             var header = document.querySelector('.app-header');
             if (header) header.style.display = 'none';
+        }
+
+        // Mobile column switching
+        function toggleMobileColumnMenu() {
+            var menu = document.getElementById('mobile-column-menu');
+            if (menu) {
+                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        // Close menu when clicking outside
+        document.addEventListener('click', function(e) {
+            var menu = document.getElementById('mobile-column-menu');
+            var btn = document.getElementById('mobile-menu-btn');
+            if (menu && menu.style.display !== 'none' && !menu.contains(e.target) && !btn.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        });
+
+        function switchMobileColumn(col) {
+            var left = document.querySelector('.left-column');
+            var center = document.querySelector('.center-column');
+            var right = document.querySelector('.right-column');
+            var menu = document.getElementById('mobile-column-menu');
+            if (menu) menu.style.display = 'none';
+
+            // Hide all columns
+            if (left) left.style.display = 'none';
+            if (center) center.style.display = 'none';
+            if (right) right.style.display = 'none';
+
+            // Show selected
+            if (col === 'left' && left) {
+                left.style.display = 'flex';
+                left.style.width = '100%';
+                left.style.maxWidth = '100%';
+                left.style.minWidth = '0';
+                left.style.flex = '1 1 100%';
+                left.style.height = '100%';
+                left.style.padding = '8px 12px';
+            } else if (col === 'center' && center) {
+                center.style.display = 'flex';
+                center.style.width = '100%';
+                center.style.maxWidth = '100%';
+                center.style.flex = '1 1 100%';
+            } else if (col === 'right' && right) {
+                right.style.display = 'flex';
+                right.style.width = '100%';
+                right.style.maxWidth = '100%';
+                right.style.minWidth = '0';
+                right.style.flex = '1 1 100%';
+                right.style.height = '100%';
+                right.style.padding = '8px 12px';
+            }
+
+            // Update menu button styles
+            var btns = document.querySelectorAll('.mobile-col-btn');
+            btns.forEach(function(b) {
+                if (b.getAttribute('data-col') === col) {
+                    b.style.background = '#F6F8FA';
+                    b.style.color = '#068487';
+                    b.style.fontWeight = '500';
+                    b.querySelector('svg').setAttribute('fill', '#068487');
+                } else {
+                    b.style.background = 'none';
+                    b.style.color = '#374151';
+                    b.style.fontWeight = '400';
+                    b.querySelector('svg').setAttribute('fill', '#374151');
+                }
+            });
         }
 
         function disableProblematicScripts() {
@@ -466,11 +539,30 @@
         </div>
     </div>
     {% if logged_in %}
-    <!-- Mobile-only header: logo = logout -->
+    <!-- Mobile-only header: logo + column switcher -->
     <div class="mobile-header">
         <a href="#" onclick="logout(); return false;" style="display: flex; align-items: center; text-decoration: none;">
             <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 40px; width: auto;">
         </a>
+        <div style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%);">
+            <button id="mobile-menu-btn" onclick="toggleMobileColumnMenu()" style="background: none; border: none; cursor: pointer; padding: 6px; display: flex; align-items: center;">
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="#374151"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
+            </button>
+            <div id="mobile-column-menu" style="display: none; position: absolute; right: 0; top: 100%; background: #fff; border: 1px solid #D1D9E0; border-radius: 8px; box-shadow: 0 6px 18px rgba(31,35,40,0.08); min-width: 180px; z-index: 5000; overflow: hidden;">
+                <button onclick="switchMobileColumn('left')" class="mobile-col-btn" data-col="left" style="width: 100%; padding: 10px 14px; background: none; border: none; border-bottom: 1px solid #F0F0F0; cursor: pointer; font-size: 13px; color: #374151; text-align: left; font-family: inherit; display: flex; align-items: center; gap: 8px;">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M5.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.49 3.49 0 0 1 2 5.5Z"/></svg>
+                    <span data-i18n="col-profile">Профиль и контакты</span>
+                </button>
+                <button onclick="switchMobileColumn('center')" class="mobile-col-btn active" data-col="center" style="width: 100%; padding: 10px 14px; background: #F6F8FA; border: none; border-bottom: 1px solid #F0F0F0; cursor: pointer; font-size: 13px; color: #068487; text-align: left; font-family: inherit; display: flex; align-items: center; gap: 8px; font-weight: 500;">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#068487"><path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25Z"/></svg>
+                    <span data-i18n="col-chat">Чат</span>
+                </button>
+                <button onclick="switchMobileColumn('right')" class="mobile-col-btn" data-col="right" style="width: 100%; padding: 10px 14px; background: none; border: none; cursor: pointer; font-size: 13px; color: #374151; text-align: left; font-family: inherit; display: flex; align-items: center; gap: 8px;">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.823.177a.25.25 0 0 0-.354 0L4.646 3h6.708L8.177.177ZM13 11V4.5H3V11h10Zm-1.5-2.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0ZM8 13h5c.553 0 1-.448 1-1H2c0 .552.447 1 1 1h5Z"/></svg>
+                    <span data-i18n="col-tasks">Задачи</span>
+                </button>
+            </div>
+        </div>
     </div>
     <div class="app-header" style="margin-bottom: 0; padding-bottom: 0;">
         <div class="header-content" style="padding-bottom: 0;">
