@@ -7616,7 +7616,12 @@ async def resend_webhook_handler(request):
         event_type = data.get('type', '')
         payload = data.get('data', {})
 
-        logger.info(f"[RESEND_WEBHOOK] Event: {event_type}, payload keys: {list(payload.keys())}")
+        # For inbound emails that come without wrapper (no type/data nesting)
+        if not event_type and 'from' in data:
+            payload = data
+            event_type = 'email.received'
+
+        logger.info(f"[RESEND_WEBHOOK] Event: {event_type}, payload keys: {list(payload.keys())}, raw keys: {list(data.keys())}")
 
         session_db = Session()
         try:
@@ -7634,38 +7639,39 @@ async def resend_webhook_handler(request):
                             'email.complained': 'failed',
                         }
                         new_status = status_map.get(event_type, outreach.status)
-                        # Не понижаем статус (replied > opened > delivered > sent)
                         status_priority = {'draft': 0, 'sent': 1, 'delivered': 2, 'opened': 3, 'replied': 4, 'bounced': 5, 'failed': 5}
                         if status_priority.get(new_status, 0) > status_priority.get(outreach.status, 0):
                             outreach.status = new_status
                             session_db.commit()
                             logger.info(f"[RESEND_WEBHOOK] Updated outreach #{outreach.id} → {new_status}")
 
-                        # Bounced → увеличиваем счётчик ошибок
                         if event_type == 'email.bounced':
                             campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
                             if campaign:
-                                # Не считаем bounced в sent
                                 pass
 
             # --- Inbound email (reply) ---
             elif event_type == 'email.received' or 'from' in payload:
                 # Resend inbound webhook format
-                raw_from = payload.get('from', '')
+                raw_from = payload.get('from', '') or data.get('from', '')
                 if isinstance(raw_from, dict):
                     from_email = raw_from.get('email', '') or raw_from.get('address', '')
                 elif isinstance(raw_from, list) and raw_from:
                     first = raw_from[0]
                     from_email = first.get('email', '') if isinstance(first, dict) else str(first)
+                elif isinstance(raw_from, str) and '<' in raw_from and '>' in raw_from:
+                    import re as _re
+                    match = _re.search(r'<([^>]+)>', raw_from)
+                    from_email = match.group(1) if match else raw_from
                 else:
                     from_email = str(raw_from)
                 from_email = from_email.strip().lower()
 
-                to_email = payload.get('to', [''])[0] if isinstance(payload.get('to'), list) else payload.get('to', '')
-                subject = payload.get('subject', '')
-                text_body = payload.get('text', '') or payload.get('html', '')
-                # Clean HTML
-                if '<' in text_body and '>' in text_body:
+                to_raw = payload.get('to', '') or data.get('to', '')
+                to_email = to_raw[0] if isinstance(to_raw, list) and to_raw else str(to_raw)
+                subject = payload.get('subject', '') or data.get('subject', '')
+                text_body = payload.get('text', '') or payload.get('html', '') or data.get('text', '') or data.get('html', '')
+                if text_body and '<' in text_body and '>' in text_body:
                     import re as _re
                     text_body = _re.sub(r'<[^>]+>', '', text_body).strip()
 
@@ -7673,11 +7679,19 @@ async def resend_webhook_handler(request):
 
                 if from_email and text_body:
                     from models import EmailOutreach, EmailCampaign
-                    # Ищем outreach по email отправителя (включая уже replied)
+                    from sqlalchemy import func
                     outreach = session_db.query(EmailOutreach).filter(
-                        EmailOutreach.recipient_email == from_email,
+                        func.lower(EmailOutreach.recipient_email) == from_email,
                         EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
                     ).order_by(EmailOutreach.sent_at.desc()).first()
+
+                    if not outreach:
+                        logger.warning(f"[RESEND_WEBHOOK] No outreach found for {from_email}, trying broader search...")
+                        outreach = session_db.query(EmailOutreach).filter(
+                            func.lower(EmailOutreach.recipient_email) == from_email,
+                        ).order_by(EmailOutreach.sent_at.desc()).first()
+                        if outreach:
+                            logger.info(f"[RESEND_WEBHOOK] Found outreach #{outreach.id} with status={outreach.status} via broader search")
 
                     if outreach:
                         was_replied = outreach.status == 'replied'
