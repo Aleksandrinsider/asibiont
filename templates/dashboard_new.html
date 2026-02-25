@@ -67,6 +67,13 @@
             flex: 0 0 auto; /* Секции НЕ конкурируют за пространство — каждая занимает свою высоту */
         }
         
+        .center-column {
+            flex: 1 1 400px;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
         .center-column .chat-section {
             flex: 1 1 auto; /* Чат растягивается */
         }
@@ -93,11 +100,13 @@
             transition: flex 0.3s ease, height 0.3s ease, padding 0.2s ease; /* Плавные переходы */
         }
         .context-section.collapsed,
+        .people-section.collapsed,
         .task-stats-block.collapsed {
             padding: 10px 15px;
             min-height: 0;
         }
         .context-section.collapsed > div:first-child,
+        .people-section.collapsed > div:first-child,
         .task-stats-block.collapsed > div:first-child {
             margin-bottom: 0 !important;
             padding-bottom: 10px !important;
@@ -217,33 +226,28 @@
             if (center) center.style.setProperty('display', 'none', 'important');
             if (right) right.style.setProperty('display', 'none', 'important');
 
+            // Common styles for all visible columns
+            var commonStyles = function(el) {
+                el.style.setProperty('display', 'flex', 'important');
+                el.style.flexDirection = 'column';
+                el.style.width = '100%';
+                el.style.maxWidth = '100%';
+                el.style.minWidth = '0';
+                el.style.flex = '1 1 100%';
+                el.style.height = 'auto';
+                el.style.minHeight = '100%';
+                el.style.overflowY = 'auto';
+                el.style.padding = '12px';
+            };
+
             // Show selected with !important
             if (col === 'left' && left) {
-                left.style.setProperty('display', 'flex', 'important');
-                left.style.width = '100%';
-                left.style.maxWidth = '100%';
-                left.style.minWidth = '0';
-                left.style.flex = '1 1 100%';
-                left.style.height = 'auto';
-                left.style.minHeight = '100%';
-                left.style.overflowY = 'auto';
-                left.style.padding = '16px 12px';
+                commonStyles(left);
             } else if (col === 'center' && center) {
-                center.style.setProperty('display', 'flex', 'important');
-                center.style.width = '100%';
-                center.style.maxWidth = '100%';
-                center.style.flex = '1 1 100%';
-                center.style.padding = '16px 12px';
+                commonStyles(center);
+                center.style.overflowY = 'hidden'; // chat handles its own scroll
             } else if (col === 'right' && right) {
-                right.style.setProperty('display', 'flex', 'important');
-                right.style.width = '100%';
-                right.style.maxWidth = '100%';
-                right.style.minWidth = '0';
-                right.style.flex = '1 1 100%';
-                right.style.height = 'auto';
-                right.style.minHeight = '100%';
-                right.style.overflowY = 'auto';
-                right.style.padding = '16px 12px';
+                commonStyles(right);
             }
 
             // Update menu button styles
@@ -346,6 +350,8 @@
             const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
             const emailContactsContent = document.getElementById('email-contacts-content');
             const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
+            const contactsSection = contactsContent ? contactsContent.parentElement : null;
+            const emailSection = emailContactsContent ? emailContactsContent.parentElement : null;
             if (!content) return;
 
             const isCollapsed = (content.style.display || '') === 'none';
@@ -356,7 +362,9 @@
                 if (profileSection) profileSection.classList.remove('collapsed');
                 if (indicator) indicator.style.display = 'none';
                 if (contactsContent) contactsContent.style.display = 'none';
+                if (contactsSection) contactsSection.classList.add('collapsed');
                 if (emailContactsContent) emailContactsContent.style.display = 'none';
+                if (emailSection) emailSection.classList.add('collapsed');
                 if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'false');
@@ -366,7 +374,9 @@
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (profileSection) profileSection.classList.add('collapsed');
                 if (contactsContent) contactsContent.style.display = 'block';
+                if (contactsSection) contactsSection.classList.remove('collapsed');
                 if (emailContactsContent) emailContactsContent.style.display = 'none';
+                if (emailSection) emailSection.classList.add('collapsed');
                 if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                 if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'true');
@@ -750,7 +760,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="people-list" id="people-list" style="padding: 0 4px;">
+                        <div class="people-list" id="people-list">
                             <!-- Контакты будут загружены динамически -->
                             <div style="padding: 20px; text-align: center; color: #6C727F;" data-i18n="loading-contacts">Загрузка контактов...</div>
                         </div>
@@ -800,20 +810,29 @@
                     const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
                     const profileContent = document.getElementById('profile-content');
                     const profileToggleBtn = document.getElementById('profile-toggle-btn');
+                    const profileSection = document.querySelector('.context-section');
+                    const contactsSection = contactsContent ? contactsContent.parentElement : null;
+                    const emailSection = emailContactsContent ? emailContactsContent.parentElement : null;
 
                     if (contactsContent.style.display === 'none') {
                         // Разворачиваем контакты: сворачиваем другие
                         contactsContent.style.display = 'block';
+                        if (contactsSection) contactsSection.classList.remove('collapsed');
                         if (emailContactsContent) emailContactsContent.style.display = 'none';
+                        if (emailSection) emailSection.classList.add('collapsed');
                         if (profileContent) profileContent.style.display = 'none';
+                        if (profileSection) profileSection.classList.add('collapsed');
                         contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                         if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
                         // Сворачиваем контакты: разворачиваем email
                         contactsContent.style.display = 'none';
+                        if (contactsSection) contactsSection.classList.add('collapsed');
                         if (emailContactsContent) emailContactsContent.style.display = 'block';
+                        if (emailSection) emailSection.classList.remove('collapsed');
                         if (profileContent) profileContent.style.display = 'none';
+                        if (profileSection) profileSection.classList.add('collapsed');
                         contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                         if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
@@ -827,20 +846,29 @@
                     const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
                     const profileContent = document.getElementById('profile-content');
                     const profileToggleBtn = document.getElementById('profile-toggle-btn');
+                    const profileSection = document.querySelector('.context-section');
+                    const contactsSection = contactsContent ? contactsContent.parentElement : null;
+                    const emailSection = emailContactsContent ? emailContactsContent.parentElement : null;
 
                     if (emailContactsContent.style.display === 'none') {
                         // Разворачиваем email: сворачиваем другие
                         emailContactsContent.style.display = 'block';
+                        if (emailSection) emailSection.classList.remove('collapsed');
                         if (contactsContent) contactsContent.style.display = 'none';
+                        if (contactsSection) contactsSection.classList.add('collapsed');
                         if (profileContent) profileContent.style.display = 'none';
+                        if (profileSection) profileSection.classList.add('collapsed');
                         emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                         if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
                         // Сворачиваем email: разворачиваем профиль
                         emailContactsContent.style.display = 'none';
+                        if (emailSection) emailSection.classList.add('collapsed');
                         if (contactsContent) contactsContent.style.display = 'none';
+                        if (contactsSection) contactsSection.classList.add('collapsed');
                         if (profileContent) profileContent.style.display = 'block';
+                        if (profileSection) profileSection.classList.remove('collapsed');
                         emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
@@ -861,6 +889,11 @@
                         emailContactsContent.style.display = 'none';
                         if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        // Добавляем collapsed класс для корректных отступов
+                        const contactsSection = contactsContent.parentElement;
+                        const emailSection = emailContactsContent.parentElement;
+                        if (contactsSection) contactsSection.classList.add('collapsed');
+                        if (emailSection) emailSection.classList.add('collapsed');
                     }
                 })();
             </script>
