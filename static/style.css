@@ -457,16 +457,16 @@ body {
 @media (min-width: 1600px) {
     .main-layout {
         grid-template-columns: 1fr 1.5fr 1fr;
-        gap: 28px;
+        gap: 10px;
     }
 }
 
 /* Ensure full-bleed sections expand on very wide screens */
 @media (min-width: 2000px) {
     .container {
-        width: calc(100vw - 160px);
-        margin-left: 80px;
-        margin-right: 80px;
+        width: calc(100% - 20px);
+        margin-left: 10px;
+        margin-right: 10px;
     }
 }
 
