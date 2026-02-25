@@ -1128,19 +1128,19 @@
                 <!-- User Statistics -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="total-users">Всего пользователей</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="total-users">Всего пользователей</div>
                         <div style="font-size: 24px; font-weight: 700; color: #068487;">{{ security_stats.user_stats.total_users }}</div>
                     </div>
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="in-24h">За 24 часа</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="in-24h">За 24 часа</div>
                         <div style="font-size: 24px; font-weight: 700; color: #059669;">+{{ security_stats.user_stats.new_users_24h }}</div>
                     </div>
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="active-subs">Активных подписок</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="active-subs">Активных подписок</div>
                         <div style="font-size: 24px; font-weight: 700; color: #7C3AED;">{{ security_stats.user_stats.active_subscriptions }}</div>
                     </div>
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="total-tasks">Всего задач</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="total-tasks">Всего задач</div>
                         <div style="font-size: 24px; font-weight: 700; color: #DC2626;">{{ security_stats.user_stats.total_tasks }}</div>
                     </div>
                 </div>
@@ -1148,19 +1148,19 @@
                 <!-- Security Statistics -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="total-requests">Всего запросов</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="total-requests">Всего запросов</div>
                         <div style="font-size: 24px; font-weight: 700; color: #374151;">{{ security_stats.total_requests }}</div>
                     </div>
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="unique-ips">Уникальных IP</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="unique-ips">Уникальных IP</div>
                         <div style="font-size: 24px; font-weight: 700; color: #0891B2;">{{ security_stats.unique_ips }}</div>
                     </div>
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="blocked-ips">Заблокировано IP</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="blocked-ips">Заблокировано IP</div>
                         <div style="font-size: 24px; font-weight: 700; color: #DC2626;">{{ security_stats.blocked_ips|length }}</div>
                     </div>
                     <div style="background: white; padding: 16px; border-radius: 6px; border: 1px solid #D1D9E0;">
-                        <div style="font-size: 11px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="suspicious-ips">Подозрительных IP</div>
+                        <div style="font-size: 12px; color: #6C727F; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;" data-i18n="suspicious-ips">Подозрительных IP</div>
                         <div style="font-size: 24px; font-weight: 700; color: #D97706;">{{ security_stats.suspicious_ips|length }}</div>
                     </div>
                 </div>
@@ -1375,14 +1375,14 @@
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
                         <div id="quick-profile-pwd-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end;">
                             <div>
-                                <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="current-password-label">Текущий пароль</label>
+                                <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="current-password-label">Текущий пароль</label>
                                 <input type="password" id="pwd-current" placeholder="••••••" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" {{ 'disabled' if not user.password_hash else '' }} />
                                 {% if not user.password_hash %}
-                                <span style="font-size: 10px; color: #9CA3AF;" data-i18n="no-password-yet">Пароль ещё не задан</span>
+                                <span style="font-size: 12px; color: #9CA3AF;" data-i18n="no-password-yet">Пароль ещё не задан</span>
                                 {% endif %}
                             </div>
                             <div>
-                                <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="new-password-label">Новый пароль (мин. 6)</label>
+                                <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="new-password-label">Новый пароль (мин. 6)</label>
                                 <input type="password" id="pwd-new" placeholder="Мин. 6 символов" data-i18n-ph="new-password-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                             </div>
                             <div>
@@ -1402,7 +1402,7 @@
                         <a href="/?link_tg=1" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-telegram">Привязать</a>
                         {% endif %}
                         <div style="margin-top: 8px;">
-                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="tg-channel">@ вашего канала для автопубликации постов (бот @asibiont_bot должен быть админом канала)</label>
+                            <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="tg-channel">@ вашего канала для автопубликации постов (бот @asibiont_bot должен быть админом канала)</label>
                             <input type="text" id="quick-telegram-channel" placeholder="@your_channel" style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
                         </div>
                     </div>
@@ -1414,7 +1414,7 @@
                         <a href="/discord/link" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-discord">Привязать</a>
                         {% endif %}
                         <div style="margin-top: 8px;">
-                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 4px;" data-i18n="discord-webhook">Webhook вашего канала для автопубликации постов</label>
+                            <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="discord-webhook">Webhook вашего канала для автопубликации постов</label>
                             <input type="text" id="quick-discord-webhook" placeholder="https://discord.com/api/webhooks/..." style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
                         </div>
                     </div>
@@ -1565,16 +1565,16 @@
             let avatarHtml = '';
             if (normalizedSender === 'ai') {
                 // AI avatar with fallback
-                avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">AI</div>';
+                avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">AI</div>';
             } else {
                 // User avatar from profile - приоритет отдаем window.userAvatarUrl
                 const avatarUrl = window.userAvatarUrl || (window.currentUserProfile && window.currentUserProfile.photo_url);
                 if (avatarUrl) {
                     avatarHtml = `<img src="${avatarUrl}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">${window.currentUserProfile && window.currentUserProfile.first_name ? window.currentUserProfile.first_name[0].toUpperCase() : 'U'}</div>`;
+                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: none; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">${window.currentUserProfile && window.currentUserProfile.first_name ? window.currentUserProfile.first_name[0].toUpperCase() : 'U'}</div>`;
                 } else {
                     const firstLetter = window.currentUserProfile && window.currentUserProfile.first_name ? window.currentUserProfile.first_name[0].toUpperCase() : 'U';
-                    avatarHtml = `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">${firstLetter}</div>`;
+                    avatarHtml = `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">${firstLetter}</div>`;
                 }
             }
             
@@ -2221,15 +2221,15 @@
                 statsRow.innerHTML = `
                     <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 20px; font-weight: 600; color: #1F2328; line-height: 1.2;">${totalSent}</div>
-                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;" data-i18n="report-sent">${t('report-sent')}</div>
+                        <div style="font-size: 12px; color: #6C727F; margin-top: 3px;" data-i18n="report-sent">${t('report-sent')}</div>
                     </div>
                     <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 20px; font-weight: 600; color: #068487; line-height: 1.2;">${totalReplied}</div>
-                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;" data-i18n="report-replied">${t('report-replied')}</div>
+                        <div style="font-size: 12px; color: #6C727F; margin-top: 3px;" data-i18n="report-replied">${t('report-replied')}</div>
                     </div>
                     <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 20px; font-weight: 600; color: ${totalConv > 0 ? '#068487' : '#374151'}; line-height: 1.2;">${totalConv}%</div>
-                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;" data-i18n="report-conversion">${t('report-conversion')}</div>
+                        <div style="font-size: 12px; color: #6C727F; margin-top: 3px;" data-i18n="report-conversion">${t('report-conversion')}</div>
                     </div>
                 `;
                 list.appendChild(statsRow);
@@ -2255,11 +2255,11 @@
                     header.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
                             <span style="font-size: 13px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.name || t('report-campaign')}</span>
-                            <span style="font-size: 11px; color: ${statusColor}; font-weight: 500; flex-shrink: 0;">${statusLabel}</span>
-                            ${createdDate ? `<span style="font-size: 11px; color: #9CA3AF; flex-shrink: 0;">${createdDate}</span>` : ''}
+                            <span style="font-size: 12px; color: ${statusColor}; font-weight: 500; flex-shrink: 0;">${statusLabel}</span>
+                            ${createdDate ? `<span style="font-size: 12px; color: #9CA3AF; flex-shrink: 0;">${createdDate}</span>` : ''}
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: 12px;">
-                            <span style="font-size: 11px; color: #6C727F;">${sent} → ${replied}</span>
+                            <span style="font-size: 12px; color: #6C727F;">${sent} → ${replied}</span>
                             <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${wasExpanded ? '180' : '0'}deg);">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                             </svg>
@@ -2325,8 +2325,8 @@
                             oHeader.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-wrap: wrap; cursor: pointer; user-select: none;';
                             oHeader.innerHTML = `
                                 <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${rcpt}</span>
-                                <span style="font-size: 11px; color: ${oClr}; flex-shrink: 0;">${oLbl}</span>
-                                ${oDate ? `<span style="font-size: 11px; color: #9CA3AF;">${oDate}</span>` : ''}
+                                <span style="font-size: 12px; color: ${oClr}; flex-shrink: 0;">${oLbl}</span>
+                                ${oDate ? `<span style="font-size: 12px; color: #9CA3AF;">${oDate}</span>` : ''}
                                 <svg class="rpt-ochev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${oWasExpanded ? '180' : '0'}deg); margin-left: auto;">
                                     <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                                 </svg>
@@ -2406,7 +2406,7 @@
                         item.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 6px;">
                                 <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${e.to || ''}</span>
-                                ${dateStr ? `<span style="font-size: 11px; color: #9CA3AF;">${dateStr}</span>` : ''}
+                                ${dateStr ? `<span style="font-size: 12px; color: #9CA3AF;">${dateStr}</span>` : ''}
                             </div>
                             ${e.subject ? `<div style="font-size: 12px; color: #6C727F; margin-top: 2px;">${e.subject}</div>` : ''}
                             ${e.body_text || e.body ? `<div style="font-size: 12px; color: #374151; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${e.body_text || e.body}</div>` : ''}
@@ -2455,7 +2455,7 @@
                         '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + ((c.name || c.company || c.notes) ? '4px' : '0') + ';">' +
                             '<span style="font-weight: 500; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (c.email || '') + '</span>' +
                             '<span style="flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: ' + statusColor + '; margin-left: 2px;" title="' + (c.status || '') + '"></span>' +
-                            (dateStr ? '<span style="font-size: 11px; color: #9CA3AF; margin-left: auto; white-space: nowrap; flex-shrink: 0;">' + dateStr + '</span>' : '') +
+                            (dateStr ? '<span style="font-size: 12px; color: #9CA3AF; margin-left: auto; white-space: nowrap; flex-shrink: 0;">' + dateStr + '</span>' : '') +
                         '</div>' +
                         ((c.name || c.company) ? '<div style="font-size: 12px; color: #6C727F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + [c.name, c.company].filter(Boolean).join(' · ') + '</div>' : '') +
                         (c.notes ? '<div style="font-size: 12px; color: #9CA3AF; margin-top: 2px;">' + c.notes + '</div>' : '') +
@@ -2552,8 +2552,8 @@
                 '<input type="text" value="' + currentName.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-name-ph') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
                 '<input type="text" value="' + currentCompany.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-company-ph') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
                 '<div style="display: flex; gap: 6px; margin-top: 2px;">' +
-                    '<button class="ec-save-btn" style="padding: 3px 10px; font-size: 11px; background: #068487; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="save">' + t('save') + '</button>' +
-                    '<button class="ec-cancel-btn" style="padding: 3px 10px; font-size: 11px; background: #F3F4F6; color: #374151; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="cancel">' + t('cancel') + '</button>' +
+                    '<button class="ec-save-btn" style="padding: 3px 10px; font-size: 12px; background: #068487; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="save">' + t('save') + '</button>' +
+                    '<button class="ec-cancel-btn" style="padding: 3px 10px; font-size: 12px; background: #F3F4F6; color: #374151; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="cancel">' + t('cancel') + '</button>' +
                 '</div>';
 
             const origHTML = card.innerHTML;
@@ -3372,7 +3372,7 @@
                         commentDiv.innerHTML = `
                             ${comment.author.photo_url ? 
                                 `<img src="${comment.author.photo_url}" onclick="openContactProfileModal('${commentUsernameClean}')" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">` : 
-                                '<div onclick="openContactProfileModal(\'' + commentUsernameClean + '\')" style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
+                                '<div onclick="openContactProfileModal(\'' + commentUsernameClean + '\')" style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
                             }
                             <div style="flex: 1; min-width: 0;">
                                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
@@ -3381,7 +3381,7 @@
                                         `<span onclick="openContactProfileModal('${commentUsernameClean}')" style="font-size: 12px; font-weight: 400; color: #068487; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${commentUsernameClean}</span>` : 
                                         ''
                                     }
-                                    <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
+                                    <span style="font-size: 12px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                 </div>
                                 <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${linkify(escapeHtml(comment.content))}</p>
                             </div>
@@ -3446,7 +3446,7 @@
                             commentDiv.innerHTML = `
                                 ${comment.author.photo_url ? 
                                     `<img src="${comment.author.photo_url}" onclick="openContactProfileModal('${commentUsernameClean}')" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">` : 
-                                    '<div onclick="openContactProfileModal(\'' + commentUsernameClean + '\')" style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
+                                    '<div onclick="openContactProfileModal(\'' + commentUsernameClean + '\')" style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
                                 }
                                 <div style="flex: 1; min-width: 0;">
                                     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
@@ -3455,7 +3455,7 @@
                                             `<span onclick="openContactProfileModal('${commentUsernameClean}')" style="font-size: 12px; font-weight: 400; color: #068487; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${commentUsernameClean}</span>` : 
                                             ''
                                         }
-                                        <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
+                                        <span style="font-size: 12px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                     </div>
                                     <p id="comment-content-${comment.id}" style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${linkify(escapeHtml(comment.content))}</p>
                                 </div>
@@ -3510,9 +3510,9 @@
         }
 
         // SVG icons for translate button - text-based, matches like button height
-        const TRANSLATE_GLOBE_SVG = 'A<span style="font-size:10px;">a</span>';
+        const TRANSLATE_GLOBE_SVG = 'A<span style="font-size:12px;">a</span>';
         const TRANSLATE_LOADING_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>';
-        const TRANSLATE_BACK_SVG = 'a<span style="font-size:10px;">A</span>';
+        const TRANSLATE_BACK_SVG = 'a<span style="font-size:12px;">A</span>';
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
@@ -5040,15 +5040,15 @@
                 const isToday = i === 0;
                 const hasTasks = tasksForDay > 0;
                 
-                html += '<div style="flex: 1; text-align: center; font-size: 11px;">';
+                html += '<div style="flex: 1; text-align: center; font-size: 12px;">';
                 html += '<div style="color: ' + (isToday ? '#068487' : '#374151') + '; font-weight: ' + (isToday ? '600' : '400') + '; margin-bottom: 4px;">' + dayOfWeek + '</div>';
-                html += '<div style="color: ' + (isToday ? '#068487' : '#8B949E') + '; font-size: 10px; margin-bottom: 6px;">' + dayOfMonth + ' ' + month + '</div>';
+                html += '<div style="color: ' + (isToday ? '#068487' : '#8B949E') + '; font-size: 12px; margin-bottom: 6px;">' + dayOfMonth + ' ' + month + '</div>';
                 html += '<div style="width: 100%; height: 6px; background: #D1D9E0; border-radius: 3px; position: relative; overflow: hidden;">';
                 if (hasTasks) {
                     html += '<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: ' + (isToday ? '#068487' : '#D1D9E0') + '; border-radius: 3px;"></div>';
                 }
                 html += '</div>';
-                html += '<div style="color: ' + (hasTasks ? (isToday ? '#068487' : '#24292F') : '#8B949E') + '; font-weight: 400; margin-top: 4px; font-size: 11px;">' + tasksForDay + '</div>';
+                html += '<div style="color: ' + (hasTasks ? (isToday ? '#068487' : '#24292F') : '#8B949E') + '; font-weight: 400; margin-top: 4px; font-size: 12px;">' + tasksForDay + '</div>';
                 html += '</div>';
             }
             
@@ -5504,7 +5504,7 @@
                     html += `<div style="margin-bottom: 10px;">`;
                     html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">`;
                     html += `<span style="font-size: 12px; color: #374151; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${g.title}</span>`;
-                    html += `<span style="font-size: 11px; color: #6C727F; white-space: nowrap;">${progress}%</span>`;
+                    html += `<span style="font-size: 12px; color: #6C727F; white-space: nowrap;">${progress}%</span>`;
                     html += `</div>`;
                     html += `<div class="progress-bar" style="height: 6px; background: #F3F4F6; border-radius: 3px; overflow: hidden;">`;
                     html += `<div style="width: ${progress}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.5s ease;"></div>`;
