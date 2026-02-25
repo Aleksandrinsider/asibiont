@@ -1087,4 +1087,37 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_email",
+            "description": "📧 ОТПРАВИТЬ EMAIL — универсальный инструмент. Отправь письмо на любой адрес: предложение, вопрос, напоминание, благодарность, приглашение, что угодно. НЕ связан с кампаниями — одиночная отправка. Используй когда пользователь даёт email и просит написать/отправить что-то конкретное.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "Email получателя"
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Тема письма"
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Текст письма. Пиши человечно: 3-4 абзаца, макс 150 слов, без шаблонных фраз"
+                    },
+                    "sender_name": {
+                        "type": "string",
+                        "description": "Имя отправителя (по умолчанию — имя пользователя)"
+                    },
+                    "sender_email": {
+                        "type": "string",
+                        "description": "Email отправителя (по умолчанию — outreach@asibiont.com)"
+                    }
+                },
+                "required": ["to", "subject", "body"]
+            }
+        }
+    },
 ]

@@ -20,6 +20,28 @@ from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, SERPER_API_KEY
 logger = logging.getLogger(__name__)
 
 
+def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '') -> str:
+    """Общий HTML-шаблон для email с unsubscribe footer.
+
+    Чистый текстовый стиль — без баннеров, кнопок, логотипов.
+    Как личное письмо.
+    """
+    unsub_line_ru = f'Если вы не хотите получать подобные письма, просто ответьте "отписаться" на это сообщение или напишите на {unsub_email}'
+    unsub_line_en = f'If you don\'t want to receive such emails, simply reply "unsubscribe" to this message or write to {unsub_email}'
+    sender_sig = f'— {sender_name}' if sender_name else ''
+
+    return f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6; margin: 0; padding: 0;">
+<div style="max-width: 600px; margin: 0 auto; padding: 24px;">
+{body_html}
+{f'<p style="margin-top: 24px; color: #374151;">{sender_sig}</p>' if sender_sig else ''}
+</div>
+<div style="max-width: 600px; margin: 0 auto; padding: 12px 24px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; line-height: 1.5;">
+{unsub_line_ru}<br>
+{unsub_line_en}
+</div>
+</body></html>"""
+
+
 def _get_lang(user_id):
     """Get user language, default ru."""
     try:
@@ -8123,13 +8145,10 @@ async def send_outreach_email(
         if not subject or not body:
             return "❌ Нужны subject и body письма."
 
-        # Формируем HTML
+        # Формируем HTML с unsubscribe footer
         html_body = body.replace('\n', '<br>')
-        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
-<div style="max-width: 600px; margin: 0 auto; padding: 24px;">
-{html_body}
-</div>
-</body></html>"""
+        unsub_email = campaign.sender_email or 'outreach@asibiont.com'
+        html = _build_email_html(html_body, unsub_email=unsub_email, sender_name=campaign.sender_name)
 
         # Отправляем через Resend
         import aiohttp as _aiohttp
@@ -8261,11 +8280,8 @@ async def reply_to_outreach_email(
         # Отправляем reply через Resend
         import aiohttp as _aiohttp
         html_body = reply_body.replace('\n', '<br>')
-        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
-<div style="max-width: 600px; margin: 0 auto; padding: 24px;">
-{html_body}
-</div>
-</body></html>"""
+        unsub_email = campaign.sender_email or 'outreach@asibiont.com'
+        html = _build_email_html(html_body, unsub_email=unsub_email, sender_name=campaign.sender_name)
 
         subject = f"Re: {outreach.subject}" if outreach.subject else "Re: Your inquiry"
         try:
@@ -8571,11 +8587,8 @@ async def send_follow_up_email(
         # Отправляем через Resend
         import aiohttp as _aiohttp
         html_body = body.replace('\n', '<br>')
-        html = f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6;">
-<div style="max-width: 600px; margin: 0 auto; padding: 24px;">
-{html_body}
-</div>
-</body></html>"""
+        unsub_email = campaign.sender_email or 'outreach@asibiont.com'
+        html = _build_email_html(html_body, unsub_email=unsub_email, sender_name=campaign.sender_name)
 
         try:
             async with _aiohttp.ClientSession() as http:
@@ -8619,6 +8632,101 @@ async def send_follow_up_email(
         return f"✅ Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
     except Exception as e:
         logger.error(f"[EMAIL_FOLLOWUP] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# GENERIC EMAIL — Отправка одиночных писем через Resend API
+# ═══════════════════════════════════════════════════════════════════
+
+async def send_email(
+    to: str = None,
+    subject: str = None,
+    body: str = None,
+    sender_name: str = None,
+    sender_email: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Отправить одиночное email-сообщение через Resend API.
+
+    Универсальный инструмент — предложение, вопрос, напоминание,
+    благодарность, что угодно. НЕ связан с кампаниями.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import RESEND_API_KEY
+        import aiohttp as _aiohttp
+
+        if not to:
+            return "❌ Укажи email получателя (to)."
+        if not subject:
+            return "❌ Укажи тему письма (subject)."
+        if not body:
+            return "❌ Нужен текст письма (body)."
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден."
+        if not RESEND_API_KEY:
+            return "❌ Resend API не настроен."
+
+        # Fallback sender
+        if not sender_name:
+            sender_name = user.first_name or user.username or 'Team'
+        if not sender_email:
+            sender_email = 'outreach@asibiont.com'
+
+        # Нормализация: удалить пробелы, lowercase
+        to_clean = to.strip().lower()
+
+        html_body = body.replace('\n', '<br>')
+        html = _build_email_html(html_body, unsub_email=sender_email, sender_name=sender_name)
+
+        try:
+            async with _aiohttp.ClientSession() as http:
+                from_header = f"{sender_name} <{sender_email}>"
+                resp = await http.post(
+                    'https://api.resend.com/emails',
+                    headers={
+                        'Authorization': f'Bearer {RESEND_API_KEY}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={
+                        'from': from_header,
+                        'to': [to_clean],
+                        'subject': subject,
+                        'text': body,
+                        'html': html,
+                    },
+                    timeout=_aiohttp.ClientTimeout(total=15),
+                )
+                resp_data = await resp.json()
+                if resp.status not in (200, 201):
+                    err = resp_data.get('message', str(resp_data))
+                    return f"❌ Ошибка Resend API: {err}"
+        except Exception as e:
+            return f"❌ Ошибка отправки: {str(e)}"
+
+        try:
+            from token_service import deduct_tokens
+            deduct_tokens(user_id, 'email_send', session=session)
+        except Exception:
+            pass
+
+        lang = _get_lang(user_id)
+        if lang == 'en':
+            return f"✅ Email sent to {to_clean}\nSubject: {subject}"
+        return f"✅ Email отправлен на {to_clean}\nТема: {subject}"
+    except Exception as e:
+        logger.error(f"[SEND_EMAIL] Error: {e}", exc_info=True)
         session.rollback()
         return f"❌ Ошибка: {str(e)}"
     finally:
