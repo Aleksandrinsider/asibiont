@@ -93,12 +93,14 @@
             transition: flex 0.3s ease, height 0.3s ease, padding 0.2s ease; /* Плавные переходы */
         }
         .context-section.collapsed,
-        .task-stats-block.collapsed {
+        .task-stats-block.collapsed,
+        .people-section.collapsed {
             padding: 10px 15px;
             min-height: 0;
         }
         .context-section.collapsed > div:first-child,
-        .task-stats-block.collapsed > div:first-child {
+        .task-stats-block.collapsed > div:first-child,
+        .people-section.collapsed > div:first-child {
             margin-bottom: 0 !important;
             padding-bottom: 10px !important;
         }
@@ -357,6 +359,99 @@
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
+
+        // toggle people sections; collapsing one expands the opposite
+        function toggleContactsSection() {
+            const content = document.getElementById('contacts-content');
+            const button = document.getElementById('contacts-toggle-btn');
+            const svg = button ? button.querySelector('svg') : null;
+            const section = button ? button.closest('.people-section') : null;
+            if (!content) return;
+
+            const isCollapsed = (content.style.display || '') === 'none';
+            if (isCollapsed) {
+                content.style.display = 'block';
+                if (svg) svg.style.transform = 'rotate(0deg)';
+                if (section) section.classList.remove('collapsed');
+                localStorage.setItem('contactsCollapsed', 'false');
+            } else {
+                content.style.display = 'none';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
+                if (section) section.classList.add('collapsed');
+                localStorage.setItem('contactsCollapsed', 'true');
+                // ensure email section is shown
+                const emailContent = document.getElementById('email-contacts-content');
+                const emailBtn = document.getElementById('email-contacts-toggle-btn');
+                const emailSec = emailBtn ? emailBtn.closest('.people-section') : null;
+                if (emailContent) emailContent.style.display = 'block';
+                if (emailBtn) emailBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                if (emailSec) emailSec.classList.remove('collapsed');
+                localStorage.setItem('emailContactsCollapsed', 'false');
+            }
+        }
+
+        function toggleEmailContactsSection() {
+            const content = document.getElementById('email-contacts-content');
+            const button = document.getElementById('email-contacts-toggle-btn');
+            const svg = button ? button.querySelector('svg') : null;
+            const section = button ? button.closest('.people-section') : null;
+            if (!content) return;
+
+            const isCollapsed = (content.style.display || '') === 'none';
+            if (isCollapsed) {
+                content.style.display = 'block';
+                if (svg) svg.style.transform = 'rotate(0deg)';
+                if (section) section.classList.remove('collapsed');
+                localStorage.setItem('emailContactsCollapsed', 'false');
+            } else {
+                content.style.display = 'none';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
+                if (section) section.classList.add('collapsed');
+                localStorage.setItem('emailContactsCollapsed', 'true');
+                // expand contacts when email collapsed
+                const contactsContent = document.getElementById('contacts-content');
+                const contactsBtn = document.getElementById('contacts-toggle-btn');
+                const contactsSec = contactsBtn ? contactsBtn.closest('.people-section') : null;
+                if (contactsContent) contactsContent.style.display = 'block';
+                if (contactsBtn) contactsBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                if (contactsSec) contactsSec.classList.remove('collapsed');
+                localStorage.setItem('contactsCollapsed', 'false');
+            }
+        }
+
+        // initial state for people sections
+        (function() {
+            const contactsEl = document.getElementById('contacts-content');
+            const contactsBtn = document.getElementById('contacts-toggle-btn');
+            const emailEl = document.getElementById('email-contacts-content');
+            const emailBtn = document.getElementById('email-contacts-toggle-btn');
+            const contactsCollapsed = localStorage.getItem('contactsCollapsed') === 'true';
+            const emailCollapsed = localStorage.getItem('emailContactsCollapsed') === 'true';
+            if (contactsCollapsed) {
+                if (contactsEl) contactsEl.style.display = 'none';
+                if (contactsBtn) contactsBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                const sec = contactsBtn ? contactsBtn.closest('.people-section') : null;
+                if (sec) sec.classList.add('collapsed');
+                if (emailEl) emailEl.style.display = 'block';
+                if (emailBtn) emailBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                const sec2 = emailBtn ? emailBtn.closest('.people-section') : null;
+                if (sec2) sec2.classList.remove('collapsed');
+                localStorage.setItem('emailContactsCollapsed', 'false');
+            } else if (emailCollapsed) {
+                if (emailEl) emailEl.style.display = 'none';
+                if (emailBtn) emailBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                const sec2 = emailBtn ? emailBtn.closest('.people-section') : null;
+                if (sec2) sec2.classList.add('collapsed');
+                if (contactsEl) contactsEl.style.display = 'block';
+                if (contactsBtn) contactsBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                const sec = contactsBtn ? contactsBtn.closest('.people-section') : null;
+                if (sec) sec.classList.remove('collapsed');
+                localStorage.setItem('contactsCollapsed', 'false');
+            } else {
+                if (contactsEl) contactsEl.style.display = 'block';
+                if (emailEl) emailEl.style.display = 'block';
+            }
+        })();
 
         // Error notification functions
         function showErrorNotification(message, type = 'error', duration = 5000) {
@@ -709,7 +804,7 @@
                     </div>
                 </div>
                 {% endif %}
-                <div class="people-section">
+                <div class="people-section" id="contacts-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
@@ -717,7 +812,13 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="contacts">Контакты</h3>
                         </div>
+                        <button onclick="toggleContactsSection()" class="section-toggle-btn" id="contacts-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
                     </div>
+                    <div id="contacts-content">
                     <div id="contact-filter-content" style="margin-bottom: 15px;">
                         <div style="position: relative; width: 100%;">
                             <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
@@ -743,6 +844,11 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="email-contacts-title">Email-контакты</h3>
                         </div>
+                        <button onclick="toggleEmailContactsSection()" class="section-toggle-btn" id="email-contacts-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
                     </div>
                     <div id="email-contacts-content" style="display: block;">
                     <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
