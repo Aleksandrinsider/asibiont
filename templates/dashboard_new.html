@@ -2099,23 +2099,26 @@
                     const card = document.createElement('div');
                     card.className = 'report-card';
                     card.style.cssText = 'display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #F6F8FA;';
-                    card.innerHTML = `
-                        <div style="width: 38px; height: 38px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: -0.5px; margin-top: 2px;">AI</div>
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                                <span style="font-size: 14px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${c.name}</span>
-                                ${createdDate ? `<span style="font-size: 12px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">${createdDate}</span>` : ''}
-                                ${hasOutreach ? `<button id="${cid}-btn" onclick="(function(btn){const el=document.getElementById('${cid}-outreach');const isOpen=el.style.display!=='none';el.style.display=isOpen?'none':'block';btn.querySelector('svg').style.transform=isOpen?'rotate(-90deg)':'rotate(0deg)';})(this)" style="background:none;border:none;cursor:pointer;padding:3px 5px;display:flex;align-items:center;color:#6C727F;border-radius:4px;flex-shrink:0;" title="Развернуть переписку"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="transform:rotate(0deg);transition:transform 0.2s;"><path d="M4.427 7.427l3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427z"/></svg></button>` : ''}
-                            </div>
-                            <div style="border-bottom: 1px solid #F6F8FA; padding-bottom: 8px; margin-bottom: ${hasOutreach ? '8px' : '0'}; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                ${c.goal ? `<span style="font-size: 12px; color: #6C727F; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">${c.goal}</span>` : ''}
-                                <span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">Отправлено: <b style="color:#1F2328">${c.emails_sent || 0}</b></span>
-                                <span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">Ответов: <b style="color:${(c.emails_replied||0)>0?'#068487':'#1F2328'}">${c.emails_replied || 0}</b></span>
-                                <span style="display:flex;align-items:center;gap:3px;font-size:11px;color:${statusDot};white-space:nowrap;flex-shrink:0;"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="${statusDot}"/></svg>${c.status || ''}</span>
-                            </div>
-                            ${hasOutreach ? `<div id="${cid}-outreach" style="display: block;">${outreachHtml}</div>` : ''}
-                        </div>
-                    `;
+                    const datePart = createdDate ? '<span style="font-size: 12px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">' + createdDate + '</span>' : '';
+                    const btnPart = hasOutreach ? '<button id="' + cid + '-btn" onclick="(function(btn){var el=document.getElementById(\'' + cid + '-outreach\');var isOpen=el.style.display!==\'none\';el.style.display=isOpen?\'none\':\'block\';btn.querySelector(\'svg\').style.transform=isOpen?\'rotate(-90deg)\':\'rotate(0deg)\'})(this)" style="background:none;border:none;cursor:pointer;padding:3px 5px;display:flex;align-items:center;color:#6C727F;border-radius:4px;flex-shrink:0;" title="\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="transform:rotate(0deg);transition:transform 0.2s;"><path d="M4.427 7.427l3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427z"/></svg></button>' : '';
+                    const marginBot = hasOutreach ? '8px' : '0';
+                    const goalPart = c.goal ? '<span style="font-size: 12px; color: #6C727F; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">' + c.goal + '</span>' : '';
+                    const repliedColor = (c.emails_replied || 0) > 0 ? '#068487' : '#1F2328';
+                    const outreachPart = hasOutreach ? '<div id="' + cid + '-outreach" style="display: block;">' + outreachHtml + '</div>' : '';
+                    card.innerHTML = '<div style="width: 38px; height: 38px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: -0.5px; margin-top: 2px;">AI</div>' +
+                        '<div style="flex: 1; min-width: 0;">' +
+                            '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">' +
+                                '<span style="font-size: 14px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">' + (c.name || '') + '</span>' +
+                                datePart + btnPart +
+                            '</div>' +
+                            '<div style="border-bottom: 1px solid #F6F8FA; padding-bottom: 8px; margin-bottom: ' + marginBot + '; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">' +
+                                goalPart +
+                                '<span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e: <b style="color:#1F2328">' + (c.emails_sent || 0) + '</b></span>' +
+                                '<span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">\u041e\u0442\u0432\u0435\u0442\u043e\u0432: <b style="color:' + repliedColor + '">' + (c.emails_replied || 0) + '</b></span>' +
+                                '<span style="display:flex;align-items:center;gap:3px;font-size:11px;color:' + statusDot + ';white-space:nowrap;flex-shrink:0;"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="' + statusDot + '"/></svg>' + (c.status || '') + '</span>' +
+                            '</div>' +
+                            outreachPart +
+                        '</div>';
                     list.appendChild(card);
                 });
 
@@ -2132,18 +2135,18 @@
                         card.className = 'report-card';
                         card.style.cssText = 'display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #F6F8FA;';
                         const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-                        card.innerHTML = `
-                            <div style="width: 38px; height: 38px; border-radius: 50%; background: #F6F8FA; border: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#6C727F"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>
-                            </div>
-                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; justify-content: center;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">→ ${e.to}</span>
-                                    ${dateStr ? `<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">${dateStr}</span>` : ''}
-                                </div>
-                                ${e.subject ? `<div style="font-size: 12px; color: #6C727F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📧 ${e.subject}</div>` : ''}
-                            </div>
-                        `;
+                        const eDatePart = dateStr ? '<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">' + dateStr + '</span>' : '';
+                        const eSubjectPart = e.subject ? '<div style="font-size: 12px; color: #6C727F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">\uD83D\uDCE7 ' + e.subject + '</div>' : '';
+                        card.innerHTML = '<div style="width: 38px; height: 38px; border-radius: 50%; background: #F6F8FA; border: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">' +
+                            '<svg width="16" height="16" viewBox="0 0 16 16" fill="#6C727F"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>' +
+                            '</div>' +
+                            '<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; justify-content: center;">' +
+                                '<div style="display: flex; align-items: center; gap: 8px;">' +
+                                    '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\u2192 ' + (e.to || '') + '</span>' +
+                                    eDatePart +
+                                '</div>' +
+                                eSubjectPart +
+                            '</div>';
                         list.appendChild(card);
                     });
                 }
