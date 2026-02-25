@@ -783,6 +783,11 @@ async def _build_proactive_context(user_id, lang='ru'):
                 val = getattr(profile, field, None)
                 if val:
                     profile_parts.append(f"{label}: {val}")
+            # Контактные данные из User (email, phone)
+            if user.email:
+                profile_parts.append(f"Email: {user.email}")
+            if user.phone:
+                profile_parts.append(f"{'Телефон' if lang == 'ru' else 'Phone'}: {user.phone}")
             if profile_parts:
                 user_memory += f"\n{_t('profile', lang)}: {', '.join(profile_parts)}"
             

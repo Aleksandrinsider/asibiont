@@ -1194,11 +1194,11 @@
             <div class="rating-modal-body">
                 <form id="quick-profile-form" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 14px;">
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="email-label">Email</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="email-hint">(для входа)</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="email-label">Email</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="email-hint">(вход + используется агентом)</span></label>
                         <input type="email" id="quick-email" placeholder="user@example.com" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.email if user.email else '' }}" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="phone-label">Телефон</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="phone-hint">(для связи)</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="phone-label">Телефон</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="phone-hint">(используется агентом для задач)</span></label>
                         <input type="tel" id="quick-phone" placeholder="+7 (999) 123-45-67" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.phone if user.phone else '' }}" />
                     </div>
                     <div>
@@ -8447,7 +8447,7 @@
       'delegates-to-me':'Делегирует мне','i-delegate':'Делегирую я',
       'fav-contacts':'Избранных контактов:','delegated-to-me':'Делегировано мне','delegated-by-me':'Делегировано мной',
       'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','active-tasks':'Активных задач:',
-      'email-label':'Email','phone-label':'Телефон','field-private':'(не видно другим)','email-hint':'(для входа в систему)','phone-hint':'(для связи, видно в профиле)',
+      'email-label':'Email','phone-label':'Телефон','field-private':'(не видно другим)','email-hint':'(вход + используется агентом)','phone-hint':'(используется агентом для задач)',
       'nothing-found':'Ничего не найдено','min-2-chars':'Введите минимум 2 символа для поиска',
       'total-users':'Всего пользователей','in-24h':'За 24 часа','active-subs':'Активных подписок',
       'total-tasks':'Всего задач','total-requests':'Всего запросов','unique-ips':'Уникальных IP',
@@ -8632,7 +8632,7 @@
       'delegates-to-me':'Delegates to me','i-delegate':'I delegate',
       'fav-contacts':'Favorite contacts:','delegated-to-me':'Delegated to me','delegated-by-me':'Delegated by me',
       'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','active-tasks':'Active tasks:',
-      'email-label':'Email','phone-label':'Phone','field-private':'(not visible to others)','email-hint':'(for login)','phone-hint':'(for contact, shown in profile)',
+      'email-label':'Email','phone-label':'Phone','field-private':'(not visible to others)','email-hint':'(login + used by agent)','phone-hint':'(used by agent for tasks)',
       'nothing-found':'Nothing found','min-2-chars':'Enter at least 2 characters to search',
       'total-users':'Total users','in-24h':'In 24 hours','active-subs':'Active subscriptions',
       'total-tasks':'Total tasks','total-requests':'Total requests','unique-ips':'Unique IPs',
