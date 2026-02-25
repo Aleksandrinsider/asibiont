@@ -8747,7 +8747,7 @@
       if (typeof updateProfile === 'function') { setTimeout(function(){ updateProfile(); }, 100); }
     }
   }
-  window.applyLang=apply;
+  window.applyLang=function(lang){ apply(lang || _currentLang || detect()); };
   document.addEventListener('DOMContentLoaded',function(){
     apply(detect());
   });
