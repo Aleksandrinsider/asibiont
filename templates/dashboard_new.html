@@ -1202,7 +1202,7 @@
                         <input type="tel" id="quick-phone" placeholder="+7 (999) 123-45-67" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" value="{{ user.phone if user.phone else '' }}" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="name-label">Имя</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;"><span data-i18n="name-label">Имя</span> <span style="color: #9CA3AF; font-weight: 400;" data-i18n="name-hint">(используется агентом при выполнении задач)</span></label>
                         <input type="text" id="quick-first-name" placeholder="Ваше имя" data-i18n-ph="name-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
@@ -8369,7 +8369,7 @@
       'open-tg-bot':'Открыть Telegram бота',
       'logout':'Выход',
       'user':'Пользователь',
-      'name-label':'Имя','name-ph':'Ваше имя',
+      'name-label':'Имя','name-hint':'(используется агентом при выполнении задач)','name-ph':'Ваше имя',
       'city-label':'Город:','country-label':'Страна:','country-label2':'Страна','country-ph':'Например: Россия','not-specified':'Не указан','not-specified-f':'Не указана','not-specified-pl':'Не указаны',
       'birthday-label':'День рождения:','company-label':'Компания:','position-label':'Должность:',
       'goals-label':'Цели:','skills-label':'Навыки:','interests-label':'Интересы:',
@@ -8555,7 +8555,7 @@
       'open-tg-bot':'Open Telegram bot',
       'logout':'Logout',
       'user':'User',
-      'name-label':'Name','name-ph':'Your name',
+      'name-label':'Name','name-hint':'(used by agent when performing tasks)','name-ph':'Your name',
       'city-label':'City:','country-label':'Country:','country-label2':'Country','country-ph':'e.g., Russia','not-specified':'Not specified','not-specified-f':'Not specified','not-specified-pl':'Not specified',
       'birthday-label':'Birthday:','company-label':'Company:','position-label':'Position:',
       'goals-label':'Goals:','skills-label':'Skills:','interests-label':'Interests:',

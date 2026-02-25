@@ -19,6 +19,49 @@ from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, SERPER_API_KEY
 
 logger = logging.getLogger(__name__)
 
+# ── Email validation cache ──
+_mx_cache = {}  # domain → (has_mx: bool, timestamp)
+
+
+def _validate_email_domain(email: str) -> tuple:
+    """Check if email domain has valid MX records. Returns (is_valid, error_message).
+
+    Uses DNS MX lookup to catch typos and non-existent domains BEFORE sending.
+    Caches results for 1 hour to avoid repeated DNS queries.
+    """
+    import dns.resolver
+    import time
+
+    try:
+        domain = email.strip().lower().split('@')[-1]
+        if not domain or '.' not in domain:
+            return False, f"Некорректный домен: {domain}"
+
+        # Check cache (1 hour TTL)
+        cached = _mx_cache.get(domain)
+        if cached and (time.time() - cached[1]) < 3600:
+            if cached[0]:
+                return True, None
+            return False, f"Домен {domain} не принимает почту (нет MX-записей)"
+
+        # DNS MX lookup
+        try:
+            answers = dns.resolver.resolve(domain, 'MX')
+            has_mx = len(answers) > 0
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+            has_mx = False
+        except Exception:
+            # DNS timeout or other transient error — let it through
+            return True, None
+
+        _mx_cache[domain] = (has_mx, time.time())
+
+        if not has_mx:
+            return False, f"Домен {domain} не принимает почту (нет MX-записей). Проверь email."
+        return True, None
+    except Exception:
+        return True, None  # On any unexpected error, don't block sending
+
 
 def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '') -> str:
     """Общий HTML-шаблон для email с unsubscribe footer.
@@ -8144,6 +8187,11 @@ async def send_outreach_email(
         if not subject or not body:
             return "❌ Нужны subject и body письма."
 
+        # MX-проверка домена получателя
+        mx_valid, mx_err = _validate_email_domain(recipient_email)
+        if not mx_valid:
+            return f"❌ {mx_err}"
+
         # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
         import aiohttp as _aiohttp
         resend_id = None
@@ -8269,6 +8317,11 @@ async def reply_to_outreach_email(
 
         if not reply_body:
             return "❌ Нужен текст ответа (reply_body)."
+
+        # MX-проверка (на всякий — получатель мог сменить домен)
+        mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
+        if not mx_valid:
+            return f"❌ {mx_err}"
 
         # Отправляем reply через Resend — plain text
         import aiohttp as _aiohttp
@@ -8573,6 +8626,11 @@ async def send_follow_up_email(
         if not body:
             return "❌ Нужен текст follow-up (body)."
 
+        # MX-проверка
+        mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
+        if not mx_valid:
+            return f"❌ {mx_err}"
+
         # Отправляем через Resend — plain text
         import aiohttp as _aiohttp
 
@@ -8671,6 +8729,11 @@ async def send_email(
 
         # Нормализация: удалить пробелы, lowercase
         to_clean = to.strip().lower()
+
+        # MX-проверка домена
+        mx_valid, mx_err = _validate_email_domain(to_clean)
+        if not mx_valid:
+            return f"❌ {mx_err}"
 
         try:
             async with _aiohttp.ClientSession() as http:
