@@ -2181,7 +2181,7 @@
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
                 const statsRow = document.createElement('div');
-                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px; border-bottom: 1px solid #D1D9E0;';
+                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px;';
                 statsRow.innerHTML = `
                     <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 20px; font-weight: 600; color: #1F2328; line-height: 1.2;">${totalSent}</div>
