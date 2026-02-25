@@ -341,6 +341,10 @@
             const svg = button ? button.querySelector('svg') : null;
             const profileSection = document.querySelector('.context-section');
             const indicator = document.getElementById('profile-update-indicator');
+            const contactsContent = document.getElementById('contacts-content');
+            const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
+            const emailContactsContent = document.getElementById('email-contacts-content');
+            const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
             if (!content) return;
 
             const isCollapsed = (content.style.display || '') === 'none';
@@ -349,6 +353,10 @@
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (profileSection) profileSection.classList.remove('collapsed');
                 if (indicator) indicator.style.display = 'none';
+                if (contactsContent) contactsContent.style.display = 'none';
+                if (emailContactsContent) emailContactsContent.style.display = 'none';
+                if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
@@ -783,17 +791,23 @@
                     const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
                     const emailContactsContent = document.getElementById('email-contacts-content');
                     const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
+                    const profileContent = document.getElementById('profile-content');
+                    const profileToggleBtn = document.getElementById('profile-toggle-btn');
 
                     if (contactsContent.style.display === 'none') {
                         contactsContent.style.display = 'block';
                         if (emailContactsContent) emailContactsContent.style.display = 'none';
+                        if (profileContent) profileContent.style.display = 'none';
                         contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                         if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
                         contactsContent.style.display = 'none';
                         if (emailContactsContent) emailContactsContent.style.display = 'block';
+                        if (profileContent) profileContent.style.display = 'none';
                         contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     }
                 }
 
@@ -802,17 +816,23 @@
                     const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
                     const contactsContent = document.getElementById('contacts-content');
                     const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
+                    const profileContent = document.getElementById('profile-content');
+                    const profileToggleBtn = document.getElementById('profile-toggle-btn');
 
                     if (emailContactsContent.style.display === 'none') {
                         emailContactsContent.style.display = 'block';
                         if (contactsContent) contactsContent.style.display = 'none';
+                        if (profileContent) profileContent.style.display = 'none';
                         emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                         if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
                         emailContactsContent.style.display = 'none';
                         if (contactsContent) contactsContent.style.display = 'block';
+                        if (profileContent) profileContent.style.display = 'none';
                         emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                         if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                        if (profileToggleBtn) profileToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     }
                 }
             </script>
