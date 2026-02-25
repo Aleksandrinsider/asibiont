@@ -2188,12 +2188,18 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                // === Summary stats ===
-                let totalSent = 0, totalReplied = 0, totalBounced = 0;
+                // === Summary stats (count from actual outreach data) ===
+                let totalSent = 0, totalReplied = 0;
                 campaigns.forEach(c => {
-                    totalSent += (c.emails_sent || 0);
-                    totalReplied += (c.emails_replied || 0);
-                    totalBounced += (c.emails_bounced || 0);
+                    let oSent = 0, oReplied = 0;
+                    if (c.outreach) {
+                        c.outreach.forEach(o => {
+                            if (o.status && o.status !== 'draft') oSent++;
+                            if (o.status === 'replied') oReplied++;
+                        });
+                    }
+                    totalSent += Math.max(c.emails_sent || 0, oSent);
+                    totalReplied += Math.max(c.emails_replied || 0, oReplied);
                 });
                 totalSent += emails.length;
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
@@ -2211,7 +2217,7 @@
                     </div>
                     <div style="text-align: center; padding: 10px 6px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 20px; font-weight: 600; color: ${totalConv > 0 ? '#068487' : '#374151'}; line-height: 1.2;">${totalConv}%</div>
-                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;">Conversion</div>
+                        <div style="font-size: 11px; color: #6C727F; margin-top: 3px;" data-i18n="report-conversion">${t('report-conversion')}</div>
                     </div>
                 `;
                 list.appendChild(statsRow);
@@ -2224,8 +2230,10 @@
 
                     const statusLabel = c.status === 'active' || c.status === 'running' ? 'активна' : c.status === 'paused' ? 'на паузе' : (c.status || 'завершена');
                     const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d73a49' : '#6C727F';
-                    const sent = c.emails_sent || 0;
-                    const replied = c.emails_replied || 0;
+                    let oSentC = 0, oRepliedC = 0;
+                    if (c.outreach) { c.outreach.forEach(o => { if (o.status && o.status !== 'draft') oSentC++; if (o.status === 'replied') oRepliedC++; }); }
+                    const sent = Math.max(c.emails_sent || 0, oSentC);
+                    const replied = Math.max(c.emails_replied || 0, oRepliedC);
                     const conv = sent > 0 ? Math.round(replied / sent * 100) : 0;
                     const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                     const wasExpanded = _reportsExpandedSet.has(cKey);
@@ -2268,7 +2276,7 @@
                     inner += `
                         <div style="padding: 10px 0; border-bottom: 1px solid #F0F3F5;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                <span style="font-size: 12px; color: #6C727F;">Conversion</span>
+                                <span style="font-size: 12px; color: #6C727F;" data-i18n="report-conversion">${t('report-conversion')}</span>
                                 <span style="font-size: 12px; font-weight: 600; color: #374151;">${conv}%</span>
                             </div>
                             <div style="height: 4px; background: #F3F4F6; border-radius: 2px; overflow: hidden;">
@@ -2281,29 +2289,67 @@
                         inner += `<div style="padding: 8px 0; border-bottom: 1px solid #F0F3F5; font-size: 12px; color: #6C727F;"><span style="font-weight: 500; color: #374151;">Цель:</span> ${c.goal}</div>`;
                     }
 
+                    details.innerHTML = inner;
+
                     if (c.outreach && c.outreach.length > 0) {
-                        c.outreach.forEach(o => {
+                        c.outreach.forEach((o, oi) => {
                             const oLbl = o.status === 'replied' ? 'Ответил' : o.status === 'interested' ? 'Заинтересован' : o.status === 'opened' ? 'Открыто' : o.status === 'delivered' ? 'Доставлено' : o.status === 'bounced' ? 'Отклонено' : o.status === 'failed' ? 'Ошибка' : o.status === 'sent' ? 'Отправлено' : (o.status || '');
                             const oClr = o.status === 'replied' ? '#068487' : o.status === 'interested' ? '#28A745' : o.status === 'opened' ? '#bf8700' : o.status === 'delivered' ? '#6C727F' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
                             const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                             const rcpt = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
+                            const oKey = cKey + '-o' + (o.id || oi);
+                            const oWasExpanded = _reportsExpandedSet.has(oKey);
 
-                            inner += `
-                                <div style="padding: 8px 0; border-bottom: 1px solid #F0F3F5;">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${rcpt}</span>
-                                        <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: ${oClr}18; color: ${oClr}; font-weight: 500; line-height: 1.6;">${oLbl}</span>
-                                        ${oDate ? `<span style="font-size: 11px; color: #9CA3AF;">${oDate}</span>` : ''}
-                                    </div>
-                                    ${o.subject ? `<div style="font-size: 12px; color: #6C727F; margin-top: 3px;">${o.subject}</div>` : ''}
-                                    ${o.body_text || o.body ? `<div style="font-size: 12px; color: #374151; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${o.body_text || o.body}</div>` : ''}
-                                    ${o.reply_text ? `<div style="margin-top: 6px; padding: 6px 10px; background: #F6F8FA; border-left: 2px solid #068487; border-radius: 0 4px 4px 0; font-size: 12px; color: #374151; white-space: pre-wrap; word-break: break-word;">${o.reply_text}</div>` : ''}
-                                </div>
+                            const oRow = document.createElement('div');
+                            oRow.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
+
+                            const oHeader = document.createElement('div');
+                            oHeader.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-wrap: wrap; cursor: pointer; user-select: none;';
+                            oHeader.innerHTML = `
+                                <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${rcpt}</span>
+                                <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: ${oClr}18; color: ${oClr}; font-weight: 500; line-height: 1.6;">${oLbl}</span>
+                                ${oDate ? `<span style="font-size: 11px; color: #9CA3AF;">${oDate}</span>` : ''}
+                                <svg class="rpt-ochev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${oWasExpanded ? '180' : '0'}deg); margin-left: auto;">
+                                    <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                                </svg>
                             `;
+                            oRow.appendChild(oHeader);
+
+                            const oBody = document.createElement('div');
+                            oBody.style.cssText = 'overflow: hidden; transition: max-height 0.2s ease;';
+                            let bodyHtml = '';
+                            if (o.subject) bodyHtml += `<div style="font-size: 12px; color: #6C727F; margin-top: 3px;">${o.subject}</div>`;
+                            if (o.body_text || o.body) bodyHtml += `<div style="font-size: 12px; color: #374151; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${o.body_text || o.body}</div>`;
+                            if (o.reply_text) bodyHtml += `<div style="margin-top: 6px; padding: 6px 10px; background: #F6F8FA; border-left: 2px solid #068487; border-radius: 0 4px 4px 0; font-size: 12px; color: #374151; white-space: pre-wrap; word-break: break-word;">${o.reply_text}</div>`;
+                            oBody.innerHTML = bodyHtml;
+                            oRow.appendChild(oBody);
+
+                            oHeader.onclick = () => {
+                                const ochev = oHeader.querySelector('.rpt-ochev');
+                                if (oBody.style.maxHeight === '0px') {
+                                    oBody.style.maxHeight = oBody.scrollHeight + 'px';
+                                    if (ochev) ochev.style.transform = 'rotate(180deg)';
+                                    _reportsExpandedSet.add(oKey);
+                                } else {
+                                    oBody.style.maxHeight = '0px';
+                                    if (ochev) ochev.style.transform = 'rotate(0deg)';
+                                    _reportsExpandedSet.delete(oKey);
+                                }
+                                if (details.style.maxHeight !== '0px') {
+                                    requestAnimationFrame(() => { details.style.maxHeight = details.scrollHeight + 'px'; });
+                                }
+                            };
+
+                            details.appendChild(oRow);
+
+                            if (oWasExpanded) {
+                                requestAnimationFrame(() => { oBody.style.maxHeight = oBody.scrollHeight + 'px'; });
+                            } else {
+                                oBody.style.maxHeight = '0px';
+                            }
                         });
                     }
 
-                    details.innerHTML = inner;
                     section.appendChild(details);
                     list.appendChild(section);
 
@@ -8600,7 +8646,7 @@
       'feed-empty-desc':'Здесь будут отображаться публикации ваших избранных контактов. Добавьте контакты в избранное, чтобы видеть их посты.',
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Отчёты агента','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
-      'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-opened':'Открыто','report-delivered':'Доставлено','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
+      'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-conversion':'Конверсия','report-opened':'Открыто','report-delivered':'Доставлено','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
@@ -8785,7 +8831,7 @@
       'feed-empty-desc':'Posts from your favorite contacts will appear here. Add contacts to favorites to see their posts.',
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Agent Reports','reports-empty':'No agent activity yet','reports-empty-desc':'Campaigns will appear here: who the agent contacted, what they replied, negotiation status.',
-      'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-opened':'Opened','report-delivered':'Delivered','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
+      'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-conversion':'Conversion','report-opened':'Opened','report-delivered':'Delivered','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
       'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
