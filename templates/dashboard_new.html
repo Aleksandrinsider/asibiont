@@ -143,12 +143,13 @@
                 border-bottom: 1px solid #D1D9E0;
                 width: 100%;
                 position: relative;
+                z-index: 100;
             }
             .left-column {
-                display: none;
+                display: none !important;
             }
             .right-column {
-                display: none;
+                display: none !important;
             }
         }
     </style>
@@ -216,33 +217,33 @@
             var menu = document.getElementById('mobile-column-menu');
             if (menu) menu.style.display = 'none';
 
-            // Hide all columns
-            if (left) left.style.display = 'none';
-            if (center) center.style.display = 'none';
-            if (right) right.style.display = 'none';
+            // Hide all columns with !important to override CSS
+            if (left) left.style.setProperty('display', 'none', 'important');
+            if (center) center.style.setProperty('display', 'none', 'important');
+            if (right) right.style.setProperty('display', 'none', 'important');
 
-            // Show selected
+            // Show selected with !important
             if (col === 'left' && left) {
-                left.style.display = 'flex';
+                left.style.setProperty('display', 'flex', 'important');
                 left.style.width = '100%';
                 left.style.maxWidth = '100%';
                 left.style.minWidth = '0';
                 left.style.flex = '1 1 100%';
                 left.style.height = '100%';
-                left.style.padding = '8px 12px';
+                left.style.padding = '16px 12px';
             } else if (col === 'center' && center) {
-                center.style.display = 'flex';
+                center.style.setProperty('display', 'flex', 'important');
                 center.style.width = '100%';
                 center.style.maxWidth = '100%';
                 center.style.flex = '1 1 100%';
             } else if (col === 'right' && right) {
-                right.style.display = 'flex';
+                right.style.setProperty('display', 'flex', 'important');
                 right.style.width = '100%';
                 right.style.maxWidth = '100%';
                 right.style.minWidth = '0';
                 right.style.flex = '1 1 100%';
                 right.style.height = '100%';
-                right.style.padding = '8px 12px';
+                right.style.padding = '16px 12px';
             }
 
             // Update menu button styles
@@ -544,7 +545,7 @@
         <a href="#" onclick="logout(); return false;" style="display: flex; align-items: center; text-decoration: none;">
             <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 40px; width: auto;">
         </a>
-        <div style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%);">
+        <div style="position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center;">
             <button id="mobile-menu-btn" onclick="toggleMobileColumnMenu()" style="background: none; border: none; cursor: pointer; padding: 6px; display: flex; align-items: center;">
                 <svg width="20" height="20" viewBox="0 0 16 16" fill="#374151"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
             </button>
