@@ -313,13 +313,13 @@ body {
 
 
 
-/* Side columns: left column is non-scrollable, internal lists scroll; right column remains flexible */
+/* Side columns: columns themselves don't scroll; internal lists scroll */
 .left-column,
 .right-column {
     display: flex;
     flex-direction: column;
     gap: 0;
-    overflow: auto;
+    overflow: hidden;
     height: 100%;
     padding: 12px;
     min-height: 0;
