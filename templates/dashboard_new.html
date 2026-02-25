@@ -62,14 +62,16 @@
             height: 100%;
         }
         
-        .left-column .context-section,
-        .left-column #email-contacts-section {
+        .left-column .context-section {
             flex: 0 0 auto;
         }
-        .left-column .people-section:not(#email-contacts-section) {
+        .left-column .people-section {
             flex: 1 1 auto;
             min-height: 0;
             overflow: hidden;
+        }
+        .left-column .people-section.collapsed {
+            flex: 0 0 auto;
         }
         
         .center-column {
@@ -737,8 +739,8 @@
                     </div>
                 </div>
                 {% endif %}
-                <div class="people-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                <div class="people-section" style="display: flex; flex-direction: column;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0; flex-shrink: 0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M5.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.49 3.49 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Z"/>
@@ -751,7 +753,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="contacts-content" style="display: block; padding: 0 4px;">
+                    <div id="contacts-content" style="display: block; padding: 0 4px; overflow-y: auto; flex: 1; min-height: 0;">
                         <div id="contact-filter-content" style="margin-bottom: 15px;">
                             <div style="position: relative; width: 100%;">
                                 <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
@@ -772,8 +774,8 @@
 
                 <!-- Email-контакты в левой колонке -->
                 {% if logged_in %}
-                <div class="people-section" id="email-contacts-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                <div class="people-section" id="email-contacts-section" style="display: flex; flex-direction: column;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0; flex-shrink: 0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="email-contacts-title">Email-контакты</h3>
@@ -784,7 +786,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="email-contacts-content" style="display: block; padding: 0 4px;">
+                    <div id="email-contacts-content" style="display: block; padding: 0 4px; overflow-y: auto; flex: 1; min-height: 0;">
                     <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
                         <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                         <div style="display: flex; gap: 6px;">
@@ -797,7 +799,7 @@
                         </button>
                     </div>
                     <!-- Список контактов -->
-                    <div id="contacts-list" style="max-height: 300px; overflow-y: auto;">
+                    <div id="contacts-list" style="overflow-y: auto;">
                         <div id="contacts-empty" style="padding: 20px 0; text-align: center; color: #6C727F; font-size: 13px;" data-i18n="contacts-empty-short">Нет контактов</div>
                     </div>
                     </div><!-- /email-contacts-content -->
@@ -1766,12 +1768,22 @@
                     return;
                 }
                 if (response.ok) {
-                    // Показываем ответ ИИ сразу
                     if (data.response) {
                         addMessage(data.response, 'ai');
                     }
                     
-                    // Обновить список задач, профиль и контакты после отправки сообщения
+                    // Sync displayedMessageIds so updateChat() won't re-add these messages
+                    try {
+                        const syncResp = await fetch('/api/interactions', { credentials: 'include', cache: 'no-store' });
+                        if (syncResp.ok) {
+                            const syncData = await syncResp.json();
+                            if (syncData.interactions) {
+                                syncData.interactions.forEach(i => displayedMessageIds.add(i.id));
+                                lastMessageCount = syncData.interactions.length;
+                            }
+                        }
+                    } catch(syncErr) {}
+                    
                     setTimeout(async () => {
                         try {
                             await updateTasks();
@@ -2260,12 +2272,18 @@
 
                     header.onclick = () => {
                         const chev = header.querySelector('.rpt-chev');
-                        if (details.style.maxHeight === '0px') {
+                        const isCollapsed = details.style.maxHeight === '0px';
+                        if (isCollapsed) {
                             details.style.maxHeight = details.scrollHeight + 'px';
                             if (chev) chev.style.transform = 'rotate(180deg)';
                             _reportsExpandedSet.add(cKey);
+                            details.addEventListener('transitionend', function handler() {
+                                if (_reportsExpandedSet.has(cKey)) details.style.maxHeight = 'none';
+                                details.removeEventListener('transitionend', handler);
+                            });
                         } else {
-                            details.style.maxHeight = '0px';
+                            details.style.maxHeight = details.scrollHeight + 'px';
+                            requestAnimationFrame(() => { details.style.maxHeight = '0px'; });
                             if (chev) chev.style.transform = 'rotate(0deg)';
                             _reportsExpandedSet.delete(cKey);
                         }
@@ -2326,16 +2344,22 @@
 
                             oHeader.onclick = () => {
                                 const ochev = oHeader.querySelector('.rpt-ochev');
-                                if (oBody.style.maxHeight === '0px') {
+                                const oCollapsed = oBody.style.maxHeight === '0px';
+                                if (oCollapsed) {
                                     oBody.style.maxHeight = oBody.scrollHeight + 'px';
                                     if (ochev) ochev.style.transform = 'rotate(180deg)';
                                     _reportsExpandedSet.add(oKey);
+                                    oBody.addEventListener('transitionend', function oh() {
+                                        if (_reportsExpandedSet.has(oKey)) oBody.style.maxHeight = 'none';
+                                        oBody.removeEventListener('transitionend', oh);
+                                    });
                                 } else {
-                                    oBody.style.maxHeight = '0px';
+                                    oBody.style.maxHeight = oBody.scrollHeight + 'px';
+                                    requestAnimationFrame(() => { oBody.style.maxHeight = '0px'; });
                                     if (ochev) ochev.style.transform = 'rotate(0deg)';
                                     _reportsExpandedSet.delete(oKey);
                                 }
-                                if (details.style.maxHeight !== '0px') {
+                                if (details.style.maxHeight !== '0px' && details.style.maxHeight !== 'none') {
                                     requestAnimationFrame(() => { details.style.maxHeight = details.scrollHeight + 'px'; });
                                 }
                             };
@@ -2343,7 +2367,7 @@
                             details.appendChild(oRow);
 
                             if (oWasExpanded) {
-                                requestAnimationFrame(() => { oBody.style.maxHeight = oBody.scrollHeight + 'px'; });
+                                oBody.style.maxHeight = 'none';
                             } else {
                                 oBody.style.maxHeight = '0px';
                             }
@@ -2354,7 +2378,7 @@
                     list.appendChild(section);
 
                     if (wasExpanded) {
-                        requestAnimationFrame(() => { details.style.maxHeight = details.scrollHeight + 'px'; });
+                        details.style.maxHeight = 'none';
                     } else {
                         details.style.maxHeight = '0px';
                     }
