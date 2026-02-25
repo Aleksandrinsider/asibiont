@@ -233,6 +233,7 @@
                 center.style.width = '100%';
                 center.style.maxWidth = '100%';
                 center.style.flex = '1 1 100%';
+                center.style.padding = '16px 12px';
             } else if (col === 'right' && right) {
                 right.style.setProperty('display', 'flex', 'important');
                 right.style.width = '100%';
@@ -759,7 +760,7 @@
                 <!-- Email-контакты в левой колонке -->
                 {% if logged_in %}
                 <div class="people-section" id="email-contacts-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="email-contacts-title">Email-контакты</h3>
@@ -770,7 +771,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="email-contacts-content" style="display: block;">
+                    <div id="email-contacts-content" style="display: block; padding: 0 4px;">
                     <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
                         <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                         <div style="display: flex; gap: 6px;">
@@ -979,7 +980,7 @@
                         <!-- Отчёты -->
                         {% if logged_in %}
                         <div id="reports-view" class="view-panel">
-                            <div id="reports-list" class="chat-messages">
+                            <div id="reports-list" class="chat-messages" style="padding: 12px 0;">
                                 <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; min-height: 300px;">
                                     <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>
                                     <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="reports-empty">Отчётов пока нет</h3>
@@ -2149,8 +2150,7 @@
                 // === Кампании ===
                 campaigns.forEach(c => {
                     const campaignSection = document.createElement('div');
-                    campaignSection.className = 'context-section';
-                    campaignSection.style.cssText = 'margin-bottom: 20px; border: 1px solid #D1D9E0; border-radius: 8px; background: #FFFFFF;';
+                    campaignSection.style.cssText = 'margin-bottom: 16px; border: 1px solid #D1D9E0; border-radius: 8px; background: #FFFFFF; overflow: hidden;';
 
                     const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', year:'numeric', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                     const statusLabel = c.status === 'active' || c.status === 'running' ? 'активна' : c.status === 'paused' ? 'на паузе' : (c.status || 'завершена');
@@ -2199,8 +2199,7 @@
                             const recipientLabel = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
 
                             const outreachItem = document.createElement('div');
-                            outreachItem.className = 'context-item';
-                            outreachItem.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid #F0F3F5; display: flex; align-items: flex-start; gap: 12px;';
+                            outreachItem.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid #F0F3F5; display: flex; align-items: flex-start; gap: 12px;';
 
                             outreachItem.innerHTML = `
                                 <div style="flex: 1;">
@@ -2227,8 +2226,7 @@
                 // === Отдельные письма ===
                 if (emails.length > 0) {
                     const emailsSection = document.createElement('div');
-                    emailsSection.className = 'context-section';
-                    emailsSection.style.cssText = 'margin-bottom: 20px; border: 1px solid #D1D9E0; border-radius: 8px; background: #FFFFFF;';
+                    emailsSection.style.cssText = 'margin-bottom: 16px; border: 1px solid #D1D9E0; border-radius: 8px; background: #FFFFFF; overflow: hidden;';
 
                     const emailsHeader = document.createElement('div');
                     emailsHeader.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #E8ECEF;';
@@ -2245,8 +2243,7 @@
 
                     emails.forEach(e => {
                         const emailItem = document.createElement('div');
-                        emailItem.className = 'context-item';
-                        emailItem.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid #F0F3F5;';
+                        emailItem.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid #F0F3F5;';
 
                         const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
 
