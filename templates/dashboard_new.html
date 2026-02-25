@@ -803,7 +803,7 @@
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer; opacity: 0.5;">
-                                    <span data-i18n="reports">Отчёты</span>
+                                    <span data-i18n="reports">Отчёты агента</span>
                                 </span>
 
                                 {% endif %}
@@ -901,7 +901,7 @@
                                 <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; min-height: 300px;">
                                     <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>
                                     <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="reports-empty">Отчётов пока нет</h3>
-                                    <p style="margin: 0 auto; font-size: 14px; color: #6C727F; max-width: 400px; text-align: center;" data-i18n="reports-empty-desc">Здесь будут отображаться действия агента: отправленные письма, ответы, кампании.</p>
+                                    <p style="margin: 0 auto; font-size: 14px; color: #6C727F; max-width: 400px; text-align: center;" data-i18n="reports-empty-desc">Здесь будут отображаться кампании агента: кому писал, что ответили, статус переговоров.</p>
                                 </div>
                             </div>
                         </div>
@@ -2064,72 +2064,84 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                // Render campaigns as conversation threads
-                campaigns.forEach(c => {
-                    // Шапка кампании (задача пользователя)
-                    const header = document.createElement('div');
-                    header.className = 'report-card';
-                    header.style.cssText = 'display: flex; gap: 14px; padding: 10px 14px; margin: 8px 0 1px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 8px 8px ' + (c.outreach && c.outreach.length > 0 ? '0 0' : '8px 8px') + '; font-size: 13px;';
-                    header.innerHTML = `
+                // === Feed-style campaign cards (expandable) ===
+                campaigns.forEach((c, ci) => {
+                    const cid = 'rpt-' + (c.id || ci);
+                    const hasOutreach = c.outreach && c.outreach.length > 0;
+                    const statusDot = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d97706' : '#9CA3AF';
+                    const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', year:'numeric', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+
+                    // Build outreach HTML separately to allow nesting template literals
+                    let outreachHtml = '';
+                    if (hasOutreach) {
+                        outreachHtml = c.outreach.map(o => {
+                            const oColor = o.status === 'replied' || o.status === 'interested' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#9CA3AF';
+                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                            const recipientLabel = o.recipient_name ? (o.recipient_name + ' &lt;' + o.recipient_email + '&gt;') : o.recipient_email;
+                            const replyBlock = o.reply_text ? '<div style="margin-top: 6px; padding: 8px 10px; background: #F0FAFA; border-radius: 6px; border-left: 2px solid #068487;"><span style="font-size: 11px; color: #068487; font-weight: 600; display: block; margin-bottom: 3px;">Ответ получателя:</span><span style="font-size: 12px; color: #374151; white-space: pre-wrap;">' + o.reply_text + '</span></div>' : '';
+                            const subjectLine = o.subject ? '<div style="font-size: 12px; color: #6C727F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: ' + (o.reply_text ? '4px' : '0') + ';">📧 ' + o.subject + '</div>' : '';
+                            return '<div style="display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F6F8FA; align-items: flex-start;">' +
+                                '<div style="width: 28px; height: 28px; border-radius: 50%; background: #F6F8FA; border: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;">' +
+                                '<svg width="13" height="13" viewBox="0 0 16 16" fill="' + oColor + '"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>' +
+                                '</div>' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + (o.subject || o.reply_text ? '4px' : '0') + ';">' +
+                                '<span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + recipientLabel + '</span>' +
+                                (oDate ? '<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">' + oDate + '</span>' : '') +
+                                '</div>' +
+                                subjectLine +
+                                replyBlock +
+                                '</div>' +
+                                '</div>';
+                        }).join('');
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = 'report-card';
+                    card.style.cssText = 'display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #F6F8FA;';
+                    card.innerHTML = `
+                        <div style="width: 38px; height: 38px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: -0.5px; margin-top: 2px;">AI</div>
                         <div style="flex: 1; min-width: 0;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${c.goal ? '6px' : '0'};">
-                                <span style="font-size: 13px; color: #1F2328; font-weight: 500;">${c.name}</span>
-                                <span style="font-size: 12px; color: #6C727F; margin-left: auto; white-space: nowrap;">${t('report-sent')}: ${c.emails_sent || 0} &middot; ${t('report-replied')}: ${c.emails_replied || 0}</span>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <span style="font-size: 14px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${c.name}</span>
+                                ${createdDate ? `<span style="font-size: 12px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">${createdDate}</span>` : ''}
+                                ${hasOutreach ? `<button id="${cid}-btn" onclick="(function(btn){const el=document.getElementById('${cid}-outreach');const isOpen=el.style.display!=='none';el.style.display=isOpen?'none':'block';btn.querySelector('svg').style.transform=isOpen?'rotate(-90deg)':'rotate(0deg)';})(this)" style="background:none;border:none;cursor:pointer;padding:3px 5px;display:flex;align-items:center;color:#6C727F;border-radius:4px;flex-shrink:0;" title="Развернуть переписку"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="transform:rotate(0deg);transition:transform 0.2s;"><path d="M4.427 7.427l3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427z"/></svg></button>` : ''}
                             </div>
-                            ${c.goal ? `<div style="font-size: 12px; color: #6C727F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.goal}</div>` : ''}
+                            <div style="border-bottom: 1px solid #F6F8FA; padding-bottom: 8px; margin-bottom: ${hasOutreach ? '8px' : '0'}; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                ${c.goal ? `<span style="font-size: 12px; color: #6C727F; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">${c.goal}</span>` : ''}
+                                <span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">Отправлено: <b style="color:#1F2328">${c.emails_sent || 0}</b></span>
+                                <span style="font-size: 12px; color: #6C727F; white-space: nowrap; flex-shrink: 0;">Ответов: <b style="color:${(c.emails_replied||0)>0?'#068487':'#1F2328'}">${c.emails_replied || 0}</b></span>
+                                <span style="display:flex;align-items:center;gap:3px;font-size:11px;color:${statusDot};white-space:nowrap;flex-shrink:0;"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="${statusDot}"/></svg>${c.status || ''}</span>
+                            </div>
+                            ${hasOutreach ? `<div id="${cid}-outreach" style="display: block;">${outreachHtml}</div>` : ''}
                         </div>
                     `;
-                    list.appendChild(header);
-
-                    // Каждое письмо как строчка переписки
-                    if (c.outreach && c.outreach.length > 0) {
-                        c.outreach.forEach((o, idx) => {
-                            const isLast = idx === c.outreach.length - 1;
-                            const statusColor = o.status === 'replied' || o.status === 'interested' ? '#068487' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
-                            const sentDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
-                            const msgCard = document.createElement('div');
-                            msgCard.className = 'report-card';
-                            msgCard.style.cssText = `display: flex; gap: 14px; padding: 10px 14px; margin: 0; background: #fff; border: 1px solid #D1D9E0; border-top: none; border-left: 3px solid ${statusColor}; border-radius: ${isLast ? '0 0 8px 8px' : '0'}; font-size: 13px;`;
-                            msgCard.innerHTML = `
-                                <div style="flex: 1; min-width: 0;">
-                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: ${(o.subject || o.reply_text) ? '4px' : '0'};">
-                                        <span style="font-size: 12px; color: #9CA3AF;">→</span>
-                                        <span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${o.recipient_name ? o.recipient_name + ' &lt;' + o.recipient_email + '&gt;' : o.recipient_email}</span>
-                                        ${sentDate ? `<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">${sentDate}</span>` : ''}
-                                    </div>
-                                    ${o.subject ? `<div style="font-size: 12px; color: #374151; margin-bottom: ${o.reply_text ? '6px' : '0'};">${o.subject}</div>` : ''}
-                                    ${o.reply_text ? `
-                                        <div style="margin-top: 6px; padding: 8px 10px; background: #F6F8FA; border-radius: 6px; border-left: 2px solid #068487;">
-                                            <span style="font-size: 11px; color: #068487; font-weight: 500; display: block; margin-bottom: 4px;">Ответ:</span>
-                                            <span style="font-size: 12px; color: #374151;">${o.reply_text}</span>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            `;
-                            list.appendChild(msgCard);
-                        });
-                    }
+                    list.appendChild(card);
                 });
 
-                // Render standalone emails
+                // === Standalone emails section ===
                 if (emails.length > 0) {
                     const sectionHeader = document.createElement('div');
                     sectionHeader.className = 'report-card';
-                    sectionHeader.style.cssText = 'padding: 8px 14px; margin: 12px 0 4px; font-size: 12px; font-weight: 500; color: #6C727F; text-transform: uppercase; letter-spacing: 0.5px;';
-                    sectionHeader.textContent = t('report-generic') || 'Письма';
+                    sectionHeader.style.cssText = 'padding: 12px 0 6px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.8px;';
+                    sectionHeader.textContent = 'Письма';
                     list.appendChild(sectionHeader);
 
                     emails.forEach(e => {
                         const card = document.createElement('div');
                         card.className = 'report-card';
-                        card.style.cssText = 'display: flex; gap: 14px; padding: 10px 14px; margin: 4px 0; background: #fff; border: 1px solid #D1D9E0; border-radius: 8px; font-size: 13px;';
-                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+                        card.style.cssText = 'display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #F6F8FA;';
+                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                         card.innerHTML = `
-                            <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;">
-                                <span style="color: #9CA3AF; font-size: 12px;">→</span>
-                                <span style="color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.to}</span>
-                                ${e.subject ? `<span style="color: #6C727F; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">${e.subject}</span>` : ''}
-                                ${dateStr ? `<span style="color: #9CA3AF; font-size: 11px; white-space: nowrap; flex-shrink: 0;">${dateStr}</span>` : ''}
+                            <div style="width: 38px; height: 38px; border-radius: 50%; background: #F6F8FA; border: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#6C727F"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>
+                            </div>
+                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; justify-content: center;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 13px; color: #374151; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">→ ${e.to}</span>
+                                    ${dateStr ? `<span style="font-size: 11px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;">${dateStr}</span>` : ''}
+                                </div>
+                                ${e.subject ? `<div style="font-size: 12px; color: #6C727F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📧 ${e.subject}</div>` : ''}
                             </div>
                         `;
                         list.appendChild(card);
@@ -8407,7 +8419,7 @@
       'feed-empty':'Лента новостей пуста',
       'feed-empty-desc':'Здесь будут отображаться публикации ваших избранных контактов. Добавьте контакты в избранное, чтобы видеть их посты.',
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
-      'reports':'Отчёты','reports-empty':'Отчётов пока нет','reports-empty-desc':'Здесь будут отображаться действия агента: отправленные письма, ответы, кампании.',
+      'reports':'Отчёты агента','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-opened':'Открыто','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
@@ -8592,7 +8604,7 @@
       'feed-empty':'News feed is empty',
       'feed-empty-desc':'Posts from your favorite contacts will appear here. Add contacts to favorites to see their posts.',
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
-      'reports':'Reports','reports-empty':'No reports yet','reports-empty-desc':'Agent actions will appear here: emails sent, replies, campaigns.',
+      'reports':'Agent Reports','reports-empty':'No agent activity yet','reports-empty-desc':'Campaigns will appear here: who the agent contacted, what they replied, negotiation status.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-opened':'Opened','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
       'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
