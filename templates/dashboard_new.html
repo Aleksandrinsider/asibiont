@@ -782,15 +782,18 @@
                     const contactsContent = document.getElementById('contacts-content');
                     const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
                     const emailContactsContent = document.getElementById('email-contacts-content');
+                    const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
 
                     if (contactsContent.style.display === 'none') {
                         contactsContent.style.display = 'block';
                         if (emailContactsContent) emailContactsContent.style.display = 'none';
                         contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                        if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
                         contactsContent.style.display = 'none';
                         if (emailContactsContent) emailContactsContent.style.display = 'block';
                         contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                     }
                 }
 
@@ -798,17 +801,37 @@
                     const emailContactsContent = document.getElementById('email-contacts-content');
                     const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
                     const contactsContent = document.getElementById('contacts-content');
+                    const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
 
                     if (emailContactsContent.style.display === 'none') {
                         emailContactsContent.style.display = 'block';
                         if (contactsContent) contactsContent.style.display = 'none';
                         emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
                     } else {
                         emailContactsContent.style.display = 'none';
                         if (contactsContent) contactsContent.style.display = 'block';
                         emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
                     }
                 }
+            </script>
+
+            <script>
+                (function() {
+                    const contactsContent = document.getElementById('contacts-content');
+                    const emailContactsContent = document.getElementById('email-contacts-content');
+                    const contactsToggleBtn = document.getElementById('contacts-toggle-btn');
+                    const emailContactsToggleBtn = document.getElementById('email-contacts-toggle-btn');
+
+                    if (contactsContent && emailContactsContent) {
+                        // По умолчанию контакты развернуты, email свернуты
+                        contactsContent.style.display = 'block';
+                        emailContactsContent.style.display = 'none';
+                        if (contactsToggleBtn) contactsToggleBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                        if (emailContactsToggleBtn) emailContactsToggleBtn.querySelector('svg').style.transform = 'rotate(-90deg)';
+                    }
+                })();
             </script>
 
             <!-- Центральная колонка - Чат / Лента -->
