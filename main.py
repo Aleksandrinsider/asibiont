@@ -6709,6 +6709,7 @@ async def api_reports_handler(request):
                             'recipient_email': o.recipient_email,
                             'recipient_name': o.recipient_name,
                             'subject': o.subject,
+                            'body': o.body,
                             'status': o.status,
                             'sent_at': (o.sent_at.isoformat() + 'Z') if o.sent_at else None,
                             'reply_text': (o.reply_text[:200] + '...') if o.reply_text and len(o.reply_text) > 200 else o.reply_text,
