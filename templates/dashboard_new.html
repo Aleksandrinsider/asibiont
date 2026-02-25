@@ -59,12 +59,17 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
-            height: fit-content; /* Адаптивная высота колонки */
+            height: 100%;
         }
         
         .left-column .context-section,
-        .left-column .people-section {
-            flex: 0 0 auto; /* Секции НЕ конкурируют за пространство — каждая занимает свою высоту */
+        .left-column #email-contacts-section {
+            flex: 0 0 auto;
+        }
+        .left-column .people-section:not(#email-contacts-section) {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
         }
         
         .center-column {
@@ -94,9 +99,7 @@
             border: 1px solid #D1D9E0;
             border-radius: 12px;
             padding: 15px;
-            /* Делаем блоки адаптивными по высоте */
-            height: fit-content;
-            min-height: 0; /* Минимальная высота убрана — свёрнутые блоки компактны */
+            min-height: 0;
             transition: flex 0.3s ease, height 0.3s ease, padding 0.2s ease; /* Плавные переходы */
         }
         .context-section.collapsed,
