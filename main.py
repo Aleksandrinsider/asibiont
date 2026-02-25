@@ -7168,6 +7168,10 @@ async def privacy_handler(request):
     """Страница соглашения об обработке персональных данных"""
     return aiohttp_jinja2.render_template('personal_data_consent.html', request, {})
 
+async def terms_handler(request):
+    """Страница правил использования и отказа от ответственности"""
+    return aiohttp_jinja2.render_template('terms.html', request, {})
+
 
 @aiohttp_jinja2.template('tutorial.html')
 async def tutorial_handler(request):
@@ -7728,6 +7732,8 @@ app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-ful
 app.router.add_get('/faq', faq_handler)
 # Privacy / personal data consent
 app.router.add_get('/privacy', privacy_handler)
+# Terms of use
+app.router.add_get('/terms', terms_handler)
 # i18n: English language routes (SEO — separate URLs per language)
 async def login_handler_en(request):
     """English landing page"""
