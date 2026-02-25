@@ -2413,12 +2413,10 @@
                     const card = document.createElement('div');
                     card.className = 'contact-card';
                     card.style.cssText = 'display: flex; gap: 10px; padding: 8px 4px; margin: 0; font-size: 13px; border-bottom: 1px solid #F0F3F5;';
-                    const statusColor = c.status === 'replied' || c.status === 'interested' ? '#068487' : c.status === 'bounced' || c.status === 'unsubscribed' ? '#d73a49' : c.status === 'contacted' ? '#bf8700' : '#6C727F';
                     const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
                         '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + ((c.name || c.company || c.notes) ? '4px' : '0') + ';">' +
                             '<span style="font-weight: 500; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (c.email || '') + '</span>' +
-                            '<span style="flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: ' + statusColor + '; margin-left: 2px;" title="' + (c.status || '') + '"></span>' +
                             (dateStr ? '<span style="font-size: 12px; color: #9CA3AF; margin-left: auto; white-space: nowrap; flex-shrink: 0;">' + dateStr + '</span>' : '') +
                         '</div>' +
                         ((c.name || c.company) ? '<div style="font-size: 12px; color: #6C727F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + [c.name, c.company].filter(Boolean).join(' · ') + '</div>' : '') +
