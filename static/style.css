@@ -2344,7 +2344,7 @@ details[open] .details-content {
         max-width: 100% !important;
         min-width: 0 !important;
         width: 100% !important;
-        padding: 0 12px !important;
+        padding: 12px !important;
         border-radius: 0 !important;
         overflow-x: hidden !important;
         height: 100% !important;
