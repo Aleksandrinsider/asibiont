@@ -33,7 +33,6 @@ def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com'
     return f"""<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #374151; line-height: 1.6; margin: 0; padding: 0;">
 <div style="max-width: 600px; margin: 0 auto; padding: 24px;">
 {body_html}
-{f'<p style="margin-top: 24px; color: #374151;">{sender_sig}</p>' if sender_sig else ''}
 </div>
 <div style="max-width: 600px; margin: 0 auto; padding: 12px 24px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; line-height: 1.5;">
 {unsub_line_ru}<br>
