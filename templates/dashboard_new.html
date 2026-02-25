@@ -753,6 +753,33 @@
                         <div style="padding: 20px; text-align: center; color: #6C727F;" data-i18n="loading-contacts">Загрузка контактов...</div>
                     </div>
                 </div>
+
+                <!-- Email-контакты в левой колонке -->
+                {% if logged_in %}
+                <div class="people-section" id="email-contacts-section">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
+                            <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;" data-i18n="email-contacts-title">Email-контакты</h3>
+                        </div>
+                    </div>
+                    <!-- Форма добавления -->
+                    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+                        <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="text" id="contact-name" placeholder="Имя" data-i18n-ph="contact-name-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-company').focus()" style="flex: 1; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
+                            <input type="text" id="contact-company" placeholder="Компания" data-i18n-ph="contact-company-ph" onkeypress="if(event.key==='Enter')addManualContact()" style="flex: 1; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
+                            <button onclick="addManualContact()" class="chat-action-btn" title="Добавить контакт" data-i18n-title="add-contact">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Список контактов -->
+                    <div id="contacts-list" style="max-height: 300px; overflow-y: auto;">
+                        <div id="contacts-empty" style="padding: 20px 0; text-align: center; color: #6C727F; font-size: 13px;" data-i18n="contacts-empty-short">Нет контактов</div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Центральная колонка - Чат / Лента -->
@@ -778,10 +805,7 @@
                                 <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="reports">Отчёты</span>
                                 </span>
-                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
-                                <span id="contacts-link" onclick="event.stopPropagation(); switchToContacts()" style="cursor: pointer; opacity: 0.5;">
-                                    <span data-i18n="contacts-tab">Контакты</span>
-                                </span>
+
                                 {% endif %}
                             </h3>
                         </div>
@@ -883,27 +907,7 @@
                         </div>
                         {% endif %}
 
-                        <!-- Контакты -->
-                        {% if logged_in %}
-                        <div id="contacts-view" class="view-panel">
-                            <div id="contacts-list" class="chat-messages">
-                                <div id="contacts-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; min-height: 300px;">
-                                    <svg width="64" height="64" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.3; margin-bottom: 16px;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
-                                    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 500; color: #1F2328;" data-i18n="contacts-empty">Контактов пока нет</h3>
-                                    <p style="margin: 0 auto; font-size: 14px; color: #6C727F; max-width: 400px; text-align: center;" data-i18n="contacts-empty-desc">Добавьте контакт вручную или сохраните из отчётов.</p>
-                                </div>
-                            </div>
-                            <div class="chat-input">
-                                <input type="text" id="contact-input" placeholder="email@example.com, Имя, Компания" data-i18n-ph="contact-placeholder" onkeypress="if(event.key==='Enter')addManualContact()">
-                                <div style="display: flex; gap: 4px; flex-direction: row;">
-                                    <button onclick="addManualContact()" style="padding: 0 14px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: inherit; white-space: nowrap;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
-                                        <span data-i18n="add-contact-btn">Добавить</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
+                        <!-- view-panel для контактов удалён — они теперь в левой колонке -->
                     </div>
                 </div>
             </div>
@@ -2138,34 +2142,9 @@
             }
         }
 
-        // ====== Contacts functions ======
+        // ====== Contacts functions ====== (email contacts now in left column)
         function switchToContacts() {
-            const chatView = document.getElementById('chat-view');
-            const feedView = document.getElementById('feed-view');
-            const notesView = document.getElementById('notes-view');
-            const reportsView = document.getElementById('reports-view');
-            const contactsView = document.getElementById('contacts-view');
-            if (!chatView || !feedView || !contactsView) return;
-
-            currentView = 'contacts';
-            chatView.classList.remove('active');
-            feedView.classList.remove('active');
-            if (notesView) { notesView.classList.remove('active'); notesView.style.zIndex = '0'; }
-            if (reportsView) { reportsView.classList.remove('active'); reportsView.style.zIndex = '0'; }
-            contactsView.classList.add('active');
-            contactsView.style.zIndex = '1';
-            chatView.style.zIndex = '0';
-            feedView.style.zIndex = '0';
-            document.getElementById('chat-link').style.opacity = '0.5';
-            document.getElementById('feed-link').style.opacity = '0.5';
-            const notesLink = document.getElementById('notes-link');
-            if (notesLink) notesLink.style.opacity = '0.5';
-            const reportsLink = document.getElementById('reports-link');
-            if (reportsLink) reportsLink.style.opacity = '0.5';
-            const contactsLink = document.getElementById('contacts-link');
-            if (contactsLink) contactsLink.style.opacity = '1';
-
-            loadContacts();
+            // Email contacts are now in the left column — no view switching needed
         }
 
         async function loadContacts() {
@@ -2217,15 +2196,15 @@
         }
 
         async function addManualContact() {
-            const input = document.getElementById('contact-input');
-            if (!input || !input.value.trim()) return;
-            const parts = input.value.trim().split(',').map(s => s.trim());
-            const email = parts[0] || '';
-            if (!email.includes('@')) {
+            const emailEl = document.getElementById('contact-email');
+            const nameEl = document.getElementById('contact-name');
+            const companyEl = document.getElementById('contact-company');
+            const email = emailEl ? emailEl.value.trim() : '';
+            if (!email || !email.includes('@')) {
                 showNotification(t('contact-invalid-email'), 'error');
                 return;
             }
-            const body = { email: email, name: parts[1] || '', company: parts[2] || '', source: 'manual' };
+            const body = { email: email, name: (nameEl ? nameEl.value.trim() : ''), company: (companyEl ? companyEl.value.trim() : ''), source: 'manual' };
             try {
                 const resp = await fetch('/api/email-contacts', {
                     method: 'POST',
@@ -2233,6 +2212,20 @@
                     credentials: 'include',
                     body: JSON.stringify(body)
                 });
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    showNotification(data.error || t('err-unknown'), 'error');
+                    return;
+                }
+                if (emailEl) emailEl.value = '';
+                if (nameEl) nameEl.value = '';
+                if (companyEl) companyEl.value = '';
+                showNotification(t('contact-saved'), 'success');
+                loadContacts();
+            } catch (err) {
+                showNotification(t('err-prefix') + ' ' + err.message, 'error');
+            }
+        }
                 if (!resp.ok) {
                     const data = await resp.json();
                     showNotification(data.error || t('err-unknown'), 'error');
@@ -7599,6 +7592,7 @@
             loadInitialMessages();
             updateProfile();
             loadGoalsProgress();
+            loadContacts();  // Загрузить email-контакты
             
             // Auto-update every 30 seconds (reduced from 5s to lower DB load)
             setInterval(() => {
@@ -7616,8 +7610,8 @@
                 }
                 // Проверяем наличие новых постов, но НЕ перезагружаем ленту полностью
                 checkNewPosts();
-                // Обновляем email-контакты и отчёты если они активны
-                if (currentView === 'contacts') loadContacts();
+                // Периодически обновляем email-контакты
+                loadContacts();
                 if (currentView === 'reports') loadReports();
             }, 30000);
             
@@ -8415,7 +8409,7 @@
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Отчёты','reports-empty':'Отчётов пока нет','reports-empty-desc':'Здесь будут отображаться действия агента: отправленные письма, ответы, кампании.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-opened':'Открыто','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
-      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты',
+      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
       'save':'Сохранить','cancel':'Отмена',
@@ -8600,7 +8594,7 @@
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Reports','reports-empty':'No reports yet','reports-empty-desc':'Agent actions will appear here: emails sent, replies, campaigns.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-opened':'Opened','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
-      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','save-contact':'Save to contacts',
+      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
       'save':'Save','cancel':'Cancel',
