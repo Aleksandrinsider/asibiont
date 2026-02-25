@@ -7734,8 +7734,33 @@ async def resend_webhook_handler(request):
 
             # --- Inbound email (reply) ---
             elif event_type == 'email.received' or 'from' in payload:
-                # Resend inbound webhook format
+                # Resend sends only metadata in webhook; body must be fetched via API
+                email_id = payload.get('email_id', '') or data.get('email_id', '')
                 raw_from = payload.get('from', '') or data.get('from', '')
+                subject = payload.get('subject', '') or data.get('subject', '')
+                text_body = payload.get('text', '') or payload.get('html', '') or data.get('text', '') or data.get('html', '')
+
+                if email_id and not text_body:
+                    try:
+                        from config import RESEND_API_KEY
+                        if RESEND_API_KEY:
+                            import aiohttp as _aiohttp
+                            async with _aiohttp.ClientSession() as http:
+                                r = await http.get(
+                                    f'https://api.resend.com/emails/receiving/{email_id}',
+                                    headers={'Authorization': f'Bearer {RESEND_API_KEY}'},
+                                    timeout=_aiohttp.ClientTimeout(total=10),
+                                )
+                                if r.status == 200:
+                                    rec = await r.json()
+                                    text_body = rec.get('text') or rec.get('html') or ''
+                                    if not raw_from:
+                                        raw_from = rec.get('from', '')
+                                    if not subject:
+                                        subject = rec.get('subject', '')
+                    except Exception as e:
+                        logger.warning(f"[RESEND_WEBHOOK] Failed to fetch received email body: {e}")
+
                 if isinstance(raw_from, dict):
                     from_email = raw_from.get('email', '') or raw_from.get('address', '')
                 elif isinstance(raw_from, list) and raw_from:
@@ -7746,20 +7771,20 @@ async def resend_webhook_handler(request):
                     match = _re.search(r'<([^>]+)>', raw_from)
                     from_email = match.group(1) if match else raw_from
                 else:
-                    from_email = str(raw_from)
+                    from_email = str(raw_from or '')
                 from_email = from_email.strip().lower()
 
-                to_raw = payload.get('to', '') or data.get('to', '')
-                to_email = to_raw[0] if isinstance(to_raw, list) and to_raw else str(to_raw)
-                subject = payload.get('subject', '') or data.get('subject', '')
-                text_body = payload.get('text', '') or payload.get('html', '') or data.get('text', '') or data.get('html', '')
                 if text_body and '<' in text_body and '>' in text_body:
                     import re as _re
                     text_body = _re.sub(r'<[^>]+>', '', text_body).strip()
 
-                logger.info(f"[RESEND_WEBHOOK] Inbound email from={from_email} to={to_email} subject={subject[:80]}")
+                to_raw = payload.get('to', '') or data.get('to', '')
+                to_email = to_raw[0] if isinstance(to_raw, list) and to_raw else str(to_raw)
+                logger.info(f"[RESEND_WEBHOOK] Inbound email from={from_email} subject={subject[:80] if subject else ''} body_len={len(text_body or '')}")
 
-                if from_email and text_body:
+                if from_email:
+                    if not text_body:
+                        text_body = '(письмо без текста)'
                     from models import EmailOutreach, EmailCampaign
                     from sqlalchemy import func
                     outreach = session_db.query(EmailOutreach).filter(
