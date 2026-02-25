@@ -2489,14 +2489,16 @@
             const currentCompany = parts[1] || '';
 
             const form = document.createElement('div');
-            form.style.cssText = 'display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;';
+            form.style.cssText = 'display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0;';
             form.innerHTML =
-                '<input type="email" value="' + currentEmail.replace(/"/g, '&quot;') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
-                '<input type="text" value="' + currentName.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-name-ph') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
-                '<input type="text" value="' + currentCompany.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-company-ph') + '" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 12px; font-family: inherit; outline: none;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
-                '<div style="display: flex; gap: 6px; margin-top: 2px;">' +
-                    '<button class="ec-save-btn" style="padding: 3px 10px; font-size: 12px; background: #068487; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="save">' + t('save') + '</button>' +
-                    '<button class="ec-cancel-btn" style="padding: 3px 10px; font-size: 12px; background: #F3F4F6; color: #374151; border: none; border-radius: 4px; cursor: pointer; font-family: inherit;" data-i18n="cancel">' + t('cancel') + '</button>' +
+                '<input type="email" value="' + currentEmail.replace(/"/g, '&quot;') + '" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
+                '<div style="display: flex; gap: 6px;">' +
+                    '<input type="text" value="' + currentName.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-name-ph') + '" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
+                    '<input type="text" value="' + currentCompany.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-company-ph') + '" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
+                '</div>' +
+                '<div style="display: flex; gap: 6px;">' +
+                    '<button class="ec-save-btn" style="flex: 1; padding: 7px 10px; font-size: 13px; background: #374151; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-family: inherit; transition: background 0.15s;" onmouseover="this.style.background=\'#4B5563\'" onmouseout="this.style.background=\'#374151\'" data-i18n="save">' + t('save') + '</button>' +
+                    '<button class="ec-cancel-btn" style="flex: 1; padding: 7px 10px; font-size: 13px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.15s;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\'" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\'" data-i18n="cancel">' + t('cancel') + '</button>' +
                 '</div>';
 
             const origHTML = card.innerHTML;
