@@ -8144,12 +8144,7 @@ async def send_outreach_email(
         if not subject or not body:
             return "❌ Нужны subject и body письма."
 
-        # Формируем HTML с unsubscribe footer
-        html_body = body.replace('\n', '<br>')
-        unsub_email = campaign.sender_email or 'outreach@asibiont.com'
-        html = _build_email_html(html_body, unsub_email=unsub_email, sender_name=campaign.sender_name)
-
-        # Отправляем через Resend
+        # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
         import aiohttp as _aiohttp
         resend_id = None
         try:
@@ -8166,7 +8161,6 @@ async def send_outreach_email(
                         'to': [recipient_email],
                         'subject': subject,
                         'text': body,
-                        'html': html,
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
@@ -8276,11 +8270,8 @@ async def reply_to_outreach_email(
         if not reply_body:
             return "❌ Нужен текст ответа (reply_body)."
 
-        # Отправляем reply через Resend
+        # Отправляем reply через Resend — plain text
         import aiohttp as _aiohttp
-        html_body = reply_body.replace('\n', '<br>')
-        unsub_email = campaign.sender_email or 'outreach@asibiont.com'
-        html = _build_email_html(html_body, unsub_email=unsub_email, sender_name=campaign.sender_name)
 
         subject = f"Re: {outreach.subject}" if outreach.subject else "Re: Your inquiry"
         try:
@@ -8297,7 +8288,6 @@ async def reply_to_outreach_email(
                         'to': [outreach.recipient_email],
                         'subject': subject,
                         'text': reply_body,
-                        'html': html,
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
@@ -8583,11 +8573,8 @@ async def send_follow_up_email(
         if not body:
             return "❌ Нужен текст follow-up (body)."
 
-        # Отправляем через Resend
+        # Отправляем через Resend — plain text
         import aiohttp as _aiohttp
-        html_body = body.replace('\n', '<br>')
-        unsub_email = campaign.sender_email or 'outreach@asibiont.com'
-        html = _build_email_html(html_body, unsub_email=unsub_email, sender_name=campaign.sender_name)
 
         try:
             async with _aiohttp.ClientSession() as http:
@@ -8603,7 +8590,6 @@ async def send_follow_up_email(
                         'to': [outreach.recipient_email],
                         'subject': subject,
                         'text': body,
-                        'html': html,
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
@@ -8686,9 +8672,6 @@ async def send_email(
         # Нормализация: удалить пробелы, lowercase
         to_clean = to.strip().lower()
 
-        html_body = body.replace('\n', '<br>')
-        html = _build_email_html(html_body, unsub_email=sender_email, sender_name=sender_name)
-
         try:
             async with _aiohttp.ClientSession() as http:
                 from_header = f"{sender_name} <{sender_email}>"
@@ -8703,7 +8686,6 @@ async def send_email(
                         'to': [to_clean],
                         'subject': subject,
                         'text': body,
-                        'html': html,
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
