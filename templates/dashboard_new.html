@@ -2223,7 +2223,7 @@
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: 12px;">
                             <span style="font-size: 12px; color: #6C727F;">${sent} → ${replied}</span>
-                            <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${wasExpanded ? '180' : '0'}deg);">
+                            <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${wasExpanded ? '0' : '-90'}deg);">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                             </svg>
                         </div>
@@ -2238,7 +2238,7 @@
                         const isCollapsed = details.style.maxHeight === '0px';
                         if (isCollapsed) {
                             details.style.maxHeight = details.scrollHeight + 'px';
-                            if (chev) chev.style.transform = 'rotate(180deg)';
+                            if (chev) chev.style.transform = 'rotate(0deg)';
                             _reportsExpandedSet.add(cKey);
                             details.addEventListener('transitionend', function handler() {
                                 if (_reportsExpandedSet.has(cKey)) details.style.maxHeight = 'none';
@@ -2247,7 +2247,7 @@
                         } else {
                             details.style.maxHeight = details.scrollHeight + 'px';
                             requestAnimationFrame(() => { details.style.maxHeight = '0px'; });
-                            if (chev) chev.style.transform = 'rotate(0deg)';
+                            if (chev) chev.style.transform = 'rotate(-90deg)';
                             _reportsExpandedSet.delete(cKey);
                         }
                     };
@@ -2290,7 +2290,7 @@
                                 <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${rcpt}</span>
                                 <span style="font-size: 12px; color: ${oClr}; flex-shrink: 0;">${oLbl}</span>
                                 ${oDate ? `<span style="font-size: 12px; color: #9CA3AF;">${oDate}</span>` : ''}
-                                <svg class="rpt-ochev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${oWasExpanded ? '180' : '0'}deg); margin-left: auto;">
+                                <svg class="rpt-ochev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${oWasExpanded ? '0' : '-90'}deg); margin-left: auto;">
                                     <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                                 </svg>
                             `;
@@ -2310,7 +2310,7 @@
                                 const oCollapsed = oBody.style.maxHeight === '0px';
                                 if (oCollapsed) {
                                     oBody.style.maxHeight = oBody.scrollHeight + 'px';
-                                    if (ochev) ochev.style.transform = 'rotate(180deg)';
+                                    if (ochev) ochev.style.transform = 'rotate(0deg)';
                                     _reportsExpandedSet.add(oKey);
                                     oBody.addEventListener('transitionend', function oh() {
                                         if (_reportsExpandedSet.has(oKey)) oBody.style.maxHeight = 'none';
@@ -2319,7 +2319,7 @@
                                 } else {
                                     oBody.style.maxHeight = oBody.scrollHeight + 'px';
                                     requestAnimationFrame(() => { oBody.style.maxHeight = '0px'; });
-                                    if (ochev) ochev.style.transform = 'rotate(0deg)';
+                                    if (ochev) ochev.style.transform = 'rotate(-90deg)';
                                     _reportsExpandedSet.delete(oKey);
                                 }
                                 if (details.style.maxHeight !== '0px' && details.style.maxHeight !== 'none') {
