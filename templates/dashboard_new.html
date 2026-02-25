@@ -345,6 +345,24 @@
         }
         
         // Global functions defined early for HTML onclick handlers
+        function _collapseAllLeftSections(except) {
+            const sections = [
+                { content: 'profile-content', btn: 'profile-toggle-btn', section: document.querySelector('.context-section'), key: 'profile' },
+                { content: 'contacts-content', btn: 'contacts-toggle-btn', section: null, key: 'contacts' },
+                { content: 'email-contacts-content', btn: 'email-contacts-toggle-btn', section: null, key: 'email' }
+            ];
+            sections.forEach(s => {
+                if (s.key === except) return;
+                const c = document.getElementById(s.content);
+                const b = document.getElementById(s.btn);
+                if (!c) return;
+                c.style.display = 'none';
+                if (b) { const sv = b.querySelector('svg'); if (sv) sv.style.transform = 'rotate(-90deg)'; }
+                const sec = s.section || c.parentElement;
+                if (sec) sec.classList.add('collapsed');
+            });
+        }
+
         function toggleProfileSection() {
             const content = document.getElementById('profile-content');
             const button = document.getElementById('profile-toggle-btn');
@@ -354,6 +372,7 @@
             if (!content) return;
 
             if ((content.style.display || '') === 'none') {
+                _collapseAllLeftSections('profile');
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (profileSection) profileSection.classList.remove('collapsed');
@@ -795,6 +814,7 @@
                     if (!content) return;
 
                     if (content.style.display === 'none') {
+                        _collapseAllLeftSections('contacts');
                         content.style.display = 'block';
                         if (svg) svg.style.transform = 'rotate(0deg)';
                         if (section) section.classList.remove('collapsed');
@@ -813,6 +833,7 @@
                     if (!content) return;
 
                     if (content.style.display === 'none') {
+                        _collapseAllLeftSections('email');
                         content.style.display = 'block';
                         if (svg) svg.style.transform = 'rotate(0deg)';
                         if (section) section.classList.remove('collapsed');
