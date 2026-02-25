@@ -642,9 +642,9 @@
                         {{ token_balance or 0 }} <span data-i18n="tokens">токенов</span>
                     </button>
                     
-                    <button onclick="window.location.href='/tutorial'" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Руководство" data-i18n-title="guide">
+                    <button id="header-install-btn" onclick="triggerPwaInstall()" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Установить приложение" data-i18n-title="install-app">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                            <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/>
+                            <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/>
                         </svg>
                     </button>
 
@@ -7467,6 +7467,23 @@
     </script>
 
     <script>
+        // PWA Install
+        var deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+        function triggerPwaInstall() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
+            } else if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                alert('Нажмите «Поделиться» → «На экран Домой»');
+            } else {
+                alert('Откройте сайт в Chrome или Safari для установки');
+            }
+        }
+
         function logout() {
             window.location.href = '/logout';
         }
@@ -8031,7 +8048,10 @@
       'next-up':'На очереди:',
       'token-balance':'Баланс токенов',
       'tokens':'токенов',
-      'guide':'Руководство',
+      'install-app':'Установить приложение',
+      'col-profile':'Профиль и контакты',
+      'col-chat':'Чат с ИИ и лента новостей',
+      'col-tasks':'Статистика и задачи',
       'open-tg-bot':'Открыть Telegram бота',
       'logout':'Выход',
       'user':'Пользователь',
@@ -8213,7 +8233,10 @@
       'next-up':'Next up:',
       'token-balance':'Token balance',
       'tokens':'tokens',
-      'guide':'Guide',
+      'install-app':'Install App',
+      'col-profile':'Profile & Contacts',
+      'col-chat':'AI Chat & News Feed',
+      'col-tasks':'Stats & Tasks',
       'open-tg-bot':'Open Telegram bot',
       'logout':'Logout',
       'user':'User',

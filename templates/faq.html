@@ -494,6 +494,25 @@
 })();
 </script>
 
+<script>
+// PWA Install
+var deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferredPrompt = e;
+});
+function triggerPwaInstall() {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
+    } else if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        alert('Нажмите «Поделиться» → «На экран Домой»');
+    } else {
+        alert('Откройте сайт в Chrome или Safari для установки');
+    }
+}
+</script>
+
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){
