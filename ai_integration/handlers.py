@@ -4852,11 +4852,15 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
             session.delete(child)
             logger.info(f"[DELETE_TASK] Deleted child task ID: {child.id}")
         
-        # Удаляем задачу
-        session.delete(task)
+        # Мягкое удаление (soft-delete): ставим статус 'cancelled' + время удаления
+        # чтобы статистика "удалённых задач" корректно считалась
+        from datetime import datetime as _dt_del
+        import pytz as _pytz_del
+        task.status = 'cancelled'
+        task.actual_completion_time = _dt_del.now(_pytz_del.UTC)
         session.commit()
         
-        logger.info(f"[DELETE_TASK] Task '{task_name}' (ID: {task_db_id}) deleted successfully")
+        logger.info(f"[DELETE_TASK] Task '{task_name}' (ID: {task_db_id}) soft-deleted (status=cancelled)")
         
         reason_text = f" Причина: {reason}" if reason else ""
         return f"Задача '{task_name}' удалена.{reason_text}"

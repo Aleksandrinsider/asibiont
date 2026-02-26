@@ -6083,8 +6083,8 @@ async def api_tasks_handler(request):
         
         tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
         
-        # Exclude rejected tasks from the list
-        tasks = [t for t in tasks if t.status != 'rejected' and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
+        # Exclude rejected and cancelled (soft-deleted) tasks from the list
+        tasks = [t for t in tasks if t.status not in ('rejected', 'cancelled') and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
         
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
@@ -7005,6 +7005,8 @@ async def api_reports_handler(request):
                             'sent_at': (o.sent_at.isoformat() + 'Z') if o.sent_at else None,
                             'reply_text': (o.reply_text[:200] + '...') if o.reply_text and len(o.reply_text) > 200 else o.reply_text,
                             'reply_at': (o.reply_at.isoformat() + 'Z') if o.reply_at else None,
+                            'ai_reply_text': (o.ai_reply_text[:200] + '...') if o.ai_reply_text and len(o.ai_reply_text) > 200 else (o.ai_reply_text or None),
+                            'ai_reply_sent_at': (o.ai_reply_sent_at.isoformat() + 'Z') if o.ai_reply_sent_at else None,
                         } for o in outreach],
                     })
             except Exception as e:
@@ -7176,12 +7178,18 @@ async def api_reports_handler(request):
                 personal_stats['tasks_deleted'] = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'cancelled',
-                    Task.created_at >= thirty_days_ago
+                    or_(
+                        and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= thirty_days_ago),
+                        and_(Task.actual_completion_time.is_(None), Task.created_at >= thirty_days_ago)
+                    )
                 ).count()
                 personal_stats['tasks_deleted_today'] = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'cancelled',
-                    Task.created_at >= today_start_ps
+                    or_(
+                        and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= today_start_ps),
+                        and_(Task.actual_completion_time.is_(None), Task.created_at >= today_start_ps)
+                    )
                 ).count()
                 # Goals completed in 30d
                 from models import Goal as _Goal
