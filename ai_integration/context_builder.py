@@ -396,9 +396,25 @@ class ContextBuilder:
             except Exception as e:
                 logger.warning(f"[INBOX_CTX] Error: {e}")
 
-            # ═══ ОТВЕТЫ НА EMAIL (outreach replies) ═══
+            # ═══ EMAIL: СТАТИСТИКА ЗА СЕГОДНЯ ═══
             try:
                 from models import EmailOutreach, EmailCampaign
+                import pytz as _pytz_ec
+                _tz_ec = _pytz_ec.timezone(user.timezone or 'Europe/Moscow')
+                _now_ec = datetime.now(_tz_ec)
+                _today_start_ec = _now_ec.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_pytz_ec.utc).replace(tzinfo=None)
+                _sent_today = session.query(EmailOutreach).filter(
+                    EmailOutreach.user_id == user.id,
+                    EmailOutreach.sent_at >= _today_start_ec,
+                    EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                ).count()
+                if _sent_today > 0:
+                    hints.append(f"EMAIL СЕГОДНЯ: отправлено {_sent_today}/20 писем (лимит по всем кампаниям). Осталось: {max(0, 20 - _sent_today)}.")
+            except Exception as e:
+                logger.warning(f"[EMAIL_DAILY_CTX] Error: {e}")
+
+            # ═══ ОТВЕТЫ НА EMAIL (outreach replies) ═══
+            try:
                 recent_replies = session.query(EmailOutreach).filter(
                     EmailOutreach.user_id == user.id,
                     EmailOutreach.status == 'replied',
