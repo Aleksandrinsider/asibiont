@@ -169,6 +169,32 @@
                 overflow-x: hidden;
             }
         }
+
+        /* ─── Markdown rendering in AI messages ─────────────────────────── */
+        .message-text p { margin: 0 0 6px 0; }
+        .message-text p:last-child { margin-bottom: 0; }
+        .message-text ul, .message-text ol { margin: 4px 0 8px 0; padding-left: 20px; }
+        .message-text li { margin-bottom: 3px; line-height: 1.5; }
+        .message-text h1, .message-text h2, .message-text h3,
+        .message-text h4, .message-text h5 {
+            font-size: 1em; font-weight: 600; margin: 8px 0 4px 0; color: #1a1a1a;
+        }
+        .message-text code {
+            background: #F3F4F6; border-radius: 3px; padding: 1px 5px;
+            font-family: monospace; font-size: 0.9em; color: #374151;
+        }
+        .message-text pre {
+            background: #F3F4F6; border-radius: 6px; padding: 10px;
+            overflow-x: auto; margin: 6px 0;
+        }
+        .message-text pre code { background: none; padding: 0; }
+        .message-text blockquote {
+            border-left: 3px solid #068487; margin: 6px 0;
+            padding: 2px 10px; color: #6C727F; font-style: italic;
+        }
+        .message-text strong { font-weight: 600; color: #1a1a1a; }
+        .message-text hr { border: none; border-top: 1px solid #E8ECEF; margin: 8px 0; }
+        .message-text a { color: #068487; text-decoration: underline; }
     </style>
 
     <!-- Structured Data -->
@@ -522,6 +548,7 @@
         // Инициализируем из sessionStorage или по умолчанию 'chat'
         let currentView = 'chat'; // Начальный вид - Чат с ИИ
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1501,12 +1528,25 @@
             // Парсинг @username в ссылки на профили контактов (без обработки markdown)
             let processedText = text;
             
-            // Экранируем HTML для защиты от XSS
-            processedText = escapeHtml(processedText);
-            // Делаем ссылки кликабельными (после escapeHtml для безопасности)
-            processedText = linkify(processedText);
-            // Только сохраняем переносы строк как <br>
-            processedText = processedText.replace(/\n/g, '<br>');
+            // Рендерим Markdown для AI-сообщений, для user — только escape + linkify
+            if (normalizedSender === 'ai' && typeof marked !== 'undefined') {
+                try {
+                    marked.setOptions({ breaks: true, gfm: true });
+                    // Отключаем raw HTML из AI-ответа (безопасность)
+                    const renderer = new marked.Renderer();
+                    const html = marked.parse(text, { renderer });
+                    processedText = html;
+                } catch(e) {
+                    processedText = escapeHtml(text).replace(/\n/g, '<br>');
+                }
+            } else {
+                // Экранируем HTML для защиты от XSS
+                processedText = escapeHtml(processedText);
+                // Делаем ссылки кликабельными (после escapeHtml для безопасности)
+                processedText = linkify(processedText);
+                // Только сохраняем переносы строк как <br>
+                processedText = processedText.replace(/\n/g, '<br>');
+            }
             // Убираем лишние пробелы в начале и конце
             processedText = processedText.trim();
             
@@ -8743,9 +8783,16 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 fd.append('audio', blob, 'audio.webm');
                 const resp = await fetch('/api/transcribe', { method: 'POST', body: fd, credentials: 'include' });
                 const json = await resp.json();
+                if (!resp.ok) {
+                    const errMsg = json.error || 'Ошибка транскрипции';
+                    console.error('[voice] transcribe error:', resp.status, errMsg);
+                    showNotification(errMsg, 'error');
+                    return null;
+                }
                 return json.text || null;
             } catch (e) {
                 console.error('[voice] transcribe error', e);
+                showNotification('Ошибка соединения при распознавании речи', 'error');
                 return null;
             }
         }
