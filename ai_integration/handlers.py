@@ -8968,3 +8968,68 @@ async def list_email_contacts(
     finally:
         if close_session:
             session.close()
+
+
+async def publish_to_discord(
+    content: str,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """📢 ПУБЛИКАЦИЯ В DISCORD канал пользователя через webhook.
+    Требования: discord_webhook должен быть указан в профиле (Настройки → Discord).
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        if not user.discord_webhook:
+            return (
+                "❌ Discord webhook не настроен.\n"
+                "Чтобы публиковать в Discord канал:\n"
+                "1. Открой нужный канал в Discord → Настройки канала → Интеграции → Webhooks\n"
+                "2. Создай webhook и скопируй URL\n"
+                "3. Вставь URL в дашборде: Настройки профиля → Discord webhook\n"
+                "Ссылка: https://asibiont.com/dashboard"
+            )
+
+        if not user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
+            return "❌ Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
+
+        import aiohttp as _aiohttp
+        async with _aiohttp.ClientSession() as http:
+            resp = await http.post(
+                user.discord_webhook,
+                json={"content": content},
+                timeout=_aiohttp.ClientTimeout(total=15)
+            )
+            if resp.status in (200, 204):
+                try:
+                    from models import AgentActivityLog
+                    log = AgentActivityLog(
+                        user_id=user.id,
+                        activity_type='post_discord',
+                        title=content[:80] + ('...' if len(content) > 80 else ''),
+                        content=content,
+                        target='Discord канал',
+                        status='published',
+                    )
+                    session.add(log)
+                    session.commit()
+                except Exception as _le:
+                    logger.warning(f"[DISCORD] Failed to log: {_le}")
+                server = getattr(user, 'discord_server_name', None) or 'Discord канал'
+                return f"✅ Пост опубликован в {server}"
+            else:
+                err = await resp.text()
+                return f"❌ Ошибка Discord webhook: {resp.status} — {err[:200]}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_DISCORD] Error: {e}", exc_info=True)
+        return f"❌ Ошибка публикации в Discord: {str(e)}"
+    finally:
+        if close_session:
+            session.close()

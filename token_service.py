@@ -59,7 +59,8 @@ ACTION_COSTS = {
     # ── Маркетинг ──
     'generate_marketing_content': 30,  # Генерация маркетинг-контента
     'set_content_strategy':       15,  # Настройка стратегии контента
-    'publish_to_telegram':        30,  # Публикация в канал
+    'publish_to_telegram':        30,  # Публикация в TG-канал
+    'publish_to_discord':          30,  # Публикация в Discord канал
 
     # ── Автономные функции ──
     'toggle_autonomous_feature':   5,  # Вкл/выкл автономной функции
