@@ -8831,7 +8831,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                 const r = new SR();
                 _currentRecognition = r;
-                r.lang = (_currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
+                r.lang = (window._currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
                 r.interimResults = false;
                 r.maxAlternatives = 1;
                 r.onstart = () => { isRecording = true; setActive(); };
@@ -8896,7 +8896,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                 const recognition = new SR();
                 _currentRecognition = recognition;
-                recognition.lang = (_currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
+                recognition.lang = (window._currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
                 recognition.interimResults = false;
                 recognition.maxAlternatives = 1;
                 recognition.onstart = () => { isRecording = true; _activateVoiceBtn(voiceButton); };
