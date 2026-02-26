@@ -185,60 +185,123 @@ Support: @aleksandrinsider"""
 }
 
 try:
-    import speech_recognition as sr
-    from pydub import AudioSegment
-    VOICE_RECOGNITION_AVAILABLE = True
-except Exception as e:
-    logging.warning(f"Voice recognition not available: {e}")
-    VOICE_RECOGNITION_AVAILABLE = False
+    from config import GROQ_API_KEY, OPENAI_API_KEY as _WHISPER_OPENAI_KEY
+except ImportError:
+    GROQ_API_KEY = None
+    _WHISPER_OPENAI_KEY = None
+
+# Determine which Whisper backend is available
+_WHISPER_BACKEND = None
+if GROQ_API_KEY:
+    _WHISPER_BACKEND = "groq"
+elif _WHISPER_OPENAI_KEY:
+    _WHISPER_BACKEND = "openai"
+else:
+    logging.warning(
+        "[VOICE] No GROQ_API_KEY or OPENAI_API_KEY found — voice transcription unavailable. "
+        "Add GROQ_API_KEY (free at console.groq.com) to enable it."
+    )
+
+# Legacy Google SR / pydub — kept only as last-resort fallback
+try:
+    import speech_recognition as _sr
+    from pydub import AudioSegment as _AudioSegment
+    _GOOGLE_SR_AVAILABLE = True
+except Exception as _e:
+    logging.warning(f"[VOICE] Google SR / pydub not available (expected on Railway): {_e}")
+    _GOOGLE_SR_AVAILABLE = False
 
 
-def transcribe_audio_sync(audio_file_path):
+async def transcribe_audio(audio_file_path: str) -> str | None:
     """
-    Синхронная транскрибация аудио файла в текст.
-    Использует speech_recognition с Google Speech Recognition.
+    Транскрибирует OGG-файл в текст.
+
+    Порядок бэкендов:
+    1. Groq Whisper (бесплатно, GROQ_API_KEY)
+    2. OpenAI Whisper (OPENAI_API_KEY)
+    3. Google Speech Recognition (fallback, ненадёжно в production)
     """
-    if not VOICE_RECOGNITION_AVAILABLE:
-        logging.error("Voice recognition libraries not available")
+    if not os.path.exists(audio_file_path):
+        logging.error(f"[VOICE] Audio file not found: {audio_file_path}")
         return None
 
-    wav_path = None
-    try:
-        # Проверяем существование файла
-        if not os.path.exists(audio_file_path):
-            logging.error(f"Audio file not found: {audio_file_path}")
-            return None
-        
-        # Конвертируем OGG в WAV для SpeechRecognition
-        audio = AudioSegment.from_ogg(audio_file_path)
-        wav_path = audio_file_path.replace('.ogg', '.wav')
-        audio.export(wav_path, format='wav')
+    import aiohttp as _aiohttp
 
-        # Используем Google Speech Recognition (бесплатный, без API ключа)
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio_data = recognizer.record(source)
-            text = recognizer.recognize_google(audio_data, language='ru-RU')
-            logging.info(f"Successfully transcribed: {text[:50]}...")
-            return text
+    # ── 1. Groq Whisper ──────────────────────────────────────────────────────
+    if _WHISPER_BACKEND == "groq":
+        try:
+            url = "https://api.groq.com/openai/v1/audio/transcriptions"
+            async with _aiohttp.ClientSession() as sess:
+                with open(audio_file_path, "rb") as f:
+                    form = _aiohttp.FormData()
+                    form.add_field("file", f, filename="voice.ogg", content_type="audio/ogg")
+                    form.add_field("model", "whisper-large-v3-turbo")
+                    form.add_field("language", "ru")
+                    form.add_field("response_format", "json")
+                    async with sess.post(
+                        url,
+                        headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                        data=form,
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            text = data.get("text", "").strip()
+                            logging.info(f"[VOICE] Groq transcribed: {text[:60]}")
+                            return text or None
+                        body = await resp.text()
+                        logging.error(f"[VOICE] Groq API error {resp.status}: {body}")
+        except Exception as e:
+            logging.error(f"[VOICE] Groq transcription failed: {e}", exc_info=True)
 
-    except Exception as e:
-        logging.error(f"Error transcribing audio: {e}", exc_info=True)
-        return None
-    finally:
-        # Удаляем временный WAV файл
-        if wav_path and os.path.exists(wav_path):
-            try:
-                os.unlink(wav_path)
-            except Exception as e:
-                logging.warning(f"Failed to remove temporary WAV file {wav_path}: {e}")
-                pass
+    # ── 2. OpenAI Whisper ────────────────────────────────────────────────────
+    if _WHISPER_BACKEND == "openai" or (_WHISPER_BACKEND == "groq" and _WHISPER_OPENAI_KEY):
+        try:
+            url = "https://api.openai.com/v1/audio/transcriptions"
+            async with _aiohttp.ClientSession() as sess:
+                with open(audio_file_path, "rb") as f:
+                    form = _aiohttp.FormData()
+                    form.add_field("file", f, filename="voice.ogg", content_type="audio/ogg")
+                    form.add_field("model", "whisper-1")
+                    form.add_field("language", "ru")
+                    async with sess.post(
+                        url,
+                        headers={"Authorization": f"Bearer {_WHISPER_OPENAI_KEY}"},
+                        data=form,
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            text = data.get("text", "").strip()
+                            logging.info(f"[VOICE] OpenAI Whisper transcribed: {text[:60]}")
+                            return text or None
+                        body = await resp.text()
+                        logging.error(f"[VOICE] OpenAI Whisper error {resp.status}: {body}")
+        except Exception as e:
+            logging.error(f"[VOICE] OpenAI transcription failed: {e}", exc_info=True)
 
+    # ── 3. Google SR fallback (local / dev only) ─────────────────────────────
+    if _GOOGLE_SR_AVAILABLE:
+        wav_path = None
+        try:
+            audio_obj = _AudioSegment.from_ogg(audio_file_path)
+            wav_path = audio_file_path.replace(".ogg", ".wav")
+            audio_obj.export(wav_path, format="wav")
+            recognizer = _sr.Recognizer()
+            with _sr.AudioFile(wav_path) as source:
+                audio_data = recognizer.record(source)
+                text = recognizer.recognize_google(audio_data, language="ru-RU")
+                logging.info(f"[VOICE] Google SR transcribed: {text[:60]}")
+                return text
+        except Exception as e:
+            logging.error(f"[VOICE] Google SR failed: {e}", exc_info=True)
+        finally:
+            if wav_path and os.path.exists(wav_path):
+                try:
+                    os.unlink(wav_path)
+                except Exception:
+                    pass
 
-async def transcribe_audio(audio_file_path):
-    """Асинхронная обёртка для транскрибации."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, transcribe_audio_sync, audio_file_path)
+    logging.error("[VOICE] All transcription backends failed")
+    return None
 
 logger = logging.getLogger(__name__)
 
