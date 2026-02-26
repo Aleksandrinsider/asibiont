@@ -466,7 +466,32 @@ class ContextBuilder:
                     _Post.created_at >= user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC).replace(tzinfo=None),
                 ).count()
                 if _posts_today >= 1:
-                    hints.append("ПОСТ СЕГОДНЯ: уже опубликован — НЕ публикуй повторно (лимит 1/день).")
+                    hints.append("ПОСТ СЕГОДНЯ (лента): уже опубликован — НЕ публикуй повторно (лимит 1/день).")
+                # Discord пост сегодня
+                try:
+                    from models import AgentActivityLog as _AAL2
+                    _discord_today = session.query(_AAL2).filter(
+                        _AAL2.user_id == user.id,
+                        _AAL2.activity_type == 'post_discord',
+                        _AAL2.created_at >= user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC).replace(tzinfo=None),
+                        _AAL2.status == 'published',
+                    ).count()
+                    if _discord_today >= 1:
+                        hints.append("ПОСТ СЕГОДНЯ (Discord): уже опубликован — НЕ публикуй повторно (лимит 1/день).")
+                except Exception:
+                    pass
+                # TG-канал пост сегодня
+                try:
+                    from models import AnchorDeliveryLog as _ADL
+                    _tg_today = session.query(_ADL).filter(
+                        _ADL.user_id == user.id,
+                        _ADL.created_at >= user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC).replace(tzinfo=None),
+                        _ADL.anchor_types.contains('channel_post'),
+                    ).count()
+                    if _tg_today >= 1:
+                        hints.append("ПОСТ СЕГОДНЯ (Telegram-канал): уже опубликован — НЕ публикуй повторно (лимит 1/день).")
+                except Exception:
+                    pass
             except Exception as e:
                 logger.warning(f"[POST_CTX] Error: {e}")
 
@@ -478,6 +503,9 @@ class ContextBuilder:
                 _channel = getattr(user, 'telegram_channel', None)
                 if not _channel:
                     hints.append("TELEGRAM-КАНАЛ: не настроен в профиле — publish_to_telegram работать не будет до добавления канала.")
+                _discord_wh = getattr(user, 'discord_webhook', None)
+                if not _discord_wh:
+                    hints.append("DISCORD: webhook не настроен — publish_to_discord работать не будет.")
             except Exception as e:
                 logger.warning(f"[TOKENS_CTX] Error: {e}")
 

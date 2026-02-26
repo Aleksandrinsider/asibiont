@@ -9087,6 +9087,24 @@ async def publish_to_discord(
         if not user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
             return "❌ Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
 
+        # Лимит: 1 пост в Discord в день
+        import pytz as _pytz_dc
+        import datetime as _dt_dc
+        _utz_dc = _pytz_dc.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _today_dc = _dt_dc.datetime.now(_utz_dc).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_pytz_dc.UTC).replace(tzinfo=None)
+        try:
+            from models import AgentActivityLog as _AAL
+            _discord_today = session.query(_AAL).filter(
+                _AAL.user_id == user.id,
+                _AAL.activity_type == 'post_discord',
+                _AAL.created_at >= _today_dc,
+                _AAL.status == 'published',
+            ).count()
+            if _discord_today >= 1:
+                return "⚠️ Сегодня пост в Discord уже опубликован (лимит — 1 в день). Следующий можно завтра."
+        except Exception as _lim_e:
+            logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
+
         import aiohttp as _aiohttp
         # Если есть картинка — публикуем через embed
         if image_url:
