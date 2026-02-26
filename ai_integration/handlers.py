@@ -8223,9 +8223,13 @@ async def send_outreach_email(
             session.commit()
             return f"⚠️ Кампания #{campaign.id} достигла лимита ({campaign.max_emails} писем). Статус: completed."
 
-        # Дневной лимит
+        # Дневной лимит — считаем «сегодня» по таймзоне пользователя
         from datetime import datetime as dt, timezone as tz
-        today_start = dt.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        import pytz as _pytz
+        _user_tz = _pytz.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _user_now = dt.now(_user_tz)
+        _day_local = _user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = _day_local.astimezone(tz.utc)
         sent_today = session.query(EmailOutreach).filter(
             EmailOutreach.campaign_id == campaign.id,
             EmailOutreach.sent_at >= today_start,
@@ -8233,6 +8237,25 @@ async def send_outreach_email(
         ).count()
         if sent_today >= campaign.daily_limit:
             return f"⚠️ Дневной лимит ({campaign.daily_limit} писем) исчерпан. Попробуй завтра."
+
+        # Глобальный дневной лимит: не более 20 писем на пользователя в сутки (все кампании)
+        GLOBAL_DAILY_LIMIT = 20
+        global_sent_today = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.sent_at >= today_start,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        ).count()
+        if global_sent_today >= GLOBAL_DAILY_LIMIT:
+            return f"⚠️ Глобальный дневной лимит ({GLOBAL_DAILY_LIMIT} писем/день) достигнут. Продолжим завтра."
+
+        # Проверка дубликата — не слать дважды одному recipient ВООБЩЕ (по всем кампаниям)
+        existing_any = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == recipient_email,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        ).first()
+        if existing_any:
+            return f"⚠️ Письмо на {recipient_email} уже отправлялось ранее (кампания #{existing_any.campaign_id}). Пропускаю дубль."
 
         # Проверка дубликата (не слать дважды одному recipient в одной кампании)
         existing = session.query(EmailOutreach).filter_by(
@@ -8696,6 +8719,20 @@ async def send_follow_up_email(
         max_follow_ups = campaign.max_follow_ups or 2
         if outreach.follow_up_count >= max_follow_ups:
             return f"⚠️ Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}."
+
+        # Глобальный дневной лимит — по таймзоне пользователя
+        GLOBAL_DAILY_LIMIT = 20
+        import pytz as _pytz2
+        _utz = _pytz2.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _day_start_local = dt.now(_utz).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = _day_start_local.astimezone(tz.utc)
+        global_sent_today = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.sent_at >= today_start,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        ).count()
+        if global_sent_today >= GLOBAL_DAILY_LIMIT:
+            return f"⚠️ Глобальный дневной лимит ({GLOBAL_DAILY_LIMIT} писем/день) достигнут. Продолжим завтра."
 
         if not subject:
             subject = f"Re: {outreach.subject}" if outreach.subject else "Following up"

@@ -1598,8 +1598,11 @@ class AnchorEngine:
                 campaign_id=campaign.id, status='draft'
             ).limit(5).all()
 
-            # Дневной лимит
-            today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+            # Дневной лимит — считаем «сегодня» по таймзоне пользователя, не UTC
+            import pytz as _pytz_email
+            _utz_email = _pytz_email.timezone(user.timezone or 'Europe/Moscow')
+            _user_now_local = now_utc.astimezone(_utz_email)
+            today_start = _user_now_local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
             sent_today = session.query(EmailOutreach).filter(
                 EmailOutreach.campaign_id == campaign.id,
                 EmailOutreach.sent_at >= today_start,
