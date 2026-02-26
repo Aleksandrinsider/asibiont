@@ -8285,13 +8285,10 @@ async def send_outreach_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
-        # Добавляем unsubscribe-ссылку в конец письма
-        from config import WEB_APP_URL
-        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
-        body = body.rstrip() + f"\n\n---\nОтписаться / Unsubscribe: {_unsub_url}"
-
         # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
         import aiohttp as _aiohttp
+        from config import WEB_APP_URL
+        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
         resend_id = None
         try:
             async with _aiohttp.ClientSession() as http:
@@ -8307,6 +8304,7 @@ async def send_outreach_email(
                         'to': [recipient_email],
                         'subject': subject,
                         'text': body,
+                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
@@ -8753,13 +8751,10 @@ async def send_follow_up_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
-        # Добавляем unsubscribe-ссылку
-        from config import WEB_APP_URL
-        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
-        body = body.rstrip() + f"\n\n---\nОтписаться / Unsubscribe: {_unsub_url}"
-
         # Отправляем через Resend — plain text
         import aiohttp as _aiohttp
+        from config import WEB_APP_URL
+        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
 
         try:
             async with _aiohttp.ClientSession() as http:
@@ -8775,6 +8770,7 @@ async def send_follow_up_email(
                         'to': [outreach.recipient_email],
                         'subject': subject,
                         'text': body,
+                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
@@ -8884,10 +8880,8 @@ async def send_email(
         if _is_new_recip and _global_sent_today >= GLOBAL_DAILY_LIMIT:
             return f"⚠️ Достигнут дневной лимит: {_global_sent_today} новых получателей (макс. {GLOBAL_DAILY_LIMIT}). Продолжим завтра."
 
-        # Добавляем unsubscribe-ссылку
         from config import WEB_APP_URL
         _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
-        body = body.rstrip() + f"\n\n---\nОтписаться / Unsubscribe: {_unsub_url}"
 
         resend_id = ''
         try:
@@ -8904,6 +8898,7 @@ async def send_email(
                         'to': [to_clean],
                         'subject': subject,
                         'text': body,
+                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
