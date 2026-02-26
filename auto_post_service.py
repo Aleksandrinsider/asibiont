@@ -132,12 +132,16 @@ async def generate_progress_post(user_id, session):
             "с конкретикой и чуть личным",
         ])
 
-        # Build prompt
+        # Build prompt — pre-compute optional lines (no backslash in f-string expressions for Python <3.12)
+        city_part = f", {user_city}" if user_city else ""
+        skills_line = f"\n- Сфера / навыки: {user_skills}" if user_skills else ""
+        interests_line = f"\n- Интересы: {user_interests}" if user_interests else ""
+        goals_line = f"\n- Цели: {user_goals}" if user_goals else ""
+
         context = f"""Ты — ghostwriter. Пишешь короткий пост в соцсеть от лица реального человека. Стиль: {tone}. Не пиши "ghostwriter", не пиши от своего имени.
 
 О человеке:
-- Имя: {user_name}{f', {user_city}' if user_city else ''}
-{f'- Сфера / навыки: {user_skills}' if user_skills else ''}{f'\n- Интересы: {user_interests}' if user_interests else ''}{f'\n- Цели: {user_goals}' if user_goals else ''}
+- Имя: {user_name}{city_part}{skills_line}{interests_line}{goals_line}
 - Сейчас: {time_of_day}
 """
 
