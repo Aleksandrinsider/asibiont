@@ -75,7 +75,7 @@ ACTION_COSTS = {
     'set_reminder':       5,   # Установка напоминания
 
     # ── Утилиты ──
-    'get_weather_info':   5,   # Погода
+    'get_weather_info':   2,   # Погода
     'get_news_trends':    5,   # Новости
     'quick_topic_search': 5,   # Быстрый поиск
     'research_topic':    10,   # Глубокое исследование

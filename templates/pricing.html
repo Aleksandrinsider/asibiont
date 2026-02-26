@@ -6,7 +6,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Расценки ASI Biont — стоимость действий в токенах</title>
-    <meta name="description" content="Полная таблица стоимости действий ASI Biont в токенах. 1 токен = 1 рубль. Сообщение — 10, создание задачи — 7, маркетинг-контент — 30. Все функции доступны с первого токена.">
+    <meta name="description" content="Полная таблица стоимости действий ASI Biont в токенах. 1 токен = 1 рубль. 1 500 токенов бесплатно при регистрации.">
     <meta name="keywords" content="расценки AI агент, стоимость токенов, ASI Biont цены, сколько стоит AI помощник, токены Telegram бот">
     <meta name="author" content="ASI Biont">
     <meta name="robots" content="index, follow">
@@ -22,706 +22,179 @@
     <link rel="alternate" hreflang="x-default" href="https://asibiont.com/pricing">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body {
-            height: 100%;
-            background: #FFFFFF;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-        }
-        body {
-            display: block;
-            padding: 40px 15px;
-        }
-        @media (max-width: 768px) {
-            body { padding: 15px 12px !important; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        .page-container {
-            width: 100%;
-            max-width: 860px;
-            margin: 0 auto;
-        }
-        .back-link {
-            display: inline-block;
-            color: #59636E;
-            text-decoration: none;
-            font-size: 13px;
-            margin-bottom: 24px;
-            transition: color 0.2s;
-        }
-        .back-link:hover { color: #1F2328; }
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            color: #374151;
-            text-align: center;
-            margin-bottom: 8px;
-        }
-        .subtitle {
-            text-align: center;
-            color: #6C727F;
-            font-size: 14px;
-            line-height: 1.6;
-            margin-bottom: 32px;
-        }
-        /* Stats row */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            margin-bottom: 32px;
-        }
-        .stat-card {
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            padding: 16px;
-            background: white;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 22px;
-            font-weight: 700;
-            color: #374151;
-            margin-bottom: 4px;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #6C727F;
-            line-height: 1.4;
-        }
-        /* Category sections */
-        .category {
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            margin-bottom: 12px;
-            background: white;
-            overflow: hidden;
-        }
-        .category-header {
-            padding: 14px 20px;
-            background: #F6F8FA;
-            border-bottom: 1px solid #D1D9E0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-            user-select: none;
-        }
-        .category-header:hover { background: #EAEEF2; }
-        .category-icon {
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        .category-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1F2328;
-            flex: 1;
-        }
-        .category-chevron {
-            font-size: 10px;
-            color: #6C727F;
-            transition: transform 0.2s;
-        }
-        .category.open .category-chevron { transform: rotate(180deg); }
-        .category-body {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
-        .category.open .category-body { max-height: 2000px; }
-        .pricing-row {
-            display: flex;
-            align-items: center;
-            padding: 10px 20px;
-            border-bottom: 1px solid #F6F8FA;
-            font-size: 13px;
-            transition: background 0.15s;
-        }
-        .pricing-row:last-child { border-bottom: none; }
-        .pricing-row:hover { background: #F6F8FA; }
-        .row-name {
-            flex: 1;
-            color: #374151;
-            line-height: 1.4;
-        }
-        .row-name span {
-            display: block;
-            font-size: 11px;
-            color: #6C727F;
-            margin-top: 2px;
-        }
-        .row-cost {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1F2328;
-            min-width: 60px;
-            text-align: right;
-        }
-        .row-cost .unit {
-            font-size: 11px;
-            font-weight: 400;
-            color: #6C727F;
-        }
-        .cost-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .cost-low { background: #F0FDF4; color: #059669; }
-        .cost-mid { background: #FFF7ED; color: #D97706; }
+        html, body { height: 100%; background: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+        body { display: block; padding: 40px 15px; }
+        @media (max-width: 768px) { body { padding: 15px 12px !important; } }
+        .faq-container { width: 100%; max-width: 800px; margin: 0 auto; }
+        h1 { font-size: 24px; font-weight: 600; color: #374151; text-align: center; margin-bottom: 8px; }
+        .faq-subtitle { text-align: center; color: #6C727F; font-size: 14px; margin-bottom: 32px; line-height: 1.5; }
+        .faq-item { border: 1px solid #D1D9E0; border-radius: 6px; margin-bottom: 12px; overflow: hidden; background: white; }
+        .faq-question { padding: 16px 20px; font-size: 15px; font-weight: 600; color: #1F2328; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; user-select: none; }
+        .faq-question:hover { background: #F6F8FA; }
+        .faq-question::after { content: '+'; font-size: 20px; font-weight: 400; color: #6C727F; flex-shrink: 0; margin-left: 12px; }
+        .faq-item.open .faq-question::after { content: '\2212'; }
+        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .faq-item.open .faq-answer { max-height: 2000px; }
+        .faq-answer-inner { padding: 0 20px 16px; font-size: 14px; color: #374151; line-height: 1.7; }
+        .price-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #F6F8FA; gap: 12px; }
+        .price-row:last-child { border-bottom: none; }
+        .price-name { flex: 1; color: #374151; font-size: 14px; }
+        .price-name small { display: block; font-size: 12px; color: #6C727F; margin-top: 1px; }
+        .price-val { font-size: 13px; font-weight: 600; white-space: nowrap; padding: 2px 9px; border-radius: 12px; }
+        .cost-low  { background: #F0FDF4; color: #059669; }
+        .cost-mid  { background: #FFF7ED; color: #D97706; }
         .cost-high { background: #FFF1F2; color: #E11D48; }
-        /* Note */
-        .note {
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            padding: 16px 20px;
-            background: #F6F8FA;
-            font-size: 13px;
-            color: #374151;
-            line-height: 1.6;
-            margin-bottom: 24px;
-        }
-        .note b { color: #1F2328; }
-        /* CTA */
-        .cta-block {
-            text-align: center;
-            margin-top: 32px;
-            padding: 24px 16px;
-        }
-        .cta-block p {
-            font-size: 15px;
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 16px;
-        }
-        .btn-primary {
-            display: inline-block;
-            padding: 10px 20px;
-            background: #374151;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            margin: 4px 6px;
-            transition: background 0.2s;
-        }
-        .btn-primary:hover { background: #2C3441; }
-        .btn-secondary {
-            display: inline-block;
-            padding: 10px 20px;
-            background: white;
-            color: #59636E;
-            text-decoration: none;
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            margin: 4px 6px;
-            transition: all 0.2s;
-        }
-        .btn-secondary:hover { background: #F6F8FA; border-color: #1F2328; }
-        /* Footer */
-        .footer-links {
-            text-align: center;
-            margin-top: 24px;
-            padding-top: 24px;
-            border-top: 1px solid #F6F8FA;
-            color: #6C727F;
-            font-size: 13px;
-        }
-        .footer-links a {
-            color: #59636E;
-            text-decoration: none;
-            margin: 0 8px;
-            transition: color 0.2s;
-        }
-        .footer-links a:hover { color: #1F2328; }
-        .footer-copy {
-            margin-top: 8px;
-            font-size: 12px;
-            color: #9CA3AF;
-        }
+        .note-block { border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 20px; background: #F6F8FA; font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px; }
+        .note-block a { color: #374151; font-weight: 600; }
+        .faq-cta { text-align: center; margin-top: 32px; padding: 24px; }
+        .faq-cta p { color: #374151; font-size: 15px; margin-bottom: 16px; }
+        .faq-cta a { display: inline-block; padding: 10px 20px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500; margin: 0 6px; transition: background 0.2s; }
+        .faq-cta a:hover { background: #2C3441; }
+        .faq-cta a.secondary { background: white; color: #59636E; border: 1px solid #D1D9E0; }
+        .faq-cta a.secondary:hover { background: #F6F8FA; border-color: #1F2328; }
+        .back-link { display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px; }
+        .back-link:hover { color: #1F2328; }
     </style>
 </head>
 <body>
-<div class="page-container">
-
-    <a href="/dashboard" class="back-link">← На главную</a>
-
+<div class="faq-container">
+    <a href="/dashboard" class="back-link">&#8592; На главную</a>
     <h1>Расценки</h1>
-    <p class="subtitle">
-        Полная стоимость всех действий AI-агента. <b>1 токен = 1 рубль.</b><br>
-        Неизвестные действия списывают 5 токенов по умолчанию. 1 500 токенов — бесплатно при регистрации.
-    </p>
+    <p class="faq-subtitle">Стоимость всех действий AI-агента. 1 токен = 1 рубль. 1&#160;500 токенов — бесплатно при регистрации.</p>
+    <div class="note-block">Токены списываются только при успешном выполнении действия. Если баланс недостаточен — агент сообщит. Пополнить: /buy в Telegram или <a href="/subscription-tiers">на странице тарифов</a>.</div>
 
-    <!-- Быстрая сводка -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-value">2 ₽</div>
-            <div class="stat-label">минимум за действие</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">10 ₽</div>
-            <div class="stat-label">сообщение с AI</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">30 ₽</div>
-            <div class="stat-label">публикация в канал</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">1 500 ₽</div>
-            <div class="stat-label">токенов бесплатно</div>
-        </div>
+    <div class="faq-item open">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#128172; Базовые</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Сообщение с AI<small>Один раунд: запрос + ответ</small></div><span class="price-val cost-mid">10</span></div>
+            <div class="price-row"><div class="price-name">Голосовое сообщение<small>Транскрипция + ответ AI</small></div><span class="price-val cost-mid">12</span></div>
+        </div></div>
     </div>
 
-    <div class="note">
-        <b>Как это работает:</b> каждое обращение к AI-агенту тарифицируется по таблице ниже.
-        Токены списываются только при успешном выполнении действия. Если баланс недостаточен — агент сообщит об этом.
-        Пополнение: /buy в Telegram или на странице <a href="/subscription-tiers" style="color:#374151;font-weight:600;">Пополнить баланс</a>.
+    <div class="faq-item open">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#9989; Задачи</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Создание задачи</div><span class="price-val cost-low">7</span></div>
+            <div class="price-row"><div class="price-name">Редактирование / перенос задачи</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Список задач</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Детали задачи</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Завершение задачи</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Удаление / восстановление задачи</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Пропуск / откладывание</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Проверка конфликтов времени</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Поиск контактов для задачи</div><span class="price-val cost-low">5</span></div>
+        </div></div>
     </div>
 
-    <!-- Базовые -->
-    <div class="category open">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">💬</span>
-            <span class="category-title">Базовые</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Сообщение с AI<span>Один раунд диалога: запрос + ответ</span></div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Голосовое сообщение<span>Транскрипция + ответ AI</span></div>
-                <div class="row-cost"><span class="cost-badge cost-mid">12</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#127919; Цели</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Создание цели</div><span class="price-val cost-mid">10</span></div>
+            <div class="price-row"><div class="price-name">Обновление цели</div><span class="price-val cost-low">7</span></div>
+            <div class="price-row"><div class="price-name">Обновление прогресса</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Список целей</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Завершение / удаление цели</div><span class="price-val cost-low">2</span></div>
+        </div></div>
     </div>
 
-    <!-- Задачи -->
-    <div class="category open">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">✅</span>
-            <span class="category-title">Задачи</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Создание задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">7</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Редактирование задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Перенос задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Список задач</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Детали задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Завершение задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Удаление задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Восстановление задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Пропуск / откладывание</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Проверка конфликтов времени</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Поиск контактов для задачи</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#129309; Делегирование</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Делегировать задачу<small>Поручить другому пользователю с контролем дедлайна</small></div><span class="price-val cost-high">20</span></div>
+            <div class="price-row"><div class="price-name">Принять / отклонить делегирование</div><span class="price-val cost-low">3</span></div>
+            <div class="price-row"><div class="price-name">Проверить прогресс / отменить</div><span class="price-val cost-low">5</span></div>
+        </div></div>
     </div>
 
-    <!-- Цели -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">🎯</span>
-            <span class="category-title">Цели</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Создание цели</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Обновление цели</div>
-                <div class="row-cost"><span class="cost-badge cost-low">7</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Обновление прогресса</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Список целей</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Завершение цели</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Удаление цели</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#129504; Аналитика и планирование</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Анализ ситуации и предложение задач<small>Полный анализ профиля, целей и текущих задач</small></div><span class="price-val cost-mid">15</span></div>
+            <div class="price-row"><div class="price-name">Исследование и планирование</div><span class="price-val cost-mid">15</span></div>
+            <div class="price-row"><div class="price-name">Анализ групповых возможностей</div><span class="price-val cost-mid">12</span></div>
+        </div></div>
     </div>
 
-    <!-- Делегирование -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">🤝</span>
-            <span class="category-title">Делегирование</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Делегировать задачу<span>Поручить другому пользователю</span></div>
-                <div class="row-cost"><span class="cost-badge cost-high">20</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Принять делегированную задачу</div>
-                <div class="row-cost"><span class="cost-badge cost-low">3</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Отклонить делегированную задачу</div>
-                <div class="row-cost"><span class="cost-badge cost-low">3</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Проверить прогресс делегирования</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Отменить делегирование</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#128227; Маркетинг и контент</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Генерация маркетинг-контента<small>Тексты постов, идеи кампаний, копирайтинг</small></div><span class="price-val cost-high">30</span></div>
+            <div class="price-row"><div class="price-name">Публикация в Telegram-канал</div><span class="price-val cost-high">30</span></div>
+            <div class="price-row"><div class="price-name">Публикация в Discord-канал</div><span class="price-val cost-high">30</span></div>
+            <div class="price-row"><div class="price-name">Генерация изображения<small>Replicate / Flux Schnell</small></div><span class="price-val cost-high">20</span></div>
+            <div class="price-row"><div class="price-name">Настройка контент-стратегии</div><span class="price-val cost-mid">15</span></div>
+            <div class="price-row"><div class="price-name">Создание поста</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Редактирование поста</div><span class="price-val cost-low">3</span></div>
+            <div class="price-row"><div class="price-name">Просмотр / удаление поста</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Вкл / выкл автономной функции</div><span class="price-val cost-low">5</span></div>
+        </div></div>
     </div>
 
-    <!-- Аналитика -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">🧠</span>
-            <span class="category-title">Аналитика и планирование</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Анализ ситуации и предложение задач<span>Полный анализ профиля, целей и задач</span></div>
-                <div class="row-cost"><span class="cost-badge cost-mid">15</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Исследование и планирование</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">15</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Анализ групповых возможностей</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">12</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#9993; Email-аутрич</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Создание email-кампании</div><span class="price-val cost-mid">15</span></div>
+            <div class="price-row"><div class="price-name">Отправка outreach-письма / прямая отправка</div><span class="price-val cost-mid">10</span></div>
+            <div class="price-row"><div class="price-name">Follow-up письмо</div><span class="price-val cost-mid">10</span></div>
+            <div class="price-row"><div class="price-name">Ответ на входящее письмо</div><span class="price-val cost-low">8</span></div>
+            <div class="price-row"><div class="price-name">Добавление лидов в кампанию</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Сохранение / просмотр email-контактов</div><span class="price-val cost-low">2</span></div>
+            <div class="price-row"><div class="price-name">Статус / пауза кампании</div><span class="price-val cost-low">2</span></div>
+        </div></div>
     </div>
 
-    <!-- Маркетинг -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">📣</span>
-            <span class="category-title">Маркетинг и контент</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Генерация маркетинг-контента<span>Тексты постов, идеи кампаний, копирайтинг</span></div>
-                <div class="row-cost"><span class="cost-badge cost-high">30</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Публикация в Telegram-канал</div>
-                <div class="row-cost"><span class="cost-badge cost-high">30</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Публикация в Discord-канал</div>
-                <div class="row-cost"><span class="cost-badge cost-high">30</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Генерация изображения<span>Via Replicate / Flux Schnell</span></div>
-                <div class="row-cost"><span class="cost-badge cost-high">20</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Настройка контент-стратегии</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">15</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Создание поста</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Редактирование поста</div>
-                <div class="row-cost"><span class="cost-badge cost-low">3</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Просмотр постов</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Удаление поста</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Вкл / выкл автономной функции</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#128101; Контакты, партнёры и профиль</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Поиск партнёров и исполнителей</div><span class="price-val cost-low">7</span></div>
+            <div class="price-row"><div class="price-name">Поиск и отправка сообщений пользователям<small>Массовое нахождение по навыкам</small></div><span class="price-val cost-mid">10</span></div>
+            <div class="price-row"><div class="price-name">Обновление профиля</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Настройка уведомления о контакте</div><span class="price-val cost-low">5</span></div>
+        </div></div>
     </div>
 
-    <!-- Email-аутрич -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">✉️</span>
-            <span class="category-title">Email-аутрич</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Создание email-кампании</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">15</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Отправка outreach-письма</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Прямая отправка письма</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Follow-up письмо</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Ответ на входящее письмо</div>
-                <div class="row-cost"><span class="cost-badge cost-low">8</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Добавление лидов в кампанию</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Сохранение email-контакта</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Просмотр email-контактов</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Статус кампании</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Пауза / возобновление кампании</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#128269; Поиск и внешние данные</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Веб-поиск / быстрый поиск по теме</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Глубокое исследование темы</div><span class="price-val cost-mid">10</span></div>
+            <div class="price-row"><div class="price-name">Тренды новостей</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Погода / котировки акций / крипто</div><span class="price-val cost-low">2</span></div>
+        </div></div>
     </div>
 
-    <!-- Контакты -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">👥</span>
-            <span class="category-title">Контакты, партнёры и профиль</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Поиск партнёров и исполнителей</div>
-                <div class="row-cost"><span class="cost-badge cost-low">7</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Поиск и отправка сообщений пользователям<span>Массовое нахождение по навыкам</span></div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Обновление профиля</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Умное обновление профиля</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Настройка уведомления о контакте</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-        </div>
+    <div class="faq-item">
+        <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">&#129302; Проактивный агент и напоминания</div>
+        <div class="faq-answer"><div class="faq-answer-inner">
+            <div class="price-row"><div class="price-name">Установить напоминание</div><span class="price-val cost-low">5</span></div>
+            <div class="price-row"><div class="price-name">Проактивное сообщение<small>Агент сам пишет: сводки, дедлайны, инсайты</small></div><span class="price-val cost-low">7</span></div>
+            <div class="price-row"><div class="price-name">Проактивный пост в ленту</div><span class="price-val cost-mid">10</span></div>
+            <div class="price-row"><div class="price-name">Проактивный пост в канал</div><span class="price-val cost-mid">15</span></div>
+        </div></div>
     </div>
 
-    <!-- Сообщения -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">📩</span>
-            <span class="category-title">Сообщения (автономный агент)</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Отправка сообщения пользователю</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Ответ на сообщение пользователя</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Просмотр входящих сообщений</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Статус отправленного сообщения</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-        </div>
+    <div class="faq-cta">
+        <p>1&#160;500 токенов при регистрации. Все функции доступны сразу.</p>
+        <a href="/subscription-tiers">Пополнить баланс</a>
+        <a href="/faq" class="secondary">FAQ</a>
     </div>
 
-    <!-- Поиск / Веб -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">🔍</span>
-            <span class="category-title">Поиск и внешние данные</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Веб-поиск</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Быстрый поиск по теме</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Глубокое исследование темы</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Тренды новостей</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Погода</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Котировки акций</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Курс криптовалюты</div>
-                <div class="row-cost"><span class="cost-badge cost-low">2</span></div>
-            </div>
-        </div>
+    <div class="footer-links" style="text-align: center; margin-top: 24px; padding-top: 24px; padding-bottom: 24px; color: #6C727F; font-size: 13px;">
+        <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Главная</a>
+        <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
+        <a href="/pricing" style="color: #59636E; text-decoration: none; margin-right: 16px;">Расценки</a>
+        <a href="/subscription-tiers" style="color: #59636E; text-decoration: none; margin-right: 16px;">Тарифы</a>
+        <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Туториал</a>
+        <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
+        <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
+        <a href="/terms" style="color: #59636E; text-decoration: none;">Правила</a>
+        <div style="margin-top: 8px;">2026 ASI Biont</div>
     </div>
-
-    <!-- Напоминания -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">🔔</span>
-            <span class="category-title">Напоминания</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Установить напоминание</div>
-                <div class="row-cost"><span class="cost-badge cost-low">5</span></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Проактивные -->
-    <div class="category">
-        <div class="category-header" onclick="toggleCategory(this)">
-            <span class="category-icon">🤖</span>
-            <span class="category-title">Проактивные действия агента</span>
-            <span class="category-chevron">▼</span>
-        </div>
-        <div class="category-body">
-            <div class="pricing-row">
-                <div class="row-name">Проактивное сообщение<span>Агент сам пишет утреннюю сводку, напоминания и инсайты</span></div>
-                <div class="row-cost"><span class="cost-badge cost-low">7</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Проактивный пост в ленту</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">10</span></div>
-            </div>
-            <div class="pricing-row">
-                <div class="row-name">Проактивный пост в канал</div>
-                <div class="row-cost"><span class="cost-badge cost-mid">15</span></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- CTA -->
-    <div class="cta-block">
-        <p>1 500 токенов при регистрации. Все функции доступны сразу.</p>
-        <a href="/subscription-tiers" class="btn-primary">Пополнить баланс</a>
-        <a href="/faq" class="btn-secondary">FAQ</a>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer-links">
-        <a href="/">Главная</a>
-        <a href="/faq">FAQ</a>
-        <a href="/pricing">Расценки</a>
-        <a href="/subscription-tiers">Пополнить</a>
-        <a href="/tutorial">Туториал</a>
-        <a href="https://t.me/aleksandrinsider" target="_blank">Поддержка</a>
-        <a href="/privacy">Соглашение</a>
-        <a href="/terms">Правила</a>
-        <div class="footer-copy">2026 ASI Biont</div>
-    </div>
-
 </div>
-
-<script>
-function toggleCategory(header) {
-    var cat = header.closest('.category');
-    cat.classList.toggle('open');
-}
-</script>
-
-<!-- Yandex.Metrika counter -->
 <script type="text/javascript">
-    (function(m,e,t,r,i,k,a){
-        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
-        m[i].l=1*new Date();
-        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
-        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
-    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=106862663', 'ym');
-    ym(106862663, 'init', {ssr:true, webvisor:true, clickmap:true, trackLinks:true, accurateTrackBounce:true});
+    (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})(window,document,'script','https://mc.yandex.ru/metrika/tag.js?id=106862663','ym');
+    ym(106862663,'init',{ssr:true,webvisor:true,clickmap:true,trackLinks:true,accurateTrackBounce:true});
 </script>
-<noscript><div><img src="https://mc.yandex.ru/watch/106862663" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<noscript><div><img src="https://mc.yandex.ru/watch/106862663" style="position:absolute;left:-9999px;" alt=""/></div></noscript>
 </body>
 </html>
