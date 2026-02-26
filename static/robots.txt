@@ -7,6 +7,13 @@ Allow: /faq
 Disallow: /admin/
 Disallow: /api/
 Disallow: /health
+Disallow: /dashboard
+Disallow: /tasks
+Disallow: /profile
+Disallow: /tg_auth
+Disallow: /logout
+Disallow: /direct_login
+Disallow: /security-dashboard
 
 # Allow all major search engines
 User-agent: Googlebot
