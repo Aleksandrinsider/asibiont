@@ -148,7 +148,7 @@ Discord-канал (личный): publish_to_discord(content). ТРЕБУЕТ: 
 EMAIL (Resend API):
 — send_email(to, subject, body, sender_name, sender_email) — УНИВЕРСАЛЬНАЯ отправка одиночного email. Предложение, вопрос, напоминание, благодарность — что угодно. НЕ требует кампании.
 — start_email_campaign(name, goal, target_audience, offer, tone, max_emails, daily_limit) — создать email-кампанию для привлечения клиентов.
-— send_outreach_email(campaign_id, recipient_email, recipient_name, recipient_company, context, subject, body) — отправить персонализированное outreach-письмо в рамках кампании.
+— send_outreach_email(campaign_id, recipient_email, recipient_name, recipient_company, context, subject, body) — отправить персонализированное outreach-письмо в рамках кампании. ЛИМИТ: 20 писем в сутки НА ОДНОГО ПОЛЬЗОВАТЕЛЯ (не 20 на всех, а отдельно для каждого). Одному адресату не пишем дважды в общей истории.
 — add_email_leads(campaign_id, emails_json) — добавить email-адреса в кампанию (JSON-массив [{{"email": ..., "name": ..., "company": ...}}]).
 — reply_to_outreach_email(outreach_id, reply_text) — ответить на входящий reply в рамках кампании.
 — send_follow_up_email(outreach_id, recipient_email, subject, body) — follow-up если не ответили.
@@ -372,7 +372,7 @@ You're a negotiator, not a mailman. You manage correspondence to a result: sent 
 EMAIL (Resend API):
 — send_email(to, subject, body, sender_name, sender_email) — UNIVERSAL single email send. Proposal, question, reminder, thank you — anything. Does NOT require a campaign.
 — start_email_campaign(name, goal, target_audience, offer, tone, max_emails, daily_limit) — create email campaign for client acquisition.
-— send_outreach_email(campaign_id, recipient_email, recipient_name, recipient_company, context, subject, body) — send personalized outreach email within a campaign.
+— send_outreach_email(campaign_id, recipient_email, recipient_name, recipient_company, context, subject, body) — send personalized outreach email within a campaign. LIMIT: 20 emails per day PER USER (each user has their own independent limit of 20, not shared). Same address is never emailed twice across all campaigns.
 — add_email_leads(campaign_id, emails_json) — add email addresses to campaign (JSON array [{{"email": ..., "name": ..., "company": ...}}]).
 — reply_to_outreach_email(outreach_id, reply_text) — reply to an incoming reply within a campaign.
 — send_follow_up_email(outreach_id, recipient_email, subject, body) — follow-up if no reply.
