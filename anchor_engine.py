@@ -1669,6 +1669,25 @@ class AnchorEngine:
                     batch_group='email',
                 ))
 
+            # --- Auto-complete: нет черновиков, нет следующих follow-up, все письма завершены ---
+            if not drafts and not stale_emails:
+                active_outreach = session.query(EmailOutreach).filter(
+                    EmailOutreach.campaign_id == campaign.id,
+                    EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                    EmailOutreach.follow_up_count < (campaign.max_follow_ups or 2),
+                ).count()
+                total_outreach = session.query(EmailOutreach).filter(
+                    EmailOutreach.campaign_id == campaign.id,
+                ).count()
+                if total_outreach > 0 and active_outreach == 0:
+                    campaign.status = 'completed'
+                    try:
+                        session.commit()
+                        logger.info(f"[ANCHOR] Auto-completed campaign #{campaign.id} «{campaign.name}» — all emails done")
+                    except Exception:
+                        session.rollback()
+                    continue  # Skip anchors for this completed campaign
+
             # --- 4. Дневной отчёт по кампании (если есть активность) ---
             total_sent = campaign.emails_sent or 0
             total_replied = campaign.emails_replied or 0
