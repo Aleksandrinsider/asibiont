@@ -8228,6 +8228,24 @@ async def resend_webhook_handler(request):
                     import re as _re
                     text_body = _re.sub(r'<[^>]+>', '', text_body).strip()
 
+                # --- Отрезаем цитату оригинального письма (строки «> ...» и заголовок «Чт, ...») ---
+                if text_body:
+                    import re as _re_q
+                    lines = text_body.split('\n')
+                    clean_lines = []
+                    for _ln in lines:
+                        if _ln.strip().startswith('>'):
+                            break  # всё после первой цитируемой строки — мусор
+                        clean_lines.append(_ln)
+                    clean_body = '\n'.join(clean_lines).strip()
+                    # Убираем финальный заголовок «Пн/Вт/.../Чт, DD мес YYYY г. в HH:MM, Имя:»
+                    clean_body = _re_q.sub(
+                        r'\n+(?:Пн|Вт|Ср|Чт|Пт|Сб|Вс|On\s)[^\n]{0,200}$',
+                        '', clean_body, flags=_re_q.DOTALL
+                    ).strip()
+                    if clean_body:
+                        text_body = clean_body
+
                 to_raw = payload.get('to', '') or data.get('to', '')
                 to_email = to_raw[0] if isinstance(to_raw, list) and to_raw else str(to_raw)
                 logger.info(f"[RESEND_WEBHOOK] Parsed: from_email={from_email}, to={to_email}, subject={subject[:80] if subject else ''}, body_len={len(text_body or '')}")

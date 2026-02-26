@@ -8883,6 +8883,31 @@ async def send_email(
             campaign.emails_sent = (campaign.emails_sent or 0) + 1
             session.commit()
             logger.info(f"[SEND_EMAIL] Outreach #{outreach.id} saved for {to_clean} (campaign #{campaign.id})")
+            # --- Автоматически создаём EmailContact если его ещё нет ---
+            try:
+                from models import EmailContact as _EmailContact
+                existing_contact = session.query(_EmailContact).filter_by(
+                    user_id=user.id, email=to_clean
+                ).first()
+                if not existing_contact:
+                    # Пытаемся извлечь имя из адреса (например «Иван Иванов <ivan@example.com>»)
+                    _contact_name = None
+                    if to and '<' in str(to):
+                        import re as _re_c
+                        _nm = _re_c.match(r'^(.+?)\s*<', str(to))
+                        if _nm:
+                            _contact_name = _nm.group(1).strip().strip('"\'')
+                    new_contact = _EmailContact(
+                        user_id=user.id,
+                        email=to_clean,
+                        name=_contact_name,
+                        source='outreach',
+                    )
+                    session.add(new_contact)
+                    session.commit()
+                    logger.info(f"[SEND_EMAIL] EmailContact auto-created for {to_clean}")
+            except Exception as _ce:
+                logger.warning(f"[SEND_EMAIL] Failed to auto-create contact: {_ce}")
         except Exception as _e:
             logger.warning(f"[SEND_EMAIL] Failed to save outreach record: {_e}")
             session.rollback()
