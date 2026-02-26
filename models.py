@@ -681,6 +681,51 @@ class UserMessage(Base):
     recipient = relationship("User", foreign_keys=[recipient_id], backref="received_messages")
 
 
+class AgentActivityLog(Base):
+    """
+    Лог всех автономных действий агента: делегирование, посты, рассылки, TG-канал, и т.д.
+    Отображается в табе «Активность» на дашборде.
+    """
+    __tablename__ = 'agent_activity_log'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Тип действия
+    activity_type = Column(String(50), nullable=False, index=True)
+    # Типы: 'delegation' | 'post_newsfeed' | 'post_telegram' | 'user_message' | 'email' | 'other'
+
+    # Заголовок / краткое описание (для строки в списке)
+    title = Column(String(300), nullable=False)
+
+    # Детали: текст поста, тело письма, текст сообщения и т.п.
+    content = Column(Text)
+
+    # Кому / куда (получатель делегирования, канал, email и т.д.)
+    target = Column(String(300))
+
+    # Статус
+    status = Column(String(50), default='completed', index=True)
+    # delegation: pending / accepted / rejected / cancelled
+    # post_*: published / deleted
+    # other: completed / failed
+
+    # Ссылка на исходную запись (task.id, post.id, …)
+    ref_id = Column(Integer)
+
+    # Результат / ответ (для делегирования — ответ получателя; для рассылок — ответ)
+    result = Column(Text)
+
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="agent_activities")
+
+    __table_args__ = (
+        Index('ix_agent_activity_user_type', 'user_id', 'activity_type'),
+    )
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):
