@@ -6187,7 +6187,6 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             return "Текст поста не может быть пустым."
 
         # Лимит: 1 пост в ленту в день (можно обойти force=True если пользователь явно просит)
-        if not force:
         import datetime as dt
         import pytz as _pytz_cp
         _utz_cp = _pytz_cp.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
@@ -6197,8 +6196,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             Post.user_id == user.id,
             Post.created_at >= _today_start_cp,
         ).count()
-        if posts_today >= 1:
-                return "⚠️ Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
+        if posts_today >= 1 and not force:
+            return "⚠️ Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
 
         post = Post(
             user_id=user.id,
