@@ -2621,12 +2621,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 }
 
                 // === Agent Activities (delegations, posts, TG, etc.) ===
-                if (agentActivities.length > 0) {
-                    const actHdr = document.createElement('div');
-                    actHdr.style.cssText = 'font-size: 12px; font-weight: 600; color: #8C959F; text-transform: uppercase; letter-spacing: 0.05em; padding: 14px 0 6px 0;';
-                    actHdr.textContent = '\u0410\u043a\u0442\u0438\u0432\u043d\u043e\u0441\u0442\u044c \u0430\u0433\u0435\u043d\u0442\u0430';
-                    list.appendChild(actHdr);
-                }
                 // Group by activity_type
                 const activityGroups = {};
                 agentActivities.forEach(a => {
@@ -2727,8 +2721,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         const canDelete = !['cancelled', 'deleted'].includes(a.status);
                         // For delegation: show cancel (status→cancelled) only if pending
                         const canCancel = type === 'delegation' && a.status === 'pending';
-                        // For telegram posts: no delete (already sent)
-                        const showDelete = canDelete && type !== 'post_telegram';
+                        const showDelete = canDelete;
 
                         const aRow = document.createElement('div');
                         aRow.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
@@ -2950,6 +2943,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             if (!id) return;
             const confirmMsg = type === 'delegation' ? 'Отменить и удалить это делегирование?' :
                                type === 'post_newsfeed' ? 'Удалить пост из ленты новостей?' :
+                               type === 'post_telegram' ? 'Удалить запись об этом Telegram-посте?' :
                                'Удалить запись об активности?';
             if (!confirm(confirmMsg)) return;
             try {
