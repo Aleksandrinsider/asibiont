@@ -7068,19 +7068,18 @@
             // Проверить заполненность профиля и показать модальное окно при необходимости
             checkProfileCompleteness();
             
-            // Убедиться что reports-view активен при загрузке
+            // Убедиться что chat-view активен при загрузке
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
             const reportsViewInit = document.getElementById('reports-view');
             if (chatView && feedView) {
-                // Всегда открываем Активность при первой загрузке
-                if (chatView) { chatView.classList.remove('active'); chatView.style.zIndex = '0'; }
+                // Всегда открываем Чат с ИИ при загрузке
+                if (chatView) { chatView.classList.add('active'); chatView.style.zIndex = '1'; }
                 if (feedView) { feedView.classList.remove('active'); feedView.style.zIndex = '0'; }
-                if (reportsViewInit) { reportsViewInit.classList.add('active'); reportsViewInit.style.zIndex = '1'; }
-                currentView = 'reports';
-                const rl = document.getElementById('reports-link'); if (rl) rl.style.opacity = '1';
-                const cl = document.getElementById('chat-link'); if (cl) cl.style.opacity = '0.5';
-                loadReports();
+                if (reportsViewInit) { reportsViewInit.classList.remove('active'); reportsViewInit.style.zIndex = '0'; }
+                currentView = 'chat';
+                const cl = document.getElementById('chat-link'); if (cl) cl.style.opacity = '1';
+                const rl = document.getElementById('reports-link'); if (rl) rl.style.opacity = '0.5';
             }
             
             // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
