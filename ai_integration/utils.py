@@ -50,6 +50,8 @@ else:
 weather_cache = {}
 news_cache = {}
 finance_cache = {}
+# 429 backoff for NewsAPI: unix timestamp "blocked until"
+_news_backoff_until: float = 0.0
 # Executor для фоновых задач
 background_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="api_cache")
 
@@ -538,7 +540,14 @@ def get_news_info(city=None, cache_ttl_minutes=120):
 
 def _load_news_sync(city=None):
     """Load news data synchronously from API"""
+    global _news_backoff_until
     try:
+        # 429 backoff check
+        if time.time() < _news_backoff_until:
+            remaining = int((_news_backoff_until - time.time()) / 60)
+            logger.info(f"[NEWS] NewsAPI backoff active, {remaining} min remaining — skipping request")
+            return None
+
         # Ключ кеша зависит от города
         if city and city.strip():
             cache_key = f"news_{city.lower().strip()}"
@@ -574,7 +583,14 @@ def _load_news_sync(city=None):
                 logger.warning(f"[NEWS] No articles in response: {data}")
                 return None
         else:
-            logger.warning(f"[NEWS] Failed to fetch news: {response.status_code} - {response.text}")
+            if response.status_code == 429:
+                _news_backoff_until = time.time() + 43200  # 12 часов
+                logger.warning(
+                    f"[NEWS] 429 from NewsAPI — dev quota exhausted. "
+                    f"Backoff 12h. Body: {response.text[:200]}"
+                )
+            else:
+                logger.warning(f"[NEWS] Failed to fetch news: {response.status_code} - {response.text}")
             return None
     except Exception as e:
         logger.error(f"[NEWS] Error fetching news: {e}")

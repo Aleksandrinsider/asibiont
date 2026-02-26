@@ -8703,132 +8703,160 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         }
 
         let isRecording = false;
+        let _currentRecognition = null;
+        let _mediaRecorder = null;
+        let _mediaChunks = [];
 
-        function startVoiceNote() {
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                showNotification(t('err-speech'), 'error');
-                return;
-            }
-            const voiceBtn = document.getElementById('note-voice-button');
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const recognition = new SpeechRecognition();
-            recognition.lang = (_currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-            recognition.onstart = function() {
-                if (voiceBtn) {
-                    voiceBtn.style.borderColor = '#068487';
-                    voiceBtn.style.animation = 'pulse 1s infinite';
-                }
-            };
-            recognition.onresult = function(event) {
-                const transcript = event.results[0][0].transcript;
-                const inp = document.getElementById('note-input');
-                if (inp) {
-                    inp.value = transcript;
-                    inp.focus();
-                }
-            };
-            recognition.onerror = function(event) {
-                const errMap = {
-                    'not-allowed': 'Разрешите доступ к микрофону в настройках браузера',
-                    'network': 'Ошибка сети — проверьте подключение',
-                    'no-speech': 'Речь не распознана, попробуйте ещё раз',
-                    'audio-capture': 'Микрофон не найден — проверьте подключение',
-                    'aborted': null,
-                };
-                const msg = errMap[event.error];
-                if (msg) showNotification(msg, 'error');
-                if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
-            };
-            recognition.onend = function() {
-                if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
-            };
-            try { recognition.start(); } catch(e) {
-                showNotification('Не удалось запустить голосовой ввод: ' + e.message, 'error');
-                if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
+        // ─── helpers ───────────────────────────────────────────────────────
+        function _hasSpeechApi() {
+            return ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
+        }
+
+        // Sends audio blob to /api/transcribe and returns text (or null on failure)
+        async function _transcribeBlob(blob) {
+            try {
+                const fd = new FormData();
+                fd.append('audio', blob, 'audio.webm');
+                const resp = await fetch('/api/transcribe', { method: 'POST', body: fd, credentials: 'include' });
+                const json = await resp.json();
+                return json.text || null;
+            } catch (e) {
+                console.error('[voice] transcribe error', e);
+                return null;
             }
         }
 
-        function startVoiceChat() {
-            // Сброс зависшего флага: если запись не идёт, но флаг установлен
-            if (isRecording) { isRecording = false; return; }
-            
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                showNotification(t('err-speech'), 'error');
+        // Stop any active recording / recognition
+        function _stopVoiceAll() {
+            if (_currentRecognition) { try { _currentRecognition.abort(); } catch(e){} _currentRecognition = null; }
+            if (_mediaRecorder && _mediaRecorder.state !== 'inactive') { try { _mediaRecorder.stop(); } catch(e){} }
+            isRecording = false;
+        }
+
+        // ─── Voice Note (note input) ────────────────────────────────────────
+        function startVoiceNote() {
+            const voiceBtn = document.getElementById('note-voice-button');
+            const inp = document.getElementById('note-input');
+
+            if (isRecording) { _stopVoiceAll(); if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; } return; }
+
+            function setActive() { if (voiceBtn) { voiceBtn.style.borderColor = '#068487'; voiceBtn.style.animation = 'pulse 1s infinite'; } }
+            function setIdle()   { if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; } }
+
+            // Path A: Web Speech API (Chrome / Edge)
+            if (_hasSpeechApi()) {
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const r = new SR();
+                _currentRecognition = r;
+                r.lang = (_currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
+                r.interimResults = false;
+                r.maxAlternatives = 1;
+                r.onstart = () => { isRecording = true; setActive(); };
+                r.onresult = (e) => { if (inp) { inp.value = e.results[0][0].transcript; inp.focus(); } };
+                r.onerror = (e) => {
+                    const m = {'not-allowed':'Разрешите доступ к микрофону','network':'Ошибка сети','no-speech':'Речь не распознана','audio-capture':'Микрофон не найден'}[e.error];
+                    if (m) showNotification(m, 'error');
+                    _currentRecognition = null; isRecording = false; setIdle();
+                };
+                r.onend = () => { _currentRecognition = null; isRecording = false; setIdle(); };
+                try { r.start(); } catch(e) { showNotification('Ошибка запуска: ' + e.message, 'error'); setIdle(); }
                 return;
             }
 
-            const voiceButton = document.getElementById('voice-button');
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const recognition = new SpeechRecognition();
-            
-            recognition.lang = (_currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-            
-            recognition.onstart = function() {
-                isRecording = true;
-
-                // Изменить стиль кнопки - цвет как у лого ASI Biont
-                voiceButton.style.backgroundColor = '#F6F8FA';
-                voiceButton.style.color = '#ffffff';
-                voiceButton.style.borderColor = '#068487';
-                // Сделать иконку белой
-                const micIcon = voiceButton.querySelector('img');
-                if (micIcon) {
-                    micIcon.style.filter = 'brightness(0) invert(1)';
-                }
-                // Можно добавить пульсацию
-                voiceButton.style.animation = 'pulse 1s infinite';
-            };
-            
-            recognition.onresult = function(event) {
-                const transcript = event.results[0][0].transcript;
-
-                
-                // Вставить текст в поле ввода
-                const messageInput = document.getElementById('message-input');
-                messageInput.value = transcript;
-                
-                // Автоматически отправить сообщение
-                sendChatMessage();
-            };
-            
-            recognition.onerror = function(event) {
-                const errMap = {
-                    'not-allowed': 'Разрешите доступ к микрофону в настройках браузера',
-                    'network': 'Ошибка сети — проверьте подключение',
-                    'no-speech': 'Речь не распознана, попробуйте ещё раз',
-                    'audio-capture': 'Микрофон не найден — проверьте подключение',
-                    'aborted': null,
+            // Path B: MediaRecorder + Whisper (Firefox / Safari)
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                _mediaChunks = [];
+                const mr = new MediaRecorder(stream);
+                _mediaRecorder = mr;
+                mr.ondataavailable = e => { if (e.data.size > 0) _mediaChunks.push(e.data); };
+                mr.onstop = async () => {
+                    stream.getTracks().forEach(t => t.stop());
+                    isRecording = false; setIdle();
+                    showNotification('Распознаю...', 'info');
+                    const blob = new Blob(_mediaChunks, { type: 'audio/webm' });
+                    const text = await _transcribeBlob(blob);
+                    if (text) { if (inp) { inp.value = text; inp.focus(); } }
+                    else showNotification('Не удалось распознать речь', 'error');
                 };
-                const msg = errMap[event.error];
-                if (msg) showNotification(msg, 'error');
-                resetVoiceButton();
-            };
-            
-            recognition.onend = function() {
-                resetVoiceButton();
-            };
-            
-            function resetVoiceButton() {
-                isRecording = false;
-                voiceButton.style.backgroundColor = '#FFFFFF';
-                voiceButton.style.color = '#374151';
-                voiceButton.style.borderColor = '#D1D9E0';
-                voiceButton.style.animation = '';
-                // Вернуть иконку к серому цвету
-                const micIcon = voiceButton.querySelector('img');
-                if (micIcon) {
-                    micIcon.style.filter = 'brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%)';
-                }
+                mr.start();
+                isRecording = true; setActive();
+                showNotification('Запись... нажмите снова чтобы остановить', 'info');
+            }).catch(() => showNotification('Нет доступа к микрофону', 'error'));
+        }
+
+        // ─── Voice Chat (chat input + auto-send) ───────────────────────────
+        function startVoiceChat() {
+            const voiceButton = document.getElementById('voice-button');
+
+            if (isRecording) { _stopVoiceAll(); _resetVoiceBtn(voiceButton); return; }
+
+            function _resetVoiceBtn(btn) {
+                if (!btn) return;
+                btn.style.backgroundColor = '#FFFFFF';
+                btn.style.color = '#374151';
+                btn.style.borderColor = '#D1D9E0';
+                btn.style.animation = '';
+                const ic = btn.querySelector('img');
+                if (ic) ic.style.filter = 'brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%)';
             }
-            
-            try { recognition.start(); } catch(e) {
-                showNotification('Не удалось запустить голосовой ввод: ' + e.message, 'error');
-                resetVoiceButton();
+            function _activateVoiceBtn(btn) {
+                if (!btn) return;
+                btn.style.backgroundColor = '#F6F8FA';
+                btn.style.borderColor = '#068487';
+                btn.style.animation = 'pulse 1s infinite';
+                const ic = btn.querySelector('img');
+                if (ic) ic.style.filter = 'brightness(0) invert(1)';
             }
+
+            // Path A: Web Speech API
+            if (_hasSpeechApi()) {
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const recognition = new SR();
+                _currentRecognition = recognition;
+                recognition.lang = (_currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+                recognition.onstart = () => { isRecording = true; _activateVoiceBtn(voiceButton); };
+                recognition.onresult = (e) => {
+                    const transcript = e.results[0][0].transcript;
+                    const inp = document.getElementById('message-input');
+                    if (inp) inp.value = transcript;
+                    sendChatMessage();
+                };
+                recognition.onerror = (e) => {
+                    const m = {'not-allowed':'Разрешите доступ к микрофону','network':'Ошибка сети','no-speech':'Речь не распознана','audio-capture':'Микрофон не найден'}[e.error];
+                    if (m) showNotification(m, 'error');
+                    _currentRecognition = null; isRecording = false; _resetVoiceBtn(voiceButton);
+                };
+                recognition.onend = () => { _currentRecognition = null; isRecording = false; _resetVoiceBtn(voiceButton); };
+                try { recognition.start(); } catch(e) { showNotification('Ошибка запуска: ' + e.message, 'error'); _resetVoiceBtn(voiceButton); }
+                return;
+            }
+
+            // Path B: MediaRecorder + Whisper (Firefox / Safari / etc)
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                _mediaChunks = [];
+                const mr = new MediaRecorder(stream);
+                _mediaRecorder = mr;
+                mr.ondataavailable = e => { if (e.data.size > 0) _mediaChunks.push(e.data); };
+                mr.onstop = async () => {
+                    stream.getTracks().forEach(t => t.stop());
+                    isRecording = false; _resetVoiceBtn(voiceButton);
+                    showNotification('Распознаю...', 'info');
+                    const blob = new Blob(_mediaChunks, { type: 'audio/webm' });
+                    const text = await _transcribeBlob(blob);
+                    if (text) {
+                        const inp = document.getElementById('message-input');
+                        if (inp) inp.value = text;
+                        sendChatMessage();
+                    } else {
+                        showNotification('Не удалось распознать речь', 'error');
+                    }
+                };
+                mr.start();
+                isRecording = true; _activateVoiceBtn(voiceButton);
+                showNotification('Запись... нажмите ещё раз для отправки', 'info');
+            }).catch(() => { showNotification('Нет доступа к микрофону', 'error'); _resetVoiceBtn(voiceButton); });
         }
         
         function showInfoModal(section) {

@@ -1826,6 +1826,81 @@ async def chat_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def transcribe_handler(request):
+    """POST /api/transcribe — транскрипция аудио через Groq / OpenAI Whisper.
+
+    Принимает multipart/form-data с полем 'audio' (WebM/OGG/M4A/MP3).
+    Возвращает {'text': '...'} или {'error': '...', 'status': ...}.
+    """
+    from config import GROQ_API_KEY, OPENAI_API_KEY
+    try:
+        session = await get_session(request)
+        if not session.get('user_id'):
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+
+        data = await request.post()
+        audio_field = data.get('audio')
+        if not audio_field:
+            return web.json_response({'error': 'audio field required'}, status=400)
+
+        audio_bytes = audio_field.file.read()
+        filename = getattr(audio_field, 'filename', None) or 'audio.webm'
+        if not filename or filename == 'blob':
+            filename = 'audio.webm'
+
+        if not GROQ_API_KEY and not OPENAI_API_KEY:
+            return web.json_response({'error': 'Транскрипция не настроена. Установите GROQ_API_KEY.'}, status=503)
+
+        async def _call_whisper(api_url, api_key):
+            form = aiohttp.FormData()
+            form.add_field('file', audio_bytes, filename=filename,
+                           content_type='audio/webm')
+            form.add_field('model', 'whisper-large-v3' if 'groq' in api_url else 'whisper-1')
+            form.add_field('language', 'ru')
+            form.add_field('response_format', 'json')
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    api_url,
+                    headers={'Authorization': f'Bearer {api_key}'},
+                    data=form,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    body = await resp.json()
+                    if resp.status == 200:
+                        return body.get('text', '').strip()
+                    logger.warning(f"[TRANSCRIBE] {api_url} → {resp.status}: {body}")
+                    return None
+
+        text = None
+        # Groq — бесплатный Whisper
+        if GROQ_API_KEY:
+            try:
+                text = await _call_whisper(
+                    'https://api.groq.com/openai/v1/audio/transcriptions', GROQ_API_KEY
+                )
+            except Exception as e:
+                logger.warning(f"[TRANSCRIBE] Groq error: {e}")
+
+        # OpenAI — платный фолбэк
+        if not text and OPENAI_API_KEY:
+            try:
+                text = await _call_whisper(
+                    'https://api.openai.com/v1/audio/transcriptions', OPENAI_API_KEY
+                )
+            except Exception as e:
+                logger.warning(f"[TRANSCRIBE] OpenAI error: {e}")
+
+        if text:
+            logger.info(f"[TRANSCRIBE] OK: '{text[:80]}'")
+            return web.json_response({'text': text})
+
+        return web.json_response({'error': 'Не удалось распознать речь'}, status=500)
+
+    except Exception as e:
+        logger.error(f"[TRANSCRIBE] Unexpected error: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_send_message_handler(request):
     """API endpoint for sending messages from frontend (delegation, task actions)"""
     try:
@@ -8428,6 +8503,7 @@ app.router.add_get('/tasks', tasks_handler)
 app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
 app.router.add_get('/chat/progress', chat_progress_handler)
+app.router.add_post('/api/transcribe', transcribe_handler)
 app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
 
