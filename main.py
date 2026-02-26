@@ -7124,6 +7124,72 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading task stats: {e}")
 
+            # Personal activity stats (last 30 days)
+            personal_stats = {
+                'tasks_completed': 0, 'tasks_completed_today': 0,
+                'tasks_deleted': 0, 'tasks_deleted_today': 0,
+                'goals_completed': 0, 'goals_completed_today': 0,
+                'activity_index': 0, 'active_days': 0,
+            }
+            try:
+                today_start_ps = datetime.now(dt_timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                # Tasks completed in 30d (prefer actual_completion_time, fallback to created_at)
+                from sqlalchemy import or_, and_
+                completed_tasks_30d = session_db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status == 'completed',
+                    or_(
+                        and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= thirty_days_ago),
+                        and_(Task.actual_completion_time.is_(None), Task.created_at >= thirty_days_ago)
+                    )
+                ).all()
+                personal_stats['tasks_completed'] = len(completed_tasks_30d)
+                personal_stats['tasks_completed_today'] = sum(
+                    1 for t in completed_tasks_30d
+                    if (t.actual_completion_time or t.created_at) and
+                       (t.actual_completion_time or t.created_at).replace(tzinfo=dt_timezone.utc) >= today_start_ps
+                )
+                # Cancelled / deleted tasks in 30d
+                personal_stats['tasks_deleted'] = session_db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status == 'cancelled',
+                    Task.created_at >= thirty_days_ago
+                ).count()
+                personal_stats['tasks_deleted_today'] = session_db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status == 'cancelled',
+                    Task.created_at >= today_start_ps
+                ).count()
+                # Goals completed in 30d
+                from models import Goal as _Goal
+                goals_30d = session_db.query(_Goal).filter(
+                    _Goal.user_id == user.id,
+                    _Goal.status == 'completed',
+                    _Goal.completed_at >= thirty_days_ago
+                ).all()
+                personal_stats['goals_completed'] = len(goals_30d)
+                personal_stats['goals_completed_today'] = sum(
+                    1 for g in goals_30d
+                    if g.completed_at and g.completed_at.replace(tzinfo=dt_timezone.utc) >= today_start_ps
+                )
+                # Active days (days with at least one interaction in 30d)
+                interactions_30d = session_db.query(Interaction.created_at).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.created_at >= thirty_days_ago
+                ).all()
+                active_days = len(set(i.created_at.date() for i in interactions_30d if i.created_at))
+                personal_stats['active_days'] = active_days
+                # Activity index: tasks*5 + goals*15 + posts*3 + active_days*0.67 → capped at 100
+                idx = min(100, round(
+                    personal_stats['tasks_completed'] * 5 +
+                    personal_stats['goals_completed'] * 15 +
+                    post_stats.get('total', 0) * 3 +
+                    active_days * 0.67
+                ))
+                personal_stats['activity_index'] = idx
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading personal stats: {e}")
+
             # Tokens spent today
             tokens_today = 0
             try:
@@ -7162,6 +7228,7 @@ async def api_reports_handler(request):
                 'agent_activities': agent_activities_data,
                 'post_stats': post_stats,
                 'task_stats': task_stats,
+                'personal_stats': personal_stats,
                 'tokens_today': tokens_today,
                 'delegated_to_me': delegated_to_me,
                 'delegated_to_me_today': delegated_to_me_today,

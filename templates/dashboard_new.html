@@ -2148,7 +2148,7 @@
             loadReports();
         }
 
-        var _reportsExpandedSet = new Set(['social-activity-block']);
+var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block']);
 
         async function loadReports() {
             try {
@@ -2196,6 +2196,7 @@
                 const delegatedToMe = data.delegated_to_me || 0;
                 const delegatedToMeToday = data.delegated_to_me_today || 0;
                 const tokensToday = data.tokens_today || 0;
+                const personalStats = data.personal_stats || {};
 
                 // Today's deltas from existing data
                 const todayStr = new Date().toISOString().slice(0, 10);
@@ -2215,6 +2216,67 @@
                         </div>
                         <div style="font-size: 12px; color: #8C959F; margin-top: 2px;">${label}</div>
                     </div>`;
+
+                // === COLLAPSIBLE: Личная активность ===
+                const personalKey = 'personal-activity-block';
+                const personalExpanded = _reportsExpandedSet.has(personalKey);
+                const personalSection = document.createElement('div');
+                personalSection.style.cssText = 'padding: 0; margin-bottom: 4px;';
+
+                const personalHeader = document.createElement('div');
+                personalHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                personalHeader.innerHTML = `
+                    <div style="display: flex; align-items: baseline; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('stat-personal')}</span>
+                        <span style="font-size: 12px; color: #8C959F;">${t('stat-30d')}</span>
+                    </div>
+                    <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${personalExpanded ? '0' : '-90'}deg);">
+                        <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                    </svg>
+                `;
+
+                const actIdx = personalStats.activity_index || 0;
+                const actIdxColor = actIdx >= 70 ? '#068487' : actIdx >= 40 ? '#F59E0B' : '#EF4444';
+                const personalDetails = document.createElement('div');
+                personalDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${personalExpanded ? 'none' : '0px'};`;
+                personalDetails.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px 0 14px 0;">
+                        ${sc(personalStats.goals_completed || 0, t('stat-goals-done'), personalStats.goals_completed_today || 0)}
+                        ${sc(personalStats.tasks_completed || 0, t('stat-tasks-done'), personalStats.tasks_completed_today || 0)}
+                        ${sc(personalStats.tasks_deleted || 0, t('stat-tasks-deleted'), personalStats.tasks_deleted_today || 0)}
+                        <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                            <div style="display: inline-flex; align-items: baseline; gap: 4px; justify-content: center; width: 100%;">
+                                <span style="font-size: 15px; font-weight: 400; color: ${actIdxColor}; line-height: 1.2;">${actIdx}%</span>
+                            </div>
+                            <div style="font-size: 12px; color: #8C959F; margin-top: 2px;">${t('stat-activity-index')}</div>
+                        </div>
+                    </div>
+                `;
+
+                personalHeader.onclick = () => {
+                    const chev = personalHeader.querySelector('.rpt-chev');
+                    const isCollapsed = personalDetails.style.maxHeight === '0px';
+                    if (isCollapsed) {
+                        personalDetails.style.overflow = 'hidden';
+                        personalDetails.style.maxHeight = personalDetails.scrollHeight + 'px';
+                        if (chev) chev.style.transform = 'rotate(0deg)';
+                        _reportsExpandedSet.add(personalKey);
+                        personalDetails.addEventListener('transitionend', function h() {
+                            if (_reportsExpandedSet.has(personalKey)) { personalDetails.style.maxHeight = 'none'; personalDetails.style.overflow = 'visible'; }
+                            personalDetails.removeEventListener('transitionend', h);
+                        });
+                    } else {
+                        personalDetails.style.overflow = 'hidden';
+                        personalDetails.style.maxHeight = personalDetails.scrollHeight + 'px';
+                        requestAnimationFrame(() => { personalDetails.style.maxHeight = '0px'; });
+                        if (chev) chev.style.transform = 'rotate(-90deg)';
+                        _reportsExpandedSet.delete(personalKey);
+                    }
+                };
+
+                personalSection.appendChild(personalHeader);
+                personalSection.appendChild(personalDetails);
+                list.appendChild(personalSection);
 
                 // === COLLAPSIBLE: Социальная активность ===
                 const socialKey = 'social-activity-block';
@@ -9249,8 +9311,9 @@
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Активность','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-conversion':'Конверсия','report-opened':'Открыто','report-delivered':'Доставлено','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
-      'stat-social':'Социальная активность','stat-biz':'Деловая активность','stat-30d':'за 30 дней','stat-today':'сегодня',
+      'stat-personal':'Личная активность','stat-social':'Социальная активность','stat-biz':'Деловая активность','stat-30d':'за 30 дней','stat-today':'сегодня',
       'stat-posts':'Постов','stat-likes':'Лайков','stat-views':'Просмотров','stat-comments':'Комментариев',
+      'stat-goals-done':'Целей достигнуто','stat-tasks-done':'Задач выполнено','stat-tasks-deleted':'Задач удалено','stat-activity-index':'Индекс активности',
       'stat-email-sent':'Email отправлено','stat-email-replied':'Email ответов','stat-email-conv':'Email конверсия','stat-email-campaigns':'Email кампаний',
       'stat-deleg-me':'Поручено мне','stat-deleg-by-me':'Поручено мной','stat-posts-feed':'Постов в ленту','stat-posts-tg':'Постов в Telegram','stat-posts-discord':'Постов в Discord',
       'camp-active':'Активна','camp-paused':'На паузе','camp-completed':'Завершена','camp-launched':'Кампания запущена','camp-on-pause':'Кампания на паузе',
@@ -9441,8 +9504,9 @@
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Activity','reports-empty':'No agent activity yet','reports-empty-desc':'Campaigns will appear here: who the agent contacted, what they replied, negotiation status.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-conversion':'Conversion','report-opened':'Opened','report-delivered':'Delivered','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
-      'stat-social':'Social activity','stat-biz':'Business activity','stat-30d':'last 30 days','stat-today':'today',
+      'stat-personal':'Personal activity','stat-social':'Social activity','stat-biz':'Business activity','stat-30d':'last 30 days','stat-today':'today',
       'stat-posts':'Posts','stat-likes':'Likes','stat-views':'Views','stat-comments':'Comments',
+      'stat-goals-done':'Goals achieved','stat-tasks-done':'Tasks completed','stat-tasks-deleted':'Tasks deleted','stat-activity-index':'Activity index',
       'stat-email-sent':'Emails sent','stat-email-replied':'Email replies','stat-email-conv':'Email conversion','stat-email-campaigns':'Email campaigns',
       'stat-deleg-me':'Assigned to me','stat-deleg-by-me':'Assigned by me','stat-posts-feed':'Feed posts','stat-posts-tg':'Telegram posts','stat-posts-discord':'Discord posts',
       'camp-active':'Active','camp-paused':'Paused','camp-completed':'Completed','camp-launched':'Campaign launched','camp-on-pause':'Campaign paused',
