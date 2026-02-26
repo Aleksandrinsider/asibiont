@@ -1186,7 +1186,7 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
                 else:
                     logger.warning(f"[TRANSLATE] API returned {response.status} for {target_lang}")
     except Exception as e:
-        logger.error(f"[TRANSLATE] Error translating to {target_lang}: {e}")
+        logger.error(f"[TRANSLATE] Error translating to {target_lang}: {type(e).__name__}: {e!r}")
     return None
 
 

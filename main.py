@@ -2463,6 +2463,9 @@ async def session_error_middleware(request, handler):
     """Handle corrupted session cookies"""
     try:
         return await handler(request)
+    except web.HTTPException:
+        # Normal HTTP responses (404, 403, etc.) — pass through without logging
+        raise
     except json.JSONDecodeError as e:
         logger.error(f"Corrupted session cookie detected: {e}, clearing cookie")
         # Create response without session cookie
@@ -2475,16 +2478,34 @@ async def session_error_middleware(request, handler):
         raise
 
 
+# Paths commonly probed by bots/scanners — suppress noisy 404 logs for these
+_BOT_SCAN_PATHS = ('/wp-admin', '/wordpress', '/wp-login', '/xmlrpc.php',
+                   '/.env', '/phpmyadmin', '/admin/config', '/setup-config')
+
+
 @web.middleware
 async def logging_middleware(request, handler):
     """Log all incoming requests"""
-    logger.info(f"Incoming request: {request.method} {request.path} from {request.remote}")
+    path = request.path
+    is_bot_probe = any(p in path for p in _BOT_SCAN_PATHS)
+    if not is_bot_probe:
+        logger.info(f"Incoming request: {request.method} {path} from {request.remote}")
     try:
         response = await handler(request)
-        logger.info(f"Response: {request.method} {request.path} -> {response.status}")
+        if not is_bot_probe:
+            logger.info(f"Response: {request.method} {path} -> {response.status}")
         return response
+    except web.HTTPException as e:
+        if e.status == 404 and is_bot_probe:
+            # Silently drop 404s for bot scanner paths
+            raise
+        if e.status >= 500:
+            logger.error(f"HTTP {e.status} on {request.method} {path}: {e}")
+        else:
+            logger.debug(f"HTTP {e.status} on {request.method} {path}")
+        raise
     except Exception as e:
-        logger.error(f"Error handling {request.method} {request.path}: {e}")
+        logger.error(f"Error handling {request.method} {path}: {e}")
         raise
 
 
