@@ -8,14 +8,6 @@ import pytz
 import json
 from datetime import datetime, timedelta, timezone
 
-
-class _SafeDict(dict):
-    """Возвращает '{key}' для неизвестных ключей вместо KeyError.
-    Нужно чтобы JSON-примеры в промпте вроде {"email": "..."} не ломали format().
-    """
-    def __missing__(self, key):
-        return '{' + key + '}'
-
 from .context_builder import context_builder
 from .system_prompt import select_prompt_version
 
@@ -270,21 +262,24 @@ If user says "done/finished/completed" → complete_task()"""
     complexity = "medium"  # Можно определить на основе контекста
     base_prompt = select_prompt_version(subscription_tier, complexity, lang=lang)
 
-    # Заполняем шаблон — SafeDict оставляет неизвестные {ключи} (JSON в промпте) как есть
-    prompt = base_prompt.format_map(_SafeDict(
-        tier_info=tier_info,
-        user_username=user_username,
-        current_time_str=current_time_str,
-        current_date_str=current_date_str,
-        tier_value=tier_value,
-        profile=profile,
-        search_context=search_context,
-        memory_section=memory_section,
-        weather=weather,
-        news=news,
-        proactive_context=proactive_context or "",
-        task_section=task_section
-    ))
+    # Заполняем шаблон — ручной replace чтобы избежать KeyError/ValueError
+    # от JSON-примеров вроде {"email": "..."} внутри промпта
+    prompt = base_prompt
+    for _key, _val in (
+        ('tier_info', tier_info),
+        ('user_username', user_username),
+        ('current_time_str', current_time_str),
+        ('current_date_str', current_date_str),
+        ('tier_value', tier_value),
+        ('profile', profile),
+        ('search_context', search_context),
+        ('memory_section', memory_section),
+        ('weather', weather),
+        ('news', news),
+        ('proactive_context', proactive_context or ""),
+        ('task_section', task_section),
+    ):
+        prompt = prompt.replace('{' + _key + '}', str(_val))
 
     # Добавляем инструкцию по профилю — ПЕРЕД промптом для 2+ пустых полей (чтобы перебивала всё)
     if profile_instruction and len(profile_missing) >= 2:
