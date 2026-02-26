@@ -2237,7 +2237,7 @@
                     section.appendChild(header);
 
                     const details = document.createElement('div');
-                    details.style.cssText = 'overflow: hidden; transition: max-height 0.3s ease;';
+                    details.style.cssText = 'overflow: hidden; transition: max-height 0.3s ease; padding-bottom: 1px;';
 
                     header.onclick = () => {
                         const chev = header.querySelector('.rpt-chev');
@@ -2338,7 +2338,10 @@
                                     if (ochev) ochev.style.transform = 'rotate(0deg)';
                                     _reportsExpandedSet.add(oKey);
                                     oBody.addEventListener('transitionend', function oh() {
-                                        if (_reportsExpandedSet.has(oKey)) oBody.style.maxHeight = 'none';
+                                        if (_reportsExpandedSet.has(oKey)) {
+                                            oBody.style.maxHeight = 'none';
+                                            if (details.style.maxHeight !== '0px') details.style.maxHeight = 'none';
+                                        }
                                         oBody.removeEventListener('transitionend', oh);
                                     });
                                 } else {
