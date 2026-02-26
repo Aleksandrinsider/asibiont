@@ -6830,10 +6830,10 @@ async def api_outreach_reply_handler(request):
             was_replied = outreach.status == 'replied'
             outreach.status = 'replied'
             if outreach.reply_text:
-                outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + reply_text)[:5000]
+                outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(dt_timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + reply_text)[:5000]
             else:
                 outreach.reply_text = reply_text[:5000]
-            outreach.reply_at = datetime.now(timezone.utc)
+            outreach.reply_at = datetime.now(dt_timezone.utc)
             if not was_replied:
                 campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
                 if campaign:
@@ -7750,12 +7750,15 @@ async def resend_webhook_handler(request):
                 if email_id:
                     try:
                         from config import RESEND_API_KEY
-                        if RESEND_API_KEY:
+                        import os as _os
+                        # Use RESEND_RECEIVING_API_KEY if set (full-access key), else fall back to RESEND_API_KEY
+                        receiving_key = _os.environ.get('RESEND_RECEIVING_API_KEY') or RESEND_API_KEY
+                        if receiving_key:
                             import aiohttp as _aiohttp
                             async with _aiohttp.ClientSession() as http:
                                 r = await http.get(
                                     f'https://api.resend.com/emails/receiving/{email_id}',
-                                    headers={'Authorization': f'Bearer {RESEND_API_KEY}'},
+                                    headers={'Authorization': f'Bearer {receiving_key}'},
                                     timeout=_aiohttp.ClientTimeout(total=10),
                                 )
                                 resp_text = await r.text()
@@ -7770,6 +7773,8 @@ async def resend_webhook_handler(request):
                                         raw_from = rec.get('from', '')
                                     if not subject:
                                         subject = rec.get('subject', '')
+                                elif r.status == 401:
+                                    logger.warning(f"[RESEND_WEBHOOK] Receiving API 401 — API key restricted to sending only. Set RESEND_RECEIVING_API_KEY env var with a full-access key.")
                                 else:
                                     logger.warning(f"[RESEND_WEBHOOK] Receiving API returned {r.status}")
                     except Exception as e:
@@ -7825,10 +7830,10 @@ async def resend_webhook_handler(request):
                         was_replied = outreach.status == 'replied'
                         outreach.status = 'replied'
                         if outreach.reply_text:
-                            outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + text_body)[:5000]
+                            outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(dt_timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + text_body)[:5000]
                         else:
                             outreach.reply_text = text_body[:5000]
-                        outreach.reply_at = datetime.now(timezone.utc)
+                        outreach.reply_at = datetime.now(dt_timezone.utc)
                         if not was_replied:
                             campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
                             if campaign:
