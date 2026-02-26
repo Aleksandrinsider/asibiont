@@ -1810,22 +1810,18 @@ class AnchorEngine:
             logger.debug(f"[ANCHOR] User {user.telegram_id}: skip post — outside hours ({current_hour})")
             return anchors
 
-        # ── Индивидуальное время для поста в ленту ──
-        # Каждый пользователь получает уникальное время на основе user.id + дня
-        # Окно: 10:00–21:00 (660 минут), hash от id+date → стабильное но разное каждый день
+        # ── Soft throttle: не более одного якоря каждые 4ч в рабочее время ──
+        # Строгое «индивидуальное окно» убрано — оно пропускало дни при перезапуске бота.
+        # Cooldown=4h на якоре уже ограничивает частоту; лимит постов за день = MAX_FEED_PER_DAY.
+        # Дополнительно: рассеиваем нагрузку по user.id чтобы не всё сразу в 10:00
         import hashlib
-        day_seed = f"{user.id}:{user_now.strftime('%Y-%m-%d')}:{posts_today}"
+        day_seed = f"{user.id}:{user_now.strftime('%Y-%m-%d')}"
         uid_hash = int(hashlib.md5(day_seed.encode()).hexdigest()[:8], 16)
-        feed_offset_minutes = uid_hash % 660  # 0..659 минут внутри окна 10:00-21:00
-        preferred_hour = 10 + feed_offset_minutes // 60
-        preferred_minute = feed_offset_minutes % 60
-
-        current_minutes = user_now.hour * 60 + user_now.minute
-        target_minutes = preferred_hour * 60 + preferred_minute
-
-        # Окно: ±60 мин от индивидуального времени (расширено для надёжности)
-        if abs(current_minutes - target_minutes) > 60:
-            logger.debug(f"[ANCHOR] User {user.telegram_id}: skip post — window miss (now={current_minutes}, target={target_minutes}, preferred={preferred_hour}:{preferred_minute:02d})")
+        # Минимальный час старта = 10 + (hash % 3), т.е. 10, 11 или 12
+        # Это мягко распределяет старт у разных пользователей, но не блокирует весь день
+        earliest_start_hour = 10 + (uid_hash % 3)
+        if user_now.hour < earliest_start_hour:
+            logger.debug(f"[ANCHOR] User {user.telegram_id}: skip post — before personal start hour {earliest_start_hour}:00")
             return anchors
 
         # Собираем «материал» для AI:
@@ -2150,10 +2146,12 @@ class AnchorEngine:
                 post_text = await self._ai_compose_post(user, anchor_data, session, mode='feed')
                 if not post_text:
                     logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for feed post")
-                    return
-
-                # Создаём Post в БД
-                post = Post(
+                    # Помечаем якорь доставленным (skip) чтобы не копились undelivered якоря
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
                     user_id=user.id,
                     username=user.username or user.first_name or f'user_{user.telegram_id}',
                     content=post_text,

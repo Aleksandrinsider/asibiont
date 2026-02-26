@@ -2183,22 +2183,25 @@
                 const totalPostsNewsfeed = agentActivities.filter(a => a.activity_type === 'post_newsfeed').length;
                 const totalPostsTg = agentActivities.filter(a => a.activity_type === 'post_telegram').length;
                 const postStats = data.post_stats || {total: 0, likes: 0, views: 0, comments: 0};
-                const tokensToday = data.tokens_today || 0;
+                const delegatedToMe = data.delegated_to_me || 0;
+                const delegatedToMeToday = data.delegated_to_me_today || 0;
 
                 // Today's deltas from existing data
                 const todayStr = new Date().toISOString().slice(0, 10);
                 const isToday = s => s && s.slice(0, 10) === todayStr;
                 const sentToday = campaigns.reduce((n, c) => n + (c.outreach || []).filter(o => isToday(o.sent_at)).length, 0);
                 const repliedToday = campaigns.reduce((n, c) => n + (c.outreach || []).filter(o => isToday(o.reply_at)).length, 0);
-                const delegToday = agentActivities.filter(a => a.activity_type === 'delegation' && isToday(a.created_at)).length;
+                const delegByMeToday = agentActivities.filter(a => a.activity_type === 'delegation' && isToday(a.created_at)).length;
                 const nfToday = agentActivities.filter(a => a.activity_type === 'post_newsfeed' && isToday(a.created_at)).length;
                 const tgToday = agentActivities.filter(a => a.activity_type === 'post_telegram' && isToday(a.created_at)).length;
 
                 const sc = (val, label, delta) => `
                     <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${val}</div>
+                        <div style="display: inline-flex; align-items: baseline; gap: 4px; justify-content: center; width: 100%;">
+                            <span style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${val}</span>
+                            ${delta > 0 ? `<span style="font-size: 11px; color: #068487;">+${delta}</span>` : ''}
+                        </div>
                         <div style="font-size: 12px; color: #8C959F; margin-top: 2px;">${label}</div>
-                        ${delta > 0 ? `<div style="font-size: 11px; color: #068487; margin-top: 1px;">+${delta} сегодня</div>` : ''}
                     </div>`;
 
                 const statsRow = document.createElement('div');
@@ -2208,8 +2211,8 @@
                     ${sc(totalReplied, 'Email ответов', repliedToday)}
                     ${sc(totalConv + '%', 'Email конверсия', 0)}
                     ${sc(campaigns.length, 'Email кампаний', 0)}
-                    ${sc(tokensToday, 'Токенов сегодня', 0)}
-                    ${sc(totalDelegations, 'Делегирований', delegToday)}
+                    ${sc(delegatedToMe, 'Поручено мне', delegatedToMeToday)}
+                    ${sc(totalDelegations, 'Поручено мной', delegByMeToday)}
                     ${sc(totalPostsNewsfeed, 'Постов в ленту', nfToday)}
                     ${sc(totalPostsTg, 'Постов в Telegram', tgToday)}
                     ${sc(postStats.total, 'Постов за 30 дней', postStats.total_today || 0)}
@@ -2433,6 +2436,12 @@
                 }
 
                 // === Agent Activities (delegations, posts, TG, etc.) ===
+                if (agentActivities.length > 0) {
+                    const actHdr = document.createElement('div');
+                    actHdr.style.cssText = 'font-size: 12px; font-weight: 600; color: #8C959F; text-transform: uppercase; letter-spacing: 0.05em; padding: 14px 0 6px 0;';
+                    actHdr.textContent = '\u0410\u043a\u0442\u0438\u0432\u043d\u043e\u0441\u0442\u044c \u0430\u0433\u0435\u043d\u0442\u0430';
+                    list.appendChild(actHdr);
+                }
                 // Group by activity_type
                 const activityGroups = {};
                 agentActivities.forEach(a => {

@@ -7076,6 +7076,25 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading token stats: {e}")
 
+            # Delegations TO me (tasks assigned to my username)
+            delegated_to_me = 0
+            delegated_to_me_today = 0
+            try:
+                my_username = user.username
+                if my_username:
+                    dm_q = session_db.query(Task).filter(
+                        Task.delegated_to_username == my_username,
+                        Task.delegation_status.in_(['pending', 'accepted', 'in_progress'])
+                    )
+                    delegated_to_me = dm_q.count()
+                    today_start_d = datetime.now(dt_timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                    delegated_to_me_today = session_db.query(Task).filter(
+                        Task.delegated_to_username == my_username,
+                        Task.created_at >= today_start_d
+                    ).count()
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading delegated_to_me: {e}")
+
             return web.json_response({
                 'campaigns': campaigns_data,
                 'emails': [],
@@ -7083,6 +7102,8 @@ async def api_reports_handler(request):
                 'post_stats': post_stats,
                 'task_stats': task_stats,
                 'tokens_today': tokens_today,
+                'delegated_to_me': delegated_to_me,
+                'delegated_to_me_today': delegated_to_me_today,
             })
         finally:
             session_db.close()
