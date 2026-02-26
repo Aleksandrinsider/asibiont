@@ -8637,17 +8637,29 @@
                 }
             };
             recognition.onerror = function(event) {
-                showNotification(t('err-speech-recog') + ' ' + event.error, 'error');
+                const errMap = {
+                    'not-allowed': 'Разрешите доступ к микрофону в настройках браузера',
+                    'network': 'Ошибка сети — проверьте подключение',
+                    'no-speech': 'Речь не распознана, попробуйте ещё раз',
+                    'audio-capture': 'Микрофон не найден — проверьте подключение',
+                    'aborted': null,
+                };
+                const msg = errMap[event.error];
+                if (msg) showNotification(msg, 'error');
                 if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
             };
             recognition.onend = function() {
                 if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
             };
-            recognition.start();
+            try { recognition.start(); } catch(e) {
+                showNotification('Не удалось запустить голосовой ввод: ' + e.message, 'error');
+                if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
+            }
         }
 
         function startVoiceChat() {
-            if (isRecording) return; // Предотвратить повторный запуск
+            // Сброс зависшего флага: если запись не идёт, но флаг установлен
+            if (isRecording) { isRecording = false; return; }
             
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 showNotification(t('err-speech'), 'error');
@@ -8691,13 +8703,19 @@
             };
             
             recognition.onerror = function(event) {
-                console.error('Ошибка распознавания:', event.error);
-                showNotification(t('err-speech-recog') + ' ' + event.error, 'error');
+                const errMap = {
+                    'not-allowed': 'Разрешите доступ к микрофону в настройках браузера',
+                    'network': 'Ошибка сети — проверьте подключение',
+                    'no-speech': 'Речь не распознана, попробуйте ещё раз',
+                    'audio-capture': 'Микрофон не найден — проверьте подключение',
+                    'aborted': null,
+                };
+                const msg = errMap[event.error];
+                if (msg) showNotification(msg, 'error');
                 resetVoiceButton();
             };
             
             recognition.onend = function() {
-
                 resetVoiceButton();
             };
             
@@ -8714,7 +8732,10 @@
                 }
             }
             
-            recognition.start();
+            try { recognition.start(); } catch(e) {
+                showNotification('Не удалось запустить голосовой ввод: ' + e.message, 'error');
+                resetVoiceButton();
+            }
         }
         
         function showInfoModal(section) {
