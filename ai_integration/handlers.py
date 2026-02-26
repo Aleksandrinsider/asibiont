@@ -6161,7 +6161,7 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
             session.close()
 
 
-async def create_post(content: str, user_id: int, session=None):
+async def create_post(content: str, user_id: int, session=None, force: bool = False):
     """
     📝 ПУБЛИКАЦИЯ ПОСТА В ЛЕНТУ НОВОСТЕЙ
     
@@ -6186,7 +6186,8 @@ async def create_post(content: str, user_id: int, session=None):
         if not content or not content.strip():
             return "Текст поста не может быть пустым."
 
-        # Лимит: 1 пост в ленту в день
+        # Лимит: 1 пост в ленту в день (можно обойти force=True если пользователь явно просит)
+        if not force:
         import datetime as dt
         import pytz as _pytz_cp
         _utz_cp = _pytz_cp.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
@@ -6197,7 +6198,7 @@ async def create_post(content: str, user_id: int, session=None):
             Post.created_at >= _today_start_cp,
         ).count()
         if posts_today >= 1:
-            return "⚠️ Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
+                return "⚠️ Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
 
         post = Post(
             user_id=user.id,
@@ -6384,7 +6385,7 @@ async def delete_post(user_id: int, post_id: int = None, session=None):
             session.close()
 
 
-async def publish_to_telegram(content: str, image_url: str = None, user_id: int = None, session=None):
+async def publish_to_telegram(content: str, image_url: str = None, user_id: int = None, session=None, force: bool = False):
     """
     📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
     
@@ -6435,7 +6436,7 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         ).count()
         
         total_channel_posts_today = auto_channel_today + manual_channel_today
-        if total_channel_posts_today >= 1:
+        if total_channel_posts_today >= 1 and not force:
             channel = user.telegram_channel or 'канал'
             if not channel.startswith('@') and not channel.startswith('-'):
                 channel = f"@{channel}"
@@ -9062,6 +9063,7 @@ async def publish_to_discord(
     user_id: int = None,
     session=None,
     close_session: bool = True,
+    force: bool = False,
 ):
     """📢 ПУБЛИКАЦИЯ В DISCORD канал пользователя через webhook.
     Требования: discord_webhook должен быть указан в профиле (Настройки → Discord).
@@ -9087,23 +9089,24 @@ async def publish_to_discord(
         if not user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
             return "❌ Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
 
-        # Лимит: 1 пост в Discord в день
-        import pytz as _pytz_dc
-        import datetime as _dt_dc
-        _utz_dc = _pytz_dc.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
-        _today_dc = _dt_dc.datetime.now(_utz_dc).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_pytz_dc.UTC).replace(tzinfo=None)
-        try:
-            from models import AgentActivityLog as _AAL
-            _discord_today = session.query(_AAL).filter(
-                _AAL.user_id == user.id,
-                _AAL.activity_type == 'post_discord',
-                _AAL.created_at >= _today_dc,
-                _AAL.status == 'published',
-            ).count()
-            if _discord_today >= 1:
-                return "⚠️ Сегодня пост в Discord уже опубликован (лимит — 1 в день). Следующий можно завтра."
-        except Exception as _lim_e:
-            logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
+        # Лимит: 1 пост в Discord в день (можно обойти force=True если пользователь явно просит)
+        if not force:
+            import pytz as _pytz_dc
+            import datetime as _dt_dc
+            _utz_dc = _pytz_dc.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+            _today_dc = _dt_dc.datetime.now(_utz_dc).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_pytz_dc.UTC).replace(tzinfo=None)
+            try:
+                from models import AgentActivityLog as _AAL
+                _discord_today = session.query(_AAL).filter(
+                    _AAL.user_id == user.id,
+                    _AAL.activity_type == 'post_discord',
+                    _AAL.created_at >= _today_dc,
+                    _AAL.status == 'published',
+                ).count()
+                if _discord_today >= 1:
+                    return "⚠️ Сегодня пост в Discord уже опубликован (лимит — 1 в день). Следующий можно завтра."
+            except Exception as _lim_e:
+                logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
 
         import aiohttp as _aiohttp
         # Если есть картинка — публикуем через embed
