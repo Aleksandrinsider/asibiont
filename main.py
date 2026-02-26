@@ -6743,6 +6743,65 @@ async def api_outreach_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_campaign_status_handler(request):
+    """PATCH /api/campaigns/{campaign_id}/status — set status active or paused."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        campaign_id = int(request.match_info['campaign_id'])
+        body = await request.json()
+        new_status = body.get('status')
+        if new_status not in ('active', 'paused'):
+            return web.json_response({'error': 'Invalid status'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import EmailCampaign
+            campaign = session_db.query(EmailCampaign).filter_by(id=campaign_id, user_id=user.id).first()
+            if not campaign:
+                return web.json_response({'error': 'Campaign not found'}, status=404)
+            campaign.status = new_status
+            session_db.commit()
+            return web.json_response({'ok': True, 'status': new_status})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error updating campaign status: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_campaign_delete_handler(request):
+    """DELETE /api/campaigns/{campaign_id} — delete campaign and its outreach."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        campaign_id = int(request.match_info['campaign_id'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import EmailCampaign, EmailOutreach
+            campaign = session_db.query(EmailCampaign).filter_by(id=campaign_id, user_id=user.id).first()
+            if not campaign:
+                return web.json_response({'error': 'Campaign not found'}, status=404)
+            session_db.query(EmailOutreach).filter_by(campaign_id=campaign_id).delete()
+            session_db.delete(campaign)
+            session_db.commit()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error deleting campaign: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_reports_handler(request):
     """API for getting email reports — campaigns + standalone emails."""
     try:
@@ -8066,6 +8125,8 @@ app.router.add_post('/api/notes', api_notes_handler)
 app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 app.router.add_get('/api/reports', api_reports_handler)
+app.router.add_patch('/api/campaigns/{campaign_id}/status', api_campaign_status_handler)
+app.router.add_delete('/api/campaigns/{campaign_id}', api_campaign_delete_handler)
 app.router.add_post('/api/outreach/{outreach_id}/reply', api_outreach_reply_handler)
 app.router.add_delete('/api/outreach/{outreach_id}', api_outreach_delete_handler)
 app.router.add_get('/api/email-contacts', api_email_contacts_handler)
