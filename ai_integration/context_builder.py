@@ -396,7 +396,29 @@ class ContextBuilder:
             except Exception as e:
                 logger.warning(f"[INBOX_CTX] Error: {e}")
 
-            # PREMIUM АЛЕРТЫ
+            # ═══ ОТВЕТЫ НА EMAIL (outreach replies) ═══
+            try:
+                from models import EmailOutreach, EmailCampaign
+                recent_replies = session.query(EmailOutreach).filter(
+                    EmailOutreach.user_id == user.id,
+                    EmailOutreach.status == 'replied',
+                    EmailOutreach.reply_text != None,
+                    EmailOutreach.reply_text != ''
+                ).order_by(EmailOutreach.reply_at.desc()).limit(5).all()
+
+                if recent_replies:
+                    reply_lines = []
+                    for r in recent_replies:
+                        name = r.recipient_name or r.recipient_email
+                        reply_preview = (r.reply_text or '')[:120].replace('\n', ' ')
+                        reply_lines.append(f"  {name} ({r.recipient_email}): {reply_preview}")
+                    hints.append(
+                        f"ОТВЕТЫ НА EMAIL ({len(recent_replies)}): контакты ответили на письма кампании — "
+                        f"ты уже знаешь содержание ответов, НЕ спрашивай пользователя 'что они написали':\n"
+                        + "\n".join(reply_lines)
+                    )
+            except Exception as e:
+                logger.warning(f"[EMAIL_REPLY_CTX] Error: {e}")
             alert_hints = self.build_premium_alerts_context(user_id, session)
             if alert_hints:
                 hints.extend(alert_hints[:2])
