@@ -568,6 +568,24 @@ class HybridAutonomousAgent:
         AI иногда передаёт неправильные имена параметров —
         эта функция исправляет самые частые ошибки.
         """
+        # === Универсально: убираем кавычки из имён параметров ===
+        # DeepSeek иногда присылает ключи вида '"email"' вместо 'email'
+        reserved = {'user_id', 'session', 'close_session'}
+        needs_fix = [k for k in params if k not in reserved and (k.startswith('"') or k.startswith("'"))]
+        for bad_key in needs_fix:
+            clean_key = bad_key.strip('"\' ')
+            if clean_key and clean_key not in params:
+                params[clean_key] = params.pop(bad_key)
+            elif clean_key:
+                params.pop(bad_key)  # дубль — удаляем
+
+        # === add_email_leads: leads может прийти как list/dict вместо строки ===
+        if tool_name == 'add_email_leads' and 'leads' in params:
+            v = params['leads']
+            if isinstance(v, (list, dict)):
+                import json as _json
+                params['leads'] = _json.dumps(v, ensure_ascii=False)
+
         if tool_name == 'find_relevant_contacts_for_task':
             if 'description' in params and 'task_description' not in params:
                 params['task_description'] = params.pop('description')

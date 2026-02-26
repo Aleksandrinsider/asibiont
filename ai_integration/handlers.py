@@ -8458,34 +8458,48 @@ async def add_email_leads(
 
         # Парсим leads
         parsed = []
-        leads_str = (leads or '').strip()
-        # Убираем двойное экранирование которое иногда добавляет AI
-        leads_clean = leads_str.replace('\\"', '"')
-        try:
-            raw = json.loads(leads_clean)
-            if isinstance(raw, list):
-                # normalize keys: strip extra quotes that AI may add
-                for item in raw:
-                    if isinstance(item, dict):
-                        clean = {k.strip('"\' '): v for k, v in item.items()}
-                        parsed.append(clean)
-            elif isinstance(raw, str):
-                # double-encoded
-                raw2 = json.loads(raw)
-                if isinstance(raw2, list):
-                    for item in raw2:
+
+        # Если AI передал leads как list/dict — работаем напрямую
+        if isinstance(leads, (list, dict)):
+            raw_list = leads if isinstance(leads, list) else [leads]
+            for item in raw_list:
+                if isinstance(item, dict):
+                    clean = {k.strip('"\' '): v for k, v in item.items()}
+                    parsed.append(clean)
+                elif isinstance(item, str) and '@' in item:
+                    parsed.append({'email': item.strip().lower()})
+        else:
+            leads_str = (leads or '').strip()
+            # Убираем двойное экранирование которое иногда добавляет AI
+            leads_clean = leads_str.replace('\\"', '"')
+            try:
+                raw = json.loads(leads_clean)
+                if isinstance(raw, list):
+                    # normalize keys: strip extra quotes that AI may add
+                    for item in raw:
                         if isinstance(item, dict):
                             clean = {k.strip('"\' '): v for k, v in item.items()}
                             parsed.append(clean)
-        except Exception:
-            parsed = []
+                elif isinstance(raw, dict):
+                    clean = {k.strip('"\' '): v for k, v in raw.items()}
+                    parsed.append(clean)
+                elif isinstance(raw, str):
+                    # double-encoded
+                    raw2 = json.loads(raw)
+                    if isinstance(raw2, list):
+                        for item in raw2:
+                            if isinstance(item, dict):
+                                clean = {k.strip('"\' '): v for k, v in item.items()}
+                                parsed.append(clean)
+            except Exception:
+                parsed = []
 
-        if not parsed:
-            # Простой список email через запятую/перенос строки
-            for line in re.split(r'[,\n;]+', leads):
-                email = line.strip()
-                if '@' in email and '.' in email:
-                    parsed.append({'email': email})
+            if not parsed and isinstance(leads, str):
+                # Простой список email через запятую/перенос строки
+                for line in re.split(r'[,\n;]+', leads):
+                    email_addr = line.strip()
+                    if '@' in email_addr and '.' in email_addr:
+                        parsed.append({'email': email_addr})
 
         if not parsed:
             return "❌ Не удалось распарсить email-адреса. Укажи JSON или через запятую."
