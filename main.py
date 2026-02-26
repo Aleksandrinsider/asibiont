@@ -8087,6 +8087,49 @@ async def add_test_users_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def admin_invite_handler(request):
+    """Send beta-invite email to a specified address (admin only).
+
+    GET /admin/invite?secret=ADMIN_SECRET&email=user@example.com
+    """
+    try:
+        admin_secret = request.query.get('secret', '')
+        expected_secret = os.getenv('ADMIN_SECRET')
+        if not admin_secret or admin_secret != expected_secret:
+            return web.json_response({'error': 'Unauthorized'}, status=403)
+
+        email = request.query.get('email', '').strip()
+        if not email or '@' not in email:
+            return web.json_response({'error': 'email parameter required'}, status=400)
+
+        base_url = os.getenv('BASE_URL', 'https://asibiont.com')
+        register_url = f"{base_url}/"
+
+        subject = "Приглашение на тестирование ASI Biont"
+        body = (
+            f"Здравствуйте!\n\n"
+            f"Вы приглашены для тестирования AI-агента ASI Biont.\n\n"
+            f"ASI Biont — это персональный AI-ассистент для управления задачами, "
+            f"целями и коммуникациями через Telegram-бота и веб-интерфейс.\n\n"
+            f"Для начала работы:\n"
+            f"1. Перейдите на {register_url}\n"
+            f"2. Войдите через Telegram (@asibiont_bot) или создайте аккаунт по email\n"
+            f"3. Напишите боту свои первые задачи или цели — агент разберётся сам\n\n"
+            f"Ваши отзывы очень важны для нас. Буду рад любым комментариям в ответ "
+            f"на это письмо.\n\n"
+            f"С уважением,\n"
+            f"Команда ASI Biont"
+        )
+
+        await send_email(email, subject, body)
+        logger.info(f"[INVITE] Beta invite sent to {email}")
+        return web.json_response({'success': True, 'sent_to': email})
+
+    except Exception as e:
+        logger.error(f"[INVITE] Failed to send invite to {request.query.get('email')}: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def withdraw_handler(request):
     """Handle referral balance withdrawal request"""
     try:
@@ -8489,6 +8532,7 @@ app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
 app.router.add_post('/admin/clear_database', clear_database_handler)
 app.router.add_get('/admin/add_test_users', add_test_users_handler)
+app.router.add_get('/admin/invite', admin_invite_handler)
 app.router.add_get('/api/elite_partners', api_elite_partners_handler)
 app.router.add_get('/api/contact_profile', api_contact_profile_handler)
 app.router.add_get('/api/favorite_contacts', api_favorite_contacts_handler)

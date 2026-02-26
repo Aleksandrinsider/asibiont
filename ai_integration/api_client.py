@@ -177,6 +177,8 @@ class ExternalAPIClient:
         self.cache = APICache()
         self.rate_limiter = RateLimiter()
         self._api_call_count: Dict[str, int] = {}
+        # Backoff-timestamps after 429 (api_name -> unix timestamp "blocked until")
+        self._backoff_until: Dict[str, float] = {}
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """Ленивая инициализация единой сессии"""
@@ -400,7 +402,7 @@ class ExternalAPIClient:
         sort_by: str = "publishedAt",
         page_size: int = 10,
         from_date: Optional[str] = None,
-        cache_ttl: int = 900  # 15 минут
+        cache_ttl: int = 21600  # 6 часов (Developer: 100 req/day)
     ) -> Optional[List[dict]]:
         """
         Поиск новостей через NewsAPI.
@@ -419,6 +421,13 @@ class ExternalAPIClient:
         if cached is not None:
             return cached
         
+        # Backoff: если сервер вернул 429 — ждём 12 ч прежде чем снова дёргать API
+        blocked_until = self._backoff_until.get('newsapi', 0)
+        if time.time() < blocked_until:
+            remaining = int((blocked_until - time.time()) / 60)
+            logger.info(f"[NEWS] Rate-limited by NewsAPI, backoff {remaining} min remaining")
+            return None
+
         # Rate-limit
         if not await self.rate_limiter.acquire('newsapi'):
             return None
@@ -473,7 +482,15 @@ class ExternalAPIClient:
                     logger.info(f"[NEWS] Found {len(articles)} articles for: {topic or 'headlines'}")
                     return articles
                 else:
-                    logger.warning(f"[NEWS] API error {response.status} for: {topic}")
+                    if response.status == 429:
+                        # 429 Too Many Requests — блокируем запросы на 12 часов
+                        self._backoff_until['newsapi'] = time.time() + 43200
+                        logger.warning(
+                            f"[NEWS] 429 received — NewsAPI dev quota exhausted. "
+                            f"Backoff 12h set. Body: {await response.text()[:200]}"
+                        )
+                    else:
+                        logger.warning(f"[NEWS] API error {response.status} for: {topic}")
                     return None
                     
         except Exception as e:
