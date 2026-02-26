@@ -165,6 +165,9 @@
             .right-column {
                 display: none !important;
             }
+            .center-column {
+                overflow-x: hidden;
+            }
         }
     </style>
 
@@ -3278,6 +3281,9 @@
                             gap: 14px; 
                             margin-bottom: 8px; 
                             padding: 8px;
+                            min-width: 0;
+                            max-width: 100%;
+                            box-sizing: border-box;
                         `;
 
                         const postTime = new Date(post.created_at);
@@ -3327,17 +3333,17 @@
                                 <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
                                     <div id="comments-${post.id}" style="margin-bottom: 8px;"></div>
                                     
-                                    <div style="display: flex; gap: 6px; align-items: center;">
+                                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; row-gap: 4px;">
                                         <input 
                                             type="text" 
                                             id="comment-input-${post.id}" 
                                             placeholder="${t('write-comment')}" 
-                                            style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
+                                            style="flex: 1; min-width: 120px; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
                                             onkeypress="handleCommentKeyPress(event, ${post.id})"
                                         >
                                         <button 
                                             onclick="addComment(${post.id})" 
-                                            style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" 
+                                            style="flex-shrink: 0; padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" 
                                             onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" 
                                             onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'"
                                             title="${t('send')}"
@@ -3346,12 +3352,13 @@
                                             id="translate-btn-${post.id}"
                                             onclick="translatePost(${post.id})"
                                             class="delete-btn"
+                                            style="flex-shrink: 0;"
                                             title="${t('translate')}"
                                         ><span id="translate-label-${post.id}">${TRANSLATE_GLOBE_SVG}</span></button>
                                         <button 
                                             id="like-btn-${post.id}"
                                             onclick="toggleLike(${post.id})" 
-                                            style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
+                                            style="flex-shrink: 0; padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                             onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'"
                                             onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'"
                                             title="${t('like')}"
@@ -3650,6 +3657,9 @@
                     gap: 14px; 
                     margin-bottom: 8px; 
                     padding: 8px 0;
+                    min-width: 0;
+                    max-width: 100%;
+                    box-sizing: border-box;
                 `;
 
                 const postTime = new Date(post.created_at);
@@ -3695,17 +3705,17 @@
                         <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
                             <div id="comments-${post.id}" style="margin-bottom: 8px;"></div>
                             
-                            <div style="display: flex; gap: 6px; align-items: center;">
+                            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; row-gap: 4px;">
                                 <input 
                                     type="text" 
                                     id="comment-input-${post.id}" 
                                     placeholder="${t('write-comment')}" 
-                                    style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
+                                    style="flex: 1; min-width: 120px; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
                                     onkeypress="handleCommentKeyPress(event, ${post.id})"
                                 >
                                 <button 
                                     onclick="addComment(${post.id})" 
-                                    style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" 
+                                    style="flex-shrink: 0; padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" 
                                     onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" 
                                     onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'"
                                     title="${t('send')}"
@@ -3714,12 +3724,13 @@
                                     id="translate-btn-${post.id}"
                                     onclick="translatePost(${post.id})"
                                     class="delete-btn"
+                                    style="flex-shrink: 0;"
                                     title="${t('translate')}"
                                 ><span id="translate-label-${post.id}">${TRANSLATE_GLOBE_SVG}</span></button>
                                 <button 
                                     id="like-btn-${post.id}"
                                     onclick="toggleLike(${post.id})" 
-                                    style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
+                                    style="flex-shrink: 0; padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                     onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'"
                                     title="${t('like')}"
@@ -5068,6 +5079,9 @@
                 gap: 14px; 
                 margin-bottom: 8px; 
                 padding: 8px 0;
+                min-width: 0;
+                max-width: 100%;
+                box-sizing: border-box;
             `;
 
             const postTime = new Date(post.created_at);
@@ -5117,17 +5131,17 @@
                     <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
                         <div id="comments-${post.id}" style="margin-bottom: 8px;"></div>
                         
-                        <div style="display: flex; gap: 6px; align-items: center;">
+                        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; row-gap: 4px;">
                             <input 
                                 type="text" 
                                 id="comment-input-${post.id}" 
                                 placeholder="${t('write-comment')}" 
-                                style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
+                                style="flex: 1; min-width: 120px; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
                                 onkeypress="handleCommentKeyPress(event, ${post.id})"
                             >
                             <button 
                                 onclick="addComment(${post.id})" 
-                                style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" 
+                                style="flex-shrink: 0; padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: inline-flex; align-items: center; justify-content: center;" 
                                 onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" 
                                 onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'"
                                 title="${t('send')}"
@@ -5136,12 +5150,13 @@
                                 id="translate-btn-${post.id}"
                                 onclick="translatePost(${post.id})"
                                 class="delete-btn"
+                                style="flex-shrink: 0;"
                                 title="${t('translate')}"
                             ><span id="translate-label-${post.id}">${TRANSLATE_GLOBE_SVG}</span></button>
                             <button 
                                 id="like-btn-${post.id}"
                                 onclick="toggleLike(${post.id})" 
-                                style="padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
+                                style="flex-shrink: 0; padding: 0 10px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
                                 onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'"
                                 title="${t('like')}"
