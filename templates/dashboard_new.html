@@ -2181,7 +2181,7 @@
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
                 const statsRow = document.createElement('div');
-                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 12px;';
+                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 0;';
                 statsRow.innerHTML = `
                     <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 16px; font-weight: 600; color: #1F2328; line-height: 1.2;">${totalSent}</div>
@@ -2202,7 +2202,7 @@
                 campaigns.forEach((c, idx) => {
                     const cKey = c.id || c.name || idx;
                     const section = document.createElement('div');
-                    section.style.cssText = 'padding: 0 12px;';
+                    section.style.cssText = 'padding: 0;';
 
                     const statusLabel = c.status === 'active' || c.status === 'running' ? 'активна' : c.status === 'paused' ? 'на паузе' : (c.status || 'завершена');
                     const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d73a49' : '#6C727F';
@@ -2351,7 +2351,7 @@
                 // === Individual emails ===
                 if (emails.length > 0) {
                     const emailsSec = document.createElement('div');
-                    emailsSec.style.cssText = 'padding: 0 12px;';
+                    emailsSec.style.cssText = 'padding: 0;';
 
                     const emailsHdr = document.createElement('div');
                     emailsHdr.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #D1D9E0;';
