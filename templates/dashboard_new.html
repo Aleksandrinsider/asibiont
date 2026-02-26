@@ -2185,6 +2185,8 @@
                 const totalDelegations = agentActivities.filter(a => a.activity_type === 'delegation').length;
                 const totalPostsNewsfeed = agentActivities.filter(a => a.activity_type === 'post_newsfeed').length;
                 const totalPostsTg = agentActivities.filter(a => a.activity_type === 'post_telegram').length;
+                const postStats = data.post_stats || {total: 0, likes: 0, views: 0, comments: 0};
+                const taskStats = data.task_stats || {completed_week: 0, total_active: 0, overdue: 0};
 
                 const statsRow = document.createElement('div');
                 statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 0 14px 0;';
@@ -2220,6 +2222,34 @@
                     <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${totalPostsTg}</div>
                         <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Постов в Telegram</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${postStats.total}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Постов за 30 дней</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${postStats.likes}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Лайков на постах</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${postStats.views}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Просмотров постов</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${postStats.comments}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Комментариев</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${taskStats.completed_week}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Задач за неделю</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${taskStats.total_active}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Задач активных</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: ${taskStats.overdue > 0 ? '#d73a49' : '#1F2328'}; line-height: 1.2;">${taskStats.overdue}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Просроченных</div>
                     </div>
                 `;
                 list.appendChild(statsRow);

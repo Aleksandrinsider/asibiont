@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, EmailContact, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, EmailContact, AgentActivityLog, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -6802,6 +6802,82 @@ async def api_campaign_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_activity_delete_handler(request):
+    """DELETE /api/activities/{activity_id} — delete an agent activity log entry.
+    For delegation: cancels the associated task. For posts: deletes the post."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        activity_id = int(request.match_info['activity_id'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            activity = session_db.query(AgentActivityLog).filter_by(id=activity_id, user_id=user.id).first()
+            if not activity:
+                return web.json_response({'error': 'Activity not found'}, status=404)
+            # For delegation: cancel the task
+            if activity.activity_type == 'delegation' and activity.ref_id:
+                task = session_db.query(Task).filter_by(id=activity.ref_id).first()
+                if task and task.delegation_status in ('pending',):
+                    task.delegation_status = 'cancelled'
+                    task.status = 'cancelled'
+            # For newsfeed posts: delete the post
+            elif activity.activity_type == 'post_newsfeed' and activity.ref_id:
+                post = session_db.query(Post).filter_by(id=activity.ref_id, user_id=user.id).first()
+                if post:
+                    session_db.delete(post)
+            # Delete the activity log entry
+            session_db.delete(activity)
+            session_db.commit()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error deleting activity: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_activity_status_handler(request):
+    """PATCH /api/activities/{activity_id}/status — update activity status (pause/resume delegation)."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        activity_id = int(request.match_info['activity_id'])
+        data = await request.json()
+        new_status = data.get('status', '')
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            activity = session_db.query(AgentActivityLog).filter_by(id=activity_id, user_id=user.id).first()
+            if not activity:
+                return web.json_response({'error': 'Activity not found'}, status=404)
+            activity.status = new_status
+            import datetime as _dt
+            activity.updated_at = _dt.datetime.now(_dt.timezone.utc)
+            # For delegation tasks: update underlying task too
+            if activity.activity_type == 'delegation' and activity.ref_id:
+                task = session_db.query(Task).filter_by(id=activity.ref_id).first()
+                if task:
+                    if new_status == 'cancelled':
+                        task.delegation_status = 'cancelled'
+                        task.status = 'cancelled'
+            session_db.commit()
+            return web.json_response({'ok': True, 'status': new_status})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error updating activity status: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_reports_handler(request):
     """API for getting email reports — campaigns + standalone emails."""
     try:
@@ -6891,9 +6967,81 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Status sync error: {e}")
 
+            # Agent activities (delegations, auto-posts, TG posts, etc.)
+            agent_activities_data = []
+            try:
+                activities = session_db.query(AgentActivityLog).filter_by(
+                    user_id=user.id
+                ).order_by(AgentActivityLog.created_at.desc()).limit(100).all()
+                for a in activities:
+                    agent_activities_data.append({
+                        'id': a.id,
+                        'activity_type': a.activity_type,
+                        'title': a.title,
+                        'content': a.content,
+                        'target': a.target,
+                        'status': a.status,
+                        'ref_id': a.ref_id,
+                        'result': a.result,
+                        'created_at': (a.created_at.isoformat() + 'Z') if a.created_at else None,
+                        'updated_at': (a.updated_at.isoformat() + 'Z') if a.updated_at else None,
+                    })
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading agent activities: {e}")
+
+            # Post engagement stats (last 30 days)
+            post_stats = {'total': 0, 'likes': 0, 'views': 0, 'comments': 0}
+            try:
+                from datetime import timedelta
+                thirty_days_ago = datetime.now(dt_timezone.utc) - timedelta(days=30)
+                user_posts = session_db.query(Post).filter(
+                    Post.user_id == user.id,
+                    Post.created_at >= thirty_days_ago
+                ).all()
+                post_stats['total'] = len(user_posts)
+                if user_posts:
+                    post_ids = [p.id for p in user_posts]
+                    post_stats['likes'] = session_db.query(PostLike).filter(
+                        PostLike.post_id.in_(post_ids)
+                    ).count()
+                    post_stats['views'] = session_db.query(PostView).filter(
+                        PostView.post_id.in_(post_ids)
+                    ).count()
+                    post_stats['comments'] = session_db.query(Comment).filter(
+                        Comment.post_id.in_(post_ids)
+                    ).count()
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading post stats: {e}")
+
+            # Task completion stats
+            task_stats = {'completed_week': 0, 'total_active': 0, 'overdue': 0}
+            try:
+                seven_days_ago = datetime.now(dt_timezone.utc) - timedelta(days=7)
+                task_stats['completed_week'] = session_db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status == 'completed',
+                    Task.updated_at >= seven_days_ago
+                ).count()
+                task_stats['total_active'] = session_db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['pending', 'in_progress'])
+                ).count()
+                now_utc = datetime.now(dt_timezone.utc)
+                task_stats['overdue'] = session_db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['pending', 'in_progress']),
+                    Task.due_date.isnot(None),
+                    Task.due_date < now_utc
+                ).count()
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading task stats: {e}")
+
             return web.json_response({
                 'campaigns': campaigns_data,
                 'emails': [],
+                'agent_activities': agent_activities_data,
+                'post_stats': post_stats,
+                'task_stats': task_stats,
             })
         finally:
             session_db.close()
@@ -8129,6 +8277,8 @@ app.router.add_patch('/api/campaigns/{campaign_id}/status', api_campaign_status_
 app.router.add_delete('/api/campaigns/{campaign_id}', api_campaign_delete_handler)
 app.router.add_post('/api/outreach/{outreach_id}/reply', api_outreach_reply_handler)
 app.router.add_delete('/api/outreach/{outreach_id}', api_outreach_delete_handler)
+app.router.add_delete('/api/activities/{activity_id}', api_activity_delete_handler)
+app.router.add_patch('/api/activities/{activity_id}/status', api_activity_status_handler)
 app.router.add_get('/api/email-contacts', api_email_contacts_handler)
 app.router.add_post('/api/email-contacts', api_email_contacts_handler)
 app.router.add_put('/api/email-contacts/{contact_id}', api_email_contact_edit_handler)
