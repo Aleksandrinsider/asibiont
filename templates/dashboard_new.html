@@ -2144,7 +2144,7 @@
             loadReports();
         }
 
-        var _reportsExpandedSet = new Set();
+        var _reportsExpandedSet = new Set(['social-activity-block']);
 
         async function loadReports() {
             try {
@@ -2162,25 +2162,31 @@
                 const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0;
                 if (emptyEl) emptyEl.style.display = hasListItems ? 'none' : '';
 
-                // === Summary stats (count from actual outreach data) ===
+                // === 30-day filter ===
+                const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                const isWithin30 = s => s && s >= thirtyDaysAgo;
+                const activities30 = agentActivities.filter(a => isWithin30(a.created_at));
+
+                // === Summary stats (last 30 days) ===
                 let totalSent = 0, totalReplied = 0;
                 campaigns.forEach(c => {
                     let oSent = 0, oReplied = 0;
                     if (c.outreach) {
                         c.outreach.forEach(o => {
-                            if (o.status && o.status !== 'draft') oSent++;
-                            if (o.status === 'replied') oReplied++;
+                            if (o.status && o.status !== 'draft' && isWithin30(o.sent_at)) oSent++;
+                            if (o.status === 'replied' && isWithin30(o.sent_at)) oReplied++;
                         });
                     }
-                    totalSent += Math.max(c.emails_sent || 0, oSent);
-                    totalReplied += Math.max(c.emails_replied || 0, oReplied);
+                    totalSent += oSent;
+                    totalReplied += oReplied;
                 });
-                totalSent += emails.length;
+                totalSent += emails.filter(e => isWithin30(e.sent_at || e.created_at)).length;
+                const campaigns30 = campaigns.filter(c => isWithin30(c.created_at)).length;
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
-                const totalDelegations = agentActivities.filter(a => a.activity_type === 'delegation').length;
-                const totalPostsNewsfeed = agentActivities.filter(a => a.activity_type === 'post_newsfeed').length;
-                const totalPostsTg = agentActivities.filter(a => a.activity_type === 'post_telegram').length;
+                const totalDelegations = activities30.filter(a => a.activity_type === 'delegation').length;
+                const totalPostsNewsfeed = activities30.filter(a => a.activity_type === 'post_newsfeed').length;
+                const totalPostsTg = activities30.filter(a => a.activity_type === 'post_telegram').length;
                 const postStats = data.post_stats || {total: 0, likes: 0, views: 0, comments: 0};
                 const delegatedToMe = data.delegated_to_me || 0;
                 const delegatedToMeToday = data.delegated_to_me_today || 0;
@@ -2204,16 +2210,59 @@
                         <div style="font-size: 12px; color: #8C959F; margin-top: 2px;">${label}</div>
                     </div>`;
 
-                // === TOP: Post stats (always visible) ===
-                const postStatsRow = document.createElement('div');
-                postStatsRow.style.cssText = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 0 14px 0;';
-                postStatsRow.innerHTML = `
-                    ${sc(postStats.total, 'Постов за 30 дней', postStats.total_today || 0)}
-                    ${sc(postStats.likes, 'Лайков на постах', postStats.likes_today || 0)}
-                    ${sc(postStats.views, 'Просмотров постов', postStats.views_today || 0)}
-                    ${sc(postStats.comments, 'Коммент. на постах', postStats.comments_today || 0)}
+                // === COLLAPSIBLE: Социальная активность ===
+                const socialKey = 'social-activity-block';
+                const socialExpanded = _reportsExpandedSet.has(socialKey);
+                const socialSection = document.createElement('div');
+                socialSection.style.cssText = 'padding: 0; margin-bottom: 4px;';
+
+                const socialHeader = document.createElement('div');
+                socialHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                socialHeader.innerHTML = `
+                    <div style="display: flex; align-items: baseline; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">Социальная активность</span>
+                        <span style="font-size: 11px; color: #8C959F;">за 30 дней</span>
+                    </div>
+                    <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${socialExpanded ? '0' : '-90'}deg);">
+                        <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                    </svg>
                 `;
-                list.appendChild(postStatsRow);
+
+                const socialDetails = document.createElement('div');
+                socialDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${socialExpanded ? 'none' : '0px'};`;
+                socialDetails.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px 0 14px 0;">
+                        ${sc(postStats.total, 'Постов', postStats.total_today || 0)}
+                        ${sc(postStats.likes, 'Лайков', postStats.likes_today || 0)}
+                        ${sc(postStats.views, 'Просмотров', postStats.views_today || 0)}
+                        ${sc(postStats.comments, 'Комментариев', postStats.comments_today || 0)}
+                    </div>
+                `;
+
+                socialHeader.onclick = () => {
+                    const chev = socialHeader.querySelector('.rpt-chev');
+                    const isCollapsed = socialDetails.style.maxHeight === '0px';
+                    if (isCollapsed) {
+                        socialDetails.style.overflow = 'hidden';
+                        socialDetails.style.maxHeight = socialDetails.scrollHeight + 'px';
+                        if (chev) chev.style.transform = 'rotate(0deg)';
+                        _reportsExpandedSet.add(socialKey);
+                        socialDetails.addEventListener('transitionend', function h() {
+                            if (_reportsExpandedSet.has(socialKey)) { socialDetails.style.maxHeight = 'none'; socialDetails.style.overflow = 'visible'; }
+                            socialDetails.removeEventListener('transitionend', h);
+                        });
+                    } else {
+                        socialDetails.style.overflow = 'hidden';
+                        socialDetails.style.maxHeight = socialDetails.scrollHeight + 'px';
+                        requestAnimationFrame(() => { socialDetails.style.maxHeight = '0px'; });
+                        if (chev) chev.style.transform = 'rotate(-90deg)';
+                        _reportsExpandedSet.delete(socialKey);
+                    }
+                };
+
+                socialSection.appendChild(socialHeader);
+                socialSection.appendChild(socialDetails);
+                list.appendChild(socialSection);
 
                 // === COLLAPSIBLE: Деловая активность ===
                 const bizKey = 'biz-activity-block';
@@ -2224,7 +2273,10 @@
                 const bizHeader = document.createElement('div');
                 bizHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                 bizHeader.innerHTML = `
-                    <span style="font-size: 13px; font-weight: 400; color: #1F2328;">Деловая активность</span>
+                    <div style="display: flex; align-items: baseline; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">Деловая активность</span>
+                        <span style="font-size: 11px; color: #8C959F;">за 30 дней</span>
+                    </div>
                     <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${bizExpanded ? '0' : '-90'}deg);">
                         <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                     </svg>
@@ -2237,7 +2289,7 @@
                         ${sc(totalSent, 'Email отправлено', sentToday)}
                         ${sc(totalReplied, 'Email ответов', repliedToday)}
                         ${sc(totalConv + '%', 'Email конверсия', 0)}
-                        ${sc(campaigns.length, 'Email кампаний', 0)}
+                        ${sc(campaigns30, 'Email кампаний', 0)}
                         ${sc(delegatedToMe, 'Поручено мне', delegatedToMeToday)}
                         ${sc(totalDelegations, 'Поручено мной', delegByMeToday)}
                         ${sc(totalPostsNewsfeed, 'Постов в ленту', nfToday)}
