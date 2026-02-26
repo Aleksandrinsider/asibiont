@@ -8204,9 +8204,10 @@ async def resend_webhook_handler(request):
                         logger.info(f"[RESEND_WEBHOOK] Reply saved for outreach #{outreach.id} from {from_email} (was_replied={was_replied})")
 
                         # Уведомим пользователя через TG если возможно
+                        _reply_user = None
                         try:
-                            user = session_db.query(User).filter_by(id=outreach.user_id).first()
-                            if user and user.telegram_id:
+                            _reply_user = session_db.query(User).filter_by(id=outreach.user_id).first()
+                            if _reply_user and _reply_user.telegram_id:
                                 tg_text = (
                                     f"📩 Новый ответ на email-кампанию!\n\n"
                                     f"От: {from_email}\n"
@@ -8220,11 +8221,21 @@ async def resend_webhook_handler(request):
                                     async with _aiohttp.ClientSession() as http:
                                         await http.post(
                                             f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
-                                            json={'chat_id': user.telegram_id, 'text': tg_text, 'parse_mode': 'HTML'},
+                                            json={'chat_id': _reply_user.telegram_id, 'text': tg_text, 'parse_mode': 'HTML'},
                                             timeout=_aiohttp.ClientTimeout(total=10),
                                         )
                         except Exception as e:
                             logger.warning(f"[RESEND_WEBHOOK] Failed to notify user via TG: {e}")
+
+                        # Немедленно запускаем anchor engine — не ждём следующего цикла
+                        try:
+                            from anchor_engine import get_anchor_engine as _get_engine
+                            _engine = _get_engine()
+                            if _engine and _reply_user and _reply_user.telegram_id:
+                                asyncio.create_task(_engine._process_user(_reply_user.telegram_id))
+                                logger.info(f"[RESEND_WEBHOOK] Triggered anchor engine for user {_reply_user.telegram_id}")
+                        except Exception as _ae:
+                            logger.warning(f"[RESEND_WEBHOOK] Failed to trigger anchor engine: {_ae}")
                     else:
                         logger.info(f"[RESEND_WEBHOOK] No matching outreach for reply from {from_email}")
 

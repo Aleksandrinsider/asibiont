@@ -8819,6 +8819,7 @@ async def send_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
+        resend_id = ''
         try:
             async with _aiohttp.ClientSession() as http:
                 from_header = f"{sender_name} <{sender_email}>"
@@ -8840,8 +8841,51 @@ async def send_email(
                 if resp.status not in (200, 201):
                     err = resp_data.get('message', str(resp_data))
                     return f"❌ Ошибка Resend API: {err}"
+                resend_id = resp_data.get('id', '')
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
+
+        # --- Сохраняем EmailOutreach для трекинга ответов через webhook ---
+        try:
+            from models import EmailCampaign as _EmailCampaign, EmailOutreach as _EmailOutreach
+            from datetime import datetime as _dt2, timezone as _tz2
+            # Ищем активную кампанию или создаём дефолтную «Персональные письма»
+            campaign = session.query(_EmailCampaign).filter_by(
+                user_id=user.id, status='active'
+            ).order_by(_EmailCampaign.created_at.desc()).first()
+            if not campaign:
+                campaign = _EmailCampaign(
+                    user_id=user.id,
+                    name='Персональные письма',
+                    goal='Индивидуальная переписка и коммуникация',
+                    target_audience='Индивидуальные получатели',
+                    offer='Персональная коммуникация',
+                    sender_name=sender_name,
+                    sender_email=sender_email,
+                    status='active',
+                    daily_limit=50,
+                    max_emails=1000,
+                )
+                session.add(campaign)
+                session.flush()
+            now_utc = _dt2.now(_tz2.utc)
+            outreach = _EmailOutreach(
+                campaign_id=campaign.id,
+                user_id=user.id,
+                recipient_email=to_clean,
+                subject=subject,
+                body=body,
+                status='sent',
+                resend_id=resend_id,
+                sent_at=now_utc,
+            )
+            session.add(outreach)
+            campaign.emails_sent = (campaign.emails_sent or 0) + 1
+            session.commit()
+            logger.info(f"[SEND_EMAIL] Outreach #{outreach.id} saved for {to_clean} (campaign #{campaign.id})")
+        except Exception as _e:
+            logger.warning(f"[SEND_EMAIL] Failed to save outreach record: {_e}")
+            session.rollback()
 
         try:
             from token_service import deduct_tokens
