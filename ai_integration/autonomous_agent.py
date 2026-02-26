@@ -1044,9 +1044,10 @@ class HybridAutonomousAgent:
                 user_message, profile_data=profile_data, tasks_data=tasks_data
             )
 
-            # ===== Tool calling loop (max 4 итераций) =====
+            # ===== Tool calling loop (max 3 итераций) =====
             all_execution_results = []
-            MAX_ITERATIONS = 4
+            MAX_ITERATIONS = 3
+            MAX_TOOLS_PER_ITERATION = 2  # Лимит инструментов за одну итерацию (скорость)
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'delegate_task'}  # строго 1 раз
@@ -1125,6 +1126,7 @@ class HybridAutonomousAgent:
                 # AI вызвал tools → добавляем assistant message в цепочку
                 messages.append(msg)
 
+                tools_executed_this_iter = 0
                 for tc_item in tool_calls:
                     func = tc_item.get('function', {})
                     name = func.get('name', '')
@@ -1136,6 +1138,16 @@ class HybridAutonomousAgent:
                     if not isinstance(args, dict):
                         logger.warning(f"[EXEC] {name}: arguments parsed to {type(args).__name__}, not dict — reset")
                         args = {}
+
+                    # Per-iteration tool cap — не больше MAX_TOOLS_PER_ITERATION за итерацию
+                    if tools_executed_this_iter >= MAX_TOOLS_PER_ITERATION:
+                        logger.warning(f"[SPEED] Skipping {name} — iteration tool cap ({MAX_TOOLS_PER_ITERATION}) reached")
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc_item['id'],
+                            "content": json.dumps({"status": f"skipped: max {MAX_TOOLS_PER_ITERATION} tools per iteration for speed"}, ensure_ascii=False)
+                        })
+                        continue
 
                     # Dedup: предотвращаем повторные вызовы того же tool с теми же параметрами
                     dedup_key = f"{name}:{json.dumps(args, sort_keys=True)}"
@@ -1187,6 +1199,7 @@ class HybridAutonomousAgent:
 
                     action = [{"tool": name, "params": args,
                                "reason": f"AI iter {iteration+1}: {name}"}]
+                    tools_executed_this_iter += 1
                     try:
                         results = await self.execute_actions(
                             action, user_id, session=session,
@@ -1224,6 +1237,7 @@ class HybridAutonomousAgent:
                     "Formulate the final response. IMPORTANT: rephrase tool data IN YOUR OWN WORDS, "
                     "weave into natural conversational text. Don't copy format, bullets, emoji headers from results. "
                     "If a tool found nothing useful — don't mention it. "
+                    "If you sent an email — report BRIEFLY who you wrote to and the topic, do NOT paste the email body. "
                     "PRESERVE ALL URLs from tool results — user needs clickable links. "
                     "Put links on separate lines at the end: Title — URL. "
                     "Write ONLY in English."
@@ -1233,6 +1247,7 @@ class HybridAutonomousAgent:
                     "Сформируй финальный ответ. ВАЖНО: перескажи данные из инструментов СВОИМИ СЛОВАМИ, "
                     "вплети в живой разговорный текст. Не копируй формат, bullets, emoji-заголовки из результатов. "
                     "Если инструмент не нашёл полезного — не упоминай это. "
+                    "Если отправлял email — сообщи КРАТКО кому написал и тему, НЕ вставляй текст письма. "
                     "ОБЯЗАТЕЛЬНО СОХРАНЯЙ ВСЕ URL-ССЫЛКИ из результатов инструментов — пользователю нужны кликабельные ссылки. "
                     "Ссылки выноси отдельными строками в конце ответа в формате: Название — URL"
                 )
