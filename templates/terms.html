@@ -152,6 +152,7 @@
             <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Главная</a>
             <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
             <a href="/subscription-tiers" style="color: #59636E; text-decoration: none; margin-right: 16px;">Тарифы</a>
+            <a href="/pricing" style="color: #59636E; text-decoration: none; margin-right: 16px;">Расценки</a>
             <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
             <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
             <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
@@ -219,7 +220,7 @@
         { h: '10. Изменения Правил', p: 'Оператор вправе вносить изменения в настоящие Правила. Актуальная версия размещена по адресу <a href="/terms">/terms</a>. Продолжение использования Сервиса после публикации изменений означает их принятие.' },
         { h: '11. Контакты', p: 'По всем вопросам обращайтесь: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' }
       ],
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал'
+      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fPricing: 'Расценки', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал'
     },
     en: {
       title: 'Terms of Use | ASI Biont',
@@ -278,7 +279,7 @@
         { h: '10. Changes to Terms', p: 'The Operator reserves the right to amend these Terms. The current version is always available at <a href="/terms">/terms</a>. Continued use of the Service after changes are published constitutes acceptance.' },
         { h: '11. Contact', p: 'For all inquiries, contact: <a href="https://t.me/aleksandrinsider">@aleksandrinsider</a>.' }
       ],
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial'
+      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fPricing: 'Rates', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial'
     }
   };
   function detect() {
@@ -327,10 +328,11 @@
     if (fl[0]) fl[0].textContent = t.fHome;
     if (fl[1]) fl[1].textContent = t.fFaq;
     if (fl[2]) fl[2].textContent = t.fPrice;
-    if (fl[3]) fl[3].textContent = t.fSupport;
-    if (fl[4]) fl[4].textContent = t.fPrivacy;
-    if (fl[5]) fl[5].textContent = t.fTerms;
-    if (fl[6]) fl[6].textContent = t.fTutorial;
+    if (fl[3]) fl[3].textContent = t.fPricing;
+    if (fl[4]) fl[4].textContent = t.fSupport;
+    if (fl[5]) fl[5].textContent = t.fPrivacy;
+    if (fl[6]) fl[6].textContent = t.fTerms;
+    if (fl[7]) fl[7].textContent = t.fTutorial;
   }
   document.addEventListener('DOMContentLoaded', function() {
     apply(detect());

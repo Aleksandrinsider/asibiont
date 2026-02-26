@@ -219,7 +219,7 @@
       topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $150 USDT'],
       ctaBtn1: 'Пополнить баланс', ctaBtn2: 'Установить приложение',
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал'
+      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fPricing: 'Расценки', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал'
     },
     en: {
       title: 'ASI Biont Tokens — Top Up Balance | AI Partner for Business',
@@ -238,7 +238,7 @@
       topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $150 USDT'],
       ctaBtn1: 'Top Up Balance', ctaBtn2: 'Install App',
       cta: '1,500 tokens on signup. All features available immediately.',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial'
+      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fPricing: 'Rates', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -293,10 +293,11 @@
     if (fl[0]) fl[0].textContent = t.fHome;
     if (fl[1]) fl[1].textContent = t.fFaq;
     if (fl[2]) fl[2].textContent = t.fPrice;
-    if (fl[3]) fl[3].textContent = t.fSupport;
-    if (fl[4]) fl[4].textContent = t.fPrivacy;
-    if (fl[5]) fl[5].textContent = t.fTerms;
-    if (fl[6]) fl[6].textContent = t.fTutorial;
+    if (fl[3]) fl[3].textContent = t.fPricing;
+    if (fl[4]) fl[4].textContent = t.fSupport;
+    if (fl[5]) fl[5].textContent = t.fPrivacy;
+    if (fl[6]) fl[6].textContent = t.fTerms;
+    if (fl[7]) fl[7].textContent = t.fTutorial;
   }
   window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {
