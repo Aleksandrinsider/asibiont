@@ -485,9 +485,10 @@ class ExternalAPIClient:
                     if response.status == 429:
                         # 429 Too Many Requests — блокируем запросы на 12 часов
                         self._backoff_until['newsapi'] = time.time() + 43200
+                        _body = await response.text()
                         logger.warning(
                             f"[NEWS] 429 received — NewsAPI dev quota exhausted. "
-                            f"Backoff 12h set. Body: {await response.text()[:200]}"
+                            f"Backoff 12h set. Body: {_body[:200]}"
                         )
                     else:
                         logger.warning(f"[NEWS] API error {response.status} for: {topic}")

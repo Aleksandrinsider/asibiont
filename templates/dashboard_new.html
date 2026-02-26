@@ -8831,7 +8831,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                 const r = new SR();
                 _currentRecognition = r;
-                r.lang = (window._currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
+                r.lang = (localStorage.getItem('asibiont_lang') || 'ru') === 'en' ? 'en-US' : 'ru-RU';
                 r.interimResults = false;
                 r.maxAlternatives = 1;
                 r.onstart = () => { isRecording = true; setActive(); };
@@ -8896,7 +8896,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                 const recognition = new SR();
                 _currentRecognition = recognition;
-                recognition.lang = (window._currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
+                recognition.lang = (localStorage.getItem('asibiont_lang') || 'ru') === 'en' ? 'en-US' : 'ru-RU';
                 recognition.interimResults = false;
                 recognition.maxAlternatives = 1;
                 recognition.onstart = () => { isRecording = true; _activateVoiceBtn(voiceButton); };
@@ -9793,6 +9793,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
   window.t = t;
   function apply(lang){
     _currentLang = lang;
+    window._currentLang = lang;
     var d=D[lang]; localStorage.setItem('asibiont_lang',lang); document.documentElement.lang=lang;
     document.querySelectorAll('[data-i18n]').forEach(function(el){var k=el.getAttribute('data-i18n');if(d[k])el.textContent=d[k];});
     document.querySelectorAll('[data-i18n-html]').forEach(function(el){var k=el.getAttribute('data-i18n-html');if(d[k])el.innerHTML=d[k];});

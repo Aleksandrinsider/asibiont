@@ -620,6 +620,17 @@ class HybridAutonomousAgent:
             else:
                 params['topic'] = 'общая информация'
 
+        elif tool_name in ('publish_to_telegram', 'publish_to_discord'):
+            if 'content' not in params or not params.get('content'):
+                # DeepSeek вызвал без content — извлекаем из user_message или reason
+                fallback_content = params.pop('text', None) or params.pop('message', None) or reason
+                if fallback_content:
+                    params['content'] = fallback_content
+                    logger.info(f"[FIX_PARAMS] {tool_name}: extracted content from fallback")
+                else:
+                    params['content'] = user_message[:500] if user_message else 'Новый пост'
+                    logger.info(f"[FIX_PARAMS] {tool_name}: used user_message as content")
+
         elif tool_name == 'research_topic':
             if 'topic' in params and 'query' not in params:
                 params['query'] = params.pop('topic')

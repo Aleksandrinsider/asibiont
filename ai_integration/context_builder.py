@@ -199,7 +199,7 @@ class ContextBuilder:
                         future_tasks.append(t.title)
 
                 if overdue:
-                    hints.append(f"ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])}")
+                    hints.append(f"ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])} — упомяни КРАТКО при случае, но НЕ зацикливайся. Если пользователь обсуждает другое — ОТВЕЧАЙ на его тему, а просроченное можно упомянуть в конце одним предложением.")
                 if today_tasks:
                     hints.append(f"СЕГОДНЯ ({len(today_tasks)}): {', '.join(today_tasks[:3])}")
                 if tomorrow_tasks:
@@ -426,16 +426,28 @@ class ContextBuilder:
                 ).order_by(EmailOutreach.reply_at.desc()).limit(5).all()
 
                 if recent_replies:
-                    reply_lines = []
+                    new_reply_lines = []
+                    answered_reply_lines = []
                     for r in recent_replies:
                         name = r.recipient_name or r.recipient_email
                         reply_preview = (r.reply_text or '')[:120].replace('\n', ' ')
-                        reply_lines.append(f"  {name} ({r.recipient_email}): {reply_preview}")
-                    hints.append(
-                        f"ОТВЕТЫ НА EMAIL ({len(recent_replies)}): контакты ответили на письма кампании — "
-                        f"ты уже знаешь содержание ответов, НЕ спрашивай пользователя 'что они написали':\n"
-                        + "\n".join(reply_lines)
-                    )
+                        if r.ai_reply_sent_at:
+                            answered_reply_lines.append(f"  ✅ {name} ({r.recipient_email}): [ОТВЕТ УЖЕ ОТПРАВЛЕН {r.ai_reply_sent_at.strftime('%d.%m %H:%M')}]")
+                        else:
+                            new_reply_lines.append(f"  🆕 {name} ({r.recipient_email}): {reply_preview}")
+                    parts = []
+                    if new_reply_lines:
+                        parts.append(
+                            f"НОВЫЕ ОТВЕТЫ НА EMAIL ({len(new_reply_lines)}): контакты ответили — НУЖЕН ответ через reply_to_outreach_email:\n"
+                            + "\n".join(new_reply_lines)
+                        )
+                    if answered_reply_lines:
+                        parts.append(
+                            f"ОТВЕЧЕННЫЕ EMAIL ({len(answered_reply_lines)}): ты уже ответил этим контактам, НЕ предлагай ответить повторно:\n"
+                            + "\n".join(answered_reply_lines)
+                        )
+                    if parts:
+                        hints.append("\n".join(parts))
             except Exception as e:
                 logger.warning(f"[EMAIL_REPLY_CTX] Error: {e}")
 
@@ -453,7 +465,7 @@ class ContextBuilder:
                             _EO.campaign_id == c.id,
                             _EO.status == 'draft',
                         ).count()
-                        camp_lines.append(f"  id={c.id} «{c.name}» — лидов ожидает: {pending_leads}, отправлено: {c.sent_count or 0}/{c.max_emails or '∞'}")
+                        camp_lines.append(f"  id={c.id} «{c.name}» — лидов ожидает: {pending_leads}, отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
                     hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ:\n" + "\n".join(camp_lines))
             except Exception as e:
                 logger.warning(f"[CAMPAIGNS_CTX] Error: {e}")
