@@ -2212,7 +2212,7 @@
                     <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
                         <div style="display: inline-flex; align-items: baseline; gap: 4px; justify-content: center; width: 100%;">
                             <span style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${val}</span>
-                            ${delta > 0 ? `<span style="font-size: 12px; color: #068487;">+${delta} сегодня</span>` : ''}
+                            ${delta > 0 ? `<span style="font-size: 12px; color: #068487;">+${delta} ${t('stat-today')}</span>` : ''}
                         </div>
                         <div style="font-size: 12px; color: #8C959F; margin-top: 2px;">${label}</div>
                     </div>`;
@@ -2227,8 +2227,8 @@
                 socialHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                 socialHeader.innerHTML = `
                     <div style="display: flex; align-items: baseline; gap: 6px;">
-                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">Социальная активность</span>
-                        <span style="font-size: 12px; color: #8C959F;">за 30 дней</span>
+                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('stat-social')}</span>
+                        <span style="font-size: 12px; color: #8C959F;">${t('stat-30d')}</span>
                     </div>
                     <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${socialExpanded ? '0' : '-90'}deg);">
                         <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -2239,10 +2239,10 @@
                 socialDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${socialExpanded ? 'none' : '0px'};`;
                 socialDetails.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px 0 14px 0;">
-                        ${sc(postStats.total, 'Постов', postStats.total_today || 0)}
-                        ${sc(postStats.likes, 'Лайков', postStats.likes_today || 0)}
-                        ${sc(postStats.views, 'Просмотров', postStats.views_today || 0)}
-                        ${sc(postStats.comments, 'Комментариев', postStats.comments_today || 0)}
+                        ${sc(postStats.total, t('stat-posts'), postStats.total_today || 0)}
+                        ${sc(postStats.likes, t('stat-likes'), postStats.likes_today || 0)}
+                        ${sc(postStats.views, t('stat-views'), postStats.views_today || 0)}
+                        ${sc(postStats.comments, t('stat-comments'), postStats.comments_today || 0)}
                     </div>
                 `;
 
@@ -2281,8 +2281,8 @@
                 bizHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                 bizHeader.innerHTML = `
                     <div style="display: flex; align-items: baseline; gap: 6px;">
-                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">Деловая активность</span>
-                        <span style="font-size: 12px; color: #8C959F;">за 30 дней</span>
+                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('stat-biz')}</span>
+                        <span style="font-size: 12px; color: #8C959F;">${t('stat-30d')}</span>
                     </div>
                     <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${bizExpanded ? '0' : '-90'}deg);">
                         <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -2293,14 +2293,14 @@
                 bizDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${bizExpanded ? 'none' : '0px'};`;
                 bizDetails.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px 0 14px 0;">
-                        ${sc(totalSent, 'Email отправлено', sentToday)}
-                        ${sc(totalReplied, 'Email ответов', repliedToday)}
-                        ${sc(totalConv + '%', 'Email конверсия', 0)}
-                        ${sc(campaigns30, 'Email кампаний', 0)}
-                        ${sc(delegatedToMe, 'Поручено мне', delegatedToMeToday)}
-                        ${sc(totalDelegations, 'Поручено мной', delegByMeToday)}
-                        ${sc(totalPostsNewsfeed, 'Постов в ленту', nfToday)}
-                        ${sc(totalPostsTg, 'Постов в Telegram', tgToday)}
+                        ${sc(totalSent, t('stat-email-sent'), sentToday)}
+                        ${sc(totalReplied, t('stat-email-replied'), repliedToday)}
+                        ${sc(totalConv + '%', t('stat-email-conv'), 0)}
+                        ${sc(campaigns30, t('stat-email-campaigns'), 0)}
+                        ${sc(delegatedToMe, t('stat-deleg-me'), delegatedToMeToday)}
+                        ${sc(totalDelegations, t('stat-deleg-by-me'), delegByMeToday)}
+                        ${sc(totalPostsNewsfeed, t('stat-posts-feed'), nfToday)}
+                        ${sc(totalPostsTg, t('stat-posts-tg'), tgToday)}
                     </div>
                 `;
 
@@ -2335,7 +2335,7 @@
                     const section = document.createElement('div');
                     section.style.cssText = 'padding: 0; margin-bottom: 4px;';
 
-                    const statusLabel = c.status === 'active' || c.status === 'running' ? 'Активна' : c.status === 'paused' ? 'На паузе' : (c.status === 'completed' ? 'Завершена' : (c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : 'Завершена'));
+                    const statusLabel = c.status === 'active' || c.status === 'running' ? t('camp-active') : c.status === 'paused' ? t('camp-paused') : (c.status === 'completed' ? t('camp-completed') : (c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : t('camp-completed')));
                     const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d73a49' : '#6C727F';
                     let oSentC = 0, oRepliedC = 0;
                     if (c.outreach) { c.outreach.forEach(o => { if (o.status && o.status !== 'draft') oSentC++; if (o.status === 'replied') oRepliedC++; }); }
@@ -2412,7 +2412,7 @@
 
                     if (c.outreach && c.outreach.length > 0) {
                         c.outreach.forEach((o, oi) => {
-                            const oLbl = o.status === 'replied' ? 'Ответил' : o.status === 'interested' ? 'Заинтересован' : o.status === 'opened' ? 'Открыто' : o.status === 'delivered' ? 'Доставлено' : o.status === 'bounced' ? 'Отклонено' : o.status === 'failed' ? 'Ошибка' : o.status === 'sent' ? 'Отправлено' : (o.status || '');
+                            const oLbl = o.status === 'replied' ? t('os-replied') : o.status === 'interested' ? t('os-interested') : o.status === 'opened' ? t('os-opened') : o.status === 'delivered' ? t('os-delivered') : o.status === 'bounced' ? t('os-bounced') : o.status === 'failed' ? t('os-failed') : o.status === 'sent' ? t('os-sent') : (o.status || '');
                             const oClr = o.status === 'replied' ? '#068487' : o.status === 'interested' ? '#28A745' : o.status === 'opened' ? '#bf8700' : o.status === 'delivered' ? '#6C727F' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
                             const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                             const rcpt = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
@@ -2557,19 +2557,19 @@
                 });
                 const activityMeta = {
                     'delegation': {
-                        label: 'Делегирование',
+                        label: t('act-delegation'),
                         icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M13.5 5.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM7 10.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75ZM1.5 4.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5H4V9.5h.75a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5H2.5V5H2.25a.75.75 0 0 1-.75-.75Z"/></svg>',
                     },
                     'post_newsfeed': {
-                        label: 'Посты в ленту новостей',
+                        label: t('act-post-feed'),
                         icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M2 2.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-1Zm0 4a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-1Zm0 4a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-1Z"/></svg>',
                     },
                     'post_telegram': {
-                        label: 'Посты в Telegram-канал',
+                        label: t('act-post-tg'),
                         icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8.287 5.906c-.778.324-2.334.994-4.666 2.01-.378.15-.577.298-.595.442-.03.243.275.339.69.47l.175.055c.408.133.958.288 1.243.294.26.006.549-.1.868-.32 2.179-1.471 3.304-2.214 3.374-2.23.05-.012.12-.026.166.016.047.041.042.12.037.141-.03.129-1.227 1.241-1.846 1.817-.193.18-.33.307-.358.336a8.154 8.154 0 0 1-.188.186c-.38.366-.664.64.015 1.088.327.216.589.393.85.571.284.194.568.387.936.629.093.06.183.125.27.187.331.236.63.448.997.414.214-.02.435-.22.547-.82.265-1.417.786-4.486.906-5.751a1.426 1.426 0 0 0-.013-.315.337.337 0 0 0-.114-.217.526.526 0 0 0-.31-.093c-.3.005-.763.166-2.984 1.09z"/></svg>',
                     },
                     'other': {
-                        label: 'Прочая активность',
+                        label: t('act-other'),
                         icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>',
                     }
                 };
@@ -2839,7 +2839,7 @@
                     body: JSON.stringify({ status })
                 });
                 if (resp.ok) {
-                    showNotification(status === 'active' ? 'Кампания запущена' : 'Кампания на паузе', 'success');
+                    showNotification(status === 'active' ? t('camp-launched') : t('camp-on-pause'), 'success');
                     loadReports();
                 } else {
                     showNotification('Ошибка', 'error');
@@ -9166,6 +9166,13 @@
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Активность','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-conversion':'Конверсия','report-opened':'Открыто','report-delivered':'Доставлено','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
+      'stat-social':'Социальная активность','stat-biz':'Деловая активность','stat-30d':'за 30 дней','stat-today':'сегодня',
+      'stat-posts':'Постов','stat-likes':'Лайков','stat-views':'Просмотров','stat-comments':'Комментариев',
+      'stat-email-sent':'Email отправлено','stat-email-replied':'Email ответов','stat-email-conv':'Email конверсия','stat-email-campaigns':'Email кампаний',
+      'stat-deleg-me':'Поручено мне','stat-deleg-by-me':'Поручено мной','stat-posts-feed':'Постов в ленту','stat-posts-tg':'Постов в Telegram',
+      'camp-active':'Активна','camp-paused':'На паузе','camp-completed':'Завершена','camp-launched':'Кампания запущена','camp-on-pause':'Кампания на паузе',
+      'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
+      'act-delegation':'Делегирование','act-post-feed':'Посты в ленту новостей','act-post-tg':'Посты в Telegram-канал','act-other':'Прочая активность','agent-activity-title':'Активность агента',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
@@ -9351,6 +9358,13 @@
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Activity','reports-empty':'No agent activity yet','reports-empty-desc':'Campaigns will appear here: who the agent contacted, what they replied, negotiation status.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-conversion':'Conversion','report-opened':'Opened','report-delivered':'Delivered','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
+      'stat-social':'Social activity','stat-biz':'Business activity','stat-30d':'last 30 days','stat-today':'today',
+      'stat-posts':'Posts','stat-likes':'Likes','stat-views':'Views','stat-comments':'Comments',
+      'stat-email-sent':'Emails sent','stat-email-replied':'Email replies','stat-email-conv':'Email conversion','stat-email-campaigns':'Email campaigns',
+      'stat-deleg-me':'Assigned to me','stat-deleg-by-me':'Assigned by me','stat-posts-feed':'Feed posts','stat-posts-tg':'Telegram posts',
+      'camp-active':'Active','camp-paused':'Paused','camp-completed':'Completed','camp-launched':'Campaign launched','camp-on-pause':'Campaign paused',
+      'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
+      'act-delegation':'Delegation','act-post-feed':'Feed posts','act-post-tg':'Telegram channel posts','act-other':'Other activity','agent-activity-title':'Agent activity',
       'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-blocked':'Contact blocked','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','block-contact':'Block contact','edit-contact':'Edit contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
