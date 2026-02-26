@@ -580,10 +580,15 @@ class HybridAutonomousAgent:
                 params.pop(bad_key)  # дубль — удаляем
 
         # === save_email_contact: email может прийти с кавычками внутри значения ===
-        if tool_name == 'save_email_contact':
-            for _fld in ['email', 'name', 'company', 'position', 'notes']:
-                if _fld in params and isinstance(params[_fld], str):
-                    params[_fld] = params[_fld].strip('"\' ')
+        # Универсально: чистим кавычки из значений email-полей во всех инструментах
+        _email_fields = ['email', 'recipient_email', 'name', 'recipient_name',
+                         'company', 'recipient_company', 'subject', 'position', 'notes']
+        for _fld in _email_fields:
+            if _fld in params and isinstance(params[_fld], str):
+                _stripped = params[_fld].strip('"\' ')
+                if _stripped != params[_fld]:
+                    logger.info(f"[FIX_PARAMS] stripped quoted value for {_fld}: {params[_fld]!r} -> {_stripped!r}")
+                    params[_fld] = _stripped
 
         # === add_email_leads: leads может прийти как list/dict вместо строки ===
         if tool_name == 'add_email_leads' and 'leads' in params:
