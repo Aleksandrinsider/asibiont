@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 8
-MAX_FEED_PER_DAY = 2
+MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
@@ -263,21 +263,32 @@ class AnchorEngine:
         try:
             # ── DB-LEVEL ADVISORY LOCK — атомарная защита от параллельных процессов ──
             # pg_try_advisory_lock не блокирует, а возвращает False если lock занят другим процессом
-            lock_id = abs(user_id) % 2147483647  # PostgreSQL advisory lock ID (int4)
-            lock_result = session.execute(
-                text(f"SELECT pg_try_advisory_lock(:lock_id)"),
-                {"lock_id": lock_id}
-            ).scalar()
-            if not lock_result:
-                logger.debug(f"[ANCHOR] User {user_id}: ⛔ advisory lock busy (another process), skip")
-                return
+            # PostgreSQL advisory lock — атомарная защита от параллельных процессов
+            # SQLite не поддерживает advisory locks — пропускаем
+            lock_id = abs(user_id) % 2147483647
+            use_advisory_lock = False
+            try:
+                lock_result = session.execute(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"),
+                    {"lock_id": lock_id}
+                ).scalar()
+                if not lock_result:
+                    logger.debug(f"[ANCHOR] User {user_id}: ⛔ advisory lock busy (another process), skip")
+                    return
+                use_advisory_lock = True
+            except Exception:
+                # SQLite или другая БД без advisory locks — продолжаем без них
+                pass
 
             try:
                 await self._process_user_inner(user_id, session)
             finally:
-                # Освобождаем advisory lock
-                session.execute(text(f"SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
-                session.commit()
+                if use_advisory_lock:
+                    try:
+                        session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
+                        session.commit()
+                    except Exception:
+                        pass
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
@@ -563,13 +574,18 @@ class AnchorEngine:
         # Дедупликация: не создаём якорь если уже есть недоставленный с тем же type+source
         # with_for_update() сериализует запись между двумя параллельными инстансами (Railway deploy)
         try:
-            existing = session.query(Anchor).filter(
-                Anchor.user_id == user.id,
-                Anchor.delivered_at.is_(None)
-            ).with_for_update(nowait=True).all()
+            try:
+                existing = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.delivered_at.is_(None)
+                ).with_for_update(nowait=True).all()
+            except Exception:
+                # SQLite не поддерживает FOR UPDATE / nowait — fallback без блокировки
+                existing = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.delivered_at.is_(None)
+                ).all()
         except Exception:
-            # nowait=True бросает исключение если строки заблокированы другим процессом
-            # В этом случае другой инстанс уже делает scan — пропускаем
             logger.info(f"[ANCHOR] User {user.id}: scan skipped (locked by another instance)")
             return []
         existing_keys = {(a.anchor_type, a.source) for a in existing}

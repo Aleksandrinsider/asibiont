@@ -8865,7 +8865,8 @@ async def start_auto_post_service(app):
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
-app.on_startup.append(start_auto_post_service)
+# auto_post_service DISABLED — handled by AnchorEngine (post_opportunity anchors)
+# app.on_startup.append(start_auto_post_service)
 app.on_shutdown.append(on_shutdown)
 
 
