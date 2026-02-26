@@ -3111,6 +3111,24 @@ async def api_partners_handler(request):
             else:
                 p.common_tasks = None
 
+        # Auto-renormalize partner profiles if EN viewer and translated fields are missing
+        if viewer_lang == 'en':
+            _norm_count = 0
+            for _p in partners:
+                if _norm_count >= 10:  # Limit normalization per request to avoid timeout
+                    break
+                if any(getattr(_p, f, None) and not getattr(_p, f'{f}_normalized', None)
+                       for f in ['city', 'company', 'position', 'interests']):
+                    try:
+                        from ai_integration.utils import normalize_profile_fields
+                        _norm_ok = await normalize_profile_fields(_p)
+                        if _norm_ok:
+                            session_db.commit()
+                            logger.info(f"[PARTNERS] Auto-normalized profile for user_id {getattr(_p, 'user_id', '?')}")
+                            _norm_count += 1
+                    except Exception as _ne:
+                        logger.warning(f"[PARTNERS] Auto-normalization failed: {_ne}")
+
         partners_data = []
         for p in partners:
             try:
@@ -6319,6 +6337,22 @@ async def api_search_contacts_handler(request):
                             photo_url = updated_avatar
                     except Exception as e:
                         logger.error(f"Error updating avatar for {user.telegram_id}: {e}")
+
+                # Auto-renormalize profile if EN viewer and translated fields are missing
+                if _search_lang == 'en' and profile:
+                    _needs_norm = any(
+                        getattr(profile, f, None) and not getattr(profile, f'{f}_normalized', None)
+                        for f in ['city', 'company', 'position', 'interests']
+                    )
+                    if _needs_norm:
+                        try:
+                            from ai_integration.utils import normalize_profile_fields
+                            _norm_ok = await normalize_profile_fields(profile)
+                            if _norm_ok:
+                                session_db.commit()
+                                logger.info(f"[SEARCH] Auto-normalized profile for user {user.id}")
+                        except Exception as _ne:
+                            logger.warning(f"[SEARCH] Auto-normalization failed for user {user.id}: {_ne}")
 
                 contacts_data.append({
                     'username': user.username,
