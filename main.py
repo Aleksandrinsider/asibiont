@@ -6706,6 +6706,43 @@ async def api_email_contact_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_outreach_delete_handler(request):
+    """Delete an outreach record."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        outreach_id = int(request.match_info['outreach_id'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import EmailOutreach, EmailCampaign
+            outreach = session_db.query(EmailOutreach).filter_by(
+                id=outreach_id, user_id=user.id
+            ).first()
+            if not outreach:
+                return web.json_response({'error': 'Outreach not found'}, status=404)
+            # Update campaign counters
+            if outreach.campaign_id:
+                campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+                if campaign:
+                    if outreach.status not in ('draft',):
+                        campaign.emails_sent = max(0, (campaign.emails_sent or 1) - 1)
+                    if outreach.status == 'replied':
+                        campaign.emails_replied = max(0, (campaign.emails_replied or 1) - 1)
+            session_db.delete(outreach)
+            session_db.commit()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error deleting outreach: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_reports_handler(request):
     """API for getting email reports — campaigns + standalone emails."""
     try:
@@ -8030,6 +8067,7 @@ app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 app.router.add_get('/api/reports', api_reports_handler)
 app.router.add_post('/api/outreach/{outreach_id}/reply', api_outreach_reply_handler)
+app.router.add_delete('/api/outreach/{outreach_id}', api_outreach_delete_handler)
 app.router.add_get('/api/email-contacts', api_email_contacts_handler)
 app.router.add_post('/api/email-contacts', api_email_contacts_handler)
 app.router.add_put('/api/email-contacts/{contact_id}', api_email_contact_edit_handler)
