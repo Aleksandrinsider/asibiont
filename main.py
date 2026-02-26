@@ -7799,8 +7799,6 @@ async def resend_webhook_handler(request):
                 logger.info(f"[RESEND_WEBHOOK] Parsed: from_email={from_email}, to={to_email}, subject={subject[:80] if subject else ''}, body_len={len(text_body or '')}")
 
                 if from_email:
-                    if not text_body:
-                        text_body = ''
                     from models import EmailOutreach, EmailCampaign
                     from sqlalchemy import func
                     
@@ -7827,9 +7825,9 @@ async def resend_webhook_handler(request):
                         was_replied = outreach.status == 'replied'
                         outreach.status = 'replied'
                         if outreach.reply_text:
-                            outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(dt_timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + text_body)[:5000]
+                            outreach.reply_text = (outreach.reply_text + '\n\n--- ' + datetime.now(dt_timezone.utc).strftime('%d.%m.%Y %H:%M') + ' ---\n' + (text_body or ''))[:5000]
                         else:
-                            outreach.reply_text = text_body[:5000]
+                            outreach.reply_text = (text_body or '') or None
                         outreach.reply_at = datetime.now(dt_timezone.utc)
                         if not was_replied:
                             campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
