@@ -1669,24 +1669,36 @@ class AnchorEngine:
                     batch_group='email',
                 ))
 
-            # --- Auto-complete: нет черновиков, нет следующих follow-up, все письма завершены ---
+            # --- Auto-complete: нет черновиков, нет ожидающих follow-up, все треды закрыты ---
+            # Работает для ЛЮБЫХ кампаний:
+            # - Переговоры (1 письмо): ответили + агент ответил → готово
+            # - Привлечение (50 писем): агент сам добавляет лиды через add_email_leads,
+            #   пока есть черновики — не завершается. Как только все обработаны → завершается.
             if not drafts and not stale_emails:
-                active_outreach = session.query(EmailOutreach).filter(
+                # Письма у которых ещё не закрыт цикл:
+                # sent/delivered/opened с незакрытыми follow-up ИЛИ replied без ответа агента
+                open_outreach = session.query(EmailOutreach).filter(
                     EmailOutreach.campaign_id == campaign.id,
                     EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
                     EmailOutreach.follow_up_count < (campaign.max_follow_ups or 2),
                 ).count()
+                unanswered_replies = session.query(EmailOutreach).filter(
+                    EmailOutreach.campaign_id == campaign.id,
+                    EmailOutreach.status == 'replied',
+                    EmailOutreach.reply_text.isnot(None),
+                    EmailOutreach.ai_reply_sent_at.is_(None),
+                ).count()
                 total_outreach = session.query(EmailOutreach).filter(
                     EmailOutreach.campaign_id == campaign.id,
                 ).count()
-                if total_outreach > 0 and active_outreach == 0:
+                if total_outreach > 0 and open_outreach == 0 and unanswered_replies == 0:
                     campaign.status = 'completed'
                     try:
                         session.commit()
-                        logger.info(f"[ANCHOR] Auto-completed campaign #{campaign.id} «{campaign.name}» — all emails done")
+                        logger.info(f"[ANCHOR] Auto-completed campaign #{campaign.id} «{campaign.name}» — all threads closed")
                     except Exception:
                         session.rollback()
-                    continue  # Skip anchors for this completed campaign
+                    continue  # Skip anchors for completed campaign
 
             # --- 4. Дневной отчёт по кампании (если есть активность) ---
             total_sent = campaign.emails_sent or 0
