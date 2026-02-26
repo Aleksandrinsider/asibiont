@@ -517,7 +517,7 @@
         let currentContactFilter = 'recommended';
         // Глобальная переменная для отслеживания активного view: 'chat' или 'feed'
         // Инициализируем из sessionStorage или по умолчанию 'chat'
-        let currentView = 'reports'; // Начальный вид - Активность
+        let currentView = 'chat'; // Начальный вид - Чат с ИИ
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="stylesheet" href="/static/style.css">
@@ -587,13 +587,6 @@
                 </a>
 
                 <!-- Модальное окно поиска вынесено за пределы хедера -->
-
-                <!-- Масштаб шрифта -->
-                <div style="display: flex; align-items: center; gap: 2px;">
-                    <button onclick="_fzStep(-1)" title="Уменьшить шрифт" style="padding: 0; width: 28px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px 0 0 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">A<sup style="font-size:9px">-</sup></button>
-                    <button onclick="_fzStep(0)" title="Сбросить масштаб" id="fz-label" style="padding: 0 4px; height: 32px; background: #FFFFFF; border-top: 1px solid #D1D9E0; border-bottom: 1px solid #D1D9E0; border-left: none; border-right: none; cursor: pointer; transition: all 0.2s; font-size: 11px; color: #8C959F; font-weight: 400; display: flex; align-items: center; justify-content: center; min-width: 32px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;" onmouseover="this.style.background='#F6F8FA';" onmouseout="this.style.background='#FFFFFF';">100%</button>
-                    <button onclick="_fzStep(1)" title="Увеличить шрифт" style="padding: 0; width: 28px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 0 6px 6px 0; cursor: pointer; transition: all 0.2s; font-size: 14px; color: #59636E; font-weight: 400; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">A<sup style="font-size:9px">+</sup></button>
-                </div>
             </div>
             <div class="header-center">
                 <!-- Информация о следующей задаче -->
@@ -882,18 +875,16 @@
                                 <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25Z"/>
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal; letter-spacing: normal;">
-                                {% if logged_in %}
-                                <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer;">
-                                    <span data-i18n="reports">Активность</span>
-                                </span>
-                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
-                                {% endif %}
-                                <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer; opacity: 0.5;" data-i18n="chat-ai">Чат с ИИ</span>
+                                <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer;" data-i18n="chat-ai">Чат с ИИ</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="news-feed">Лента новостей</span>
                                 </span>
                                 {% if logged_in %}
+                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer; opacity: 0.5;">
+                                    <span data-i18n="reports">Активность</span>
+                                </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="notes-link" onclick="event.stopPropagation(); switchToNotes()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="notes">Заметки</span>
@@ -906,7 +897,7 @@
                     <!-- Контейнер для переключения между чатом и лентой -->
                     <div class="view-container">
                         <!-- Чат с ИИ -->
-                        <div id="chat-view" class="view-panel">
+                        <div id="chat-view" class="view-panel active">
                             <div id="chat-messages" class="chat-messages">
                         </div>
                         {% if logged_in %}
@@ -988,7 +979,7 @@
 
                         <!-- Отчёты -->
                         {% if logged_in %}
-                        <div id="reports-view" class="view-panel active">
+                        <div id="reports-view" class="view-panel">
                             <div id="reports-list" class="chat-messages" style="display: flex; flex-direction: column; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 20px;">
                                 <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 20px; text-align: center; flex: 1;">
                                     <svg width="48" height="48" viewBox="0 0 16 16" fill="#D1D9E0" style="margin-bottom: 16px;"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>
@@ -9548,33 +9539,7 @@
 </script>
 <noscript><div><img src="https://mc.yandex.ru/watch/106862663" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
 <!-- /Yandex.Metrika counter -->
-<!-- Font zoom -->
-<script>
-(function(){
-  var STEPS = [0.85, 0.90, 1.0, 1.1, 1.2];
-  var idx = parseInt(localStorage.getItem('fz_idx') || '2', 10);
-  if (idx < 0 || idx >= STEPS.length) idx = 2;
-  function apply() {
-    var v = STEPS[idx];
-    document.body.style.zoom = v;
-    if (typeof CSS !== 'undefined' && !CSS.supports('zoom', '1')) {
-      document.body.style.transform = 'scale(' + v + ')';
-      document.body.style.transformOrigin = 'top left';
-      document.body.style.width = (100 / v) + '%';
-    }
-    var lbl = document.getElementById('fz-label');
-    if (lbl) lbl.textContent = Math.round(v * 100) + '%';
-    localStorage.setItem('fz_idx', idx);
-  }
-  window._fzStep = function(dir) {
-    if (dir === 0) { idx = 2; }
-    else { idx = Math.max(0, Math.min(STEPS.length - 1, idx + dir)); }
-    apply();
-  };
-  document.addEventListener('DOMContentLoaded', apply);
-  apply();
-})();
-</script>
+
 <!-- PWA: Service Worker + Web Push -->
 <script>
 if ('serviceWorker' in navigator) {
