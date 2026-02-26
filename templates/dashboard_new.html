@@ -2181,19 +2181,19 @@
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
                 const statsRow = document.createElement('div');
-                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 0 12px 0;';
+                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 0 14px 0;';
                 statsRow.innerHTML = `
-                    <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 16px; font-weight: 400; color: #374151; line-height: 1.2;">${totalSent}</div>
-                        <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-sent">${t('report-sent')}</div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${totalSent}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;" data-i18n="report-sent">${t('report-sent')}</div>
                     </div>
-                    <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 16px; font-weight: 400; color: #374151; line-height: 1.2;">${totalReplied}</div>
-                        <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-replied">${t('report-replied')}</div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${totalReplied}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;" data-i18n="report-replied">${t('report-replied')}</div>
                     </div>
-                    <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 16px; font-weight: 400; color: #374151; line-height: 1.2;">${totalConv}%</div>
-                        <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-conversion">${t('report-conversion')}</div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${totalConv}%</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;" data-i18n="report-conversion">${t('report-conversion')}</div>
                     </div>
                 `;
                 list.appendChild(statsRow);
@@ -2218,11 +2218,11 @@
                     header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                     header.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
-                            <span style="font-size: 13px; font-weight: 400; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.name || t('report-campaign')}</span>
+                            <span style="font-size: 13px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.name || t('report-campaign')}</span>
                             <span style="font-size: 12px; color: ${statusColor}; flex-shrink: 0;">${statusLabel}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: 12px;">
-                            <span style="font-size: 12px; color: #6C727F;">${sent} → ${replied}</span>
+                            <span style="font-size: 12px; color: #8C959F;">${sent} → ${replied}</span>
                             <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${wasExpanded ? '0' : '-90'}deg);">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                             </svg>
@@ -2255,8 +2255,8 @@
                     let inner = '';
 
                     inner += `
-                        <div style="padding: 10px 0; border-bottom: 1px solid #F0F3F5;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="padding: 10px 0; border-bottom: 1px solid #F6F8FA;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                 <span style="font-size: 13px; color: #374151; font-weight: 400;" data-i18n="report-conversion">${t('report-conversion')}</span>
                                 <span style="font-size: 13px; color: #374151;">${conv}%</span>
                             </div>
@@ -2267,7 +2267,7 @@
                     `;
 
                     if (c.goal) {
-                        inner += `<div style="padding: 8px 0; border-bottom: 1px solid #F0F3F5; font-size: 12px; color: #6C727F;"><span style="font-weight: 500; color: #374151;">Цель:</span> ${c.goal}</div>`;
+                        inner += `<div style="padding: 8px 0; border-bottom: 1px solid #F6F8FA; font-size: 13px; color: #374151; line-height: 1.6;"><span style="font-weight: 600; color: #1F2328;">Цель:</span> ${c.goal}</div>`;
                     }
 
                     details.innerHTML = inner;
@@ -2305,19 +2305,19 @@
                             let bodyHtml = '';
                             // Outgoing message
                             if (o.subject || o.body_text || o.body) {
-                                bodyHtml += `<div style="margin-top: 8px;">`;
-                                if (o.subject) bodyHtml += `<div style="font-size: 12px; color: #374151; font-weight: 600; margin: 10px 0;">Тема письма: ${o.subject}</div>`;
-                                if (o.body_text || o.body) bodyHtml += `<div style="font-size: 12px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.5; padding: 0 2px;">${o.body_text || o.body}</div>`;
+                                bodyHtml += `<div style="margin-top: 10px;">`;
+                                if (o.subject) bodyHtml += `<div style="font-size: 13px; color: #1F2328; font-weight: 600; margin-bottom: 6px;">Тема письма: ${o.subject}</div>`;
+                                if (o.body_text || o.body) bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.body_text || o.body}</div>`;
                                 bodyHtml += `</div>`;
                             }
                             // Reply
                             if (o.reply_text) {
-                                bodyHtml += `<div style="margin-top: 10px;">`;
-                                bodyHtml += `<div style="display: flex; align-items: center; gap: 6px; background: #F6F8FA; padding: 4px 8px; border-radius: 4px; margin-bottom: 4px;">`;
-                                bodyHtml += `<span style="font-size: 11px; color: #068487;">↩ Ответ</span>`;
-                                if (replyDate) bodyHtml += `<span style="font-size: 11px; color: #9CA3AF;">${replyDate}</span>`;
+                                bodyHtml += `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #F6F8FA;">`;
+                                bodyHtml += `<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">`;
+                                bodyHtml += `<span style="font-size: 12px; color: #068487; font-weight: 600;">↩ Ответ</span>`;
+                                if (replyDate) bodyHtml += `<span style="font-size: 12px; color: #8C959F; font-weight: 400;">${replyDate}</span>`;
                                 bodyHtml += `</div>`;
-                                bodyHtml += `<div style="font-size: 12px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.5; padding: 0 2px;">${o.reply_text}</div>`;
+                                bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.reply_text}</div>`;
                                 bodyHtml += `</div>`;
                             }
 
