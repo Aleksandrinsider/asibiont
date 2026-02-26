@@ -495,7 +495,12 @@ class HybridAutonomousAgent:
         try:
             for action in actions:
                 tool_name = action.get('tool')
-                params = dict(action.get('params', {}))
+                raw_params = action.get('params', {})
+                # Defensive: если AI прислал не dict (строку, список и т.д.) — заменяем на пустой dict
+                if not isinstance(raw_params, dict):
+                    logger.warning(f"[EXEC] {tool_name}: params is {type(raw_params).__name__}, not dict — reset to {{}}")
+                    raw_params = {}
+                params = dict(raw_params)
                 reason = action.get('reason', '')
 
                 handler_func = getattr(handlers, tool_name, None)
@@ -504,15 +509,15 @@ class HybridAutonomousAgent:
                                     "error": f"Handler {tool_name} not found"})
                     continue
 
-                params['user_id'] = user_id
-                sig = inspect.signature(handler_func)
-                if 'session' in sig.parameters:
-                    params['session'] = session
-                    # Не закрываем переданную извне сессию — это ответственность вызывающего
-                    if 'close_session' in sig.parameters:
-                        params['close_session'] = False
-
                 try:
+                    params['user_id'] = user_id
+                    sig = inspect.signature(handler_func)
+                    if 'session' in sig.parameters:
+                        params['session'] = session
+                        # Не закрываем переданную извне сессию — это ответственность вызывающего
+                        if 'close_session' in sig.parameters:
+                            params['close_session'] = False
+
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
 
@@ -1114,6 +1119,10 @@ class HybridAutonomousAgent:
                         args = json.loads(func.get('arguments', '{}'))
                     except Exception:
                         args = {}
+                    # Defensive: если AI прислал не dict (строку, список и т.д.) — сбрасываем
+                    if not isinstance(args, dict):
+                        logger.warning(f"[EXEC] {name}: arguments parsed to {type(args).__name__}, not dict — reset")
+                        args = {}
 
                     # Dedup: предотвращаем повторные вызовы того же tool с теми же параметрами
                     dedup_key = f"{name}:{json.dumps(args, sort_keys=True)}"
@@ -1165,23 +1174,27 @@ class HybridAutonomousAgent:
 
                     action = [{"tool": name, "params": args,
                                "reason": f"AI iter {iteration+1}: {name}"}]
-                    results = await self.execute_actions(
-                        action, user_id, session=session,
-                        user_message=user_message,
-                        progress_callback=progress_callback)
+                    try:
+                        results = await self.execute_actions(
+                            action, user_id, session=session,
+                            user_message=user_message,
+                            progress_callback=progress_callback)
 
-                    r = results[0] if results else {"success": False,
-                                                     "error": "no result"}
-                    all_execution_results.append(r)
+                        r = results[0] if results else {"success": False,
+                                                         "error": "no result"}
+                        all_execution_results.append(r)
 
-                    # Добавляем tool result в messages (со сжатием)
-                    if r.get('success'):
-                        rc = json.dumps(r['result'], ensure_ascii=False,
-                                        default=str)
-                        rc = CognitiveEngine.compress_tool_result(rc)
-                    else:
-                        rc = json.dumps({"error": str(r.get('error', ''))},
-                                        ensure_ascii=False)
+                        # Добавляем tool result в messages (со сжатием)
+                        if r.get('success'):
+                            rc = json.dumps(r['result'], ensure_ascii=False,
+                                            default=str)
+                            rc = CognitiveEngine.compress_tool_result(rc)
+                        else:
+                            rc = json.dumps({"error": str(r.get('error', ''))},
+                                            ensure_ascii=False)
+                    except Exception as _tool_err:
+                        logger.error(f"[EXEC] {name} crashed outside execute_actions: {_tool_err}\n{traceback.format_exc()}")
+                        rc = json.dumps({"error": str(_tool_err)}, ensure_ascii=False)
 
                     messages.append({
                         "role": "tool",
@@ -1586,6 +1599,10 @@ class HybridAutonomousAgent:
                         args = json.loads(func.get('arguments', '{}'))
                     except Exception:
                         args = {}
+                    # Defensive: если AI прислал не dict — сбрасываем
+                    if not isinstance(args, dict):
+                        logger.warning(f"[AGENT:SYSTEM] {name}: arguments parsed to {type(args).__name__}, not dict — reset")
+                        args = {}
 
                     # Dedup
                     dedup_key = f"{name}:{json.dumps(args, sort_keys=True)}"
@@ -1608,18 +1625,22 @@ class HybridAutonomousAgent:
                         continue
 
                     # Execute
-                    action = [{"tool": name, "params": args,
-                               "reason": f"system:{mode} iter {iteration+1}"}]
-                    results = await self.execute_actions(
-                        action, user_id, session=None, user_message=instruction)
+                    try:
+                        action = [{"tool": name, "params": args,
+                                   "reason": f"system:{mode} iter {iteration+1}"}]
+                        results = await self.execute_actions(
+                            action, user_id, session=None, user_message=instruction)
 
-                    r = results[0] if results else {"success": False, "error": "no result"}
-                    all_execution_results.append(r)
+                        r = results[0] if results else {"success": False, "error": "no result"}
+                        all_execution_results.append(r)
 
-                    if r.get('success'):
-                        rc = json.dumps(r['result'], ensure_ascii=False, default=str)[:1500]
-                    else:
-                        rc = json.dumps({"error": str(r.get('error', ''))}, ensure_ascii=False)
+                        if r.get('success'):
+                            rc = json.dumps(r['result'], ensure_ascii=False, default=str)[:1500]
+                        else:
+                            rc = json.dumps({"error": str(r.get('error', ''))}, ensure_ascii=False)
+                    except Exception as _tool_err:
+                        logger.error(f"[AGENT:SYSTEM] Tool {name} failed in {mode}: {_tool_err}\n{traceback.format_exc()}")
+                        rc = json.dumps({"error": str(_tool_err)}, ensure_ascii=False)
 
                     messages.append({
                         "role": "tool",
