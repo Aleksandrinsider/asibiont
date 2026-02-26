@@ -1,5 +1,6 @@
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, EmailContact, AgentActivityLog, TokenTransaction, init_db
 from reminder_service import ReminderService
+from auto_post_service import run_service as auto_post_run_service
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
 from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET
@@ -8680,9 +8681,18 @@ async def start_reminder_service(app):
         logger.info(f"Job: {job.id} at {job.next_run_time}")
 
 
+async def start_auto_post_service(app):
+    """Start background auto-post service (proactive newsfeed posts)"""
+    try:
+        asyncio.create_task(auto_post_run_service())
+        logger.info("Auto-post service started as background task")
+    except Exception as e:
+        logger.warning(f"Auto-post service startup error: {e}")
+
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
+app.on_startup.append(start_auto_post_service)
 app.on_shutdown.append(on_shutdown)
 
 
