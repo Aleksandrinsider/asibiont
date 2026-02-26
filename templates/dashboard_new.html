@@ -518,7 +518,7 @@
         let currentContactFilter = 'recommended';
         // Глобальная переменная для отслеживания активного view: 'chat' или 'feed'
         // Инициализируем из sessionStorage или по умолчанию 'chat'
-        let currentView = 'chat'; // Начальный вид - всегда чат
+        let currentView = 'reports'; // Начальный вид - Активность
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="stylesheet" href="/static/style.css">
@@ -877,12 +877,12 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal; letter-spacing: normal;">
                                 {% if logged_in %}
-                                <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer; opacity: 0.5;">
+                                <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer;">
                                     <span data-i18n="reports">Активность</span>
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 {% endif %}
-                                <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer;" data-i18n="chat-ai">Чат с ИИ</span>
+                                <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer; opacity: 0.5;" data-i18n="chat-ai">Чат с ИИ</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="news-feed">Лента новостей</span>
@@ -900,7 +900,7 @@
                     <!-- Контейнер для переключения между чатом и лентой -->
                     <div class="view-container">
                         <!-- Чат с ИИ -->
-                        <div id="chat-view" class="view-panel active">
+                        <div id="chat-view" class="view-panel">
                             <div id="chat-messages" class="chat-messages">
                         </div>
                         {% if logged_in %}
@@ -982,7 +982,7 @@
 
                         <!-- Отчёты -->
                         {% if logged_in %}
-                        <div id="reports-view" class="view-panel">
+                        <div id="reports-view" class="view-panel active">
                             <div id="reports-list" class="chat-messages" style="display: flex; flex-direction: column; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 20px;">
                                 <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 20px; text-align: center; flex: 1;">
                                     <svg width="48" height="48" viewBox="0 0 16 16" fill="#D1D9E0" style="margin-bottom: 16px;"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>
@@ -6702,22 +6702,19 @@
             // Проверить заполненность профиля и показать модальное окно при необходимости
             checkProfileCompleteness();
             
-            // Убедиться что chat-view активен при загрузке
+            // Убедиться что reports-view активен при загрузке
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
+            const reportsViewInit = document.getElementById('reports-view');
             if (chatView && feedView) {
-                const chatActive = chatView.classList.contains('active');
-                const feedActive = feedView.classList.contains('active');
-                
-                // Только при первой загрузке устанавливаем chat как активный
-                if (!chatActive && !feedActive) {
-                    chatView.classList.add('active');
-                    currentView = 'chat';
-                } else if (feedActive) {
-                    currentView = 'feed';
-                } else {
-                    currentView = 'chat';
-                }
+                // Всегда открываем Активность при первой загрузке
+                if (chatView) { chatView.classList.remove('active'); chatView.style.zIndex = '0'; }
+                if (feedView) { feedView.classList.remove('active'); feedView.style.zIndex = '0'; }
+                if (reportsViewInit) { reportsViewInit.classList.add('active'); reportsViewInit.style.zIndex = '1'; }
+                currentView = 'reports';
+                const rl = document.getElementById('reports-link'); if (rl) rl.style.opacity = '1';
+                const cl = document.getElementById('chat-link'); if (cl) cl.style.opacity = '0.5';
+                loadReports();
             }
             
             // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
