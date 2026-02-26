@@ -586,7 +586,7 @@
                     <span data-i18n="col-profile">Профиль и контакты</span>
                 </button>
                 <button onclick="switchMobileColumn('center')" class="mobile-col-btn active" data-col="center" style="width: 100%; padding: 10px 14px; background: #F6F8FA; border: none; border-bottom: 1px solid #F0F0F0; cursor: pointer; font-size: 13px; color: #068487; text-align: left; font-family: inherit; font-weight: 500;">
-                    <span data-i18n="col-chat">Чат с ИИ и лента новостей</span>
+                    <span data-i18n="col-chat">Чат и активность</span>
                 </button>
                 <button onclick="switchMobileColumn('right')" class="mobile-col-btn" data-col="right" style="width: 100%; padding: 10px 14px; background: none; border: none; cursor: pointer; font-size: 13px; color: #374151; text-align: left; font-family: inherit;">
                     <span data-i18n="col-tasks">Статистика и задачи</span>
@@ -2800,10 +2800,12 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         aBody.style.cssText = 'overflow: hidden; transition: max-height 0.2s ease;';
                         let aBodyHtml = '';
                         if (a.content) {
-                            // Strip images: remove <img> tags and standalone image URLs
+                            // Strip images: remove <img> tags, markdown images, and image URLs
                             let _safeContent = a.content
                                 .replace(/<img[^>]*>/gi, '')
-                                .replace(/https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|svg|bmp)[^\s]*/gi, '')
+                                .replace(/!\[.*?\]\([^)]*\)/g, '')
+                                .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff)\S*/gi, '')
+                                .replace(/https?:\/\/\S*(?:image|photo|media|upload|thumb|img|pic|cdn)\S*/gi, '')
                                 .replace(/\n{3,}/g, '\n\n').trim();
                             if (_safeContent) {
                             aBodyHtml += `<div style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #F0F3F5;">
@@ -3001,11 +3003,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
 
         async function activityDelete(id, type) {
             if (!id) return;
-            const confirmMsg = type === 'delegation' ? t('act-del-deleg') :
-                               type === 'post_newsfeed' ? t('act-del-post-feed') :
-                               type === 'post_telegram' ? t('act-del-post-tg') :
-                               t('act-del-default');
-            if (!confirm(confirmMsg)) return;
             try {
                 const resp = await fetch('/api/activities/' + id, {
                     method: 'DELETE',
@@ -3024,8 +3021,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
 
         async function activityDeleteGroup(ids, type) {
             if (!ids || ids.length === 0) return;
-            const msg = t('act-del-group').replace('{n}', ids.length);
-            if (!confirm(msg)) return;
             let ok = 0, fail = 0;
             for (const id of ids) {
                 try {
@@ -5076,6 +5071,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         const CONTACTS_PER_PAGE = 10;
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
+        let _firstTasksLoad = true; // Флаг первой загрузки задач с API
         let lastMessageCount = 0;
         let lastPostCount = 0;
         const displayedMessageIds = new Set(); // Для отслеживания уже показанных сообщений
@@ -7448,7 +7444,11 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    renderTaskGroups(data.tasks);
+                    // Защита от затирания SSR-задач пустым ответом при первой загрузке
+                    if (data.tasks && (data.tasks.length > 0 || !_firstTasksLoad)) {
+                        renderTaskGroups(data.tasks);
+                    }
+                    _firstTasksLoad = false;
                 } else {
                     console.error(`Failed to fetch tasks: HTTP ${response.status} ${response.statusText}`);
                     const errorText = await response.text();
@@ -9441,7 +9441,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'tokens':'токенов',
       'install-app':'Установить приложение',
       'col-profile':'Профиль и контакты',
-      'col-chat':'Чат с ИИ и лента новостей',
+      'col-chat':'Чат и активность',
       'col-tasks':'Статистика и задачи',
       'open-tg-bot':'Открыть Telegram бота',
       'logout':'Выход',
@@ -9641,7 +9641,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'tokens':'tokens',
       'install-app':'Install App',
       'col-profile':'Profile & Contacts',
-      'col-chat':'AI Chat & News Feed',
+      'col-chat':'Chat & Activity',
       'col-tasks':'Stats & Tasks',
       'open-tg-bot':'Open Telegram bot',
       'logout':'Logout',
