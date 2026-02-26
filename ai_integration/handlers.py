@@ -8310,13 +8310,6 @@ async def send_outreach_email(
         outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=3)
         session.commit()
 
-        # Списание токенов
-        try:
-            from token_service import deduct_tokens
-            deduct_tokens(user_id, 'email_send', session=session)
-        except Exception:
-            pass
-
         lang = _get_lang(user_id)
         name_str = f" ({recipient_name})" if recipient_name else ""
         if lang == 'en':
@@ -8412,12 +8405,6 @@ async def reply_to_outreach_email(
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
         session.commit()
-
-        try:
-            from token_service import deduct_tokens
-            deduct_tokens(user_id, 'email_reply', session=session)
-        except Exception:
-            pass
 
         return f"✅ Ответ отправлен на {outreach.recipient_email}\nТема: {subject}"
     except Exception as e:
@@ -8755,12 +8742,6 @@ async def send_follow_up_email(
         outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=next_gap_days)
         session.commit()
 
-        try:
-            from token_service import deduct_tokens
-            deduct_tokens(user_id, 'email_follow_up', session=session)
-        except Exception:
-            pass
-
         return f"✅ Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
     except Exception as e:
         logger.error(f"[EMAIL_FOLLOWUP] Error: {e}", exc_info=True)
@@ -8916,12 +8897,6 @@ async def send_email(
         except Exception as _e:
             logger.warning(f"[SEND_EMAIL] Failed to save outreach record: {_e}")
             session.rollback()
-
-        try:
-            from token_service import deduct_tokens
-            deduct_tokens(user_id, 'email_send', session=session)
-        except Exception:
-            pass
 
         lang = _get_lang(user_id)
         if lang == 'en':
@@ -9222,13 +9197,6 @@ async def generate_image(
         else:
             # Telegram не принял — отдаём прямой URL
             result_msg = f"🎨 Изображение сгенерировано! URL картинки: {image_url}"
-
-        # Списываем токены
-        try:
-            from token_service import deduct_tokens
-            deduct_tokens(user_id, "generate_image", session=session)
-        except Exception:
-            pass
 
         return result_msg
 

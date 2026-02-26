@@ -83,14 +83,51 @@ ACTION_COSTS = {
 
     # ── Email-аутрич ──
     'start_email_campaign':     15,  # Создание email-кампании
-    'send_outreach_email':      10,  # Отправка email
+    'send_outreach_email':      10,  # Отправка outreach-письма
     'email_send':               10,  # Alias для send_outreach_email
-    'reply_to_outreach_email':   8,  # Ответ на reply
+    'send_email':               10,  # Прямая отправка письма
+    'reply_to_outreach_email':   8,  # Ответ на входящий reply
     'email_reply':               8,  # Alias для reply
-    'add_email_leads':           5,  # Добавление лидов
-    'get_email_campaign_status': 2,  # Просмотр статуса
-    'pause_email_campaign':      2,  # Пауза/возобновление
-    'email_follow_up':          10,  # Фоллоу-ап
+    'send_follow_up_email':     10,  # Follow-up письмо
+    'email_follow_up':          10,  # Alias для follow-up
+    'add_email_leads':           5,  # Добавление лидов в кампанию
+    'get_email_campaign_status': 2,  # Просмотр статуса кампании
+    'pause_email_campaign':      2,  # Пауза/возобновление кампании
+    'save_email_contact':        2,  # Сохранение email-контакта
+    'list_email_contacts':       2,  # Просмотр контактов
+
+    # ── Задачи (дополнительно) ──
+    'skip_task':                 2,  # Пропуск/откладывание задачи
+    'accept_delegated_task':     3,  # Принятие делегированной задачи
+    'reject_delegated_task':     3,  # Отклонение делегированной задачи
+    'check_time_conflicts':      2,  # Проверка конфликтов времени
+    'find_relevant_contacts_for_task': 5,  # Поиск контактов для задачи
+
+    # ── Цели (дополнительно) ──
+    'delete_goal':               2,  # Удаление цели
+    'update_goal_progress':      5,  # Обновление прогресса цели
+
+    # ── Посты ──
+    'create_post':               5,  # Создание поста
+    'edit_post':                 3,  # Редактирование поста
+    'get_posts':                 2,  # Просмотр постов
+    'delete_post':               2,  # Удаление поста
+
+    # ── Финансы / рынки ──
+    'get_stock_info':            2,  # Котировки акций
+
+    # ── Уведомления / контакты ──
+    'set_contact_alert':         5,  # Настройка уведомления о контакте
+    'find_and_message_relevant_users': 10,  # Поиск и отправка пользователям
+
+    # ── Сообщения (автономный агент) ──
+    'send_message_to_user':      5,  # Отправка сообщения пользователю
+    'reply_to_user_message':     5,  # Ответ на сообщение пользователя
+    'get_incoming_messages':     2,  # Просмотр входящих
+    'get_message_status':        2,  # Статус сообщения
+
+    # ── Поиск / веб ──
+    'web_search':                5,  # Быстрый веб-поиск
 
     # ── Проактивные (от агента) ──
     'proactive_message':  7,   # Проактивное сообщение
