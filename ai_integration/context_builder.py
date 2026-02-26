@@ -438,6 +438,49 @@ class ContextBuilder:
                     )
             except Exception as e:
                 logger.warning(f"[EMAIL_REPLY_CTX] Error: {e}")
+
+            # ═══ АКТИВНЫЕ EMAIL-КАМПАНИИ ═══
+            try:
+                from models import EmailCampaign as _EC, EmailOutreach as _EO
+                active_campaigns = session.query(_EC).filter(
+                    _EC.user_id == user.id,
+                    _EC.status == 'active',
+                ).all()
+                if active_campaigns:
+                    camp_lines = []
+                    for c in active_campaigns:
+                        pending_leads = session.query(_EO).filter(
+                            _EO.campaign_id == c.id,
+                            _EO.status == 'draft',
+                        ).count()
+                        camp_lines.append(f"  id={c.id} «{c.name}» — лидов ожидает: {pending_leads}, отправлено: {c.sent_count or 0}/{c.max_emails or '∞'}")
+                    hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ:\n" + "\n".join(camp_lines))
+            except Exception as e:
+                logger.warning(f"[CAMPAIGNS_CTX] Error: {e}")
+
+            # ═══ ПОСТ ЗА СЕГОДНЯ ═══
+            try:
+                from models import Post as _Post
+                _posts_today = session.query(_Post).filter(
+                    _Post.user_id == user.id,
+                    _Post.created_at >= user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC).replace(tzinfo=None),
+                ).count()
+                if _posts_today >= 1:
+                    hints.append("ПОСТ СЕГОДНЯ: уже опубликован — НЕ публикуй повторно (лимит 1/день).")
+            except Exception as e:
+                logger.warning(f"[POST_CTX] Error: {e}")
+
+            # ═══ ТОКЕНЫ И TELEGRAM-КАНАЛ ═══
+            try:
+                _tokens = getattr(user, 'token_balance', 0) or 0
+                if _tokens < 5000:
+                    hints.append(f"ТОКЕНЫ: осталось {_tokens} — скоро закончатся, предупреди пользователя.")
+                _channel = getattr(user, 'telegram_channel', None)
+                if not _channel:
+                    hints.append("TELEGRAM-КАНАЛ: не настроен в профиле — publish_to_telegram работать не будет до добавления канала.")
+            except Exception as e:
+                logger.warning(f"[TOKENS_CTX] Error: {e}")
+
             alert_hints = self.build_premium_alerts_context(user_id, session)
             if alert_hints:
                 hints.extend(alert_hints[:2])
