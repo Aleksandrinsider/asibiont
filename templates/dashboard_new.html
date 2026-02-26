@@ -2314,7 +2314,7 @@
                             // Outgoing message
                             if (o.subject || o.body_text || o.body) {
                                 bodyHtml += `<div style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #F0F3F5;">`;
-                                if (o.subject) bodyHtml += `<div style="font-size: 13px; color: #1F2328; font-weight: 600; margin-bottom: 6px;">Тема письма: ${o.subject}</div>`;
+                                if (o.subject) bodyHtml += `<div style="font-size: 13px; color: #1F2328; font-weight: 600; padding: 4px 0; margin-bottom: ${o.body_text || o.body ? '6px' : '0'};">Тема письма: ${o.subject}</div>`;
                                 if (o.body_text || o.body) bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.body_text || o.body}</div>`;
                                 bodyHtml += `</div>`;
                             }
