@@ -232,6 +232,57 @@
         .feature-card:hover {
             border-color: #1F2328;
         }
+        /* ── Тёмные карточки (ряд 3) ── */
+        .feature-card-dark {
+            border: 1px solid #2D333B;
+            border-radius: 6px;
+            padding: 24px;
+            background: #1F2328;
+            text-align: center;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .feature-card-dark::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #374151, #6B7280, #374151);
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+        .feature-card-dark:hover {
+            border-color: #6B7280;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .feature-card-dark:hover::before {
+            opacity: 1;
+        }
+        .feature-card-dark h2 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #FFFFFF;
+            margin: 0;
+        }
+        .feature-card-dark .feature-description {
+            color: #9CA3AF;
+        }
+        .feature-card-dark .feature-icon {
+            filter: invert(1) brightness(0.85);
+        }
+        @media (max-width: 768px) {
+            .feature-card-dark {
+                padding: 16px;
+            }
+        }
         .feature-icon {
             width: 48px;
             height: 48px;
@@ -616,6 +667,29 @@
                     <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Бот + дашборд</h2>
                     <div class="feature-description">В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.</div>
                 </div>
+
+                <!-- Ряд 3 — тёмные карточки -->
+                <div class="feature-card-dark">
+                    <div class="feature-icon">
+                        <img src="/static/svg/avatar-svgrepo-com.svg" alt="Личный AI-ассистент, который думает за вас">
+                    </div>
+                    <h2>Личный ассистент</h2>
+                    <div class="feature-description">Не просто ответы на вопросы — полноценный агент, который думает за вас. Помнит контекст, понимает цели, предлагает решения и действует самостоятельно. Один диалог заменяет десяток приложений.</div>
+                </div>
+                <div class="feature-card-dark">
+                    <div class="feature-icon">
+                        <img src="/static/svg/office-svgrepo-com.svg" alt="AI ведёт персонализированные переговоры с партнёрами">
+                    </div>
+                    <h2>Бизнес помощник</h2>
+                    <div class="feature-description">Персонализированное общение с каждым потенциальным партнёром от вашего имени. Не спам-рассылка, а осмысленный диалог — агент изучает профиль, находит точки контакта и выстраивает отношения.</div>
+                </div>
+                <div class="feature-card-dark">
+                    <div class="feature-icon">
+                        <img src="/static/svg/globe-svgrepo-com.svg" alt="Глобальный нетворкинг на двух языках">
+                    </div>
+                    <h2>Нетворкинг</h2>
+                    <div class="feature-description">Глобальное покрытие на двух языках — русском и английском. Находит нужных людей по навыкам, интересам и локации. Ваша сеть контактов растёт, пока вы занимаетесь делом.</div>
+                </div>
             </div>
         </div>
 
@@ -653,7 +727,10 @@
         ['Делегирование', '«Поручи @ivan подготовить отчёт до среды» — задача уйдёт исполнителю, дедлайн встанет на контроль. Агент отследит сроки и напомнит обеим сторонам.'],
         ['Автопилот 24/7', 'Вы спите — он публикует в канал по расписанию. Вы на встрече — он отправляет утреннюю сводку. Просрочена задача — напомнит сам, без вашего участия.'],
         ['Точечные возможности', 'Новый участник с нужными навыками в вашем городе — агент сообщит. Контакт обновил профиль — вы узнаете первым. Не шум, а релевантные сигналы.'],
-        ['Бот + дашборд', 'В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.']
+        ['Бот + дашборд', 'В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.'],
+        ['Личный ассистент', 'Не просто ответы на вопросы — полноценный агент, который думает за вас. Помнит контекст, понимает цели, предлагает решения и действует самостоятельно. Один диалог заменяет десяток приложений.'],
+        ['Бизнес помощник', 'Персонализированное общение с каждым потенциальным партнёром от вашего имени. Не спам-рассылка, а осмысленный диалог — агент изучает профиль, находит точки контакта и выстраивает отношения.'],
+        ['Нетворкинг', 'Глобальное покрытие на двух языках — русском и английском. Находит нужных людей по навыкам, интересам и локации. Ваша сеть контактов растёт, пока вы занимаетесь делом.']
       ],
       rl: [
         '«Скинул голосовое на бегу — бот сам вытащил задачу и дедлайн. Магия какая-то.»',
@@ -735,7 +812,10 @@
         ['Delegation', '"Ask @ivan to prepare the report by Wednesday" — the task goes to the assignee, deadline is tracked. The agent monitors timelines and reminds both sides.'],
         ['Autopilot 24/7', 'You sleep — it posts to your channel on schedule. In a meeting — it sends a morning briefing. Task overdue — it reminds on its own.'],
         ['Targeted Opportunities', 'A new member with the right skills in your city — the agent notifies you. A contact updated their profile — you learn first. Not noise — relevant signals.'],
-        ['Bot + Dashboard', 'In your pocket — a Telegram bot for voice and text. On screen — a dashboard with tasks, contacts and feed. One database, two interfaces.']
+        ['Bot + Dashboard', 'In your pocket — a Telegram bot for voice and text. On screen — a dashboard with tasks, contacts and feed. One database, two interfaces.'],
+        ['Personal Assistant', 'Not just answers — a full-fledged agent that thinks for you. Remembers your context, understands goals, suggests solutions and acts independently. One dialogue replaces a dozen apps.'],
+        ['Business Partner', 'Personalized outreach to each potential partner on your behalf. Not spam blasts — meaningful dialogue. The agent studies profiles, finds common ground and builds relationships.'],
+        ['Networking', 'Global coverage in two languages — Russian and English. Finds the right people by skills, interests and location. Your network grows while you focus on what matters.']
       ],
       rl: [
         '"Sent a voice memo on the go — the bot extracted the task and deadline itself. Pure magic."',
@@ -827,7 +907,7 @@
     if (h1) h1.textContent = t.heading;
     var sub = document.querySelector('.subtitle');
     if (sub) sub.textContent = t.subtitle;
-    document.querySelectorAll('.feature-card').forEach(function(c, i) {
+    document.querySelectorAll('.feature-card, .feature-card-dark').forEach(function(c, i) {
       if (!t.feat[i]) return;
       var h2 = c.querySelector('h2');
       if (h2) h2.textContent = t.feat[i][0];
