@@ -633,10 +633,16 @@ class AnchorEngine:
                         session.rollback()
 
                 # ПРОСРОЧЕННЫЕ (более 30 мин назад)
-                # НО: если reminder_sent=False — задачу только что перенесли, 
-                # новое время ещё не наступило, НЕ считаем просроченной
-                elif minutes_diff < -30 and getattr(task, 'reminder_sent', True):
+                # Доставляем ВСЕГДА — даже если reminder_sent=False (бот был офлайн в момент X)
+                elif minutes_diff < -30:
                     hours_overdue = abs(minutes_diff) / 60
+                    # Помечаем reminder_sent чтобы не дублировать точное напоминание после
+                    if not getattr(task, 'reminder_sent', False):
+                        task.reminder_sent = True
+                        try:
+                            session.commit()
+                        except Exception:
+                            session.rollback()
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_overdue',
@@ -665,6 +671,44 @@ class AnchorEngine:
                                         'hours_left': round(hours_left, 1)}),
                         triggered_at=now_utc,
                         expires_at=rt,
+                        cooldown_hours=4,
+                        batch_group='tasks',
+                    ))
+
+            # due_date без reminder_time — проверяем просрочку/дедлайн по due_date
+            elif task.due_date and not task.reminder_time:
+                dd = task.due_date
+                if dd.tzinfo is None:
+                    dd = dd.replace(tzinfo=timezone.utc)
+                minutes_diff_dd = (dd - now_utc).total_seconds() / 60
+                if minutes_diff_dd < -30:
+                    hours_overdue = abs(minutes_diff_dd) / 60
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='task_overdue',
+                        source=f'task:{task.id}',
+                        topic=_t(user, f'Задача «{task.title}» просрочена на {int(hours_overdue)}ч', f'Task «{task.title}» overdue by {int(hours_overdue)}h'),
+                        priority=AnchorPriority.CRITICAL,
+                        data=json.dumps({'task_id': task.id, 'title': task.title,
+                                        'hours_overdue': round(hours_overdue, 1),
+                                        'description': (task.description or '')[:200]}),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(hours=24),
+                        cooldown_hours=2,
+                        batch_group='tasks',
+                    ))
+                elif 0 < minutes_diff_dd <= 24 * 60:
+                    hours_left = minutes_diff_dd / 60
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='task_deadline_soon',
+                        source=f'task:{task.id}',
+                        topic=_t(user, f'Задача «{task.title}» — дедлайн через {int(hours_left)}ч', f'Task «{task.title}» — deadline in {int(hours_left)}h'),
+                        priority=AnchorPriority.HIGH,
+                        data=json.dumps({'task_id': task.id, 'title': task.title,
+                                        'hours_left': round(hours_left, 1)}),
+                        triggered_at=now_utc,
+                        expires_at=dd,
                         cooldown_hours=4,
                         batch_group='tasks',
                     ))
