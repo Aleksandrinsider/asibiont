@@ -2459,6 +2459,27 @@ if bot:
 
 
 @web.middleware
+async def custom_404_middleware(request, handler):
+    """Return custom 404 page for unknown routes (HTML requests only)"""
+    try:
+        return await handler(request)
+    except web.HTTPNotFound:
+        # API and static paths — return plain 404
+        path = request.path
+        if path.startswith('/api/') or path.startswith('/static/') or path.startswith('/webhook'):
+            raise
+        accept = request.headers.get('Accept', '')
+        if 'text/html' not in accept and accept:
+            raise
+        try:
+            with open('templates/404.html', 'r', encoding='utf-8') as f:
+                html = f.read()
+            return web.Response(text=html, status=404, content_type='text/html')
+        except Exception:
+            raise
+
+
+@web.middleware
 async def session_error_middleware(request, handler):
     """Handle corrupted session cookies"""
     try:
@@ -2610,6 +2631,7 @@ app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(session_error_middleware)
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
+app.middlewares.append(custom_404_middleware)
 
 # Setup Jinja2 with custom filters
 def unique_interests(value):
