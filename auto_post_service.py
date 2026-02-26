@@ -6,7 +6,7 @@ Automatic post generation service - creates daily progress posts and birthday po
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import random
 import aiohttp
@@ -33,11 +33,11 @@ async def _generate_text_with_ai(prompt: str) -> str:
     data = {
         "model": DEEPSEEK_MODEL,
         "messages": [
-            {"role": "system", "content": "Ты - копирайтер. Пиши естественные посты от первого лица. Только текст поста, без пояснений."},
+            {"role": "system", "content": "You are a ghostwriter. Write short, authentic social media posts in first person. Voice: candid, natural, human — the kind of thing someone actually posts, not a press release. Output only the post text, nothing else."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.8,
-        "max_tokens": 500
+        "temperature": 0.85,
+        "max_tokens": 400
     }
 
     async with aiohttp.ClientSession() as session:
@@ -56,114 +56,146 @@ async def generate_progress_post(user_id, session):
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return None
-        
+
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if not profile:
             return None
-        
-        # Get today's tasks stats
+
+        # Timezone & time-of-day
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         now_utc = datetime.now(pytz.UTC)
         user_now = now_utc.astimezone(user_tz)
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
-        
-        # Get actual tasks with their details
-        tasks_today = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.created_at >= today_start
-        ).all()
-        
-        completed_tasks = [t for t in tasks_today if t.status == 'completed' or t.status == 'done']
-        pending_tasks = [t for t in tasks_today if t.status in ['pending', 'in_progress']]
-        overdue_tasks = [t for t in tasks_today if t.status == 'overdue']
-        
-        # Build context for AI
-        user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
-        user_city = profile.city or 'не указан'
-        user_interests = profile.interests or 'не указаны'
-        user_skills = profile.skills or 'не указаны'
-        user_goals = profile.goals or 'не указаны'
-        
-        context = f"""Создай живой, естественный пост от лица пользователя {user_name} о его дне.
 
-Информация о пользователе:
-- Имя: {user_name}
-- Город: {user_city}
-- Интересы: {user_interests}
-- Навыки: {user_skills}
-- Цели: {user_goals}
-
-Задачи сегодня:
-"""
-        
-        if completed_tasks:
-            context += f"\nВыполнено ({len(completed_tasks)}):\n"
-            for task in completed_tasks[:5]:  # Показываем до 5 задач
-                desc = decrypt_data(task.description) if task.description else task.title
-                context += f"- {desc}\n"
-        
-        if pending_tasks:
-            context += f"\nВ работе ({len(pending_tasks)}):\n"
-            for task in pending_tasks[:3]:
-                desc = decrypt_data(task.description) if task.description else task.title
-                context += f"- {desc}\n"
-        
-        if overdue_tasks:
-            context += f"\nПросрочено ({len(overdue_tasks)}):\n"
-            for task in overdue_tasks[:2]:
-                desc = decrypt_data(task.description) if task.description else task.title
-                context += f"- {desc}\n"
-        
-        if not tasks_today:
-            context += "\nСегодня задач не создавалось и ничего не было выполнено.\n"
-        
-        has_completed = bool(completed_tasks)
-        
-        context += """
-Требования к посту:
-1. Пиши от первого лица, как будто сам пользователь делится своим днем
-2. Упомяни 1-2 конкретные выполненные задачи (если есть), но естественно, в контексте
-3. Покажи эмоции - радость от достижений, усталость, мотивацию или даже сомнения
-4. Добавь личные детали: что помогло/помешало, какие мысли возникали
-5. Если есть интересы/цели пользователя, можно связать задачи с ними"""
-        
-        if not has_completed:
-            context += """
-6. ВАЖНО: Сегодня НЕТ выполненных задач. НЕ ВЫДУМЫВАЙ достижения и действия! Честно напиши что сегодня был день без конкретных результатов. Можно упомянуть размышления, планы на завтра, или просто что взял паузу. Но НЕ придумывай что "сидел за кодом", "доделал проект" и т.д. если задач не было."""
+        hour = user_now.hour
+        if hour < 12:
+            time_of_day = "утро"
+        elif hour < 17:
+            time_of_day = "день"
+        elif hour < 21:
+            time_of_day = "вечер"
         else:
-            context += """
-6. Основывайся ТОЛЬКО на реально выполненных задачах из списка выше. НЕ придумывай дополнительные достижения."""
-        
-        context += """
-7. Максимум 3-4 предложения
-8. БЕЗ эмодзи, БЕЗ хештегов, БЕЗ призывов к действию
-9. Стиль - живой разговорный, как в обычной соцсети
+            time_of_day = "ночь"
 
-Пример поста КОГДА ЕСТЬ выполненные задачи:
-"Сегодня наконец-то доделал презентацию для клиента, над которой сидел всю неделю. Честно, думал не успею - вечером совещание накладывалось, но взял тайм-аут и сосредоточился. Теперь можно выдохнуть."
+        # Tasks completed TODAY (by actual_completion_time OR status change today)
+        completed_today = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status.in_(['completed', 'done']),
+            Task.actual_completion_time >= today_start
+        ).all()
+        # Fallback: tasks created today with completed status (no actual_completion_time)
+        if not completed_today:
+            completed_today = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['completed', 'done']),
+                Task.created_at >= today_start
+            ).all()
 
-Пример поста КОГДА НЕТ выполненных задач:
-"Сегодня как-то не задалось с продуктивностью — ничего конкретного не закрыл. Зато поймал себя на мысли, что давно откладываю структурирование идей по проекту. Завтра надо начать с этого, пока запал не пропал."
+        # Active tasks (created any time, still open)
+        active_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status.in_(['pending', 'in_progress'])
+        ).order_by(Task.due_date.asc()).limit(5).all()
 
-Создай пост:"""
-        
-        # Прямой вызов AI API для генерации поста (без полного агентского пайплайна)
+        overdue_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'overdue'
+        ).limit(3).all()
+
+        # Week stats for richer context
+        week_ago = today_start - timedelta(days=7)
+        week_completed_count = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status.in_(['completed', 'done']),
+            Task.actual_completion_time >= week_ago
+        ).count()
+
+        # Last 2 posts to avoid repetition
+        recent_posts = session.query(Post).filter(
+            Post.user_id == user.id
+        ).order_by(Post.created_at.desc()).limit(2).all()
+        recent_snippets = [p.content[:80] for p in recent_posts if p.content]
+
+        # Profile info
+        user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
+        user_city = profile.city or ''
+        user_interests = profile.interests or ''
+        user_skills = profile.skills or ''
+        user_goals = profile.goals or ''
+
+        # Random tone variation to keep posts diverse
+        tone = random.choice([
+            "без прикрас, честно — как в чате другу",
+            "немного устал, но доволен — рефлексивно",
+            "энергично, с лёгким юмором",
+            "спокойно и по-деловому",
+            "с конкретикой и чуть личным",
+        ])
+
+        # Build prompt
+        context = f"""Ты — ghostwriter. Пишешь короткий пост в соцсеть от лица реального человека. Стиль: {tone}. Не пиши "ghostwriter", не пиши от своего имени.
+
+О человеке:
+- Имя: {user_name}{f', {user_city}' if user_city else ''}
+{f'- Сфера / навыки: {user_skills}' if user_skills else ''}{f'\n- Интересы: {user_interests}' if user_interests else ''}{f'\n- Цели: {user_goals}' if user_goals else ''}
+- Сейчас: {time_of_day}
+"""
+
+        if completed_today:
+            context += f"\nЗакрыто сегодня ({len(completed_today)}):\n"
+            for t in completed_today[:5]:
+                desc = decrypt_data(t.description) if t.description else t.title
+                notes = f" — {t.completion_notes[:60]}" if t.completion_notes else ""
+                context += f"- {desc}{notes}\n"
+        else:
+            context += "\nЗакрытых задач сегодня нет.\n"
+
+        if active_tasks:
+            context += f"\nВ работе сейчас:\n"
+            for t in active_tasks[:3]:
+                desc = decrypt_data(t.description) if t.description else t.title
+                context += f"- {desc}\n"
+
+        if overdue_tasks:
+            context += f"\nПросрочено:\n"
+            for t in overdue_tasks[:2]:
+                desc = decrypt_data(t.description) if t.description else t.title
+                context += f"- {desc}\n"
+
+        if week_completed_count > 0:
+            context += f"\nЗа неделю закрыто задач: {week_completed_count}\n"
+
+        if recent_snippets:
+            context += f"\nПредыдущие посты (НЕ повторяй тему и структуру):\n"
+            for s in recent_snippets:
+                context += f"- «{s}…»\n"
+
+        context += f"""
+Напиши пост. Правила:
+— от первого лица, 3-4 предложения, максимум 500 символов
+— живой разговорный текст, без буллетов и нумерации
+— можно 1 эмодзи если уместно, без хештегов, без CTA
+— {"основывайся ТОЛЬКО на реально закрытых задачах выше, не придумывай" if completed_today else "задач сегодня не было — напиши честно: размышление, пауза, планы — но НЕ придумывай несуществующие дела"}
+— не начинай с имени пользователя, не заканчивай вопросом к аудитории
+
+Только текст поста:"""
+
+        # Call AI
         try:
             response = await _generate_text_with_ai(context)
-            
+
             if response and len(response) > 20:
-                # Clean up response - remove quotes if present
                 post_content = response.strip().strip('"').strip("'")
-                logger.info(f"[AUTO POST] Generated AI post for {user_id}: {post_content[:100]}")
+                logger.info(f"[AUTO POST] Generated post for {user_id} (tone={tone}): {post_content[:100]}")
                 return post_content
             else:
                 logger.warning(f"AI response too short for {user_id}, using fallback")
-                return generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks)
-                
+                return generate_simple_fallback(completed_today, active_tasks, overdue_tasks)
+
         except Exception as ai_error:
             logger.error(f"AI generation failed for {user_id}: {ai_error}")
-            return generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks)
-        
+            return generate_simple_fallback(completed_today, active_tasks, overdue_tasks)
+
     except Exception as e:
         logger.error(f"Error generating progress post for user {user_id}: {e}")
         return None
