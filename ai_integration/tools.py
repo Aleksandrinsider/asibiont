@@ -739,13 +739,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_telegram",
-            "description": "📢 ПОСТ В TELEGRAM КАНАЛ (НЕ в ленту!): Публикует пост в личный Telegram-канал пользователя. Это ДРУГАЯ система, не путай с create_post (лента новостей). Используй когда пользователь явно просит опубликовать в его TG-канал. Требует: канал должен быть указан в профиле, бот добавлен как админ канала. Ключевые слова: 'пост в канал', 'опубликуй в телеграм', 'запости в мой канал'.",
+            "description": "📢 ПОСТ В TELEGRAM КАНАЛ (НЕ в ленту!): Публикует пост в личный Telegram-канал пользователя. Поддерживает картинки: если передать image_url (URL из generate_image), пост выйдет как фото с подписью. Паттерн с картинкой: сначала generate_image → взять URL из ответа → передать в image_url. Ключевые слова: 'пост в канал', 'опубликуй в телеграм', 'запости в мой канал'.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "content": {
                         "type": "string",
                         "description": "Текст поста для Telegram-канала. Поддерживает Markdown. Пиши качественный контент по теме канала."
+                    },
+                    "image_url": {
+                        "type": "string",
+                        "description": "URL картинки для прикрепления к посту. Получи его вызвав generate_image и взяв URL из ответа. Если не нужна картинка — не передавай."
                     }
                 },
                 "required": ["content"]
@@ -756,13 +760,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_discord",
-            "description": "📢 ПОСТ В DISCORD КАНАЛ: Публикует пост в Discord канал пользователя через webhook. Требует: webhook должен быть настроен в профиле (Настройки → Discord webhook). Если не настроен — объясни как добавить. Ключевые слова: 'пост в дискорд', 'опубликуй в discord', 'запости в мой discord канал'.",
+            "description": "📢 ПОСТ В DISCORD КАНАЛ: Публикует пост в Discord канал пользователя через webhook. Поддерживает картинки: если передать image_url (URL из generate_image), пост выйдет с embed-изображением. Паттерн с картинкой: сначала generate_image → взять URL из ответа → передать в image_url. Ключевые слова: 'пост в дискорд', 'опубликуй в discord'.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "content": {
                         "type": "string",
                         "description": "Текст поста для Discord канала. Пиши качественный контент по теме."
+                    },
+                    "image_url": {
+                        "type": "string",
+                        "description": "URL картинки для embed. Получи его вызвав generate_image и взяв URL из ответа. Если не нужна картинка — не передавай."
                     }
                 },
                 "required": ["content"]

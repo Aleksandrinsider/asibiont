@@ -161,6 +161,7 @@ EMAIL (Resend API):
 
 ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (Replicate Flux):
 — generate_image(prompt, style, aspect_ratio) — создаёт картинку и отправляет пользователю. Промпт пиши на английском, максимально детально. aspect_ratio: 1:1 для постов, 16:9 для баннеров, 9:16 для stories. Вызывай когда просят 'нарисуй', 'создай картинку', 'визуал для поста', 'иллюстрацию'.
+— ПАТТЕРН ПОСТ С КАРТИНКОЙ: generate_image(prompt) → из ответа взять URL (строка после "URL картинки:") → передать в publish_to_telegram(content, image_url=...) или publish_to_discord(content, image_url=...). Так пост выйдет сразу с изображением. Используй когда просят создать пост с визуалом.
 
 СЦЕНАРИИ — КРИТИЧЕСКИ ВАЖНО РАЗЛИЧАТЬ:
 (1) «Отправь письмо Ивану», «напиши одно предложение» — РАЗОВОЕ → send_email → save_email_contact. НЕ создавай кампанию.
@@ -381,6 +382,10 @@ EMAIL (Resend API):
 EMAIL CONTACTS:
 — save_email_contact(email, name, company, position, notes, source) — save an email contact to the user's address book. Call when user gives an email, after sending an email, or when discussing potential clients. Duplicates get updated.
 — list_email_contacts(status_filter) — list email contacts: all/new/contacted/replied/interested/bounced. Call when discussing who to write to.
+
+IMAGE GENERATION (Replicate Flux):
+— generate_image(prompt, style, aspect_ratio) — generates an image and sends it to the user. Write the prompt in English, maximally detailed. aspect_ratio: 1:1 for posts, 16:9 for banners, 9:16 for stories. Call when asked to 'draw', 'create image', 'make visual for post', 'illustration'.
+— POST WITH IMAGE PATTERN: generate_image(prompt) → extract URL from response (string after "URL картинки:") → pass to publish_to_telegram(content, image_url=...) or publish_to_discord(content, image_url=...). The post will be published with the image attached.
 
 SCENARIOS — CRITICAL DISTINCTION:
 (1) "Send email to Ivan", "write one proposal" — SINGLE → send_email → save_email_contact. Do NOT create a campaign.

@@ -257,7 +257,7 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         }
 
 
-async def publish_to_telegram(content, user_id=None, session=None):
+async def publish_to_telegram(content, image_url=None, user_id=None, session=None):
     """
     Публикация контента в Telegram канал пользователя
     
@@ -331,34 +331,48 @@ async def publish_to_telegram(content, user_id=None, session=None):
         # Убедимся что ID канала начинается с @  если это username
         if not channel.startswith('-') and not channel.startswith('@'):
             channel = f"@{channel}"
-        
+
         async with aiohttp.ClientSession() as http_session:
-            async with http_session.post(
-                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
-                json={
+            if image_url:
+                # Публикуем фото с подписью
+                tg_method = 'sendPhoto'
+                tg_payload = {
+                    'chat_id': channel,
+                    'photo': image_url,
+                    'caption': post_text[:1024],  # Telegram caption limit
+                    'parse_mode': 'Markdown'
+                }
+            else:
+                tg_method = 'sendMessage'
+                tg_payload = {
                     'chat_id': channel,
                     'text': post_text,
                     'parse_mode': 'Markdown'
                 }
+
+            async with http_session.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{tg_method}',
+                json=tg_payload
             ) as response:
                 result = await response.json()
-                
+
                 if result.get('ok'):
                     logger.info(f"[PUBLISH] Successfully published to {channel}")
-                    
+
                     # Создаем задачу-отчет об успешной публикации
                     if user_id and session:
                         from models import Task
+                        img_note = " (с изображением)" if image_url else ""
                         report_task = Task(
                             user_id=user.id,
-                            title=f"✅ Пост опубликован в {channel}",
+                            title=f"✅ Пост опубликован в {channel}{img_note}",
                             description=f"Контент:\n{post_text[:200]}...",
                             status='completed',
                             actual_completion_time=datetime.now(timezone.utc)
                         )
                         session.add(report_task)
                         session.commit()
-                    
+
                     return {
                         "success": True,
                         "channel": channel,

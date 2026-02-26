@@ -6372,7 +6372,7 @@ async def delete_post(user_id: int, post_id: int = None, session=None):
             session.close()
 
 
-async def publish_to_telegram(content: str, user_id: int, session):
+async def publish_to_telegram(content: str, image_url: str = None, user_id: int = None, session=None):
     """
     📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
     
@@ -6442,6 +6442,7 @@ async def publish_to_telegram(content: str, user_id: int, session):
         
         result = await marketing_agent.publish_to_telegram(
             content=content_data,
+            image_url=image_url,
             user_id=user_id,
             session=session
         )
@@ -9045,6 +9046,7 @@ async def list_email_contacts(
 
 async def publish_to_discord(
     content: str,
+    image_url: str = None,
     user_id: int = None,
     session=None,
     close_session: bool = True,
@@ -9074,10 +9076,19 @@ async def publish_to_discord(
             return "❌ Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
 
         import aiohttp as _aiohttp
+        # Если есть картинка — публикуем через embed
+        if image_url:
+            payload = {
+                "content": content,
+                "embeds": [{"image": {"url": image_url}}]
+            }
+        else:
+            payload = {"content": content}
+
         async with _aiohttp.ClientSession() as http:
             resp = await http.post(
                 user.discord_webhook,
-                json={"content": content},
+                json=payload,
                 timeout=_aiohttp.ClientTimeout(total=15)
             )
             if resp.status in (200, 204):
@@ -9096,7 +9107,8 @@ async def publish_to_discord(
                 except Exception as _le:
                     logger.warning(f"[DISCORD] Failed to log: {_le}")
                 server = getattr(user, 'discord_server_name', None) or 'Discord канал'
-                return f"✅ Пост опубликован в {server}"
+                img_note = " с изображением" if image_url else ""
+                return f"✅ Пост опубликован{img_note} в {server}"
             else:
                 err = await resp.text()
                 return f"❌ Ошибка Discord webhook: {resp.status} — {err[:200]}"
@@ -9206,10 +9218,10 @@ async def generate_image(
             send_data = await send_resp.json()
 
         if send_data.get("ok"):
-            result_msg = "✅ Изображение отправлено!"
+            result_msg = f"✅ Изображение отправлено! URL картинки: {image_url}"
         else:
             # Telegram не принял — отдаём прямой URL
-            result_msg = f"🎨 Изображение сгенерировано:\n{image_url}"
+            result_msg = f"🎨 Изображение сгенерировано! URL картинки: {image_url}"
 
         # Списываем токены
         try:
