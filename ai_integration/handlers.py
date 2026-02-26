@@ -8248,15 +8248,6 @@ async def send_outreach_email(
         if global_sent_today >= GLOBAL_DAILY_LIMIT:
             return f"⚠️ Глобальный дневной лимит ({GLOBAL_DAILY_LIMIT} писем/день) достигнут. Продолжим завтра."
 
-        # Проверка дубликата — не слать дважды одному recipient ВООБЩЕ (по всем кампаниям)
-        existing_any = session.query(EmailOutreach).filter(
-            EmailOutreach.user_id == user.id,
-            EmailOutreach.recipient_email == recipient_email,
-            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-        ).first()
-        if existing_any:
-            return f"⚠️ Письмо на {recipient_email} уже отправлялось ранее (кампания #{existing_any.campaign_id}). Пропускаю дубль."
-
         # Проверка дубликата (не слать дважды одному recipient в одной кампании)
         existing = session.query(EmailOutreach).filter_by(
             campaign_id=campaign.id,
