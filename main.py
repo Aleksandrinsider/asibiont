@@ -7749,16 +7749,13 @@ async def resend_webhook_handler(request):
                 # Always try to fetch body from Resend API for inbound emails
                 if email_id:
                     try:
-                        from config import RESEND_API_KEY
-                        import os as _os
-                        # Use RESEND_RECEIVING_API_KEY if set (full-access key), else fall back to RESEND_API_KEY
-                        receiving_key = _os.environ.get('RESEND_RECEIVING_API_KEY') or RESEND_API_KEY
-                        if receiving_key:
+                        from config import RESEND_RECEIVING_API_KEY
+                        if RESEND_RECEIVING_API_KEY:
                             import aiohttp as _aiohttp
                             async with _aiohttp.ClientSession() as http:
                                 r = await http.get(
                                     f'https://api.resend.com/emails/receiving/{email_id}',
-                                    headers={'Authorization': f'Bearer {receiving_key}'},
+                                    headers={'Authorization': f'Bearer {RESEND_RECEIVING_API_KEY}'},
                                     timeout=_aiohttp.ClientTimeout(total=10),
                                 )
                                 resp_text = await r.text()

@@ -119,6 +119,8 @@ SMTP_FROM = os.getenv("SMTP_FROM", "ASI Biont <aleksandr.insider@gmail.com>")
 
 # Resend.com HTTP Email API (fallback when SMTP ports are blocked)
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+# Full-access key for reading inbound/received emails (Resend Receiving API)
+RESEND_RECEIVING_API_KEY = os.getenv("RESEND_RECEIVING_API_KEY", "") or RESEND_API_KEY
 
 # Reminder settings
 DAILY_REPORT_HOUR = int(os.getenv("DAILY_REPORT_HOUR", 22))
