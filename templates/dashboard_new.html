@@ -152,9 +152,7 @@
                 display: flex !important;
                 align-items: center;
                 justify-content: center;
-                padding: 8px 0;
-                background: #fff;
-                border-bottom: 1px solid #D1D9E0;
+                padding: 5px 0;
                 width: 100%;
                 position: relative;
                 z-index: 100;
@@ -539,7 +537,7 @@
             </button>
         </div>
         <a href="#" onclick="logout(); return false;" style="display: flex; align-items: center; text-decoration: none;">
-            <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 40px; width: auto;">
+            <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 37px; width: auto;">
         </a>
         <div style="position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px;">
             <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
@@ -566,7 +564,7 @@
             <div class="header-left" style="display: flex; align-items: center; gap: 8px;">
                 <!-- Логотип -->
                 <a href="https://asibiont.com/" target="_blank" class="logo" style="display: flex; align-items: center; text-decoration: none; margin-left: 15px;">
-                    <img src="/static/asibiont.svg" alt="ASI Biont Logo" style="height: 55px; width: auto;">
+                    <img src="/static/asibiont.svg" alt="ASI Biont Logo" style="height: 52px; width: auto;">
                 </a>
                 
                 <!-- Поиск контактов -->
@@ -2212,7 +2210,7 @@
                     ${sc(postStats.total, 'Постов за 30 дней', postStats.total_today || 0)}
                     ${sc(postStats.likes, 'Лайков на постах', postStats.likes_today || 0)}
                     ${sc(postStats.views, 'Просмотров постов', postStats.views_today || 0)}
-                    ${sc(postStats.comments, 'Комментариев', postStats.comments_today || 0)}
+                    ${sc(postStats.comments, 'Коммент. на постах', postStats.comments_today || 0)}
                 `;
                 list.appendChild(postStatsRow);
 
