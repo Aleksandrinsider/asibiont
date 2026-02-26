@@ -6185,8 +6185,20 @@ async def create_post(content: str, user_id: int, session=None):
         
         if not content or not content.strip():
             return "Текст поста не может быть пустым."
-        
+
+        # Лимит: 1 пост в ленту в день
         import datetime as dt
+        import pytz as _pytz_cp
+        _utz_cp = _pytz_cp.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _now_cp = dt.datetime.now(_utz_cp)
+        _today_start_cp = _now_cp.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_pytz_cp.UTC).replace(tzinfo=None)
+        posts_today = session.query(Post).filter(
+            Post.user_id == user.id,
+            Post.created_at >= _today_start_cp,
+        ).count()
+        if posts_today >= 1:
+            return "⚠️ Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
+
         post = Post(
             user_id=user.id,
             username=user.username or user.first_name or f"user_{user.telegram_id}",
