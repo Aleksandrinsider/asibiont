@@ -2185,6 +2185,7 @@
                 const postStats = data.post_stats || {total: 0, likes: 0, views: 0, comments: 0};
                 const delegatedToMe = data.delegated_to_me || 0;
                 const delegatedToMeToday = data.delegated_to_me_today || 0;
+                const tokensToday = data.tokens_today || 0;
 
                 // Today's deltas from existing data
                 const todayStr = new Date().toISOString().slice(0, 10);
@@ -2204,23 +2205,72 @@
                         <div style="font-size: 12px; color: #8C959F; margin-top: 2px;">${label}</div>
                     </div>`;
 
-                const statsRow = document.createElement('div');
-                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 0 14px 0;';
-                statsRow.innerHTML = `
-                    ${sc(totalSent, 'Email отправлено', sentToday)}
-                    ${sc(totalReplied, 'Email ответов', repliedToday)}
-                    ${sc(totalConv + '%', 'Email конверсия', 0)}
-                    ${sc(campaigns.length, 'Email кампаний', 0)}
-                    ${sc(delegatedToMe, 'Поручено мне', delegatedToMeToday)}
-                    ${sc(totalDelegations, 'Поручено мной', delegByMeToday)}
-                    ${sc(totalPostsNewsfeed, 'Постов в ленту', nfToday)}
-                    ${sc(totalPostsTg, 'Постов в Telegram', tgToday)}
+                // === TOP: Post stats (always visible) ===
+                const postStatsRow = document.createElement('div');
+                postStatsRow.style.cssText = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 0 14px 0;';
+                postStatsRow.innerHTML = `
                     ${sc(postStats.total, 'Постов за 30 дней', postStats.total_today || 0)}
                     ${sc(postStats.likes, 'Лайков на постах', postStats.likes_today || 0)}
                     ${sc(postStats.views, 'Просмотров постов', postStats.views_today || 0)}
                     ${sc(postStats.comments, 'Комментариев', postStats.comments_today || 0)}
                 `;
-                list.appendChild(statsRow);
+                list.appendChild(postStatsRow);
+
+                // === COLLAPSIBLE: Деловая активность ===
+                const bizKey = 'biz-activity-block';
+                const bizExpanded = _reportsExpandedSet.has(bizKey);
+                const bizSection = document.createElement('div');
+                bizSection.style.cssText = 'padding: 0; margin-bottom: 4px;';
+
+                const bizHeader = document.createElement('div');
+                bizHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                bizHeader.innerHTML = `
+                    <span style="font-size: 13px; font-weight: 600; color: #1F2328;">Деловая активность</span>
+                    <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${bizExpanded ? '0' : '-90'}deg);">
+                        <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                    </svg>
+                `;
+
+                const bizDetails = document.createElement('div');
+                bizDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${bizExpanded ? 'none' : '0px'};`;
+                bizDetails.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px 0 14px 0;">
+                        ${sc(totalSent, 'Email отправлено', sentToday)}
+                        ${sc(totalReplied, 'Email ответов', repliedToday)}
+                        ${sc(totalConv + '%', 'Email конверсия', 0)}
+                        ${sc(campaigns.length, 'Email кампаний', 0)}
+                        ${sc(delegatedToMe, 'Поручено мне', delegatedToMeToday)}
+                        ${sc(totalDelegations, 'Поручено мной', delegByMeToday)}
+                        ${sc(totalPostsNewsfeed, 'Постов в ленту', nfToday)}
+                        ${sc(totalPostsTg, 'Постов в Telegram', tgToday)}
+                        ${sc(tokensToday, 'Токенов сегодня', 0)}
+                    </div>
+                `;
+
+                bizHeader.onclick = () => {
+                    const chev = bizHeader.querySelector('.rpt-chev');
+                    const isCollapsed = bizDetails.style.maxHeight === '0px';
+                    if (isCollapsed) {
+                        bizDetails.style.overflow = 'hidden';
+                        bizDetails.style.maxHeight = bizDetails.scrollHeight + 'px';
+                        if (chev) chev.style.transform = 'rotate(0deg)';
+                        _reportsExpandedSet.add(bizKey);
+                        bizDetails.addEventListener('transitionend', function h() {
+                            if (_reportsExpandedSet.has(bizKey)) { bizDetails.style.maxHeight = 'none'; bizDetails.style.overflow = 'visible'; }
+                            bizDetails.removeEventListener('transitionend', h);
+                        });
+                    } else {
+                        bizDetails.style.overflow = 'hidden';
+                        bizDetails.style.maxHeight = bizDetails.scrollHeight + 'px';
+                        requestAnimationFrame(() => { bizDetails.style.maxHeight = '0px'; });
+                        if (chev) chev.style.transform = 'rotate(-90deg)';
+                        _reportsExpandedSet.delete(bizKey);
+                    }
+                };
+
+                bizSection.appendChild(bizHeader);
+                bizSection.appendChild(bizDetails);
+                list.appendChild(bizSection);
 
                 // === Campaigns ===
                 campaigns.forEach((c, idx) => {
