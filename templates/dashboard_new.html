@@ -2184,15 +2184,15 @@
                 statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 0 12px 0;';
                 statsRow.innerHTML = `
                     <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 16px; font-weight: 600; color: #1F2328; line-height: 1.2;">${totalSent}</div>
+                        <div style="font-size: 16px; font-weight: 400; color: #374151; line-height: 1.2;">${totalSent}</div>
                         <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-sent">${t('report-sent')}</div>
                     </div>
                     <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 16px; font-weight: 600; color: #068487; line-height: 1.2;">${totalReplied}</div>
+                        <div style="font-size: 16px; font-weight: 400; color: #374151; line-height: 1.2;">${totalReplied}</div>
                         <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-replied">${t('report-replied')}</div>
                     </div>
                     <div style="text-align: center; padding: 6px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 16px; font-weight: 600; color: ${totalConv > 0 ? '#068487' : '#374151'}; line-height: 1.2;">${totalConv}%</div>
+                        <div style="font-size: 16px; font-weight: 400; color: #374151; line-height: 1.2;">${totalConv}%</div>
                         <div style="font-size: 12px; color: #6C727F; margin-top: 2px;" data-i18n="report-conversion">${t('report-conversion')}</div>
                     </div>
                 `;
