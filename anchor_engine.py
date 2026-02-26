@@ -561,10 +561,17 @@ class AnchorEngine:
         anchors.extend(self._scan_email_outreach(user, session, now_utc))
 
         # Дедупликация: не создаём якорь если уже есть недоставленный с тем же type+source
-        existing = session.query(Anchor).filter(
-            Anchor.user_id == user.id,
-            Anchor.delivered_at.is_(None)
-        ).all()
+        # with_for_update() сериализует запись между двумя параллельными инстансами (Railway deploy)
+        try:
+            existing = session.query(Anchor).filter(
+                Anchor.user_id == user.id,
+                Anchor.delivered_at.is_(None)
+            ).with_for_update(nowait=True).all()
+        except Exception:
+            # nowait=True бросает исключение если строки заблокированы другим процессом
+            # В этом случае другой инстанс уже делает scan — пропускаем
+            logger.info(f"[ANCHOR] User {user.id}: scan skipped (locked by another instance)")
+            return []
         existing_keys = {(a.anchor_type, a.source) for a in existing}
 
         unique_anchors = []
@@ -2722,7 +2729,29 @@ class AnchorEngine:
                 return
             anchors = still_pending
 
-            # Проверяем: не было ли доставки этому юзеру за последние MIN_PROACTIVE_GAP_MINUTES?
+            # ── CROSS-PROCESS DUPLICATE GUARD ──
+            # Два инстанса могут создать разные DB-строки для одного логического якоря.
+            # Если те же anchor_types уже доставлялись в последние 2 мин — это дубль.
+            current_types = set(a.anchor_type for a in anchors)
+            very_recent_logs = session.query(AnchorDeliveryLog).filter(
+                AnchorDeliveryLog.user_id == user.id,
+                AnchorDeliveryLog.created_at >= now_utc - timedelta(minutes=2)
+            ).all()
+            for log in very_recent_logs:
+                try:
+                    logged_types = set(json.loads(log.anchor_types) if log.anchor_types else [])
+                except Exception:
+                    logged_types = set()
+                overlap = current_types & logged_types
+                if overlap:
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: cross-process duplicate detected (types: {overlap}), marking and skip")
+                    for anchor in anchors:
+                        anchor.delivered_at = now_utc
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
             recent_delivery = session.query(AnchorDeliveryLog).filter(
                 AnchorDeliveryLog.user_id == user.id,
                 AnchorDeliveryLog.created_at >= now_utc - timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES)
