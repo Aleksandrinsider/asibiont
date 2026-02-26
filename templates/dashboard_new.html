@@ -2159,7 +2159,8 @@
 
                 const campaigns = data.campaigns || [];
                 const emails = data.emails || [];
-                if (campaigns.length === 0 && emails.length === 0) {
+                const agentActivities = data.agent_activities || [];
+                if (campaigns.length === 0 && emails.length === 0 && agentActivities.length === 0) {
                     if (emptyEl) emptyEl.style.display = '';
                     return;
                 }
@@ -2182,7 +2183,7 @@
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
                 const statsRow = document.createElement('div');
-                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 0 14px 0;';
+                statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 0 14px 0;';
                 statsRow.innerHTML = `
                     <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${totalSent}</div>
@@ -2195,6 +2196,10 @@
                     <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${totalConv}%</div>
                         <div style="font-size: 12px; color: #8C959F; margin-top: 3px;" data-i18n="report-conversion">${t('report-conversion')}</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${agentActivities.length}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Действий агента</div>
                     </div>
                 `;
                 list.appendChild(statsRow);
@@ -2412,6 +2417,180 @@
                     list.appendChild(emailsSec);
                 }
 
+                // === Agent Activities (delegations, posts, TG, etc.) ===
+                // Group by activity_type
+                const activityGroups = {};
+                agentActivities.forEach(a => {
+                    if (!activityGroups[a.activity_type]) activityGroups[a.activity_type] = [];
+                    activityGroups[a.activity_type].push(a);
+                });
+                const activityMeta = {
+                    'delegation': {
+                        label: 'Делегирование',
+                        icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M13.5 5.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM7 10.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75ZM1.5 4.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5H4V9.5h.75a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5H2.5V5H2.25a.75.75 0 0 1-.75-.75Z"/></svg>',
+                    },
+                    'post_newsfeed': {
+                        label: 'Посты в ленту новостей',
+                        icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M2 2.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-1Zm0 4a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-1Zm0 4a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-1Z"/></svg>',
+                    },
+                    'post_telegram': {
+                        label: 'Посты в Telegram-канал',
+                        icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8.287 5.906c-.778.324-2.334.994-4.666 2.01-.378.15-.577.298-.595.442-.03.243.275.339.69.47l.175.055c.408.133.958.288 1.243.294.26.006.549-.1.868-.32 2.179-1.471 3.304-2.214 3.374-2.23.05-.012.12-.026.166.016.047.041.042.12.037.141-.03.129-1.227 1.241-1.846 1.817-.193.18-.33.307-.358.336a8.154 8.154 0 0 1-.188.186c-.38.366-.664.64.015 1.088.327.216.589.393.85.571.284.194.568.387.936.629.093.06.183.125.27.187.331.236.63.448.997.414.214-.02.435-.22.547-.82.265-1.417.786-4.486.906-5.751a1.426 1.426 0 0 0-.013-.315.337.337 0 0 0-.114-.217.526.526 0 0 0-.31-.093c-.3.005-.763.166-2.984 1.09z"/></svg>',
+                    },
+                    'other': {
+                        label: 'Прочая активность',
+                        icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity:0.7;"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>',
+                    }
+                };
+
+                Object.entries(activityGroups).forEach(([type, items]) => {
+                    const meta = activityMeta[type] || activityMeta['other'];
+                    const grpKey = 'act-grp-' + type;
+                    const grpExpanded = _reportsExpandedSet.has(grpKey);
+
+                    const section = document.createElement('div');
+                    section.style.cssText = 'padding: 0; margin-bottom: 4px;';
+
+                    // Group summary stat: count by status
+                    const doneCount = items.filter(a => ['published', 'accepted', 'completed'].includes(a.status)).length;
+                    const pendCount = items.filter(a => ['pending'].includes(a.status)).length;
+
+                    const grpHeader = document.createElement('div');
+                    grpHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                    grpHeader.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                            ${meta.icon}
+                            <span style="font-size: 13px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${meta.label}</span>
+                            <span style="font-size: 12px; color: #6C727F; flex-shrink: 0;">${items.length} ${items.length === 1 ? 'действие' : (items.length >=2 && items.length <=4 ? 'действия' : 'действий')}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px;">
+                            ${pendCount > 0 ? `<span style="font-size: 12px; color: #bf8700;">${pendCount} ожид.</span>` : ''}
+                            <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${grpExpanded ? '0' : '-90'}deg);">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </div>
+                    `;
+                    section.appendChild(grpHeader);
+
+                    const grpDetails = document.createElement('div');
+                    grpDetails.style.cssText = 'overflow: hidden; transition: max-height 0.3s ease; padding-bottom: 1px;';
+
+                    grpHeader.onclick = () => {
+                        const chev = grpHeader.querySelector('.rpt-chev');
+                        const isCollapsed = grpDetails.style.maxHeight === '0px';
+                        if (isCollapsed) {
+                            grpDetails.style.overflow = 'hidden';
+                            grpDetails.style.maxHeight = grpDetails.scrollHeight + 'px';
+                            if (chev) chev.style.transform = 'rotate(0deg)';
+                            _reportsExpandedSet.add(grpKey);
+                            grpDetails.addEventListener('transitionend', function h() {
+                                if (_reportsExpandedSet.has(grpKey)) { grpDetails.style.maxHeight = 'none'; grpDetails.style.overflow = 'visible'; }
+                                grpDetails.removeEventListener('transitionend', h);
+                            });
+                        } else {
+                            grpDetails.style.overflow = 'hidden';
+                            grpDetails.style.maxHeight = grpDetails.scrollHeight + 'px';
+                            requestAnimationFrame(() => { grpDetails.style.maxHeight = '0px'; });
+                            if (chev) chev.style.transform = 'rotate(-90deg)';
+                            _reportsExpandedSet.delete(grpKey);
+                        }
+                    };
+
+                    // Individual activity items
+                    items.forEach((a, ai) => {
+                        const aKey = grpKey + '-' + (a.id || ai);
+                        const aExpanded = _reportsExpandedSet.has(aKey);
+
+                        // Status label & color
+                        const stMap = {
+                            'pending': ['Ожидает', '#bf8700'],
+                            'accepted': ['Принято', '#068487'],
+                            'rejected': ['Отклонено', '#d73a49'],
+                            'cancelled': ['Отменено', '#6C727F'],
+                            'published': ['Опубликовано', '#068487'],
+                            'completed': ['Выполнено', '#068487'],
+                            'failed': ['Ошибка', '#d73a49'],
+                            'deleted': ['Удалено', '#6C727F'],
+                        };
+                        const [stLbl, stClr] = stMap[a.status] || [a.status || '', '#6C727F'];
+                        const aDate = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+
+                        const canDelete = !['cancelled', 'deleted'].includes(a.status);
+                        // For delegation: show cancel (status→cancelled) only if pending
+                        const canCancel = type === 'delegation' && a.status === 'pending';
+                        // For telegram posts: no delete (already sent)
+                        const showDelete = canDelete && type !== 'post_telegram';
+
+                        const aRow = document.createElement('div');
+                        aRow.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
+
+                        const aHeader = document.createElement('div');
+                        aHeader.style.cssText = 'display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;';
+                        aHeader.innerHTML = `
+                            ${showDelete ? `<button onclick="event.stopPropagation(); activityDelete(${a.id}, '${type}')" style="padding: 0; background: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; opacity: 0.4; transition: opacity 0.15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'" title="Удалить">
+                                <svg width="13" height="13" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+                            </button>` : '<span style="width:20px; flex-shrink:0;"></span>'}
+                            <span style="font-size: 13px; font-weight: 500; color: #1F2328; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${a.title || ''}</span>
+                            ${a.target ? `<span style="font-size: 12px; color: #6C727F; flex-shrink: 0;">${a.target}</span>` : ''}
+                            <span style="font-size: 12px; color: ${stClr}; flex-shrink: 0;">${stLbl}</span>
+                            ${aDate ? `<span style="font-size: 12px; color: #9CA3AF; flex-shrink: 0;">${aDate}</span>` : ''}
+                            ${canCancel ? `<button onclick="event.stopPropagation(); activitySetStatus(${a.id}, 'cancelled')" class="quick-action" title="Отменить делегирование" style="margin-left: 2px;"><svg width="14" height="14" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg></button>` : ''}
+                            <svg class="rpt-ochev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${aExpanded ? '0' : '-90'}deg); margin-left: auto; flex-shrink: 0;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        `;
+                        aRow.appendChild(aHeader);
+
+                        const aBody = document.createElement('div');
+                        aBody.style.cssText = 'overflow: hidden; transition: max-height 0.2s ease;';
+                        let aBodyHtml = '';
+                        if (a.content) {
+                            aBodyHtml += `<div style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #F0F3F5;">
+                                <div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6;">${a.content}</div>
+                            </div>`;
+                        }
+                        if (a.result) {
+                            aBodyHtml += `<div style="margin-top: 6px; padding: 8px 0; border-top: 1px solid #F0F3F5;">
+                                <div style="font-size: 12px; color: #8C959F;">${a.result}</div>
+                            </div>`;
+                        }
+                        aBody.innerHTML = aBodyHtml;
+                        aRow.appendChild(aBody);
+
+                        aHeader.onclick = () => {
+                            if (!aBodyHtml) return;
+                            const ochev = aHeader.querySelector('.rpt-ochev');
+                            const aCollapsed = aBody.style.maxHeight === '0px';
+                            if (aCollapsed) {
+                                aBody.style.maxHeight = aBody.scrollHeight + 'px';
+                                if (ochev) ochev.style.transform = 'rotate(0deg)';
+                                _reportsExpandedSet.add(aKey);
+                                aBody.addEventListener('transitionend', function ah() {
+                                    if (_reportsExpandedSet.has(aKey)) { aBody.style.maxHeight = 'none'; if (grpDetails.style.maxHeight !== '0px') grpDetails.style.maxHeight = 'none'; }
+                                    aBody.removeEventListener('transitionend', ah);
+                                });
+                            } else {
+                                aBody.style.maxHeight = aBody.scrollHeight + 'px';
+                                requestAnimationFrame(() => { aBody.style.maxHeight = '0px'; });
+                                if (ochev) ochev.style.transform = 'rotate(-90deg)';
+                                _reportsExpandedSet.delete(aKey);
+                            }
+                            if (grpDetails.style.maxHeight !== '0px' && grpDetails.style.maxHeight !== 'none') {
+                                requestAnimationFrame(() => { grpDetails.style.maxHeight = grpDetails.scrollHeight + 'px'; });
+                            }
+                        };
+
+                        if (aExpanded && aBodyHtml) { aBody.style.maxHeight = 'none'; } else { aBody.style.maxHeight = '0px'; }
+
+                        grpDetails.appendChild(aRow);
+                    });
+
+                    section.appendChild(grpDetails);
+                    list.appendChild(section);
+
+                    if (grpExpanded) { grpDetails.style.maxHeight = 'none'; } else { grpDetails.style.maxHeight = '0px'; }
+                });
+
                 if (window.applyLang) applyLang();
             } catch (err) {
                 console.error('Failed to load reports:', err);
@@ -2555,6 +2734,47 @@
                 }
             } catch (err) {
                 console.error('Failed to delete campaign:', err);
+            }
+        }
+
+        async function activityDelete(id, type) {
+            if (!id) return;
+            const confirmMsg = type === 'delegation' ? 'Отменить и удалить это делегирование?' :
+                               type === 'post_newsfeed' ? 'Удалить пост из ленты новостей?' :
+                               'Удалить запись об активности?';
+            if (!confirm(confirmMsg)) return;
+            try {
+                const resp = await fetch('/api/activities/' + id, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    showNotification('Удалено', 'success');
+                    loadReports();
+                } else {
+                    showNotification('Ошибка при удалении', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to delete activity:', err);
+            }
+        }
+
+        async function activitySetStatus(id, status) {
+            if (!id) return;
+            try {
+                const resp = await fetch('/api/activities/' + id + '/status', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status }),
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    loadReports();
+                } else {
+                    showNotification('Ошибка обновления статуса', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to update activity status:', err);
             }
         }
 
