@@ -8458,8 +8458,25 @@ async def add_email_leads(
 
         # Парсим leads
         parsed = []
+        leads_str = (leads or '').strip()
+        # Убираем двойное экранирование которое иногда добавляет AI
+        leads_clean = leads_str.replace('\\"', '"')
         try:
-            parsed = json.loads(leads) if leads.strip().startswith('[') else []
+            raw = json.loads(leads_clean)
+            if isinstance(raw, list):
+                # normalize keys: strip extra quotes that AI may add
+                for item in raw:
+                    if isinstance(item, dict):
+                        clean = {k.strip('"\' '): v for k, v in item.items()}
+                        parsed.append(clean)
+            elif isinstance(raw, str):
+                # double-encoded
+                raw2 = json.loads(raw)
+                if isinstance(raw2, list):
+                    for item in raw2:
+                        if isinstance(item, dict):
+                            clean = {k.strip('"\' '): v for k, v in item.items()}
+                            parsed.append(clean)
         except Exception:
             parsed = []
 

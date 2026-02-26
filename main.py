@@ -7047,7 +7047,7 @@ async def api_reports_handler(request):
                 task_stats['completed_week'] = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'completed',
-                    Task.updated_at >= seven_days_ago
+                    Task.created_at >= seven_days_ago
                 ).count()
                 task_stats['total_active'] = session_db.query(Task).filter(
                     Task.user_id == user.id,

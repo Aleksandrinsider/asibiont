@@ -2159,6 +2159,9 @@ class AnchorEngine:
                         session.commit()
                     except Exception:
                         session.rollback()
+                    return
+
+                post = Post(
                     user_id=user.id,
                     username=user.username or user.first_name or f'user_{user.telegram_id}',
                     content=post_text,
