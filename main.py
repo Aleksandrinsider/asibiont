@@ -6139,7 +6139,8 @@ async def api_tasks_handler(request):
                 'delegated_to_username': task.delegated_to_username,  # Дублируем для удобста
                 'delegated_by': None,  # Будет устале же
                 'delegated_by_username': None,  # Username того кто поручил
-                'delegated_by_me': task.delegated_by == user.id  # True если я делегироал эту задачу
+                'delegated_by_me': task.delegated_by == user.id,  # True если я делегироал эту задачу
+                'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
             }
             
             # Определяем delegated_by и delegated_by_username

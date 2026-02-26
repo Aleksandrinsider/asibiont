@@ -5292,6 +5292,12 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             groups.today.sort(sortByTime);
             groups.tomorrow.sort(sortByTime);
             groups.later.sort(sortByTime);
+            // Завершённые — по убыванию даты завершения (свежие сверху)
+            groups.completed.sort((a, b) => {
+                const tA = a.updated_at ? new Date(a.updated_at).getTime() : (a.reminder_time ? new Date(a.reminder_time).getTime() : 0);
+                const tB = b.updated_at ? new Date(b.updated_at).getTime() : (b.reminder_time ? new Date(b.reminder_time).getTime() : 0);
+                return tB - tA;
+            });
             
             return groups;
         }
