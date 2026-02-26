@@ -8285,6 +8285,11 @@ async def send_outreach_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
+        # Добавляем unsubscribe-ссылку в конец письма
+        from config import WEB_APP_URL
+        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
+        body = body.rstrip() + f"\n\n---\nОтписаться / Unsubscribe: {_unsub_url}"
+
         # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
         import aiohttp as _aiohttp
         resend_id = None
@@ -8316,6 +8321,10 @@ async def send_outreach_email(
         except Exception as e:
             logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
             return f"❌ Ошибка отправки: {str(e)}"
+
+        # Anti-spam задержка между письмами (10 сек)
+        import asyncio as _asyncio_delay
+        await _asyncio_delay.sleep(10)
 
         # Сохраняем в БД (обновляем draft или создаём новый)
         if existing and existing.status == 'draft':
@@ -8744,6 +8753,11 @@ async def send_follow_up_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
+        # Добавляем unsubscribe-ссылку
+        from config import WEB_APP_URL
+        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
+        body = body.rstrip() + f"\n\n---\nОтписаться / Unsubscribe: {_unsub_url}"
+
         # Отправляем через Resend — plain text
         import aiohttp as _aiohttp
 
@@ -8770,6 +8784,10 @@ async def send_follow_up_email(
                     return f"❌ Ошибка Resend API: {err}"
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
+
+        # Anti-spam задержка (10 сек)
+        import asyncio as _asyncio_delay
+        await _asyncio_delay.sleep(10)
 
         # Обновляем запись
         outreach.follow_up_count = (outreach.follow_up_count or 0) + 1
@@ -8842,6 +8860,35 @@ async def send_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
+        # Глобальный дневной лимит: макс 20 уникальных получателей/день
+        from datetime import datetime as _dt_limit, timezone as _tz_limit
+        from sqlalchemy import func as _func_limit, distinct as _distinct_limit
+        import pytz as _pytz_limit
+        _user_tz_limit = _pytz_limit.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _user_now_limit = _dt_limit.now(_user_tz_limit)
+        _day_local_limit = _user_now_limit.replace(hour=0, minute=0, second=0, microsecond=0)
+        _today_start_limit = _day_local_limit.astimezone(_tz_limit.utc)
+        GLOBAL_DAILY_LIMIT = 20
+        _global_sent_today = session.query(
+            _func_limit.count(_distinct_limit(EmailOutreach.recipient_email))
+        ).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.sent_at >= _today_start_limit,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        ).scalar() or 0
+        _is_new_recip = not session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == to_clean,
+            EmailOutreach.sent_at >= _today_start_limit,
+        ).first()
+        if _is_new_recip and _global_sent_today >= GLOBAL_DAILY_LIMIT:
+            return f"⚠️ Достигнут дневной лимит: {_global_sent_today} новых получателей (макс. {GLOBAL_DAILY_LIMIT}). Продолжим завтра."
+
+        # Добавляем unsubscribe-ссылку
+        from config import WEB_APP_URL
+        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
+        body = body.rstrip() + f"\n\n---\nОтписаться / Unsubscribe: {_unsub_url}"
+
         resend_id = ''
         try:
             async with _aiohttp.ClientSession() as http:
@@ -8868,6 +8915,10 @@ async def send_email(
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
 
+        # Anti-spam задержка (10 сек)
+        import asyncio as _asyncio_delay
+        await _asyncio_delay.sleep(10)
+
         # --- Сохраняем EmailOutreach для трекинга ответов через webhook ---
         try:
             from models import EmailCampaign as _EmailCampaign, EmailOutreach as _EmailOutreach
@@ -8887,7 +8938,7 @@ async def send_email(
                     sender_email=sender_email,
                     status='active',
                     daily_limit=20,
-                    max_emails=1000,
+                    max_emails=200,
                 )
                 session.add(campaign)
                 session.flush()

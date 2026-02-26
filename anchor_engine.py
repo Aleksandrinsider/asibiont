@@ -497,7 +497,9 @@ class AnchorEngine:
         # ── 3e. EMAIL SILENT — автономная отправка/follow-up (не ночью, без сообщений юзеру) ──
         if not is_night and email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors...")
-            for ea in email_silent_anchors[:3]:  # макс 3 за цикл
+            for _ea_idx, ea in enumerate(email_silent_anchors[:3]):  # макс 3 за цикл
+                if _ea_idx > 0:
+                    await asyncio.sleep(15)  # Anti-spam задержка между email-якорями
                 async with self._ai_semaphore:
                     await self._process_email_silent_anchor(user, ea, session)
 
