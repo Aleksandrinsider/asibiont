@@ -2384,14 +2384,14 @@
                     emails.forEach(e => {
                         const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                         const item = document.createElement('div');
-                        item.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
+                        item.style.cssText = 'margin-bottom: 8px; padding: 8px; border-bottom: 1px solid #F6F8FA;';
                         item.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <span style="font-size: 13px; font-weight: 500; color: #1F2328;">${e.to || ''}</span>
-                                ${dateStr ? `<span style="font-size: 12px; color: #9CA3AF;">${dateStr}</span>` : ''}
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                <span style="font-size: 13px; font-weight: 600; color: #1F2328;">${e.to || ''}</span>
+                                ${dateStr ? `<span style="font-size: 12px; color: #8C959F; font-weight: 400;">${dateStr}</span>` : ''}
                             </div>
-                            ${e.subject ? `<div style="font-size: 12px; color: #6C727F; margin-top: 2px;">${e.subject}</div>` : ''}
-                            ${e.body_text || e.body ? `<div style="font-size: 12px; color: #374151; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${e.body_text || e.body}</div>` : ''}
+                            ${e.subject ? `<div style="font-size: 13px; color: #1F2328; font-weight: 600; margin-top: 10px; margin-bottom: 6px;">Тема письма: ${e.subject}</div>` : ''}
+                            ${e.body_text || e.body ? `<div style="font-size: 13px; color: #374151; margin-top: 4px; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${e.body_text || e.body}</div>` : ''}
                         `;
                         emailsSec.appendChild(item);
                     });
