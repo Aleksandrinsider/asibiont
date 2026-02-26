@@ -739,7 +739,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_telegram",
-            "description": "📢 ПОСТ В TELEGRAM КАНАЛ (НЕ в ленту!): Публикует пост в личный Telegram-канал пользователя. Поддерживает картинки: если передать image_url (URL из generate_image), пост выйдет как фото с подписью. Паттерн с картинкой: сначала generate_image → взять URL из ответа → передать в image_url. Ключевые слова: 'пост в канал', 'опубликуй в телеграм', 'запости в мой канал'.",
+            "description": "📢 ПОСТ В TELEGRAM КАНАЛ (НЕ в ленту!): Публикует пост в личный Telegram-канал пользователя. АВТОМАТИЧЕСКОЕ ПРАВИЛО: перед публикацией ВСЕГДА сначала вызывай generate_image и передавай URL в image_url. Если generate_image вернул ошибку — публикуй без image_url, пост должен выйти в любом случае. Ключевые слова: 'пост в канал', 'опубликуй в телеграм', 'запости в мой канал'.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -760,7 +760,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_discord",
-            "description": "📢 ПОСТ В DISCORD КАНАЛ: Публикует пост в Discord канал пользователя через webhook. Поддерживает картинки: если передать image_url (URL из generate_image), пост выйдет с embed-изображением. Паттерн с картинкой: сначала generate_image → взять URL из ответа → передать в image_url. Ключевые слова: 'пост в дискорд', 'опубликуй в discord'.",
+            "description": "📢 ПОСТ В DISCORD КАНАЛ: Публикует пост в Discord канал пользователя через webhook. АВТОМАТИЧЕСКОЕ ПРАВИЛО: перед публикацией ВСЕГДА сначала вызывай generate_image и передавай URL в image_url. Если generate_image вернул ошибку — публикуй без image_url, пост должен выйти в любом случае. Ключевые слова: 'пост в дискорд', 'опубликуй в discord'.",
             "parameters": {
                 "type": "object",
                 "properties": {
