@@ -8222,6 +8222,14 @@ app.router.add_get('/BingSiteAuth.xml', lambda r: web.FileResponse('static/BingS
 # SEO: robots.txt и sitemap.xml в корне (поисковые ищут именно тут)
 app.router.add_get('/robots.txt', lambda r: web.FileResponse('static/robots.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
 app.router.add_get('/sitemap.xml', lambda r: web.FileResponse('static/sitemap.xml', headers={'Content-Type': 'application/xml; charset=utf-8'}))
+# PWA: Service Worker из корня с разрешённым scope /
+async def sw_handler(request):
+    return web.FileResponse('static/sw.js', headers={
+        'Content-Type': 'application/javascript',
+        'Service-Worker-Allowed': '/',
+        'Cache-Control': 'no-cache',
+    })
+app.router.add_get('/sw.js', sw_handler)
 # SEO: IndexNow key file
 app.router.add_get('/d6193b04262141bba808b1279123715b.txt', lambda r: web.FileResponse('static/d6193b04262141bba808b1279123715b.txt'))
 # AI SEO: llms.txt for AI crawlers (ChatGPT, Perplexity, Yandex GPT)

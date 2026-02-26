@@ -9478,7 +9478,7 @@
 <!-- PWA: Service Worker + Web Push -->
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js', {scope: '/'}).then(function(reg) {
+  navigator.serviceWorker.register('/sw.js', {scope: '/'}).then(function(reg) {
     console.log('SW registered');
     // Subscribe to push if supported and permission granted
     if ('PushManager' in window && reg.pushManager) {
