@@ -1341,7 +1341,7 @@
                     <!-- Password change section -->
                     <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 10px; margin-top: 2px;">
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
-                        <div id="quick-profile-pwd-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end;">
+                        <div id="quick-profile-pwd-grid" style="display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; align-items: end;">
                             <div>
                                 <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="current-password-label">Текущий пароль</label>
                                 <input type="password" id="pwd-current" placeholder="••••••" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" {{ 'disabled' if not user.password_hash else '' }} />
@@ -1354,7 +1354,10 @@
                                 <input type="password" id="pwd-new" placeholder="Мин. 6 символов" data-i18n-ph="new-password-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                             </div>
                             <div>
-                                <button onclick="changePassword()" class="rating-submit-btn" style="width: 100%;" data-i18n="change-password-btn">Сменить</button>
+                                <button onclick="changePassword()" class="rating-submit-btn" style="white-space: nowrap;" data-i18n="change-password-btn">Сменить</button>
+                            </div>
+                            <div>
+                                <button onclick="deleteAccount()" class="rating-submit-btn" style="white-space: nowrap; background: #d73a49; border-color: #d73a49;" data-i18n="delete-account-btn">Удалить аккаунт</button>
                             </div>
                         </div>
                         <p id="pwd-change-msg" style="display: none; font-size: 12px; margin: 6px 0 0 0; text-align: center;"></p>
@@ -6731,6 +6734,28 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             }
         }
         
+        async function deleteAccount() {
+            const confirmed = confirm(t('delete-account-confirm', 'Удалить аккаунт безвозвратно? Все задачи, заметки и история будут удалены.'));
+            if (!confirmed) return;
+            const confirmed2 = confirm(t('delete-account-confirm2', 'Это действие нельзя отменить. Продолжить?'));
+            if (!confirmed2) return;
+            try {
+                const resp = await fetch('/api/account/delete', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    showNotification(t('delete-account-ok', 'Аккаунт удалён. До свидания!'), 'success');
+                    setTimeout(() => { window.location.href = '/?logout=1'; }, 1500);
+                } else {
+                    showNotification(t('err-prefix') + ' ' + (data.error || t('err-unknown')), 'error');
+                }
+            } catch (e) {
+                showNotification(t('err-prefix') + ' ' + e.message, 'error');
+            }
+        }
+
         async function changePassword() {
             const currentPwd = document.getElementById('pwd-current').value;
             const newPwd = document.getElementById('pwd-new').value;
@@ -9496,6 +9521,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'support':'Поддержка','admin-panel':'Панель администратора',
       'change-password-title':'Сменить пароль','current-password-label':'Текущий пароль','new-password-label':'Новый пароль (мин. 6)',
       'new-password-ph':'Мин. 6 символов','change-password-btn':'Сменить','no-password-yet':'Пароль ещё не задан',
+      'delete-account-btn':'Удалить аккаунт','delete-account-confirm':'Удалить аккаунт безвозвратно? Все задачи, заметки и история будут удалены.','delete-account-confirm2':'Это действие нельзя отменить. Продолжить?','delete-account-ok':'Аккаунт удалён. До свидания!',
       'err-pwd-min6':'Новый пароль минимум 6 символов','pwd-changed-ok':'Пароль успешно изменён'
     },
     en: {
@@ -9690,6 +9716,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'support':'Support','admin-panel':'Admin panel',
       'change-password-title':'Change password','current-password-label':'Current password','new-password-label':'New password (min 6)',
       'new-password-ph':'Min. 6 characters','change-password-btn':'Change','no-password-yet':'No password set yet',
+      'delete-account-btn':'Delete account','delete-account-confirm':'Permanently delete account? All tasks, notes and history will be removed.','delete-account-confirm2':'This cannot be undone. Continue?','delete-account-ok':'Account deleted. Goodbye!',
       'err-pwd-min6':'New password must be at least 6 characters','pwd-changed-ok':'Password changed successfully'
     }
   };

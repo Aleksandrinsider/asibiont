@@ -903,6 +903,79 @@ https://asibiont.com"""
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def delete_account_handler(request):
+    """DELETE /api/account/delete — permanently delete current user and all their data"""
+    try:
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        from models import (
+            Task, Interaction, Note, UserProfile, Goal, UserRating,
+            Subscription, PaymentHistory, Post, PostLike, Comment, PostView,
+            ActivityAlert, ContactAlert, Anchor, AnchorDeliveryLog,
+            PushSubscription, TokenTransaction, EmailContact, EmailCampaign,
+            EmailOutreach, AgentActivityLog
+        )
+        # UserMessage may not exist in all deployments
+        try:
+            from models import UserMessage
+            has_user_message = True
+        except ImportError:
+            has_user_message = False
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            uid = user.id
+
+            # Delete child records in dependency order (leaves first)
+            session_db.query(AnchorDeliveryLog).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(PostLike).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(PostView).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Comment).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Post).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(EmailOutreach).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(EmailCampaign).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(EmailContact).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(AgentActivityLog).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(PushSubscription).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(TokenTransaction).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(PaymentHistory).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Subscription).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(UserRating).filter(
+                (UserRating.rater_user_id == uid) | (UserRating.rated_user_id == uid)
+            ).delete(synchronize_session=False)
+            session_db.query(ActivityAlert).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(ContactAlert).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Anchor).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Goal).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Task).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Interaction).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Note).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(UserProfile).filter_by(user_id=uid).delete(synchronize_session=False)
+            if has_user_message:
+                session_db.query(UserMessage).filter(
+                    (UserMessage.sender_id == uid) | (UserMessage.recipient_id == uid)
+                ).delete(synchronize_session=False)
+            session_db.delete(user)
+            session_db.commit()
+
+            logger.info(f"[DELETE ACCOUNT] User {user_id} (db id={uid}) fully deleted")
+            return web.json_response({'success': True})
+        except Exception as e:
+            session_db.rollback()
+            logger.error(f"[DELETE ACCOUNT] DB error: {e}", exc_info=True)
+            return web.json_response({'error': 'Ошибка при удалении'}, status=500)
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[DELETE ACCOUNT] Unexpected error: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def password_change_handler(request):
     """Change password for logged-in user"""
     try:
@@ -8495,6 +8568,7 @@ app.router.add_post('/api/register', email_register_handler)
 app.router.add_post('/api/login/email', email_login_handler)
 app.router.add_post('/api/password/reset', password_reset_handler)
 app.router.add_post('/api/password/change', password_change_handler)
+app.router.add_post('/api/account/delete', delete_account_handler)
 app.router.add_post('/api/push/subscribe', push_subscribe_handler)
 app.router.add_get('/api/push/vapid-key', push_vapid_key_handler)
 app.router.add_get('/logout', logout_handler)
