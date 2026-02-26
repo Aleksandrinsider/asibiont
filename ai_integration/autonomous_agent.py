@@ -547,9 +547,12 @@ class HybridAutonomousAgent:
                     logger.info(f"[EXEC] {tool_name} ✓ result={str(result)[:200]} — {reason}")
 
                 except Exception as e:
-                    logger.error(f"[EXEC] {tool_name} ✗ — {e}")
-                    self.tool_discovery.learn_from_failure(
-                        func_name=tool_name, error=str(e))
+                    logger.error(f"[EXEC] {tool_name} ✗ — {e}\n{traceback.format_exc()}")
+                    try:
+                        self.tool_discovery.learn_from_failure(
+                            func_name=tool_name, error=str(e))
+                    except Exception:
+                        pass
                     results.append({"tool": tool_name, "success": False,
                                     "error": str(e), "reason": reason})
         finally:
