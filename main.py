@@ -7800,7 +7800,7 @@ async def resend_webhook_handler(request):
 
                 if from_email:
                     if not text_body:
-                        text_body = '(письмо без текста)'
+                        text_body = ''
                     from models import EmailOutreach, EmailCampaign
                     from sqlalchemy import func
                     
