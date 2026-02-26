@@ -512,10 +512,10 @@ class HybridAutonomousAgent:
                     if 'close_session' in sig.parameters:
                         params['close_session'] = False
 
-                # === Parameter auto-fix для известных quirks ===
-                params = self._fix_tool_params(tool_name, params, user_message)
-
                 try:
+                    # === Parameter auto-fix для известных quirks ===
+                    params = self._fix_tool_params(tool_name, params, user_message)
+
                     # Списываем токены за инструмент (если стоимость > 0)
                     from token_service import spend_tokens, ACTION_COSTS, DEFAULT_TOOL_COST
                     from config import FREE_ACCESS_MODE
@@ -578,6 +578,12 @@ class HybridAutonomousAgent:
                 params[clean_key] = params.pop(bad_key)
             elif clean_key:
                 params.pop(bad_key)  # дубль — удаляем
+
+        # === save_email_contact: email может прийти с кавычками внутри значения ===
+        if tool_name == 'save_email_contact':
+            for _fld in ['email', 'name', 'company', 'position', 'notes']:
+                if _fld in params and isinstance(params[_fld], str):
+                    params[_fld] = params[_fld].strip('"\' ')
 
         # === add_email_leads: leads может прийти как list/dict вместо строки ===
         if tool_name == 'add_email_leads' and 'leads' in params:
