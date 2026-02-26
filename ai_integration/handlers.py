@@ -7633,16 +7633,16 @@ async def find_and_message_relevant_users(
                 "я уведомлю когда появится подходящий человек (contact_alert)."
             )
         
-        # Антиспам: общий лимит 10 исходящих в день
+        # Антиспам: общий лимит 50 исходящих в день
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         total_sent_today = session.query(UserMessage).filter(
             UserMessage.sender_id == sender.id,
             UserMessage.created_at >= today_start
         ).count()
         
-        remaining = max(0, 10 - total_sent_today)
+        remaining = max(0, 50 - total_sent_today)
         if remaining == 0:
-            return "⚠️ Дневной лимит исходящих сообщений (10) исчерпан. Попробуй завтра."
+            return "⚠️ Дневной лимит исходящих сообщений (50) исчерпан. Попробуй завтра."
         
         top = top[:remaining]
         
