@@ -632,7 +632,6 @@
             <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Главная</a>
             <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
             <a href="/subscription-tiers" style="color: #59636E; text-decoration: none; margin-right: 16px;">Тарифы</a>
-            <a href="/pricing" style="color: #59636E; text-decoration: none; margin-right: 16px;">Расценки</a>
             <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
             <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
             <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
@@ -722,7 +721,7 @@
       ],
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
       btnTop: 'Пополнить баланс', btnInstall: 'Установить приложение',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fPricing: 'Расценки', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал',
+      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал',
       discordLogin: 'Войти через Discord',
       emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена', forgotPassword: 'Забыли пароль?'
     },
@@ -804,7 +803,7 @@
       ],
       cta: '1,500 tokens on signup. All features available immediately.',
       btnTop: 'Top Up Balance', btnInstall: 'Install App',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fPricing: 'Rates', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial',
+      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial',
       discordLogin: 'Sign in with Discord',
       emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel', forgotPassword: 'Forgot password?'
     }
@@ -856,11 +855,10 @@
       if (fa[0]) fa[0].textContent = t.fHome;
       if (fa[1]) fa[1].textContent = t.fFaq;
       if (fa[2]) fa[2].textContent = t.fPrice;
-      if (fa[3]) fa[3].textContent = t.fPricing;
-      if (fa[4]) fa[4].textContent = t.fSupport;
-      if (fa[5]) fa[5].textContent = t.fPrivacy;
-      if (fa[6]) fa[6].textContent = t.fTerms;
-      if (fa[7]) fa[7].textContent = t.fTutorial;
+      if (fa[3]) fa[3].textContent = t.fSupport;
+      if (fa[4]) fa[4].textContent = t.fPrivacy;
+      if (fa[5]) fa[5].textContent = t.fTerms;
+      if (fa[6]) fa[6].textContent = t.fTutorial;
     }
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');
