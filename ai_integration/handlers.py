@@ -8886,7 +8886,7 @@ async def send_email(
                     sender_name=sender_name,
                     sender_email=sender_email,
                     status='active',
-                    daily_limit=50,
+                    daily_limit=20,
                     max_emails=1000,
                 )
                 session.add(campaign)
