@@ -2160,11 +2160,8 @@
                 const campaigns = data.campaigns || [];
                 const emails = data.emails || [];
                 const agentActivities = data.agent_activities || [];
-                if (campaigns.length === 0 && emails.length === 0 && agentActivities.length === 0) {
-                    if (emptyEl) emptyEl.style.display = '';
-                    return;
-                }
-                if (emptyEl) emptyEl.style.display = 'none';
+                const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0;
+                if (emptyEl) emptyEl.style.display = hasListItems ? 'none' : '';
 
                 // === Summary stats (count from actual outreach data) ===
                 let totalSent = 0, totalReplied = 0;
