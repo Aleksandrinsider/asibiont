@@ -415,7 +415,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0;
-    padding: 3px;
+    padding: 6px 3px 3px 3px;
     overflow: hidden;
     min-height: 0;
     -webkit-overflow-scrolling: touch;
