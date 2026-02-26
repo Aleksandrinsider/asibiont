@@ -9106,3 +9106,123 @@ async def publish_to_discord(
     finally:
         if close_session:
             session.close()
+
+
+async def generate_image(
+    prompt: str,
+    style: str = None,
+    aspect_ratio: str = "1:1",
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+) -> str:
+    """Генерация изображения через Replicate (Flux) и отправка пользователю в Telegram."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import REPLICATE_API_TOKEN, TELEGRAM_TOKEN
+        if not REPLICATE_API_TOKEN:
+            return "❌ Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в переменные окружения."
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден."
+
+        # Строим полный промпт (всегда на английском для лучшего качества)
+        full_prompt = prompt
+        if style:
+            full_prompt = f"{prompt}, {style} style"
+
+        import aiohttp as _aiohttp
+        import asyncio as _asyncio
+
+        model = "black-forest-labs/flux-schnell"
+        input_data = {
+            "prompt": full_prompt,
+            "aspect_ratio": aspect_ratio or "1:1",
+            "output_format": "webp",
+            "output_quality": 80,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {REPLICATE_API_TOKEN}",
+            "Content-Type": "application/json",
+            "Prefer": "wait",  # ждём результат синхронно (до 60с)
+        }
+
+        async with _aiohttp.ClientSession() as http:
+            # Запускаем генерацию
+            resp = await http.post(
+                f"https://api.replicate.com/v1/models/{model}/predictions",
+                headers=headers,
+                json={"input": input_data},
+                timeout=_aiohttp.ClientTimeout(total=90),
+            )
+            data = await resp.json()
+
+            if resp.status not in (200, 201):
+                err = data.get("detail", str(data))
+                return f"❌ Ошибка Replicate: {err}"
+
+            output = data.get("output")
+            prediction_id = data.get("id")
+
+            # Если Prefer:wait не сработал — опрашиваем статус
+            if output is None and prediction_id:
+                for _ in range(30):
+                    await _asyncio.sleep(3)
+                    poll = await http.get(
+                        f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                        headers=headers,
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    poll_data = await poll.json()
+                    status = poll_data.get("status")
+                    if status == "succeeded":
+                        output = poll_data.get("output")
+                        break
+                    elif status in ("failed", "canceled"):
+                        err = poll_data.get("error", "Unknown error")
+                        return f"❌ Генерация не удалась: {err}"
+
+            if not output:
+                return "❌ Изображение не сгенерировано (таймаут)."
+
+            # output — URL или список URL
+            image_url = output[0] if isinstance(output, list) else output
+
+            # Отправляем фото в Telegram
+            caption = f"🎨 {prompt[:900]}"
+            send_resp = await http.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
+                json={
+                    "chat_id": user.telegram_id,
+                    "photo": image_url,
+                    "caption": caption,
+                },
+                timeout=_aiohttp.ClientTimeout(total=30),
+            )
+            send_data = await send_resp.json()
+
+        if send_data.get("ok"):
+            result_msg = "✅ Изображение отправлено!"
+        else:
+            # Telegram не принял — отдаём прямой URL
+            result_msg = f"🎨 Изображение сгенерировано:\n{image_url}"
+
+        # Списываем токены
+        try:
+            from token_service import deduct_tokens
+            deduct_tokens(user_id, "generate_image", session=session)
+        except Exception:
+            pass
+
+        return result_msg
+
+    except Exception as e:
+        logger.error(f"[GENERATE_IMAGE] Error: {e}", exc_info=True)
+        return f"❌ Ошибка генерации изображения: {str(e)}"
+    finally:
+        if close_session:
+            session.close()

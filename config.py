@@ -67,6 +67,11 @@ TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "asibiont_bot")
 if not TELEGRAM_BOT_USERNAME:
     TELEGRAM_BOT_USERNAME = "asibiont_bot"
 
+# Replicate (Image Generation)
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+if not REPLICATE_API_TOKEN and not LOCAL:
+    logger.warning("REPLICATE_API_TOKEN not set - image generation will be unavailable")
+
 # Discord
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")

@@ -61,6 +61,7 @@ ACTION_COSTS = {
     'set_content_strategy':       15,  # Настройка стратегии контента
     'publish_to_telegram':        30,  # Публикация в TG-канал
     'publish_to_discord':          30,  # Публикация в Discord канал
+    'generate_image':              20,  # Генерация изображения (Replicate Flux)
 
     # ── Автономные функции ──
     'toggle_autonomous_feature':   5,  # Вкл/выкл автономной функции

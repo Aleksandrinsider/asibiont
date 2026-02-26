@@ -1191,4 +1191,30 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": "🎨 ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ через Replicate (Flux). Создаёт картинку по текстовому описанию и отправляет пользователю в Telegram. Используй когда просят: 'нарисуй', 'создай изображение', 'сгенерируй картинку', 'сделай иллюстрацию для поста', 'визуал для кампании'. Пиши подробный английский промпт для лучшего качества.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Детальное описание изображения на английском языке. Чем подробнее — тем лучше результат. Пример: 'minimalist flat design illustration of a productive workspace with laptop, coffee and plants, soft teal and white color palette, clean modern aesthetic'"
+                    },
+                    "style": {
+                        "type": "string",
+                        "description": "Дополнительный стиль: photorealistic, illustration, minimalist, watercolor, 3d render, cinematic и т.п. Опционально."
+                    },
+                    "aspect_ratio": {
+                        "type": "string",
+                        "description": "Соотношение сторон: 1:1 (квадрат, для постов), 16:9 (горизонтальный, для баннеров), 9:16 (вертикальный, для stories). По умолчанию 1:1.",
+                        "enum": ["1:1", "16:9", "9:16", "4:3", "3:4"]
+                    }
+                },
+                "required": ["prompt"]
+            }
+        }
+    },
 ]
