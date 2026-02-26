@@ -2183,6 +2183,7 @@
                 const totalPostsNewsfeed = agentActivities.filter(a => a.activity_type === 'post_newsfeed').length;
                 const totalPostsTg = agentActivities.filter(a => a.activity_type === 'post_telegram').length;
                 const postStats = data.post_stats || {total: 0, likes: 0, views: 0, comments: 0};
+                const tokensToday = data.tokens_today || 0;
 
                 const statsRow = document.createElement('div');
                 statsRow.style.cssText = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 0 14px 0;';
@@ -2204,8 +2205,8 @@
                         <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Email кампаний</div>
                     </div>
                     <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
-                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${agentActivities.length}</div>
-                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Действий агента</div>
+                        <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${tokensToday}</div>
+                        <div style="font-size: 12px; color: #8C959F; margin-top: 3px;">Токенов сегодня</div>
                     </div>
                     <div style="text-align: center; padding: 8px 4px; background: #F6F8FA; border-radius: 6px;">
                         <div style="font-size: 15px; font-weight: 400; color: #1F2328; line-height: 1.2;">${totalDelegations}</div>

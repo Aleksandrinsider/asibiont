@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, EmailContact, AgentActivityLog, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, PaymentHistory, Post, PostLike, Comment, PostView, Goal, Note, PushSubscription, EmailCampaign, EmailOutreach, EmailContact, AgentActivityLog, TokenTransaction, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -7036,12 +7036,26 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading task stats: {e}")
 
+            # Tokens spent today
+            tokens_today = 0
+            try:
+                today_start = datetime.now(dt_timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                result = session_db.query(TokenTransaction).filter(
+                    TokenTransaction.user_id == user.id,
+                    TokenTransaction.amount < 0,
+                    TokenTransaction.created_at >= today_start
+                ).all()
+                tokens_today = sum(abs(t.amount) for t in result)
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading token stats: {e}")
+
             return web.json_response({
                 'campaigns': campaigns_data,
                 'emails': [],
                 'agent_activities': agent_activities_data,
                 'post_stats': post_stats,
                 'task_stats': task_stats,
+                'tokens_today': tokens_today,
             })
         finally:
             session_db.close()
