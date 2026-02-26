@@ -232,55 +232,56 @@
         .feature-card:hover {
             border-color: #1F2328;
         }
-        /* ── Тёмные карточки (ряд 3) ── */
-        .feature-card-dark {
-            border: 1px solid #2D333B;
+        /* ── Нумерованные карточки (ряд 3) ── */
+        .bonus-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 80px 0 0 0;
+        }
+        .bonus-card {
+            border: 1px solid #D1D9E0;
             border-radius: 6px;
             padding: 24px;
-            background: #1F2328;
-            text-align: center;
-            transition: all 0.3s;
+            background: white;
+            transition: all 0.2s;
             display: flex;
             flex-direction: column;
-            align-items: center;
             gap: 12px;
-            position: relative;
-            overflow: hidden;
+            text-align: left;
         }
-        .feature-card-dark::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #374151, #6B7280, #374151);
-            opacity: 0.6;
-            transition: opacity 0.3s;
+        .bonus-card:hover {
+            border-color: #1F2328;
         }
-        .feature-card-dark:hover {
-            border-color: #6B7280;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        .bonus-num {
+            font-size: 32px;
+            font-weight: 700;
+            color: #D1D9E0;
+            line-height: 1;
         }
-        .feature-card-dark:hover::before {
-            opacity: 1;
-        }
-        .feature-card-dark h2 {
+        .bonus-card h2 {
             font-size: 15px;
             font-weight: 600;
-            color: #FFFFFF;
+            color: #1F2328;
             margin: 0;
         }
-        .feature-card-dark .feature-description {
-            color: #9CA3AF;
-        }
-        .feature-card-dark .feature-icon {
-            filter: invert(1) brightness(0.85);
+        .bonus-card .feature-description {
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.5;
+            text-align: left;
         }
         @media (max-width: 768px) {
-            .feature-card-dark {
+            .bonus-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                margin-top: 48px;
+            }
+            .bonus-card {
                 padding: 16px;
+            }
+            .bonus-num {
+                font-size: 24px;
             }
         }
         .feature-icon {
@@ -667,28 +668,23 @@
                     <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Бот + дашборд</h2>
                     <div class="feature-description">В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.</div>
                 </div>
+            </div>
 
-                <!-- Ряд 3 — тёмные карточки -->
-                <div class="feature-card-dark">
-                    <div class="feature-icon">
-                        <img src="/static/svg/avatar-svgrepo-com.svg" alt="Личный AI-ассистент, который думает за вас">
-                    </div>
+            <div class="bonus-grid">
+                <div class="bonus-card">
+                    <div class="bonus-num">01</div>
                     <h2>Личный ассистент</h2>
-                    <div class="feature-description">Не просто ответы на вопросы — полноценный агент, который думает за вас. Помнит контекст, понимает цели, предлагает решения и действует самостоятельно. Один диалог заменяет десяток приложений.</div>
+                    <div class="feature-description">Заменяет Google, заметки и половину приложений. Спросите «что там с тем проектом?» — он вспомнит контекст месячной давности, найдёт информацию в сети и предложит следующий шаг. Не чат-бот — агент, который реально экономит часы.</div>
                 </div>
-                <div class="feature-card-dark">
-                    <div class="feature-icon">
-                        <img src="/static/svg/office-svgrepo-com.svg" alt="AI ведёт персонализированные переговоры с партнёрами">
-                    </div>
+                <div class="bonus-card">
+                    <div class="bonus-num">02</div>
                     <h2>Бизнес помощник</h2>
-                    <div class="feature-description">Персонализированное общение с каждым потенциальным партнёром от вашего имени. Не спам-рассылка, а осмысленный диалог — агент изучает профиль, находит точки контакта и выстраивает отношения.</div>
+                    <div class="feature-description">Агент изучает профиль потенциального партнёра, находит общие интересы и пишет персональное сообщение от вашего имени. Никакого спама — каждое касание осмысленное. Конверсия в 3× выше холодных рассылок.</div>
                 </div>
-                <div class="feature-card-dark">
-                    <div class="feature-icon">
-                        <img src="/static/svg/globe-svgrepo-com.svg" alt="Глобальный нетворкинг на двух языках">
-                    </div>
+                <div class="bonus-card">
+                    <div class="bonus-num">03</div>
                     <h2>Нетворкинг</h2>
-                    <div class="feature-description">Глобальное покрытие на двух языках — русском и английском. Находит нужных людей по навыкам, интересам и локации. Ваша сеть контактов растёт, пока вы занимаетесь делом.</div>
+                    <div class="feature-description">Ваша сеть растёт, пока вы спите. Агент ищет нужных людей по навыкам и локации, автоматически переводит между русским и английским. Один агент — доступ к контактам по всему миру.</div>
                 </div>
             </div>
         </div>
@@ -727,10 +723,12 @@
         ['Делегирование', '«Поручи @ivan подготовить отчёт до среды» — задача уйдёт исполнителю, дедлайн встанет на контроль. Агент отследит сроки и напомнит обеим сторонам.'],
         ['Автопилот 24/7', 'Вы спите — он публикует в канал по расписанию. Вы на встрече — он отправляет утреннюю сводку. Просрочена задача — напомнит сам, без вашего участия.'],
         ['Точечные возможности', 'Новый участник с нужными навыками в вашем городе — агент сообщит. Контакт обновил профиль — вы узнаете первым. Не шум, а релевантные сигналы.'],
-        ['Бот + дашборд', 'В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.'],
-        ['Личный ассистент', 'Не просто ответы на вопросы — полноценный агент, который думает за вас. Помнит контекст, понимает цели, предлагает решения и действует самостоятельно. Один диалог заменяет десяток приложений.'],
-        ['Бизнес помощник', 'Персонализированное общение с каждым потенциальным партнёром от вашего имени. Не спам-рассылка, а осмысленный диалог — агент изучает профиль, находит точки контакта и выстраивает отношения.'],
-        ['Нетворкинг', 'Глобальное покрытие на двух языках — русском и английском. Находит нужных людей по навыкам, интересам и локации. Ваша сеть контактов растёт, пока вы занимаетесь делом.']
+        ['Бот + дашборд', 'В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.']
+      ],
+      bonus: [
+        ['Личный ассистент', 'Заменяет CRM, социальную сеть, заметки и половину приложений. Спросите «что там с тем проектом?» — он вспомнит контекст месячной давности, найдёт информацию в сети и предложит следующий шаг. Не чат-бот — агент, который реально экономит часы.'],
+        ['Бизнес помощник', 'Агент находит потенциального партнёра, изучает его профиль, выявляет общие интересы и пишет персональное сообщение от вашего имени. Никакого спама — каждое касание осмысленное. Конверсия в 3× выше холодных рассылок.'],
+        ['Нетворкинг', 'Ваша сеть растёт, пока вы спите. Агент ищет нужных людей по навыкам и локации, автоматически переводит между русским и английским. Один агент — доступ к контактам по всему миру. Вы строите связи, а не тратите время на поиск.']
       ],
       rl: [
         '«Скинул голосовое на бегу — бот сам вытащил задачу и дедлайн. Магия какая-то.»',
@@ -812,10 +810,12 @@
         ['Delegation', '"Ask @ivan to prepare the report by Wednesday" — the task goes to the assignee, deadline is tracked. The agent monitors timelines and reminds both sides.'],
         ['Autopilot 24/7', 'You sleep — it posts to your channel on schedule. In a meeting — it sends a morning briefing. Task overdue — it reminds on its own.'],
         ['Targeted Opportunities', 'A new member with the right skills in your city — the agent notifies you. A contact updated their profile — you learn first. Not noise — relevant signals.'],
-        ['Bot + Dashboard', 'In your pocket — a Telegram bot for voice and text. On screen — a dashboard with tasks, contacts and feed. One database, two interfaces.'],
-        ['Personal Assistant', 'Not just answers — a full-fledged agent that thinks for you. Remembers your context, understands goals, suggests solutions and acts independently. One dialogue replaces a dozen apps.'],
-        ['Business Partner', 'Personalized outreach to each potential partner on your behalf. Not spam blasts — meaningful dialogue. The agent studies profiles, finds common ground and builds relationships.'],
-        ['Networking', 'Global coverage in two languages — Russian and English. Finds the right people by skills, interests and location. Your network grows while you focus on what matters.']
+        ['Bot + Dashboard', 'In your pocket — a Telegram bot for voice and text. On screen — a dashboard with tasks, contacts and feed. One database, two interfaces.']
+      ],
+      bonus: [
+        ['Personal Assistant', 'Replaces your CRM, social network, notes and half your apps. Ask "what about that project?" — it recalls context, searches the web and suggests next steps. Not a chatbot — an agent that actually saves you hours.'],
+        ['Business Partner', 'The agent finds potential partners, studies their profiles, discovers common interests and writes a personal message on your behalf. Zero spam — every touch is intentional. 3× higher conversion than cold outreach.'],
+        ['Networking', 'Your network grows while you sleep. The agent finds the right people by skills and location, auto-translates between Russian and English. One agent — access to contacts worldwide. You build connections, not waste time searching.']
       ],
       rl: [
         '"Sent a voice memo on the go — the bot extracted the task and deadline itself. Pure magic."',
@@ -907,12 +907,19 @@
     if (h1) h1.textContent = t.heading;
     var sub = document.querySelector('.subtitle');
     if (sub) sub.textContent = t.subtitle;
-    document.querySelectorAll('.feature-card, .feature-card-dark').forEach(function(c, i) {
+    document.querySelectorAll('.feature-card').forEach(function(c, i) {
       if (!t.feat[i]) return;
       var h2 = c.querySelector('h2');
       if (h2) h2.textContent = t.feat[i][0];
       var d = c.querySelector('.feature-description');
       if (d) d.textContent = t.feat[i][1];
+    });
+    document.querySelectorAll('.bonus-card').forEach(function(c, i) {
+      if (!t.bonus || !t.bonus[i]) return;
+      var h2 = c.querySelector('h2');
+      if (h2) h2.textContent = t.bonus[i][0];
+      var d = c.querySelector('.feature-description');
+      if (d) d.textContent = t.bonus[i][1];
     });
     document.querySelectorAll('.reviews-left .review-item').forEach(function(e, i) {
       if (t.rl[i]) e.textContent = t.rl[i];
