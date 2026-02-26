@@ -1538,6 +1538,29 @@ def delegate_task(
         session.commit()
         task_id = task.id
 
+        # Log agent activity
+        try:
+            from models import AgentActivityLog
+            deadline_str = str(reminder_time) if reminder_time else ''
+            log_entry = AgentActivityLog(
+                user_id=delegator.id,
+                activity_type='delegation',
+                title=title,
+                content=description[:500] if description else None,
+                target=f'@{recipient_username}',
+                status='pending',
+                ref_id=task_id,
+                result=f'Дедлайн: {deadline_str}' if deadline_str else None,
+            )
+            session.add(log_entry)
+            session.commit()
+        except Exception as log_err:
+            logger.warning(f"[DELEGATE] Failed to log activity: {log_err}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
         # Send notification to recipient
         try:
             from main import bot
@@ -1686,6 +1709,21 @@ def accept_delegated_task(task_id=None, task_title=None, user_id=None):
             import traceback
             traceback.print_exc()
 
+        # Update AgentActivityLog status to 'accepted'
+        try:
+            from models import AgentActivityLog
+            log_entry = session.query(AgentActivityLog).filter_by(
+                activity_type='delegation', ref_id=task_id
+            ).first()
+            if log_entry:
+                log_entry.status = 'accepted'
+                log_entry.result = (log_entry.result or '') + f' | Принято: @{user_username}'
+                import datetime as _dt
+                log_entry.updated_at = _dt.datetime.now(_dt.timezone.utc)
+                session.commit()
+        except Exception as log_err:
+            logger.warning(f"[ACCEPT_DELEGATE] Failed to update activity log: {log_err}")
+
         return f"Вы приняли задачу '{task_title}'. Она добавлена в ваш список задач."
     except Exception as e:
         import traceback
@@ -1794,6 +1832,21 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
             logging.error(f"Failed to notify delegator: {e}")
             import traceback
             traceback.print_exc()
+
+        # Update AgentActivityLog status to 'rejected'
+        try:
+            from models import AgentActivityLog
+            log_entry = session.query(AgentActivityLog).filter_by(
+                activity_type='delegation', ref_id=task_id
+            ).first()
+            if log_entry:
+                log_entry.status = 'rejected'
+                log_entry.result = (log_entry.result or '') + f' | Отклонено: @{user_username}'
+                import datetime as _dt
+                log_entry.updated_at = _dt.datetime.now(_dt.timezone.utc)
+                session.commit()
+        except Exception as log_err:
+            logger.warning(f"[REJECT_DELEGATE] Failed to update activity log: {log_err}")
 
         return f"Вы отклонили задачу '{task_title}'."
     except Exception as e:

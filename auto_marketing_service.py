@@ -160,6 +160,28 @@ class AutoMarketingService:
                     )
                     if "успешно" in result.lower():
                         posts_published = 1
+                        # Log agent activity for TG channel post
+                        try:
+                            from models import AgentActivityLog
+                            session_log = Session()
+                            try:
+                                db_user = session_log.query(User).filter_by(telegram_id=user_id).first()
+                                if db_user:
+                                    short_title = marketing_content[:80] + ('...' if len(marketing_content) > 80 else '')
+                                    log_entry = AgentActivityLog(
+                                        user_id=db_user.id,
+                                        activity_type='post_telegram',
+                                        title=short_title,
+                                        content=marketing_content,
+                                        target=user.telegram_channel,
+                                        status='published',
+                                    )
+                                    session_log.add(log_entry)
+                                    session_log.commit()
+                            finally:
+                                session_log.close()
+                        except Exception as log_err:
+                            logger.warning(f"[AUTO_MARKETING_SERVICE] Failed to log TG activity: {log_err}")
                 except Exception as e:
                     logger.error(f"[AUTO_MARKETING_SERVICE] Publish error: {e}")
             

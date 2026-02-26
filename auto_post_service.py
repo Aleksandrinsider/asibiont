@@ -310,6 +310,24 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         
         session.add(post)
         session.commit()
+
+        # Log agent activity
+        try:
+            from models import AgentActivityLog
+            short_title = content[:80] + ('...' if len(content) > 80 else '')
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='post_newsfeed',
+                title=short_title,
+                content=content,
+                target='Лента новостей',
+                status='published',
+                ref_id=post.id,
+            )
+            session.add(log_entry)
+            session.commit()
+        except Exception as log_err:
+            logger.warning(f"[AUTO_POST] Failed to log activity: {log_err}")
         
         logger.info(f"Auto-post created for user {user_id}")
         
