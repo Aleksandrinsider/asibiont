@@ -966,6 +966,9 @@
                                 <input type="text" id="note-input" placeholder="Текст заметки..." data-i18n-ph="note-placeholder" onkeypress="if(event.key==='Enter')addManualNote()">
                                 <input type="file" id="note-file-input" style="display: none;" accept="text/*,.pdf,.doc,.docx,.csv,.json,.xml,.md,.txt,.log">
                                 <div style="display: flex; gap: 4px; flex-direction: row;">
+                                    <button id="note-voice-button" onclick="startVoiceNote()" class="chat-action-btn" title="Голосовой ввод" data-i18n-title="voice-input">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3ZM3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5Z"/></svg>
+                                    </button>
                                     <button onclick="document.getElementById('note-file-input').click()" class="chat-action-btn" title="Прикрепить файл" data-i18n-title="attach-file">
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
                                     </button>
@@ -3027,12 +3030,13 @@
                     const dateStr = noteTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
                     const timeStr = noteTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
                     const src = n.source === 'chat' ? t('from-chat') : t('manual-note');
+                    const displayTitle = n.title ? escapeHtml(n.title) : src;
                     card.innerHTML = `
                         <div style="flex: 1; min-width: 0;">
                             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #F6F8FA;">
                                 <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
                                     <div style="display: flex; align-items: center; gap: 6px;">
-                                        <span style="font-size: 13px; color: #1F2328; font-weight: 600;">${src}</span>
+                                        <span id="note-title-${n.id}" data-orig-title="${escapeHtml(n.title || '')}" data-src="${src}" style="font-size: 13px; color: #1F2328; font-weight: 600;">${displayTitle}</span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8C959F; opacity: 0.7; font-weight: 400;">
                                         ${dateStr} ${timeStr}
@@ -3155,23 +3159,26 @@
         function editNote(noteId) {
             const contentEl = document.getElementById('note-content-' + noteId);
             if (!contentEl) return;
-            if (contentEl.isContentEditable) return;
+            if (contentEl.contentEditable === 'true') return;
             
             contentEl._originalText = contentEl.textContent;
-            
+
+            // Editable title input above content
+            const titleEl = document.getElementById('note-title-' + noteId);
+            const origTitle = titleEl ? (titleEl.dataset.origTitle || '') : '';
+            const titleInput = document.createElement('input');
+            titleInput.id = 'edit-title-note-' + noteId;
+            titleInput.type = 'text';
+            titleInput.value = origTitle;
+            titleInput.placeholder = 'Заголовок (необязательно)';
+            titleInput.style.cssText = 'width: 100%; box-sizing: border-box; padding: 5px 8px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; font-weight: 600; color: #1F2328; margin-bottom: 6px; outline: none; background: #FAFBFC;';
+            contentEl.parentNode.insertBefore(titleInput, contentEl);
+            titleInput.focus();
+
             contentEl.contentEditable = 'true';
             contentEl.style.outline = '1px solid #D1D9E0';
             contentEl.style.borderRadius = '4px';
             contentEl.style.padding = '6px 10px';
-            contentEl.focus();
-            
-            // Place cursor at end
-            const range = document.createRange();
-            range.selectNodeContents(contentEl);
-            range.collapse(false);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
             
             // Add save/cancel buttons
             const btnContainer = document.createElement('div');
@@ -3189,19 +3196,29 @@
             if (!contentEl) return;
             const newContent = contentEl.textContent.trim();
             if (!newContent) return;
+            const titleInput = document.getElementById('edit-title-note-' + noteId);
+            const newTitle = titleInput ? titleInput.value.trim() : '';
             try {
                 const resp = await fetch('/api/notes/' + noteId, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ content: newContent })
+                    body: JSON.stringify({ content: newContent, title: newTitle || null })
                 });
                 if (resp.ok) {
                     contentEl.contentEditable = 'false';
                     contentEl.style.outline = '';
                     contentEl.style.padding = '';
+                    if (titleInput) titleInput.remove();
                     const btns = document.getElementById('edit-btns-note-' + noteId);
                     if (btns) btns.remove();
+                    // Update title display span
+                    const titleEl = document.getElementById('note-title-' + noteId);
+                    if (titleEl) {
+                        const src = titleEl.dataset.src || '';
+                        titleEl.dataset.origTitle = newTitle;
+                        titleEl.textContent = newTitle || src;
+                    }
                     showNotification(t('note-saved'), 'success');
                 }
             } catch (e) {
@@ -3216,6 +3233,8 @@
                 contentEl.contentEditable = 'false';
                 contentEl.style.outline = '';
                 contentEl.style.padding = '';
+                const titleInput = document.getElementById('edit-title-note-' + noteId);
+                if (titleInput) titleInput.remove();
                 const btns = document.getElementById('edit-btns-note-' + noteId);
                 if (btns) btns.remove();
             }
@@ -8591,6 +8610,41 @@
         }
 
         let isRecording = false;
+
+        function startVoiceNote() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                showNotification(t('err-speech'), 'error');
+                return;
+            }
+            const voiceBtn = document.getElementById('note-voice-button');
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            recognition.lang = (_currentLang || detect()) === 'en' ? 'en-US' : 'ru-RU';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            recognition.onstart = function() {
+                if (voiceBtn) {
+                    voiceBtn.style.borderColor = '#068487';
+                    voiceBtn.style.animation = 'pulse 1s infinite';
+                }
+            };
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                const inp = document.getElementById('note-input');
+                if (inp) {
+                    inp.value = transcript;
+                    inp.focus();
+                }
+            };
+            recognition.onerror = function(event) {
+                showNotification(t('err-speech-recog') + ' ' + event.error, 'error');
+                if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
+            };
+            recognition.onend = function() {
+                if (voiceBtn) { voiceBtn.style.borderColor = ''; voiceBtn.style.animation = ''; }
+            };
+            recognition.start();
+        }
 
         function startVoiceChat() {
             if (isRecording) return; // Предотвратить повторный запуск

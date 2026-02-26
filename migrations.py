@@ -312,6 +312,7 @@ def _migrate_notes(session, inspector):
                 CREATE TABLE notes (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id),
+                    title VARCHAR(200),
                     content TEXT NOT NULL,
                     source VARCHAR(20) DEFAULT 'manual',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -324,6 +325,12 @@ def _migrate_notes(session, inspector):
         except Exception as e:
             logger.error(f"Failed to create notes table: {e}")
             session.rollback()
+    else:
+        # Add title column if it doesn't exist
+        cols = [col['name'] for col in inspector.get_columns('notes')]
+        _add_columns(session, 'notes', cols, {
+            'title': 'ALTER TABLE notes ADD COLUMN title VARCHAR(200)',
+        })
 
 
 def _migrate_email_campaigns(session, inspector):

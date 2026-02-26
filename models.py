@@ -117,6 +117,7 @@ class Note(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    title = Column(String(200), nullable=True)
     content = Column(Text, nullable=False)
     source = Column(String(20), default='manual')  # 'manual' or 'chat'
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)

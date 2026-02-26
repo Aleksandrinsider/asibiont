@@ -6529,11 +6529,13 @@ async def api_notes_handler(request):
                 source = data.get('source', 'manual')
                 if source not in ('manual', 'chat'):
                     source = 'manual'
-                note = Note(user_id=user.id, content=content, source=source)
+                title = (data.get('title') or '').strip() or None
+                note = Note(user_id=user.id, title=title, content=content, source=source)
                 session_db.add(note)
                 session_db.commit()
                 return web.json_response({'success': True, 'note': {
                     'id': note.id,
+                    'title': note.title,
                     'content': note.content,
                     'source': note.source,
                     'created_at': (note.created_at.isoformat() + 'Z') if note.created_at else None,
@@ -6543,6 +6545,7 @@ async def api_notes_handler(request):
             notes = session_db.query(Note).filter_by(user_id=user.id).order_by(Note.created_at.desc()).limit(100).all()
             return web.json_response({'notes': [{
                 'id': n.id,
+                'title': n.title,
                 'content': n.content,
                 'source': n.source,
                 'created_at': (n.created_at.isoformat() + 'Z') if n.created_at else None,
@@ -6594,6 +6597,7 @@ async def api_note_edit_handler(request):
             return web.json_response({'error': 'Content required'}, status=400)
         if len(content) > 5000:
             return web.json_response({'error': 'Note too long'}, status=400)
+        title = (data.get('title') or '').strip() or None
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -6603,9 +6607,11 @@ async def api_note_edit_handler(request):
             if not note:
                 return web.json_response({'error': 'Note not found'}, status=404)
             note.content = content
+            note.title = title
             session_db.commit()
             return web.json_response({'success': True, 'note': {
                 'id': note.id,
+                'title': note.title,
                 'content': note.content,
                 'source': note.source,
                 'created_at': (note.created_at.isoformat() + 'Z') if note.created_at else None,
