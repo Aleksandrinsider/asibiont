@@ -8425,6 +8425,14 @@ app.router.add_get('/llms.txt', lambda r: web.FileResponse('static/llms.txt', he
 app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
 # AI SEO: FAQ page
 app.router.add_get('/faq', faq_handler)
+# Pricing / rates page
+async def pricing_handler(request):
+    """Страница расценок — полная таблица стоимости действий в токенах"""
+    lang = request.match_info.get('lang', 'ru')
+    if lang not in ('ru', 'en'):
+        lang = 'ru'
+    return aiohttp_jinja2.render_template('pricing.html', request, {'lang': lang})
+app.router.add_get('/pricing', pricing_handler)
 # Privacy / personal data consent
 app.router.add_get('/privacy', privacy_handler)
 # Terms of use
@@ -8461,10 +8469,14 @@ async def subscription_tiers_handler_en(request):
 async def tutorial_handler_en(request):
     return aiohttp_jinja2.render_template('tutorial.html', request, {'lang': 'en'})
 
+async def pricing_handler_en(request):
+    return aiohttp_jinja2.render_template('pricing.html', request, {'lang': 'en'})
+
 app.router.add_get('/en', login_handler_en)
 app.router.add_get('/en/', login_handler_en)
 app.router.add_get('/en/faq', faq_handler_en)
 app.router.add_get('/en/tutorial', tutorial_handler_en)
+app.router.add_get('/en/pricing', pricing_handler_en)
 app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')
