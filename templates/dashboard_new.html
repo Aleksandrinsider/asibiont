@@ -5474,7 +5474,24 @@
                     const usernameWithoutAt = p1.substring(1);
                     return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #d73a49; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
                 });
-                nextTaskTextEl.innerHTML = displayTitle;
+                // Считаем насколько просрочена
+                let overdueTimeText = '';
+                if (overdue.reminder_time) {
+                    const overdueDelta = nowTimestamp - new Date(overdue.reminder_time).getTime();
+                    if (overdueDelta > 0) {
+                        const odMin = Math.floor(overdueDelta / 60000);
+                        const odHours = Math.floor(odMin / 60);
+                        const odDays = Math.floor(odHours / 24);
+                        if (odDays > 0) {
+                            overdueTimeText = `${odDays} ${t('days-short')} ${odHours % 24} ${t('hours-short')} ${t('ago') || 'назад'}`;
+                        } else if (odHours > 0) {
+                            overdueTimeText = `${odHours} ${t('hours-short')} ${odMin % 60} ${t('minutes-short')} ${t('ago') || 'назад'}`;
+                        } else {
+                            overdueTimeText = `${odMin} ${t('minutes-short')} ${t('ago') || 'назад'}`;
+                        }
+                    }
+                }
+                nextTaskTextEl.innerHTML = `${displayTitle}${overdueTimeText ? ' <span style="color:#d73a49;">' + overdueTimeText + '</span>' : ''}`;
                 nextTaskCenterEl.style.display = 'flex';
             } else if (upcomingTasks.length > 0) {
                 const next = upcomingTasks[0];
@@ -8920,7 +8937,7 @@
       'err-server-unavail':'Сервер временно недоступен. Попробуйте через минуту.',
       'confirm-task-return':'Задача вернется в ваш список личных задач.',
       'delegated-to':'Поручена','delegated-from':'Поручена от',
-      'in-time':'через','days-short':'дн.','hours-short':'ч.','minutes-short':'мин.',
+      'in-time':'через','days-short':'дн.','hours-short':'ч.','minutes-short':'мин.','ago':'назад',,
       'status-text':'Статус:','to-label':'Кому:','from-label':'От:',
       'no-incoming-deleg':'Нет входящих делегирований','no-outgoing-deleg':'Нет исходящих делегирований',
       'avatar-alt':'Аватар','unknown-user':'неизвестен',
@@ -9105,7 +9122,7 @@
       'err-server-unavail':'Server temporarily unavailable. Try again in a minute.',
       'confirm-task-return':'The task will return to your personal task list.',
       'delegated-to':'Delegated to','delegated-from':'Delegated from',
-      'in-time':'in','days-short':'d','hours-short':'h','minutes-short':'min',
+      'in-time':'in','days-short':'d','hours-short':'h','minutes-short':'min','ago':'ago',
       'status-text':'Status:','to-label':'To:','from-label':'From:',
       'no-incoming-deleg':'No incoming delegations','no-outgoing-deleg':'No outgoing delegations',
       'avatar-alt':'Avatar','unknown-user':'unknown',
