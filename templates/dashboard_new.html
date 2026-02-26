@@ -2799,23 +2799,41 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         const aBody = document.createElement('div');
                         aBody.style.cssText = 'overflow: hidden; transition: max-height 0.2s ease;';
                         let aBodyHtml = '';
+                        // Helper: strip all images/media from HTML string via DOM
+                        function _stripMedia(html) {
+                            const _tmp = document.createElement('div');
+                            _tmp.innerHTML = html;
+                            _tmp.querySelectorAll('img, picture, figure, video, iframe, source, svg[data-img]').forEach(el => el.remove());
+                            // Also strip background-image inline styles
+                            _tmp.querySelectorAll('[style]').forEach(el => {
+                                el.style.backgroundImage = '';
+                                el.style.background = el.style.background.replace(/url\([^)]*\)/gi, '');
+                            });
+                            return _tmp.innerHTML;
+                        }
                         if (a.content) {
-                            // Strip images: remove <img> tags, markdown images, and image URLs
+                            // Step 1: regex pre-pass to remove markdown images and bare image URLs
                             let _safeContent = a.content
-                                .replace(/<img[^>]*>/gi, '')
                                 .replace(/!\[.*?\]\([^)]*\)/g, '')
-                                .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff)\S*/gi, '')
+                                .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi, '')
                                 .replace(/https?:\/\/\S*(?:image|photo|media|upload|thumb|img|pic|cdn)\S*/gi, '')
                                 .replace(/\n{3,}/g, '\n\n').trim();
-                            if (_safeContent) {
-                            aBodyHtml += `<div style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #F0F3F5;">
+                            // Step 2: DOM-based removal of any remaining media elements
+                            _safeContent = _stripMedia(_safeContent);
+                            // Remove trailing empty lines after stripping
+                            const _tmpCheck = document.createElement('div');
+                            _tmpCheck.innerHTML = _safeContent;
+                            const _textOnly = _tmpCheck.textContent.trim();
+                            if (_textOnly) {
+                                aBodyHtml += `<div style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #F0F3F5;">
                                 <div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6;">${_safeContent}</div>
                             </div>`;
                             }
                         }
                         if (a.result) {
+                            const _safeResult = _stripMedia(a.result);
                             aBodyHtml += `<div style="margin-top: 6px; padding: 8px 0; border-top: 1px solid #F0F3F5;">
-                                <div style="font-size: 12px; color: #8C959F;">${a.result}</div>
+                                <div style="font-size: 12px; color: #8C959F;">${_safeResult}</div>
                             </div>`;
                         }
                         aBody.innerHTML = aBodyHtml;
