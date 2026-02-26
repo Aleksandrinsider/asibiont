@@ -330,7 +330,41 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
             logger.warning(f"[AUTO_POST] Failed to log activity: {log_err}")
         
         logger.info(f"Auto-post created for user {user_id}")
-        
+
+        # === Отправка в Discord webhook (если настроен) ===
+        try:
+            if user.discord_webhook and user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
+                async with aiohttp.ClientSession() as dc_session:
+                    dc_payload = {"content": content}
+                    async with dc_session.post(
+                        user.discord_webhook,
+                        json=dc_payload,
+                        timeout=aiohttp.ClientTimeout(total=10)
+                    ) as dc_resp:
+                        if dc_resp.status in (200, 204):
+                            logger.info(f"[DISCORD] Post sent to webhook for user {user_id}")
+                            # Логируем в агентскую активность
+                            try:
+                                from models import AgentActivityLog
+                                dc_log = AgentActivityLog(
+                                    user_id=user.id,
+                                    activity_type='post_discord',
+                                    title=content[:80] + ('...' if len(content) > 80 else ''),
+                                    content=content,
+                                    target='Discord канал',
+                                    status='published',
+                                    ref_id=post.id,
+                                )
+                                session.add(dc_log)
+                                session.commit()
+                            except Exception as _le:
+                                logger.warning(f"[DISCORD] Failed to log activity: {_le}")
+                        else:
+                            err_text = await dc_resp.text()
+                            logger.warning(f"[DISCORD] Webhook returned {dc_resp.status} for user {user_id}: {err_text[:200]}")
+        except Exception as dc_err:
+            logger.warning(f"[DISCORD] Failed to send post for user {user_id}: {dc_err}")
+
         # Notify user about created post — через AI агент для единого стиля
         if notify:
             try:
