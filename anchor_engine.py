@@ -1558,7 +1558,7 @@ class AnchorEngine:
         anchors.append(Anchor(
             user_id=user.id,
             anchor_type='incoming_message',
-            source=f'messages:unread:{now_utc.strftime("%Y-%m-%d-%H")}',
+            source=f'messages:unread:{now_utc.strftime("%Y-%m-%d")}',  # дедупликация по дню (было по часу → дубли)
             topic=_t(user, f'{len(unread)} непрочитанных сообщений от {len(senders)} чел: {", ".join(summaries)}', f'{len(unread)} unread messages from {len(senders)} people: {", ".join(summaries)}'),
             priority=AnchorPriority.HIGH,
             data=json.dumps({
@@ -2073,7 +2073,7 @@ class AnchorEngine:
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_outreach_send',
-                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d-%H")}',
+                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d")}',  # дедупликация по дню (было по часу → дубли)
                     topic=_t(user,
                         f'Email-кампания «{campaign.name}» — {len(drafts)} черновиков ждут отправки ({remaining_daily} осталось сегодня)',
                         f'Email campaign «{campaign.name}» — {len(drafts)} drafts pending ({remaining_daily} remaining today)'),
@@ -2225,7 +2225,7 @@ class AnchorEngine:
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='email_need_leads',
-                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d-%H")}',
+                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}',  # дедупликация по дню
                         topic=_t(user,
                             f'🔍 Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
                             f'🔍 Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
@@ -3365,9 +3365,17 @@ class AnchorEngine:
 
             if anchor.anchor_type == 'email_outreach_send':
                 # ═══ ПРЯМАЯ ОТПРАВКА: AI пишет тексты → мы отправляем напрямую ═══
-                drafts = anchor_data.get('drafts', [])
-                if not drafts:
-                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no drafts, skip")
+                campaign_id = anchor_data.get('campaign_id')
+                if not campaign_id:
+                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no campaign_id, skip")
+                    return
+
+                # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
+                live_drafts = session.query(EmailOutreach).filter_by(
+                    campaign_id=campaign_id, status='draft'
+                ).limit(10).all()
+                if not live_drafts:
+                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, skip")
                     return
 
                 from ai_integration.api_client import get_api_client
@@ -3380,17 +3388,16 @@ class AnchorEngine:
                 offer = anchor_data.get('offer', '')
                 tone = anchor_data.get('tone', 'professional')
                 sender_name = anchor_data.get('sender_name', '')
-                campaign_id = anchor_data.get('campaign_id')
                 remaining = anchor_data.get('remaining_daily', 5)
 
                 sent_count = 0
-                for draft in drafts:
+                for d_obj in live_drafts:
                     if sent_count >= remaining:
                         break
-                    email = draft.get('email', '')
-                    name = draft.get('name', '?')
-                    company = draft.get('company', '')
-                    context = draft.get('context', '')
+                    email = d_obj.recipient_email or ''
+                    name = d_obj.recipient_name or '?'
+                    company = d_obj.recipient_company or ''
+                    context = d_obj.recipient_context or ''
 
                     # Определяем язык
                     _has_cyr = any('\u0400' <= c <= '\u04ff' for c in f"{name} {company} {context} {email}")
@@ -3466,7 +3473,7 @@ class AnchorEngine:
                         logger.error(f"[ANCHOR] Compose/send error for {email}: {_compose_err}")
                         continue
 
-                logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(drafts)} for campaign #{campaign_id}")
+                logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(live_drafts)} for campaign #{campaign_id}")
 
                 # Списываем токены
                 if not FREE_ACCESS_MODE and sent_count > 0:
@@ -3477,7 +3484,7 @@ class AnchorEngine:
                 log = AnchorDeliveryLog(
                     user_id=user.id,
                     anchor_ids=json.dumps([anchor.id]),
-                    message_text=f'[EMAIL_SILENT] email_outreach_send: sent {sent_count}/{len(drafts)} emails for campaign «{campaign_name}»',
+                    message_text=f'[EMAIL_SILENT] email_outreach_send: sent {sent_count}/{len(live_drafts)} emails for campaign «{campaign_name}»',
                     anchor_types=json.dumps([anchor.anchor_type]),
                 )
                 session.add(log)

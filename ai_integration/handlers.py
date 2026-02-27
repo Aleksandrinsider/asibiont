@@ -9062,10 +9062,18 @@ async def send_outreach_email(
             return f"⚠️ Достигнут лимит: сегодня уже написали {global_recipients_today} новым получателям (макс {GLOBAL_DAILY_LIMIT}/день). Продолжим завтра."
 
         # Проверка дубликата (не слать дважды одному recipient в одной кампании)
-        existing = session.query(EmailOutreach).filter_by(
-            campaign_id=campaign.id,
-            recipient_email=recipient_email,
-        ).first()
+        # FOR UPDATE блокирует строку чтобы параллельный процесс не отправил то же письмо
+        try:
+            existing = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id,
+                recipient_email=recipient_email,
+            ).with_for_update(skip_locked=False).first()
+        except Exception:
+            # SQLite fallback
+            existing = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id,
+                recipient_email=recipient_email,
+            ).first()
         if existing and existing.status != 'draft':
             return f"⚠️ Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}."
 
