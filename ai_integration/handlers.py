@@ -1321,8 +1321,7 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             logger.info("[RESCHEDULE_TASK] No current task, searching for last active task")
             task = session.query(Task).filter(
                 Task.user_id == user.id,
-                Task.status != 'completed',
-                Task.status != 'deleted'
+                Task.status.notin_(['completed', 'cancelled', 'deleted'])
             ).order_by(Task.reminder_time.asc()).first()
             
             if task:
@@ -2198,7 +2197,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         if include_completed:
             active_tasks_query = base_query.order_by(Task.created_at.desc()).limit(MAX_TASKS_TO_LOAD)
         else:
-            active_tasks_query = base_query.filter(Task.status != 'completed').limit(MAX_TASKS_TO_LOAD)
+            active_tasks_query = base_query.filter(Task.status.notin_(['completed', 'cancelled', 'deleted'])).limit(MAX_TASKS_TO_LOAD)
         
         # Получаем делегированные задачи отдельно
         if user.username and user.username.strip():
