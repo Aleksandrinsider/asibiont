@@ -7109,11 +7109,24 @@ async def api_reports_handler(request):
                 campaigns = session_db.query(EmailCampaign).filter_by(
                     user_id=user.id
                 ).order_by(EmailCampaign.created_at.desc()).limit(20).all()
+                import pytz as _pytz_api
+                from datetime import datetime as _dt_api, timezone as _tz_api
+                _user_tz_api = _pytz_api.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+                _user_now_api = _dt_api.now(_user_tz_api)
+                _today_start_api = _user_now_api.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_api.utc)
+
                 for c in campaigns:
                     outreach = session_db.query(EmailOutreach).filter_by(
                         campaign_id=c.id
                     ).order_by(EmailOutreach.sent_at.desc()).limit(50).all()
                     opened_count = sum(1 for o in outreach if o.status in ('opened', 'replied'))
+                    # Сколько отправлено сегодня
+                    _sent_today = session_db.query(EmailOutreach).filter(
+                        EmailOutreach.campaign_id == c.id,
+                        EmailOutreach.sent_at >= _today_start_api,
+                        EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                    ).count()
+                    _drafts_count = sum(1 for o in outreach if o.status == 'draft')
                     campaigns_data.append({
                         'id': c.id,
                         'name': c.name,
@@ -7122,6 +7135,10 @@ async def api_reports_handler(request):
                         'emails_sent': c.emails_sent or 0,
                         'emails_replied': c.emails_replied or 0,
                         'emails_opened': opened_count,
+                        'daily_limit': c.daily_limit or 20,
+                        'sent_today': _sent_today,
+                        'drafts_count': _drafts_count,
+                        'max_emails': c.max_emails or 0,
                         'created_at': (c.created_at.isoformat() + 'Z') if c.created_at else None,
                         'outreach': [{
                             'id': o.id,

@@ -2449,8 +2449,36 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     const section = document.createElement('div');
                     section.style.cssText = 'padding: 0; margin-bottom: 4px;';
 
-                    const statusLabel = c.status === 'active' || c.status === 'running' ? t('camp-active') : c.status === 'paused' ? t('camp-paused') : (c.status === 'completed' ? t('camp-completed') : (c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : t('camp-completed')));
-                    const statusColor = c.status === 'active' || c.status === 'running' ? '#068487' : c.status === 'paused' ? '#d73a49' : '#6C727F';
+                    // Определяем подстатус для активных кампаний
+                    const isActive = c.status === 'active' || c.status === 'running';
+                    const dailyLimitReached = isActive && c.daily_limit && c.sent_today >= c.daily_limit;
+                    const noLeads = isActive && (c.drafts_count === 0) && (c.sent_today === 0) && (c.emails_sent === 0);
+                    const waitingNextDay = isActive && dailyLimitReached;
+                    const searching = isActive && !dailyLimitReached && (c.drafts_count === 0) && (c.emails_sent > 0 || c.sent_today > 0);
+
+                    let statusLabel, statusColor;
+                    if (waitingNextDay) {
+                        statusLabel = t('camp-wait-day');
+                        statusColor = '#bf8700';
+                    } else if (noLeads) {
+                        statusLabel = t('camp-no-leads');
+                        statusColor = '#d73a49';
+                    } else if (searching) {
+                        statusLabel = t('camp-searching');
+                        statusColor = '#bf8700';
+                    } else if (isActive) {
+                        statusLabel = t('camp-sending');
+                        statusColor = '#068487';
+                    } else if (c.status === 'paused') {
+                        statusLabel = t('camp-paused');
+                        statusColor = '#d73a49';
+                    } else if (c.status === 'completed') {
+                        statusLabel = t('camp-completed');
+                        statusColor = '#6C727F';
+                    } else {
+                        statusLabel = c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : t('camp-completed');
+                        statusColor = '#6C727F';
+                    }
                     let oSentC = 0, oRepliedC = 0;
                     if (c.outreach) { c.outreach.forEach(o => { if (o.status && o.status !== 'draft') oSentC++; if (o.status === 'replied') oRepliedC++; }); }
                     const sent = Math.max(c.emails_sent || 0, oSentC);
@@ -2467,10 +2495,15 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                             <span style="font-size: 12px; color: ${statusColor}; flex-shrink: 0;">${statusLabel}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px;">
-                            <span style="font-size: 12px; color: #8C959F;">${sent} → ${replied}</span>
-                            ${c.status === 'active' || c.status === 'running'
-                                ? `<button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'paused')" title="Пауза"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 10.25 3Z"/></svg></button>`
-                                : `<button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'active')" title="Запустить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`
+                            <span style="font-size: 12px; color: #8C959F;">${isActive && c.daily_limit ? `${c.sent_today || 0}/${c.daily_limit} ` : ''}${sent} → ${replied}</span>
+                            ${waitingNextDay
+                                ? `<span style="font-size: 11px; color: #bf8700;" title="${t('camp-wait-tip')}">⏳</span>
+                                   <button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'paused')" title="${t('camp-pause-tip')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 10.25 3Z"/></svg></button>`
+                                : isActive
+                                ? `<button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'paused')" title="${t('camp-pause-tip')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 10.25 3Z"/></svg></button>`
+                                : c.status === 'paused'
+                                ? `<button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'active')" title="${t('camp-resume-tip')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`
+                                : ''
                             }
                             <button class="delete-btn" onclick="event.stopPropagation(); campaignDelete(${c.id})" title="Удалить кампанию"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
                             <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${wasExpanded ? '0' : '-90'}deg);">
@@ -9496,6 +9529,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'stat-email-sent':'Email отправлено','stat-email-replied':'Email ответов','stat-email-conv':'Email конверсия','stat-email-campaigns':'Email кампаний',
       'stat-deleg-me':'Поручено мне','stat-deleg-by-me':'Поручено мной','stat-posts-feed':'Постов в ленту','stat-posts-tg':'Постов в Telegram','stat-posts-discord':'Постов в Discord',
       'camp-active':'Активна','camp-paused':'На паузе','camp-completed':'Завершена','camp-launched':'Кампания запущена','camp-on-pause':'Кампания на паузе',
+      'camp-sending':'Отправляет','camp-wait-day':'Ждёт завтра','camp-no-leads':'Нет лидов','camp-searching':'Ищет контакты',
+      'camp-pause-tip':'Поставить на паузу','camp-resume-tip':'Возобновить','camp-wait-tip':'Дневной лимит исчерпан, продолжит завтра',
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
       'act-delegation':'Делегирование','act-post-feed':'Посты в ленту новостей','act-post-tg':'Посты в Telegram-канал','act-post-discord':'Посты в Discord','act-other':'Прочая активность','agent-activity-title':'Активность агента',
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
@@ -9695,6 +9730,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'stat-email-sent':'Emails sent','stat-email-replied':'Email replies','stat-email-conv':'Email conversion','stat-email-campaigns':'Email campaigns',
       'stat-deleg-me':'Assigned to me','stat-deleg-by-me':'Assigned by me','stat-posts-feed':'Feed posts','stat-posts-tg':'Telegram posts','stat-posts-discord':'Discord posts',
       'camp-active':'Active','camp-paused':'Paused','camp-completed':'Completed','camp-launched':'Campaign launched','camp-on-pause':'Campaign paused',
+      'camp-sending':'Sending','camp-wait-day':'Waiting tomorrow','camp-no-leads':'No leads','camp-searching':'Searching contacts',
+      'camp-pause-tip':'Pause campaign','camp-resume-tip':'Resume campaign','camp-wait-tip':'Daily limit reached, will continue tomorrow',
       'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
       'act-delegation':'Delegation','act-post-feed':'Feed posts','act-post-tg':'Telegram channel posts','act-post-discord':'Discord posts','act-other':'Other activity','agent-activity-title':'Agent activity',
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',
