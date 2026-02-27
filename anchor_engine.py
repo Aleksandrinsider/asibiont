@@ -2434,6 +2434,41 @@ class AnchorEngine:
                     f"коротким ненавязчивым follow-up body с новой ценностью. Пиши на ТОМ ЖЕ языке что оригинал."
                     f"\nПосле отправки верни SKIP."
                 )
+            elif anchor.anchor_type == 'email_need_leads':
+                # Напрямую вызываем _auto_find_leads — без AI-модели
+                campaign_id = anchor_data.get('campaign_id')
+                if not campaign_id:
+                    logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: no campaign_id, skip")
+                    return
+
+                from models import EmailCampaign
+                campaign = session.query(EmailCampaign).filter_by(id=campaign_id).first()
+                if not campaign or campaign.status != 'active':
+                    logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: campaign not found or not active, skip")
+                    return
+
+                from ai_integration.handlers import _auto_find_leads
+                count, msg = await _auto_find_leads(
+                    campaign=campaign,
+                    user=user,
+                    target_audience=anchor_data.get('target_audience', campaign.target_audience or ''),
+                    goal=anchor_data.get('campaign_goal', campaign.goal or ''),
+                    offer=anchor_data.get('offer', campaign.offer or ''),
+                    session=session,
+                )
+                logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: found {count} leads for campaign #{campaign_id}")
+
+                # Помечаем якорь как доставленный
+                anchor.delivered_at = datetime.now(timezone.utc)
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[EMAIL_SILENT] email_need_leads: found {count} new leads for campaign «{campaign.name}»',
+                    anchor_types=json.dumps([anchor.anchor_type]),
+                )
+                session.add(log)
+                session.commit()
+                return
             else:
                 return
 
