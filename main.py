@@ -2594,7 +2594,7 @@ except Exception as e:
 
 
 # Global app for Railway
-app = web.Application()
+app = web.Application(client_max_size=5 * 1024 * 1024)  # 5MB for avatar uploads
 
 # Add bot to app
 if bot:

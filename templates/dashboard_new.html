@@ -1533,7 +1533,13 @@
                     credentials: 'include',
                     body: formData
                 });
-                if (!await checkAuth(resp)) return;
+                if (!resp.ok) {
+                    const errText = await resp.text();
+                    console.error('Avatar upload failed:', resp.status, errText);
+                    alert('Ошибка загрузки: ' + (resp.status === 413 ? 'Файл слишком большой' : resp.status));
+                    input.value = '';
+                    return;
+                }
                 const data = await resp.json();
                 if (data.success && data.avatar_url) {
                     // Update profile avatar image
