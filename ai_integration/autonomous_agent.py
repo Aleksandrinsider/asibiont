@@ -1061,11 +1061,11 @@ class HybridAutonomousAgent:
             # ===== Tool calling loop (max 3 итераций) =====
             all_execution_results = []
             MAX_ITERATIONS = 3
-            MAX_TOOLS_PER_ITERATION = 2  # Лимит инструментов за одну итерацию (скорость)
+            MAX_TOOLS_PER_ITERATION = 4  # Лимит инструментов за одну итерацию
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'delegate_task'}  # строго 1 раз
-            multi_limit_tools = {'add_task': 3}  # до 3 задач за ход (юзер может попросить несколько)
+            multi_limit_tools = {'add_task': 3, 'web_search': 5, 'add_email_leads': 3}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
 
@@ -1089,7 +1089,7 @@ class HybridAutonomousAgent:
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc, max_tokens=800)
+                    tool_choice=tc, max_tokens=500)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')
@@ -1258,19 +1258,20 @@ class HybridAutonomousAgent:
                 )
             else:
                 _final_instr = (
-                    "Сформируй финальный ответ. ВАЖНО: перескажи данные из инструментов СВОИМИ СЛОВАМИ, "
-                    "вплети в живой разговорный текст. Не копируй формат, bullets, emoji-заголовки из результатов. "
+                    "Сформируй КРАТКИЙ финальный ответ (3-5 предложений, макс 150 слов). "
+                    "Перескажи данные из инструментов СВОИМИ СЛОВАМИ, вплети в живой разговорный текст. "
+                    "НЕ копируй формат, bullets, emoji-заголовки из результатов. "
                     "Если инструмент не нашёл полезного — не упоминай это. "
                     "Если отправлял email — сообщи КРАТКО кому написал и тему, НЕ вставляй текст письма. "
-                    "ОБЯЗАТЕЛЬНО СОХРАНЯЙ ВСЕ URL-ССЫЛКИ из результатов инструментов — пользователю нужны кликабельные ссылки. "
-                    "Ссылки выноси отдельными строками в конце ответа в формате: Название — URL"
+                    "ОБЯЗАТЕЛЬНО СОХРАНЯЙ URL-ССЫЛКИ из результатов — ссылки отдельными строками в конце. "
+                    "НЕ ПИШИ длинных абзацев — будь лаконичен как друг в мессенджере."
                 )
             messages.append({
                 "role": "user",
                 "content": _final_instr
             })
             final_resp = await self.call_ai(
-                messages, use_tools=False, temperature=0.7, max_tokens=800)
+                messages, use_tools=False, temperature=0.7, max_tokens=500)
             final_text = final_resp['choices'][0]['message'].get('content', '')
             return self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)

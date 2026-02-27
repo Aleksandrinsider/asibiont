@@ -8102,6 +8102,138 @@ def get_message_status(
 # EMAIL OUTREACH — Автономное привлечение клиентов через Resend API
 # ═══════════════════════════════════════════════════════════════════
 
+# Generic email prefixes — фильтруем при автопоиске
+_GENERIC_PREFIXES = {
+    'info', 'contact', 'contacts', 'hello', 'hi', 'support', 'sales',
+    'admin', 'office', 'team', 'help', 'mail', 'noreply', 'no-reply',
+    'hr', 'billing', 'press', 'media', 'marketing', 'general',
+    'enquiries', 'feedback', 'service', 'webmaster', 'subscribe',
+}
+
+
+async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
+                           offer: str, session) -> tuple:
+    """Автоматический поиск лидов через Serper + AI-экстракцию email.
+
+    Возвращает (count_added, message_str).
+    Вызывается из start_email_campaign для сценария ПРИВЛЕЧЕНИЕ.
+    """
+    from .api_client import get_api_client
+    api = get_api_client()
+
+    # Формируем 3–4 поисковых запроса из целевой аудитории
+    keywords = target_audience[:200].replace(',', ' ').replace('.', ' ')
+    goal_kw = goal[:100].replace(',', ' ').replace('.', ' ')
+
+    queries = [
+        f'{keywords} email contact',
+        f'site:github.com {keywords} email',
+        f'{goal_kw} blog author email -info@ -support@',
+        f'site:linkedin.com {keywords}',
+    ]
+
+    all_snippets = []
+    for q in queries:
+        try:
+            results = await api.serper_search(q, num=5)
+            if results:
+                for r in results:
+                    snippet = f"{r.get('title','')} {r.get('snippet','')} {r.get('link','')}"
+                    all_snippets.append(snippet)
+        except Exception as _sq_err:
+            logger.warning(f"[AUTO_LEADS] Search query failed: {q}: {_sq_err}")
+
+    if not all_snippets:
+        return 0, ""
+
+    # AI-экстракция email из сниппетов
+    snippets_text = "\n".join(all_snippets[:20])
+    extract_prompt = f"""Extract all PERSONAL email addresses from these search results.
+Target audience: {target_audience[:300]}
+Campaign goal: {goal[:300]}
+
+Search results:
+{snippets_text}
+
+RULES:
+- Return ONLY personal emails (john@company.com = OK)
+- SKIP generic emails: info@, contact@, hello@, support@, sales@, admin@, team@, noreply@
+- For each email, extract the person's name and company/project if visible
+- Return JSON array: [{{"email":"...","name":"...","company":"...","context":"why relevant"}}]
+- If no personal emails found, return empty array: []
+- Maximum 15 emails
+"""
+    try:
+        ai_result = await api.deepseek_analyze(
+            prompt=extract_prompt,
+            system_prompt="You extract email addresses from text. Return ONLY valid JSON array, no markdown.",
+            max_tokens=800
+        )
+    except Exception as _ai_err:
+        logger.warning(f"[AUTO_LEADS] AI extraction failed: {_ai_err}")
+        # Fallback: regex extraction
+        ai_result = None
+
+    parsed_leads = []
+
+    if ai_result:
+        # Извлечь JSON из AI-ответа
+        import json as _json_al
+        text = ai_result.strip()
+        # Убрать markdown code blocks если есть
+        if '```' in text:
+            parts = text.split('```')
+            for p in parts:
+                p = p.strip()
+                if p.startswith('json'):
+                    p = p[4:].strip()
+                if p.startswith('['):
+                    text = p
+                    break
+        try:
+            raw = _json_al.loads(text)
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict) and item.get('email'):
+                        parsed_leads.append(item)
+        except Exception:
+            pass
+
+    # Fallback: regex если AI не дал результатов
+    if not parsed_leads:
+        import re as _re_al
+        combined = " ".join(all_snippets)
+        emails_found = _re_al.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', combined
+        )
+        seen = set()
+        for em in emails_found:
+            em = em.lower().strip('.')
+            local = em.split('@')[0]
+            if local not in _GENERIC_PREFIXES and em not in seen:
+                seen.add(em)
+                parsed_leads.append({'email': em})
+
+    if not parsed_leads:
+        return 0, ""
+
+    # Добавляем через add_email_leads (централизованная логика с дедупом)
+    leads_json = json.dumps(parsed_leads[:15], ensure_ascii=False)
+    result_msg = await add_email_leads(
+        campaign_id=campaign.id,
+        leads=leads_json,
+        user_id=user.telegram_id,
+        session=session,
+        close_session=False,
+    )
+
+    # Парсим количество добавленных
+    import re as _re_count
+    m = _re_count.search(r'(\d+)\s*email', result_msg or '')
+    count = int(m.group(1)) if m else 0
+
+    return count, ""
+
 async def start_email_campaign(
     name: str,
     goal: str,
@@ -8156,28 +8288,52 @@ async def start_email_campaign(
         session.add(campaign)
         session.commit()
 
+        # ═══════════════════════════════════════════════════════
+        # АВТОПОИСК ЛИДОВ — только для ПРИВЛЕЧЕНИЯ (сценарий 3)
+        # Переговоры (max_emails<=5) — агент сам добавит конкретный email
+        # ═══════════════════════════════════════════════════════
+        is_outreach_campaign = (max_emails == 0 or max_emails > 10) and daily_limit >= 5
+        auto_leads_count = 0
+        auto_leads_msg = ""
+        if is_outreach_campaign:
+            try:
+                auto_leads_count, auto_leads_msg = await _auto_find_leads(
+                    campaign=campaign, user=user, target_audience=target_audience,
+                    goal=goal, offer=offer, session=session
+                )
+            except Exception as _af_err:
+                logger.error(f"[EMAIL_CAMPAIGN] Auto-find leads error: {_af_err}", exc_info=True)
+                auto_leads_msg = ""
+
         lang = _get_lang(user_id)
-        if lang == 'en':
+        if is_outreach_campaign:
+            # Сценарий 3 — привлечение
+            if lang == 'en':
+                base = f"📧 Campaign #{campaign.id} «{name}» created!"
+                if auto_leads_count > 0:
+                    base += f"\n🔍 Found {auto_leads_count} contacts — first emails will be sent automatically."
+                else:
+                    base += "\n⚠️ No contacts found automatically. Search for people via web_search, then add_email_leads."
+            else:
+                base = f"📧 Кампания #{campaign.id} «{name}» создана!"
+                if auto_leads_count > 0:
+                    base += f"\n🔍 Найдено {auto_leads_count} контактов — первые письма будут отправлены автоматически."
+                else:
+                    base += "\n⚠️ Автопоиск не нашёл контактов. Найди людей через web_search, затем add_email_leads."
+            if auto_leads_msg:
+                base += f"\n{auto_leads_msg}"
+            return base
+        else:
+            # Сценарий 2 — переговоры (конкретный контакт)
+            if lang == 'en':
+                return (
+                    f"📧 Campaign #{campaign.id} «{name}» created.\n"
+                    f"Now add the contact via add_email_leads and send the first email via send_outreach_email."
+                )
             return (
-                f"📧 Email campaign #{campaign.id} «{name}» created!\n\n"
-                f"🎯 Goal: {goal[:200]}\n"
-                f"👥 Audience: {target_audience[:200]}\n"
-                f"💼 Offer: {offer[:200]}\n"
-                f"📨 Daily limit: {daily_limit} emails/day{f', max {max_emails} total' if max_emails and max_emails > 0 else ', unlimited total'}\n\n"
-                f"⚡ NEXT STEP: Search for contacts NOW using web_search (3-5 queries across GitHub, LinkedIn, blogs, ProductHunt) "
-                f"and add at least 5-10 PERSONAL emails via add_email_leads(campaign_id={campaign.id}, leads=[...])! "
-                f"Do NOT postpone — campaign is empty, no one to send to."
+                f"📧 Кампания #{campaign.id} «{name}» создана.\n"
+                f"Теперь добавь контакт через add_email_leads и отправь первое письмо через send_outreach_email."
             )
-        return (
-            f"📧 Email-кампания #{campaign.id} «{name}» создана!\n\n"
-            f"🎯 Цель: {goal[:200]}\n"
-            f"👥 Аудитория: {target_audience[:200]}\n"
-            f"💼 Предложение: {offer[:200]}\n"
-            f"📨 Лимит: {daily_limit} писем/день{f', макс. {max_emails} всего' if max_emails and max_emails > 0 else ', без ограничений'}\n\n"
-            f"⚡ СЛЕДУЮЩИЙ ШАГ: СЕЙЧАС ЖЕ найди контакты через web_search (3-5 запросов по разным источникам: GitHub, LinkedIn, блоги, ProductHunt) "
-            f"и добавь минимум 5-10 ЛИЧНЫХ email через add_email_leads(campaign_id={campaign.id}, leads=[...])! "
-            f"НЕ откладывай поиск — кампания пуста, писем некому отправить."
-        )
     except Exception as e:
         logger.error(f"[EMAIL_CAMPAIGN] Error creating campaign: {e}", exc_info=True)
         session.rollback()
