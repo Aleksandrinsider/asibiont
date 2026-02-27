@@ -15,7 +15,7 @@ from .utils import parse_time_to_datetime, generate_unified_recommendations
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
 from . import marketing_agent
-from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, SERPER_API_KEY
+from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -6497,7 +6497,7 @@ async def quick_topic_search(topic: str, user_id: int = None, session=None):
         logger.info(f"[QUICK_SEARCH] Starting for user {user_id}: topic='{topic}'")
         api = get_api_client()
         
-        results = await api.serper_search(topic, num=3)
+        results = await api.web_search(topic, num=3)
         if not results:
             return f"🔍 По запросу '{topic}' не найдено результатов"
         
@@ -6555,7 +6555,7 @@ async def check_topic_relevance(topic: str, user_id: int = None, session=None):
         
         current_year = datetime.now().year
         
-        results = await api.serper_search(f"{topic} {current_year} тренды актуальность", num=7)
+        results = await api.web_search(f"{topic} {current_year} тренды актуальность", num=7)
         
         if not results:
             return f"📊 **Проверка актуальности**: {topic}\n\n❌ Информация по теме не найдена"
@@ -6676,7 +6676,7 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
             f"{query} рекомендации лучшие"
         ]
 
-        all_results = await api.serper_multi_search(search_queries, num_per_query=5)
+        all_results = await api.web_multi_search(search_queries, num_per_query=5)
 
         if not all_results:
             return f"❌ Не удалось найти информацию по запросу '{query}'"
@@ -6891,7 +6891,7 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
         return f"❌ Ошибка получения погоды: {str(e)}"
 
 async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
-    """Получить информацию о котировках акций, сырьевых товаров, криптовалют через Serper + DeepSeek AI"""
+    """Получить информацию о котировках акций, сырьевых товаров, криптовалют через DuckDuckGo + DeepSeek AI"""
     from .api_client import get_api_client
     
     try:
@@ -6904,7 +6904,7 @@ async def get_stock_info(symbol: str, user_id: int = None, session=None) -> str:
         ]
         
         # Параллельный поиск
-        all_results = await api.serper_multi_search(
+        all_results = await api.web_multi_search(
             queries=search_queries,
             num_per_query=5,
             gl="us",
@@ -7018,7 +7018,7 @@ async def web_search(query: str, user_id: int = None, session=None) -> str:
     
     try:
         api = get_api_client()
-        results = await api.serper_search(query, num=7)
+        results = await api.web_search(query, num=7)
         
         if not results:
             return f"❌ Результаты поиска по '{query}' не найдены"
@@ -8115,8 +8115,11 @@ _GENERIC_PATTERNS = {'contact', 'support', 'info', 'admin', 'sales', 'help',
 
 
 def _is_generic_email(email: str) -> bool:
-    """Проверяет, является ли email корпоративным/generic/фейковым."""
+    """Проверяет, является ли email корпоративным/generic/фейковым/мусорным."""
+    import re as _re_ge
     prefix = email.split('@')[0].lower()
+    domain = email.split('@')[1].lower() if '@' in email else ''
+
     if prefix in _GENERIC_PREFIXES:
         return True
     # Проверяем паттерны внутри prefix (например 46contact@...)
@@ -8125,8 +8128,33 @@ def _is_generic_email(email: str) -> bool:
             return True
     # Фейковые/placeholder email
     if prefix in ('example', 'test', 'user', 'demo', 'sample', 'your',
-                   'name', 'email', 'somebody', 'placeholder'):
+                   'name', 'email', 'somebody', 'placeholder', 'username',
+                   'firstname', 'lastname', 'root', 'postmaster', 'abuse',
+                   'null', 'void', 'nobody', 'anonymous', 'guest'):
         return True
+
+    # ── Новые проверки качества ──
+    # Слишком длинный prefix (>30 символов) — вероятно автогенерённый
+    if len(prefix) > 30:
+        return True
+    # Hex-строки (5+ hex-символов подряд) — автогенерённые
+    if _re_ge.search(r'[0-9a-f]{8,}', prefix):
+        return True
+    # Слишком много цифр (>50% prefix = цифры) — не личный email
+    digit_count = sum(1 for c in prefix if c.isdigit())
+    if len(prefix) > 4 and digit_count / len(prefix) > 0.5:
+        return True
+    # Домен = noreply/bounce/mailer
+    domain_base = domain.split('.')[0] if domain else ''
+    if domain_base in ('noreply', 'bounce', 'mailer', 'donotreply',
+                        'notifications', 'alerts', 'daemon', 'no-reply'):
+        return True
+    # Явно мусорные домены (example.com, test.com, etc.)
+    if domain in ('example.com', 'test.com', 'localhost', 'email.com',
+                  'domain.com', 'yoursite.com', 'website.com', 'site.com',
+                  'company.com', 'placeholder.com'):
+        return True
+
     return False
 
 
@@ -8155,27 +8183,32 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     }
 
     # ── PASS 0: AI генерирует УМНЫЕ поисковые запросы ──
-    # Вместо буквального использования target_audience, AI интерпретирует НАМЕРЕНИЕ
+    # Фокус на поиск РЕЛЕВАНТНЫХ людей — не просто любых email
     lang_hint = "Russian" if _has_cyrillic else "English"
-    query_gen_prompt = f"""You're an expert at finding people's email addresses via Google Search.
+    query_gen_prompt = f"""You are an expert B2B/B2C lead researcher.
 
 Campaign goal: {goal[:300]}
 Target audience: {target_audience[:400]}
 Product/offer: {offer[:300]}
 
-Generate 6 Google search queries that will find REAL PEOPLE who might be interested in this product.
-Think BROADLY — if the goal mentions "testers", look for early adopters, developers, tech enthusiasts, bloggers, indie hackers — not just QA testers.
-If the goal mentions "clients", look for people who face the problem this product solves.
+Generate 6 search queries to find RELEVANT people who would genuinely need this product.
+The goal is to find contact pages, portfolios, author bios, and profiles of people matching the target audience.
 
-CRITICAL RULES for queries:
-1. Each query MUST include "@gmail.com" OR "@yandex.ru" OR "@mail.ru" OR "@" — we need pages that SHOW email addresses
-2. Use short keywords (2-4 words max per concept)
-3. Target: personal blogs, GitHub profiles, portfolios, vc.ru/habr/medium articles with author contacts
-4. Think about WHO would genuinely want this product — expand beyond the literal target audience
-5. Language: {lang_hint} keywords preferred
-6. Vary the queries — different angles, platforms, communities
+RULES:
+1. Queries 1-3: Include "email" OR "contact" OR "@" to find pages with visible emails
+2. Queries 4-6: Target specific communities/platforms (GitHub, vc.ru, Habr, Medium, ProductHunt, IndieHackers) + relevant keywords
+3. DO NOT use "site:" operator — it doesn't work with our search engine
+4. Instead of "site:github.com ...", write "github.com ..." 
+5. DO NOT add "@gmail.com" to every query — this leads to random email dump pages
+6. Focus on ROLES and INTERESTS that match the target audience, not random people
+7. Use short, specific keywords (2-4 words per concept)
+8. Language: {lang_hint} keywords preferred
+9. Think: who suffers from the problem this product solves? Search for THOSE people.
 
-Return ONLY a JSON array of 6 strings (search queries). No explanation."""
+GOOD examples: "indie hacker contact email AI tools", "github.com task management README email"
+BAD examples: "@gmail.com freelancer" (finds email dumps), "site:github.com ..." (site: not supported)
+
+Return ONLY a JSON array of 6 strings. No explanation."""
 
     ai_queries = []
     try:
@@ -8207,34 +8240,40 @@ Return ONLY a JSON array of 6 strings (search queries). No explanation."""
         logger.warning(f"[AUTO_LEADS] AI query generation failed: {_qg_err}")
 
     # ── PASS 1: Поиск людей с EMAIL-адресами ──
-    # Комбинируем AI-запросы + несколько надёжных fallback-запросов
+    # Стратегия: DuckDuckGo (бесплатно)
     short_kw = ' '.join(keywords.split()[:4])  # Короткие ключевые слова
 
-    # Fallback-запросы на случай если AI не сгенерировал
+    # Fallback-запросы (совместимые с DDG — без site: и OR)
     if _has_cyrillic:
         fallback_queries = [
-            f'{short_kw} "@gmail.com" OR "@yandex.ru" OR "@mail.ru"',
-            f'{short_kw} email контакт "@"',
-            f'site:github.com {short_kw} "@" followers',
+            f'{short_kw} email контакт автор',
+            f'{short_kw} vc.ru habr контакт',
+            f'{short_kw} github.com email README',
+            f'{short_kw} портфолио "написать мне"',
+            f'{short_kw} telegram бот разработчик email',
         ]
     else:
         fallback_queries = [
-            f'{short_kw} "@gmail.com" OR "@outlook.com" OR "@yahoo.com"',
-            f'{short_kw} email contact "@"',
-            f'site:github.com {short_kw} "@" followers',
+            f'{short_kw} email contact author',
+            f'{short_kw} medium indiehackers portfolio',
+            f'{short_kw} github.com email README',
+            f'{short_kw} portfolio "get in touch"',
+            f'{short_kw} developer blog email contact',
         ]
 
-    # AI-запросы в приоритете, fallback добирают до 8
+    # AI-запросы в приоритете, fallback добирают до 10
     queries = ai_queries[:6]
     for fq in fallback_queries:
-        if len(queries) < 8:
+        if len(queries) < 10:
             queries.append(fq)
 
     all_results = []  # (title, snippet, url)
+
     for q in queries:
         try:
-            results = await api.serper_search(q, num=5)
-            logger.info(f"[AUTO_LEADS] Query: {q[:80]}... → {len(results or [])} results")
+            results = await api.duckduckgo_search(q, num=10)
+
+            logger.info(f"[AUTO_LEADS] [DDG] Query: {q[:80]}... → {len(results or [])} results")
             if results:
                 for r in results:
                     all_results.append({
@@ -8290,7 +8329,7 @@ Return ONLY a JSON array of 6 strings (search queries). No explanation."""
         scored_urls.append((score, url, r['snippet']))
 
     scored_urls.sort(reverse=True)
-    top_urls = scored_urls[:8]  # Скачиваем до 8 страниц
+    top_urls = scored_urls[:15]  # Скачиваем до 15 страниц (компенсация за DDG)
     logger.info(f"[AUTO_LEADS] Unique domains: {len(seen_domains)}, top URLs to fetch: {len(top_urls)}")
 
     page_texts = []  # тексты страниц для AI анализа
@@ -8345,29 +8384,39 @@ Return ONLY a JSON array of 6 strings (search queries). No explanation."""
     combined_text = "\n---\n".join(page_texts[:6])
     snippets_text = "\n".join(f"- {r['title']}: {r['snippet']}" for r in all_results[:15])
 
-    # Если уже нашли email через regex — просим AI определить имена
+    # Если уже нашли email через regex — просим AI отфильтровать по РЕЛЕВАНТНОСТИ
     if all_emails_raw:
         emails_list = ", ".join(list(all_emails_raw)[:20])
-        extract_prompt = f"""I found these email addresses. For each one, determine the person's name and company from the context below.
-Also find any ADDITIONAL personal emails in the text that I might have missed.
+        extract_prompt = f"""I found these email addresses from web search results about our target audience.
+Your job is to FILTER them — keep ONLY emails of people who GENUINELY match the target audience.
 
 Found emails: {emails_list}
 
 Target audience: {target_audience[:300]}
 Campaign goal: {goal[:300]}
+Product: {offer[:200]}
 
 Context (search results + page content):
 {snippets_text}
 
 {combined_text[:3000]}
 
-Return JSON array: [{{"email":"...","name":"...","company":"...","context":"one line why relevant"}}]
-Rules: SKIP info@, contact@, support@, sales@, admin@, noreply@ etc. Only PERSONAL emails. Max 20."""
+STRICT RULES:
+1. For each email, determine: Does this person ACTUALLY match the target audience?
+2. Rate relevance 1-10. Only include emails rated 7+.
+3. If you cannot determine the person's role/interests from context, EXCLUDE them (relevance=0).
+4. SKIP: info@, contact@, support@, sales@, admin@, noreply@, and any corporate/generic emails.
+5. SKIP: emails from unrelated people (random commenters, unrelated authors, etc.)
+6. Better to return 3 RELEVANT leads than 15 irrelevant ones.
+
+Return JSON array: [{{"email":"...","name":"...","company":"...","relevance":8,"context":"why this person matches target audience"}}]
+If NO emails are relevant, return empty array: []"""
     else:
-        extract_prompt = f"""Find personal email addresses of people matching this target audience.
+        extract_prompt = f"""Find personal email addresses of people matching this SPECIFIC target audience.
 
 Target audience: {target_audience[:300]}
 Campaign goal: {goal[:300]}
+Product: {offer[:200]}
 
 Search results:
 {snippets_text}
@@ -8375,9 +8424,15 @@ Search results:
 Page content:
 {combined_text[:3000]}
 
-Return JSON array: [{{"email":"...","name":"...","company":"...","context":"one line why relevant"}}]
-Rules: SKIP info@, contact@, support@, sales@, admin@, noreply@ etc. Only PERSONAL emails. Max 20.
-If no emails found return []"""
+STRICT RULES:
+1. ONLY include emails of people who GENUINELY match the target audience.
+2. Rate relevance 1-10. Only include emails rated 7+.
+3. SKIP: info@, contact@, support@, sales@, admin@, noreply@ — only PERSONAL emails.
+4. If you can't determine why a person matches the target audience, DON'T include them.
+5. Better to return 0 leads than add irrelevant people.
+
+Return JSON array: [{{"email":"...","name":"...","company":"...","relevance":8,"context":"why this person matches target audience"}}]
+If no relevant emails found return []"""
 
     try:
         ai_result = await api.deepseek_analyze(
@@ -8410,16 +8465,28 @@ If no emails found return []"""
                 for item in raw:
                     if isinstance(item, dict) and item.get('email'):
                         em = item['email'].lower().strip('.')
-                        if not _is_generic_email(em):
-                            parsed_leads.append(item)
+                        if _is_generic_email(em):
+                            continue
+                        # Фильтр по relevance score (AI должен ставить 7+)
+                        relevance = item.get('relevance', 0)
+                        try:
+                            relevance = int(relevance)
+                        except (ValueError, TypeError):
+                            relevance = 0
+                        if relevance < 6:
+                            logger.info(f"[AUTO_LEADS] Skipping low-relevance lead: "
+                                        f"{em} (score={relevance})")
+                            continue
+                        parsed_leads.append(item)
         except Exception:
             pass
 
-    # Fallback: если AI не справился — используем regex-результаты
+    # НЕ используем fallback на сырые regex email — 
+    # лучше 0 лидов чем 15 нерелевантных
     if not parsed_leads and all_emails_raw:
-        logger.info(f"[AUTO_LEADS] AI parsed 0 leads, falling back to regex emails: {all_emails_raw}")
-        for em in all_emails_raw:
-            parsed_leads.append({'email': em})
+        logger.info(f"[AUTO_LEADS] AI found 0 relevant leads. "
+                    f"Regex found {len(all_emails_raw)} raw emails but SKIPPING "
+                    f"(no relevance verification). Emails: {all_emails_raw}")
 
     if not parsed_leads:
         logger.warning(f"[AUTO_LEADS] FINAL: 0 leads found for campaign #{campaign.id} "

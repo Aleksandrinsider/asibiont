@@ -51,10 +51,7 @@ if not DEEPSEEK_API_KEY:
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")   # Free Whisper via api.groq.com (recommended)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # OpenAI Whisper whisper-1 model
 
-# Web Search API (Serper)
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")
-if not SERPER_API_KEY and not LOCAL:
-    logger.warning("SERPER_API_KEY not set - web search features will be limited")
+# Web Search — DuckDuckGo (бесплатно, без API ключа)
 
 # AI Optimization Settings
 AI_CACHE_ENABLED = os.getenv("AI_CACHE_ENABLED", "False").lower() in ("true", "1", "yes")

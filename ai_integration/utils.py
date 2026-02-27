@@ -600,7 +600,7 @@ def _load_news_sync(city=None):
 def get_finance_info(symbol, asset_type='stock', cache_ttl_minutes=15):
     """Get finance information with caching.
     
-    DEPRECATED: Alpha Vantage removed. Use get_stock_info() handler (Serper + AI).
+    DEPRECATED: Alpha Vantage removed. Use get_stock_info() handler (DuckDuckGo + AI).
     Returns None — kept for backward compatibility.
     """
     logger.warning(f"[FINANCE] get_finance_info() is deprecated. Use get_stock_info() handler instead.")

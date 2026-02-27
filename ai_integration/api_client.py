@@ -20,7 +20,6 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
 from config import (
-    SERPER_API_KEY,
     OPENWEATHERMAP_API_KEY,
     NEWSAPI_API_KEY,
     DEEPSEEK_API_KEY,
@@ -116,7 +115,7 @@ class RateLimiter:
         self._calls: Dict[str, List[float]] = {}
         self._limits: Dict[str, tuple] = {
             # (max_calls, window_seconds)
-            'serper': (100, 86400),         # 100/день (Serper Free)
+            'ddg': (200, 86400),             # DuckDuckGo — бесплатный
             'newsapi': (90, 86400),          # 100/день (NewsAPI Free), оставляем запас
             'openweathermap': (55, 60),      # 60/мин (OWM Free)
             'deepseek': (50, 60),            # DeepSeek — мягкий лимит
@@ -200,7 +199,7 @@ class ExternalAPIClient:
     def get_stats(self) -> dict:
         """Общая статистика по API"""
         stats = {}
-        for api in ['serper', 'newsapi', 'openweathermap', 'deepseek']:
+        for api in ['ddg', 'newsapi', 'openweathermap', 'deepseek']:
             stats[api] = {
                 'total_calls': self._api_call_count.get(api, 0),
                 'rate_limit': self.rate_limiter.get_usage(api)
@@ -208,83 +207,71 @@ class ExternalAPIClient:
         return stats
 
     # ========================================================================
-    # SERPER (Google Search)
+    # DUCKDUCKGO (бесплатный поиск, без API ключа)
     # ========================================================================
-    
-    async def serper_search(
+
+    async def duckduckgo_search(
+        self,
+        query: str,
+        num: int = 10,
+        region: str = "ru-ru",
+        cache_ttl: int = 1800
+    ) -> Optional[List[dict]]:
+        """
+        Бесплатный поиск через DuckDuckGo (без API ключа).
+
+        Returns:
+            Список результатов [{'title': ..., 'snippet': ..., 'link': ...}] или None
+        """
+        cache_params = {'q': query, 'num': num, 'region': region, 'engine': 'ddg'}
+
+        # Проверяем кэш
+        cached = await self.cache.get('ddg', cache_params)
+        if cached is not None:
+            return cached
+
+        try:
+            from duckduckgo_search import DDGS
+            import asyncio as _aio
+
+            def _sync_search():
+                with DDGS() as ddgs:
+                    raw = list(ddgs.text(query, region=region, max_results=num))
+                    return [{
+                        'title': r.get('title', ''),
+                        'snippet': r.get('body', ''),
+                        'link': r.get('href', ''),
+                    } for r in raw]
+
+            loop = _aio.get_event_loop()
+            results = await loop.run_in_executor(None, _sync_search)
+
+            self._track_call('ddg')
+            await self.cache.set('ddg', cache_params, results, cache_ttl)
+            logger.info(f"[DDG] Found {len(results)} results for: {query[:50]}")
+            return results
+
+        except Exception as e:
+            logger.warning(f"[DDG] Error: {e}")
+            return None
+
+    async def web_search(
         self,
         query: str,
         num: int = 10,
         gl: str = "ru",
         hl: str = "ru",
-        cache_ttl: int = 1800  # 30 минут
+        cache_ttl: int = 1800
     ) -> Optional[List[dict]]:
         """
-        Поиск через Serper API с кэшированием.
-        
-        Returns:
-            Список результатов [{'title': ..., 'snippet': ..., 'link': ...}] или None
+        Универсальный поиск через DuckDuckGo.
         """
-        if not SERPER_API_KEY:
-            logger.warning("[SERPER] API key not set")
-            return None
-        
-        cache_params = {'q': query, 'num': num, 'gl': gl}
-        
-        # Проверяем кэш
-        cached = await self.cache.get('serper', cache_params)
-        if cached is not None:
-            return cached
-        
-        # Rate-limit
-        if not await self.rate_limiter.acquire('serper'):
-            logger.warning(f"[SERPER] Rate limit exceeded for query: {query}")
-            return None
-        
-        session = await self._get_session()
-        
-        try:
-            async with session.post(
-                'https://google.serper.dev/search',
-                headers={
-                    'X-API-KEY': SERPER_API_KEY,
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "q": query,
-                    "num": num,
-                    "gl": gl,
-                    "hl": hl
-                }
-            ) as response:
-                self._track_call('serper')
-                
-                if response.status == 200:
-                    data = await response.json()
-                    results = []
-                    for item in data.get('organic', [])[:num]:
-                        results.append({
-                            'title': item.get('title', ''),
-                            'snippet': item.get('snippet', ''),
-                            'link': item.get('link', '')
-                        })
-                    
-                    # Кэшируем
-                    await self.cache.set('serper', cache_params, results, cache_ttl)
-                    logger.info(f"[SERPER] Found {len(results)} results for: {query[:50]}")
-                    return results
-                else:
-                    logger.warning(f"[SERPER] API error {response.status} for: {query[:50]}")
-                    return None
-                    
-        except asyncio.TimeoutError:
-            logger.warning(f"[SERPER] Timeout for: {query[:50]}")
-            return None
-        except Exception as e:
-            logger.error(f"[SERPER] Error: {e}")
-            return None
-    
-    async def serper_multi_search(
+        region = f"{hl}-{gl}" if gl and hl else "ru-ru"
+        return await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
+
+
+
+    async def web_multi_search(
         self,
         queries: List[str],
         num_per_query: int = 5,
@@ -293,36 +280,31 @@ class ExternalAPIClient:
         cache_ttl: int = 1800
     ) -> List[dict]:
         """
-        Параллельный поиск нескольких запросов через Serper.
-        Вместо 5 последовательных запросов — все параллельно.
-        
-        Returns:
-            Объединённый список уникальных результатов
+        Параллельный поиск через DuckDuckGo.
         """
+        region = f"{hl}-{gl}" if gl and hl else "ru-ru"
         tasks = [
-            self.serper_search(q, num=num_per_query, gl=gl, hl=hl, cache_ttl=cache_ttl)
+            self.duckduckgo_search(q, num=num_per_query, region=region, cache_ttl=cache_ttl)
             for q in queries
         ]
-        
+
         results_lists = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Объединяем и дедуплицируем по URL
+
         seen_urls = set()
         all_results = []
-        
+
         for i, results in enumerate(results_lists):
-            if isinstance(results, Exception):
-                logger.warning(f"[SERPER_MULTI] Query '{queries[i]}' failed: {results}")
+            if isinstance(results, Exception) or not results:
+                logger.warning(f"[WEB_MULTI] Query '{queries[i]}' returned no results")
                 continue
-            if results:
-                for r in results:
-                    url = r.get('link', '')
-                    if url and url not in seen_urls:
-                        seen_urls.add(url)
-                        r['query_source'] = queries[i]
-                        all_results.append(r)
-        
-        logger.info(f"[SERPER_MULTI] {len(queries)} queries → {len(all_results)} unique results")
+            for r in results:
+                url = r.get('link', '')
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    r['query_source'] = queries[i]
+                    all_results.append(r)
+
+        logger.info(f"[WEB_MULTI] {len(queries)} queries → {len(all_results)} unique results")
         return all_results
     
     # ========================================================================
@@ -612,8 +594,8 @@ class ExternalAPIClient:
                 'message': str          # Готовое сообщение для пользователя
             }
         """
-        # 1. Поиск
-        results = await self.serper_search(query, num=num_results, cache_ttl=cache_ttl)
+        # 1. Поиск через DuckDuckGo
+        results = await self.web_search(query, num=num_results, cache_ttl=cache_ttl)
         
         if not results:
             return {
