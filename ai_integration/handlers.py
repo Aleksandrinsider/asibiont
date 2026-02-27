@@ -8109,6 +8109,22 @@ _GENERIC_PREFIXES = {
     'enquiries', 'feedback', 'service', 'webmaster', 'subscribe',
 }
 
+# Паттерны в email-prefix которые указывают на корпоративный/generic email
+_GENERIC_PATTERNS = {'contact', 'support', 'info', 'admin', 'sales', 'help',
+                     'press', 'media', 'billing', 'noreply', 'service'}
+
+
+def _is_generic_email(email: str) -> bool:
+    """Проверяет, является ли email корпоративным/generic."""
+    prefix = email.split('@')[0].lower()
+    if prefix in _GENERIC_PREFIXES:
+        return True
+    # Проверяем паттерны внутри prefix (например 46contact@...)
+    for pat in _GENERIC_PATTERNS:
+        if pat in prefix and len(prefix) <= len(pat) + 3:
+            return True
+    return False
+
 
 async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                            offer: str, session) -> tuple:
@@ -8127,31 +8143,58 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     goal_kw = goal[:100].replace(',', ' ').replace('.', ' ')
     _has_cyrillic = any('\u0400' <= c <= '\u04ff' for c in target_audience)
 
-    # ── PASS 1: Поиск людей и страниц с контактами ──
-    # Запросы нацелены на страницы КОНТАКТОВ, а не на статьи
+    # Домены которые блокируют бот-запросы — скачивать бесполезно
+    _unfetchable_domains = {
+        'facebook.com', 'linkedin.com', 'twitter.com', 'x.com',
+        'instagram.com', 'youtube.com', 'reddit.com', 'tiktok.com',
+        'vk.com', 'ok.ru', 't.me', 'pinterest.com',
+    }
+
+    # ── PASS 1: Поиск людей с EMAIL-адресами ──
+    # Ключевая стратегия: ищем страницы где email ВИДЕН в тексте
+    # Используем операторы "@gmail.com" и "@" для нацеливания на email
+    short_kw = ' '.join(keywords.split()[:5])  # Короткие ключевые слова
     if _has_cyrillic:
         queries = [
-            f'{keywords} "написать" OR "связаться" OR "telegram" email',
-            f'site:vc.ru {keywords} автор "почта" OR "email" OR "написать мне"',
-            f'site:habr.com {keywords} "email" OR "почта" OR "@"',
-            f'{goal_kw} эксперт контакты email -info@ -support@',
-            f'{keywords} "основатель" OR "CEO" OR "фаундер" email site:facebook.com OR site:linkedin.com',
-            f'{keywords} telegram "@" email consultant',
+            # Прямой поиск email-ов в тексте
+            f'{short_kw} "@gmail.com" OR "@yandex.ru" OR "@mail.ru"',
+            f'{short_kw} email контакт "@"',
+            # GitHub — email в профилях
+            f'site:github.com {short_kw} "@" followers',
+            # Личные блоги и портфолио с контактами
+            f'{short_kw} "свяжитесь" OR "напишите мне" OR "мой email" "@"',
+            # vc.ru авторы с контактами
+            f'site:vc.ru {short_kw} "@gmail.com" OR "@yandex.ru" OR "telegram"',
+            # habr авторы
+            f'site:habr.com {short_kw} "@" автор профиль',
+            # Специализированные запросы по цели
+            f'{goal_kw} "@gmail.com" OR "@yandex.ru" OR "@mail.ru" контакт',
+            # Medium / Substack авторы
+            f'{short_kw} "@" site:medium.com OR site:substack.com',
         ]
     else:
         queries = [
-            f'{keywords} "contact me" OR "get in touch" OR "reach me" email',
-            f'site:medium.com {keywords} author "@gmail.com" OR "@outlook.com"',
-            f'site:github.com {keywords} email followers',
-            f'{goal_kw} expert "contact" email -info@ -support@',
-            f'{keywords} founder CEO email site:linkedin.com OR site:twitter.com',
-            f'site:producthunt.com {keywords} maker "@"',
+            # Direct email search
+            f'{short_kw} "@gmail.com" OR "@outlook.com" OR "@yahoo.com"',
+            f'{short_kw} email contact "@"',
+            # GitHub profiles
+            f'site:github.com {short_kw} "@" followers',
+            # Personal sites with contact info
+            f'{short_kw} "contact me" OR "reach me" OR "my email" "@"',
+            # Medium / dev.to / Substack authors
+            f'site:medium.com {short_kw} "@gmail.com" OR "@" author',
+            f'site:dev.to {short_kw} "@" contact',
+            # Goal-specific
+            f'{goal_kw} "@gmail.com" OR "@outlook.com" contact',
+            # ProductHunt makers
+            f'site:producthunt.com {short_kw} "@" maker',
         ]
 
     all_results = []  # (title, snippet, url)
     for q in queries:
         try:
             results = await api.serper_search(q, num=5)
+            logger.info(f"[AUTO_LEADS] Query: {q[:80]}... → {len(results or [])} results")
             if results:
                 for r in results:
                     all_results.append({
@@ -8160,9 +8203,11 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                         'url': r.get('link', ''),
                     })
         except Exception as _sq_err:
-            logger.warning(f"[AUTO_LEADS] Search failed: {q}: {_sq_err}")
+            logger.warning(f"[AUTO_LEADS] Search failed: {q[:80]}: {_sq_err}")
 
+    logger.info(f"[AUTO_LEADS] Total search results: {len(all_results)}")
     if not all_results:
+        logger.warning(f"[AUTO_LEADS] ZERO results from all queries for campaign #{campaign.id}")
         return 0, ""
 
     # ── PASS 2: Скачиваем перспективные страницы и извлекаем email ──
@@ -8170,6 +8215,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     _contact_hints = {'contact', 'about', 'profile', 'author', 'user',
                       'контакт', 'автор', 'профиль', 'обо мне',
                       '@', 'email', 'mailto', 'написать', 'связаться'}
+    import re as _re_al
+    all_emails_raw = set()  # email найденные напрямую — инициализируем ДО цикла
     scored_urls = []
     seen_domains = set()
     for r in all_results:
@@ -8183,6 +8230,15 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             continue
         if domain in seen_domains:
             continue
+        # Пропускаем домены которые блокируют ботов
+        base_domain = '.'.join(domain.split('.')[-2:])
+        if base_domain in _unfetchable_domains or domain in _unfetchable_domains:
+            # Но всё равно извлекаем email из сниппета
+            for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', r['snippet']):
+                em = em.lower().strip('.')
+                if not _is_generic_email(em):
+                    all_emails_raw.add(em)
+            continue
         seen_domains.add(domain)
 
         # Скоринг: сниппет/заголовок содержат email-подсказки?
@@ -8195,16 +8251,15 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
 
     scored_urls.sort(reverse=True)
     top_urls = scored_urls[:8]  # Скачиваем до 8 страниц
+    logger.info(f"[AUTO_LEADS] Unique domains: {len(seen_domains)}, top URLs to fetch: {len(top_urls)}")
 
-    all_emails_raw = set()  # email найденные напрямую
     page_texts = []  # тексты страниц для AI анализа
 
     # Извлекаем email из сниппетов сразу
-    import re as _re_al
     for _, _, snippet in scored_urls:
         for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', snippet):
             em = em.lower().strip('.')
-            if em.split('@')[0] not in _GENERIC_PREFIXES:
+            if not _is_generic_email(em):
                 all_emails_raw.add(em)
 
     # Скачиваем страницы параллельно
@@ -8232,12 +8287,18 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             # Извлечь email regex из HTML
             for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', page_html):
                 em = em.lower().strip('.')
-                if em.split('@')[0] not in _GENERIC_PREFIXES:
+                if not _is_generic_email(em):
                     all_emails_raw.add(em)
             # Собираем текст для AI-анализа (убираем HTML-теги, берём фрагмент)
             clean_text = _re_al.sub(r'<[^>]+>', ' ', page_html)
             clean_text = _re_al.sub(r'\s+', ' ', clean_text)[:2000]
             page_texts.append(clean_text)
+
+    pages_fetched = sum(1 for p in pages if isinstance(p, str) and p)
+    logger.info(f"[AUTO_LEADS] Pages fetched: {pages_fetched}/{len(top_urls)}, "
+                f"emails from regex (snippets+pages): {len(all_emails_raw)}, "
+                f"raw emails: {all_emails_raw}")
+    logger.info(f"[AUTO_LEADS] Page texts collected for AI: {len(page_texts)}")
 
     # ── Финальная AI-экстракция: имена + контекст ──
     # Объединяем всё: сниппеты + тексты страниц
@@ -8284,6 +8345,7 @@ If no emails found return []"""
             system_prompt="Extract email addresses from text. Return ONLY valid JSON array, no markdown.",
             max_tokens=1000
         )
+        logger.info(f"[AUTO_LEADS] AI result length: {len(ai_result or '')}, preview: {(ai_result or '')[:200]}")
     except Exception as _ai_err:
         logger.warning(f"[AUTO_LEADS] AI extraction failed: {_ai_err}")
         ai_result = None
@@ -8308,20 +8370,25 @@ If no emails found return []"""
                 for item in raw:
                     if isinstance(item, dict) and item.get('email'):
                         em = item['email'].lower().strip('.')
-                        if em.split('@')[0] not in _GENERIC_PREFIXES:
+                        if not _is_generic_email(em):
                             parsed_leads.append(item)
         except Exception:
             pass
 
     # Fallback: если AI не справился — используем regex-результаты
     if not parsed_leads and all_emails_raw:
+        logger.info(f"[AUTO_LEADS] AI parsed 0 leads, falling back to regex emails: {all_emails_raw}")
         for em in all_emails_raw:
             parsed_leads.append({'email': em})
 
     if not parsed_leads:
+        logger.warning(f"[AUTO_LEADS] FINAL: 0 leads found for campaign #{campaign.id} "
+                       f"(search_results={len(all_results)}, pages={pages_fetched}, "
+                       f"regex_emails={len(all_emails_raw)}, ai_parsed=0)")
         return 0, ""
 
-    logger.info(f"[AUTO_LEADS] Found {len(parsed_leads)} leads for campaign #{campaign.id}")
+    logger.info(f"[AUTO_LEADS] Found {len(parsed_leads)} leads for campaign #{campaign.id}: "
+                f"{[l.get('email') for l in parsed_leads[:5]]}")
 
     # Добавляем через add_email_leads (централизованная логика с дедупом)
     leads_json = json.dumps(parsed_leads[:15], ensure_ascii=False)
@@ -8376,6 +8443,29 @@ async def start_email_campaign(
             sender_name = user.first_name or user.username or 'Team'
         if not sender_email:
             sender_email = 'outreach@asibiont.com'
+
+        # Проверка на дубликат — если есть активная кампания с похожей целью
+        from sqlalchemy import func as sa_func
+        existing = session.query(EmailCampaign).filter(
+            EmailCampaign.user_id == user.id,
+            EmailCampaign.status == 'active',
+        ).all()
+        for ex in existing:
+            # Сравниваем цели — если пересекаются ключевые слова
+            ex_words = set((ex.goal or '').lower().split())
+            new_words = set(goal.lower().split())
+            overlap = ex_words & new_words - {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'a', 'the', 'to', 'for', 'of', 'and', 'in'}
+            if len(overlap) >= 3:
+                # Обновляем существующую кампанию вместо создания новой
+                if daily_limit > ex.daily_limit:
+                    ex.daily_limit = min(daily_limit, 50)
+                if max_emails and max_emails > (ex.max_emails or 0):
+                    ex.max_emails = max_emails
+                session.commit()
+                lang = getattr(user, 'language_code', 'ru') or 'ru'
+                if lang == 'en':
+                    return f"📧 Campaign #{ex.id} «{ex.name}» already exists and is active! Updated daily_limit to {ex.daily_limit}. Leads will be found automatically."
+                return f"📧 Кампания #{ex.id} «{ex.name}» уже существует и активна! Обновил daily_limit до {ex.daily_limit}. Лиды будут найдены автоматически."
 
         campaign = EmailCampaign(
             user_id=user.id,
