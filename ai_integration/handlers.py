@@ -8152,12 +8152,25 @@ _GENERIC_PREFIXES = {
     'tos', 'legal', 'privacy', 'security', 'abuse', 'postmaster',
     'jobs', 'careers', 'newsletter', 'notifications', 'alerts',
     'unsubscribe', 'mailer-daemon', 'reply', 'do-not-reply',
+    # Корп/партнёрские
+    'partners', 'partnership', 'partner', 'business', 'biz',
+    'cooperation', 'collab', 'collaborate', 'pr', 'invest',
+    'investor', 'investors', 'ceo', 'cto', 'cfo', 'coo',
+    'editor', 'editorial', 'news', 'newsroom', 'events', 'event',
+    'community', 'social', 'director', 'manager', 'commercial',
+    'advertising', 'ads', 'advert', 'booking', 'reservations',
+    'customerservice', 'cs', 'tech', 'technical', 'ops', 'operations',
+    'compliance', 'procurement', 'reception', 'frontdesk', 'helpdesk',
+    'itsupport', 'it', 'devops', 'sysadmin', 'accounts', 'accounting',
+    'finance', 'payroll', 'hq', 'headquarters', 'main', 'central',
 }
 
 # Паттерны в email-prefix которые указывают на корпоративный/generic email
 _GENERIC_PATTERNS = {'contact', 'support', 'info', 'admin', 'sales', 'help',
                      'press', 'media', 'billing', 'noreply', 'service',
-                     'newsletter', 'unsubscribe', 'notification'}
+                     'newsletter', 'unsubscribe', 'notification',
+                     'partner', 'business', 'marketing', 'event',
+                     'booking', 'advertis', 'commercial', 'investor'}
 
 
 def _is_generic_email(email: str) -> bool:
@@ -8311,17 +8324,20 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         _ru_lang_block = """\n\nLANGUAGE: The target audience speaks RUSSIAN. You MUST:
 - Generate 7-8 queries in RUSSIAN (кириллицей)
 - Generate 2-3 queries in English but targeting Russian-speaking people
-- Use Russian platforms: vc.ru, habr.com, tproger.ru, spark.ru, rb.ru, pikabu.ru
-- Use Russian role words: разработчик, тестировщик, маркетолог, предприниматель, эксперт
-- Use Russian contact words: контакт, email, почта, "написать мне", "связаться"
+- CRITICAL: Russian queries MUST be 3-4 words MAX! DDG completely ignores long Russian queries!
+- Use Russian platforms: vc.ru, habr, tproger, spark.ru, rb.ru
+- Use Russian role words: разработчик, тестировщик, маркетолог, предприниматель
+- Use Russian contact words: email, почта, контакт
 
-GOOD Russian examples:
-  "разработчик ИИ email контакт"
-  "тестировщик email портфолио"
-  "habr.com автор ИИ email"
-  "vc.ru предприниматель email контакт"
-  "маркетолог \"написать мне\" email"
-  "AI developer Russia email contact"""
+GOOD (3-4 words):
+  "разработчик ИИ email"
+  "habr автор email"
+  "vc.ru email контакт"
+  "маркетолог email почта"
+  "AI developer Russia email"
+BAD (too long, DDG ignores):
+  "разработчик ИИ email контакт портфолио Россия"
+  "vc.ru предприниматель email контакт связаться" """
 
     query_gen_prompt = f"""You are an expert lead researcher finding PEOPLE with public email addresses.
 
@@ -8399,25 +8415,26 @@ Return ONLY a JSON array of 10 strings. No explanation."""
     # УНИВЕРСАЛЬНЫЕ fallback-запросы — работают для ЛЮБОЙ ниши
     # Стратегия: [core_kw] + email-маркер + платформа/контекст
     if _has_cyrillic:
-        # ── Для РУССКОЯЗЫЧНОЙ аудитории: RU-запросы В ПРИОРИТЕТЕ ──
+        # ── Для РУССКОЯЗЫЧНОЙ аудитории: КОРОТКИЕ запросы (3-4 слова макс) ──
+        # DDG плохо обрабатывает длинные русские запросы — урезаем до минимума
         universal_queries = [
-            # RU платформы и ключевые слова (первые!)
-            f'{core_kw} email контакт портфолио',
-            f'{core_kw} "написать мне" email',
-            f'{core_kw} "связаться" email контакт',
-            f'{core_kw} эксперт email контакт',
-            f'{core_kw} vc.ru автор email контакт',
-            f'{core_kw} habr.com автор email',
-            f'{core_kw} tproger.ru email автор',
-            f'{core_kw} spark.ru email контакт',
-            f'{core_kw} фрилансер email контакт',
-            f'{core_kw} разработчик email Россия',
-            f'{core_kw} блог автор email почта',
-            f'{core_kw} telegram email контакт',
-            # EN запросы для русскоязычных с западным присутствием
-            f'{core_kw} Russia email contact',
+            # Короткие RU-запросы (платформа + ключ)
+            f'{core_kw} email контакт',
+            f'{core_kw} "написать мне"',
+            f'{core_kw} автор email',
+            f'{core_kw} vc.ru email',
+            f'{core_kw} habr автор',
+            f'{core_kw} tproger email',
+            f'{core_kw} фрилансер email',
+            f'{core_kw} разработчик email',
+            f'{core_kw} блогер email',
+            f'{core_kw} telegram канал',
+            f'{core_kw} spark.ru контакт',
+            f'{core_kw} "моя почта"',
+            # EN-запросы для RU-аудитории с западным присутствием
+            f'{core_kw} Russia email',
             f'{core_kw} Russian developer email',
-            f'{core_kw} email portfolio contact',
+            f'{core_kw} email portfolio',
             f'{core_kw} "get in touch" email',
         ]
     else:
@@ -9456,9 +9473,8 @@ async def add_email_leads(
             email = lead.get('email', '').strip().lower()
             if not email or '@' not in email:
                 continue
-            # Отклоняем generic-адреса (info@, contact@, hello@ и т.д.)
-            local_part = email.split('@')[0]
-            if local_part in GENERIC_PREFIXES:
+            # Отклоняем generic-адреса через полный фильтр
+            if _is_generic_email(email):
                 skipped_generic += 1
                 continue
             # Дубль-проверка в текущей кампании
@@ -10029,7 +10045,7 @@ async def send_email(
                 existing_contact = session.query(_EmailContact).filter_by(
                     user_id=user.id, email=to_clean
                 ).first()
-                if not existing_contact:
+                if not existing_contact and not _is_generic_email(to_clean):
                     # Пытаемся извлечь имя из адреса (например «Иван Иванов <ivan@example.com>»)
                     _contact_name = None
                     if to and '<' in str(to):
@@ -10089,6 +10105,10 @@ async def save_email_contact(
         email_clean = (email or '').strip().lower()
         if not email_clean or '@' not in email_clean:
             return "❌ Некорректный email"
+
+        # Блокируем generic/корпоративные адреса
+        if _is_generic_email(email_clean):
+            return f"⚠️ {email_clean} — это корпоративный/generic адрес. Сохраняй только личные email конкретных людей."
 
         # Check duplicate
         existing = session.query(EmailContact).filter_by(
