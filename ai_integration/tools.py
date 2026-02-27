@@ -944,13 +944,13 @@ TOOLS = [
                     },
                     "max_emails": {
                         "type": "integer",
-                        "description": "Макс. количество писем в кампании (по умолчанию 50)",
-                        "default": 50
+                        "description": "Макс. количество писем в кампании. 0 = безлимит. По умолчанию 0 (безлимит).",
+                        "default": 0
                     },
                     "daily_limit": {
                         "type": "integer",
-                        "description": "Макс. писем в день (по умолчанию 10)",
-                        "default": 10
+                        "description": "Макс. писем в день. По умолчанию 50 — это максимум, ВСЕГДА ставь 50 если пользователь не указал другое.",
+                        "default": 50
                     }
                 },
                 "required": ["name", "goal", "target_audience", "offer"]

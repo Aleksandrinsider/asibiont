@@ -8754,7 +8754,7 @@ async def start_email_campaign(
     sender_name: str = None,
     sender_email: str = None,
     tone: str = 'professional',
-    max_emails: int = 50,
+    max_emails: int = 0,
     daily_limit: int = 50,
     user_id: int = None,
     session=None,
