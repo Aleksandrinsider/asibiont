@@ -8669,6 +8669,12 @@ def get_email_campaign_status(
             return "📭 Нет email-кампаний. Создай кампанию: «запусти email-кампанию для привлечения клиентов»."
 
         result = []
+        import pytz as _pytz_cs
+        from datetime import timezone as _tz_cs
+        _user_tz_cs = _pytz_cs.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _user_now_cs = datetime.now(_user_tz_cs)
+        _today_start_cs = _user_now_cs.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_cs.utc)
+
         for c in campaigns:
             emails = session.query(EmailOutreach).filter_by(campaign_id=c.id).all()
             draft = sum(1 for e in emails if e.status == 'draft')
@@ -8677,14 +8683,47 @@ def get_email_campaign_status(
             replied = sum(1 for e in emails if e.status == 'replied')
             bounced = sum(1 for e in emails if e.status in ('bounced', 'failed'))
 
-            status_emoji = {'active': '🟢', 'paused': '⏸️', 'completed': '✅', 'cancelled': '❌'}.get(c.status, '❓')
+            # Сколько отправлено сегодня
+            sent_today = session.query(EmailOutreach).filter(
+                EmailOutreach.campaign_id == c.id,
+                EmailOutreach.sent_at >= _today_start_cs,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).count()
+            daily_limit = c.daily_limit or 50
+
+            # Умный подстатус
+            is_active = c.status in ('active', 'running')
+            if c.status == 'paused':
+                status_emoji = '⏸️'
+                status_text = 'На паузе'
+            elif c.status == 'completed':
+                status_emoji = '✅'
+                status_text = 'Завершена'
+            elif c.status == 'cancelled':
+                status_emoji = '❌'
+                status_text = 'Отменена'
+            elif is_active and sent_today >= daily_limit:
+                status_emoji = '⏳'
+                status_text = f'Ждёт завтра (лимит {daily_limit}/день исчерпан)'
+            elif is_active and draft == 0 and (c.emails_sent or 0) == 0 and sent_today == 0:
+                status_emoji = '🔴'
+                status_text = 'Нет лидов — нужны контакты (add_email_leads)'
+            elif is_active and draft == 0 and ((c.emails_sent or 0) > 0 or sent_today > 0):
+                status_emoji = '🔍'
+                status_text = 'Все отправлены, ищет новые контакты'
+            elif is_active:
+                status_emoji = '🟢'
+                status_text = f'Отправляет ({draft} черновиков готово)'
+            else:
+                status_emoji = '❓'
+                status_text = c.status or 'неизвестно'
 
             block = (
                 f"{status_emoji} Кампания #{c.id}: «{c.name}»\n"
-                f"📊 Статус: {c.status}\n"
+                f"📊 Статус: {status_text}\n"
                 f"📧 Всего: {len(emails)} | Черновики: {draft} | Отправлено: {sent + delivered}\n"
                 f"💬 Ответов: {replied} | Ошибки: {bounced}\n"
-                f"📨 Отправлено: {c.emails_sent}{f'/{c.max_emails}' if c.max_emails and c.max_emails > 0 else ''} (макс {c.daily_limit}/день)"
+                f"📨 Сегодня: {sent_today}/{daily_limit} | Всего: {c.emails_sent or 0}{f'/{c.max_emails}' if c.max_emails and c.max_emails > 0 else '/∞'}"
             )
             if replied > 0:
                 recent_replies = [e for e in emails if e.status == 'replied' and e.reply_text]

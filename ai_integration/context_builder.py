@@ -411,8 +411,9 @@ class ContextBuilder:
                     EmailOutreach.sent_at >= _today_start_ec,
                     EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
                 ).scalar() or 0
+                _global_daily = 50
                 if _sent_today > 0:
-                    hints.append(f"EMAIL СЕГОДНЯ: написали {_sent_today}/20 новым получателям. Осталось: {max(0, 20 - _sent_today)}. Существующим контактам (фолоу-ап, ответ) — без ограничений.")
+                    hints.append(f"EMAIL СЕГОДНЯ: написали {_sent_today}/{_global_daily} новым получателям. Осталось: {max(0, _global_daily - _sent_today)}. Существующим контактам (фолоу-ап, ответ) — без ограничений.")
             except Exception as e:
                 logger.warning(f"[EMAIL_DAILY_CTX] Error: {e}")
 
@@ -459,14 +460,37 @@ class ContextBuilder:
                     _EC.status.in_(['active', 'paused']),
                 ).all()
                 if active_campaigns:
+                    import pytz as _pytz_cc
+                    from datetime import timezone as _tz_cc
+                    _user_tz_cc = _pytz_cc.timezone(user.timezone or 'Europe/Moscow')
+                    _user_now_cc = datetime.now(_user_tz_cc)
+                    _today_start_cc = _user_now_cc.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_cc.utc)
                     camp_lines = []
                     for c in active_campaigns:
                         pending_leads = session.query(_EO).filter(
                             _EO.campaign_id == c.id,
                             _EO.status == 'draft',
                         ).count()
-                        status_badge = "⏸️ PAUSED" if c.status == 'paused' else "▶️"
-                        camp_lines.append(f"  {status_badge} id={c.id} «{c.name}» — лидов ожидает: {pending_leads}, отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
+                        _sent_today_c = session.query(_EO).filter(
+                            _EO.campaign_id == c.id,
+                            _EO.sent_at >= _today_start_cc,
+                            _EO.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                        ).count()
+                        _dlimit = c.daily_limit or 50
+                        _is_active_c = c.status in ('active', 'running')
+                        if c.status == 'paused':
+                            status_badge = '⏸️ НА ПАУЗЕ'
+                        elif _is_active_c and _sent_today_c >= _dlimit:
+                            status_badge = f'⏳ ЖДЁТ ЗАВТРА ({_sent_today_c}/{_dlimit})'
+                        elif _is_active_c and pending_leads == 0 and (c.emails_sent or 0) == 0 and _sent_today_c == 0:
+                            status_badge = '🔴 НЕТ ЛИДОВ — НУЖНЫ КОНТАКТЫ'
+                        elif _is_active_c and pending_leads == 0:
+                            status_badge = f'🔍 ВСЕ ОТПРАВЛЕНЫ ({_sent_today_c}/{_dlimit} сегодня)'
+                        elif _is_active_c:
+                            status_badge = f'🟢 ОТПРАВЛЯЕТ ({pending_leads} черновиков, {_sent_today_c}/{_dlimit} сегодня)'
+                        else:
+                            status_badge = f'❓ {c.status}'
+                        camp_lines.append(f"  {status_badge} id={c.id} «{c.name}» — отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
                     hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ:\n" + "\n".join(camp_lines))
             except Exception as e:
                 logger.warning(f"[CAMPAIGNS_CTX] Error: {e}")
