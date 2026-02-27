@@ -101,6 +101,10 @@ ACTION_COSTS = {
     'start_content_campaign':   15,  # Создание контент-кампании
     'manage_content_campaign':   5,  # Управление контент-кампанией
 
+    # ── Кампании делегирования ──
+    'start_delegation_campaign': 15,  # Создание кампании делегирования
+    'manage_delegation_campaign': 5,  # Управление кампанией делегирования
+
     # ── Задачи (дополнительно) ──
     'skip_task':                 2,  # Пропуск/откладывание задачи
     'accept_delegated_task':     3,  # Принятие делегированной задачи

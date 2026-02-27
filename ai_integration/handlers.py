@@ -1053,6 +1053,17 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     # Сохраняем флаг что нужно отправить отчет делегатору после получения результатов
                     # Используем поле completion_notes для временного хранения ID делегатора
                     task.pending_delegator_report = delegator.telegram_id
+
+                    # Обновляем счётчик кампании делегирования
+                    if getattr(task, 'delegation_campaign_id', None):
+                        try:
+                            from models import DelegationCampaign
+                            dc = session.query(DelegationCampaign).filter_by(id=task.delegation_campaign_id).first()
+                            if dc:
+                                dc.delegations_completed = (dc.delegations_completed or 0) + 1
+                        except Exception:
+                            pass
+
                     session.commit()
                     
                     # Обновляем сообщение для пользователя
@@ -1673,6 +1684,17 @@ def accept_delegated_task(task_id=None, task_title=None, user_id=None):
         # Update delegation status and task status
         task.delegation_status = "accepted"
         task.status = "in_progress"  # Задача теперь в работе
+
+        # Обновляем счётчик кампании делегирования
+        if getattr(task, 'delegation_campaign_id', None):
+            try:
+                from models import DelegationCampaign
+                dc = session.query(DelegationCampaign).filter_by(id=task.delegation_campaign_id).first()
+                if dc:
+                    dc.delegations_accepted = (dc.delegations_accepted or 0) + 1
+            except Exception:
+                pass
+
         session.commit()
 
         # Schedule reminder
@@ -1780,6 +1802,17 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
         # Update delegation status
         task.delegation_status = "rejected"
         task.status = "rejected"
+
+        # Обновляем счётчик кампании делегирования
+        if getattr(task, 'delegation_campaign_id', None):
+            try:
+                from models import DelegationCampaign
+                dc = session.query(DelegationCampaign).filter_by(id=task.delegation_campaign_id).first()
+                if dc:
+                    dc.delegations_rejected = (dc.delegations_rejected or 0) + 1
+            except Exception:
+                pass
+
         session.commit()
 
         # Отменяем все запланированные джобы для этой задачи
@@ -10534,6 +10567,219 @@ async def manage_content_campaign(
 
     except Exception as e:
         logger.error(f"[CONTENT_CAMPAIGN] Error managing: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════
+# КАМПАНИИ ДЕЛЕГИРОВАНИЯ — массовое автономное делегирование
+# ═══════════════════════════════════════════════════════
+
+async def start_delegation_campaign(
+    name: str,
+    goal: str,
+    target_audience: str,
+    task_template: str = None,
+    offer: str = None,
+    tone: str = 'professional',
+    max_delegations: int = 10,
+    daily_limit: int = 3,
+    default_deadline_hours: int = 48,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создать кампанию делегирования для автономного распределения задач.
+
+    AI-агент будет автономно:
+    1. Находить подходящих исполнителей по навыкам/интересам
+    2. Создавать задачи и делегировать
+    3. Отправлять мотивирующие уведомления
+    4. Отслеживать принятие/отклонение
+    """
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        if not name or not goal or not target_audience:
+            return "❌ Укажи название, цель и целевую аудиторию кампании"
+
+        # Проверяем дубликаты
+        from models import DelegationCampaign
+        existing = session.query(DelegationCampaign).filter(
+            DelegationCampaign.user_id == user.id,
+            DelegationCampaign.status == 'active',
+        ).all()
+        for ex in existing:
+            if ex.name and name.lower() in ex.name.lower():
+                return f"⚠️ Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign чтобы обновить."
+
+        # Лимит активных кампаний
+        if len(existing) >= 5:
+            return "❌ Максимум 5 активных кампаний делегирования. Заверши или отмени старые."
+
+        campaign = DelegationCampaign(
+            user_id=user.id,
+            name=name[:300],
+            goal=goal[:2000],
+            target_audience=target_audience[:1000],
+            task_template=(task_template or '')[:1000],
+            offer=(offer or '')[:500],
+            tone=tone or 'professional',
+            max_delegations=max_delegations if max_delegations and max_delegations > 0 else 10,
+            daily_limit=daily_limit if daily_limit and daily_limit > 0 else 3,
+            max_follow_ups=2,
+            default_deadline_hours=default_deadline_hours if default_deadline_hours and default_deadline_hours > 0 else 48,
+            status='active',
+            delegations_sent=0,
+            delegations_accepted=0,
+            delegations_completed=0,
+            delegations_rejected=0,
+        )
+        session.add(campaign)
+        session.commit()
+
+        result = (
+            f"✅ Кампания делегирования «{name}» запущена! (#{campaign.id})\n\n"
+            f"🎯 Цель: {goal[:150]}\n"
+            f"👥 Аудитория: {target_audience[:150]}\n"
+            f"📊 Макс. делегирований: {max_delegations}\n"
+            f"⏰ Лимит в день: {daily_limit}\n"
+            f"📅 Дедлайн задач: {default_deadline_hours}ч\n"
+        )
+        if task_template:
+            result += f"📋 Шаблон: {task_template[:100]}\n"
+        if offer:
+            result += f"🎁 Мотивация: {offer[:100]}\n"
+
+        result += "\nАгент будет автономно находить подходящих исполнителей и делегировать задачи."
+
+        logger.info(f"[DELEGATION_CAMPAIGN] Created #{campaign.id} «{name}» for user {user_id}")
+        return result
+
+    except Exception as e:
+        logger.error(f"[DELEGATION_CAMPAIGN] Error creating: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка создания кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def manage_delegation_campaign(
+    action: str,
+    campaign_id: int = None,
+    updates: dict = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Управление кампанией делегирования: пауза, возобновление, отмена, обновление."""
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        from models import DelegationCampaign
+
+        if campaign_id:
+            campaign = session.query(DelegationCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            campaign = session.query(DelegationCampaign).filter(
+                DelegationCampaign.user_id == user.id,
+                DelegationCampaign.status.in_(['active', 'paused'])
+            ).order_by(DelegationCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return "❌ Кампания делегирования не найдена. Создай новую с помощью start_delegation_campaign."
+
+        if action == 'pause':
+            if campaign.status == 'paused':
+                return f"⏸️ Кампания «{campaign.name}» уже на паузе."
+            campaign.status = 'paused'
+            session.commit()
+            return (
+                f"⏸️ Кампания «{campaign.name}» (#{campaign.id}) на паузе.\n"
+                f"📊 Отправлено: {campaign.delegations_sent or 0}, принято: {campaign.delegations_accepted or 0}"
+            )
+
+        elif action == 'resume':
+            if campaign.status == 'active':
+                return f"▶️ Кампания «{campaign.name}» уже активна."
+            if campaign.status in ('completed', 'cancelled'):
+                return f"❌ Кампания «{campaign.name}» завершена/отменена. Создай новую."
+            campaign.status = 'active'
+            session.commit()
+            return f"▶️ Кампания «{campaign.name}» (#{campaign.id}) возобновлена!"
+
+        elif action == 'cancel':
+            campaign.status = 'cancelled'
+            session.commit()
+            return (
+                f"🗑️ Кампания «{campaign.name}» (#{campaign.id}) отменена.\n"
+                f"📊 Итого: отправлено {campaign.delegations_sent or 0}, "
+                f"принято {campaign.delegations_accepted or 0}, "
+                f"завершено {campaign.delegations_completed or 0}"
+            )
+
+        elif action == 'update':
+            if not updates:
+                return "❌ Укажи параметры для обновления (updates)."
+
+            changed = []
+            if 'name' in updates:
+                campaign.name = str(updates['name'])[:300]
+                changed.append(f"название → {campaign.name}")
+            if 'goal' in updates:
+                campaign.goal = str(updates['goal'])[:2000]
+                changed.append("цель обновлена")
+            if 'target_audience' in updates:
+                campaign.target_audience = str(updates['target_audience'])[:1000]
+                changed.append(f"аудитория → {campaign.target_audience[:100]}")
+            if 'task_template' in updates:
+                campaign.task_template = str(updates['task_template'])[:1000]
+                changed.append("шаблон задачи обновлён")
+            if 'offer' in updates:
+                campaign.offer = str(updates['offer'])[:500]
+                changed.append(f"мотивация → {campaign.offer[:100]}")
+            if 'tone' in updates:
+                campaign.tone = str(updates['tone'])
+                changed.append(f"тон → {campaign.tone}")
+            if 'max_delegations' in updates:
+                campaign.max_delegations = int(updates['max_delegations'])
+                changed.append(f"макс.делегирований → {campaign.max_delegations}")
+            if 'daily_limit' in updates:
+                campaign.daily_limit = int(updates['daily_limit'])
+                changed.append(f"лимит в день → {campaign.daily_limit}")
+            if 'default_deadline_hours' in updates:
+                campaign.default_deadline_hours = int(updates['default_deadline_hours'])
+                changed.append(f"дедлайн → {campaign.default_deadline_hours}ч")
+
+            if not changed:
+                return "⚠️ Нет распознанных параметров для обновления."
+
+            session.commit()
+            return f"✅ Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f"  • {c}" for c in changed)
+
+        else:
+            return f"❌ Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
+
+    except Exception as e:
+        logger.error(f"[DELEGATION_CAMPAIGN] Error managing: {e}", exc_info=True)
         session.rollback()
         return f"❌ Ошибка: {str(e)}"
     finally:

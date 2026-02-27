@@ -43,7 +43,7 @@ from models import (
     Anchor, AnchorDeliveryLog, AnchorPriority,
     ActivityAlert, ContactAlert, UserMessage,
     EmailCampaign, EmailOutreach, ContentCampaign,
-    AgentActivityLog,
+    DelegationCampaign, AgentActivityLog,
 )
 from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR
 
@@ -128,6 +128,9 @@ BATCH_GROUPS = {
     'email_need_leads': 'email',    # Кампании нужны новые контакты
     # Content campaigns
     'content_campaign_publish': 'content',
+    # Delegation campaigns
+    'delegation_campaign_send': 'delegation',
+    'delegation_campaign_follow_up': 'delegation',
 }
 
 
@@ -485,14 +488,16 @@ class AnchorEngine:
         # ── Разделяем потоки ──
         EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
         CONTENT_SILENT_TYPES = {'content_campaign_publish'}
+        DELEGATION_SILENT_TYPES = {'delegation_campaign_send', 'delegation_campaign_follow_up'}
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
         email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
-        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors]
+        delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
+        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors]
 
-        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
+        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}, deleg_silent={len(delegation_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
         # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
         all_dialog_anchors = critical_anchors.copy()
@@ -554,6 +559,17 @@ class AnchorEngine:
                     await self._process_content_campaign_anchor(user, cc, session)
         elif content_silent_anchors and is_night:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ content campaigns blocked (night hours)")
+
+        # ── 3g. DELEGATION CAMPAIGNS — автономное делегирование (не ночью) ──
+        if delegation_silent_anchors and not is_night:
+            logger.info(f"[ANCHOR] User {user_id}: 🤝 Processing {len(delegation_silent_anchors)} delegation campaign anchors...")
+            for _dc_idx, dc in enumerate(delegation_silent_anchors[:3]):  # макс 3 за цикл
+                if _dc_idx > 0:
+                    await asyncio.sleep(5)
+                async with self._ai_semaphore:
+                    await self._process_delegation_campaign_anchor(user, dc, session)
+        elif delegation_silent_anchors and is_night:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ delegation campaigns blocked (night hours)")
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
@@ -627,6 +643,9 @@ class AnchorEngine:
 
         # --- КОНТЕНТ-КАМПАНИИ (автономная публикация по расписанию) ---
         anchors.extend(self._scan_content_campaigns(user, session, now_utc))
+
+        # --- КАМПАНИИ ДЕЛЕГИРОВАНИЯ (автономное распределение задач) ---
+        anchors.extend(self._scan_delegation_campaigns(user, session, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         anchors = await self._enrich_anchors_with_ddg(anchors, profile)
@@ -1844,6 +1863,155 @@ class AnchorEngine:
         return anchors
 
     # ═══════════════════════════════════════════════════════
+    # DELEGATION CAMPAIGN SCANNER — автономное делегирование задач
+    # ═══════════════════════════════════════════════════════
+
+    def _scan_delegation_campaigns(self, user, session, now_utc) -> list:
+        """Сканирует кампании делегирования: создаёт якоря delegation_campaign_send.
+
+        Проверяет:
+        1. Активные кампании с status='active'
+        2. Дневной лимит (daily_limit)
+        3. Общий лимит (max_delegations)
+        4. Рабочие часы
+        5. Наличие подходящих исполнителей
+        """
+        anchors = []
+
+        campaigns = session.query(DelegationCampaign).filter(
+            DelegationCampaign.user_id == user.id,
+            DelegationCampaign.status == 'active'
+        ).all()
+
+        if not campaigns:
+            return anchors
+
+        import pytz as _pytz_dc
+        user_tz = _pytz_dc.timezone(user.timezone or 'Europe/Moscow')
+        user_now = now_utc.astimezone(user_tz)
+
+        # Рабочие часы (10:00–20:00)
+        if user_now.hour < 10 or user_now.hour >= 20:
+            return anchors
+
+        for campaign in campaigns:
+            # --- Общий лимит ---
+            if campaign.max_delegations and campaign.max_delegations > 0:
+                if (campaign.delegations_sent or 0) >= campaign.max_delegations:
+                    campaign.status = 'completed'
+                    try:
+                        session.commit()
+                        logger.info(f"[ANCHOR] Auto-completed delegation campaign #{campaign.id} «{campaign.name}» — reached max_delegations")
+                    except Exception:
+                        session.rollback()
+                    continue
+
+            # --- Частота: макс 1 делегация в 4ч ---
+            if campaign.last_delegation_at:
+                last_deleg = campaign.last_delegation_at
+                if last_deleg.tzinfo is None:
+                    last_deleg = last_deleg.replace(tzinfo=timezone.utc)
+                hours_since = (now_utc - last_deleg).total_seconds() / 3600
+                if hours_since < 4:
+                    continue
+
+            # --- Дневной лимит ---
+            today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+            delegations_today = session.query(Task).filter(
+                Task.delegated_by == user.id,
+                Task.delegation_campaign_id == campaign.id,
+                Task.created_at >= today_start,
+            ).count()
+
+            if delegations_today >= (campaign.daily_limit or 3):
+                continue
+
+            # --- Ищем потенциальных исполнителей ---
+            target_desc = (campaign.target_audience or campaign.goal or '')[:500]
+            if not target_desc:
+                continue
+
+            # Получаем уже привлечённых (чтобы не повторяться)
+            already_delegated = session.query(Task.delegated_to_username).filter(
+                Task.delegation_campaign_id == campaign.id,
+                Task.delegated_to_username.isnot(None),
+            ).distinct().all()
+            already_usernames = {r[0].lower() for r in already_delegated if r[0]}
+
+            # Ищем пользователей по interests/skills/bio
+            from sqlalchemy import or_
+            keywords = [w.strip().lower() for w in target_desc.replace(',', ' ').replace(';', ' ').split() if len(w.strip()) > 3][:10]
+
+            candidates = []
+            if keywords:
+                filters = []
+                for kw in keywords[:5]:
+                    filters.append(UserProfile.interests.ilike(f'%{kw}%'))
+                    filters.append(UserProfile.skills.ilike(f'%{kw}%'))
+                    filters.append(UserProfile.bio.ilike(f'%{kw}%'))
+
+                profiles = session.query(UserProfile).join(User).filter(
+                    User.id != user.id,
+                    or_(*filters),
+                ).limit(20).all()
+
+                for p in profiles:
+                    p_user = session.query(User).filter_by(id=p.user_id).first()
+                    if not p_user or not p_user.username:
+                        continue
+                    if p_user.username.lower() in already_usernames:
+                        continue
+                    # Скоринг
+                    score = 0
+                    profile_text = f"{(p.interests or '').lower()} {(p.skills or '').lower()} {(p.bio or '').lower()}"
+                    for kw in keywords:
+                        if kw in profile_text:
+                            score += 1
+                    if score > 0:
+                        candidates.append((p_user, score))
+
+                candidates.sort(key=lambda x: -x[1])
+
+            if not candidates:
+                logger.debug(f"[ANCHOR] Delegation campaign #{campaign.id}: no candidates found")
+                continue
+
+            # Берём лучшего кандидата
+            best_candidate, best_score = candidates[0]
+
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='delegation_campaign_send',
+                source=f'delegation_campaign:{campaign.id}:send:{best_candidate.username}:{user_now.strftime("%Y-%m-%d")}',
+                topic=_t(user,
+                    f'Кампания делегирования «{campaign.name}» — делегировать @{best_candidate.username}',
+                    f'Delegation campaign «{campaign.name}» — delegate to @{best_candidate.username}'),
+                priority=AnchorPriority.MEDIUM,
+                data=json.dumps({
+                    'campaign_id': campaign.id,
+                    'campaign_name': campaign.name,
+                    'goal': (campaign.goal or '')[:500],
+                    'target_audience': (campaign.target_audience or '')[:300],
+                    'task_template': (campaign.task_template or '')[:500],
+                    'offer': (campaign.offer or '')[:300],
+                    'tone': campaign.tone or 'professional',
+                    'candidate_username': best_candidate.username,
+                    'candidate_name': best_candidate.first_name or best_candidate.username,
+                    'candidate_score': best_score,
+                    'delegations_sent': campaign.delegations_sent or 0,
+                    'max_delegations': campaign.max_delegations or 0,
+                    'default_deadline_hours': campaign.default_deadline_hours or 48,
+                    'user_name': user.first_name or user.username or 'user',
+                }, ensure_ascii=False),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(hours=8),
+                cooldown_hours=4,
+                batch_group='delegation',
+            ))
+
+        return anchors
+
+    # ═══════════════════════════════════════════════════════
     # EMAIL OUTREACH SCANNER — автономная email-кампания
     # ═══════════════════════════════════════════════════════
 
@@ -2895,6 +3063,275 @@ class AnchorEngine:
         except Exception as e:
             logger.error(f"[ANCHOR] _ai_compose_campaign_post error: {e}")
             return None
+
+    # ═══════════════════════════════════════════════════════
+    # DELEGATION CAMPAIGN PROCESSOR — автономное делегирование
+    # ═══════════════════════════════════════════════════════
+
+    async def _process_delegation_campaign_anchor(self, user, anchor, session):
+        """Обрабатывает якорь delegation_campaign_send: находит исполнителя, делегирует задачу.
+
+        Работает автономно, без диалога с пользователем.
+        Создаёт Task, отправляет уведомление исполнителю, обновляет счётчики кампании.
+        """
+        try:
+            # ── Защита от дублей ──
+            fresh = session.query(Anchor).filter_by(id=anchor.id).with_for_update(skip_locked=True).first()
+            if not fresh or fresh.delivered_at is not None:
+                logger.info(f"[ANCHOR] Delegation campaign anchor #{anchor.id} already delivered, skip")
+                return
+            anchor = fresh
+
+            # Токены
+            from token_service import check_and_deduct
+            allowed = await check_and_deduct(user.telegram_id, 'delegate_task', session)
+            if not allowed:
+                logger.info(f"[ANCHOR] Delegation campaign anchor #{anchor.id}: insufficient tokens")
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            anchor_data = json.loads(anchor.data or '{}')
+            campaign_id = anchor_data.get('campaign_id')
+            if not campaign_id:
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            campaign = session.query(DelegationCampaign).filter_by(id=campaign_id).first()
+            if not campaign or campaign.status != 'active':
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            candidate_username = anchor_data.get('candidate_username')
+            if not candidate_username:
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            # Проверяем кандидата
+            candidate = session.query(User).filter(
+                User.username.ilike(candidate_username)
+            ).first()
+            if not candidate:
+                logger.warning(f"[ANCHOR] Delegation campaign: candidate @{candidate_username} not found")
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            # Проверяем блокировку
+            is_blocked = False
+            try:
+                from models import UserBlock
+                is_blocked = session.query(UserBlock).filter(
+                    ((UserBlock.blocker_id == user.id) & (UserBlock.blocked_id == candidate.id)) |
+                    ((UserBlock.blocker_id == candidate.id) & (UserBlock.blocked_id == user.id))
+                ).first()
+            except Exception:
+                pass  # UserBlock may not exist yet
+            if is_blocked:
+                logger.info(f"[ANCHOR] Delegation campaign: @{candidate_username} blocked, skip")
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            # ── Генерируем текст задачи через AI ──
+            task_title, task_description, delegation_message = await self._ai_compose_delegation(
+                user, campaign, anchor_data, candidate, session
+            )
+            if not task_title:
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            # ── Создаём задачу ──
+            deadline_hours = anchor_data.get('default_deadline_hours', 48)
+            now_utc = datetime.datetime.now(timezone.utc)
+            due_date = now_utc + timedelta(hours=deadline_hours)
+
+            task = Task(
+                user_id=user.id,
+                title=task_title[:500],
+                description=task_description[:2000] if task_description else None,
+                status='pending',
+                priority='medium',
+                due_date=due_date,
+                delegated_by=user.id,
+                delegated_to_username=candidate.username,
+                delegation_status='pending',
+                delegation_details=f"[Кампания «{campaign.name}» #{campaign.id}] {(campaign.offer or '')[:200]}",
+                delegation_campaign_id=campaign.id,
+            )
+            session.add(task)
+            session.flush()
+
+            # ── Логируем активность ──
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='delegation',
+                title=f'Делегировано @{candidate.username}: {task_title[:100]}',
+                content=task_description[:500] if task_description else '',
+                target=f'@{candidate.username}',
+                status='pending',
+                ref_id=str(task.id),
+                result=f'campaign:{campaign.id}',
+            )
+            session.add(log_entry)
+
+            # ── Обновляем счётчики кампании ──
+            campaign.delegations_sent = (campaign.delegations_sent or 0) + 1
+            campaign.last_delegation_at = now_utc
+
+            # Проверяем достижение лимита
+            if campaign.max_delegations and campaign.max_delegations > 0:
+                if campaign.delegations_sent >= campaign.max_delegations:
+                    campaign.status = 'completed'
+
+            # ── Отправляем уведомление исполнителю ──
+            if candidate.telegram_id and delegation_message:
+                try:
+                    from handlers import bot
+                    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                    kb = InlineKeyboardMarkup(inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text='✅ Принять', callback_data=f'accept_deleg_{task.id}'),
+                            InlineKeyboardButton(text='❌ Отклонить', callback_data=f'reject_deleg_{task.id}'),
+                        ]
+                    ])
+                    await bot.send_message(
+                        candidate.telegram_id,
+                        delegation_message,
+                        reply_markup=kb,
+                        parse_mode='HTML',
+                    )
+                    logger.info(f"[ANCHOR] Delegation campaign #{campaign.id}: delegated «{task_title[:50]}» to @{candidate.username}")
+                except Exception as e:
+                    logger.warning(f"[ANCHOR] Delegation campaign: failed to notify @{candidate_username}: {e}")
+
+            # ── Маркируем якорь ──
+            anchor.delivered_at = now_utc
+            anchor.delivery_result = f'delegated_task:{task.id}:@{candidate.username}'
+            session.commit()
+
+            # ── Уведомляем пользователя (кратко) ──
+            try:
+                from handlers import bot
+                await bot.send_message(
+                    user.telegram_id,
+                    f"🤝 <b>Кампания «{campaign.name}»</b>\n"
+                    f"Делегировано @{candidate.username}: {task_title[:100]}\n"
+                    f"📊 Отправлено {campaign.delegations_sent}"
+                    f"{f'/{campaign.max_delegations}' if campaign.max_delegations else ''}",
+                    parse_mode='HTML',
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _process_delegation_campaign_anchor error: {e}\n{traceback.format_exc()}")
+            try:
+                anchor.delivered_at = datetime.datetime.now(timezone.utc)
+                session.commit()
+            except Exception:
+                session.rollback()
+
+    async def _ai_compose_delegation(self, user, campaign, anchor_data: dict, candidate, session) -> tuple:
+        """Генерирует текст задачи и сообщение для делегирования через AI.
+
+        Returns: (task_title, task_description, delegation_message) or (None, None, None)
+        """
+        try:
+            candidate_profile = session.query(UserProfile).filter_by(user_id=candidate.id).first()
+            candidate_info = ''
+            if candidate_profile:
+                parts = []
+                if candidate_profile.bio:
+                    parts.append(f"Bio: {candidate_profile.bio[:200]}")
+                if candidate_profile.skills:
+                    parts.append(f"Skills: {candidate_profile.skills[:200]}")
+                if candidate_profile.interests:
+                    parts.append(f"Interests: {candidate_profile.interests[:200]}")
+                candidate_info = '\n'.join(parts)
+
+            system_msg = (
+                "Ты AI-менеджер проекта. Создаёшь задачу для делегирования конкретному исполнителю.\n"
+                "Задача должна быть чёткой, конкретной и мотивирующей.\n"
+                "Ответ СТРОГО в формате:\n"
+                "TITLE: [краткое название задачи 5-15 слов]\n"
+                "DESCRIPTION: [подробное описание: что сделать, ожидаемый результат, 2-4 предложения]\n"
+                "MESSAGE: [личное сообщение исполнителю: представься, объясни задачу, мотивируй. 3-5 предложений. Без HTML.]"
+            )
+            user_msg = (
+                f"Кампания: {campaign.name}\n"
+                f"Цель кампании: {anchor_data.get('goal', '')[:300]}\n"
+                f"Целевая аудитория: {anchor_data.get('target_audience', '')[:200]}\n"
+                f"Шаблон задачи: {anchor_data.get('task_template', '')[:300]}\n"
+                f"Предложение/мотивация: {anchor_data.get('offer', '')[:200]}\n"
+                f"Тон: {anchor_data.get('tone', 'professional')}\n\n"
+                f"ИСПОЛНИТЕЛЬ: @{candidate.username} ({candidate.first_name or 'user'})\n"
+                f"{candidate_info}\n\n"
+                f"ДЕЛЕГАТОР: {user.first_name or user.username}\n\n"
+                f"Создай ЗАДАЧУ и СООБЩЕНИЕ ИСПОЛНИТЕЛЮ."
+            )
+
+            import aiohttp
+            async with aiohttp.ClientSession() as http:
+                resp = await http.post(
+                    'https://api.deepseek.com/chat/completions',
+                    headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                    json={
+                        'model': 'deepseek-chat',
+                        'messages': [
+                            {'role': 'system', 'content': system_msg},
+                            {'role': 'user', 'content': user_msg},
+                        ],
+                        'max_tokens': 600,
+                        'temperature': 0.7,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30),
+                )
+                if resp.status != 200:
+                    logger.warning(f"[ANCHOR] _ai_compose_delegation: API error {resp.status}")
+                    return (None, None, None)
+                data = await resp.json()
+                text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+            if not text:
+                return (None, None, None)
+
+            # Парсим ответ
+            title = ''
+            description = ''
+            message = ''
+            for line in text.split('\n'):
+                line_s = line.strip()
+                if line_s.upper().startswith('TITLE:'):
+                    title = line_s[6:].strip()
+                elif line_s.upper().startswith('DESCRIPTION:'):
+                    description = line_s[12:].strip()
+                elif line_s.upper().startswith('MESSAGE:'):
+                    message = line_s[8:].strip()
+
+            # Если DESCRIPTION/MESSAGE многострочные (всё что после TITLE/DESCRIPTION до следующего маркера)
+            if not description and 'DESCRIPTION:' in text:
+                parts = text.split('DESCRIPTION:')
+                if len(parts) > 1:
+                    desc_part = parts[1].split('MESSAGE:')[0].strip()
+                    description = desc_part
+            if not message and 'MESSAGE:' in text:
+                parts = text.split('MESSAGE:')
+                if len(parts) > 1:
+                    message = parts[1].strip()
+
+            if not title:
+                title = f"Задача от {user.first_name or user.username}: {(campaign.goal or 'помощь')[:80]}"
+
+            return (title[:500], description[:2000], message[:1500])
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _ai_compose_delegation error: {e}")
+            return (None, None, None)
 
     async def _process_email_silent_anchor(self, user, anchor, session):
         """Обрабатывает email-якорь МОЛЧА: напрямую генерирует текст через AI и отправляет.

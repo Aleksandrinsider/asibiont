@@ -1339,6 +1339,92 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "start_delegation_campaign",
+            "description": "🤝 ЗАПУСК КАМПАНИИ ДЕЛЕГИРОВАНИЯ — автономное массовое распределение задач подходящим пользователям. Агент сам найдёт исполнителей по навыкам/интересам, создаст задачи, отправит уведомления. Используй когда: 'найди тестировщиков для проекта', 'раздай задачи', 'найди помощников', 'делегируй командой', 'распредели задачи'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Название кампании: 'Тестировщики для MVP', 'Помощники по дизайну'"
+                    },
+                    "goal": {
+                        "type": "string",
+                        "description": "Цель: что нужно сделать, зачем, какой результат ожидается"
+                    },
+                    "target_audience": {
+                        "type": "string",
+                        "description": "Кого ищем: навыки, интересы, опыт. Пример: 'тестировщики, QA, разработчики Python'"
+                    },
+                    "task_template": {
+                        "type": "string",
+                        "description": "Шаблон задачи: что конкретно должен сделать исполнитель"
+                    },
+                    "offer": {
+                        "type": "string",
+                        "description": "Мотивация: что получит исполнитель (опыт, обратная связь, коллаборация и т.д.)"
+                    },
+                    "tone": {
+                        "type": "string",
+                        "description": "Тон общения: professional, casual, friendly, motivational"
+                    },
+                    "max_delegations": {
+                        "type": "integer",
+                        "description": "Макс. количество делегирований (0=без ограничения, по умолчанию 10)"
+                    },
+                    "daily_limit": {
+                        "type": "integer",
+                        "description": "Макс. делегирований в день (по умолчанию 3)"
+                    },
+                    "default_deadline_hours": {
+                        "type": "integer",
+                        "description": "Дедлайн задачи в часах (по умолчанию 48)"
+                    }
+                },
+                "required": ["name", "goal", "target_audience"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_delegation_campaign",
+            "description": "⏸️ УПРАВЛЕНИЕ кампанией делегирования: пауза, возобновление, отмена, обновление. Используй когда: 'останови делегирование', 'поставь кампанию на паузу', 'отмени поиск исполнителей', 'измени лимит'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "campaign_id": {
+                        "type": "integer",
+                        "description": "ID кампании делегирования. Если не указан — последняя активная."
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Действие",
+                        "enum": ["pause", "resume", "cancel", "update"]
+                    },
+                    "updates": {
+                        "type": "object",
+                        "description": "Обновляемые параметры (для action=update): name, goal, target_audience, task_template, offer, tone, max_delegations, daily_limit, default_deadline_hours",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "goal": {"type": "string"},
+                            "target_audience": {"type": "string"},
+                            "task_template": {"type": "string"},
+                            "offer": {"type": "string"},
+                            "tone": {"type": "string"},
+                            "max_delegations": {"type": "integer"},
+                            "daily_limit": {"type": "integer"},
+                            "default_deadline_hours": {"type": "integer"}
+                        }
+                    }
+                },
+                "required": ["action"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "generate_image",
             "description": "🎨 ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ через Replicate (Flux). Создаёт картинку по текстовому описанию и отправляет пользователю в Telegram. Используй когда просят: 'нарисуй', 'создай изображение', 'сгенерируй картинку', 'сделай иллюстрацию для поста', 'визуал для кампании'. Пиши подробный английский промпт для лучшего качества.",
             "parameters": {

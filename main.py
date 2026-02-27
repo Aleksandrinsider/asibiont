@@ -7463,11 +7463,41 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading content campaigns: {e}")
 
+            # Delegation campaigns
+            delegation_campaigns_data = []
+            try:
+                from models import DelegationCampaign
+                dc_list = session_db.query(DelegationCampaign).filter_by(
+                    user_id=user.id
+                ).order_by(DelegationCampaign.created_at.desc()).limit(20).all()
+                for dc in dc_list:
+                    delegation_campaigns_data.append({
+                        'id': dc.id,
+                        'name': dc.name,
+                        'goal': dc.goal,
+                        'target_audience': dc.target_audience,
+                        'task_template': dc.task_template,
+                        'offer': dc.offer,
+                        'status': dc.status,
+                        'max_delegations': dc.max_delegations or 0,
+                        'daily_limit': dc.daily_limit or 3,
+                        'delegations_sent': dc.delegations_sent or 0,
+                        'delegations_accepted': dc.delegations_accepted or 0,
+                        'delegations_completed': dc.delegations_completed or 0,
+                        'delegations_rejected': dc.delegations_rejected or 0,
+                        'default_deadline_hours': dc.default_deadline_hours or 48,
+                        'last_delegation_at': (dc.last_delegation_at.isoformat() + 'Z') if dc.last_delegation_at else None,
+                        'created_at': (dc.created_at.isoformat() + 'Z') if dc.created_at else None,
+                    })
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading delegation campaigns: {e}")
+
             return web.json_response({
                 'campaigns': campaigns_data,
                 'emails': [],
                 'agent_activities': agent_activities_data,
                 'content_campaigns': content_campaigns_data,
+                'delegation_campaigns': delegation_campaigns_data,
                 'post_stats': post_stats,
                 'task_stats': task_stats,
                 'personal_stats': personal_stats,

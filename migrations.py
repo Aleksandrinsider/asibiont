@@ -156,6 +156,7 @@ def _migrate_tasks(session, inspector):
             'recurrence_end_date': 'ALTER TABLE tasks ADD COLUMN recurrence_end_date TIMESTAMP',
             'parent_task_id': 'ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER REFERENCES tasks(id)',
             'followup_reminder_sent': 'ALTER TABLE tasks ADD COLUMN followup_reminder_sent BOOLEAN DEFAULT FALSE',
+            'delegation_campaign_id': 'ALTER TABLE tasks ADD COLUMN delegation_campaign_id INTEGER',
         })
 
 

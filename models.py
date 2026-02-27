@@ -82,6 +82,7 @@ class Task(Base):
     delegated_to_username = Column(String(255), index=True)  # Индекс для поиска делегированных задач
     delegation_status = Column(String(50), default=None, index=True)  # Индекс для статуса делегирования
     delegation_details = Column(Text)  # Additional details about delegation
+    delegation_campaign_id = Column(Integer, nullable=True)  # Link to DelegationCampaign if from campaign
     completion_notes = Column(Text)  # Notes about task completion/result
     actual_completion_time = Column(DateTime)  # When task was actually completed
     skipped_reason = Column(String(255))  # Reason if task was skipped/cancelled
@@ -690,6 +691,53 @@ class ContentCampaign(Base):
 
     __table_args__ = (
         Index('ix_content_campaign_user_status', 'user_id', 'status'),
+    )
+
+
+class DelegationCampaign(Base):
+    """
+    Кампания массового делегирования — автономное распределение задач.
+
+    Аналог EmailCampaign, но для делегирования внутри платформы.
+    Пользователь описывает цель и целевую аудиторию, агент автономно
+    находит подходящих исполнителей, делегирует задачи, отслеживает прогресс.
+    """
+    __tablename__ = 'delegation_campaigns'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Конфигурация
+    name = Column(String(300))                    # "Найти тестировщиков для MVP"
+    goal = Column(Text)                            # Подробная цель (промпт для AI)
+    target_audience = Column(Text)                 # Кого ищем: навыки, интересы, город
+    task_template = Column(Text)                   # Шаблон задачи для делегирования
+    offer = Column(Text)                           # Что предлагаем исполнителю (мотивация)
+    tone = Column(String(50), default='professional')
+
+    # Лимиты
+    max_delegations = Column(Integer, default=10)  # Макс. делегирований (0=unlimited)
+    daily_limit = Column(Integer, default=3)       # Макс. делегирований в день
+    max_follow_ups = Column(Integer, default=2)    # Макс. повторных обращений без ответа
+    default_deadline_hours = Column(Integer, default=48)  # Дедлайн задачи (часов)
+
+    # Счётчики
+    delegations_sent = Column(Integer, default=0)
+    delegations_accepted = Column(Integer, default=0)
+    delegations_completed = Column(Integer, default=0)
+    delegations_rejected = Column(Integer, default=0)
+
+    # Статус
+    status = Column(String(50), default='active', index=True)  # active, paused, completed, cancelled
+    last_delegation_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="delegation_campaigns")
+
+    __table_args__ = (
+        Index('ix_delegation_campaign_user_status', 'user_id', 'status'),
     )
 
 
