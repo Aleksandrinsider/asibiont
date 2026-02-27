@@ -1253,6 +1253,92 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "start_content_campaign",
+            "description": "📝 ЗАПУСТИТЬ КОНТЕНТ-КАМПАНИЮ — автономная публикация постов по расписанию в ленту, Telegram-канал и/или Discord. Агент сам генерирует и публикует контент. Аналог email-кампании, но для постов. Используй когда: 'публикуй посты каждый день', 'запусти автопостинг в канал', 'создай контент-план', 'начни серию постов про AI', 'ежедневные посты в ленту и дискорд'. СНАЧАЛА уточни: о чём постить, куда (лента/TG/Discord), как часто.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Название кампании. Примеры: 'Ежедневные посты про AI', 'Серия про продуктивность', 'Контент для канала'"
+                    },
+                    "goal": {
+                        "type": "string",
+                        "description": "Подробная цель/стратегия — о чём писать, для кого, какой результат ожидается. Промпт для AI."
+                    },
+                    "topics": {
+                        "type": "string",
+                        "description": "Темы для постов (через ; или свободным текстом). Примеры: 'AI и автоматизация; продуктивность; нейросети в бизнесе'"
+                    },
+                    "platforms": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": ["feed", "telegram", "discord"]},
+                        "description": "Площадки для публикации. feed = лента новостей, telegram = TG-канал, discord = Discord."
+                    },
+                    "tone": {
+                        "type": "string",
+                        "description": "Тон постов",
+                        "enum": ["professional", "casual", "motivational", "expert", "friendly"],
+                        "default": "professional"
+                    },
+                    "frequency": {
+                        "type": "string",
+                        "description": "Частота публикации",
+                        "enum": ["daily", "every_2_days", "every_3_days", "weekly"],
+                        "default": "daily"
+                    },
+                    "post_time": {
+                        "type": "string",
+                        "description": "Предпочтительное время публикации (HH:MM). По умолчанию 12:00"
+                    },
+                    "max_posts": {
+                        "type": "integer",
+                        "description": "Макс. количество постов (0 = без ограничений). По умолчанию 0."
+                    }
+                },
+                "required": ["name", "goal", "platforms"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_content_campaign",
+            "description": "⏸️ УПРАВЛЕНИЕ контент-кампанией: пауза, возобновление, отмена, обновление параметров. Используй когда: 'останови постинг', 'поставь кампанию на паузу', 'продолжи постить', 'отмени кампанию', 'измени расписание на раз в 2 дня', 'добавь тему X'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "campaign_id": {
+                        "type": "integer",
+                        "description": "ID контент-кампании. Если не указан — используется последняя активная."
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Действие",
+                        "enum": ["pause", "resume", "cancel", "update"]
+                    },
+                    "updates": {
+                        "type": "object",
+                        "description": "Обновляемые параметры (для action=update): goal, topics, tone, frequency, post_time, max_posts, platforms, name",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "goal": {"type": "string"},
+                            "topics": {"type": "string"},
+                            "tone": {"type": "string"},
+                            "frequency": {"type": "string"},
+                            "post_time": {"type": "string"},
+                            "max_posts": {"type": "integer"},
+                            "platforms": {"type": "array", "items": {"type": "string"}}
+                        }
+                    }
+                },
+                "required": ["action"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "generate_image",
             "description": "🎨 ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ через Replicate (Flux). Создаёт картинку по текстовому описанию и отправляет пользователю в Telegram. Используй когда просят: 'нарисуй', 'создай изображение', 'сгенерируй картинку', 'сделай иллюстрацию для поста', 'визуал для кампании'. Пиши подробный английский промпт для лучшего качества.",
             "parameters": {

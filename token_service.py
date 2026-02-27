@@ -97,6 +97,10 @@ ACTION_COSTS = {
     'save_email_contact':        2,  # Сохранение email-контакта
     'list_email_contacts':       2,  # Просмотр контактов
 
+    # ── Контент-кампании ──
+    'start_content_campaign':   15,  # Создание контент-кампании
+    'manage_content_campaign':   5,  # Управление контент-кампанией
+
     # ── Задачи (дополнительно) ──
     'skip_task':                 2,  # Пропуск/откладывание задачи
     'accept_delegated_task':     3,  # Принятие делегированной задачи

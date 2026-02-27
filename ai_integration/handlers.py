@@ -10287,3 +10287,255 @@ async def generate_image(
     finally:
         if close_session:
             session.close()
+
+
+# ═══════════════════════════════════════════════════════
+# КОНТЕНТ-КАМПАНИИ — автономная публикация постов
+# ═══════════════════════════════════════════════════════
+
+async def start_content_campaign(
+    name: str,
+    goal: str,
+    platforms: list = None,
+    topics: str = None,
+    tone: str = 'professional',
+    frequency: str = 'daily',
+    post_time: str = '12:00',
+    max_posts: int = 0,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создать контент-кампанию для автономной публикации постов.
+
+    AI-агент будет автономно:
+    1. Генерировать контент по заданной стратегии и темам
+    2. Публиковать в выбранные площадки (лента/TG/Discord)
+    3. Соблюдать расписание и лимиты
+    """
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        if not name or not goal:
+            return "❌ Укажи название и цель кампании"
+
+        if platforms is None:
+            platforms = ['feed']
+
+        # Валидация площадок
+        valid_platforms = {'feed', 'telegram', 'discord'}
+        platforms = [p for p in platforms if p in valid_platforms]
+        if not platforms:
+            platforms = ['feed']
+
+        # Проверяем наличие каналов для выбранных площадок
+        warnings = []
+        if 'telegram' in platforms and not user.telegram_channel:
+            warnings.append("⚠️ Telegram-канал не настроен — посты в TG публиковаться не будут. Укажи канал командой /settings.")
+        if 'discord' in platforms and not getattr(user, 'discord_webhook', None):
+            warnings.append("⚠️ Discord webhook не настроен — посты в Discord публиковаться не будут. Настрой в дашборде.")
+
+        # Проверяем дубликаты (активная кампания с похожим названием)
+        from models import ContentCampaign
+        existing = session.query(ContentCampaign).filter(
+            ContentCampaign.user_id == user.id,
+            ContentCampaign.status == 'active',
+        ).all()
+        for ex in existing:
+            if ex.name and name.lower() in ex.name.lower():
+                return f"⚠️ Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_content_campaign чтобы обновить."
+
+        # Лимит активных кампаний
+        if len(existing) >= 5:
+            return "❌ Максимум 5 активных контент-кампаний. Заверши или отмени старые."
+
+        # Валидация частоты
+        valid_freq = {'daily', 'every_2_days', 'every_3_days', 'weekly'}
+        if frequency not in valid_freq:
+            frequency = 'daily'
+
+        # Валидация времени
+        try:
+            h, m = map(int, post_time.split(':'))
+            if h < 0 or h > 23 or m < 0 or m > 59:
+                post_time = '12:00'
+        except (ValueError, AttributeError):
+            post_time = '12:00'
+
+        import json as _json_cc
+        campaign = ContentCampaign(
+            user_id=user.id,
+            name=name[:300],
+            goal=goal[:2000],
+            topics=(topics or '')[:1000],
+            platforms=_json_cc.dumps(platforms),
+            tone=tone or 'professional',
+            language=getattr(user, 'language', 'ru') or 'ru',
+            frequency=frequency,
+            post_time=post_time,
+            daily_limit=1,
+            max_posts=max_posts if max_posts and max_posts > 0 else 0,
+            status='active',
+            posts_published=0,
+        )
+        session.add(campaign)
+        session.commit()
+
+        freq_map = {
+            'daily': 'каждый день',
+            'every_2_days': 'раз в 2 дня',
+            'every_3_days': 'раз в 3 дня',
+            'weekly': 'раз в неделю',
+        }
+        platforms_ru = {
+            'feed': 'лента новостей',
+            'telegram': f'TG канал {user.telegram_channel or "?"}',
+            'discord': 'Discord',
+        }
+        platforms_str = ', '.join(platforms_ru.get(p, p) for p in platforms)
+
+        result = (
+            f"✅ Контент-кампания «{name}» запущена! (#{campaign.id})\n\n"
+            f"📋 Площадки: {platforms_str}\n"
+            f"⏰ Частота: {freq_map.get(frequency, frequency)} в {post_time}\n"
+            f"🎯 Цель: {goal[:150]}\n"
+        )
+        if topics:
+            result += f"📌 Темы: {topics[:150]}\n"
+        if max_posts and max_posts > 0:
+            result += f"📊 Всего постов: {max_posts}\n"
+        else:
+            result += "📊 Без ограничения по количеству\n"
+
+        result += "\nАгент будет автономно генерировать и публиковать посты по расписанию."
+
+        if warnings:
+            result += "\n\n" + "\n".join(warnings)
+
+        logger.info(f"[CONTENT_CAMPAIGN] Created #{campaign.id} «{name}» for user {user_id}: {platforms}, {frequency}")
+        return result
+
+    except Exception as e:
+        logger.error(f"[CONTENT_CAMPAIGN] Error creating: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка создания кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def manage_content_campaign(
+    action: str,
+    campaign_id: int = None,
+    updates: dict = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Управление контент-кампанией: пауза, возобновление, отмена, обновление."""
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        from models import ContentCampaign
+
+        # Находим кампанию
+        if campaign_id:
+            campaign = session.query(ContentCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            # Последняя активная/paused
+            campaign = session.query(ContentCampaign).filter(
+                ContentCampaign.user_id == user.id,
+                ContentCampaign.status.in_(['active', 'paused'])
+            ).order_by(ContentCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return "❌ Контент-кампания не найдена. Создай новую с помощью start_content_campaign."
+
+        if action == 'pause':
+            if campaign.status == 'paused':
+                return f"⏸️ Кампания «{campaign.name}» уже на паузе."
+            campaign.status = 'paused'
+            session.commit()
+            return f"⏸️ Кампания «{campaign.name}» (#{campaign.id}) поставлена на паузу. Публикация остановлена."
+
+        elif action == 'resume':
+            if campaign.status == 'active':
+                return f"▶️ Кампания «{campaign.name}» уже активна."
+            if campaign.status in ('completed', 'cancelled'):
+                return f"❌ Кампания «{campaign.name}» завершена/отменена. Создай новую."
+            campaign.status = 'active'
+            session.commit()
+            return f"▶️ Кампания «{campaign.name}» (#{campaign.id}) возобновлена! Публикация продолжится по расписанию."
+
+        elif action == 'cancel':
+            campaign.status = 'cancelled'
+            session.commit()
+            return f"🗑️ Кампания «{campaign.name}» (#{campaign.id}) отменена. Опубликовано {campaign.posts_published or 0} постов."
+
+        elif action == 'update':
+            if not updates:
+                return "❌ Укажи параметры для обновления (updates)."
+
+            import json as _json_upd
+            changed = []
+            if 'name' in updates:
+                campaign.name = str(updates['name'])[:300]
+                changed.append(f"название → {campaign.name}")
+            if 'goal' in updates:
+                campaign.goal = str(updates['goal'])[:2000]
+                changed.append("цель обновлена")
+            if 'topics' in updates:
+                campaign.topics = str(updates['topics'])[:1000]
+                changed.append(f"темы → {campaign.topics[:100]}")
+            if 'tone' in updates:
+                campaign.tone = str(updates['tone'])
+                changed.append(f"тон → {campaign.tone}")
+            if 'frequency' in updates:
+                valid_freq = {'daily', 'every_2_days', 'every_3_days', 'weekly'}
+                freq = str(updates['frequency'])
+                if freq in valid_freq:
+                    campaign.frequency = freq
+                    changed.append(f"частота → {freq}")
+            if 'post_time' in updates:
+                campaign.post_time = str(updates['post_time'])[:10]
+                changed.append(f"время → {campaign.post_time}")
+            if 'max_posts' in updates:
+                campaign.max_posts = int(updates['max_posts'])
+                changed.append(f"макс.постов → {campaign.max_posts}")
+            if 'platforms' in updates:
+                valid_p = {'feed', 'telegram', 'discord'}
+                new_p = [p for p in updates['platforms'] if p in valid_p]
+                if new_p:
+                    campaign.platforms = _json_upd.dumps(new_p)
+                    changed.append(f"площадки → {', '.join(new_p)}")
+
+            if not changed:
+                return "⚠️ Нет распознанных параметров для обновления."
+
+            session.commit()
+            return f"✅ Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f"  • {c}" for c in changed)
+
+        else:
+            return f"❌ Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
+
+    except Exception as e:
+        logger.error(f"[CONTENT_CAMPAIGN] Error managing: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()

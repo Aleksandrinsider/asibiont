@@ -7060,11 +7060,21 @@ async def api_activity_delete_handler(request):
                 if task and task.delegation_status in ('pending',):
                     task.delegation_status = 'cancelled'
                     task.status = 'cancelled'
-            # For newsfeed posts: delete the post
+            # For newsfeed posts: delete the post + cascade (likes, comments, views)
             elif activity.activity_type == 'post_newsfeed' and activity.ref_id:
                 post = session_db.query(Post).filter_by(id=activity.ref_id, user_id=user.id).first()
                 if post:
+                    try:
+                        from models import PostLike, Comment, PostView
+                        session_db.query(PostLike).filter_by(post_id=post.id).delete(synchronize_session=False)
+                        session_db.query(Comment).filter_by(post_id=post.id).delete(synchronize_session=False)
+                        session_db.query(PostView).filter_by(post_id=post.id).delete(synchronize_session=False)
+                    except Exception:
+                        pass
                     session_db.delete(post)
+            # For content campaign posts: also cascade
+            elif activity.activity_type in ('post_telegram', 'post_discord') and activity.ref_id:
+                pass  # No linked Post object to delete, just remove the activity log
             # Delete the activity log entry
             session_db.delete(activity)
             session_db.commit()
@@ -7421,10 +7431,43 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading delegated_to_me: {e}")
 
+            # Content campaigns (auto-posting projects)
+            content_campaigns_data = []
+            try:
+                from models import ContentCampaign
+                cc_list = session_db.query(ContentCampaign).filter_by(
+                    user_id=user.id
+                ).order_by(ContentCampaign.created_at.desc()).limit(20).all()
+                import json as _json_cc_api
+                for cc in cc_list:
+                    try:
+                        _cc_platforms = _json_cc_api.loads(cc.platforms) if cc.platforms else ['feed']
+                    except Exception:
+                        _cc_platforms = ['feed']
+                    content_campaigns_data.append({
+                        'id': cc.id,
+                        'name': cc.name,
+                        'goal': cc.goal,
+                        'topics': cc.topics,
+                        'platforms': _cc_platforms,
+                        'tone': cc.tone,
+                        'frequency': cc.frequency,
+                        'post_time': cc.post_time,
+                        'daily_limit': cc.daily_limit or 1,
+                        'max_posts': cc.max_posts or 0,
+                        'posts_published': cc.posts_published or 0,
+                        'status': cc.status,
+                        'last_post_at': (cc.last_post_at.isoformat() + 'Z') if cc.last_post_at else None,
+                        'created_at': (cc.created_at.isoformat() + 'Z') if cc.created_at else None,
+                    })
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading content campaigns: {e}")
+
             return web.json_response({
                 'campaigns': campaigns_data,
                 'emails': [],
                 'agent_activities': agent_activities_data,
+                'content_campaigns': content_campaigns_data,
                 'post_stats': post_stats,
                 'task_stats': task_stats,
                 'personal_stats': personal_stats,

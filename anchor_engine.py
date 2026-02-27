@@ -42,7 +42,8 @@ from models import (
     Session, User, UserProfile, Task, Goal, Interaction, Post,
     Anchor, AnchorDeliveryLog, AnchorPriority,
     ActivityAlert, ContactAlert, UserMessage,
-    EmailCampaign, EmailOutreach,
+    EmailCampaign, EmailOutreach, ContentCampaign,
+    AgentActivityLog,
 )
 from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR
 
@@ -55,7 +56,7 @@ logger = logging.getLogger(__name__)
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 8
-MAX_FEED_PER_DAY = 2
+MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
@@ -125,6 +126,8 @@ BATCH_GROUPS = {
     'email_reply_received': 'email',
     'email_campaign_report': 'email',
     'email_need_leads': 'email',    # Кампании нужны новые контакты
+    # Content campaigns
+    'content_campaign_publish': 'content',
 }
 
 
@@ -481,13 +484,15 @@ class AnchorEngine:
 
         # ── Разделяем потоки ──
         EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
+        CONTENT_SILENT_TYPES = {'content_campaign_publish'}
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
         email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
-        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors]
+        content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
+        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors]
 
-        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
+        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
         # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
         all_dialog_anchors = critical_anchors.copy()
@@ -538,6 +543,17 @@ class AnchorEngine:
                     await asyncio.sleep(5)  # Краткая задержка между email-якорями
                 async with self._ai_semaphore:
                     await self._process_email_silent_anchor(user, ea, session)
+
+        # ── 3f. CONTENT CAMPAIGNS — автономная публикация по расписанию (не ночью) ──
+        if content_silent_anchors and not is_night:
+            logger.info(f"[ANCHOR] User {user_id}: 📝 Processing {len(content_silent_anchors)} content campaign anchors...")
+            for _cc_idx, cc in enumerate(content_silent_anchors[:2]):  # макс 2 за цикл
+                if _cc_idx > 0:
+                    await asyncio.sleep(3)
+                async with self._ai_semaphore:
+                    await self._process_content_campaign_anchor(user, cc, session)
+        elif content_silent_anchors and is_night:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ content campaigns blocked (night hours)")
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
@@ -608,6 +624,9 @@ class AnchorEngine:
 
         # --- EMAIL OUTREACH (автономная отправка + фоллоу-апы + уведомления о reply) ---
         anchors.extend(self._scan_email_outreach(user, session, now_utc))
+
+        # --- КОНТЕНТ-КАМПАНИИ (автономная публикация по расписанию) ---
+        anchors.extend(self._scan_content_campaigns(user, session, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         anchors = await self._enrich_anchors_with_ddg(anchors, profile)
@@ -1704,6 +1723,127 @@ class AnchorEngine:
         return anchors
 
     # ═══════════════════════════════════════════════════════
+    # CONTENT CAMPAIGN SCANNER — автономная публикация контента
+    # ═══════════════════════════════════════════════════════
+
+    def _scan_content_campaigns(self, user, session, now_utc) -> list:
+        """Сканирует контент-кампании: создаёт якорь content_campaign_publish когда пора постить.
+
+        Проверяет:
+        1. Активные кампании с status='active'
+        2. Частоту (daily / every_2_days / every_3_days / weekly)
+        3. Предпочтительное время (post_time)
+        4. Дневной лимит (daily_limit)
+        5. Общий лимит (max_posts)
+        """
+        anchors = []
+
+        campaigns = session.query(ContentCampaign).filter(
+            ContentCampaign.user_id == user.id,
+            ContentCampaign.status == 'active'
+        ).all()
+
+        if not campaigns:
+            return anchors
+
+        import pytz as _pytz_cc
+        user_tz = _pytz_cc.timezone(user.timezone or 'Europe/Moscow')
+        user_now = now_utc.astimezone(user_tz)
+
+        for campaign in campaigns:
+            # --- Общий лимит ---
+            if campaign.max_posts and campaign.max_posts > 0:
+                if (campaign.posts_published or 0) >= campaign.max_posts:
+                    campaign.status = 'completed'
+                    try:
+                        session.commit()
+                        logger.info(f"[ANCHOR] Auto-completed content campaign #{campaign.id} «{campaign.name}» — reached max_posts")
+                    except Exception:
+                        session.rollback()
+                    continue
+
+            # --- Частота: проверяем last_post_at ---
+            frequency_hours = {
+                'daily': 20,          # ~1 раз в 20ч (с запасом)
+                'every_2_days': 44,
+                'every_3_days': 68,
+                'weekly': 164,
+            }
+            min_gap_hours = frequency_hours.get(campaign.frequency or 'daily', 20)
+
+            if campaign.last_post_at:
+                last_post = campaign.last_post_at
+                if last_post.tzinfo is None:
+                    last_post = last_post.replace(tzinfo=timezone.utc)
+                hours_since = (now_utc - last_post).total_seconds() / 3600
+                if hours_since < min_gap_hours:
+                    logger.debug(f"[ANCHOR] Content campaign #{campaign.id}: skip — {hours_since:.1f}h since last post (need {min_gap_hours})")
+                    continue
+
+            # --- Дневной лимит ---
+            today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+            posts_today = session.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type.in_(['post_newsfeed', 'post_telegram', 'post_discord']),
+                AgentActivityLog.created_at >= today_start,
+                AgentActivityLog.result == f'campaign:{campaign.id}',
+            ).count()
+
+            if posts_today >= (campaign.daily_limit or 1):
+                logger.debug(f"[ANCHOR] Content campaign #{campaign.id}: skip — {posts_today} posts today (limit {campaign.daily_limit})")
+                continue
+
+            # --- Время поста (±90 мин от предпочтительного) ---
+            try:
+                post_h, post_m = map(int, (campaign.post_time or '12:00').split(':'))
+            except (ValueError, AttributeError):
+                post_h, post_m = 12, 0
+
+            current_minutes = user_now.hour * 60 + user_now.minute
+            target_minutes = post_h * 60 + post_m
+            if abs(current_minutes - target_minutes) > 90:
+                continue
+
+            # --- Рабочие часы (9:00–22:00) ---
+            if user_now.hour < 9 or user_now.hour >= 22:
+                continue
+
+            # --- Собираем данные для AI ---
+            platforms = ['feed']
+            try:
+                platforms = json.loads(campaign.platforms or '["feed"]')
+            except (json.JSONDecodeError, TypeError):
+                platforms = ['feed']
+
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='content_campaign_publish',
+                source=f'content_campaign:{campaign.id}:publish:{user_now.strftime("%Y-%m-%d")}',
+                topic=_t(user,
+                    f'Контент-кампания «{campaign.name}» — время для публикации',
+                    f'Content campaign «{campaign.name}» — time to publish'),
+                priority=AnchorPriority.MEDIUM,
+                data=json.dumps({
+                    'campaign_id': campaign.id,
+                    'campaign_name': campaign.name,
+                    'goal': (campaign.goal or '')[:500],
+                    'topics': (campaign.topics or '')[:300],
+                    'platforms': platforms,
+                    'tone': campaign.tone or 'professional',
+                    'language': campaign.language or 'ru',
+                    'posts_published': campaign.posts_published or 0,
+                    'max_posts': campaign.max_posts or 0,
+                    'user_name': user.first_name or user.username or 'user',
+                }, ensure_ascii=False),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(hours=6),
+                cooldown_hours=min_gap_hours * 0.8,  # cooldown чуть меньше частоты
+                batch_group='content',
+            ))
+
+        return anchors
+
+    # ═══════════════════════════════════════════════════════
     # EMAIL OUTREACH SCANNER — автономная email-кампания
     # ═══════════════════════════════════════════════════════
 
@@ -2373,6 +2513,7 @@ class AnchorEngine:
                     created_at=datetime.now(timezone.utc)
                 )
                 session.add(post)
+                session.flush()  # get post.id
 
                 # Помечаем якорь как доставленный
                 anchor.delivered_at = datetime.now(timezone.utc)
@@ -2384,7 +2525,46 @@ class AnchorEngine:
                     anchor_types=json.dumps([anchor.anchor_type]),
                 )
                 session.add(log)
+
+                # Логируем в AgentActivityLog (для отображения в дашборде)
+                activity_log = AgentActivityLog(
+                    user_id=user.id,
+                    activity_type='post_newsfeed',
+                    title=post_text[:80] + ('...' if len(post_text) > 80 else ''),
+                    content=post_text,
+                    target='Лента новостей',
+                    status='published',
+                    ref_id=post.id,
+                )
+                session.add(activity_log)
                 session.commit()
+
+                # Авто-публикация в Discord (если webhook настроен)
+                try:
+                    if user.discord_webhook and user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
+                        import aiohttp as _aiohttp_dc
+                        async with _aiohttp_dc.ClientSession() as http:
+                            resp = await http.post(
+                                user.discord_webhook,
+                                json={"content": post_text},
+                                timeout=_aiohttp_dc.ClientTimeout(total=15)
+                            )
+                            if resp.status in (200, 204):
+                                dc_log = AgentActivityLog(
+                                    user_id=user.id,
+                                    activity_type='post_discord',
+                                    title=post_text[:80] + ('...' if len(post_text) > 80 else ''),
+                                    content=post_text,
+                                    target='Discord канал',
+                                    status='published',
+                                )
+                                session.add(dc_log)
+                                session.commit()
+                                logger.info(f"[ANCHOR] ✅ Auto-published feed post to Discord for {user.telegram_id}")
+                            else:
+                                logger.warning(f"[ANCHOR] Discord webhook failed ({resp.status}) for {user.telegram_id}")
+                except Exception as dc_err:
+                    logger.debug(f"[ANCHOR] Discord auto-publish failed (non-critical): {dc_err}")
 
                 # Уведомляем пользователя
                 if self.bot:
@@ -2447,6 +2627,274 @@ class AnchorEngine:
         except Exception as e:
             logger.error(f"[ANCHOR] _process_post_anchor error: {e}\n{traceback.format_exc()}")
             session.rollback()
+
+    async def _process_content_campaign_anchor(self, user, anchor, session):
+        """Обрабатывает контент-кампанию: AI создаёт пост, публикует на указанные площадки.
+
+        Работает аналогично _process_email_silent_anchor — автономно, без диалога с пользователем.
+        Уведомляет пользователя о публикации.
+        """
+        try:
+            # ── ЗАЩИТА ОТ ДУБЛЕЙ ──
+            fresh = session.query(Anchor).filter_by(id=anchor.id).with_for_update(skip_locked=True).first()
+            if not fresh or fresh.delivered_at is not None:
+                logger.info(f"[ANCHOR] Content campaign anchor #{anchor.id} already delivered, skip")
+                return
+            anchor = fresh
+
+            # Проверяем и списываем токены
+            from token_service import spend_tokens, has_enough_tokens
+            from config import FREE_ACCESS_MODE
+            if not FREE_ACCESS_MODE:
+                if not has_enough_tokens(user.telegram_id, 'proactive_post', session=session):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск контент-кампании — нет токенов")
+                    return
+                spend_tokens(user.telegram_id, 'proactive_post', description='content_campaign_publish', session=session, auto_commit=False)
+
+            anchor_data = json.loads(anchor.data) if anchor.data else {}
+            campaign_id = anchor_data.get('campaign_id')
+            if not campaign_id:
+                return
+
+            campaign = session.query(ContentCampaign).filter_by(id=campaign_id).first()
+            if not campaign or campaign.status != 'active':
+                return
+
+            platforms = anchor_data.get('platforms', ['feed'])
+            campaign_goal = anchor_data.get('goal', '')
+            topics = anchor_data.get('topics', '')
+            tone = anchor_data.get('tone', 'professional')
+            lang = anchor_data.get('language', 'ru')
+            user_name = anchor_data.get('user_name', 'user')
+
+            # AI генерирует пост
+            post_text = await self._ai_compose_campaign_post(user, campaign, anchor_data, session)
+            if not post_text:
+                logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for content campaign #{campaign_id}")
+                try:
+                    session.delete(anchor)
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                return
+
+            published_to = []
+
+            # --- Публикация в ленту ---
+            if 'feed' in platforms:
+                post = Post(
+                    user_id=user.id,
+                    username=user.username or user.first_name or f'user_{user.telegram_id}',
+                    content=post_text,
+                    created_at=datetime.now(timezone.utc)
+                )
+                session.add(post)
+                session.flush()
+                activity = AgentActivityLog(
+                    user_id=user.id,
+                    activity_type='post_newsfeed',
+                    title=post_text[:80] + ('...' if len(post_text) > 80 else ''),
+                    content=post_text,
+                    target='Лента новостей',
+                    status='published',
+                    ref_id=post.id,
+                    result=f'campaign:{campaign.id}',
+                )
+                session.add(activity)
+                published_to.append('лента')
+
+            # --- Публикация в Telegram канал ---
+            if 'telegram' in platforms and user.telegram_channel:
+                tg_ok = False
+                if self.bot:
+                    try:
+                        await self.bot.send_message(chat_id=user.telegram_channel, text=post_text)
+                        tg_ok = True
+                    except Exception as tg_err:
+                        logger.error(f"[ANCHOR] Content campaign TG publish error: {tg_err}")
+                activity = AgentActivityLog(
+                    user_id=user.id,
+                    activity_type='post_telegram',
+                    title=post_text[:80] + ('...' if len(post_text) > 80 else ''),
+                    content=post_text,
+                    target=user.telegram_channel,
+                    status='published' if tg_ok else 'failed',
+                    result=f'campaign:{campaign.id}',
+                )
+                session.add(activity)
+                if tg_ok:
+                    published_to.append(f'TG {user.telegram_channel}')
+
+            # --- Публикация в Discord ---
+            if 'discord' in platforms and user.discord_webhook:
+                dc_ok = False
+                try:
+                    import aiohttp as _aiohttp_cc
+                    if user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
+                        async with _aiohttp_cc.ClientSession() as http:
+                            resp = await http.post(
+                                user.discord_webhook,
+                                json={"content": post_text},
+                                timeout=_aiohttp_cc.ClientTimeout(total=15)
+                            )
+                            dc_ok = resp.status in (200, 204)
+                except Exception as dc_err:
+                    logger.error(f"[ANCHOR] Content campaign Discord publish error: {dc_err}")
+                activity = AgentActivityLog(
+                    user_id=user.id,
+                    activity_type='post_discord',
+                    title=post_text[:80] + ('...' if len(post_text) > 80 else ''),
+                    content=post_text,
+                    target='Discord канал',
+                    status='published' if dc_ok else 'failed',
+                    result=f'campaign:{campaign.id}',
+                )
+                session.add(activity)
+                if dc_ok:
+                    published_to.append('Discord')
+
+            # Обновляем кампанию
+            campaign.posts_published = (campaign.posts_published or 0) + 1
+            campaign.last_post_at = datetime.now(timezone.utc)
+
+            # Помечаем якорь
+            anchor.delivered_at = datetime.now(timezone.utc)
+            log = AnchorDeliveryLog(
+                user_id=user.id,
+                anchor_ids=json.dumps([anchor.id]),
+                message_text=f'[CONTENT CAMPAIGN #{campaign.id}] {post_text[:200]}',
+                anchor_types=json.dumps([anchor.anchor_type]),
+            )
+            session.add(log)
+            session.commit()
+
+            # Уведомляем пользователя
+            if self.bot and published_to:
+                platforms_str = ', '.join(published_to)
+                notify = (
+                    f"📝 Контент-кампания «{campaign.name}» — пост #{campaign.posts_published}:\n\n"
+                    f"{post_text[:500]}\n\n"
+                    f"Опубликовано: {platforms_str}\n"
+                    f"Если нужно поправить — скажи."
+                )
+                await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+            logger.info(f"[ANCHOR] ✅ Content campaign #{campaign.id} post #{campaign.posts_published} for {user.telegram_id}: {published_to}")
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _process_content_campaign_anchor error: {e}\n{traceback.format_exc()}")
+            session.rollback()
+
+    async def _ai_compose_campaign_post(self, user, campaign, anchor_data: dict, session) -> str | None:
+        """AI генерирует пост для контент-кампании.
+
+        Отличается от _ai_compose_post тем, что использует цель/темы кампании,
+        а не общие сигналы пользователя.
+        """
+        try:
+            import aiohttp
+
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            user_name = user.first_name or user.username or 'Пользователь'
+            lang = anchor_data.get('language', 'ru')
+            tone_map = {
+                'professional': 'профессиональный, экспертный',
+                'casual': 'разговорный, дружеский, неформальный',
+                'motivational': 'мотивирующий, вдохновляющий',
+                'expert': 'экспертный, аналитический, глубокий',
+                'friendly': 'дружелюбный, лёгкий',
+            }
+            tone_desc = tone_map.get(anchor_data.get('tone', 'professional'), 'профессиональный')
+
+            profile_info = []
+            if profile:
+                if profile.skills: profile_info.append(f"Навыки: {profile.skills[:100]}")
+                if profile.interests: profile_info.append(f"Интересы: {profile.interests[:100]}")
+                if profile.position: profile_info.append(f"Должность: {profile.position}")
+
+            # DDG: свежий контекст из интернета по темам кампании
+            fresh_data = []
+            try:
+                from ai_integration.api_client import get_api_client
+                api = get_api_client()
+                search_query = (anchor_data.get('topics', '') or anchor_data.get('goal', ''))[:60]
+                if search_query:
+                    from datetime import datetime as dt
+                    fresh_results = await api.duckduckgo_search(f'{search_query} тренды {dt.now().strftime("%Y")}', num=3, cache_ttl=7200)
+                    if fresh_results:
+                        for r in fresh_results[:3]:
+                            fresh_data.append(f"  — {r.get('title', '')}: {r.get('snippet', '')[:120]}")
+            except Exception:
+                pass
+
+            system_msg = (
+                f"Ты — контент-менеджер. Пишешь пост для контент-кампании пользователя.\n\n"
+                f"КАМПАНИЯ: {campaign.name}\n"
+                f"ЦЕЛЬ: {anchor_data.get('goal', 'не указана')}\n"
+                f"ТЕМЫ: {anchor_data.get('topics', 'любые')}\n"
+                f"ТОН: {tone_desc}\n"
+                f"ПОСТ #{(campaign.posts_published or 0) + 1}"
+                f"{f' из {campaign.max_posts}' if campaign.max_posts else ''}\n\n"
+                f"ПРАВИЛА:\n"
+                f"1. Пиши от ПЕРВОГО лица, как будто сам пользователь\n"
+                f"2. Пост должен соответствовать цели и темам кампании\n"
+                f"3. Каждый пост должен быть УНИКАЛЬНЫМ — не повторяй предыдущие\n"
+                f"4. 3-8 предложений, {tone_desc} стиль\n"
+                f"5. БЕЗ эмодзи, без хештегов, без призывов вроде 'подписывайтесь'\n"
+                f"6. Если есть свежие данные из сети — используй их как основу\n"
+                f"7. Верни ТОЛЬКО текст поста. Ничего больше."
+            )
+
+            user_prompt_parts = [f"Пользователь: {user_name}"]
+            if profile_info:
+                user_prompt_parts.append("\nПРОФИЛЬ:")
+                user_prompt_parts.extend(profile_info)
+            if fresh_data:
+                user_prompt_parts.append("\nСВЕЖИЕ ДАННЫЕ ИЗ СЕТИ:")
+                user_prompt_parts.extend(fresh_data)
+            user_prompt_parts.append("\nНапиши пост для этой кампании.")
+
+            user_prompt = "\n".join(user_prompt_parts)
+
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": 0.85,
+                "max_tokens": 600
+            }
+
+            async with aiohttp.ClientSession() as http:
+                async with http.post(url, json=data, headers=headers,
+                                     timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                    if resp.status != 200:
+                        logger.error(f"[ANCHOR] AI compose campaign post error: HTTP {resp.status}")
+                        return None
+                    result = await resp.json()
+
+            choice = result.get('choices', [{}])[0]
+            text = choice.get('message', {}).get('content', '').strip()
+
+            if not text or text.upper() == 'SKIP' or len(text) < 20:
+                return None
+
+            # Очистка: убираем обрамление кавычками если AI добавил
+            if text.startswith('"') and text.endswith('"'):
+                text = text[1:-1]
+            if text.startswith('«') and text.endswith('»'):
+                text = text[1:-1]
+
+            return text.strip()
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _ai_compose_campaign_post error: {e}")
+            return None
 
     async def _process_email_silent_anchor(self, user, anchor, session):
         """Обрабатывает email-якорь МОЛЧА: напрямую генерирует текст через AI и отправляет.

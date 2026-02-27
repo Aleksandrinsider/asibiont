@@ -650,6 +650,49 @@ class EmailOutreach(Base):
     )
 
 
+class ContentCampaign(Base):
+    """
+    Контент-кампания для автономной публикации постов в ленту / TG-канал / Discord.
+
+    Аналог EmailCampaign, но для контента. Пользователь описывает стратегию,
+    агент автономно генерирует и публикует посты по расписанию.
+    """
+    __tablename__ = 'content_campaigns'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Конфигурация
+    name = Column(String(300))              # "Ежедневные посты про AI"
+    goal = Column(Text)                      # Подробная цель/стратегия (промпт для AI)
+    topics = Column(Text)                    # Темы для постов (через ; или свободный текст)
+    platforms = Column(String(200), default='["feed"]')  # JSON: ["feed", "telegram", "discord"]
+    tone = Column(String(50), default='professional')     # professional, casual, motivational, expert
+    language = Column(String(10), default='ru')            # ru, en
+
+    # Расписание
+    frequency = Column(String(50), default='daily')        # daily, every_2_days, every_3_days, weekly
+    post_time = Column(String(10), default='12:00')        # Preferred time HH:MM
+    daily_limit = Column(Integer, default=1)               # Макс. постов в день
+
+    # Лимиты
+    max_posts = Column(Integer, default=0)                 # 0=unlimited
+    posts_published = Column(Integer, default=0)           # Счётчик опубликованных
+
+    # Статус
+    status = Column(String(50), default='active', index=True)  # active, paused, completed, cancelled
+    last_post_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="content_campaigns")
+
+    __table_args__ = (
+        Index('ix_content_campaign_user_status', 'user_id', 'status'),
+    )
+
+
 class UserMessage(Base):
     """
     Сообщения между пользователями через AI-агента.
