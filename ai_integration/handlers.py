@@ -8115,7 +8115,7 @@ _GENERIC_PATTERNS = {'contact', 'support', 'info', 'admin', 'sales', 'help',
 
 
 def _is_generic_email(email: str) -> bool:
-    """Проверяет, является ли email корпоративным/generic."""
+    """Проверяет, является ли email корпоративным/generic/фейковым."""
     prefix = email.split('@')[0].lower()
     if prefix in _GENERIC_PREFIXES:
         return True
@@ -8123,6 +8123,10 @@ def _is_generic_email(email: str) -> bool:
     for pat in _GENERIC_PATTERNS:
         if pat in prefix and len(prefix) <= len(pat) + 3:
             return True
+    # Фейковые/placeholder email
+    if prefix in ('example', 'test', 'user', 'demo', 'sample', 'your',
+                   'name', 'email', 'somebody', 'placeholder'):
+        return True
     return False
 
 
@@ -8150,45 +8154,81 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         'vk.com', 'ok.ru', 't.me', 'pinterest.com',
     }
 
+    # ── PASS 0: AI генерирует УМНЫЕ поисковые запросы ──
+    # Вместо буквального использования target_audience, AI интерпретирует НАМЕРЕНИЕ
+    lang_hint = "Russian" if _has_cyrillic else "English"
+    query_gen_prompt = f"""You're an expert at finding people's email addresses via Google Search.
+
+Campaign goal: {goal[:300]}
+Target audience: {target_audience[:400]}
+Product/offer: {offer[:300]}
+
+Generate 6 Google search queries that will find REAL PEOPLE who might be interested in this product.
+Think BROADLY — if the goal mentions "testers", look for early adopters, developers, tech enthusiasts, bloggers, indie hackers — not just QA testers.
+If the goal mentions "clients", look for people who face the problem this product solves.
+
+CRITICAL RULES for queries:
+1. Each query MUST include "@gmail.com" OR "@yandex.ru" OR "@mail.ru" OR "@" — we need pages that SHOW email addresses
+2. Use short keywords (2-4 words max per concept)
+3. Target: personal blogs, GitHub profiles, portfolios, vc.ru/habr/medium articles with author contacts
+4. Think about WHO would genuinely want this product — expand beyond the literal target audience
+5. Language: {lang_hint} keywords preferred
+6. Vary the queries — different angles, platforms, communities
+
+Return ONLY a JSON array of 6 strings (search queries). No explanation."""
+
+    ai_queries = []
+    try:
+        ai_raw = await api.deepseek_analyze(
+            prompt=query_gen_prompt,
+            system_prompt="Generate Google search queries. Return ONLY valid JSON array of strings.",
+            max_tokens=400,
+            temperature=0.7,
+        )
+        if ai_raw:
+            import json as _json_q
+            text = ai_raw.strip()
+            if '```' in text:
+                for part in text.split('```'):
+                    part = part.strip()
+                    if part.startswith('json'):
+                        part = part[4:].strip()
+                    if part.startswith('['):
+                        text = part
+                        break
+            try:
+                parsed = _json_q.loads(text)
+                if isinstance(parsed, list):
+                    ai_queries = [str(q) for q in parsed if isinstance(q, str) and len(q) > 5][:6]
+            except Exception:
+                pass
+        logger.info(f"[AUTO_LEADS] AI generated {len(ai_queries)} smart queries")
+    except Exception as _qg_err:
+        logger.warning(f"[AUTO_LEADS] AI query generation failed: {_qg_err}")
+
     # ── PASS 1: Поиск людей с EMAIL-адресами ──
-    # Ключевая стратегия: ищем страницы где email ВИДЕН в тексте
-    # Используем операторы "@gmail.com" и "@" для нацеливания на email
-    short_kw = ' '.join(keywords.split()[:5])  # Короткие ключевые слова
+    # Комбинируем AI-запросы + несколько надёжных fallback-запросов
+    short_kw = ' '.join(keywords.split()[:4])  # Короткие ключевые слова
+
+    # Fallback-запросы на случай если AI не сгенерировал
     if _has_cyrillic:
-        queries = [
-            # Прямой поиск email-ов в тексте
+        fallback_queries = [
             f'{short_kw} "@gmail.com" OR "@yandex.ru" OR "@mail.ru"',
             f'{short_kw} email контакт "@"',
-            # GitHub — email в профилях
             f'site:github.com {short_kw} "@" followers',
-            # Личные блоги и портфолио с контактами
-            f'{short_kw} "свяжитесь" OR "напишите мне" OR "мой email" "@"',
-            # vc.ru авторы с контактами
-            f'site:vc.ru {short_kw} "@gmail.com" OR "@yandex.ru" OR "telegram"',
-            # habr авторы
-            f'site:habr.com {short_kw} "@" автор профиль',
-            # Специализированные запросы по цели
-            f'{goal_kw} "@gmail.com" OR "@yandex.ru" OR "@mail.ru" контакт',
-            # Medium / Substack авторы
-            f'{short_kw} "@" site:medium.com OR site:substack.com',
         ]
     else:
-        queries = [
-            # Direct email search
+        fallback_queries = [
             f'{short_kw} "@gmail.com" OR "@outlook.com" OR "@yahoo.com"',
             f'{short_kw} email contact "@"',
-            # GitHub profiles
             f'site:github.com {short_kw} "@" followers',
-            # Personal sites with contact info
-            f'{short_kw} "contact me" OR "reach me" OR "my email" "@"',
-            # Medium / dev.to / Substack authors
-            f'site:medium.com {short_kw} "@gmail.com" OR "@" author',
-            f'site:dev.to {short_kw} "@" contact',
-            # Goal-specific
-            f'{goal_kw} "@gmail.com" OR "@outlook.com" contact',
-            # ProductHunt makers
-            f'site:producthunt.com {short_kw} "@" maker',
         ]
+
+    # AI-запросы в приоритете, fallback добирают до 8
+    queries = ai_queries[:6]
+    for fq in fallback_queries:
+        if len(queries) < 8:
+            queries.append(fq)
 
     all_results = []  # (title, snippet, url)
     for q in queries:
