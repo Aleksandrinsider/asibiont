@@ -480,7 +480,6 @@ class AnchorEngine:
 
         # ── Разделяем потоки ──
         EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up'}
-        EMAIL_NOTIFY_TYPES = {'email_reply_received', 'email_campaign_report'}
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
@@ -1049,27 +1048,29 @@ class AnchorEngine:
                         batch_group='delegation',
                     ))
 
-        # Задачи с обновлённым статусом делегирования (accepted/completed)
+        # Задачи с обновлённым статусом делегирования (accepted/completed/rejected)
         updated_delegated = session.query(Task).filter(
             Task.user_id == user.id,
             Task.delegated_to_username.isnot(None),
-            Task.delegation_status.in_(['accepted', 'completed']),
+            Task.delegation_status.in_(['accepted', 'completed', 'rejected']),
             Task.status.in_(['pending', 'in_progress'])
         ).all()
 
         for task in updated_delegated:
+            # Для rejected — HIGH приоритет, короткий cooldown
+            is_rejected = task.delegation_status == 'rejected'
             anchors.append(Anchor(
                 user_id=user.id,
                 anchor_type='delegation_update',
                 source=f'task:{task.id}:status:{task.delegation_status}',
                 topic=_t(user, f'Задача «{task.title}» — @{task.delegated_to_username} {task.delegation_status}', f'Task «{task.title}» — @{task.delegated_to_username} {task.delegation_status}'),
-                priority=AnchorPriority.MEDIUM,
+                priority=AnchorPriority.HIGH if is_rejected else AnchorPriority.HIGH,
                 data=json.dumps({'task_id': task.id, 'title': task.title,
                                 'delegated_to': task.delegated_to_username,
                                 'status': task.delegation_status}),
                 triggered_at=now_utc,
                 expires_at=now_utc + timedelta(hours=24),
-                cooldown_hours=12,
+                cooldown_hours=4 if is_rejected else 12,
                 batch_group='delegation',
             ))
 
