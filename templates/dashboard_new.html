@@ -737,14 +737,14 @@
                                         {% endif %}
                                         <!-- Upload avatar overlay -->
                                         <div class="avatar-upload-overlay" onclick="document.getElementById('avatar-upload-input').click();" title="Загрузить фото">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                                         </div>
                                         <input type="file" id="avatar-upload-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;" onchange="uploadAvatar(this)">
                                     </div>
                                 </div>
                                 
                                 <!-- Имя и ник под аватаром -->
-                                <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %} <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
+                                <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;"><a href="#" onclick="openContactProfileModal('{{ user.username }}'); return false;" style="color: #374151; text-decoration: none; cursor: pointer;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %}</a> <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
                                 <p style="margin: 4px 0 0 0; color: #374151; font-size: 13px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
                                 {% if profile.average_rating is defined and profile.average_rating > 0 %}
                                 <p style="margin: 4px 0 0 0; font-size: 12px;{% if profile.average_rating < 5 %} color: #d73a49;{% elif profile.average_rating >= 8 %} color: #068487;{% else %} color: #6C727F;{% endif %}"><span data-i18n="rating-label">Рекомендация:</span> {{ profile.average_rating }}/10</p>
