@@ -5978,23 +5978,47 @@ async def api_avatar_upload_handler(request):
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
-        reader = await request.multipart()
+        # Read multipart form data with chunked approach for reliability
+        try:
+            reader = await request.multipart()
+        except Exception as mp_err:
+            logger.error(f"Avatar multipart parse error: {mp_err}")
+            return web.json_response({'error': f'Multipart parse error: {mp_err}'}, status=400)
+
         field = await reader.next()
+        if not field:
+            return web.json_response({'error': 'No file field in form'}, status=400)
+
+        # Skip non-file fields to find 'avatar'
+        while field and field.name != 'avatar':
+            await field.read()  # consume and skip
+            field = await reader.next()
 
         if not field or field.name != 'avatar':
-            return web.json_response({'error': 'No avatar file'}, status=400)
-
-        # Read file data (max 2MB)
-        data = await field.read()
-        if len(data) > 2 * 1024 * 1024:
-            return web.json_response({'error': 'File too large (max 2MB)'}, status=400)
-
-        if not data:
-            return web.json_response({'error': 'Empty file'}, status=400)
+            return web.json_response({'error': 'No avatar file field'}, status=400)
 
         content_type = field.content_type or 'image/jpeg'
         if content_type not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
-            return web.json_response({'error': 'Invalid image format'}, status=400)
+            return web.json_response({'error': f'Invalid image format: {content_type}'}, status=400)
+
+        # Read file data in chunks (max 4MB)
+        MAX_SIZE = 4 * 1024 * 1024
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await field.read_chunk(size=65536)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > MAX_SIZE:
+                return web.json_response({'error': f'File too large (max 4MB, got {total_size})'}, status=400)
+            chunks.append(chunk)
+
+        data = b''.join(chunks)
+        if not data:
+            return web.json_response({'error': 'Empty file'}, status=400)
+
+        logger.info(f"Avatar upload: user={user_id}, size={len(data)}, type={content_type}")
 
         import base64
         data_uri = f"data:{content_type};base64,{base64.b64encode(data).decode()}"
@@ -6007,15 +6031,16 @@ async def api_avatar_upload_handler(request):
 
             user.custom_avatar = data_uri
             db_session.commit()
-            logger.info(f"Custom avatar uploaded for user {user_id}")
+            logger.info(f"Custom avatar saved for user {user_id}, data_uri_len={len(data_uri)}")
 
-            return web.json_response({'success': True, 'avatar_url': f'/api/avatar/{user_id}?r={__import__("random").randint(100000,999999)}'})
+            import random
+            return web.json_response({'success': True, 'avatar_url': f'/api/avatar/{user_id}?r={random.randint(100000,999999)}'})
         finally:
             db_session.close()
 
     except Exception as e:
-        logger.error(f"Error uploading avatar: {e}")
-        return web.json_response({'error': 'Internal server error'}, status=500)
+        logger.error(f"Error uploading avatar: {e}", exc_info=True)
+        return web.json_response({'error': f'Upload error: {str(e)}'}, status=500)
 
 
 async def api_avatar_delete_handler(request):

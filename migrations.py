@@ -268,13 +268,18 @@ def _migrate_payments(session, inspector):
 
 def _migrate_anchors(session, inspector):
     """Миграции таблиц anchors и anchor_delivery_log"""
-    # Таблица anchors — создаётся автоматически через Base.metadata.create_all
-    # но добавляем миграцию на случай нового поля в будущем
     if inspector.has_table('anchors'):
         cols = [col['name'] for col in inspector.get_columns('anchors')]
         _add_columns(session, 'anchors', cols, {
             # Будущие миграции сюда
         })
+        # Migrate cooldown_hours from INTEGER to FLOAT (0.3 was truncated to 0)
+        try:
+            session.execute(text('ALTER TABLE anchors ALTER COLUMN cooldown_hours TYPE DOUBLE PRECISION USING cooldown_hours::double precision'))
+            session.commit()
+            logger.info('Migrated anchors.cooldown_hours to FLOAT')
+        except Exception:
+            session.rollback()
 
     if inspector.has_table('anchor_delivery_log'):
         cols = [col['name'] for col in inspector.get_columns('anchor_delivery_log')]

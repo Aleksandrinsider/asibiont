@@ -1515,8 +1515,8 @@
         async function uploadAvatar(input) {
             const file = input.files[0];
             if (!file) return;
-            if (file.size > 2 * 1024 * 1024) {
-                alert('Максимальный размер файла: 2 МБ');
+            if (file.size > 4 * 1024 * 1024) {
+                alert('Максимальный размер файла: 4 МБ');
                 input.value = '';
                 return;
             }
@@ -1534,9 +1534,15 @@
                     body: formData
                 });
                 if (!resp.ok) {
-                    const errText = await resp.text();
-                    console.error('Avatar upload failed:', resp.status, errText);
-                    alert('Ошибка загрузки: ' + (resp.status === 413 ? 'Файл слишком большой' : resp.status));
+                    let errMsg = 'Код: ' + resp.status;
+                    try {
+                        const errData = await resp.json();
+                        errMsg = errData.error || errMsg;
+                    } catch(_) {
+                        try { errMsg = await resp.text() || errMsg; } catch(_2) {}
+                    }
+                    console.error('Avatar upload failed:', resp.status, errMsg);
+                    alert('Ошибка загрузки аватара: ' + errMsg);
                     input.value = '';
                     return;
                 }

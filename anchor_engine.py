@@ -2557,7 +2557,7 @@ class AnchorEngine:
 
         # Один запрос: все недавние доставки этого пользователя по типам
         # Берём max cooldown из списка якорей чтобы покрыть все 
-        max_cooldown = max((a.cooldown_hours or PRIORITY_COOLDOWN.get(a.priority, 4)) for a in anchors) if anchors else 8
+        max_cooldown = max((a.cooldown_hours if a.cooldown_hours is not None and a.cooldown_hours > 0 else PRIORITY_COOLDOWN.get(a.priority, 4)) for a in anchors) if anchors else 8
         recent_deliveries = session.query(
             Anchor.anchor_type,
             Anchor.delivered_at
@@ -2574,7 +2574,7 @@ class AnchorEngine:
                 last_delivery_by_type[atype] = delivered_at
 
         for anchor in anchors:
-            cooldown_h = anchor.cooldown_hours or PRIORITY_COOLDOWN.get(anchor.priority, 4)
+            cooldown_h = anchor.cooldown_hours if anchor.cooldown_hours is not None and anchor.cooldown_hours > 0 else PRIORITY_COOLDOWN.get(anchor.priority, 4)
             last_delivered = last_delivery_by_type.get(anchor.anchor_type)
             if last_delivered:
                 if last_delivered.tzinfo is None:

@@ -438,7 +438,7 @@ class Anchor(Base):
     reaction_at = Column(DateTime)
 
     # Антиспам
-    cooldown_hours = Column(Integer, default=4)    # Минимум часов между повторными якорями этого типа
+    cooldown_hours = Column(Float, default=4)    # Минимум часов между повторными якорями этого типа
     suppress_until = Column(DateTime)              # Подавлен до (если пользователь отклонил)
     batch_group = Column(String(50))               # Группа для батчинга: 'tasks', 'contacts', 'insights'
 
