@@ -825,7 +825,7 @@
                         </button>
                     </div>
                     <div id="email-contacts-content" style="display: block; padding: 0 4px; overflow-y: auto; flex: 1; min-height: 0;">
-                    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+                    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
                         <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                         <div style="display: flex; gap: 6px;">
                             <input type="text" id="contact-name" placeholder="Имя" data-i18n-ph="contact-name-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-company').focus()" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
@@ -3033,7 +3033,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 contacts.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'contact-card';
-                    card.style.cssText = 'display: flex; gap: 10px; padding: 0; margin-bottom: 8px; font-size: 13px; align-items: center;';
+                    card.style.cssText = 'display: flex; gap: 8px; padding: 0; margin-bottom: 8px; font-size: 13px; align-items: center;';
                     const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
                         '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + ((c.name || c.company || c.notes) ? '4px' : '0') + ';">' +
