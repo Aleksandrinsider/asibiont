@@ -565,7 +565,7 @@
     <!-- Mobile-only header: logo + column switcher -->
     <div class="mobile-header">
         <div style="position: absolute; left: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px;">
-            <button onclick="showSearchModal()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Поиск контактов" data-i18n-title="search-contacts">
+            <button onclick="showSearchModal()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Поиск" data-i18n-title="search-contacts">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
             </button>
             <button onclick="window.open('https://t.me/{{ bot_username }}', '_blank')" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Telegram бот" data-i18n-title="open-tg-bot">
@@ -603,12 +603,12 @@
                     <img src="/static/asibiont.svg" alt="ASI Biont Logo" style="height: 52px; width: auto;">
                 </a>
                 
-                <!-- Поиск контактов -->
+                <!-- Поиск -->
                 <button class="contact-search-desktop" onclick="showSearchModal()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"/>
                     </svg>
-                    <span data-i18n="search-contacts">Поиск контактов</span>
+                    <span data-i18n="search-contacts">Поиск</span>
                 </button>
 
                 <!-- Поддержка -->
@@ -620,6 +620,14 @@
                         <span data-i18n="support">Поддержка</span>
                     </button>
                 </a>
+
+                <!-- Сообщения -->
+                <button onclick="openMessagesSection()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25v-8.5C0 1.784.784 1 1.75 1ZM1.5 2.75v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25Z"/>
+                    </svg>
+                    <span data-i18n="header-messages">Сообщения</span>
+                </button>
 
                 <!-- Модальное окно поиска вынесено за пределы хедера -->
             </div>
@@ -881,6 +889,32 @@
                         content.style.display = 'none';
                         if (svg) svg.style.transform = 'rotate(-90deg)';
                         if (section) section.classList.add('collapsed');
+                    }
+                }
+
+                function openMessagesSection() {
+                    // Развернуть секцию «Контакты» в левой колонке
+                    const content = document.getElementById('contacts-content');
+                    const btn = document.getElementById('contacts-toggle-btn');
+                    const svg = btn ? btn.querySelector('svg') : null;
+                    const section = content ? content.parentElement : null;
+                    if (!content) return;
+
+                    _collapseAllLeftSections('contacts');
+                    content.style.display = 'block';
+                    if (svg) svg.style.transform = 'rotate(0deg)';
+                    if (section) section.classList.remove('collapsed');
+
+                    // Переключить фильтр на «Сообщения»
+                    const filterSelect = document.getElementById('contact-filter-select');
+                    if (filterSelect) {
+                        filterSelect.value = 'messages';
+                        if (typeof filterContacts === 'function') filterContacts('messages');
+                    }
+
+                    // На мобильном — показать левую колонку
+                    if (window.innerWidth <= 1024 && typeof switchMobileColumn === 'function') {
+                        switchMobileColumn('left');
                     }
                 }
             </script>
@@ -9753,8 +9787,9 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
 
       'back':'Назад',
-      'search-contacts':'Поиск контактов',
+      'search-contacts':'Поиск',
       'search-contacts-title':'Поиск контактов',
+      'header-messages':'Сообщения',
       'search-ph':'Введите никнейм в Telegram (например, @username)',
       'search-hint':'Начните вводить никнейм для поиска',
       'next-up':'На очереди:',
@@ -9960,8 +9995,9 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
 
       'back':'Back',
-      'search-contacts':'Search contacts',
+      'search-contacts':'Search',
       'search-contacts-title':'Search contacts',
+      'header-messages':'Messages',
       'search-ph':'Enter Telegram username (e.g., @username)',
       'search-hint':'Start typing a username to search',
       'next-up':'Next up:',
