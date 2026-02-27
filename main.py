@@ -5985,7 +5985,7 @@ async def api_avatar_upload_handler(request):
             return web.json_response({'error': 'No avatar file'}, status=400)
 
         # Read file data (max 2MB)
-        data = await field.read(chunk_size=2 * 1024 * 1024)
+        data = await field.read()
         if len(data) > 2 * 1024 * 1024:
             return web.json_response({'error': 'File too large (max 2MB)'}, status=400)
 
