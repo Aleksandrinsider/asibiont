@@ -5997,7 +5997,15 @@ async def api_avatar_upload_handler(request):
         if not field or field.name != 'avatar':
             return web.json_response({'error': 'No avatar file field'}, status=400)
 
-        content_type = field.content_type or 'image/jpeg'
+        # BodyPartReader не имеет .content_type — читаем из headers
+        content_type = (
+            field.headers.get('Content-Type')
+            or field.headers.get('content-type')
+            or 'image/jpeg'
+        )
+        # Убираем параметры типа "; charset=..." если есть
+        if ';' in content_type:
+            content_type = content_type.split(';')[0].strip()
         if content_type not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
             return web.json_response({'error': f'Invalid image format: {content_type}'}, status=400)
 
