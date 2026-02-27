@@ -7897,7 +7897,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     
                                     // Check if there are any common fields
-                                    const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks || partner.task_relevance;
+                                    const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals || partner.task_relevance;
                                     
                                     // Приоритет: сначала релевантность для текущих задач
                                     if (partner.task_relevance) {
@@ -7914,9 +7914,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     }
                                     if (partner.common_goals) {
                                         html += '<span class="task-meta" style="color: #068487;">' + t('common-goals') + ' ' + partner.common_goals + '</span>';
-                                    }
-                                    if (partner.common_tasks) {
-                                        html += '<span class="task-meta" style="color: #068487;">' + t('common-tasks') + ' ' + partner.common_tasks + '</span>';
                                     }
                                     
                                     // If no common fields, show a fallback message
@@ -7996,7 +7993,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     
                                     // Check if there are any common fields
-                                    const hasCommonFields3 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
+                                    const hasCommonFields3 = partner.common_interests || partner.common_skills || partner.common_goals;
                                     
                                     if (partner.common_interests) {
                                         html += '<span class="task-meta" style="color: #068487;">' + t('common-interests') + ' ' + partner.common_interests + '</span>';
@@ -8006,9 +8003,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     }
                                     if (partner.common_goals) {
                                         html += '<span class="task-meta" style="color: #068487;">' + t('common-goals') + ' ' + partner.common_goals + '</span>';
-                                    }
-                                    if (partner.common_tasks) {
-                                        html += '<span class="task-meta" style="color: #068487;">' + t('common-tasks') + ' ' + partner.common_tasks + '</span>';
                                     }
                                     
                                     // If no common fields, show a fallback message
@@ -8093,7 +8087,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                         html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                         
                                         // Check if there are any common fields
-                                        const hasCommonFields = blockedPartner.common_interests || blockedPartner.common_skills || blockedPartner.common_goals || blockedPartner.common_tasks;
+                                        const hasCommonFields = blockedPartner.common_interests || blockedPartner.common_skills || blockedPartner.common_goals;
                                         
                                         if (blockedPartner.interests) {
                                             html += '<span class="task-meta">' + t('interests-label') + ' ' + blockedPartner.interests + '</span>';
@@ -8106,9 +8100,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                         }
                                         if (blockedPartner.common_goals) {
                                             html += '<span class="task-meta" style="color: #068487;">' + t('common-goals') + ' ' + blockedPartner.common_goals + '</span>';
-                                        }
-                                        if (blockedPartner.common_tasks) {
-                                            html += '<span class="task-meta" style="color: #068487;">' + t('common-tasks') + ' ' + blockedPartner.common_tasks + '</span>';
                                         }
                                         
                                         // If no common fields, show a fallback message
@@ -8193,7 +8184,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     
                                     // Check if there are any common fields
-                                    const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
+                                    const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals;
                                     
                                     if (partner.common_interests) {
                                         html += '<span class="task-meta" style="color: #068487;">' + t('common-interests') + ' ' + partner.common_interests + '</span>';
@@ -8203,9 +8194,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     }
                                     if (partner.common_goals) {
                                         html += '<span class="task-meta" style="color: #068487;">' + t('common-goals') + ' ' + partner.common_goals + '</span>';
-                                    }
-                                    if (partner.common_tasks) {
-                                        html += '<span class="task-meta" style="color: #068487;">' + t('common-tasks') + ' ' + partner.common_tasks + '</span>';
                                     }
                                     
                                     // If no common fields, show a fallback message
@@ -8287,7 +8275,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     
                                     // Check if there are any common fields
-                                    const hasCommonFields2 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
+                                    const hasCommonFields2 = partner.common_interests || partner.common_skills || partner.common_goals;
                                     
                                     if (partner.common_interests) {
                                         html += '<span class="task-meta" style="color: #068487;">' + t('common-interests') + ' ' + partner.common_interests + '</span>';
@@ -8297,9 +8285,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     }
                                     if (partner.common_goals) {
                                         html += '<span class="task-meta" style="color: #068487;">' + t('common-goals') + ' ' + partner.common_goals + '</span>';
-                                    }
-                                    if (partner.common_tasks) {
-                                        html += '<span class="task-meta" style="color: #068487;">' + t('common-tasks') + ' ' + partner.common_tasks + '</span>';
                                     }
                                     
                                     // If no common fields, show a fallback message
@@ -9728,7 +9713,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'remove-fav':'Удалить из избранного','add-fav':'Добавить в избранное',
       'send-message':'Отправить сообщение','block-contact':'Заблокировать контакт','unblock-contact':'Разблокировать контакт',
       'common-interests':'Общие интересы:','common-skills':'Общие навыки:',
-      'common-goals':'Общие цели:','common-tasks':'Общие задачи:',
+      'common-goals':'Общие цели:',
       'nothing-common':'Общего пока не найдено','blocked':'Заблокирован',
       'delegates-to-me':'Делегирует мне','i-delegate':'Делегирую я',
       'fav-contacts':'Избранных контактов:','delegated-to-me':'Делегировано мне','delegated-by-me':'Делегировано мной',
@@ -9933,7 +9918,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'remove-fav':'Remove from favorites','add-fav':'Add to favorites',
       'send-message':'Send message','block-contact':'Block contact','unblock-contact':'Unblock contact',
       'common-interests':'Common interests:','common-skills':'Common skills:',
-      'common-goals':'Common goals:','common-tasks':'Common tasks:',
+      'common-goals':'Common goals:',
       'nothing-common':'Nothing in common found yet','blocked':'Blocked',
       'delegates-to-me':'Delegates to me','i-delegate':'I delegate',
       'fav-contacts':'Favorite contacts:','delegated-to-me':'Delegated to me','delegated-by-me':'Delegated by me',

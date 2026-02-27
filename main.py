@@ -1397,7 +1397,6 @@ async def dashboard_handler(request):
                             'common_interests': partner.common_interests if hasattr(partner, 'common_interests') else None,
                             'common_skills': partner.common_skills if hasattr(partner, 'common_skills') else None,
                             'common_goals': partner.common_goals if hasattr(partner, 'common_goals') else None,
-                            'common_tasks': partner.common_tasks if hasattr(partner, 'common_tasks') else None,
                             'contact_info': partner_user.username if partner_user.username else None,
                             'photo_url': safe_avatar_url(partner_user.telegram_id),
                             'city': _pick_dash(partner, 'city'),
@@ -3258,53 +3257,6 @@ async def api_partners_handler(request):
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
-        # Calculate common_tasks for regular partners - улучшенная логика с частичным совпадением
-        for p in partners:
-            if profile and p:
-                # Get user's tasks
-                user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-                user_task_titles = set()
-                for task in user_tasks:
-                    if task.title:
-                        user_task_titles.add(task.title.lower().strip())
-
-                # Get partner's tasks
-                if hasattr(p, 'user_id') and p.user_id is not None:
-                    partner_user = session_db.query(User).filter_by(id=p.user_id).first()
-                    if partner_user:
-                        partner_tasks = session_db.query(Task).filter_by(user_id=partner_user.id).all()
-                        partner_task_titles = set()
-                        for task in partner_tasks:
-                            if task.title:
-                                partner_task_titles.add(task.title.lower().strip())
-
-                        # Точное совпадение задач
-                        common_task_titles = user_task_titles & partner_task_titles
-                        
-                        # Частичное совпадение - только значимые слова (4+ символов)
-                        _stop = {'для', 'как', 'что', 'это', 'все', 'они', 'его', 'были', 'или', 'при', 'так', 'уже', 'нет', 'без', 'под', 'над', 'между', 'через', 'после', 'перед', 'список', 'составить', 'сделать', 'создать'}
-                        if not common_task_titles:
-                            partial_matches = set()
-                            for user_task in user_task_titles:
-                                user_words = set(w for w in user_task.split() if len(w) >= 4 and w not in _stop)
-                                if len(user_words) < 2:
-                                    continue
-                                for partner_task in partner_task_titles:
-                                    partner_words = set(w for w in partner_task.split() if len(w) >= 4 and w not in _stop)
-                                    common_words = user_words & partner_words
-                                    if len(common_words) >= 2:
-                                        partial_matches.add(user_task)
-                            if partial_matches:
-                                common_task_titles = partial_matches
-                        
-                        p.common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
-                    else:
-                        p.common_tasks = None
-                else:
-                    p.common_tasks = None
-            else:
-                p.common_tasks = None
-
         # Auto-renormalize partner profiles if EN viewer and translated fields are missing
         if viewer_lang == 'en':
             _norm_count = 0
@@ -3370,10 +3322,6 @@ async def api_partners_handler(request):
                             'common_goals': getattr(
                                 p,
                                 'common_goals',
-                                None),
-                            'common_tasks': getattr(
-                                p,
-                                'common_tasks',
                                 None),
                             'recommendation_reason': getattr(
                                 p,
