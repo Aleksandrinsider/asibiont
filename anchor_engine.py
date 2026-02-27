@@ -533,9 +533,9 @@ class AnchorEngine:
         # Email outreach/follow-up — тихие операции, не будят пользователя → работают 24/7
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
-            for _ea_idx, ea in enumerate(email_silent_anchors[:3]):  # макс 3 за цикл
+            for _ea_idx, ea in enumerate(email_silent_anchors[:5]):  # макс 5 за цикл
                 if _ea_idx > 0:
-                    await asyncio.sleep(15)  # Anti-spam задержка между email-якорями
+                    await asyncio.sleep(5)  # Краткая задержка между email-якорями
                 async with self._ai_semaphore:
                     await self._process_email_silent_anchor(user, ea, session)
 
@@ -1658,7 +1658,7 @@ class AnchorEngine:
             if not is_paused:
                 drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign.id, status='draft'
-                ).limit(5).all()
+                ).limit(10).all()
 
             # Дневной лимит — считаем «сегодня» по таймзоне пользователя, не UTC
             import pytz as _pytz_email
@@ -1679,11 +1679,11 @@ class AnchorEngine:
                 remaining_total = 999999  # безлимит
 
             if drafts and remaining_daily > 0 and remaining_total > 0:
-                draft_emails = [d.recipient_email for d in drafts[:3]]
+                batch_size = min(len(drafts), remaining_daily, 10)
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_outreach_send',
-                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d")}',
+                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d-%H")}',
                     topic=_t(user,
                         f'Email-кампания «{campaign.name}» — {len(drafts)} черновиков ждут отправки ({remaining_daily} осталось сегодня)',
                         f'Email campaign «{campaign.name}» — {len(drafts)} drafts pending ({remaining_daily} remaining today)'),
@@ -1700,13 +1700,13 @@ class AnchorEngine:
                         'drafts': [{'id': d.id, 'email': d.recipient_email,
                                     'name': d.recipient_name,
                                     'company': d.recipient_company,
-                                    'context': d.recipient_context} for d in drafts[:5]],
+                                    'context': d.recipient_context} for d in drafts[:batch_size]],
                         'remaining_daily': remaining_daily,
                         'remaining_total': remaining_total,
                     }),
                     triggered_at=now_utc,
                     expires_at=now_utc + timedelta(hours=12),
-                    cooldown_hours=2,
+                    cooldown_hours=0.3,  # ~20 мин между пакетами
                     batch_group='email',
                 ))
 
@@ -2345,7 +2345,7 @@ class AnchorEngine:
             session.rollback()
 
     async def _process_email_silent_anchor(self, user, anchor, session):
-        """Обрабатывает email-якорь МОЛЧА: AI вызывает send_outreach_email / send_follow_up_email.
+        """Обрабатывает email-якорь МОЛЧА: напрямую генерирует текст через AI и отправляет.
 
         Не отправляет сообщение пользователю — только выполняет email-действие.
         """
@@ -2368,72 +2368,208 @@ class AnchorEngine:
 
             anchor_data = json.loads(anchor.data) if anchor.data else {}
 
-            # Используем AI агента с tool calling для автономного выполнения
-            from ai_integration.autonomous_agent import get_autonomous_agent
-            agent = get_autonomous_agent()
-
             if anchor.anchor_type == 'email_outreach_send':
-                # AI должен написать персонализированные письма для черновиков
+                # ═══ ПРЯМАЯ ОТПРАВКА: AI пишет тексты → мы отправляем напрямую ═══
                 drafts = anchor_data.get('drafts', [])
                 if not drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no drafts, skip")
                     return
 
-                instruction = (
-                    f"Тебе нужно отправить email-письма в рамках кампании.\n\n"
-                    f"Кампания: {anchor_data.get('campaign_name', '')}\n"
-                    f"Цель: {anchor_data.get('campaign_goal', '')}\n"
-                    f"Аудитория: {anchor_data.get('target_audience', '')}\n"
-                    f"Предложение: {anchor_data.get('offer', '')}\n"
-                    f"Тон: {anchor_data.get('tone', 'professional')}\n"
-                    f"Отправитель: {anchor_data.get('sender_name', '')}\n\n"
-                    f"ВАЖНО: получатели — не обязательно компании. Это могут быть:\n"
-                    f"- отдельные люди (разработчики, тестировщики, блогеры, фрилансеры)\n"
-                    f"- сообщества, каналы, open-source проекты\n"
-                    f"- компании и стартапы\n"
-                    f"Персонализируй письмо под КОНКРЕТНОГО получателя, его роль и контекст.\n\n"
-                    f"Черновики для отправки (ID кампании: {anchor_data.get('campaign_id')}):\n"
+                from ai_integration.api_client import get_api_client
+                from ai_integration.handlers import send_outreach_email
+                api = get_api_client()
+
+                campaign_name = anchor_data.get('campaign_name', '')
+                campaign_goal = anchor_data.get('campaign_goal', '')
+                target_audience = anchor_data.get('target_audience', '')
+                offer = anchor_data.get('offer', '')
+                tone = anchor_data.get('tone', 'professional')
+                sender_name = anchor_data.get('sender_name', '')
+                campaign_id = anchor_data.get('campaign_id')
+                remaining = anchor_data.get('remaining_daily', 5)
+
+                sent_count = 0
+                for draft in drafts:
+                    if sent_count >= remaining:
+                        break
+                    email = draft.get('email', '')
+                    name = draft.get('name', '?')
+                    company = draft.get('company', '')
+                    context = draft.get('context', '')
+
+                    # Определяем язык
+                    _has_cyr = any('\u0400' <= c <= '\u04ff' for c in f"{name} {company} {context} {email}")
+                    lang_hint = "Russian" if _has_cyr or any(email.endswith(d) for d in ['.ru', '.by', '.ua', '.kz']) else "English"
+
+                    compose_prompt = (
+                        f"Write a cold outreach email for this recipient.\n\n"
+                        f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n"
+                        f"Offer: {offer}\nTone: {tone}\nSender: {sender_name}\n\n"
+                        f"Recipient: {email}\nName: {name}\n"
+                        f"{'Company/project: ' + company if company else ''}\n"
+                        f"Context: {context or 'none'}\n\n"
+                        f"Language: {lang_hint}\n\n"
+                        f"Return ONLY a JSON object: {{\"subject\": \"...\", \"body\": \"...\"}}\n"
+                        f"Rules:\n"
+                        f"- Subject: short, specific, no spam words\n"
+                        f"- Body: plain text, 3-5 sentences, personalized to recipient\n"
+                        f"- End with a clear CTA (question or next step)\n"
+                        f"- No HTML, no markdown, no signatures with links"
+                    )
+
+                    try:
+                        ai_result = await api.deepseek_analyze(
+                            prompt=compose_prompt,
+                            system_prompt="You write cold outreach emails. Return ONLY valid JSON with subject and body fields.",
+                            max_tokens=500,
+                            temperature=0.7,
+                        )
+                        if not ai_result:
+                            logger.warning(f"[ANCHOR] AI compose failed for {email}: empty result")
+                            continue
+
+                        # Парсим JSON
+                        import json as _json_compose
+                        text = ai_result.strip()
+                        if '```' in text:
+                            for part in text.split('```'):
+                                part = part.strip()
+                                if part.startswith('json'):
+                                    part = part[4:].strip()
+                                if part.startswith('{'):
+                                    text = part
+                                    break
+                        parsed = _json_compose.loads(text)
+                        subject = parsed.get('subject', '')
+                        body = parsed.get('body', '')
+
+                        if not subject or not body:
+                            logger.warning(f"[ANCHOR] AI compose: missing subject/body for {email}")
+                            continue
+
+                        # Отправляем напрямую через send_outreach_email
+                        result = await send_outreach_email(
+                            campaign_id=campaign_id,
+                            recipient_email=email,
+                            recipient_name=name if name != '?' else None,
+                            recipient_company=company or None,
+                            recipient_context=context or None,
+                            subject=subject,
+                            body=body,
+                            user_id=user.telegram_id,
+                            session=session,
+                            close_session=False,
+                        )
+                        logger.info(f"[ANCHOR] Direct send to {email}: {(result or '')[:100]}")
+                        if result and '✅' in result:
+                            sent_count += 1
+                        elif result and ('лимит' in result.lower() or 'limit' in result.lower()):
+                            logger.info(f"[ANCHOR] Daily limit reached, stopping batch")
+                            break
+
+                    except Exception as _compose_err:
+                        logger.error(f"[ANCHOR] Compose/send error for {email}: {_compose_err}")
+                        continue
+
+                logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(drafts)} for campaign #{campaign_id}")
+
+                # Списываем токены
+                if not FREE_ACCESS_MODE and sent_count > 0:
+                    spend_tokens(user.telegram_id, action, description=f'anchor_email_outreach_send x{sent_count}', session=session, auto_commit=False)
+
+                # Помечаем якорь как доставленный
+                anchor.delivered_at = datetime.now(timezone.utc)
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[EMAIL_SILENT] email_outreach_send: sent {sent_count}/{len(drafts)} emails for campaign «{campaign_name}»',
+                    anchor_types=json.dumps([anchor.anchor_type]),
                 )
-                for d in drafts:
-                    name_part = d.get('name', '?')
-                    company_part = d.get('company', '')
-                    ctx_part = d.get('context', 'нет')
-                    info = f"  - {d.get('email')} (имя: {name_part}"
-                    if company_part:
-                        info += f", организация/проект: {company_part}"
-                    info += f") контекст: {ctx_part}\n"
-                    instruction += info
-                instruction += (
-                    f"\n⚠️ ЯЗЫК ПИСЬМА (КРИТИЧЕСКИ ВАЖНО):\n"
-                    f"Определи язык для КАЖДОГО получателя отдельно:\n"
-                    f"- Кириллическое имя / домен .ru/.ua/.by/.kz / контекст на русском → пиши НА РУССКОМ\n"
-                    f"- Латинское имя / международный домен / контекст на английском → пиши НА АНГЛИЙСКОМ\n"
-                    f"- Если не уверен → АНГЛИЙСКИЙ (безопаснее)\n"
-                    f"НЕ пиши на русском англоязычному человеку! Это выглядит как спам.\n\n"
-                    f"Для каждого черновика вызови send_outreach_email с campaign_id={anchor_data.get('campaign_id')}, "
-                    f"персонализированными subject и body. Пиши УНИКАЛЬНО для каждого! "
-                    f"Учитывай контекст и роль получателя. Максимум {anchor_data.get('remaining_daily', 5)} сегодня.\n"
-                    f"После отправки НЕ пиши сообщение пользователю — просто выполни и верни SKIP."
-                )
+                session.add(log)
+                session.commit()
+                return
 
             elif anchor.anchor_type == 'email_follow_up':
+                # ═══ ПРЯМОЙ FOLLOW-UP: AI пишет текст → отправляем напрямую ═══
+                from ai_integration.api_client import get_api_client
+                from ai_integration.handlers import send_follow_up_email
+                api = get_api_client()
+
+                recipient_email = anchor_data.get('recipient_email', '')
+                recipient_name = anchor_data.get('recipient_name', '')
                 company_info = anchor_data.get('recipient_company', '')
-                company_line = f"Организация/проект: {company_info}\n" if company_info else ""
-                instruction = (
-                    f"Отправь follow-up email.\n\n"
-                    f"Кампания: {anchor_data.get('campaign_name', '')}\n"
-                    f"Цель: {anchor_data.get('campaign_goal', '')}\n"
-                    f"Получатель: {anchor_data.get('recipient_email')} ({anchor_data.get('recipient_name', '')})\n"
-                    f"{company_line}"
-                    f"Оригинальная тема: {anchor_data.get('original_subject', '')}\n"
-                    f"Оригинальное письмо: {anchor_data.get('original_body', '')[:300]}\n"
-                    f"Follow-up #: {anchor_data.get('follow_up_number', 1)}\n"
-                    f"Дней с отправки: {anchor_data.get('days_since_sent', 0)}\n\n"
-                    f"⚠️ ЯЗЫК: определи из имени/домена/оригинала. Кириллица/.ru → русский. Латиница/международный → английский.\n"
-                    f"Вызови send_follow_up_email с outreach_id={anchor_data.get('outreach_id')} и "
-                    f"коротким ненавязчивым follow-up body с новой ценностью. Пиши на ТОМ ЖЕ языке что оригинал."
-                    f"\nПосле отправки верни SKIP."
+                original_subject = anchor_data.get('original_subject', '')
+                original_body = anchor_data.get('original_body', '')[:300]
+                follow_up_number = anchor_data.get('follow_up_number', 1)
+                days_since = anchor_data.get('days_since_sent', 0)
+                outreach_id = anchor_data.get('outreach_id')
+
+                _has_cyr = any('\u0400' <= c <= '\u04ff' for c in f"{recipient_name} {company_info} {original_subject} {original_body}")
+                lang_hint = "Russian" if _has_cyr else "English"
+
+                compose_prompt = (
+                    f"Write a follow-up email (#{follow_up_number}) for an unanswered cold outreach.\n\n"
+                    f"Campaign: {anchor_data.get('campaign_name', '')}\n"
+                    f"Goal: {anchor_data.get('campaign_goal', '')}\n"
+                    f"Original subject: {original_subject}\n"
+                    f"Original email: {original_body}\n"
+                    f"Recipient: {recipient_email} ({recipient_name})\n"
+                    f"{'Company: ' + company_info if company_info else ''}\n"
+                    f"Days since sent: {days_since}\n"
+                    f"Language: {lang_hint}\n\n"
+                    f"Return ONLY a JSON object: {{\"body\": \"...\"}}\n"
+                    f"Rules: short, add new value, don't repeat original, be polite, no pressure."
                 )
+
+                try:
+                    ai_result = await api.deepseek_analyze(
+                        prompt=compose_prompt,
+                        system_prompt="You write follow-up emails. Return ONLY valid JSON with body field.",
+                        max_tokens=400,
+                        temperature=0.7,
+                    )
+                    if ai_result:
+                        import json as _json_fu
+                        text = ai_result.strip()
+                        if '```' in text:
+                            for part in text.split('```'):
+                                part = part.strip()
+                                if part.startswith('json'):
+                                    part = part[4:].strip()
+                                if part.startswith('{'):
+                                    text = part
+                                    break
+                        parsed = _json_fu.loads(text)
+                        fu_body = parsed.get('body', '')
+
+                        if fu_body and outreach_id:
+                            result = await send_follow_up_email(
+                                outreach_id=outreach_id,
+                                body=fu_body,
+                                user_id=user.telegram_id,
+                                session=session,
+                                close_session=False,
+                            )
+                            logger.info(f"[ANCHOR] Direct follow-up to {recipient_email}: {(result or '')[:100]}")
+                except Exception as _fu_err:
+                    logger.error(f"[ANCHOR] Follow-up compose/send error: {_fu_err}")
+
+                # Списываем токены
+                if not FREE_ACCESS_MODE:
+                    spend_tokens(user.telegram_id, action, description=f'anchor_email_follow_up', session=session, auto_commit=False)
+
+                # Помечаем якорь как доставленный
+                anchor.delivered_at = datetime.now(timezone.utc)
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[EMAIL_SILENT] email_follow_up: follow-up #{follow_up_number} to {recipient_email}',
+                    anchor_types=json.dumps([anchor.anchor_type]),
+                )
+                session.add(log)
+                session.commit()
+                return
+
             elif anchor.anchor_type == 'email_need_leads':
                 # Напрямую вызываем _auto_find_leads — без AI-модели
                 campaign_id = anchor_data.get('campaign_id')
@@ -2471,35 +2607,6 @@ class AnchorEngine:
                 return
             else:
                 return
-
-            # Выполняем через агента
-            result = await agent.generate_system_message(
-                user_id=user.telegram_id,
-                mode='email_silent',
-                instruction=instruction,
-                extra_context='',
-                max_tokens=2000,
-                max_iterations=5,  # больше итераций для нескольких send_outreach_email
-            )
-
-            logger.info(f"[ANCHOR] Email silent result for {user.telegram_id}: {(result or 'None')[:100]}")
-
-            # Списываем оставшийся cost
-            if not FREE_ACCESS_MODE:
-                spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}', session=session, auto_commit=False)
-
-            # Помечаем якорь как доставленный
-            anchor.delivered_at = datetime.now(timezone.utc)
-            log = AnchorDeliveryLog(
-                user_id=user.id,
-                anchor_ids=json.dumps([anchor.id]),
-                message_text=f'[EMAIL_SILENT] {anchor.anchor_type}: {(result or "executed")[:200]}',
-                anchor_types=json.dumps([anchor.anchor_type]),
-            )
-            session.add(log)
-            session.commit()
-
-            logger.info(f"[ANCHOR] ✅ Email silent anchor #{anchor.id} processed for {user.telegram_id}")
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_email_silent_anchor error: {e}\n{traceback.format_exc()}")
