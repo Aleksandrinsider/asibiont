@@ -135,6 +135,7 @@ quick_function_test.py
 
 # Diagnostic scripts with credentials
 check_db.py
+clean_memory.py
 debug_*.py
 debug_*.log
 ssl/

@@ -7,7 +7,6 @@ import tempfile
 import json
 import traceback
 import time as time_module
-import threading
 from datetime import datetime, timedelta, timezone
 from aiogram import Router
 from aiogram.filters import Command
@@ -36,25 +35,24 @@ router = Router()
 
 # Dedup cache for message processing (TTL-based to prevent memory leak)
 message_cache = {}
-message_cache_lock = threading.Lock()
+message_cache_lock = asyncio.Lock()  # async-safe lock for event loop
 MESSAGE_CACHE_MAX_SIZE = 5000  # Максимум записей
 
 # Per-user processing lock — prevents duplicate responses
 # when Telegram retries webhook or sends duplicate updates
 _user_processing_locks: dict[int, asyncio.Lock] = {}
-_user_processing_locks_guard = threading.Lock()
 _USER_LOCKS_MAX_SIZE = 2000  # Максимум локов
 
 def _get_user_lock(user_id: int) -> asyncio.Lock:
-    with _user_processing_locks_guard:
-        if user_id not in _user_processing_locks:
-            # Очистка при переполнении — удаляем незалоченные локи
-            if len(_user_processing_locks) >= _USER_LOCKS_MAX_SIZE:
-                to_remove = [k for k, v in _user_processing_locks.items() if not v.locked()]
-                for k in to_remove[:len(to_remove)//2]:
-                    del _user_processing_locks[k]
-            _user_processing_locks[user_id] = asyncio.Lock()
-        return _user_processing_locks[user_id]
+    # Safe in asyncio single-threaded event loop (no threading.Lock needed)
+    if user_id not in _user_processing_locks:
+        # Очистка при переполнении — удаляем незалоченные локи
+        if len(_user_processing_locks) >= _USER_LOCKS_MAX_SIZE:
+            to_remove = [k for k, v in _user_processing_locks.items() if not v.locked()]
+            for k in to_remove[:len(to_remove)//2]:
+                del _user_processing_locks[k]
+        _user_processing_locks[user_id] = asyncio.Lock()
+    return _user_processing_locks[user_id]
 from ai_integration import chat_with_ai
 from models import Session, User, Subscription, Task, Interaction
 from sqlalchemy import func
@@ -325,36 +323,38 @@ async def start_handler(message: Message):
 
     # Create user if doesn't exist
     session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    is_new_user = False
-    if not user:
-        # Find referrer by telegram_id to get internal user.id
-        referrer = None
-        if referrer_id:
-            referrer = session.query(User).filter_by(telegram_id=referrer_id).first()
-            if referrer:
-                logger.info(f"Referrer found: telegram_id={referrer_id}, internal_id={referrer.id}")
-            else:
-                logger.warning(f"Referrer not found for telegram_id: {referrer_id}")
-        user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0,
-                    referrer_id=referrer.id if referrer else None,
-                    language=detected_lang)
-        session.add(user)
-        session.commit()
-        logger.info(f"Created new user {user_id}, referrer={referrer_id}, lang={detected_lang}")
-        is_new_user = True
-        # Начисляем бесплатные токены
-        grant_signup_tokens(user_id, session=session)
-    else:
-        # Existing user — use their saved language
-        detected_lang = getattr(user, 'language', None) or detected_lang
-    
-    # Set language in cache
-    set_user_lang(user_id, detected_lang)
-    lang = detected_lang
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        is_new_user = False
+        if not user:
+            # Find referrer by telegram_id to get internal user.id
+            referrer = None
+            if referrer_id:
+                referrer = session.query(User).filter_by(telegram_id=referrer_id).first()
+                if referrer:
+                    logger.info(f"Referrer found: telegram_id={referrer_id}, internal_id={referrer.id}")
+                else:
+                    logger.warning(f"Referrer not found for telegram_id: {referrer_id}")
+            user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0,
+                        referrer_id=referrer.id if referrer else None,
+                        language=detected_lang)
+            session.add(user)
+            session.commit()
+            logger.info(f"Created new user {user_id}, referrer={referrer_id}, lang={detected_lang}")
+            is_new_user = True
+            # Начисляем бесплатные токены
+            grant_signup_tokens(user_id, session=session)
+        else:
+            # Existing user — use their saved language
+            detected_lang = getattr(user, 'language', None) or detected_lang
+        
+        # Set language in cache
+        set_user_lang(user_id, detected_lang)
+        lang = detected_lang
 
-    balance = user.token_balance or 0
-    session.close()
+        balance = user.token_balance or 0
+    finally:
+        session.close()
 
     btn_text = "Open web version" if lang == 'en' else "Открыть веб-версию"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -748,25 +748,24 @@ async def process_text_message(user_id, text, message, state):
         logger.info(f"Empty message from user {user_id}, ignoring")
         return
 
-    # Duplicate protection - глобальный кеш с threading.Lock
-    global message_cache, message_cache_lock
+    # Duplicate protection - dict-операции атомарны в asyncio single-threaded loop
+    global message_cache
     message_cache_key = f"msg_{user_id}_{message_id}"
     current_time = time_module.time()
     
-    with message_cache_lock:
-        # Очистка старых записей (старше 60 секунд) + лимит размера
-        message_cache = {k: v for k, v in message_cache.items() if current_time - v < 60}
-        if len(message_cache) > MESSAGE_CACHE_MAX_SIZE:
-            message_cache.clear()
-        
-        # Проверяем, было ли уже обработано это сообщение
-        if message_cache_key in message_cache:
-            logger.info(f"[DEDUP] Duplicate message detected: msg_id={message_id}, user={user_id}, skipping")
-            return
-        
-        # Отмечаем сообщение как обработанное
-        message_cache[message_cache_key] = current_time
-        logger.info(f"[DEDUP] Message registered: msg_id={message_id}, user={user_id}, cache_size={len(message_cache)}")
+    # Очистка старых записей (старше 60 секунд) + лимит размера
+    message_cache = {k: v for k, v in message_cache.items() if current_time - v < 60}
+    if len(message_cache) > MESSAGE_CACHE_MAX_SIZE:
+        message_cache.clear()
+    
+    # Проверяем, было ли уже обработано это сообщение
+    if message_cache_key in message_cache:
+        logger.info(f"[DEDUP] Duplicate message detected: msg_id={message_id}, user={user_id}, skipping")
+        return
+    
+    # Отмечаем сообщение как обработанное
+    message_cache[message_cache_key] = current_time
+    logger.info(f"[DEDUP] Message registered: msg_id={message_id}, user={user_id}, cache_size={len(message_cache)}")
 
     # Per-user lock — если уже обрабатываем сообщение от этого юзера, пропускаем
     user_lock = _get_user_lock(user_id)

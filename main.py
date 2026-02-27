@@ -7983,16 +7983,17 @@ async def nowpayments_webhook(request):
         payload_bytes = await request.read()
         signature = request.headers.get('x-nowpayments-sig', '')
 
-        # Verify signature if IPN secret is configured
-        if NOWPAYMENTS_IPN_SECRET and signature:
+        # Verify HMAC signature (mandatory when IPN secret is configured)
+        data = json.loads(payload_bytes)
+        if NOWPAYMENTS_IPN_SECRET:
+            if not signature:
+                logger.warning('[NOWPAYMENTS] Missing webhook signature')
+                return web.Response(text='Missing signature', status=400)
             from crypto_payments import verify_nowpayments_signature
-            data = json.loads(payload_bytes)
             sorted_payload = json.dumps(dict(sorted(data.items())), separators=(',', ':'))
             if not verify_nowpayments_signature(sorted_payload, signature, NOWPAYMENTS_IPN_SECRET):
                 logger.warning('[NOWPAYMENTS] Invalid webhook signature')
                 return web.Response(text='Invalid signature', status=400)
-        else:
-            data = json.loads(payload_bytes)
 
         status = data.get('payment_status', '')
         if status not in ('finished', 'confirmed'):
@@ -8062,6 +8063,9 @@ async def nowpayments_webhook(request):
                     )
                 except Exception as e:
                     logger.warning(f'[NOWPAYMENTS] Could not notify user: {e}')
+        except Exception as e:
+            session.rollback()
+            logger.error(f'[NOWPAYMENTS] DB error: {e}')
         finally:
             session.close()
 

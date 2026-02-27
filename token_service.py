@@ -198,27 +198,43 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
     try:
         # Атомарное списание — защита от race condition
         from sqlalchemy import text as sa_text
-        result = session.execute(
-            sa_text(
-                "UPDATE users SET token_balance = token_balance - :cost, "
-                "tokens_spent = COALESCE(tokens_spent, 0) + :cost "
-                "WHERE telegram_id = :tid AND COALESCE(token_balance, 0) >= :cost "
-                "RETURNING id, token_balance"
-            ),
-            {'cost': cost, 'tid': user_id}
-        )
-        row = result.fetchone()
-        if not row:
-            # Либо пользователь не найден, либо недостаточно токенов
-            balance = get_balance(user_id, session)
-            return {
-                'success': False,
-                'balance': balance,
-                'spent': 0,
-                'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
-            }
+        from config import LOCAL
         
-        db_user_id, new_balance = row
+        if LOCAL:
+            # SQLite не поддерживает RETURNING — используем ORM
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user or (user.token_balance or 0) < cost:
+                balance = (user.token_balance or 0) if user else 0
+                return {
+                    'success': False,
+                    'balance': balance,
+                    'spent': 0,
+                    'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
+                }
+            user.token_balance = user.token_balance - cost
+            user.tokens_spent = (user.tokens_spent or 0) + cost
+            db_user_id = user.id
+            new_balance = user.token_balance
+        else:
+            result = session.execute(
+                sa_text(
+                    "UPDATE users SET token_balance = token_balance - :cost, "
+                    "tokens_spent = COALESCE(tokens_spent, 0) + :cost "
+                    "WHERE telegram_id = :tid AND COALESCE(token_balance, 0) >= :cost "
+                    "RETURNING id, token_balance"
+                ),
+                {'cost': cost, 'tid': user_id}
+            )
+            row = result.fetchone()
+            if not row:
+                balance = get_balance(user_id, session)
+                return {
+                    'success': False,
+                    'balance': balance,
+                    'spent': 0,
+                    'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
+                }
+            db_user_id, new_balance = row
         
         # Записываем транзакцию
         from models import TokenTransaction
@@ -267,26 +283,46 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
         close = True
     
     try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
+        # Атомарное начисление — защита от race condition при параллельных webhook'ах
+        from sqlalchemy import text as sa_text
+        from config import LOCAL
         
-        user.token_balance = (user.token_balance or 0) + amount
+        if LOCAL:
+            # SQLite не поддерживает RETURNING — используем ORM
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
+            user.token_balance = (user.token_balance or 0) + amount
+            new_balance = user.token_balance
+            db_user_id = user.id
+        else:
+            result = session.execute(
+                sa_text(
+                    "UPDATE users SET token_balance = COALESCE(token_balance, 0) + :amount "
+                    "WHERE telegram_id = :tid "
+                    "RETURNING id, token_balance"
+                ),
+                {'amount': amount, 'tid': user_id}
+            )
+            row = result.fetchone()
+            if not row:
+                return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
+            db_user_id, new_balance = row
         
         from models import TokenTransaction
         tx = TokenTransaction(
-            user_id=user.id,
+            user_id=db_user_id,
             amount=amount,
             action=reason,
             description=f'+{amount} токенов ({reason})',
-            balance_after=user.token_balance
+            balance_after=new_balance
         )
         session.add(tx)
         session.commit()
         
-        logger.info(f"[TOKEN] User {user_id}: +{amount} ({reason}) → баланс: {user.token_balance}")
+        logger.info(f"[TOKEN] User {user_id}: +{amount} ({reason}) → баланс: {new_balance}")
         
-        return {'success': True, 'balance': user.token_balance}
+        return {'success': True, 'balance': new_balance}
         
     except Exception as e:
         logger.error(f"[TOKEN] add_tokens error: {e}")

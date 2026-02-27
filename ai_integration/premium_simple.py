@@ -403,61 +403,6 @@ async def analyze_goals_with_ai(goals_text: str) -> List[Dict[str, Any]]:
         List[Dict]: Список целей с критериями
     """
     return await analyze_context_with_ai(goals_text)
-    
-    from .autonomous_agent import HybridAutonomousAgent
-    
-    agent = HybridAutonomousAgent()
-    
-    system_prompt = f"""Ты помощник Premium пользователя. Анализируешь его бизнес-цели.
-
-ЦЕЛИ ПОЛЬЗОВАТЕЛЯ:
-{goals_text}
-
-ЗАДАЧА: 
-Извлеки actionable цели, для которых можно найти релевантных людей.
-
-Для каждой цели определи:
-- Что нужно достичь
-- Какие люди могут помочь (интересы, навыки, роль)
-
-Верни JSON:
-[
-  {{
-    "goal": "краткое описание цели",
-    "opportunity": "что можно предложить людям как возможность",
-    "needed_people": {{
-      "interests": ["интерес1", "интерес2"],
-      "skills": ["навык1", "навык2"],
-      "role_description": "кто нужен"
-    }}
-  }}
-]
-
-Если нет actionable целей - верни [].
-"""
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Проанализируй цели: {goals_text}"}
-    ]
-    
-    try:
-        response = await agent.call_ai(messages, use_tools=False, temperature=0.3)
-        content = response['choices'][0]['message']['content']
-        
-        # Парсим JSON
-        if '```json' in content:
-            content = content.split('```json')[1].split('```')[0].strip()
-        elif '```' in content:
-            content = content.split('```')[1].split('```')[0].strip()
-        
-        goals = json.loads(content)
-        logger.info(f"[PREMIUM_AUTO] Parsed {len(goals)} goals from AI")
-        return goals
-        
-    except Exception as e:
-        logger.error(f"[PREMIUM_AUTO] Failed to parse goals: {e}")
-        return []
 
 
 def find_relevant_users_for_goals(session: SessionType, 
