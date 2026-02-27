@@ -3129,24 +3129,26 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             if (!contactData) return;
 
             const infoDiv = card.querySelector('div');
-            const emailSpan = infoDiv.querySelector('span[style*="font-weight: 500"]');
+            const emailSpan = infoDiv.querySelector('span[style*="font-weight"]');
             const detailDiv = infoDiv.querySelector('div[style*="font-size: 12px"][style*="color: #6C727F"]');
-            const notesDiv = infoDiv.querySelector('div[style*="color: #9CA3AF"]');
+            const notesDiv = infoDiv.querySelector('div[style*="color: #9CA3AF"][style*="margin-top"]');
 
             const currentEmail = emailSpan ? emailSpan.textContent.trim() : '';
             const detailText = detailDiv ? detailDiv.textContent.trim() : '';
             const parts = detailText.split(' · ');
             const currentName = parts[0] || '';
             const currentCompany = parts[1] || '';
+            const currentNotes = notesDiv ? notesDiv.textContent.trim() : '';
 
             const form = document.createElement('div');
             form.style.cssText = 'display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0;';
             form.innerHTML =
-                '<input type="email" value="' + currentEmail.replace(/"/g, '&quot;') + '" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
+                '<input type="email" value="' + currentEmail.replace(/"/g, '&quot;') + '" placeholder="Email" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
                 '<div style="display: flex; gap: 6px;">' +
                     '<input type="text" value="' + currentName.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-name-ph') + '" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
                     '<input type="text" value="' + currentCompany.replace(/"/g, '&quot;') + '" placeholder="' + t('contact-company-ph') + '" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' +
                 '</div>' +
+                '<textarea placeholder="' + t('contact-notes-ph') + '" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s; resize: vertical; min-height: 36px; max-height: 120px;" onfocus="this.style.borderColor=\'#068487\'" onblur="this.style.borderColor=\'#D1D9E0\'">' + currentNotes.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' +
                 '<div style="display: flex; gap: 6px;">' +
                     '<button class="ec-save-btn" style="flex: 1; padding: 7px 10px; font-size: 13px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-weight: 400; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', \'Noto Sans\', Helvetica, Arial, sans-serif; transition: all 0.2s;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" data-i18n="save">' + t('save') + '</button>' +
                     '<button class="ec-cancel-btn" style="flex: 1; padding: 7px 10px; font-size: 13px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.15s;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\'" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\'" data-i18n="cancel">' + t('cancel') + '</button>' +
@@ -3157,17 +3159,19 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             card.appendChild(form);
 
             const inputs = form.querySelectorAll('input');
+            const notesTextarea = form.querySelector('textarea');
             form.querySelector('.ec-save-btn').onclick = async () => {
                 const newEmail = inputs[0].value.trim();
                 const newName = inputs[1].value.trim();
                 const newCompany = inputs[2].value.trim();
+                const newNotes = notesTextarea ? notesTextarea.value.trim() : '';
                 if (!newEmail || !newEmail.includes('@')) { showNotification(t('contact-invalid-email'), 'error'); return; }
                 try {
                     const resp = await fetch('/api/email-contacts/' + id, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ email: newEmail, name: newName, company: newCompany })
+                        body: JSON.stringify({ email: newEmail, name: newName, company: newCompany, notes: newNotes })
                     });
                     if (resp.ok) {
                         showNotification(t('contact-saved'), 'success');
@@ -3178,7 +3182,10 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     }
                 } catch (err) { showNotification(t('err-prefix') + ' ' + err.message, 'error'); }
             };
-            form.querySelector('.ec-cancel-btn').onclick = () => { loadContacts(); };
+            form.querySelector('.ec-cancel-btn').onclick = () => {
+                card.innerHTML = origHTML;
+                delete card.dataset.editing;
+            };
             inputs[0].focus();
         }
 
@@ -9537,7 +9544,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'act-st-pending':'Ожидает','act-st-accepted':'Принято','act-st-rejected':'Отклонено','act-st-cancelled':'Отменено','act-st-published':'Опубликовано','act-st-completed':'Выполнено','act-st-failed':'Ошибка','act-st-deleted':'Удалено',
       'act-del-deleg':'Отменить и удалить это делегирование?','act-del-post-feed':'Удалить пост из ленты новостей?','act-del-post-tg':'Удалить запись об этом Telegram-посте?','act-del-default':'Удалить запись об активности?','act-del-group':'Удалить все записи ({n} шт.) из этой группы?',
       'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':'Ошибка при удалении','act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование',
-      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contacts-empty-short':'Нет контактов',
+      'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contact-notes-ph':'Описание / заметки','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
       'save':'Сохранить','cancel':'Отмена',
@@ -9738,7 +9745,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'act-st-pending':'Pending','act-st-accepted':'Accepted','act-st-rejected':'Rejected','act-st-cancelled':'Cancelled','act-st-published':'Published','act-st-completed':'Completed','act-st-failed':'Failed','act-st-deleted':'Deleted',
       'act-del-deleg':'Cancel and delete this delegation?','act-del-post-feed':'Delete this post from news feed?','act-del-post-tg':'Delete this Telegram post record?','act-del-default':'Delete this activity record?','act-del-group':'Delete all records ({n}) from this group?',
       'act-deleted-ok':'Deleted','act-deleted-n':'{n} records deleted','act-del-failed-n':'Failed to delete {n}','act-del-err':'Error deleting','act-del-all':'Delete all','act-del-one':'Delete','act-cancel-deleg':'Cancel delegation',
-      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-blocked':'Contact blocked','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','block-contact':'Block contact','edit-contact':'Edit contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contacts-empty-short':'No contacts',
+      'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-blocked':'Contact blocked','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','block-contact':'Block contact','edit-contact':'Edit contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contact-notes-ph':'Description / notes','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
       'save':'Save','cancel':'Cancel',
