@@ -7502,11 +7502,13 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    // Защита от затирания SSR-задач пустым ответом при первой загрузке
-                    if (data.tasks && (data.tasks.length > 0 || !_firstTasksLoad)) {
-                        renderTaskGroups(data.tasks);
+                    if (data.tasks) {
+                        // Always render if tasks exist; if empty — only render after SSR was already shown
+                        if (data.tasks.length > 0 || !_firstTasksLoad) {
+                            renderTaskGroups(data.tasks);
+                        }
+                        _firstTasksLoad = false;
                     }
-                    _firstTasksLoad = false;
                 } else {
                     console.error(`Failed to fetch tasks: HTTP ${response.status} ${response.statusText}`);
                     const errorText = await response.text();

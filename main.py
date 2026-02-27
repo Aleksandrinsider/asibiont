@@ -1156,15 +1156,19 @@ async def dashboard_handler(request):
             # Токенная модель — подписка не требуется, доступ всегда открыт
             # (старый код проверки подписки удалён)
 
-            tasks = session_db.query(Task).filter(
-                or_(
-                    Task.user_id == user.id,
-                    and_(Task.delegated_to_username.isnot(None), Task.delegated_to_username.ilike(user.username)) if user.username else False
-                )
-            ).all()
+            # Query tasks: same logic as /api/tasks to avoid SSR↔API mismatch
+            _task_conditions = [Task.user_id == user.id]
+            if user.username:
+                _uname_clean = user.username.replace('@', '')
+                _task_conditions.append(or_(
+                    Task.delegated_to_username.ilike(_uname_clean),
+                    Task.delegated_to_username.ilike(f'@{_uname_clean}')
+                ))
+            _task_conditions.append(Task.delegated_by == user.id)
+            tasks = session_db.query(Task).filter(or_(*_task_conditions)).all()
+            # Exclude rejected/cancelled — same filter as /api/tasks
+            tasks = [t for t in tasks if t.status not in ('rejected', 'cancelled') and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
             logger.info(f"Found {len(tasks)} tasks for user {user.id} (telegram_id: {user.telegram_id})")
-            for task in tasks:
-                logger.info(f"Task {task.id}: {task.title} (user_id: {task.user_id})")
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
 
             # Проеряем timestamp очистки истории из БД
@@ -1577,7 +1581,7 @@ async def dashboard_handler(request):
                 if task.reminder_time.tzinfo is None:
                     task.reminder_time = pytz.UTC.localize(task.reminder_time)
                 local_reminder = task.reminder_time.astimezone(user_tz)
-                task.overdue = local_reminder < user_now and task.status == 'pending' and getattr(task, 'reminder_sent', True)
+                task.overdue = local_reminder < user_now and task.status in ['pending', 'in_progress']
                 task.reminder_time_local = local_reminder.strftime('%d.%m.%Y %H:%M')
                 if task.overdue:
                     delta = user_now - local_reminder
@@ -1634,10 +1638,22 @@ async def dashboard_handler(request):
                             user_tz if user.timezone else pytz.timezone('Europe/Moscow')).strftime("%H:%M")
                         upcoming_reminders.append(f"{task.title}  {reminder_time_local}")
 
-        #      JSON 
+        # Convert to JSON — same schema as /api/tasks to avoid SSR↔API mismatch
+        # Pre-cache delegator usernames (session may be closed, so use a fresh one)
+        _delegator_cache = {}
+        _deleg_ids = set(t.delegated_by for t in tasks if t.delegated_by and t.delegated_by != user.id)
+        if _deleg_ids:
+            _deleg_session = Session()
+            try:
+                for _du in _deleg_session.query(User).filter(User.id.in_(_deleg_ids)).all():
+                    if _du.username:
+                        _delegator_cache[_du.id] = _du.username
+            finally:
+                _deleg_session.close()
+
         tasks_dict = []
         for task in tasks:
-            # Подготоим reminder_time  ISO формате для JavaScript
+            # Подготовим reminder_time в ISO формате для JavaScript
             reminder_time_iso = None
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
@@ -1650,12 +1666,19 @@ async def dashboard_handler(request):
                 'title': task.title,
                 'description': decrypt_data(task.description) if task.description else '',
                 'status': task.status,
-                'reminder_time': reminder_time_iso,  #    JS
+                'reminder_time': reminder_time_iso,
                 'reminder_time_local': getattr(task, 'reminder_time_local', None),
                 'overdue': getattr(task, 'overdue', False),
                 'overdue_value': getattr(task, 'overdue_value', None),
                 'overdue_unit': getattr(task, 'overdue_unit', None),
-                'recommendations': task.recommendations
+                'is_delegated': task.delegated_to_username is not None,
+                'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
+                'delegated_to': task.delegated_to_username,
+                'delegated_to_username': task.delegated_to_username,
+                'delegated_by': _delegator_cache.get(task.delegated_by),
+                'delegated_by_username': _delegator_cache.get(task.delegated_by),
+                'delegated_by_me': task.delegated_by == user.id if task.delegated_by else False,
+                'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
             }
             tasks_dict.append(task_dict)
 
