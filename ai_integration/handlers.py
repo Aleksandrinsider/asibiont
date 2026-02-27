@@ -8113,97 +8113,187 @@ _GENERIC_PREFIXES = {
 
 async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                            offer: str, session) -> tuple:
-    """Автоматический поиск лидов через Serper + AI-экстракцию email.
+    """Автоматический поиск лидов: 2-pass подход.
+
+    Pass 1: Найти ЛЮДЕЙ и их страницы через поиск
+    Pass 2: Скачать страницы → извлечь реальные email
 
     Возвращает (count_added, message_str).
-    Вызывается из start_email_campaign для сценария ПРИВЛЕЧЕНИЕ.
     """
     from .api_client import get_api_client
+    import aiohttp
     api = get_api_client()
 
-    # Формируем поисковые запросы — разные площадки для разных аудиторий
     keywords = target_audience[:200].replace(',', ' ').replace('.', ' ')
     goal_kw = goal[:100].replace(',', ' ').replace('.', ' ')
-
-    # Определяем язык аудитории по кириллице
     _has_cyrillic = any('\u0400' <= c <= '\u04ff' for c in target_audience)
 
-    # Базовые запросы — работают для любой аудитории
-    queries = [
-        f'{keywords} email contact',
-        f'{goal_kw} author email -info@ -support@ -noreply@',
-    ]
-
+    # ── PASS 1: Поиск людей и страниц с контактами ──
+    # Запросы нацелены на страницы КОНТАКТОВ, а не на статьи
     if _has_cyrillic:
-        # Русскоязычные площадки: бизнес, стартапы, эксперты
-        queries.extend([
-            f'site:vc.ru {keywords} email автор',
-            f'site:habr.com {keywords} email',
-            f'site:spark.ru {keywords} email контакт',
-            f'site:tenchat.ru {keywords}',
-            f'{keywords} telegram email "основатель" OR "CEO" OR "автор"',
-            f'site:facebook.com {keywords} email',
-        ])
+        queries = [
+            f'{keywords} "написать" OR "связаться" OR "telegram" email',
+            f'site:vc.ru {keywords} автор "почта" OR "email" OR "написать мне"',
+            f'site:habr.com {keywords} "email" OR "почта" OR "@"',
+            f'{goal_kw} эксперт контакты email -info@ -support@',
+            f'{keywords} "основатель" OR "CEO" OR "фаундер" email site:facebook.com OR site:linkedin.com',
+            f'{keywords} telegram "@" email consultant',
+        ]
     else:
-        # Англоязычные площадки: business, startups, experts
-        queries.extend([
-            f'site:medium.com {keywords} email',
-            f'site:producthunt.com {keywords} maker email',
-            f'site:linkedin.com {keywords} email',
-            f'site:twitter.com {keywords} email',
-            f'{keywords} founder CEO email "@gmail.com" OR "@outlook.com"',
-            f'site:substack.com {keywords} author',
-        ])
+        queries = [
+            f'{keywords} "contact me" OR "get in touch" OR "reach me" email',
+            f'site:medium.com {keywords} author "@gmail.com" OR "@outlook.com"',
+            f'site:github.com {keywords} email followers',
+            f'{goal_kw} expert "contact" email -info@ -support@',
+            f'{keywords} founder CEO email site:linkedin.com OR site:twitter.com',
+            f'site:producthunt.com {keywords} maker "@"',
+        ]
 
-    all_snippets = []
+    all_results = []  # (title, snippet, url)
     for q in queries:
         try:
             results = await api.serper_search(q, num=5)
             if results:
                 for r in results:
-                    snippet = f"{r.get('title','')} {r.get('snippet','')} {r.get('link','')}"
-                    all_snippets.append(snippet)
+                    all_results.append({
+                        'title': r.get('title', ''),
+                        'snippet': r.get('snippet', ''),
+                        'url': r.get('link', ''),
+                    })
         except Exception as _sq_err:
-            logger.warning(f"[AUTO_LEADS] Search query failed: {q}: {_sq_err}")
+            logger.warning(f"[AUTO_LEADS] Search failed: {q}: {_sq_err}")
 
-    if not all_snippets:
+    if not all_results:
         return 0, ""
 
-    # AI-экстракция email из сниппетов
-    snippets_text = "\n".join(all_snippets[:20])
-    extract_prompt = f"""Extract all PERSONAL email addresses from these search results.
+    # ── PASS 2: Скачиваем перспективные страницы и извлекаем email ──
+    # Отбираем URL где вероятны email (контакты, about, профили)
+    _contact_hints = {'contact', 'about', 'profile', 'author', 'user',
+                      'контакт', 'автор', 'профиль', 'обо мне',
+                      '@', 'email', 'mailto', 'написать', 'связаться'}
+    scored_urls = []
+    seen_domains = set()
+    for r in all_results:
+        url = r['url']
+        if not url:
+            continue
+        # Дедуп по домену
+        try:
+            domain = url.split('/')[2]
+        except IndexError:
+            continue
+        if domain in seen_domains:
+            continue
+        seen_domains.add(domain)
+
+        # Скоринг: сниппет/заголовок содержат email-подсказки?
+        text_lower = f"{r['title']} {r['snippet']}".lower()
+        score = sum(1 for h in _contact_hints if h in text_lower)
+        # Прямые email в сниппете = максимальный приоритет
+        if '@' in r['snippet'] and '.' in r['snippet'].split('@')[-1][:10]:
+            score += 5
+        scored_urls.append((score, url, r['snippet']))
+
+    scored_urls.sort(reverse=True)
+    top_urls = scored_urls[:8]  # Скачиваем до 8 страниц
+
+    all_emails_raw = set()  # email найденные напрямую
+    page_texts = []  # тексты страниц для AI анализа
+
+    # Извлекаем email из сниппетов сразу
+    import re as _re_al
+    for _, _, snippet in scored_urls:
+        for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', snippet):
+            em = em.lower().strip('.')
+            if em.split('@')[0] not in _GENERIC_PREFIXES:
+                all_emails_raw.add(em)
+
+    # Скачиваем страницы параллельно
+    async def _fetch_page(url: str) -> str:
+        """Скачать текст страницы (первые 10KB)."""
+        try:
+            s = await api._get_session()
+            async with s.get(url, timeout=aiohttp.ClientTimeout(total=8),
+                             headers={'User-Agent': 'Mozilla/5.0'}, 
+                             allow_redirects=True, ssl=False) as resp:
+                if resp.status == 200 and 'text' in resp.content_type:
+                    raw = await resp.text(errors='replace')
+                    # Берём первые 15KB — достаточно для контактных данных
+                    return raw[:15000]
+        except Exception:
+            pass
+        return ""
+
+    import asyncio as _asyncio_al
+    pages = await _asyncio_al.gather(*[_fetch_page(u) for _, u, _ in top_urls],
+                                      return_exceptions=True)
+
+    for page_html in pages:
+        if isinstance(page_html, str) and page_html:
+            # Извлечь email regex из HTML
+            for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', page_html):
+                em = em.lower().strip('.')
+                if em.split('@')[0] not in _GENERIC_PREFIXES:
+                    all_emails_raw.add(em)
+            # Собираем текст для AI-анализа (убираем HTML-теги, берём фрагмент)
+            clean_text = _re_al.sub(r'<[^>]+>', ' ', page_html)
+            clean_text = _re_al.sub(r'\s+', ' ', clean_text)[:2000]
+            page_texts.append(clean_text)
+
+    # ── Финальная AI-экстракция: имена + контекст ──
+    # Объединяем всё: сниппеты + тексты страниц
+    combined_text = "\n---\n".join(page_texts[:6])
+    snippets_text = "\n".join(f"- {r['title']}: {r['snippet']}" for r in all_results[:15])
+
+    # Если уже нашли email через regex — просим AI определить имена
+    if all_emails_raw:
+        emails_list = ", ".join(list(all_emails_raw)[:20])
+        extract_prompt = f"""I found these email addresses. For each one, determine the person's name and company from the context below.
+Also find any ADDITIONAL personal emails in the text that I might have missed.
+
+Found emails: {emails_list}
+
+Target audience: {target_audience[:300]}
+Campaign goal: {goal[:300]}
+
+Context (search results + page content):
+{snippets_text}
+
+{combined_text[:3000]}
+
+Return JSON array: [{{"email":"...","name":"...","company":"...","context":"one line why relevant"}}]
+Rules: SKIP info@, contact@, support@, sales@, admin@, noreply@ etc. Only PERSONAL emails. Max 20."""
+    else:
+        extract_prompt = f"""Find personal email addresses of people matching this target audience.
+
 Target audience: {target_audience[:300]}
 Campaign goal: {goal[:300]}
 
 Search results:
 {snippets_text}
 
-RULES:
-- Return ONLY personal emails (john@company.com = OK)
-- SKIP generic emails: info@, contact@, hello@, support@, sales@, admin@, team@, noreply@
-- For each email, extract the person's name and company/project if visible
-- Return JSON array: [{{"email":"...","name":"...","company":"...","context":"why relevant"}}]
-- If no personal emails found, return empty array: []
-- Maximum 15 emails
-"""
+Page content:
+{combined_text[:3000]}
+
+Return JSON array: [{{"email":"...","name":"...","company":"...","context":"one line why relevant"}}]
+Rules: SKIP info@, contact@, support@, sales@, admin@, noreply@ etc. Only PERSONAL emails. Max 20.
+If no emails found return []"""
+
     try:
         ai_result = await api.deepseek_analyze(
             prompt=extract_prompt,
-            system_prompt="You extract email addresses from text. Return ONLY valid JSON array, no markdown.",
-            max_tokens=800
+            system_prompt="Extract email addresses from text. Return ONLY valid JSON array, no markdown.",
+            max_tokens=1000
         )
     except Exception as _ai_err:
         logger.warning(f"[AUTO_LEADS] AI extraction failed: {_ai_err}")
-        # Fallback: regex extraction
         ai_result = None
 
     parsed_leads = []
 
     if ai_result:
-        # Извлечь JSON из AI-ответа
         import json as _json_al
         text = ai_result.strip()
-        # Убрать markdown code blocks если есть
         if '```' in text:
             parts = text.split('```')
             for p in parts:
@@ -8218,27 +8308,21 @@ RULES:
             if isinstance(raw, list):
                 for item in raw:
                     if isinstance(item, dict) and item.get('email'):
-                        parsed_leads.append(item)
+                        em = item['email'].lower().strip('.')
+                        if em.split('@')[0] not in _GENERIC_PREFIXES:
+                            parsed_leads.append(item)
         except Exception:
             pass
 
-    # Fallback: regex если AI не дал результатов
-    if not parsed_leads:
-        import re as _re_al
-        combined = " ".join(all_snippets)
-        emails_found = _re_al.findall(
-            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', combined
-        )
-        seen = set()
-        for em in emails_found:
-            em = em.lower().strip('.')
-            local = em.split('@')[0]
-            if local not in _GENERIC_PREFIXES and em not in seen:
-                seen.add(em)
-                parsed_leads.append({'email': em})
+    # Fallback: если AI не справился — используем regex-результаты
+    if not parsed_leads and all_emails_raw:
+        for em in all_emails_raw:
+            parsed_leads.append({'email': em})
 
     if not parsed_leads:
         return 0, ""
+
+    logger.info(f"[AUTO_LEADS] Found {len(parsed_leads)} leads for campaign #{campaign.id}")
 
     # Добавляем через add_email_leads (централизованная логика с дедупом)
     leads_json = json.dumps(parsed_leads[:15], ensure_ascii=False)
@@ -8251,8 +8335,7 @@ RULES:
     )
 
     # Парсим количество добавленных
-    import re as _re_count
-    m = _re_count.search(r'(\d+)\s*email', result_msg or '')
+    m = _re_al.search(r'(\d+)\s*email', result_msg or '')
     count = int(m.group(1)) if m else 0
 
     return count, ""
