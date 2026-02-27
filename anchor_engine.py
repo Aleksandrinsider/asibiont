@@ -332,10 +332,20 @@ class AnchorEngine:
                 Task.reminder_time <= datetime.now(timezone.utc),
                 Task.status.in_(['pending', 'in_progress', 'active'])
             ).first() is not None
-            if not has_pending:
+            # Проверяем есть ли непрочитанные email-ответы (CRITICAL — нельзя блокировать)
+            has_unreplied_email = session.query(EmailOutreach).join(EmailCampaign).filter(
+                EmailCampaign.user_id == user.id,
+                EmailOutreach.status == 'replied',
+                EmailOutreach.reply_text.isnot(None),
+                EmailOutreach.ai_reply_sent_at.is_(None),
+            ).first() is not None
+            if not has_pending and not has_unreplied_email:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00), пропуск")
                 return
-            logger.info(f"[ANCHOR] User {user_id}: 🌙 ночные часы, но есть pending reminders — обрабатываем только CRITICAL")
+            if has_pending:
+                logger.info(f"[ANCHOR] User {user_id}: 🌙 ночные часы, но есть pending reminders — обрабатываем только CRITICAL")
+            if has_unreplied_email:
+                logger.info(f"[ANCHOR] User {user_id}: 🌙 ночные часы, но есть unreplied email — обрабатываем email_reply_received")
 
         # ── Подсчёт доставок за сегодня (раздельно) ──
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
