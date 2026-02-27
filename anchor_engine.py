@@ -218,11 +218,21 @@ class AnchorEngine:
                             Task.reminder_time <= now_utc,
                             Task.status.in_(['pending', 'in_progress', 'active'])
                         ).first() is not None
-                        if not has_pending_reminder:
+                        # НЕ пропускаем если есть непрочитанные email-ответы (CRITICAL)
+                        has_unreplied_email = session.query(EmailOutreach).join(EmailCampaign).filter(
+                            EmailCampaign.user_id == u.id,
+                            EmailOutreach.status == 'replied',
+                            EmailOutreach.reply_text.isnot(None),
+                            EmailOutreach.ai_reply_sent_at.is_(None),
+                        ).first() is not None
+                        if not has_pending_reminder and not has_unreplied_email:
                             skipped_night += 1
                             continue
                         else:
-                            logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has pending reminder, including")
+                            if has_pending_reminder:
+                                logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has pending reminder, including")
+                            if has_unreplied_email:
+                                logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has unreplied email, including")
                 except Exception:
                     pass  # если timezone кривой — пропускаем pre-filter, проверим в _process_user_inner
 
@@ -2678,11 +2688,31 @@ class AnchorEngine:
             ]
 
             prompt_parts.append(f"\n=== ЯКОРЯ ({len(anchors)} шт) ===")
+            # Типы якорей, для которых нужно передавать полные данные (data) в промпт
+            EMAIL_DATA_TYPES = {'email_reply_received', 'email_outreach_send', 'email_follow_up', 'email_campaign_report'}
             for i, ad in enumerate(anchor_descriptions, 1):
                 prompt_parts.append(
                     f"{i}. [{ad['priority']}] {ad['type']}: {ad['topic']} "
                     f"(источник: {ad['source']}, возраст: {ad['age_minutes']}мин)"
                 )
+                # Для email-якорей передаём полные данные — AI нужны outreach_id, reply_text, campaign_goal
+                if ad.get('type') in EMAIL_DATA_TYPES and ad.get('data'):
+                    data = ad['data']
+                    data_lines = []
+                    for key in ('campaign_id', 'campaign_name', 'campaign_goal', 'outreach_id',
+                                'recipient_email', 'recipient_name', 'recipient_company',
+                                'original_subject', 'original_body', 'reply_text',
+                                'ai_previous_reply', 'offer', 'tone', 'sender_name', 'sender_email',
+                                'drafts', 'remaining_daily', 'remaining_total',
+                                'follow_up_number', 'days_since_sent'):
+                        if key in data and data[key] is not None:
+                            val = data[key]
+                            if isinstance(val, str) and len(val) > 500:
+                                val = val[:500] + '...'
+                            data_lines.append(f"   {key}: {val}")
+                    if data_lines:
+                        prompt_parts.append("   --- DATA ---")
+                        prompt_parts.extend(data_lines)
 
             if task_lines:
                 prompt_parts.append(f"\n=== АКТИВНЫЕ ЗАДАЧИ ({len(tasks)}) ===")
