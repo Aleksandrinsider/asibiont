@@ -8163,6 +8163,9 @@ _GENERIC_PREFIXES = {
     'compliance', 'procurement', 'reception', 'frontdesk', 'helpdesk',
     'itsupport', 'it', 'devops', 'sysadmin', 'accounts', 'accounting',
     'finance', 'payroll', 'hq', 'headquarters', 'main', 'central',
+    'web', 'website', 'webteam', 'digital', 'online',
+    'noc', 'network', 'infra', 'infrastructure', 'platform',
+    'dev', 'development', 'design', 'creative', 'ux', 'ui', 'product',
 }
 
 # Паттерны в email-prefix которые указывают на корпоративный/generic email
