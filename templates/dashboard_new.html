@@ -2714,7 +2714,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     const grpItemIds = items.map(a => a.id).filter(Boolean);
                     grpHeader.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
-                            <div style="width:28px; height:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center;">${meta.icon}</div>
                             <span style="font-size: 13px; font-weight: 600; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${meta.label}</span>
                             <span style="font-size: 12px; color: #6C727F; flex-shrink: 0;">${items.length} ${items.length === 1 ? t('act-item-1') : (items.length >=2 && items.length <=4 ? t('act-item-2') : t('act-item-5'))}</span>
                         </div>
