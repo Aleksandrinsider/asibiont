@@ -8149,8 +8149,8 @@ async def start_email_campaign(
             tone=tone,
             sender_name=sender_name,
             sender_email=sender_email,
-            max_emails=min(max_emails, 200),
-            daily_limit=min(daily_limit, 20),
+            max_emails=max_emails,
+            daily_limit=min(daily_limit, 50),
             status='active',
         )
         session.add(campaign)
@@ -8163,7 +8163,7 @@ async def start_email_campaign(
                 f"🎯 Goal: {goal[:200]}\n"
                 f"👥 Audience: {target_audience[:200]}\n"
                 f"💼 Offer: {offer[:200]}\n"
-                f"📨 Daily limit: {daily_limit} emails/day, max {max_emails} total\n\n"
+                f"📨 Daily limit: {daily_limit} emails/day{f', max {max_emails} total' if max_emails and max_emails > 0 else ', unlimited total'}\n\n"
                 f"The agent will autonomously search for relevant contacts, "
                 f"compose personalized emails, and handle replies within the campaign goal.\n"
                 f"Use /email_status to check progress."
@@ -8173,7 +8173,7 @@ async def start_email_campaign(
             f"🎯 Цель: {goal[:200]}\n"
             f"👥 Аудитория: {target_audience[:200]}\n"
             f"💼 Предложение: {offer[:200]}\n"
-            f"📨 Лимит: {daily_limit} писем/день, макс. {max_emails} всего\n\n"
+            f"📨 Лимит: {daily_limit} писем/день{f', макс. {max_emails} всего' if max_emails and max_emails > 0 else ', без ограничений'}\n\n"
             f"Агент будет автономно искать релевантные контакты, "
             f"писать персонализированные письма и отвечать на ответы в рамках цели кампании.\n"
             f"Статус: спроси «статус email кампании»."
@@ -8231,8 +8231,8 @@ async def send_outreach_email(
         if not campaign:
             return "❌ Нет активной email-кампании. Сначала создай кампанию (start_email_campaign)."
 
-        # Проверка лимитов
-        if campaign.emails_sent >= campaign.max_emails:
+        # Проверка лимитов (max_emails=0 означает безлимитно)
+        if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
             campaign.status = 'completed'
             session.commit()
             return f"⚠️ Кампания #{campaign.id} достигла лимита ({campaign.max_emails} писем). Статус: completed."
@@ -8252,8 +8252,8 @@ async def send_outreach_email(
         if sent_today >= campaign.daily_limit:
             return f"⚠️ Дневной лимит ({campaign.daily_limit} писем) исчерпан. Попробуй завтра."
 
-        # Глобальный дневной лимит: не более 20 УНИКАЛЬНЫХ получателей на пользователя в сутки
-        GLOBAL_DAILY_LIMIT = 20
+        # Глобальный дневной лимит: не более 50 УНИКАЛЬНЫХ получателей на пользователя в сутки
+        GLOBAL_DAILY_LIMIT = 50
         from sqlalchemy import func, distinct as _distinct
         global_recipients_today = session.query(
             func.count(_distinct(EmailOutreach.recipient_email))
@@ -8269,7 +8269,7 @@ async def send_outreach_email(
             EmailOutreach.sent_at >= today_start,
         ).first()
         if is_new_recipient_today and global_recipients_today >= GLOBAL_DAILY_LIMIT:
-            return f"⚠️ Достигнут лимит: сегодня уже написали {global_recipients_today} новым получателям (макс. {GLOBAL_DAILY_LIMIT}). Продолжим завтра."
+            return f"⚠️ Достигнут лимит: сегодня уже написали {global_recipients_today} новым получателям (макс {GLOBAL_DAILY_LIMIT}/день). Продолжим завтра."
 
         # Проверка дубликата (не слать дважды одному recipient в одной кампании)
         existing = session.query(EmailOutreach).filter_by(
@@ -8380,9 +8380,10 @@ async def send_outreach_email(
 
         lang = _get_lang(user_id)
         name_str = f" ({recipient_name})" if recipient_name else ""
+        _max_label = campaign.max_emails if campaign.max_emails and campaign.max_emails > 0 else '∞'
         if lang == 'en':
-            return f"✅ Email sent to {recipient_email}{name_str}\nSubject: {subject}\nCampaign #{campaign.id} — {campaign.emails_sent}/{campaign.max_emails} sent"
-        return f"✅ Письмо отправлено: {recipient_email}{name_str}\nТема: {subject}\nКампания #{campaign.id} — {campaign.emails_sent}/{campaign.max_emails} отправлено"
+            return f"✅ Email sent to {recipient_email}{name_str}\nSubject: {subject}\nCampaign #{campaign.id} — {campaign.emails_sent}/{_max_label} sent"
+        return f"✅ Письмо отправлено: {recipient_email}{name_str}\nТема: {subject}\nКампания #{campaign.id} — {campaign.emails_sent}/{_max_label} отправлено"
 
     except Exception as e:
         logger.error(f"[EMAIL_OUTREACH] Error: {e}", exc_info=True)
@@ -8683,7 +8684,7 @@ def get_email_campaign_status(
                 f"📊 Статус: {c.status}\n"
                 f"📧 Всего: {len(emails)} | Черновики: {draft} | Отправлено: {sent + delivered}\n"
                 f"💬 Ответов: {replied} | Ошибки: {bounced}\n"
-                f"📨 Лимит: {c.emails_sent}/{c.max_emails} (макс {c.daily_limit}/день)"
+                f"📨 Отправлено: {c.emails_sent}{f'/{c.max_emails}' if c.max_emails and c.max_emails > 0 else ''} (макс {c.daily_limit}/день)"
             )
             if replied > 0:
                 recent_replies = [e for e in emails if e.status == 'replied' and e.reply_text]
@@ -8799,8 +8800,9 @@ async def send_follow_up_email(
             return "❌ Кампания не найдена."
 
         max_follow_ups = campaign.max_follow_ups or 2
-        if outreach.follow_up_count >= max_follow_ups:
-            return f"⚠️ Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}."
+        # Если контакт ответил (replied) — follow-up без ограничений (продолжаем диалог)
+        if outreach.status != 'replied' and outreach.follow_up_count >= max_follow_ups:
+            return f"⚠️ Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}. Контакт не отвечает."
 
         # Follow-up — к уже существующему получателю, глобальный лимит не применяется
 
@@ -8919,15 +8921,37 @@ async def send_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
-        # Глобальный дневной лимит: макс 20 уникальных получателей/день
+        # Проверка bounced/failed — вечный бан
+        from models import EmailOutreach as _EO_check
         from datetime import datetime as _dt_limit, timezone as _tz_limit
+        from datetime import timedelta as _td_cool
+        _bad = session.query(_EO_check).filter(
+            _EO_check.user_id == user.id,
+            _EO_check.recipient_email == to_clean,
+            _EO_check.status.in_(['bounced', 'failed']),
+        ).first()
+        if _bad:
+            return f"⚠️ {to_clean} ранее вернул bounced/failed. Отправка заблокирована."
+
+        # Кросс-кампанийный cooldown (30 дней)
+        _CROSS_COOL = 30
+        _cross = session.query(_EO_check).filter(
+            _EO_check.user_id == user.id,
+            _EO_check.recipient_email == to_clean,
+            _EO_check.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            _EO_check.sent_at >= _dt_limit.now(_tz_limit.utc) - _td_cool(days=_CROSS_COOL),
+        ).first()
+        if _cross:
+            return f"⚠️ На {to_clean} уже отправлялось письмо за последние {_CROSS_COOL} дней (кампания #{_cross.campaign_id}). Cooldown активен."
+
+        # Глобальный дневной лимит: макс 50 уникальных получателей/день
         from sqlalchemy import func as _func_limit, distinct as _distinct_limit
         import pytz as _pytz_limit
         _user_tz_limit = _pytz_limit.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
         _user_now_limit = _dt_limit.now(_user_tz_limit)
         _day_local_limit = _user_now_limit.replace(hour=0, minute=0, second=0, microsecond=0)
         _today_start_limit = _day_local_limit.astimezone(_tz_limit.utc)
-        GLOBAL_DAILY_LIMIT = 20
+        GLOBAL_DAILY_LIMIT = 50
         _global_sent_today = session.query(
             _func_limit.count(_distinct_limit(EmailOutreach.recipient_email))
         ).filter(
@@ -8995,8 +9019,8 @@ async def send_email(
                     sender_name=sender_name,
                     sender_email=sender_email,
                     status='active',
-                    daily_limit=20,
-                    max_emails=200,
+                    daily_limit=50,
+                    max_emails=0,
                 )
                 session.add(campaign)
                 session.flush()

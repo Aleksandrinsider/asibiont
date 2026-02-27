@@ -646,6 +646,7 @@ class EmailOutreach(Base):
     __table_args__ = (
         Index('ix_email_outreach_campaign_status', 'campaign_id', 'status'),
         Index('ix_email_outreach_user_status', 'user_id', 'status'),
+        Index('ix_email_outreach_campaign_recipient', 'campaign_id', 'recipient_email', unique=True),
     )
 
 

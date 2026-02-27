@@ -351,6 +351,19 @@ def _migrate_email_campaigns(session, inspector):
             'ai_reply_text': 'ALTER TABLE email_outreach ADD COLUMN ai_reply_text TEXT',
             'ai_reply_sent_at': 'ALTER TABLE email_outreach ADD COLUMN ai_reply_sent_at TIMESTAMP',
         })
+        # Unique index на (campaign_id, recipient_email) — защита от дублей при race condition
+        try:
+            existing_indexes = [idx['name'] for idx in inspector.get_indexes('email_outreach')]
+            if 'ix_email_outreach_campaign_recipient' not in existing_indexes:
+                session.execute(text(
+                    'CREATE UNIQUE INDEX ix_email_outreach_campaign_recipient '
+                    'ON email_outreach (campaign_id, recipient_email)'
+                ))
+                session.commit()
+                logger.info("[MIGRATION] Created unique index ix_email_outreach_campaign_recipient")
+        except Exception as e:
+            session.rollback()
+            logger.warning(f"[MIGRATION] Unique index email_outreach skipped: {e}")
 
 
 def _migrate_email_contacts(session, inspector):
