@@ -356,6 +356,18 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
             ) as response:
                 result = await response.json()
 
+                # Retry без parse_mode при ошибке парсинга Markdown
+                if not result.get('ok'):
+                    err_desc = result.get('description', '')
+                    if "can't parse entities" in err_desc.lower():
+                        logger.warning(f"[PUBLISH] Markdown parse error, retrying without parse_mode")
+                        tg_payload.pop('parse_mode', None)
+                        async with http_session.post(
+                            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{tg_method}',
+                            json=tg_payload
+                        ) as retry_resp:
+                            result = await retry_resp.json()
+
                 if result.get('ok'):
                     logger.info(f"[PUBLISH] Successfully published to {channel}")
 

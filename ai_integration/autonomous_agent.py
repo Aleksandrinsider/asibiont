@@ -633,6 +633,20 @@ class HybridAutonomousAgent:
                     params['content'] = 'Новый пост'
                     logger.info(f"[FIX_PARAMS] {tool_name}: used default content")
 
+        elif tool_name == 'generate_image':
+            if 'prompt' not in params or not params.get('prompt'):
+                # AI иногда передаёт description/text/image_prompt вместо prompt
+                fallback = (params.pop('description', None) or params.pop('text', None)
+                            or params.pop('image_prompt', None) or params.pop('image_description', None))
+                if fallback:
+                    params['prompt'] = fallback
+                    logger.info(f"[FIX_PARAMS] generate_image: extracted prompt from fallback")
+                elif user_message:
+                    params['prompt'] = user_message[:500]
+                    logger.info(f"[FIX_PARAMS] generate_image: used user_message as prompt")
+                else:
+                    params['prompt'] = 'abstract digital art illustration'
+
         elif tool_name == 'research_topic':
             if 'topic' in params and 'query' not in params:
                 params['query'] = params.pop('topic')
