@@ -617,22 +617,17 @@ def preload_common_data():
     Вызывается при старте бота для заполнения кэша.
     """
     logger.info("[CACHE] Starting preload of common data")
-    # Популярные города для предварительной загрузки
+    # Популярные города для предварительной загрузки погоды
     common_cities = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
-    # Загружаем погоду для популярных городов
     for city in common_cities:
         try:
             logger.info(f"[CACHE] Preloading weather for {city}")
             get_weather_info(city)
         except Exception as e:
             logger.warning(f"[CACHE] Failed to preload weather for {city}: {e}")
-    # Загружаем общие новости
-    try:
-        logger.info("[CACHE] Preloading general news")
-        get_news_info()
-    except Exception as e:
-        logger.warning(f"[CACHE] Failed to preload general news: {e}")
-    logger.info("[CACHE] Preload completed")
+    # NewsAPI preload removed — dev quota too small (100/day),
+    # news loaded lazily with 6h cache via api_client.get_news()
+    logger.info("[CACHE] Preload completed (weather only, news lazy)")
 
 
 def generate_unified_recommendations(context_type, user_id=None, title=None, description=None, task_count=None, overdue_count=None, profile=None, weather_info=None, partner_recommendations=None, tasks_list=None):

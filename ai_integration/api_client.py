@@ -116,7 +116,7 @@ class RateLimiter:
         self._limits: Dict[str, tuple] = {
             # (max_calls, window_seconds)
             'ddg': (200, 86400),             # DuckDuckGo — бесплатный
-            'newsapi': (90, 86400),          # 100/день (NewsAPI Free), оставляем запас
+            'newsapi': (40, 86400),          # 100/день (NewsAPI Free), большой запас чтобы не 429
             'openweathermap': (55, 60),      # 60/мин (OWM Free)
             'deepseek': (50, 60),            # DeepSeek — мягкий лимит
         }
@@ -867,7 +867,7 @@ class ExternalAPIClient:
         period: str = "week",
         focus: str = "trends",
         max_articles: int = 10,
-        cache_ttl: int = 900
+        cache_ttl: int = 21600
     ) -> dict:
         """
         Новости + AI-анализ трендов.

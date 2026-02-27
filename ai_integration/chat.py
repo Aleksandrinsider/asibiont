@@ -846,13 +846,13 @@ async def _build_proactive_context(user_id, lang='ru'):
                         f"{weather_data['description']}, {_t('humidity', lang)} {weather_data['humidity']}%, "
                         f"{_t('wind', lang)} {weather_data['wind_speed']} {_t('wind_unit', lang)}"
                     )
-                news_articles = await api.get_news(topic=profile.city, page_size=3, cache_ttl=900)
+                news_articles = await api.get_news(topic=profile.city, page_size=3, cache_ttl=21600)
                 if news_articles:
                     titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
                     if titles:
                         ctx['news'] = f"{_t('news_city', lang).format(city=profile.city)}:\n" + "\n".join(titles)
             if not ctx['news']:
-                news_articles = await api.get_news(page_size=3, cache_ttl=900)
+                news_articles = await api.get_news(page_size=3, cache_ttl=21600)
                 if news_articles:
                     titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
                     if titles:
