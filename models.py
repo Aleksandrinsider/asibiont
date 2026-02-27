@@ -25,6 +25,7 @@ class User(Base):
     username = Column(String(255), index=True)  # Индекс для поиска по username
     first_name = Column(String(255))
     photo_url = Column(String(500))  # Telegram profile photo URL
+    custom_avatar = Column(Text)  # Custom avatar uploaded by user (base64 data URI)
     memory = Column(Text)  # Long-term memory for user info
     long_term_memory = Column(Text)  # JSON with project history, preferences, patterns
     timezone = Column(String(50), default='Europe/Moscow')

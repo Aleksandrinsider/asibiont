@@ -107,6 +107,7 @@ def _migrate_users(session, inspector):
         'discord_server_name': "ALTER TABLE users ADD COLUMN discord_server_name VARCHAR(255)",
         'discord_guild_id': "ALTER TABLE users ADD COLUMN discord_guild_id VARCHAR(64)",
         'discord_channel_id': "ALTER TABLE users ADD COLUMN discord_channel_id VARCHAR(64)",
+        'custom_avatar': 'ALTER TABLE users ADD COLUMN custom_avatar TEXT',
     })
 
 

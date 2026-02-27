@@ -5890,6 +5890,7 @@ async def translate_comment_handler(request):
 
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id.
+    Priority: custom_avatar > Telegram/Discord avatar.
     For Telegram users: proxies avatar via server to hide Bot Token.
     For Discord users (negative id): serves cached Discord CDN avatar directly.
     """
@@ -5900,6 +5901,27 @@ async def api_avatar_handler(request):
 
     try:
         telegram_id = int(telegram_id)
+
+        # Check for custom avatar first (highest priority)
+        from models import User as _User
+        _db = Session()
+        try:
+            _user = _db.query(_User).filter_by(telegram_id=telegram_id).first()
+            if _user and _user.custom_avatar:
+                import base64
+                # Parse data URI: data:image/jpeg;base64,/9j/...
+                parts = _user.custom_avatar.split(',', 1)
+                if len(parts) == 2:
+                    meta = parts[0]  # data:image/jpeg;base64
+                    ct = meta.split(':')[1].split(';')[0] if ':' in meta else 'image/jpeg'
+                    img_data = base64.b64decode(parts[1])
+                    return web.Response(
+                        body=img_data,
+                        content_type=ct,
+                        headers={'Cache-Control': 'public, max-age=300'}
+                    )
+        finally:
+            _db.close()
 
         # Discord-only users: serve cached photo_url (Discord CDN)
         if telegram_id < 0:
@@ -5947,6 +5969,75 @@ async def api_avatar_handler(request):
     except Exception as e:
         logger.error(f"Error in api_avatar_handler: {e}")
         return web.Response(status=500, text='Internal server error')
+
+
+async def api_avatar_upload_handler(request):
+    """API endpoint to upload custom avatar"""
+    try:
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        reader = await request.multipart()
+        field = await reader.next()
+
+        if not field or field.name != 'avatar':
+            return web.json_response({'error': 'No avatar file'}, status=400)
+
+        # Read file data (max 2MB)
+        data = await field.read(chunk_size=2 * 1024 * 1024)
+        if len(data) > 2 * 1024 * 1024:
+            return web.json_response({'error': 'File too large (max 2MB)'}, status=400)
+
+        if not data:
+            return web.json_response({'error': 'Empty file'}, status=400)
+
+        content_type = field.content_type or 'image/jpeg'
+        if content_type not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
+            return web.json_response({'error': 'Invalid image format'}, status=400)
+
+        import base64
+        data_uri = f"data:{content_type};base64,{base64.b64encode(data).decode()}"
+
+        db_session = Session()
+        try:
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            user.custom_avatar = data_uri
+            db_session.commit()
+            logger.info(f"Custom avatar uploaded for user {user_id}")
+
+            return web.json_response({'success': True, 'avatar_url': f'/api/avatar/{user_id}?r={__import__("random").randint(100000,999999)}'})
+        finally:
+            db_session.close()
+
+    except Exception as e:
+        logger.error(f"Error uploading avatar: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_avatar_delete_handler(request):
+    """API endpoint to delete custom avatar (revert to Telegram)"""
+    try:
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        db_session = Session()
+        try:
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                user.custom_avatar = None
+                db_session.commit()
+            return web.json_response({'success': True})
+        finally:
+            db_session.close()
+
+    except Exception as e:
+        logger.error(f"Error deleting avatar: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def api_reminders_handler(request):
@@ -8960,6 +9051,8 @@ app.router.add_post('/api/favorite_contacts', api_favorite_contacts_handler)
 app.router.add_get('/api/blocked_contacts', api_blocked_contacts_handler)
 app.router.add_post('/api/blocked_contacts', api_blocked_contacts_handler)
 app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
+app.router.add_post('/api/avatar/upload', api_avatar_upload_handler)
+app.router.add_post('/api/avatar/delete', api_avatar_delete_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)
 app.router.add_post('/api/set_user_rating', set_user_rating_handler)

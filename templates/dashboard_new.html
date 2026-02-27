@@ -727,14 +727,17 @@
                             <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">
                                 <!-- Основной аватар -->
                                 <div style="position: relative; margin-bottom: 8px; display: flex; align-items: center; justify-content: center;">
-                                    <div>
+                                    <div style="position: relative;">
                                         {% set tier_glow = '#D1D9E0' %}
                                         {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Avatar" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                        <div onclick="openContactProfileModal('{{ user.username }}')" style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <img id="profile-avatar-img" src="{{ user_avatar_url }}" alt="Avatar" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username }}')" style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% else %}
-                                        <div onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
+                                        <!-- Upload avatar button -->
+                                        <div onclick="document.getElementById('avatar-upload-input').click();" style="position: absolute; bottom: -2px; right: -2px; width: 22px; height: 22px; border-radius: 50%; background: #068487; color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; cursor: pointer; border: 2px solid white; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Загрузить аватар">+</div>
+                                        <input type="file" id="avatar-upload-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;" onchange="uploadAvatar(this)">
                                     </div>
                                 </div>
                                 
@@ -1504,6 +1507,56 @@
             if (fallback) {
                 fallback.style.display = 'none';
             }
+        }
+
+        // Upload custom avatar
+        async function uploadAvatar(input) {
+            const file = input.files[0];
+            if (!file) return;
+            if (file.size > 2 * 1024 * 1024) {
+                alert('Максимальный размер файла: 2 МБ');
+                input.value = '';
+                return;
+            }
+            if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+                alert('Поддерживаются форматы: JPEG, PNG, GIF, WebP');
+                input.value = '';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('avatar', file);
+            try {
+                const resp = await fetch('/api/avatar/upload', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                if (!await checkAuth(resp)) return;
+                const data = await resp.json();
+                if (data.success && data.avatar_url) {
+                    // Update profile avatar image
+                    const img = document.getElementById('profile-avatar-img');
+                    const fallback = document.getElementById('profile-avatar-fallback');
+                    if (img) {
+                        img.src = data.avatar_url;
+                        img.style.display = 'block';
+                        if (fallback) fallback.style.display = 'none';
+                    } else if (fallback) {
+                        // No img tag exists yet — create one
+                        const newImg = document.createElement('img');
+                        newImg.id = 'profile-avatar-img';
+                        newImg.src = data.avatar_url;
+                        newImg.alt = 'Avatar';
+                        newImg.style.cssText = 'width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;cursor:pointer;';
+                        fallback.parentNode.insertBefore(newImg, fallback);
+                        fallback.style.display = 'none';
+                    }
+                    window.userAvatarUrl = data.avatar_url;
+                }
+            } catch (e) {
+                console.error('Avatar upload error:', e);
+            }
+            input.value = '';
         }
         
         // Безопасная функция для fetch с обработкой ошибок
