@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 8
-MAX_FEED_PER_DAY = 1
+MAX_FEED_PER_DAY = 2
 MAX_CHANNEL_PER_DAY = 1
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
@@ -2076,6 +2076,28 @@ class AnchorEngine:
                 signals.append(f'skills:{profile.skills[:100]}')
             if profile.interests:
                 signals.append(f'interests:{profile.interests[:100]}')
+            if profile.position:
+                signals.append(f'position:{profile.position[:80]}')
+            if profile.city:
+                signals.append(f'city:{profile.city[:50]}')
+
+        # 8. Активные задачи (материал для поста "чем занимаюсь")
+        if not signals or len(signals) < 2:
+            active_tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['pending', 'in_progress', 'active'])
+            ).order_by(Task.due_date.asc()).limit(3).all()
+            if active_tasks:
+                signals.append(f'active_tasks:{",".join(t.title for t in active_tasks)}')
+
+        # 9. Активные цели (материал для поста)
+        if not signals or len(signals) < 2:
+            active_goals = session.query(Goal).filter(
+                Goal.user_id == user.id,
+                Goal.status == 'active'
+            ).limit(3).all()
+            if active_goals:
+                signals.append(f'active_goals:{",".join(g.title for g in active_goals)}')
 
         # Нет сигналов — нет якоря
         if not signals:
@@ -2097,7 +2119,7 @@ class AnchorEngine:
             }, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=12),
-            cooldown_hours=4,
+            cooldown_hours=2,
             batch_group='posting',
         ))
 
@@ -2144,8 +2166,8 @@ class AnchorEngine:
         current_minutes = user_now.hour * 60 + user_now.minute
         target_minutes = post_h * 60 + post_m
 
-        # Окно: ±30 мин от предпочтительного времени
-        if abs(current_minutes - target_minutes) > 30:
+        # Окно: ±90 мин от предпочтительного времени (широкое окно, чтобы не пропустить при перезапусках)
+        if abs(current_minutes - target_minutes) > 90:
             return anchors
 
         # Собираем контекст для AI
@@ -2336,9 +2358,9 @@ class AnchorEngine:
                 post_text = await self._ai_compose_post(user, anchor_data, session, mode='feed')
                 if not post_text:
                     logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for feed post")
-                    # Помечаем якорь доставленным (skip) чтобы не копились undelivered якоря
-                    anchor.delivered_at = datetime.now(timezone.utc)
+                    # Удаляем якорь (не помечаем delivered — иначе cooldown блокирует следующую попытку)
                     try:
+                        session.delete(anchor)
                         session.commit()
                     except Exception:
                         session.rollback()
@@ -2382,6 +2404,12 @@ class AnchorEngine:
                 post_text = await self._ai_compose_post(user, anchor_data, session, mode='channel')
                 if not post_text:
                     logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for channel post")
+                    # Удаляем якорь (не помечаем delivered — иначе cooldown блокирует следующую попытку)
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
                     return
 
                 # Публикуем в канал
@@ -2744,20 +2772,21 @@ class AnchorEngine:
                     "Ты — автономный агент ASI Biont. Твоя задача — решить, стоит ли сделать пост в ленту "
                     "от лица пользователя.\n\n"
                     "ПРАВИЛА:\n"
-                    "1. Если материала недостаточно или пост будет неинтересным — верни SKIP\n"
+                    "1. ВСЕГДА старайся написать пост. Верни SKIP ТОЛЬКО если сигналов буквально 0 или профиль абсолютно пустой\n"
                     "2. Пиши от ПЕРВОГО лица, как будто сам пользователь делится с миром\n"
                     "3. Пост может быть О ЧЁМ УГОДНО: достижения, мысли, поиск людей, экспертное мнение, "
                     "итоги дня, просьба о помощи, инсайты, открытия, планы — выбери самое полезное\n"
-                    "4. Естественный, живой стиль. 3-6 предложений. БЕЗ эмодзи, без хештегов, без призывов к действию\n"
-                    "5. НЕ ВЫДУМЫВАЙ факты. Основывайся ТОЛЬКО на реальных сигналах ниже\n"
-                    "6. Верни ТОЛЬКО текст поста или SKIP. Ничего больше."
+                    "4. Даже 1 сигнал — достаточно для поста. Навыки или интересы из профиля = хороший повод для экспертного поста\n"
+                    "5. Естественный, живой стиль. 3-6 предложений. БЕЗ эмодзи, без хештегов, без призывов к действию\n"
+                    "6. НЕ ВЫДУМЫВАЙ факты. Основывайся ТОЛЬКО на реальных сигналах ниже\n"
+                    "7. Верни ТОЛЬКО текст поста или SKIP. Ничего больше."
                 )
             else:  # channel
                 content_strategy = anchor_data.get('content_strategy', '')
                 system_msg = (
                     "Ты — контент-менеджер для Telegram-канала пользователя.\n\n"
                     "ПРАВИЛА:\n"
-                    "1. Если нет хорошего материала для канала — верни SKIP\n"
+                    "1. ВСЕГДА старайся написать пост. Верни SKIP ТОЛЬКО если профиль абсолютно пустой и нет ни одного сигнала\n"
                     "2. Пиши от лица автора канала, экспертно и полезно\n"
                     "3. Пост должен нести ценность для аудитории канала\n"
                     f"4. Контент-стратегия: {content_strategy or 'не указана'}\n"
