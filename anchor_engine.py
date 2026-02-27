@@ -124,6 +124,7 @@ BATCH_GROUPS = {
     'email_follow_up': 'email',
     'email_reply_received': 'email',
     'email_campaign_report': 'email',
+    'email_need_leads': 'email',    # Кампании нужны новые контакты
 }
 
 
@@ -479,7 +480,7 @@ class AnchorEngine:
             return
 
         # ── Разделяем потоки ──
-        EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up'}
+        EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
@@ -1821,6 +1822,39 @@ class AnchorEngine:
                         session.rollback()
                     continue  # Skip anchors for completed campaign
 
+            # --- 3b. Нужны новые лиды: нет черновиков, но кампания не заполнена ---
+            # Срабатывает когда: активная кампания, 0 черновиков, ещё есть квота (total/daily)
+            if not is_paused and not drafts and remaining_daily > 0 and remaining_total > 0:
+                # Считаем сколько контактов уже есть (sent + draft)
+                total_in_pipeline = session.query(EmailOutreach).filter(
+                    EmailOutreach.campaign_id == campaign.id,
+                ).count()
+                # Запускаем поиск только если ещё есть в квоте место
+                if remaining_total > total_in_pipeline or remaining_total >= 999999:
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='email_need_leads',
+                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d-%H")}',
+                        topic=_t(user,
+                            f'🔍 Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
+                            f'🔍 Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
+                        priority=AnchorPriority.MEDIUM,
+                        data=json.dumps({
+                            'campaign_id': campaign.id,
+                            'campaign_name': campaign.name,
+                            'campaign_goal': campaign.goal[:500] if campaign.goal else '',
+                            'target_audience': campaign.target_audience[:300] if campaign.target_audience else '',
+                            'offer': campaign.offer[:300] if campaign.offer else '',
+                            'total_in_pipeline': total_in_pipeline,
+                            'remaining_daily': remaining_daily,
+                            'remaining_total': min(remaining_total, 50),
+                        }),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(hours=6),
+                        cooldown_hours=4,  # не чаще 4 часов
+                        batch_group='email',
+                    ))
+
             # --- 4. Дневной отчёт по кампании (если есть активность, не для paused) ---
             if is_paused:
                 continue
@@ -2718,6 +2752,7 @@ class AnchorEngine:
                 "— email_follow_up: Отправь follow-up письмо. В data будет original_subject, original_body, follow_up_number. Используй send_outreach_email или reply_to_outreach_email. Будь ненавязчив. Верни SKIP.",
                 "— email_reply_received: КРИТИЧНО! Кто-то ответил на наше письмо. В data: original_body (что МЫ писали изначально), reply_text (что ответил контакт), ai_previous_reply (наш предыдущий ответ, если был). СНАЧАЛА прочитай ВСЮ цепочку: original_body → reply_text → ai_previous_reply. Пойми что уже было сказано с обеих сторон и какие вопросы уже задавались. НЕ повторяй вопросы из original_body или ai_previous_reply — продолжай диалог ЛОГИЧНО дальше. Используй reply_to_outreach_email чтобы продолжить диалог в рамках campaign_goal. ОБЯЗАТЕЛЬНО уведоми пользователя о полученном ответе! ЭТО ЕДИНСТВЕННЫЙ email-якорь где надо НАПИСАТЬ пользователю. ВАЖНО ПРО ЗАВЕРШЕНИЕ: НЕ завершай кампанию и НЕ отмечай связанные задачи выполненными до тех пор, пока адресат явно и однозначно не подтвердит целевое действие (например — начало тестирования, встречу, оплату, регистрацию и т.п. в зависимости от campaign_goal). Слова 'интересно', 'расскажи больше', 'хорошо' — НЕ являются подтверждением. Цель считается достигнутой только когда получено явное подтверждение факта действия.",
                 "— email_campaign_report: Отчёт по кампании. Напиши пользователю краткую сводку: отправлено, ответов, что дальше.",
+                "— email_need_leads: Кампания активна, но ЧЕРНОВИКОВ НЕТ — нужно найти новых контактов и добавить через add_email_leads. В data: campaign_goal, target_audience, offer, remaining_daily (сколько ещё можно сегодня). ИЩИ ПАРАЛЛЕЛЬНО минимум через 3-5 запросов: (1) web_search('site:linkedin.com [роль/индустрия из target_audience] email contact'), (2) web_search('[отрасль] founder CEO email \"@gmail.com\" OR \"@outlook.com\"'), (3) web_search('[ключевое слово из goal] blog author contact email -info -support'), (4) web_search('site:github.com [технология/тема] maintainer email'), (5) research_topic('[ниша кампании] лидеры сообщества email'). Собирай ТОЛЬКО личные email (john@company.com — ОК; info@company.com — НЕТ). Цель: минимум 5-10 контактов за один запуск. Передавай в add_email_leads JSON [{{\"email\":...,\"name\":...,\"company\":...,\"context\":...}}] с пояснением почему этот человек релевантен цели кампании. Верни SKIP после добавления — engine сам запустит отправку.",
                 "",
                 "ПРИНЦИПЫ:",
                 "— НЕ НАЧИНАЙ С ПРИВЕТСТВИЯ: никаких 'Привет!', 'Здравствуй!', 'Доброе утро!' и т.п. Сразу по делу — с факта, вопроса или наблюдения. Ты не здороваешься каждый раз, ты уже рядом.",
@@ -2737,7 +2772,7 @@ class AnchorEngine:
 
             prompt_parts.append(f"\n=== ЯКОРЯ ({len(anchors)} шт) ===")
             # Типы якорей, для которых нужно передавать полные данные (data) в промпт
-            EMAIL_DATA_TYPES = {'email_reply_received', 'email_outreach_send', 'email_follow_up', 'email_campaign_report'}
+            EMAIL_DATA_TYPES = {'email_reply_received', 'email_outreach_send', 'email_follow_up', 'email_campaign_report', 'email_need_leads'}
             for i, ad in enumerate(anchor_descriptions, 1):
                 prompt_parts.append(
                     f"{i}. [{ad['priority']}] {ad['type']}: {ad['topic']} "

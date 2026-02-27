@@ -8724,6 +8724,35 @@ async def add_email_leads(
                 status='draft',
             )
             session.add(outreach)
+
+            # ── Автосохранение в справочник контактов (EmailContact) ──
+            try:
+                from models import EmailContact
+                ec_existing = session.query(EmailContact).filter_by(
+                    user_id=user.id, email=email
+                ).first()
+                if ec_existing:
+                    # Обновляем если есть новые данные
+                    if lead.get('name') and not ec_existing.name:
+                        ec_existing.name = lead['name']
+                    if lead.get('company') and not ec_existing.company:
+                        ec_existing.company = lead['company']
+                    if lead.get('context') and not ec_existing.notes:
+                        ec_existing.notes = lead['context']
+                else:
+                    ec = EmailContact(
+                        user_id=user.id,
+                        email=email,
+                        name=(lead.get('name') or '').strip() or None,
+                        company=(lead.get('company') or '').strip() or None,
+                        notes=(lead.get('context') or '').strip() or None,
+                        source='campaign',
+                        status='new',
+                    )
+                    session.add(ec)
+            except Exception as _ec_err:
+                logger.warning(f"[EMAIL_LEADS] Failed to save EmailContact for {email}: {_ec_err}")
+
             added += 1
         session.commit()
 
@@ -8733,10 +8762,14 @@ async def add_email_leads(
                 from anchor_engine import get_anchor_engine
                 _engine = get_anchor_engine()
                 if _engine:
-                    import asyncio as _asyncio_leads
-                    _asyncio_leads.get_event_loop().create_task(
-                        _engine._process_user(user.telegram_id)
-                    )
+                    try:
+                        import asyncio as _asyncio_leads
+                        loop = _asyncio_leads.get_running_loop()
+                        loop.create_task(_engine._process_user(user.telegram_id))
+                    except RuntimeError:
+                        # Нет текущего event loop — запускаем через ensure_future
+                        import asyncio as _asyncio_leads
+                        _asyncio_leads.ensure_future(_engine._process_user(user.telegram_id))
                     logger.info(f"[EMAIL_LEADS] Triggered anchor engine for user {user.telegram_id} after adding {added} leads")
             except Exception as _trigger_err:
                 logger.warning(f"[EMAIL_LEADS] Failed to trigger anchor engine: {_trigger_err}")

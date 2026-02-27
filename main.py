@@ -8959,8 +8959,29 @@ if __name__ == "__main__":
                 anchor_engine_task = None
                 try:
                     from anchor_engine import start_anchor_engine
+
+                    async def _anchor_engine_supervisor():
+                        """Супервизор: перезапускает AnchorEngine при сбое"""
+                        restart_delay = 60  # первый перезапуск через 1 мин
+                        while True:
+                            try:
+                                logger.info("AnchorEngine supervisor: starting engine...")
+                                await start_anchor_engine(bot)
+                            except asyncio.CancelledError:
+                                logger.info("AnchorEngine supervisor: cancelled, stopping")
+                                return
+                            except Exception as _ae_err:
+                                logger.error(f"AnchorEngine crashed: {_ae_err}, restarting in {restart_delay}s")
+                                await asyncio.sleep(restart_delay)
+                                restart_delay = min(restart_delay * 2, 600)  # max 10 мин
+                            else:
+                                # engine.start() завершился (running=False) — перезапустим через 30с
+                                logger.warning("AnchorEngine exited normally, restarting in 30s")
+                                await asyncio.sleep(30)
+                                restart_delay = 60  # сбрасываем задержку
+
                     logger.info("Starting AnchorEngine in background...")
-                    anchor_engine_task = asyncio.create_task(start_anchor_engine(bot))
+                    anchor_engine_task = asyncio.create_task(_anchor_engine_supervisor())
                     logger.info("AnchorEngine task created")
                 except Exception as e:
                     logger.error(f"Failed to start AnchorEngine: {e}")
