@@ -4295,8 +4295,6 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
         # Используем уже вычисленную релевантность из get_partners_list
         if hasattr(partner, 'task_relevance_score') and partner.task_relevance_score > 0:
             relevance_score += partner.task_relevance_score
-            if hasattr(partner, 'task_relevance') and partner.task_relevance:
-                match_reasons.append(partner.task_relevance)
         
         if relevance_score > 0:
             partner_user = session.query(User).filter_by(id=partner.user_id).first()

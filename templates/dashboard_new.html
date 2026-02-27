@@ -7897,12 +7897,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     
                                     // Check if there are any common fields
-                                    const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals || partner.task_relevance;
+                                    const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals;
                                     
-                                    // Приоритет: сначала релевантность для текущих задач
-                                    if (partner.task_relevance) {
-                                        html += '<span class="task-meta" style="color: #D97706; font-weight: 500;">🎯 ' + partner.task_relevance + '</span>';
-                                    }
                                     if (partner.interests) {
                                         html += '<span class="task-meta">' + t('interests-label') + ' ' + partner.interests + '</span>';
                                     }

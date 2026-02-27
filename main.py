@@ -1381,9 +1381,6 @@ async def dashboard_handler(request):
                             reason_parts.append(f"общие навыки: {partner.common_skills}")
                         if hasattr(partner, 'common_goals') and partner.common_goals:
                             reason_parts.append(f"общие цели: {partner.common_goals}")
-                        if hasattr(partner, 'task_relevance') and partner.task_relevance:
-                            reason_parts.append(partner.task_relevance)
-                        
                         reason = ', '.join(reason_parts) if reason_parts else 'рекомендован системой'
                         
                         # Добавляем в delegating_to_me как рекомендованный контакт
