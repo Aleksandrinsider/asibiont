@@ -1852,7 +1852,7 @@ class AnchorEngine:
                         }),
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(hours=6),
-                        cooldown_hours=4,  # не чаще 4 часов
+                        cooldown_hours=1,  # каждый час проверяем нужны ли лиды
                         batch_group='email',
                     ))
 

@@ -8164,9 +8164,9 @@ async def start_email_campaign(
                 f"👥 Audience: {target_audience[:200]}\n"
                 f"💼 Offer: {offer[:200]}\n"
                 f"📨 Daily limit: {daily_limit} emails/day{f', max {max_emails} total' if max_emails and max_emails > 0 else ', unlimited total'}\n\n"
-                f"The agent will autonomously search for relevant contacts, "
-                f"compose personalized emails, and handle replies within the campaign goal.\n"
-                f"Use /email_status to check progress."
+                f"⚡ NEXT STEP: Search for contacts NOW using web_search (3-5 queries across GitHub, LinkedIn, blogs, ProductHunt) "
+                f"and add at least 5-10 PERSONAL emails via add_email_leads(campaign_id={campaign.id}, leads=[...])! "
+                f"Do NOT postpone — campaign is empty, no one to send to."
             )
         return (
             f"📧 Email-кампания #{campaign.id} «{name}» создана!\n\n"
@@ -8174,9 +8174,9 @@ async def start_email_campaign(
             f"👥 Аудитория: {target_audience[:200]}\n"
             f"💼 Предложение: {offer[:200]}\n"
             f"📨 Лимит: {daily_limit} писем/день{f', макс. {max_emails} всего' if max_emails and max_emails > 0 else ', без ограничений'}\n\n"
-            f"Агент будет автономно искать релевантные контакты, "
-            f"писать персонализированные письма и отвечать на ответы в рамках цели кампании.\n"
-            f"Статус: спроси «статус email кампании»."
+            f"⚡ СЛЕДУЮЩИЙ ШАГ: СЕЙЧАС ЖЕ найди контакты через web_search (3-5 запросов по разным источникам: GitHub, LinkedIn, блоги, ProductHunt) "
+            f"и добавь минимум 5-10 ЛИЧНЫХ email через add_email_leads(campaign_id={campaign.id}, leads=[...])! "
+            f"НЕ откладывай поиск — кампания пуста, писем некому отправить."
         )
     except Exception as e:
         logger.error(f"[EMAIL_CAMPAIGN] Error creating campaign: {e}", exc_info=True)
