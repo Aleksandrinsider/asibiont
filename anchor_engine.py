@@ -1671,7 +1671,11 @@ class AnchorEngine:
             ).count()
 
             remaining_daily = max(0, campaign.daily_limit - sent_today)
-            remaining_total = max(0, campaign.max_emails - (campaign.emails_sent or 0))
+            # max_emails=0 означает безлимитную кампанию
+            if campaign.max_emails and campaign.max_emails > 0:
+                remaining_total = max(0, campaign.max_emails - (campaign.emails_sent or 0))
+            else:
+                remaining_total = 999999  # безлимит
 
             if drafts and remaining_daily > 0 and remaining_total > 0:
                 draft_emails = [d.recipient_email for d in drafts[:3]]
