@@ -336,12 +336,14 @@ class AnchorEngine:
             return
 
         # Проверка баланса токенов (минимум на 1 проактивное сообщение)
+        # НЕ блокируем полностью — email silent имеет отдельную проверку токенов
         from token_service import has_enough_tokens, get_balance
         from config import FREE_ACCESS_MODE
+        has_proactive_tokens = True
         if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'proactive_message'):
             balance = get_balance(user_id)
-            logger.info(f"[ANCHOR] User {user_id}: ⛔ недостаточно токенов (баланс: {balance}, нужно: 15), пропуск")
-            return
+            has_proactive_tokens = False
+            logger.info(f"[ANCHOR] User {user_id}: ⚠️ недостаточно токенов для proactive (баланс: {balance}), dialog/posts заблокированы, email silent продолжит")
 
         # Проверка DND
         if user.do_not_disturb_until:
@@ -372,8 +374,8 @@ class AnchorEngine:
                 EmailOutreach.ai_reply_sent_at.is_(None),
             ).first() is not None
             if not has_pending and not has_unreplied_email:
-                logger.info(f"[ANCHOR] User {user_id}: ⛔ ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00), пропуск")
-                return
+                logger.info(f"[ANCHOR] User {user_id}: 🌙 ночные часы ({user_now.strftime('%H:%M')} {user.timezone or 'Europe/Moscow'}, окно {MORNING_START_HOUR}:00-{NIGHT_START_HOUR}:00) — dialog/posts заблокированы, silent продолжат")
+                # НЕ return — email silent / content / delegation обрабатываются ниже по is_night флагу
             if has_pending:
                 logger.info(f"[ANCHOR] User {user_id}: 🌙 ночные часы, но есть pending reminders — обрабатываем только CRITICAL")
             if has_unreplied_email:
@@ -501,7 +503,11 @@ class AnchorEngine:
 
         # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
         all_dialog_anchors = critical_anchors.copy()
-        if is_night:
+        if not has_proactive_tokens:
+            # Нет токенов на proactive — блокируем regular, но critical всё равно доставляем
+            if regular_anchors:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (insufficient tokens)")
+        elif is_night:
             # Ночью — только CRITICAL/ALWAYS_DELIVER (task_reminder, task_overdue и т.д.)
             if regular_anchors:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (night hours)")
@@ -510,7 +516,7 @@ class AnchorEngine:
         elif regular_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok}, active_dialog={active_dialog})")
 
-        if all_dialog_anchors:
+        if all_dialog_anchors and has_proactive_tokens:
             anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
             logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
             # AI semaphore — ограничивает параллельные DeepSeek запросы
@@ -522,8 +528,8 @@ class AnchorEngine:
             else:
                 logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
 
-        # ── 3c. FEED POSTS — отдельный лимит (не ночью) ──
-        if not is_night:
+        # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
+        if not is_night and has_proactive_tokens:
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
             if feed_posts and post_count < MAX_FEED_PER_DAY:
                 for pa in feed_posts[:1]:

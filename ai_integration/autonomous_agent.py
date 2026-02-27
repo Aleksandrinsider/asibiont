@@ -991,14 +991,14 @@ class HybridAutonomousAgent:
                 emotion = CognitiveEngine.detect_emotion(user_message)
                 intent = CognitiveEngine.classify_intent(user_message)
                 
-                # Семантическая память из Pinecone
+                # Семантическая память из Pinecone — ОТКЛЮЧЕНА (в разработке)
                 memory_context = ""
-                try:
-                    memory_context = await build_memory_context(user_id, user_message, max_chars=1200)
-                    if memory_context:
-                        base_prompt += memory_context
-                except Exception as e:
-                    logger.warning(f"[VECTOR] Memory search failed: {e}")
+                # try:
+                #     memory_context = await build_memory_context(user_id, user_message, max_chars=1200)
+                #     if memory_context:
+                #         base_prompt += memory_context
+                # except Exception as e:
+                #     logger.warning(f"[VECTOR] Memory search failed: {e}")
                 
                 orchestrator = get_orchestrator()
                 user_now = ctx.get('user_now')
@@ -1068,9 +1068,9 @@ class HybridAutonomousAgent:
                 user_message, profile_data=profile_data, tasks_data=tasks_data
             )
 
-            # ===== Tool calling loop (max 3 итераций) =====
+            # ===== Tool calling loop (max 2 итераций) =====
             all_execution_results = []
-            MAX_ITERATIONS = 3
+            MAX_ITERATIONS = 2
             MAX_TOOLS_PER_ITERATION = 4  # Лимит инструментов за одну итерацию
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
@@ -1106,44 +1106,7 @@ class HybridAutonomousAgent:
                 tool_calls = msg.get('tool_calls', [])
 
                 if not tool_calls:
-                    # AI ответил текстом → проверяем, не слишком ли коротко для нового пользователя
-                    # Retry только на первой итерации и только если не было tool-вызовов
-                    if iteration == 0 and not all_execution_results:
-                        _profile_fields = ['city', 'goals', 'skills', 'interests']
-                        _missing = sum(1 for f in _profile_fields if not profile_data.get(f))
-                        if _missing >= 2 and len(content.strip()) < 300:
-                            logger.info(f"[AGENT] Short response ({len(content)} chars) for new user — retrying without tools")
-                            # НЕ добавляем короткий ответ в историю — просто перезваниваем без tools
-                            retry_messages = messages.copy()
-                            if user_lang == 'en':
-                                _retry_text = (
-                                    "This is a new person, first meeting moment. "
-                                    "EXPAND each direction with a specific example — show depth and insight, "
-                                    "don't just list things separated by commas. "
-                                    "Cover 3-4 directions in detail, with vivid real-life examples. "
-                                    "Show that you THINK, not just execute commands. "
-                                    "End with ONE engaging question about them. "
-                                    "Write in flowing text, 2-3 paragraphs, no lists. Write ONLY in English."
-                                )
-                            else:
-                                _retry_text = (
-                                    "Это новый человек, момент знакомства. "
-                                    "РАСКРОЙ каждое направление с конкретным примером — покажи глубину и сообразительность, "
-                                    "а не перечисляй через запятую. "
-                                    "Раскрой 3-4 направления подробно, с живыми примерами ситуаций. "
-                                    "Покажи что ты ДУМАЕШЬ, а не просто выполняешь команды. "
-                                    "Заверши ОДНИМ живым вопросом о нём. "
-                                    "Пиши сплошным текстом 2-3 абзаца, без списков."
-                                )
-                            retry_messages.append({
-                                "role": "user",
-                                "content": _retry_text
-                            })
-                            retry_resp = await self.call_ai(
-                                retry_messages, use_tools=False, temperature=0.75, max_tokens=1200)
-                            retry_text = retry_resp['choices'][0]['message'].get('content', '')
-                            if len(retry_text.strip()) > len(content.strip()):
-                                content = retry_text
+                    # AI ответил текстом → сразу возвращаем (retry убран для скорости)
                     return self._finalize_response(
                         content, user_message, user_id, all_execution_results)
 
@@ -1376,42 +1339,46 @@ class HybridAutonomousAgent:
             if len(self.context_memory) > 100:
                 self.context_memory = self.context_memory[-100:]
 
-        # === Семантическая память (Pinecone) — fire-and-forget ===
-        try:
-            from .cognitive import CognitiveEngine
-            emotion = CognitiveEngine.detect_emotion(user_message)
-            intent = CognitiveEngine.classify_intent(user_message)
-            asyncio.get_event_loop().create_task(
-                store_conversation_turn(
+        # === Семантическая память (Pinecone) — ОТКЛЮЧЕНА (в разработке) ===
+        # try:
+        #     from .cognitive import CognitiveEngine
+        #     emotion = CognitiveEngine.detect_emotion(user_message)
+        #     intent = CognitiveEngine.classify_intent(user_message)
+        #     asyncio.get_event_loop().create_task(
+        #         store_conversation_turn(
+        #             user_id=user_id,
+        #             user_message=user_message,
+        #             bot_response=response,
+        #             emotion=emotion,
+        #             intent=intent
+        #         )
+        #     )
+        # except Exception as e:
+        #     logger.warning(f"[VECTOR] Store failed: {e}")
+
+        # === Self-learning feedback loop (fire-and-forget для скорости) ===
+        async def _self_learn_bg():
+            try:
+                from .cognitive import CognitiveEngine
+                emotion = CognitiveEngine.detect_emotion(user_message)
+                intent = CognitiveEngine.classify_intent(user_message)
+                _, issues = CognitiveEngine.validate_response(response, user_message)
+                learner = get_learner()
+                learner.record_turn(
                     user_id=user_id,
                     user_message=user_message,
-                    bot_response=response,
+                    response=response,
+                    tools_used=tools_used,
                     emotion=emotion,
-                    intent=intent
+                    intent=intent,
+                    issues=issues if issues else None
                 )
-            )
-        except Exception as e:
-            logger.warning(f"[VECTOR] Store failed: {e}")
-
-        # === Self-learning feedback loop ===
+            except Exception as e:
+                logger.warning(f"[SELF-LEARN] Record failed: {e}")
         try:
-            from .cognitive import CognitiveEngine
-            emotion = CognitiveEngine.detect_emotion(user_message)
-            intent = CognitiveEngine.classify_intent(user_message)
-            _, issues = CognitiveEngine.validate_response(response, user_message)
-            
-            learner = get_learner()
-            learner.record_turn(
-                user_id=user_id,
-                user_message=user_message,
-                response=response,
-                tools_used=tools_used,
-                emotion=emotion,
-                intent=intent,
-                issues=issues if issues else None
-            )
-        except Exception as e:
-            logger.warning(f"[SELF-LEARN] Record failed: {e}")
+            asyncio.get_event_loop().create_task(_self_learn_bg())
+        except Exception:
+            pass
 
         # === Долгосрочная память — только значимые факты ===
         # НЕ сохраняем CRUD-результаты (задачи/цели уже в БД — дубли вызывают галлюцинации)

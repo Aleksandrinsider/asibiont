@@ -370,6 +370,7 @@ class ContextBuilder:
                 try:
                     from .handlers import get_partners_list
                     partners = get_partners_list(user.id, session)
+                    self._cached_partners = partners  # кеш для _build_social_metrics
                     if partners:
                         for p in partners[:5]:
                             partner_user = session.query(User).filter_by(id=p.user_id).first()
@@ -880,11 +881,13 @@ class ContextBuilder:
         try:
             now_utc = datetime.now(timezone.utc)
 
-            # ─── Сеть контактов ───
+            # ─── Сеть контактов (используем кеш из build_context) ───
             contact_count = 0
             try:
-                from .handlers import get_partners_list
-                partners = get_partners_list(user.id, session)
+                partners = getattr(self, '_cached_partners', None)
+                if partners is None:
+                    from .handlers import get_partners_list
+                    partners = get_partners_list(user.id, session)
                 contact_count = len(partners) if partners else 0
             except Exception:
                 pass

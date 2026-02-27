@@ -151,11 +151,17 @@ class LiveDialogTester:
         """Подготовка: чистим старого юзера, создаём пустой профиль."""
         old = self.db.query(User).filter_by(telegram_id=self.tg_id).first()
         if old:
-            from models import Interaction, Post, Subscription, ContactAlert, ActivityAlert, TokenTransaction, AnchorDeliveryLog, UserMessage, Anchor, EmailOutreach, EmailCampaign, AgentActivityLog
+            from models import Interaction, Post, Subscription, ContactAlert, ActivityAlert, TokenTransaction, AnchorDeliveryLog, UserMessage, Anchor, EmailOutreach, EmailCampaign, AgentActivityLog, UserRating
             # Удаляем сообщения где пользователь — отправитель или получатель
             for msg_filter in [UserMessage.sender_id == old.id, UserMessage.recipient_id == old.id]:
                 try:
                     self.db.query(UserMessage).filter(msg_filter).delete()
+                except Exception:
+                    pass
+            # Удаляем рейтинги где пользователь — оценщик или оцениваемый
+            for rating_filter in [UserRating.rater_user_id == old.id, UserRating.rated_user_id == old.id]:
+                try:
+                    self.db.query(UserRating).filter(rating_filter).delete()
                 except Exception:
                     pass
             for model in [EmailOutreach, EmailCampaign, AgentActivityLog, Anchor, AnchorDeliveryLog, TokenTransaction, ContactAlert, ActivityAlert, Task, Goal, UserProfile, Interaction, Post, Subscription]:
