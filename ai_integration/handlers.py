@@ -8278,9 +8278,12 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             for tech in _found_techs[:3]:
                 gh_queries.append(f"{tech} developer")
             if _has_cyrillic:
-                gh_queries.append(f"{core_kw} location:Russia")
+                # Для русской аудитории — приоритет на RU-локацию
+                gh_queries.insert(0, f"{core_kw} location:Russia")
+                gh_queries.append(f"{core_kw} location:Moscow")
+                gh_queries.append(f"{core_kw} location:Saint Petersburg")
             
-            gh_queries = gh_queries[:5]
+            gh_queries = gh_queries[:6]  # увеличили лимит для RU
             if gh_queries:
                 logger.info(f"[AUTO_LEADS] Tech audience → GitHub search: {gh_queries}")
                 github_leads = await api.github_multi_search(
@@ -8302,6 +8305,24 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     # ══════════════════════════════════════════════════════════════════════
     lang_hint = "Russian" if _has_cyrillic else "English"
 
+    # ── Определяем язык для поисковых запросов ──
+    _ru_lang_block = ""
+    if _has_cyrillic:
+        _ru_lang_block = """\n\nLANGUAGE: The target audience speaks RUSSIAN. You MUST:
+- Generate 7-8 queries in RUSSIAN (кириллицей)
+- Generate 2-3 queries in English but targeting Russian-speaking people
+- Use Russian platforms: vc.ru, habr.com, tproger.ru, spark.ru, rb.ru, pikabu.ru
+- Use Russian role words: разработчик, тестировщик, маркетолог, предприниматель, эксперт
+- Use Russian contact words: контакт, email, почта, "написать мне", "связаться"
+
+GOOD Russian examples:
+  "разработчик ИИ email контакт"
+  "тестировщик email портфолио"
+  "habr.com автор ИИ email"
+  "vc.ru предприниматель email контакт"
+  "маркетолог \"написать мне\" email"
+  "AI developer Russia email contact"""
+
     query_gen_prompt = f"""You are an expert lead researcher finding PEOPLE with public email addresses.
 
 Campaign goal: {goal[:200]}
@@ -8310,6 +8331,7 @@ Product/offer: {offer[:200]}
 
 Generate 10 DuckDuckGo search queries to find pages with VISIBLE email addresses of relevant people.
 The target audience may be from ANY field — tech, marketing, design, business, education, health, etc.
+{_ru_lang_block}
 
 CRITICAL — DuckDuckGo rules:
 - MAX 4-5 words per query (DDG ignores long queries!)
@@ -8376,42 +8398,58 @@ Return ONLY a JSON array of 10 strings. No explanation."""
     # ══════════════════════════════════════════════════════════════════════
     # УНИВЕРСАЛЬНЫЕ fallback-запросы — работают для ЛЮБОЙ ниши
     # Стратегия: [core_kw] + email-маркер + платформа/контекст
-    universal_queries = [
-        # Персональные сайты и портфолио
-        f'{core_kw} email portfolio contact',
-        f'{core_kw} "get in touch" email',
-        f'{core_kw} "contact me" email',
-        f'{core_kw} "email me" expert',
-        f'{core_kw} freelancer hire email',
-        f'{core_kw} consultant email contact',
-        # Блог-платформы (универсальные для любой ниши)
-        f'{core_kw} medium.com author email',
-        f'{core_kw} substack.com email contact',
-        f'{core_kw} about.me email',
-        f'{core_kw} blog author "reach out"',
-        # Бизнес и профессионалы
-        f'{core_kw} founder CEO email',
-        f'{core_kw} agency team email contact',
-        f'{core_kw} expert "my email" contact',
-        f'{core_kw} speaker trainer email',
-    ]
     if _has_cyrillic:
-        # Добавляем RU-специфичные запросы
-        universal_queries.extend([
-            f'{core_kw} "написать мне" email автор',
+        # ── Для РУССКОЯЗЫЧНОЙ аудитории: RU-запросы В ПРИОРИТЕТЕ ──
+        universal_queries = [
+            # RU платформы и ключевые слова (первые!)
             f'{core_kw} email контакт портфолио',
-            f'{core_kw} vc.ru автор контакт email',
-            f'{core_kw} habr.com автор email',
+            f'{core_kw} "написать мне" email',
+            f'{core_kw} "связаться" email контакт',
             f'{core_kw} эксперт email контакт',
+            f'{core_kw} vc.ru автор email контакт',
+            f'{core_kw} habr.com автор email',
+            f'{core_kw} tproger.ru email автор',
+            f'{core_kw} spark.ru email контакт',
             f'{core_kw} фрилансер email контакт',
-        ])
+            f'{core_kw} разработчик email Россия',
+            f'{core_kw} блог автор email почта',
+            f'{core_kw} telegram email контакт',
+            # EN запросы для русскоязычных с западным присутствием
+            f'{core_kw} Russia email contact',
+            f'{core_kw} Russian developer email',
+            f'{core_kw} email portfolio contact',
+            f'{core_kw} "get in touch" email',
+        ]
+    else:
+        universal_queries = [
+            # Персональные сайты и портфолио
+            f'{core_kw} email portfolio contact',
+            f'{core_kw} "get in touch" email',
+            f'{core_kw} "contact me" email',
+            f'{core_kw} "email me" expert',
+            f'{core_kw} freelancer hire email',
+            f'{core_kw} consultant email contact',
+            # Блог-платформы (универсальные для любой ниши)
+            f'{core_kw} medium.com author email',
+            f'{core_kw} substack.com email contact',
+            f'{core_kw} about.me email',
+            f'{core_kw} blog author "reach out"',
+            # Бизнес и профессионалы
+            f'{core_kw} founder CEO email',
+            f'{core_kw} agency team email contact',
+            f'{core_kw} expert "my email" contact',
+            f'{core_kw} speaker trainer email',
+        ]
     if _is_tech_audience:
         # Для tech — добавляем dev-платформы
-        universal_queries.extend([
+        _tech_queries = [
             f'{core_kw} github.com email README',
             f'{core_kw} dev.to author email',
             f'{core_kw} stackoverflow.com user email',
-        ])
+        ]
+        if _has_cyrillic:
+            _tech_queries.insert(0, f'{core_kw} github.com location Russia email')
+        universal_queries.extend(_tech_queries)
 
     # AI-запросы в приоритете, fallback добирают до 18
     queries = ai_queries[:10]
@@ -8597,6 +8635,11 @@ Return ONLY a JSON array of 10 strings. No explanation."""
             gh_lines = [f"  {em}: {ctx}" for em, ctx in list(github_context_map.items())[:20]]
             github_context = "\n\nGitHub profile data:\n" + "\n".join(gh_lines)
         
+        # Инструкция по языку для AI-фильтра
+        _lang_filter_hint = ""
+        if _has_cyrillic:
+            _lang_filter_hint = "\n7. LANGUAGE PRIORITY: The target audience is RUSSIAN-SPEAKING. Strongly prefer people with Russian names, from .ru/.by/.ua/.kz domains, or with Russian context. Foreign recipients are acceptable ONLY if they clearly match the target audience AND work in the Russian market."
+
         extract_prompt = f"""I found these email addresses from web search and GitHub profiles.
 Your job is to FILTER them — keep ONLY emails of people who GENUINELY match the target audience.
 
@@ -8618,7 +8661,7 @@ STRICT RULES:
 3. If you cannot determine the person's role/interests from context, EXCLUDE them (relevance=0).
 4. SKIP: info@, contact@, support@, sales@, admin@, noreply@, and any corporate/generic emails.
 5. SKIP: emails from unrelated people (random commenters, unrelated authors, etc.)
-6. Better to return 3 RELEVANT leads than 15 irrelevant ones.
+6. Better to return 3 RELEVANT leads than 15 irrelevant ones.{_lang_filter_hint}
 
 Return JSON array: [{{"email":"...","name":"...","company":"...","relevance":8,"context":"why this person matches target audience"}}]
 If NO emails are relevant, return empty array: []"""
