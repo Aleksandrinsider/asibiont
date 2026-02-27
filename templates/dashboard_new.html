@@ -608,18 +608,8 @@
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"/>
                     </svg>
-                    <span data-i18n="search-contacts">Поиск</span>
+                    <span data-i18n="search-contacts">Поиск контактов</span>
                 </button>
-
-                <!-- Поддержка -->
-                <a href="https://t.me/aleksandrinsider" target="_blank" style="text-decoration: none;">
-                    <button style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
-                            <path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/>
-                        </svg>
-                        <span data-i18n="support">Поддержка</span>
-                    </button>
-                </a>
 
                 <!-- Сообщения -->
                 <button onclick="openMessagesSection()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
@@ -1600,6 +1590,16 @@
                         fallback.style.display = 'none';
                     }
                     window.userAvatarUrl = data.avatar_url;
+                    // Обновляем все аватары пользователя на странице (лента, контакты, чат)
+                    if (window.currentUserTelegramId) {
+                        const tgId = window.currentUserTelegramId;
+                        const cacheBuster = data.avatar_url.split('?r=')[1] || Date.now();
+                        document.querySelectorAll('img').forEach(el => {
+                            if (el.src && el.src.includes('/api/avatar/' + tgId)) {
+                                el.src = '/api/avatar/' + tgId + '?r=' + cacheBuster;
+                            }
+                        });
+                    }
                 }
             } catch (e) {
                 console.error('Avatar upload error:', e);
@@ -3975,6 +3975,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         postElement.style.opacity = '0';
                         setTimeout(() => postElement.remove(), 300);
                     }
+                    if (lastPostCount > 0) lastPostCount--;
                 } else {
                     showNotification(t('err-prefix') + ' ' + (data.error || t('err-unknown')), 'error');
                 }
@@ -5305,8 +5306,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                          onmouseout="this.style.background='#FFFFFF'">
                         ${photoUrl ? 
                             `<img src="${photoUrl}" alt="${contact.first_name}" onclick="openContactProfileModal('${contact.username}')"
-                                 style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; flex-shrink: 0; cursor: pointer;">` :
-                            `<div onclick="openContactProfileModal('${contact.username}')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">${initials}</div>`
+                                 style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; flex-shrink: 0; cursor: pointer;">` :
+                            `<div onclick="openContactProfileModal('${contact.username}')" style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; flex-shrink: 0; cursor: pointer;">${initials}</div>`
                         }
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-size: 13px; font-weight: 400; margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
@@ -5461,6 +5462,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         {% if user_avatar_url %}
         window.userAvatarUrl = '{{ user_avatar_url | safe }}';
         {% endif %}
+        window.currentUserTelegramId = {{ user.telegram_id }};
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
@@ -8042,13 +8044,13 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;">';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
@@ -8136,13 +8138,13 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-fav-' + (partner.telegram_id || partner.contact_info);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;">';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
@@ -8234,12 +8236,12 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '<li class="task-item contact-blocked" data-username="' + username + '" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     
                                     // Avatar for blocked contacts
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;">';
+                                    html += '<div style="margin-right: 8px; flex-shrink: 0;">';
                                     if (blockedPartner && blockedPartner.photo_url) {
                                         const imgId = 'img-blocked-' + (blockedPartner.telegram_id || username);
-                                        html += '<img id="' + imgId + '" src="' + blockedPartner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" />';
+                                        html += '<img id="' + imgId + '" src="' + blockedPartner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" />';
                                     } else {
-                                        html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; cursor: pointer;">@</div>';
+                                        html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; cursor: pointer;">@</div>';
                                     }
                                     html += '</div>';
                                     
@@ -8326,13 +8328,13 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;">';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
@@ -8417,13 +8419,13 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;">';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 8px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 36px; height: 36px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 16px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
@@ -8913,31 +8915,26 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             loadReports();   // Загрузить активность (по умолчанию)
             
             // Auto-update every 30 seconds (reduced from 5s to lower DB load)
+            let _30sCounter = 0;
             setInterval(() => {
-                const feedView = document.getElementById('feed-view');
-                const chatView = document.getElementById('chat-view');
-                
+                _30sCounter++;
                 updateTasks();
-                updatePeople();
-                updateProfile();
-                updateTokenBalance();
-                loadGoalsProgress();
-                // Обновляем чат только если он активен
-                if (chatView && chatView.classList.contains('active')) {
-                    updateChat();
+                // Контакты обновляем только если вкладка активна
+                if (currentView === 'people') updatePeople();
+                // Профиль и баланс — каждые 60 секунд (через одну итерацию)
+                if (_30sCounter % 2 === 0) {
+                    updateProfile();
+                    updateTokenBalance();
+                    loadGoalsProgress();
                 }
-                // Проверяем наличие новых постов, но НЕ перезагружаем ленту полностью
                 checkNewPosts();
-                // Периодически обновляем email-контакты
-                loadContacts();
                 if (currentView === 'reports') loadReports();
             }, 30000);
             
-            // Отдельный интервал для проверки новых сообщений из Telegram независимо от активного view
-            // Это гарантирует, что сообщения от бота и пользователя всегда синхронизируются
+            // Синхронизация чата каждые 15 секунд
             setInterval(() => {
                 updateChat();
-            }, 15000); // Проверяем каждые 15 секунд
+            }, 15000);
         }
 
         async function updateTokenBalance() {
@@ -9787,7 +9784,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
 
       'back':'Назад',
-      'search-contacts':'Поиск',
+      'search-contacts':'Поиск контактов',
       'search-contacts-title':'Поиск контактов',
       'header-messages':'Сообщения',
       'search-ph':'Введите никнейм в Telegram (например, @username)',
@@ -9995,7 +9992,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
 
       'back':'Back',
-      'search-contacts':'Search',
+      'search-contacts':'Contact search',
       'search-contacts-title':'Search contacts',
       'header-messages':'Messages',
       'search-ph':'Enter Telegram username (e.g., @username)',
