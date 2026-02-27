@@ -100,14 +100,12 @@ BATCH_GROUPS = {
     'goal_stagnation': 'goals',
     'goal_deadline': 'goals',
     'contact_match': 'contacts',
-    'contact_online': 'contacts',
     'delegation_pending': 'delegation',
     'delegation_update': 'delegation',
     'market_insight': 'insights',
     'content_opportunity': 'insights',
     'profile_gap': 'engagement',
     'dialog_followup': 'engagement',
-    'weather_activity': 'misc',
     'morning_plan': 'daily',
     'evening_review': 'daily',
     'task_result_check': 'tasks',
@@ -1617,24 +1615,30 @@ class AnchorEngine:
         """Сканирует email-кампании:
         1. Активные кампании с черновиками (draft) → якорь email_outreach_send (агент отправит)
         2. Отправленные без ответа > 3 дней → якорь email_follow_up
-        3. Входящие ответы → якорь email_reply_received (CRITICAL)
+        3. Входящие ответы → якорь email_reply_received (CRITICAL) — даже для paused кампаний!
         4. Ежедневный отчёт по активным кампаниям → email_campaign_report
         """
         anchors = []
 
-        # Все активные кампании пользователя
-        campaigns = session.query(EmailCampaign).filter_by(
-            user_id=user.id, status='active'
+        # Активные + paused кампании (paused тоже нужны для обработки входящих reply)
+        campaigns = session.query(EmailCampaign).filter(
+            EmailCampaign.user_id == user.id,
+            EmailCampaign.status.in_(['active', 'paused'])
         ).all()
 
         if not campaigns:
             return anchors
 
         for campaign in campaigns:
+            is_paused = campaign.status == 'paused'
+
             # --- 1. Есть черновики (draft) — агент должен написать и отправить ---
-            drafts = session.query(EmailOutreach).filter_by(
-                campaign_id=campaign.id, status='draft'
-            ).limit(5).all()
+            # Пропускаем для paused кампаний
+            drafts = []
+            if not is_paused:
+                drafts = session.query(EmailOutreach).filter_by(
+                    campaign_id=campaign.id, status='draft'
+                ).limit(5).all()
 
             # Дневной лимит — считаем «сегодня» по таймзоне пользователя, не UTC
             import pytz as _pytz_email
@@ -1683,8 +1687,9 @@ class AnchorEngine:
                 ))
 
             # --- 2. Follow-up: отправлено > 3 дней назад, без ответа, follow_up_count < max ---
+            # Пропускаем для paused кампаний
             max_follow_ups = campaign.max_follow_ups or 2
-            stale_emails = session.query(EmailOutreach).filter(
+            stale_emails = [] if is_paused else session.query(EmailOutreach).filter(
                 EmailOutreach.campaign_id == campaign.id,
                 EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
                 EmailOutreach.follow_up_count < max_follow_ups,
@@ -1763,11 +1768,11 @@ class AnchorEngine:
                 ))
 
             # --- Auto-complete: нет черновиков, нет ожидающих follow-up, все треды закрыты ---
-            # Работает для ЛЮБЫХ кампаний:
+            # Работает для ЛЮБЫХ АКТИВНЫХ кампаний (paused не автозавершаем):
             # - Переговоры (1 письмо): ответили + агент ответил → готово
             # - Привлечение (50 писем): агент сам добавляет лиды через add_email_leads,
             #   пока есть черновики — не завершается. Как только все обработаны → завершается.
-            if not drafts and not stale_emails:
+            if not is_paused and not drafts and not stale_emails:
                 # Письма у которых ещё не закрыт цикл:
                 # sent/delivered/opened с незакрытыми follow-up ИЛИ replied без ответа агента
                 open_outreach = session.query(EmailOutreach).filter(
@@ -1793,7 +1798,9 @@ class AnchorEngine:
                         session.rollback()
                     continue  # Skip anchors for completed campaign
 
-            # --- 4. Дневной отчёт по кампании (если есть активность) ---
+            # --- 4. Дневной отчёт по кампании (если есть активность, не для paused) ---
+            if is_paused:
+                continue
             total_sent = campaign.emails_sent or 0
             total_replied = campaign.emails_replied or 0
             if total_sent > 0 and sent_today > 0:
@@ -2143,7 +2150,7 @@ class AnchorEngine:
                     'post_opportunity', 'channel_post',
                     'inactivity_reengagement',
                 }
-                OPTIONAL_LOW = {'market_insight', 'content_opportunity', 'weather_activity', 'event_discovery'}
+                OPTIONAL_LOW = {'market_insight', 'content_opportunity', 'event_discovery'}
                 # Необязательные LOW — удваиваем cooldown (через доп. фильтр)
                 filtered = []
                 for a in result:
