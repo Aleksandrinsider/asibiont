@@ -8766,7 +8766,7 @@ async def resend_webhook_handler(request):
             if event_type in ('email.delivered', 'email.opened', 'email.bounced', 'email.complained'):
                 email_id = payload.get('email_id', '')
                 if email_id:
-                    from models import EmailOutreach
+                    from models import EmailOutreach, EmailCampaign
                     outreach = session_db.query(EmailOutreach).filter_by(resend_id=email_id).first()
                     if outreach:
                         status_map = {

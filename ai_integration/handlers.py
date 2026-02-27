@@ -6626,7 +6626,7 @@ async def check_topic_relevance(topic: str, user_id: int = None, session=None):
         if close_session:
             session.close()
 
-async def get_news_trends(topic: str, period: str = "week", focus: str = "trends", user_id: int = None, session=None):
+async def get_news_trends(topic: str = "tech startups AI", period: str = "week", focus: str = "trends", user_id: int = None, session=None):
     """
     📰 ПОЛУЧЕНИЕ НОВОСТЕЙ И АНАЛИЗ ТРЕНДОВ
     Использует NewsAPI для поиска новостей + AI для анализа трендов
