@@ -7504,22 +7504,33 @@ async def send_message_to_user(
         session.add(msg)
         session.commit()
         
-        # Отправляем через Telegram
-        try:
-            await _send_telegram_message_async(
-                recipient.telegram_id,
-                f"📩 Сообщение от @{sender_username} ({intent_label}):\n\n{generated_message}\n\n"
-                f"💬 Чтобы ответить, напиши: «ответь @{sender_username} [твой ответ]»"
-            )
-            msg.status = 'delivered'
-            msg.delivered_at = datetime.utcnow()
+        # Отправляем через Telegram (только если у получателя реальный telegram_id)
+        has_real_tg = recipient.telegram_id and recipient.telegram_id > 0
+        recipient_platform = getattr(recipient, 'platform', 'telegram') or 'telegram'
+        if has_real_tg and recipient_platform not in ('discord', 'web'):
+            try:
+                await _send_telegram_message_async(
+                    recipient.telegram_id,
+                    f"📩 Сообщение от @{sender_username} ({intent_label}):\n\n{generated_message}\n\n"
+                    f"💬 Чтобы ответить, напиши: «ответь @{sender_username} [твой ответ]»"
+                )
+                msg.status = 'delivered'
+                msg.delivered_at = datetime.utcnow()
+                session.commit()
+            except Exception as e:
+                logger.error(f"[SEND_MSG] Telegram delivery failed: {e}")
+        else:
+            logger.info(f"[SEND_MSG] Recipient @{recipient_clean} has no Telegram (platform={recipient_platform}), message saved internally")
+            msg.status = 'pending_read'
             session.commit()
-        except Exception as e:
-            logger.error(f"[SEND_MSG] Telegram delivery failed: {e}")
-            # Сообщение сохранено, доставим позже
+        
+        # Формируем ответ с учётом способа доставки
+        delivery_note = ""
+        if not has_real_tg or recipient_platform in ('discord', 'web'):
+            delivery_note = "\n⚠️ У получателя не привязан Telegram — сообщение сохранено в платформе и будет доступно на дашборде."
         
         return (
-            f"✅ Сообщение отправлено @{recipient_clean}!\n"
+            f"✅ Сообщение отправлено @{recipient_clean}!{delivery_note}\n"
             f"Цель: {intent_label}\n"
             f"Текст: {generated_message[:200]}{'...' if len(generated_message) > 200 else ''}"
         )

@@ -532,8 +532,9 @@
                 }
             });
             
-            // Если фильтр заблокированные, обновляем список контактов
-            if (filterType === 'blocked') {
+            if (filterType === 'messages') {
+                loadInboxMessages();
+            } else if (filterType === 'blocked') {
                 updatePeople();
             } else {
                 // Перерендерим контакты с новым фильтром
@@ -788,6 +789,7 @@
                         <div id="contact-filter-content" style="margin-bottom: 15px;">
                             <div style="position: relative; width: 100%;">
                                 <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
+                                    <option value="messages" data-i18n="opt-messages">💬 Сообщения</option>
                                     <option value="favorite" data-i18n="opt-fav">Избранное</option>
                                     <option value="recommended" selected data-i18n="opt-rec">Рекомендуемые</option>
                                     <option value="delegating_to_me" data-i18n="opt-del-me">Поручают мне</option>
@@ -4764,19 +4766,35 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
 
         async function sendMessageToContact(username) {
             try {
-                // Убираем @ если есть
                 const cleanUsername = username.replace('@', '');
-                const platformData = (window._partnerPlatforms || {})[cleanUsername.toLowerCase()];
-                if (platformData && platformData.platform === 'discord' && platformData.discord_id) {
-                    // Открываем Discord DM
-                    window.open(`https://discord.com/users/${platformData.discord_id}`, '_blank');
-                } else {
-                    // Открываем Telegram чат
-                    window.open(`https://t.me/${cleanUsername}`, '_blank');
-                }
+                // Внутреннее сообщение через платформу для всех контактов
+                await sendInternalMessage(cleanUsername);
             } catch (error) {
-                console.error('Error opening messenger:', error);
-                showNotification(t('err-open-tg'), 'error');
+                console.error('Error sending message:', error);
+                showNotification(t('err-send') || 'Ошибка', 'error');
+            }
+        }
+
+        async function sendInternalMessage(username) {
+            const msg = prompt(t('compose-text') || 'Введите сообщение:');
+            if (!msg) return;
+            try {
+                const resp = await fetch('/api/messages/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ recipient_username: username, message_text: msg })
+                });
+                if (resp.ok) {
+                    showNotification(t('msg-sent-internal') || 'Сообщение отправлено', 'success');
+                    if (currentContactFilter === 'messages') loadInboxMessages();
+                } else {
+                    const err = await resp.json();
+                    showNotification(err.error || t('err-send'), 'error');
+                }
+            } catch (e) {
+                console.error('Internal message error:', e);
+                showNotification(t('err-send') || 'Ошибка', 'error');
             }
         }
 
@@ -4812,6 +4830,122 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             } catch (error) {
                 console.error('Error canceling delegation to contact:', error);
                 showNotification(`${t('err-send')} ${error.message}`, 'error');
+            }
+        }
+
+        async function loadInboxMessages() {
+            const list = document.getElementById('people-list');
+            if (!list) return;
+            list.innerHTML = '<div style="padding: 20px; text-align: center; color: #6C727F;">' + t('loading') + '</div>';
+            try {
+                const resp = await fetch('/api/messages', { credentials: 'include' });
+                if (!resp.ok) { list.innerHTML = '<div style="padding: 20px; text-align: center; color: #6C727F;">' + t('err-load') + '</div>'; return; }
+                const data = await resp.json();
+                const msgs = data.messages || [];
+                // Mark as read
+                if (data.unread_count > 0) {
+                    fetch('/api/messages/read', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } }).catch(() => {});
+                }
+                if (msgs.length === 0) {
+                    list.innerHTML = '<div style="padding: 20px; text-align: center; color: #6C727F;">' + (t('no-messages') || 'Нет сообщений') + '</div>';
+                    return;
+                }
+                let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
+                msgs.forEach(msg => {
+                    const isIn = msg.is_incoming;
+                    const otherName = isIn ? (msg.sender_name || msg.sender_username || '?') : (msg.recipient_name || msg.recipient_username || '?');
+                    const otherUname = isIn ? msg.sender_username : msg.recipient_username;
+                    const arrow = isIn ? '📩' : '📤';
+                    const dirLabel = isIn ? (t('msg-from') || 'от') : (t('msg-to') || 'для');
+                    const date = msg.created_at ? new Date(msg.created_at).toLocaleString() : '';
+                    const statusBadge = msg.status === 'replied' ? '<span style="color: #068487; font-size: 11px; margin-left: 6px;">✓ ' + (t('replied') || 'ответили') + '</span>'
+                        : msg.status === 'read' ? '<span style="color: #6C727F; font-size: 11px; margin-left: 6px;">👁 ' + (t('read') || 'прочитано') + '</span>'
+                        : msg.status === 'delivered' ? '<span style="color: #068487; font-size: 11px; margin-left: 6px;">✓ ' + (t('delivered') || 'доставлено') + '</span>'
+                        : '<span style="color: #D97706; font-size: 11px; margin-left: 6px;">⏳ ' + (t('pending') || 'ожидание') + '</span>';
+                    
+                    html += '<li class="task-item" style="display: flex; flex-direction: column; margin-bottom: 8px; padding: 10px 12px;">';
+                    // Header
+                    html += '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">';
+                    html += '<span>' + arrow + '</span>';
+                    html += '<span style="font-size: 12px; color: #6C727F;">' + dirLabel + '</span>';
+                    if (otherUname) {
+                        html += '<span onclick="openContactProfileModal(\'' + otherUname.replace(/'/g, "\\'") + '\')" style="color: #068487; cursor: pointer; font-size: 13px;">@' + otherUname + '</span>';
+                    } else {
+                        html += '<span style="font-size: 13px; color: #1F2328;">' + otherName + '</span>';
+                    }
+                    html += statusBadge;
+                    html += '<span style="margin-left: auto; font-size: 11px; color: #6C727F;">' + date + '</span>';
+                    html += '</div>';
+                    // Message text
+                    const truncText = msg.message_text.length > 200 ? msg.message_text.substring(0, 200) + '...' : msg.message_text;
+                    html += '<div style="font-size: 13px; color: #1F2328; line-height: 1.4; margin-bottom: 4px;">' + truncText.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+                    // Reply
+                    if (msg.reply_text) {
+                        html += '<div style="background: #F6F8FA; border-left: 3px solid #068487; padding: 6px 10px; margin-top: 4px; border-radius: 4px;">';
+                        html += '<span style="font-size: 11px; color: #6C727F;">' + (t('reply') || 'Ответ') + ':</span><br>';
+                        html += '<span style="font-size: 13px; color: #1F2328;">' + msg.reply_text.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</span>';
+                        html += '</div>';
+                    }
+                    // Reply button for incoming, unreplied messages
+                    if (isIn && msg.status !== 'replied') {
+                        html += '<div style="margin-top: 6px;">';
+                        html += '<button onclick="replyToInboxMessage(' + msg.id + ')" style="padding: 4px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-family: inherit;" onmouseover="this.style.background=\'#F6F8FA\'" onmouseout="this.style.background=\'#FFFFFF\'">' + (t('reply-btn') || 'Ответить') + '</button>';
+                        html += '</div>';
+                    }
+                    html += '</li>';
+                });
+                html += '</ul>';
+                // New message button at top
+                html = '<div style="margin-bottom: 10px;"><button onclick="composeNewMessage()" style="width: 100%; padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; color: #374151; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px;" onmouseover="this.style.background=\'#F6F8FA\'" onmouseout="this.style.background=\'#FFFFFF\'"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg> ' + (t('new-message') || 'Новое сообщение') + '</button></div>' + html;
+                list.innerHTML = html;
+            } catch (e) {
+                console.error('Error loading messages:', e);
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #6C727F;">' + t('err-load') + '</div>';
+            }
+        }
+
+        async function replyToInboxMessage(messageId) {
+            const replyText = prompt(t('reply-prompt') || 'Введите ответ:');
+            if (!replyText) return;
+            try {
+                const resp = await fetch('/api/messages/reply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ message_id: messageId, reply_text: replyText })
+                });
+                if (resp.ok) {
+                    showNotification(t('reply-sent') || 'Ответ отправлен', 'success');
+                    loadInboxMessages();
+                } else {
+                    showNotification(t('err-send') || 'Ошибка', 'error');
+                }
+            } catch (e) {
+                showNotification(t('err-send') || 'Ошибка', 'error');
+            }
+        }
+
+        async function composeNewMessage() {
+            const username = prompt(t('compose-username') || 'Введите @username получателя:');
+            if (!username) return;
+            const text = prompt(t('compose-text') || 'Введите сообщение:');
+            if (!text) return;
+            try {
+                const resp = await fetch('/api/messages/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ recipient_username: username.replace('@', ''), message_text: text })
+                });
+                if (resp.ok) {
+                    showNotification(t('msg-sent-internal') || 'Сообщение отправлено', 'success');
+                    loadInboxMessages();
+                } else {
+                    const err = await resp.json();
+                    showNotification(err.error || t('err-send'), 'error');
+                }
+            } catch (e) {
+                showNotification(t('err-send') || 'Ошибка', 'error');
             }
         }
 
@@ -7269,14 +7403,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         }
         
         function writeToContact(username) {
-            const platformData = (window._partnerPlatforms || {})[username.toLowerCase()];
-            if (platformData && platformData.platform === 'discord' && platformData.discord_id) {
-                window.open(`https://discord.com/users/${platformData.discord_id}`, '_blank');
-            } else {
-                const telegramUrl = `https://t.me/${username}`;
-                window.open(telegramUrl, '_blank');
-            }
             closeContactProfileModal();
+            sendInternalMessage(username);
         }
         
         async function toggleFavoriteContactFromModal(username) {
@@ -9491,7 +9619,10 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
       'chat-ai':'Чат с ИИ','news-feed':'Лента новостей',
       'msg-placeholder':'Сообщение...',
-      'opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
+      'opt-messages':'💬 Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
+      'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
+      'reply':'Ответ','reply-btn':'Ответить','reply-prompt':'Введите ответ:','reply-sent':'Ответ отправлен',
+      'new-message':'Новое сообщение','compose-username':'Введите @username получателя:','compose-text':'Введите сообщение:',
       'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
 
       'back':'Назад',
@@ -9694,7 +9825,10 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
       'chat-ai':'Chat with AI','news-feed':'News Feed',
       'msg-placeholder':'Message...',
-      'opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
+      'opt-messages':'💬 Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
+      'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',
+      'reply':'Reply','reply-btn':'Reply','reply-prompt':'Enter reply:','reply-sent':'Reply sent',
+      'new-message':'New message','compose-username':'Enter recipient @username:','compose-text':'Enter message:',
       'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
 
       'back':'Back',

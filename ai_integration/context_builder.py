@@ -384,6 +384,11 @@ class ContextBuilder:
                                     details.append(p.city)
                                 if p.position:
                                     details.append(p.position[:40])
+                                # Определяем доступность в Telegram
+                                has_real_tg = partner_user.telegram_id and partner_user.telegram_id > 0
+                                platform = getattr(partner_user, 'platform', 'telegram') or 'telegram'
+                                if not has_real_tg or platform in ('discord', 'web'):
+                                    details.append("⚠️ нет Telegram")
                                 detail_str = " | ".join(details) if details else "профиль заполнен"
                                 real_contacts.append(f"@{partner_user.username} ({detail_str})")
                 except Exception:

@@ -6941,6 +6941,202 @@ async def api_email_contact_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_messages_handler(request):
+    """GET /api/messages — get inbox/outbox messages for dashboard."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import UserMessage
+            messages = session_db.query(UserMessage).filter(
+                (UserMessage.sender_id == user.id) | (UserMessage.recipient_id == user.id)
+            ).order_by(UserMessage.created_at.desc()).limit(50).all()
+            
+            result = []
+            for msg in messages:
+                sender = session_db.query(User).filter_by(id=msg.sender_id).first()
+                recipient = session_db.query(User).filter_by(id=msg.recipient_id).first()
+                is_incoming = msg.recipient_id == user.id
+                result.append({
+                    'id': msg.id,
+                    'is_incoming': is_incoming,
+                    'sender_username': sender.username if sender else None,
+                    'sender_name': sender.first_name if sender else None,
+                    'sender_photo': safe_avatar_url(sender.telegram_id) if sender and sender.telegram_id and sender.telegram_id > 0 else None,
+                    'recipient_username': recipient.username if recipient else None,
+                    'recipient_name': recipient.first_name if recipient else None,
+                    'message_text': msg.message_text,
+                    'intent': msg.intent,
+                    'status': msg.status,
+                    'reply_text': msg.reply_text,
+                    'created_at': msg.created_at.isoformat() if msg.created_at else None,
+                    'replied_at': msg.replied_at.isoformat() if msg.replied_at else None,
+                })
+            
+            unread_count = session_db.query(UserMessage).filter(
+                UserMessage.recipient_id == user.id,
+                UserMessage.status.in_(['sent', 'delivered', 'pending_read'])
+            ).count()
+            
+            return web.json_response({'messages': result, 'unread_count': unread_count})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_messages_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_messages_reply_handler(request):
+    """POST /api/messages/reply — reply to inbox message."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        message_id = data.get('message_id')
+        reply_text = data.get('reply_text', '').strip()
+        if not message_id or not reply_text:
+            return web.json_response({'error': 'message_id and reply_text required'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import UserMessage
+            msg = session_db.query(UserMessage).filter_by(id=message_id, recipient_id=user.id).first()
+            if not msg:
+                return web.json_response({'error': 'Message not found'}, status=404)
+            
+            import datetime as _dt
+            msg.reply_text = reply_text
+            msg.replied_at = _dt.datetime.now(_dt.timezone.utc)
+            msg.status = 'replied'
+            session_db.commit()
+            
+            # Deliver reply via Telegram if sender has TG
+            sender = session_db.query(User).filter_by(id=msg.sender_id).first()
+            if sender and sender.telegram_id and sender.telegram_id > 0:
+                try:
+                    from config import TELEGRAM_TOKEN
+                    import aiohttp
+                    reply_user = user.first_name or user.username or 'Пользователь'
+                    tg_text = f"💬 Ответ от @{user.username or reply_user}:\n\n{reply_text}"
+                    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                    async with aiohttp.ClientSession() as http_session:
+                        async with http_session.post(url, json={"chat_id": sender.telegram_id, "text": tg_text}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                            pass
+                except Exception as e:
+                    logger.warning(f"Failed to deliver reply via TG: {e}")
+            
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_messages_reply_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_messages_send_handler(request):
+    """POST /api/messages/send — send a new internal message from dashboard."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        recipient_username = data.get('recipient_username', '').strip().lstrip('@')
+        message_text = data.get('message_text', '').strip()
+        if not recipient_username or not message_text:
+            return web.json_response({'error': 'recipient_username and message_text required'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from sqlalchemy import func as sa_func
+            recipient = session_db.query(User).filter(
+                sa_func.lower(User.username) == recipient_username.lower()
+            ).first()
+            if not recipient:
+                recipient = session_db.query(User).filter(
+                    sa_func.lower(User.first_name) == recipient_username.lower()
+                ).first()
+            if not recipient:
+                return web.json_response({'error': f'Пользователь @{recipient_username} не найден'}, status=404)
+            if recipient.id == user.id:
+                return web.json_response({'error': 'Нельзя отправить сообщение себе'}, status=400)
+            
+            from models import UserMessage
+            import datetime as _dt
+            msg = UserMessage(
+                sender_id=user.id,
+                recipient_id=recipient.id,
+                message_text=message_text,
+                intent='direct',
+                status='sent',
+                is_ai_generated=False,
+            )
+            session_db.add(msg)
+            session_db.commit()
+            
+            # Try to deliver via Telegram
+            if recipient.telegram_id and recipient.telegram_id > 0:
+                try:
+                    from config import TELEGRAM_TOKEN
+                    import aiohttp
+                    sender_uname = user.username or user.first_name or 'Пользователь'
+                    tg_text = f"📩 Сообщение от @{sender_uname}:\n\n{message_text}\n\n💬 Чтобы ответить, напиши: «ответь @{sender_uname} [твой ответ]»"
+                    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                    async with aiohttp.ClientSession() as http_session:
+                        async with http_session.post(url, json={"chat_id": recipient.telegram_id, "text": tg_text}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                            if resp.status == 200:
+                                msg.status = 'delivered'
+                                msg.delivered_at = _dt.datetime.now(_dt.timezone.utc)
+                                session_db.commit()
+                except Exception as e:
+                    logger.warning(f"TG delivery failed for internal message: {e}")
+            
+            return web.json_response({'ok': True, 'message_id': msg.id})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_messages_send_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_messages_read_handler(request):
+    """POST /api/messages/read — mark messages as read."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import UserMessage
+            updated = session_db.query(UserMessage).filter(
+                UserMessage.recipient_id == user.id,
+                UserMessage.status.in_(['sent', 'delivered', 'pending_read'])
+            ).update({UserMessage.status: 'read'}, synchronize_session='fetch')
+            session_db.commit()
+            return web.json_response({'ok': True, 'marked_read': updated})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_messages_read_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_outreach_delete_handler(request):
     """Delete an outreach record."""
     try:
@@ -8832,6 +9028,12 @@ app.router.add_get('/api/email-contacts', api_email_contacts_handler)
 app.router.add_post('/api/email-contacts', api_email_contacts_handler)
 app.router.add_put('/api/email-contacts/{contact_id}', api_email_contact_edit_handler)
 app.router.add_delete('/api/email-contacts/{contact_id}', api_email_contact_delete_handler)
+
+# Internal messaging
+app.router.add_get('/api/messages', api_messages_handler)
+app.router.add_post('/api/messages/reply', api_messages_reply_handler)
+app.router.add_post('/api/messages/send', api_messages_send_handler)
+app.router.add_post('/api/messages/read', api_messages_read_handler)
 
 
 # Setup for production
