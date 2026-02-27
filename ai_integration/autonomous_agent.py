@@ -373,15 +373,25 @@ class HybridAutonomousAgent:
             # Задачи пользователя (для CognitiveEngine strategy)
             tasks_data = []
             try:
-                user_tasks = session.query(Task).filter_by(
-                    user_id=user.id
-                ).filter(
-                    Task.status.in_(['pending', 'in_progress'])
+                from sqlalchemy import or_ as _or_tasks
+                user_tasks = session.query(Task).filter(
+                    _or_tasks(
+                        Task.user_id == user.id,
+                        Task.delegated_to_username.ilike(user.username or '__none__'),
+                        Task.delegated_by == user.id,
+                    ),
+                    Task.status.in_(['pending', 'in_progress']),
+                    Task.delegation_status != 'rejected',
                 ).order_by(Task.due_date.asc().nullslast()).limit(20).all()
                 for t in user_tasks:
                     task_info = {'id': t.id, 'title': t.title, 'status': t.status}
                     if t.due_date:
                         task_info['deadline'] = t.due_date.isoformat()
+                    if t.delegated_to_username:
+                        task_info['delegated_to'] = t.delegated_to_username
+                        task_info['delegation_status'] = t.delegation_status or 'pending'
+                    if t.delegated_by and t.delegated_by != user.id:
+                        task_info['delegated_by'] = t.delegated_by
                     tasks_data.append(task_info)
 
                 # Добавляем завершённые за сегодня — AI знает прогресс дня

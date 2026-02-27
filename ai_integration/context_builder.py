@@ -170,10 +170,16 @@ class ContextBuilder:
                 hints.append(f"НОВЫЙ ПОЛЬЗОВАТЕЛЬ (взаимодействий: {interaction_cnt}): активно используй инструменты чтобы показать ценность на деле")
 
             # ═══ ЗАДАЧИ: что на контроле ═══
+            from sqlalchemy import or_ as _or
             tasks = session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status.in_(['pending', 'active', 'in_progress'])
-            ).order_by(Task.reminder_time.asc()).limit(10).all()
+                _or(
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.ilike(user.username or '__none__'),
+                    Task.delegated_by == user.id,
+                ),
+                Task.status.in_(['pending', 'active', 'in_progress']),
+                Task.delegation_status != 'rejected',
+            ).order_by(Task.reminder_time.asc()).limit(15).all()
 
             overdue = []
             today_tasks = []
@@ -208,6 +214,53 @@ class ContextBuilder:
                     hints.append(f"БУДУЩИЕ ({len(future_tasks)}): {', '.join(future_tasks[:2])}")
 
                 hints.append(f"Всего активных задач: {len(tasks)}")
+
+            # ═══ ДЕЛЕГИРОВАНИЕ: детали ═══
+            try:
+                from models import User as _UserD
+                # Задачи которые я делегировал другим
+                deleg_out = session.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.isnot(None),
+                    Task.status.in_(['pending', 'active', 'in_progress']),
+                ).order_by(Task.reminder_time.asc()).limit(5).all()
+                if deleg_out:
+                    d_lines = []
+                    for dt in deleg_out:
+                        _ds = dt.delegation_status or 'pending'
+                        _ds_map = {'pending': '⏳ждёт', 'accepted': '✅принято', 'rejected': '❌отклонено', 'completed': '✅готово'}
+                        _dbl = _ds_map.get(_ds, _ds)
+                        _over = ''
+                        if dt.reminder_time:
+                            _ddt = dt.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_tz)
+                            if _ddt < user_now:
+                                _over = ' ⚠️ПРОСРОЧЕНО'
+                        d_lines.append(f"  {_dbl} @{dt.delegated_to_username}: {dt.title}{_over}")
+                    hints.append("ДЕЛЕГИРОВАНО МНОЙ ({}):\n{}".format(len(d_lines), '\n'.join(d_lines)))
+
+                # Задачи делегированные МНЕ
+                if user.username:
+                    deleg_in = session.query(Task).filter(
+                        Task.delegated_to_username.ilike(user.username),
+                        Task.user_id != user.id,
+                        Task.status.in_(['pending', 'active', 'in_progress']),
+                    ).order_by(Task.reminder_time.asc()).limit(5).all()
+                    if deleg_in:
+                        d_in_lines = []
+                        for dt in deleg_in:
+                            _ds = dt.delegation_status or 'pending'
+                            _ds_map = {'pending': '⏳новая', 'accepted': '✅принято', 'rejected': '❌отклонено'}
+                            _dbl = _ds_map.get(_ds, _ds)
+                            # Находим кто делегировал
+                            _from = ''
+                            if dt.delegated_by:
+                                _delegator = session.query(_UserD).filter_by(id=dt.delegated_by).first()
+                                if _delegator and _delegator.username:
+                                    _from = f' от @{_delegator.username}'
+                            d_in_lines.append(f"  {_dbl}{_from}: {dt.title}")
+                        hints.append("ДЕЛЕГИРОВАНО МНЕ ({}):\n{}".format(len(d_in_lines), '\n'.join(d_in_lines)))
+            except Exception as _de:
+                logger.warning(f"[DELEG_CTX] Error: {_de}")
 
             # ═══ СТАТИСТИКА ЗАВЕРШЁННЫХ ═══
             completed_tasks = session.query(Task).filter(
