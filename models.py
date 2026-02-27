@@ -695,7 +695,7 @@ class AgentActivityLog(Base):
 
     # Тип действия
     activity_type = Column(String(50), nullable=False, index=True)
-    # Типы: 'delegation' | 'post_newsfeed' | 'post_telegram' | 'user_message' | 'email' | 'other'
+    # Типы: 'delegation' | 'post_newsfeed' | 'post_telegram' | 'user_message' | 'email' | 'post_discord' | 'other'
 
     # Заголовок / краткое описание (для строки в списке)
     title = Column(String(300), nullable=False)

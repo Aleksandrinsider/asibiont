@@ -8866,6 +8866,24 @@ async def send_outreach_email(
         campaign.emails_sent = (campaign.emails_sent or 0) + 1
         # Ставим follow-up через 3 дня
         outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=3)
+
+        # Логируем в AgentActivityLog для ленты активности
+        try:
+            from models import AgentActivityLog
+            _name_part = f" ({recipient_name})" if recipient_name else ""
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='email',
+                title=f"Outreach → {recipient_email}{_name_part}",
+                content=f"Тема: {subject}\n\n{body[:500]}",
+                target=recipient_email,
+                status='sent',
+                ref_id=outreach.id if hasattr(outreach, 'id') else None,
+            )
+            session.add(log_entry)
+        except Exception as _log_err:
+            logger.warning(f"[EMAIL_OUTREACH] Activity log error: {_log_err}")
+
         session.commit()
 
         lang = _get_lang(user_id)
@@ -8963,6 +8981,23 @@ async def reply_to_outreach_email(
 
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
+
+        # Логируем в AgentActivityLog
+        try:
+            from models import AgentActivityLog
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='email',
+                title=f"Reply → {outreach.recipient_email}",
+                content=f"Re: {outreach.subject}\n\n{reply_body[:500]}",
+                target=outreach.recipient_email,
+                status='sent',
+                ref_id=outreach.id,
+            )
+            session.add(log_entry)
+        except Exception as _log_err:
+            logger.warning(f"[EMAIL_REPLY] Activity log error: {_log_err}")
+
         session.commit()
 
         return f"✅ Ответ отправлен на {outreach.recipient_email}\nТема: {subject}"
@@ -9437,6 +9472,23 @@ async def send_follow_up_email(
         # Следующий follow-up через 5 дней (экспоненциальное замедление)
         next_gap_days = 3 + (outreach.follow_up_count * 2)
         outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=next_gap_days)
+
+        # Логируем в AgentActivityLog
+        try:
+            from models import AgentActivityLog
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='email',
+                title=f"Follow-up #{outreach.follow_up_count} → {outreach.recipient_email}",
+                content=f"{subject}\n\n{body[:500]}",
+                target=outreach.recipient_email,
+                status='sent',
+                ref_id=outreach.id,
+            )
+            session.add(log_entry)
+        except Exception as _log_err:
+            logger.warning(f"[EMAIL_FOLLOWUP] Activity log error: {_log_err}")
+
         session.commit()
 
         return f"✅ Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
