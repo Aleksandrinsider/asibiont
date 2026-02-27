@@ -960,6 +960,57 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "update_email_campaign",
+            "description": "✏️ ОБНОВИТЬ ПАРАМЕТРЫ существующей email-кампании: daily_limit, max_emails, name, goal, target_audience, offer, tone, status. Используй ВМЕСТО создания новой кампании, когда пользователь просит изменить настройки: 'измени лимит на 50', 'поставь на паузу', 'обнови цель кампании'. НЕ создавай новую кампанию — обнови существующую!",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "campaign_id": {
+                        "type": "integer",
+                        "description": "ID кампании для обновления. Если не указан — обновляется последняя активная."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Новое название кампании"
+                    },
+                    "goal": {
+                        "type": "string",
+                        "description": "Новая цель кампании"
+                    },
+                    "target_audience": {
+                        "type": "string",
+                        "description": "Новое описание целевой аудитории"
+                    },
+                    "offer": {
+                        "type": "string",
+                        "description": "Новое предложение"
+                    },
+                    "tone": {
+                        "type": "string",
+                        "description": "Тон писем",
+                        "enum": ["professional", "friendly", "formal"]
+                    },
+                    "max_emails": {
+                        "type": "integer",
+                        "description": "Новый лимит писем всего (0 = безлимитно)"
+                    },
+                    "daily_limit": {
+                        "type": "integer",
+                        "description": "Новый дневной лимит писем (1-50)"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Новый статус кампании",
+                        "enum": ["active", "paused", "completed", "cancelled"]
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "send_outreach_email",
             "description": "📤 ОТПРАВИТЬ EMAIL в рамках кампании. Используй после web_search когда нашёл контактный email нужного человека. AI пишет персонализированное письмо с учётом цели кампании и контекста получателя. Получатель — не обязательно компания: может быть разработчик, блогер, тестировщик, спикер, любой человек. Также вызывается автономно якорем email_outreach_send.",
             "parameters": {

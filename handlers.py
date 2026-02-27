@@ -31,6 +31,66 @@ def _format_html(text: str) -> str:
             result.append(f'<a href="{html_mod.escape(clean)}">{html_mod.escape(clean)}</a>{html_mod.escape(trailing)}')
     return ''.join(result)
 
+
+def _smart_split_html(text: str, max_len: int = 4000) -> list:
+    """Разбивает HTML-текст на части, не ломая теги и URL.
+
+    Стратегия:
+    1. Ищем последний перенос строки (\n) до лимита.
+    2. Если нет — ищем последний пробел.
+    3. Никогда не режем внутри <a>...</a> или HTML-тега.
+    """
+    if len(text) <= max_len:
+        return [text]
+
+    chunks = []
+    remaining = text
+
+    while remaining:
+        if len(remaining) <= max_len:
+            chunks.append(remaining)
+            break
+
+        # Ищем позицию для разреза (не дальше max_len)
+        cut = max_len
+        candidate = remaining[:cut]
+
+        # Проверяем: не режем ли внутри <a href="...">...</a>
+        # Находим последний открытый <a без закрывающего </a>
+        last_a_open = candidate.rfind('<a ')
+        if last_a_open != -1:
+            last_a_close = candidate.rfind('</a>', last_a_open)
+            if last_a_close == -1:
+                # Тег <a> не закрыт — режем до него
+                cut = last_a_open
+
+        # Проверяем: не режем ли внутри HTML-тега < ... >
+        last_lt = candidate[:cut].rfind('<')
+        if last_lt != -1:
+            last_gt = candidate[:cut].rfind('>')
+            if last_gt < last_lt:
+                # Незакрытый тег — режем до него
+                cut = last_lt
+
+        # Теперь ищем хорошую точку разреза (перенос или пробел)
+        segment = remaining[:cut]
+        nl_pos = segment.rfind('\n')
+        if nl_pos > cut * 0.3:  # Перенос строки найден не слишком рано
+            cut = nl_pos + 1
+        else:
+            sp_pos = segment.rfind(' ')
+            if sp_pos > cut * 0.5:
+                cut = sp_pos + 1
+
+        # Защита от бесконечного цикла
+        if cut <= 0:
+            cut = max_len
+
+        chunks.append(remaining[:cut])
+        remaining = remaining[cut:]
+
+    return chunks
+
 router = Router()
 
 # Dedup cache for message processing (TTL-based to prevent memory leak)
@@ -936,12 +996,14 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
 
             # Разбиваем длинный ответ на части (Telegram лимит 4096)
             if len(response_html) > 4000:
-                for i in range(0, len(response_html), 4000):
-                    chunk = response_html[i:i+4000]
+                # Умная разбивка: не ломаем HTML-теги и URL
+                chunks = _smart_split_html(response_html, 4000)
+                for chunk in chunks:
                     try:
                         await message.bot.send_message(message.chat.id, chunk, parse_mode='HTML')
                     except Exception:
-                        await message.bot.send_message(message.chat.id, response_text[i:i+4000])
+                        # Fallback: отправляем plain text кусок соответствующей длины
+                        await message.bot.send_message(message.chat.id, chunk[:4000])
             else:
                 try:
                     await message.bot.send_message(message.chat.id, response_html, parse_mode='HTML')

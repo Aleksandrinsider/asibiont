@@ -83,6 +83,7 @@ ACTION_COSTS = {
 
     # ── Email-аутрич ──
     'start_email_campaign':     15,  # Создание email-кампании
+    'update_email_campaign':     5,  # Обновление параметров email-кампании
     'send_outreach_email':      10,  # Отправка outreach-письма
     'email_send':               10,  # Alias для send_outreach_email
     'send_email':               10,  # Прямая отправка письма

@@ -8187,6 +8187,105 @@ async def start_email_campaign(
             session.close()
 
 
+async def update_email_campaign(
+    campaign_id: int = None,
+    name: str = None,
+    goal: str = None,
+    target_audience: str = None,
+    offer: str = None,
+    tone: str = None,
+    max_emails: int = None,
+    daily_limit: int = None,
+    status: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Обновить параметры существующей email-кампании.
+
+    Позволяет изменить daily_limit, max_emails, name, goal, target_audience,
+    offer, tone, status — без создания дубликата.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден"
+
+        # Найти кампанию
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            # Берём последнюю активную кампанию
+            campaign = session.query(EmailCampaign).filter_by(
+                user_id=user.id, status='active'
+            ).order_by(EmailCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return "❌ Кампания не найдена. Укажи campaign_id или создай новую (start_email_campaign)."
+
+        changes = []
+        if name is not None:
+            campaign.name = name[:300]
+            changes.append(f"название: {name[:80]}")
+        if goal is not None:
+            campaign.goal = goal[:2000]
+            changes.append("цель обновлена")
+        if target_audience is not None:
+            campaign.target_audience = target_audience[:1000]
+            changes.append("аудитория обновлена")
+        if offer is not None:
+            campaign.offer = offer[:2000]
+            changes.append("оффер обновлён")
+        if tone is not None and tone in ('professional', 'friendly', 'formal'):
+            campaign.tone = tone
+            changes.append(f"тон: {tone}")
+        if max_emails is not None:
+            campaign.max_emails = max(0, int(max_emails))
+            changes.append(f"макс. писем: {max_emails if max_emails > 0 else 'безлимитно'}")
+        if daily_limit is not None:
+            campaign.daily_limit = min(max(1, int(daily_limit)), 50)
+            changes.append(f"лимит/день: {campaign.daily_limit}")
+        if status is not None and status in ('active', 'paused', 'completed', 'cancelled'):
+            campaign.status = status
+            changes.append(f"статус: {status}")
+
+        if not changes:
+            return f"ℹ️ Кампания #{campaign.id} «{campaign.name}» — нечего обновлять. Укажи параметры для изменения."
+
+        session.commit()
+
+        lang = _get_lang(user_id)
+        changes_str = ', '.join(changes)
+        if lang == 'en':
+            return (
+                f"✅ Campaign #{campaign.id} «{campaign.name}» updated:\n"
+                f"{changes_str}\n\n"
+                f"📨 Current: {campaign.daily_limit}/day, "
+                f"{'unlimited' if not campaign.max_emails or campaign.max_emails == 0 else f'max {campaign.max_emails}'} total, "
+                f"status: {campaign.status}"
+            )
+        return (
+            f"✅ Кампания #{campaign.id} «{campaign.name}» обновлена:\n"
+            f"{changes_str}\n\n"
+            f"📨 Текущие параметры: {campaign.daily_limit} писем/день, "
+            f"{'безлимитно' if not campaign.max_emails or campaign.max_emails == 0 else f'макс. {campaign.max_emails}'} всего, "
+            f"статус: {campaign.status}"
+        )
+    except Exception as e:
+        logger.error(f"[EMAIL_CAMPAIGN] Error updating campaign: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка обновления кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 async def send_outreach_email(
     campaign_id: int = None,
     recipient_email: str = None,
