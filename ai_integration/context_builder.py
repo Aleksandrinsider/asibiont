@@ -544,8 +544,55 @@ class ContextBuilder:
                 _post_time = getattr(profile, 'auto_post_time', None) if profile else None
                 if _post_time:
                     auto_parts.append(f"Время автопостинга: {_post_time}")
+
+                # Статистика последних постов для отчётности
+                if _channel or _discord_wh:
+                    try:
+                        from models import Post as _PostAP, AgentActivityLog as _AALAP
+                        from sqlalchemy import func as _func_ap
+                        _week_ago = (user_now - timedelta(days=7)).astimezone(pytz.UTC).replace(tzinfo=None)
+                        # Посты в ленте за неделю
+                        _feed_week = session.query(_func_ap.count(_PostAP.id)).filter(
+                            _PostAP.user_id == user.id,
+                            _PostAP.created_at >= _week_ago,
+                        ).scalar() or 0
+                        # Посты в TG за неделю
+                        _tg_week = session.query(_func_ap.count(_AALAP.id)).filter(
+                            _AALAP.user_id == user.id,
+                            _AALAP.activity_type == 'post_telegram',
+                            _AALAP.status == 'published',
+                            _AALAP.created_at >= _week_ago,
+                        ).scalar() or 0
+                        # Посты в Discord за неделю
+                        _dc_week = session.query(_func_ap.count(_AALAP.id)).filter(
+                            _AALAP.user_id == user.id,
+                            _AALAP.activity_type == 'post_discord',
+                            _AALAP.status == 'published',
+                            _AALAP.created_at >= _week_ago,
+                        ).scalar() or 0
+                        _stats = []
+                        if _feed_week:
+                            _stats.append(f"лента: {_feed_week}")
+                        if _tg_week:
+                            _stats.append(f"TG: {_tg_week}")
+                        if _dc_week:
+                            _stats.append(f"Discord: {_dc_week}")
+                        if _stats:
+                            auto_parts.append(f"За неделю опубликовано: {', '.join(_stats)}")
+                        # Последний пост
+                        _last_tg = session.query(_AALAP).filter(
+                            _AALAP.user_id == user.id,
+                            _AALAP.activity_type == 'post_telegram',
+                            _AALAP.status == 'published',
+                        ).order_by(_AALAP.created_at.desc()).first()
+                        if _last_tg and _last_tg.created_at:
+                            _lp_local = _last_tg.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone(user.timezone or 'Europe/Moscow'))
+                            auto_parts.append(f"Последний TG-пост: {_lp_local.strftime('%d.%m %H:%M')}")
+                    except Exception as _ap_err:
+                        logger.debug(f"[AUTOPOST_STATS] {_ap_err}")
+
                 if auto_parts:
-                    hints.append("АВТО-ПОСТИНГ: " + " | ".join(auto_parts) + " — система автоматически публикует посты по расписанию.")
+                    hints.append("АВТО-ПОСТИНГ РАБОТАЕТ: " + " | ".join(auto_parts) + " — система публикует посты автоматически, НЕ предлагай запускать заново.")
             except Exception as e:
                 logger.warning(f"[AUTOPOST_CTX] Error: {e}")
 

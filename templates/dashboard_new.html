@@ -1756,7 +1756,7 @@
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000);
+                const timeoutId = setTimeout(() => controller.abort(), 120000);
                 
                 const formData = new FormData();
                 formData.append('message', message);
@@ -1816,7 +1816,7 @@
                 hideTypingIndicator();
                 // AbortError = cancelled by timeout controller — don't show raw JS error
                 if (error.name === 'AbortError' || (error.message && error.message.toLowerCase().includes('aborted'))) {
-                    addMessage('⏱ ' + t('err-timeout', 'Сервер не ответил за 60 сек. Попробуйте ещё раз.'), 'ai');
+                    addMessage('⏱ ' + t('err-timeout', 'Сервер не ответил за 120 сек. Попробуйте ещё раз.'), 'ai');
                 } else {
                     addMessage(t('err-prefix') + ' ' + error.message, 'ai');
                 }
@@ -9669,7 +9669,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'tasks-word-1':'задачу','tasks-word-2':'задачи','tasks-word-5':'задач',
       'show-delegated':'Показать список задач, делегированных пользователю',
       'err-prefix':'Ошибка:','err-word':'Ошибка','err-copy':'Ошибка копирования',
-      'err-timeout':'Сервер не ответил за 60 сек. Попробуйте ещё раз.',
+      'err-timeout':'Сервер не ответил за 120 сек. Попробуйте ещё раз.',
       'err-server-unavail':'Сервер временно недоступен. Попробуйте через минуту.',
       'confirm-task-return':'Задача вернется в ваш список личных задач.',
       'delegated-to':'Поручена','delegated-from':'Поручена от',
