@@ -207,6 +207,228 @@ class ExternalAPIClient:
         return stats
 
     # ========================================================================
+    # GITHUB API (бесплатный поиск пользователей, до 60 req/h без токена)
+    # ========================================================================
+
+    async def github_search_emails(
+        self,
+        query: str,
+        max_users: int = 30,
+        cache_ttl: int = 3600
+    ) -> List[dict]:
+        """
+        Поиск пользователей GitHub по теме и сбор их email из коммитов + профилей.
+        
+        Стратегия:
+        1. Поиск пользователей через GitHub Search API
+        2. Для каждого пользователя: проверяем events/public → PushEvent → commit email
+        3. Fallback на profile email
+        
+        GitHub API Rate Limits (бесплатно):
+        - Без токена: 60 req/h (поиск: 10 req/min)
+        - С GITHUB_TOKEN: 5000 req/h (поиск: 30 req/min)
+        
+        Returns:
+            Список [{email, name, company, bio, url, repos}]
+        """
+        import os
+        cache_params = {'q': query, 'max': max_users, 'engine': 'github_v2'}
+        
+        cached = await self.cache.get('github', cache_params)
+        if cached is not None:
+            return cached
+        
+        github_token = os.environ.get('GITHUB_TOKEN', '')
+        headers = {
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'ASI-Biont-LeadFinder/1.0',
+        }
+        if github_token:
+            headers['Authorization'] = f'Bearer {github_token}'
+        
+        # Без токена ограничиваем до 15 пользователей (экономим rate limit)
+        effective_max = max_users if github_token else min(max_users, 15)
+        
+        session = await self._get_session()
+        found_leads = []
+        seen_emails = set()
+        _rate_limited = False
+        
+        try:
+            # 1. Поиск пользователей
+            search_url = 'https://api.github.com/search/users'
+            params = {
+                'q': query,
+                'per_page': min(effective_max, 100),
+                'sort': 'followers',
+                'order': 'desc',
+            }
+            
+            async with session.get(search_url, params=params, headers=headers,
+                                   timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                self._track_call('github')
+                if resp.status == 403:
+                    logger.warning(f"[GITHUB] Rate limited on search")
+                    return []
+                if resp.status != 200:
+                    body = await resp.text()
+                    logger.warning(f"[GITHUB] Search error {resp.status}: {body[:200]}")
+                    return []
+                data = await resp.json()
+            
+            users = data.get('items', [])[:effective_max]
+            logger.info(f"[GITHUB] Search '{query[:50]}' → {len(users)} users "
+                       f"(total: {data.get('total_count', 0)}, token: {'yes' if github_token else 'no'})")
+            
+            if not users:
+                await self.cache.set('github', cache_params, [], cache_ttl)
+                return []
+            
+            # 2. Для каждого user: fetch events/public → извлекаем commit email
+            import asyncio as _aio_gh
+            
+            async def _get_user_email(login: str) -> Optional[dict]:
+                """Получить email из events (commit email) или профиля."""
+                commit_email = None
+                profile_data = {}
+                
+                try:
+                    # 2a. Events API → PushEvent → commit author email
+                    events_url = f'https://api.github.com/users/{login}/events/public'
+                    async with session.get(events_url, headers=headers,
+                                           params={'per_page': 10},
+                                           timeout=aiohttp.ClientTimeout(total=8)) as r:
+                        self._track_call('github')
+                        if r.status == 403:
+                            return {'_rate_limited': True}
+                        if r.status == 200:
+                            events = await r.json()
+                            for event in events:
+                                if event.get('type') == 'PushEvent':
+                                    commits = event.get('payload', {}).get('commits', [])
+                                    for commit in commits:
+                                        author = commit.get('author', {})
+                                        em = (author.get('email') or '').lower().strip()
+                                        if (em and '@' in em 
+                                            and 'noreply' not in em 
+                                            and '@users.noreply.github.com' not in em
+                                            and not em.endswith('@github.com')):
+                                            commit_email = em
+                                            profile_data['name'] = author.get('name', '')
+                                            break
+                                    if commit_email:
+                                        break
+                except Exception as e:
+                    logger.debug(f"[GITHUB] Events fetch failed for {login}: {e}")
+                
+                # 2b. Если нет commit email, пробуем профиль
+                if not commit_email:
+                    try:
+                        user_url = f'https://api.github.com/users/{login}'
+                        async with session.get(user_url, headers=headers,
+                                               timeout=aiohttp.ClientTimeout(total=8)) as r:
+                            self._track_call('github')
+                            if r.status == 403:
+                                return {'_rate_limited': True}
+                            if r.status == 200:
+                                profile = await r.json()
+                                profile_data = {
+                                    'name': profile.get('name') or login,
+                                    'company': (profile.get('company') or '').strip().lstrip('@'),
+                                    'bio': (profile.get('bio') or '')[:200],
+                                    'html_url': profile.get('html_url', ''),
+                                    'blog': profile.get('blog', ''),
+                                    'repos': profile.get('public_repos', 0),
+                                    'followers': profile.get('followers', 0),
+                                    'location': profile.get('location', ''),
+                                }
+                                em = (profile.get('email') or '').lower().strip()
+                                if em and '@' in em and 'noreply' not in em:
+                                    commit_email = em
+                    except Exception:
+                        pass
+                
+                if not commit_email:
+                    return None
+                
+                return {
+                    'email': commit_email,
+                    'name': profile_data.get('name', login),
+                    'company': profile_data.get('company', ''),
+                    'bio': profile_data.get('bio', ''),
+                    'url': profile_data.get('html_url', f'https://github.com/{login}'),
+                    'blog': profile_data.get('blog', ''),
+                    'repos': profile_data.get('repos', 0),
+                    'followers': profile_data.get('followers', 0),
+                    'location': profile_data.get('location', ''),
+                }
+            
+            # Обрабатываем батчами по 5 (каждый user = 1-2 API calls)
+            batch_size = 5
+            for batch_start in range(0, len(users), batch_size):
+                if _rate_limited:
+                    break
+                    
+                batch = users[batch_start:batch_start + batch_size]
+                results = await _aio_gh.gather(
+                    *[_get_user_email(u['login']) for u in batch],
+                    return_exceptions=True
+                )
+                
+                for result in results:
+                    if isinstance(result, Exception) or not result:
+                        continue
+                    if isinstance(result, dict) and result.get('_rate_limited'):
+                        _rate_limited = True
+                        break
+                    em = result.get('email', '').lower()
+                    if em and em not in seen_emails:
+                        seen_emails.add(em)
+                        found_leads.append(result)
+                
+                # Пауза между батчами
+                if not _rate_limited and batch_start + batch_size < len(users):
+                    await _aio_gh.sleep(2)
+            
+            logger.info(f"[GITHUB] Found {len(found_leads)} emails (commit+profile) for: {query[:50]}"
+                       f"{' (rate limited)' if _rate_limited else ''}")
+            await self.cache.set('github', cache_params, found_leads, cache_ttl)
+            return found_leads
+            
+        except Exception as e:
+            logger.error(f"[GITHUB] Error: {e}")
+            return []
+
+    async def github_multi_search(
+        self,
+        queries: List[str],
+        max_users_per_query: int = 20,
+        cache_ttl: int = 3600
+    ) -> List[dict]:
+        """
+        Параллельный поиск по нескольким запросам GitHub.
+        Дедуплицирует по email.
+        """
+        import asyncio as _aio_gm
+        
+        # Последовательно, чтобы не превысить rate limit
+        all_leads = []
+        seen_emails = set()
+        
+        for q in queries:
+            results = await self.github_search_emails(q, max_users=max_users_per_query, cache_ttl=cache_ttl)
+            for lead in results:
+                email = lead['email'].lower()
+                if email not in seen_emails:
+                    seen_emails.add(email)
+                    all_leads.append(lead)
+            # Пауза между запросами (GitHub rate limit: 10 search/min)
+            await _aio_gm.sleep(6)
+        
+        logger.info(f"[GITHUB_MULTI] {len(queries)} queries → {len(all_leads)} unique leads")
+        return all_leads
+
+    # ========================================================================
     # DUCKDUCKGO (бесплатный поиск, без API ключа)
     # ========================================================================
 

@@ -8107,11 +8107,15 @@ _GENERIC_PREFIXES = {
     'admin', 'office', 'team', 'help', 'mail', 'noreply', 'no-reply',
     'hr', 'billing', 'press', 'media', 'marketing', 'general',
     'enquiries', 'feedback', 'service', 'webmaster', 'subscribe',
+    'tos', 'legal', 'privacy', 'security', 'abuse', 'postmaster',
+    'jobs', 'careers', 'newsletter', 'notifications', 'alerts',
+    'unsubscribe', 'mailer-daemon', 'reply', 'do-not-reply',
 }
 
 # Паттерны в email-prefix которые указывают на корпоративный/generic email
 _GENERIC_PATTERNS = {'contact', 'support', 'info', 'admin', 'sales', 'help',
-                     'press', 'media', 'billing', 'noreply', 'service'}
+                     'press', 'media', 'billing', 'noreply', 'service',
+                     'newsletter', 'unsubscribe', 'notification'}
 
 
 def _is_generic_email(email: str) -> bool:
@@ -8154,21 +8158,33 @@ def _is_generic_email(email: str) -> bool:
                   'domain.com', 'yoursite.com', 'website.com', 'site.com',
                   'company.com', 'placeholder.com'):
         return True
+    # Сервисные email платформ (не личные)
+    if domain in ('substackinc.com', 'substack.com', 'medium.com',
+                  'wordpress.com', 'github.com', 'users.noreply.github.com',
+                  'googlegroups.com', 'mailchimp.com', 'sendgrid.net',
+                  'amazonses.com', 'mailgun.org', 'sparkpost.com'):
+        return True
+    # Email начинающиеся с support+ (Substack pattern: support+xxx@substack.com)
+    if prefix.startswith('support+') or prefix.startswith('noreply+'):
+        return True
 
     return False
 
 
 async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                            offer: str, session) -> tuple:
-    """Автоматический поиск лидов: 2-pass подход.
+    """Автоматический поиск лидов: multi-pass подход для 50 лидов/день.
 
-    Pass 1: Найти ЛЮДЕЙ и их страницы через поиск
-    Pass 2: Скачать страницы → извлечь реальные email
+    Pass 0: GitHub API — публичные email разработчиков (бесплатно, 20-50 за поиск)
+    Pass 1: DDG + AI-запросы — поиск людей через DuckDuckGo
+    Pass 2: Скачать страницы + contact/about sub-pages → извлечь email
+    Pass 3: AI-фильтрация по релевантности
 
     Возвращает (count_added, message_str).
     """
     from .api_client import get_api_client
     import aiohttp
+    import random
     api = get_api_client()
 
     keywords = target_audience[:200].replace(',', ' ').replace('.', ' ')
@@ -8182,41 +8198,115 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         'vk.com', 'ok.ru', 't.me', 'pinterest.com',
     }
 
-    # ── PASS 0: AI генерирует УМНЫЕ поисковые запросы ──
-    # Фокус на поиск РЕЛЕВАНТНЫХ людей — не просто любых email
+    # Извлекаем 2-3 ключевых слова
+    _kw_words = [w for w in keywords.split() if len(w) > 2][:3]
+    core_kw = ' '.join(_kw_words)
+    # Для EN-запросов (работают лучше)
+    _goal_words = [w for w in goal_kw.split() if len(w) > 2][:2]
+    goal_short = ' '.join(_goal_words)
+
+    import re as _re_al
+    all_emails_raw = set()  # email найденные напрямую — инициализируем ДО всех пассов
+
+    # Определяем, техническая ли аудитория (GitHub полезен только для tech)
+    _all_text = f"{target_audience} {goal} {offer}".lower()
+    _tech_markers = [
+        'python', 'javascript', 'typescript', 'react', 'node', 'django',
+        'fastapi', 'flask', 'telegram', 'bot', 'ai', 'ml', 'machine learning',
+        'data science', 'blockchain', 'web3', 'devops', 'mobile', 'ios',
+        'android', 'rust', 'golang', 'java', 'php', 'ruby', 'swift',
+        'flutter', 'vue', 'angular', 'nextjs', 'developer', 'разработ',
+        'программист', 'engineer', 'инженер', 'api', 'backend', 'frontend',
+        'fullstack', 'open source', 'github', 'code', 'coding', 'software',
+    ]
+    _is_tech_audience = any(t in _all_text for t in _tech_markers)
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 0: GitHub API — ТОЛЬКО для технической аудитории
+    # (маркетологи, дизайнеры, бизнес и т.д. — GitHub бесполезен)
+    # ══════════════════════════════════════════════════════════════════════
+    github_leads = []
+    if _is_tech_audience:
+        try:
+            gh_queries = []
+            _found_techs = [t for t in _tech_markers if t in _all_text and len(t) > 2]
+            
+            if core_kw:
+                gh_queries.append(core_kw)
+            for tech in _found_techs[:3]:
+                gh_queries.append(f"{tech} developer")
+            if _has_cyrillic:
+                gh_queries.append(f"{core_kw} location:Russia")
+            
+            gh_queries = gh_queries[:5]
+            if gh_queries:
+                logger.info(f"[AUTO_LEADS] Tech audience → GitHub search: {gh_queries}")
+                github_leads = await api.github_multi_search(
+                    queries=gh_queries,
+                    max_users_per_query=20,
+                )
+                for lead in github_leads:
+                    em = lead.get('email', '').lower().strip('.')
+                    if em and not _is_generic_email(em):
+                        all_emails_raw.add(em)
+                logger.info(f"[AUTO_LEADS] GitHub found {len(github_leads)} users with email")
+        except Exception as _gh_err:
+            logger.warning(f"[AUTO_LEADS] GitHub search failed: {_gh_err}")
+    else:
+        logger.info(f"[AUTO_LEADS] Non-tech audience → skipping GitHub, using web search only")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 0.5: AI генерирует УМНЫЕ поисковые запросы для DDG
+    # ══════════════════════════════════════════════════════════════════════
     lang_hint = "Russian" if _has_cyrillic else "English"
-    query_gen_prompt = f"""You are an expert B2B/B2C lead researcher.
 
-Campaign goal: {goal[:300]}
-Target audience: {target_audience[:400]}
-Product/offer: {offer[:300]}
+    query_gen_prompt = f"""You are an expert lead researcher finding PEOPLE with public email addresses.
 
-Generate 6 search queries to find RELEVANT people who would genuinely need this product.
-The goal is to find contact pages, portfolios, author bios, and profiles of people matching the target audience.
+Campaign goal: {goal[:200]}
+Target audience: {target_audience[:300]}
+Product/offer: {offer[:200]}
 
-RULES:
-1. Queries 1-3: Include "email" OR "contact" OR "@" to find pages with visible emails
-2. Queries 4-6: Target specific communities/platforms (GitHub, vc.ru, Habr, Medium, ProductHunt, IndieHackers) + relevant keywords
-3. DO NOT use "site:" operator — it doesn't work with our search engine
-4. Instead of "site:github.com ...", write "github.com ..." 
-5. DO NOT add "@gmail.com" to every query — this leads to random email dump pages
-6. Focus on ROLES and INTERESTS that match the target audience, not random people
-7. Use short, specific keywords (2-4 words per concept)
-8. Language: {lang_hint} keywords preferred
-9. Think: who suffers from the problem this product solves? Search for THOSE people.
+Generate 10 DuckDuckGo search queries to find pages with VISIBLE email addresses of relevant people.
+The target audience may be from ANY field — tech, marketing, design, business, education, health, etc.
 
-GOOD examples: "indie hacker contact email AI tools", "github.com task management README email"
-BAD examples: "@gmail.com freelancer" (finds email dumps), "site:github.com ..." (site: not supported)
+CRITICAL — DuckDuckGo rules:
+- MAX 4-5 words per query (DDG ignores long queries!)
+- "site:" operator does NOT work — write domain as keyword: "medium.com ..." not "site:medium.com"
+- "OR" operator does NOT work
+- Quotes work: "get in touch" "my email" "contact me"
 
-Return ONLY a JSON array of 6 strings. No explanation."""
+STRATEGY — adapt to the SPECIFIC audience:
+- Queries 1-2: "[role/profession] email portfolio contact" (personal sites)
+- Queries 3-4: "[role] \"get in touch\" email" or "[role] \"contact me\" email" (contact pages)
+- Queries 5-6: "[industry platform] [topic] author email" (industry blogs/platforms)
+  Examples of platforms by niche:
+  Tech: github.com, dev.to, hackernoon.com, stackoverflow.com
+  Marketing: growthhackers.com, hubspot.com/blog, marketingprofs.com
+  Design: dribbble.com, behance.net, uxdesign.cc
+  Business: forbes.com, entrepreneur.com, inc.com
+  Education: coursera.org, udemy.com/user, edx.org
+  Health: healthline.com, webmd.com
+  General: medium.com, substack.com, wordpress.com, about.me
+- Queries 7-8: "[role] freelancer hire email" or "[role] consultant email contact"
+- Queries 9-10: "[role] [city/country] email contact" or "[niche] expert \"email me\""
+
+GOOD examples (short, niche-specific):
+  "marketing consultant email contact"
+  "UX designer portfolio email"
+  "fitness coach \"get in touch\" email"
+  "real estate agent email portfolio"
+  "medium.com AI author email"
+BAD: "marketing professionals who work with small businesses looking for email" (too long!)
+
+Return ONLY a JSON array of 10 strings. No explanation."""
 
     ai_queries = []
     try:
         ai_raw = await api.deepseek_analyze(
             prompt=query_gen_prompt,
-            system_prompt="Generate Google search queries. Return ONLY valid JSON array of strings.",
+            system_prompt="Generate search queries. Return ONLY valid JSON array of strings.",
             max_tokens=400,
-            temperature=0.7,
+            temperature=0.8,  # Более высокая temperature для разнообразия
         )
         if ai_raw:
             import json as _json_q
@@ -8232,46 +8322,74 @@ Return ONLY a JSON array of 6 strings. No explanation."""
             try:
                 parsed = _json_q.loads(text)
                 if isinstance(parsed, list):
-                    ai_queries = [str(q) for q in parsed if isinstance(q, str) and len(q) > 5][:6]
+                    ai_queries = [str(q) for q in parsed if isinstance(q, str) and len(q) > 5][:10]
             except Exception:
                 pass
         logger.info(f"[AUTO_LEADS] AI generated {len(ai_queries)} smart queries")
     except Exception as _qg_err:
         logger.warning(f"[AUTO_LEADS] AI query generation failed: {_qg_err}")
 
-    # ── PASS 1: Поиск людей с EMAIL-адресами ──
-    # Стратегия: DuckDuckGo (бесплатно)
-    short_kw = ' '.join(keywords.split()[:4])  # Короткие ключевые слова
-
-    # Fallback-запросы (совместимые с DDG — без site: и OR)
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 1: Поиск людей через DDG — короткие запросы (3-5 слов)
+    # ══════════════════════════════════════════════════════════════════════
+    # УНИВЕРСАЛЬНЫЕ fallback-запросы — работают для ЛЮБОЙ ниши
+    # Стратегия: [core_kw] + email-маркер + платформа/контекст
+    universal_queries = [
+        # Персональные сайты и портфолио
+        f'{core_kw} email portfolio contact',
+        f'{core_kw} "get in touch" email',
+        f'{core_kw} "contact me" email',
+        f'{core_kw} "email me" expert',
+        f'{core_kw} freelancer hire email',
+        f'{core_kw} consultant email contact',
+        # Блог-платформы (универсальные для любой ниши)
+        f'{core_kw} medium.com author email',
+        f'{core_kw} substack.com email contact',
+        f'{core_kw} about.me email',
+        f'{core_kw} blog author "reach out"',
+        # Бизнес и профессионалы
+        f'{core_kw} founder CEO email',
+        f'{core_kw} agency team email contact',
+        f'{core_kw} expert "my email" contact',
+        f'{core_kw} speaker trainer email',
+    ]
     if _has_cyrillic:
-        fallback_queries = [
-            f'{short_kw} email контакт автор',
-            f'{short_kw} vc.ru habr контакт',
-            f'{short_kw} github.com email README',
-            f'{short_kw} портфолио "написать мне"',
-            f'{short_kw} telegram бот разработчик email',
-        ]
-    else:
-        fallback_queries = [
-            f'{short_kw} email contact author',
-            f'{short_kw} medium indiehackers portfolio',
-            f'{short_kw} github.com email README',
-            f'{short_kw} portfolio "get in touch"',
-            f'{short_kw} developer blog email contact',
-        ]
+        # Добавляем RU-специфичные запросы
+        universal_queries.extend([
+            f'{core_kw} "написать мне" email автор',
+            f'{core_kw} email контакт портфолио',
+            f'{core_kw} vc.ru автор контакт email',
+            f'{core_kw} habr.com автор email',
+            f'{core_kw} эксперт email контакт',
+            f'{core_kw} фрилансер email контакт',
+        ])
+    if _is_tech_audience:
+        # Для tech — добавляем dev-платформы
+        universal_queries.extend([
+            f'{core_kw} github.com email README',
+            f'{core_kw} dev.to author email',
+            f'{core_kw} stackoverflow.com user email',
+        ])
 
-    # AI-запросы в приоритете, fallback добирают до 10
-    queries = ai_queries[:6]
-    for fq in fallback_queries:
-        if len(queries) < 10:
+    # AI-запросы в приоритете, fallback добирают до 18
+    queries = ai_queries[:10]
+    _used = set(q.lower() for q in queries)
+    for fq in universal_queries:
+        if len(queries) < 18 and fq.lower() not in _used:
             queries.append(fq)
+            _used.add(fq.lower())
+
+    # Перемешиваем fallback для разнообразия при повторных вызовах
+    if len(queries) > 10:
+        tail = queries[10:]
+        random.shuffle(tail)
+        queries = queries[:10] + tail
 
     all_results = []  # (title, snippet, url)
 
     for q in queries:
         try:
-            results = await api.duckduckgo_search(q, num=10)
+            results = await api.duckduckgo_search(q, num=10, cache_ttl=900)  # 15мин кэш
 
             logger.info(f"[AUTO_LEADS] [DDG] Query: {q[:80]}... → {len(results or [])} results")
             if results:
@@ -8284,55 +8402,62 @@ Return ONLY a JSON array of 6 strings. No explanation."""
         except Exception as _sq_err:
             logger.warning(f"[AUTO_LEADS] Search failed: {q[:80]}: {_sq_err}")
 
-    logger.info(f"[AUTO_LEADS] Total search results: {len(all_results)}")
-    if not all_results:
-        logger.warning(f"[AUTO_LEADS] ZERO results from all queries for campaign #{campaign.id}")
+    logger.info(f"[AUTO_LEADS] Total DDG results: {len(all_results)}, GitHub leads: {len(github_leads)}")
+    
+    # Если и DDG и GitHub дали 0 — выходим
+    if not all_results and not github_leads:
+        logger.warning(f"[AUTO_LEADS] ZERO results from all sources for campaign #{campaign.id}")
         return 0, ""
 
-    # ── PASS 2: Скачиваем перспективные страницы и извлекаем email ──
-    # Отбираем URL где вероятны email (контакты, about, профили)
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 2: Скачиваем страницы + contact/about sub-pages → email
+    # ══════════════════════════════════════════════════════════════════════
     _contact_hints = {'contact', 'about', 'profile', 'author', 'user',
                       'контакт', 'автор', 'профиль', 'обо мне',
                       '@', 'email', 'mailto', 'написать', 'связаться'}
-    import re as _re_al
-    all_emails_raw = set()  # email найденные напрямую — инициализируем ДО цикла
     scored_urls = []
     seen_domains = set()
+    contact_sub_urls = []  # URL контактных страниц для дополнительного сканирования
+
     for r in all_results:
         url = r['url']
         if not url:
             continue
-        # Дедуп по домену
         try:
             domain = url.split('/')[2]
         except IndexError:
             continue
-        if domain in seen_domains:
-            continue
+        
         # Пропускаем домены которые блокируют ботов
         base_domain = '.'.join(domain.split('.')[-2:])
         if base_domain in _unfetchable_domains or domain in _unfetchable_domains:
-            # Но всё равно извлекаем email из сниппета
+            # Но извлекаем email из сниппета
             for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', r['snippet']):
                 em = em.lower().strip('.')
                 if not _is_generic_email(em):
                     all_emails_raw.add(em)
             continue
-        seen_domains.add(domain)
+        
+        if domain not in seen_domains:
+            seen_domains.add(domain)
+            # Добавляем контактные sub-pages для каждого нового домена
+            scheme = 'https' if url.startswith('https') else 'http'
+            for sub in ['/contact', '/contacts', '/about', '/about-us', '/team', '/kontakty']:
+                contact_sub_urls.append(f"{scheme}://{domain}{sub}")
 
         # Скоринг: сниппет/заголовок содержат email-подсказки?
         text_lower = f"{r['title']} {r['snippet']}".lower()
         score = sum(1 for h in _contact_hints if h in text_lower)
-        # Прямые email в сниппете = максимальный приоритет
         if '@' in r['snippet'] and '.' in r['snippet'].split('@')[-1][:10]:
             score += 5
         scored_urls.append((score, url, r['snippet']))
 
     scored_urls.sort(reverse=True)
-    top_urls = scored_urls[:15]  # Скачиваем до 15 страниц (компенсация за DDG)
-    logger.info(f"[AUTO_LEADS] Unique domains: {len(seen_domains)}, top URLs to fetch: {len(top_urls)}")
+    top_urls = scored_urls[:20]  # Увеличили до 20 страниц
+    logger.info(f"[AUTO_LEADS] Unique domains: {len(seen_domains)}, "
+                f"top URLs: {len(top_urls)}, contact sub-pages: {len(contact_sub_urls)}")
 
-    page_texts = []  # тексты страниц для AI анализа
+    page_texts = []
 
     # Извлекаем email из сниппетов сразу
     for _, _, snippet in scored_urls:
@@ -8343,51 +8468,94 @@ Return ONLY a JSON array of 6 strings. No explanation."""
 
     # Скачиваем страницы параллельно
     async def _fetch_page(url: str) -> str:
-        """Скачать текст страницы (первые 10KB)."""
+        """Скачать текст страницы (первые 15KB)."""
         try:
             s = await api._get_session()
             async with s.get(url, timeout=aiohttp.ClientTimeout(total=8),
-                             headers={'User-Agent': 'Mozilla/5.0'}, 
+                             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}, 
                              allow_redirects=True, ssl=False) as resp:
                 if resp.status == 200 and 'text' in resp.content_type:
                     raw = await resp.text(errors='replace')
-                    # Берём первые 15KB — достаточно для контактных данных
                     return raw[:15000]
         except Exception:
             pass
         return ""
 
     import asyncio as _asyncio_al
+
+    # Fetch основных страниц
     pages = await _asyncio_al.gather(*[_fetch_page(u) for _, u, _ in top_urls],
                                       return_exceptions=True)
 
     for page_html in pages:
         if isinstance(page_html, str) and page_html:
-            # Извлечь email regex из HTML
             for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', page_html):
                 em = em.lower().strip('.')
                 if not _is_generic_email(em):
                     all_emails_raw.add(em)
-            # Собираем текст для AI-анализа (убираем HTML-теги, берём фрагмент)
+            # Также ищем mailto: ссылки (часто скрыты от глаз но есть в HTML)
+            for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', page_html):
+                em = em.lower().strip('.')
+                if not _is_generic_email(em):
+                    all_emails_raw.add(em)
             clean_text = _re_al.sub(r'<[^>]+>', ' ', page_html)
             clean_text = _re_al.sub(r'\s+', ' ', clean_text)[:2000]
             page_texts.append(clean_text)
 
     pages_fetched = sum(1 for p in pages if isinstance(p, str) and p)
-    logger.info(f"[AUTO_LEADS] Pages fetched: {pages_fetched}/{len(top_urls)}, "
-                f"emails from regex (snippets+pages): {len(all_emails_raw)}, "
-                f"raw emails: {all_emails_raw}")
-    logger.info(f"[AUTO_LEADS] Page texts collected for AI: {len(page_texts)}")
 
-    # ── Финальная AI-экстракция: имена + контекст ──
-    # Объединяем всё: сниппеты + тексты страниц
+    # Fetch контактных sub-pages (если основные не дали достаточно email)
+    contact_pages_fetched = 0
+    if len(all_emails_raw) < 30 and contact_sub_urls:
+        # Берём до 30 контактных страниц
+        _sub_to_fetch = contact_sub_urls[:30]
+        sub_pages = await _asyncio_al.gather(*[_fetch_page(u) for u in _sub_to_fetch],
+                                              return_exceptions=True)
+        for page_html in sub_pages:
+            if isinstance(page_html, str) and page_html:
+                contact_pages_fetched += 1
+                for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', page_html):
+                    em = em.lower().strip('.')
+                    if not _is_generic_email(em):
+                        all_emails_raw.add(em)
+                for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', page_html):
+                    em = em.lower().strip('.')
+                    if not _is_generic_email(em):
+                        all_emails_raw.add(em)
+
+    logger.info(f"[AUTO_LEADS] Pages fetched: {pages_fetched} main + {contact_pages_fetched} contact, "
+                f"emails from regex: {len(all_emails_raw)}, "
+                f"GitHub leads: {len(github_leads)}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 3: AI-фильтрация по релевантности
+    # ══════════════════════════════════════════════════════════════════════
     combined_text = "\n---\n".join(page_texts[:6])
     snippets_text = "\n".join(f"- {r['title']}: {r['snippet']}" for r in all_results[:15])
 
-    # Если уже нашли email через regex — просим AI отфильтровать по РЕЛЕВАНТНОСТИ
+    # Добавляем GitHub leads к all_emails_raw (если ещё не добавлены)
+    github_context_map = {}  # email → context info from GitHub
+    for gl in github_leads:
+        em = gl.get('email', '').lower().strip('.')
+        if em and not _is_generic_email(em):
+            all_emails_raw.add(em)
+            github_context_map[em] = (
+                f"GitHub user: {gl.get('name', '')} (@{gl.get('url', '').split('/')[-1] if gl.get('url') else '?'}), "
+                f"bio: {gl.get('bio', '')[:100]}, company: {gl.get('company', '')}, "
+                f"repos: {gl.get('repos', 0)}, followers: {gl.get('followers', 0)}"
+            )
+
+    # Если уже нашли email через regex/GitHub — просим AI отфильтровать по РЕЛЕВАНТНОСТИ
     if all_emails_raw:
-        emails_list = ", ".join(list(all_emails_raw)[:20])
-        extract_prompt = f"""I found these email addresses from web search results about our target audience.
+        emails_list = ", ".join(list(all_emails_raw)[:40])  # Увеличили лимит до 40
+        
+        # Формируем контекст GitHub-лидов
+        github_context = ""
+        if github_context_map:
+            gh_lines = [f"  {em}: {ctx}" for em, ctx in list(github_context_map.items())[:20]]
+            github_context = "\n\nGitHub profile data:\n" + "\n".join(gh_lines)
+        
+        extract_prompt = f"""I found these email addresses from web search and GitHub profiles.
 Your job is to FILTER them — keep ONLY emails of people who GENUINELY match the target audience.
 
 Found emails: {emails_list}
@@ -8395,6 +8563,7 @@ Found emails: {emails_list}
 Target audience: {target_audience[:300]}
 Campaign goal: {goal[:300]}
 Product: {offer[:200]}
+{github_context}
 
 Context (search results + page content):
 {snippets_text}
@@ -8481,24 +8650,46 @@ If no relevant emails found return []"""
         except Exception:
             pass
 
-    # НЕ используем fallback на сырые regex email — 
-    # лучше 0 лидов чем 15 нерелевантных
+    # Fallback: если AI не отфильтровал, но у нас есть GitHub leads с контекстом —
+    # добавляем их напрямую (у GitHub профилей уже есть name/company/bio)
+    if not parsed_leads and github_leads:
+        logger.info(f"[AUTO_LEADS] AI filter returned 0, using {len(github_leads)} GitHub leads as fallback")
+        for gl in github_leads:
+            em = gl.get('email', '').lower().strip('.')
+            if em and not _is_generic_email(em):
+                parsed_leads.append({
+                    'email': em,
+                    'name': gl.get('name', gl.get('url', '').split('/')[-1] if gl.get('url') else ''),
+                    'company': gl.get('company', ''),
+                    'relevance': 7,
+                    'context': f"GitHub: {gl.get('bio', '')[:100]}, {gl.get('repos', 0)} repos, {gl.get('followers', 0)} followers",
+                })
+
+    # Если всё ещё 0 — используем regex emails как последний резерв
+    # (раньше мы скипали, но для 50/день нужен каждый лид)
     if not parsed_leads and all_emails_raw:
-        logger.info(f"[AUTO_LEADS] AI found 0 relevant leads. "
-                    f"Regex found {len(all_emails_raw)} raw emails but SKIPPING "
-                    f"(no relevance verification). Emails: {all_emails_raw}")
+        logger.info(f"[AUTO_LEADS] Using {len(all_emails_raw)} regex-found emails as last resort")
+        for em in list(all_emails_raw)[:20]:
+            parsed_leads.append({
+                'email': em,
+                'name': '',
+                'company': '',
+                'relevance': 5,
+                'context': 'Found via web search regex (unverified relevance)',
+            })
 
     if not parsed_leads:
         logger.warning(f"[AUTO_LEADS] FINAL: 0 leads found for campaign #{campaign.id} "
-                       f"(search_results={len(all_results)}, pages={pages_fetched}, "
+                       f"(ddg_results={len(all_results)}, pages={pages_fetched}, "
+                       f"contact_pages={contact_pages_fetched}, github={len(github_leads)}, "
                        f"regex_emails={len(all_emails_raw)}, ai_parsed=0)")
         return 0, ""
 
     logger.info(f"[AUTO_LEADS] Found {len(parsed_leads)} leads for campaign #{campaign.id}: "
-                f"{[l.get('email') for l in parsed_leads[:5]]}")
+                f"{[l.get('email') for l in parsed_leads[:10]]}")
 
     # Добавляем через add_email_leads (централизованная логика с дедупом)
-    leads_json = json.dumps(parsed_leads[:15], ensure_ascii=False)
+    leads_json = json.dumps(parsed_leads[:30], ensure_ascii=False)  # Увеличили лимит до 30
     result_msg = await add_email_leads(
         campaign_id=campaign.id,
         leads=leads_json,
