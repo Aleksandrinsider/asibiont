@@ -2459,25 +2459,25 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     let statusLabel, statusColor;
                     if (waitingNextDay) {
                         statusLabel = t('camp-wait-day');
-                        statusColor = '#bf8700';
+                        statusColor = '#068487';
                     } else if (noLeads) {
                         statusLabel = t('camp-no-leads');
-                        statusColor = '#d73a49';
+                        statusColor = '#068487';
                     } else if (searching) {
                         statusLabel = t('camp-searching');
-                        statusColor = '#bf8700';
+                        statusColor = '#068487';
                     } else if (isActive) {
                         statusLabel = t('camp-sending');
                         statusColor = '#068487';
                     } else if (c.status === 'paused') {
                         statusLabel = t('camp-paused');
-                        statusColor = '#d73a49';
+                        statusColor = '#068487';
                     } else if (c.status === 'completed') {
                         statusLabel = t('camp-completed');
-                        statusColor = '#6C727F';
+                        statusColor = '#068487';
                     } else {
                         statusLabel = c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : t('camp-completed');
-                        statusColor = '#6C727F';
+                        statusColor = '#068487';
                     }
                     let oSentC = 0, oRepliedC = 0;
                     if (c.outreach) { c.outreach.forEach(o => { if (o.status && o.status !== 'draft') oSentC++; if (o.status === 'replied') oRepliedC++; }); }
@@ -2497,7 +2497,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px;">
                             <span style="font-size: 12px; color: #8C959F;">${isActive && c.daily_limit ? `${c.sent_today || 0}/${c.daily_limit} ` : ''}${sent} → ${replied}</span>
                             ${waitingNextDay
-                                ? `<span style="font-size: 11px; color: #bf8700;" title="${t('camp-wait-tip')}">⏳</span>
+                                ? `<span style="font-size: 11px; color: #068487;" title="${t('camp-wait-tip')}">⏳</span>
                                    <button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'paused')" title="${t('camp-pause-tip')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 10.25 3Z"/></svg></button>`
                                 : isActive
                                 ? `<button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'paused')" title="${t('camp-pause-tip')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 10.25 3Z"/></svg></button>`
@@ -2560,7 +2560,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     if (c.outreach && c.outreach.length > 0) {
                         c.outreach.forEach((o, oi) => {
                             const oLbl = o.status === 'replied' ? t('os-replied') : o.status === 'interested' ? t('os-interested') : o.status === 'opened' ? t('os-opened') : o.status === 'delivered' ? t('os-delivered') : o.status === 'bounced' ? t('os-bounced') : o.status === 'failed' ? t('os-failed') : o.status === 'sent' ? t('os-sent') : (o.status || '');
-                            const oClr = o.status === 'replied' ? '#068487' : o.status === 'interested' ? '#28A745' : o.status === 'opened' ? '#bf8700' : o.status === 'delivered' ? '#6C727F' : o.status === 'bounced' || o.status === 'failed' ? '#d73a49' : '#6C727F';
+                            const oClr = '#068487';
                             const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                             const rcpt = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
                             const oKey = cKey + '-o' + (o.id || oi);
@@ -2751,7 +2751,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                             <span style="font-size: 12px; color: #6C727F; flex-shrink: 0;">${items.length} ${items.length === 1 ? t('act-item-1') : (items.length >=2 && items.length <=4 ? t('act-item-2') : t('act-item-5'))}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px;">
-                            ${pendCount > 0 ? `<span style="font-size: 12px; color: #bf8700;">${pendCount} ${t('act-pending')}</span>` : ''}
+                            ${pendCount > 0 ? `<span style="font-size: 12px; color: #068487;">${pendCount} ${t('act-pending')}</span>` : ''}
                             <button class="delete-btn" onclick="event.stopPropagation(); activityDeleteGroup([${grpItemIds.join(',')}], '${type}')" title="${t('act-del-all')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
                             <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${grpExpanded ? '0' : '-90'}deg);">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -2791,16 +2791,16 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
 
                         // Status label & color
                         const stMap = {
-                            'pending': [t('act-st-pending'), '#bf8700'],
+                            'pending': [t('act-st-pending'), '#068487'],
                             'accepted': [t('act-st-accepted'), '#068487'],
-                            'rejected': [t('act-st-rejected'), '#d73a49'],
-                            'cancelled': [t('act-st-cancelled'), '#6C727F'],
+                            'rejected': [t('act-st-rejected'), '#068487'],
+                            'cancelled': [t('act-st-cancelled'), '#068487'],
                             'published': [t('act-st-published'), '#068487'],
                             'completed': [t('act-st-completed'), '#068487'],
-                            'failed': [t('act-st-failed'), '#d73a49'],
-                            'deleted': [t('act-st-deleted'), '#6C727F'],
+                            'failed': [t('act-st-failed'), '#068487'],
+                            'deleted': [t('act-st-deleted'), '#068487'],
                         };
-                        const [stLbl, stClr] = stMap[a.status] || [a.status || '', '#6C727F'];
+                        const [stLbl, stClr] = stMap[a.status] || [a.status || '', '#068487'];
                         const aDate = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
 
                         const canDelete = !['cancelled', 'deleted'].includes(a.status);
@@ -2933,14 +2933,14 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 contacts.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'contact-card';
-                    card.style.cssText = 'display: flex; gap: 10px; padding: 8px 4px; margin: 0; font-size: 13px; border-bottom: 1px solid #F0F3F5;';
+                    card.style.cssText = 'display: flex; gap: 10px; padding: 0; margin-bottom: 8px; font-size: 13px; align-items: center;';
                     const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
                         '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + ((c.name || c.company || c.notes) ? '4px' : '0') + ';">' +
                             '<span style="font-weight: 400; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (c.email || '') + '</span>' +
                             (dateStr ? '<span style="font-size: 12px; color: #9CA3AF; margin-left: auto; white-space: nowrap; flex-shrink: 0;">' + dateStr + '</span>' : '') +
                         '</div>' +
-                        ((c.name || c.company) ? '<div style="font-size: 12px; color: #6C727F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + [c.name, c.company].filter(Boolean).join(' · ') + '</div>' : '') +
+                        ((c.name || c.company) ? '<div style="font-size: 12px; color: #068487; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + [c.name, c.company].filter(Boolean).join(' · ') + '</div>' : '') +
                         (c.notes ? '<div style="font-size: 12px; color: #9CA3AF; margin-top: 2px;">' + c.notes + '</div>' : '') +
                         '</div>' +
                         '<div class="contact-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; flex-shrink: 0; align-self: center;">' +
@@ -3130,7 +3130,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
 
             const infoDiv = card.querySelector('div');
             const emailSpan = infoDiv.querySelector('span[style*="font-weight"]');
-            const detailDiv = infoDiv.querySelector('div[style*="font-size: 12px"][style*="color: #6C727F"]');
+            const detailDiv = infoDiv.querySelector('div[style*="font-size: 12px"][style*="color: #068487"]');
             const notesDiv = infoDiv.querySelector('div[style*="color: #9CA3AF"][style*="margin-top"]');
 
             const currentEmail = emailSpan ? emailSpan.textContent.trim() : '';
@@ -5929,7 +5929,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 statusColor = '#068487';
             } else if (task.delegation_status === 'rejected') {
                 statusText = t('status-rejected');
-                statusColor = '#d73a49';
+                statusColor = '#068487';
             } else if (task.delegation_status === 'accepted') {
                 statusText = t('status-accepted');
                 statusColor = '#068487';
@@ -5938,7 +5938,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 statusColor = '#068487';
             } else if (task.overdue) {
                 statusText = t('status-overdue') + ' ' + formatOverdueText(task.overdue_value, task.overdue_unit);
-                statusColor = '#d73a49';
+                statusColor = '#068487';
             }
             
             html += '<span class="task-meta" style="color: ' + statusColor + ';">' + statusText + '</span>';
