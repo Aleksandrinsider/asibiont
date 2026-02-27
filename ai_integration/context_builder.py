@@ -456,7 +456,7 @@ class ContextBuilder:
                 from models import EmailCampaign as _EC, EmailOutreach as _EO
                 active_campaigns = session.query(_EC).filter(
                     _EC.user_id == user.id,
-                    _EC.status == 'active',
+                    _EC.status.in_(['active', 'paused']),
                 ).all()
                 if active_campaigns:
                     camp_lines = []
@@ -465,7 +465,8 @@ class ContextBuilder:
                             _EO.campaign_id == c.id,
                             _EO.status == 'draft',
                         ).count()
-                        camp_lines.append(f"  id={c.id} «{c.name}» — лидов ожидает: {pending_leads}, отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
+                        status_badge = "⏸️ PAUSED" if c.status == 'paused' else "▶️"
+                        camp_lines.append(f"  {status_badge} id={c.id} «{c.name}» — лидов ожидает: {pending_leads}, отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
                     hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ:\n" + "\n".join(camp_lines))
             except Exception as e:
                 logger.warning(f"[CAMPAIGNS_CTX] Error: {e}")
@@ -506,6 +507,23 @@ class ContextBuilder:
                     pass
             except Exception as e:
                 logger.warning(f"[POST_CTX] Error: {e}")
+
+            # ═══ АВТОПОСТИНГ-КАМПАНИИ ═══
+            try:
+                _channel = getattr(user, 'telegram_channel', None)
+                _discord_wh = getattr(user, 'discord_webhook', None)
+                auto_parts = []
+                if _channel:
+                    auto_parts.append(f"TG-канал: {_channel}")
+                if _discord_wh:
+                    auto_parts.append("Discord: webhook настроен")
+                _post_time = getattr(profile, 'auto_post_time', None) if profile else None
+                if _post_time:
+                    auto_parts.append(f"Время автопостинга: {_post_time}")
+                if auto_parts:
+                    hints.append("АВТО-ПОСТИНГ: " + " | ".join(auto_parts) + " — система автоматически публикует посты по расписанию.")
+            except Exception as e:
+                logger.warning(f"[AUTOPOST_CTX] Error: {e}")
 
             # ═══ ТОКЕНЫ И TELEGRAM-КАНАЛ ═══
             try:

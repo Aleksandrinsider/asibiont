@@ -223,7 +223,20 @@ class AnchorEngine:
                             EmailOutreach.reply_text.isnot(None),
                             EmailOutreach.ai_reply_sent_at.is_(None),
                         ).first() is not None
-                        if not has_pending_reminder and not has_unreplied_email:
+                        # НЕ пропускаем если есть email-черновики для отправки (silent, не будят юзера)
+                        has_email_drafts = session.query(EmailOutreach).join(EmailCampaign).filter(
+                            EmailCampaign.user_id == u.id,
+                            EmailCampaign.status == 'active',
+                            EmailOutreach.status == 'draft',
+                        ).first() is not None
+                        # НЕ пропускаем если есть follow-up для отправки (silent)
+                        has_follow_ups = session.query(EmailOutreach).join(EmailCampaign).filter(
+                            EmailCampaign.user_id == u.id,
+                            EmailCampaign.status == 'active',
+                            EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                            EmailOutreach.next_follow_up_at <= now_utc,
+                        ).first() is not None
+                        if not has_pending_reminder and not has_unreplied_email and not has_email_drafts and not has_follow_ups:
                             skipped_night += 1
                             continue
                         else:
@@ -231,6 +244,10 @@ class AnchorEngine:
                                 logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has pending reminder, including")
                             if has_unreplied_email:
                                 logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has unreplied email, including")
+                            if has_email_drafts:
+                                logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has email drafts to send (silent), including")
+                            if has_follow_ups:
+                                logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has follow-ups to send (silent), including")
                 except Exception:
                     pass  # если timezone кривой — пропускаем pre-filter, проверим в _process_user_inner
 
@@ -512,9 +529,10 @@ class AnchorEngine:
         elif post_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ posts blocked (night hours)")
 
-        # ── 3e. EMAIL SILENT — автономная отправка/follow-up (не ночью, без сообщений юзеру) ──
-        if not is_night and email_silent_anchors:
-            logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors...")
+        # ── 3e. EMAIL SILENT — автономная отправка/follow-up (ВСЕГДА, без сообщений юзеру) ──
+        # Email outreach/follow-up — тихие операции, не будят пользователя → работают 24/7
+        if email_silent_anchors:
+            logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             for _ea_idx, ea in enumerate(email_silent_anchors[:3]):  # макс 3 за цикл
                 if _ea_idx > 0:
                     await asyncio.sleep(15)  # Anti-spam задержка между email-якорями

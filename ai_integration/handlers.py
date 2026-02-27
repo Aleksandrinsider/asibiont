@@ -8613,6 +8613,20 @@ async def add_email_leads(
             added += 1
         session.commit()
 
+        # ── Немедленный триггер anchor engine для отправки черновиков ──
+        if added > 0:
+            try:
+                from anchor_engine import get_anchor_engine
+                _engine = get_anchor_engine()
+                if _engine:
+                    import asyncio as _asyncio_leads
+                    _asyncio_leads.get_event_loop().create_task(
+                        _engine._process_user(user.telegram_id)
+                    )
+                    logger.info(f"[EMAIL_LEADS] Triggered anchor engine for user {user.telegram_id} after adding {added} leads")
+            except Exception as _trigger_err:
+                logger.warning(f"[EMAIL_LEADS] Failed to trigger anchor engine: {_trigger_err}")
+
         return f"✅ Добавлено {added} email-адресов в кампанию #{campaign.id}" + (f" (пропущено {skipped} дублей/cooldown)" if skipped else "")
     except Exception as e:
         logger.error(f"[EMAIL_LEADS] Error: {e}", exc_info=True)
