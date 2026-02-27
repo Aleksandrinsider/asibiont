@@ -8279,6 +8279,30 @@ async def send_outreach_email(
         if existing and existing.status != 'draft':
             return f"⚠️ Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}."
 
+        # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
+        # 1. Не слать тому, кому уже отправляли из другой кампании последние 30 дней
+        CROSS_CAMPAIGN_COOLDOWN_DAYS = 30
+        cross_existing = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == recipient_email,
+            EmailOutreach.campaign_id != campaign.id,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            EmailOutreach.sent_at >= dt.now(tz.utc) - timedelta(days=CROSS_CAMPAIGN_COOLDOWN_DAYS),
+        ).first()
+        if cross_existing:
+            other_camp = session.query(EmailCampaign).filter_by(id=cross_existing.campaign_id).first()
+            other_name = other_camp.name if other_camp else f'#{cross_existing.campaign_id}'
+            return f"⚠️ {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}). Повторная отправка заблокирована (cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней)."
+
+        # 2. Не слать тому, кто ранее пожаловался (complained) или bounced
+        bad_status = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == recipient_email,
+            EmailOutreach.status.in_(['bounced', 'failed']),
+        ).first()
+        if bad_status:
+            return f"⚠️ {recipient_email} ранее вернул bounced/failed (статус: {bad_status.status}). Отправка заблокирована."
+
         if not subject or not body:
             return "❌ Нужны subject и body письма."
 
@@ -8546,13 +8570,36 @@ async def add_email_leads(
             email = lead.get('email', '').strip().lower()
             if not email or '@' not in email:
                 continue
-            # Дубль-проверка
+            # Дубль-проверка в текущей кампании
             exists = session.query(EmailOutreach).filter_by(
                 campaign_id=campaign.id, recipient_email=email
             ).first()
             if exists:
                 skipped += 1
                 continue
+
+            # ── ANTI-SPAM: кросс-кампания + bounced/failed ──
+            from datetime import datetime as _dt_leads, timezone as _tz_leads
+            CROSS_CAMPAIGN_COOLDOWN_DAYS = 30
+            cross_exists = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == email,
+                EmailOutreach.campaign_id != campaign.id,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                EmailOutreach.sent_at >= _dt_leads.now(_tz_leads.utc) - timedelta(days=CROSS_CAMPAIGN_COOLDOWN_DAYS),
+            ).first()
+            if cross_exists:
+                skipped += 1
+                continue
+            bad_history = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == email,
+                EmailOutreach.status.in_(['bounced', 'failed']),
+            ).first()
+            if bad_history:
+                skipped += 1
+                continue
+
             outreach = EmailOutreach(
                 campaign_id=campaign.id,
                 user_id=user.id,
@@ -8566,7 +8613,7 @@ async def add_email_leads(
             added += 1
         session.commit()
 
-        return f"✅ Добавлено {added} email-адресов в кампанию #{campaign.id}" + (f" (пропущено {skipped} дублей)" if skipped else "")
+        return f"✅ Добавлено {added} email-адресов в кампанию #{campaign.id}" + (f" (пропущено {skipped} дублей/cooldown)" if skipped else "")
     except Exception as e:
         logger.error(f"[EMAIL_LEADS] Error: {e}", exc_info=True)
         session.rollback()
