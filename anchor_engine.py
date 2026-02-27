@@ -1796,7 +1796,8 @@ class AnchorEngine:
             # - Переговоры (1 письмо): ответили + агент ответил → готово
             # - Привлечение (50 писем): агент сам добавляет лиды через add_email_leads,
             #   пока есть черновики — не завершается. Как только все обработаны → завершается.
-            if not is_paused and not drafts and not stale_emails:
+            # НЕ автозавершаем если ещё есть квота (remaining_total) — email_need_leads найдёт ещё контакты
+            if not is_paused and not drafts and not stale_emails and remaining_total <= 0:
                 # Письма у которых ещё не закрыт цикл:
                 # sent/delivered/opened с незакрытыми follow-up ИЛИ replied без ответа агента
                 open_outreach = session.query(EmailOutreach).filter(
