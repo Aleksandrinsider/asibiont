@@ -7082,6 +7082,39 @@ async def api_messages_read_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_messages_delete_handler(request):
+    """POST /api/messages/delete — delete a message."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        message_id = data.get('message_id')
+        if not message_id:
+            return web.json_response({'error': 'message_id required'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import UserMessage
+            msg = session_db.query(UserMessage).filter_by(id=message_id).first()
+            if not msg:
+                return web.json_response({'error': 'Message not found'}, status=404)
+            # Only sender or recipient can delete
+            if msg.sender_id != user.id and msg.recipient_id != user.id:
+                return web.json_response({'error': 'Access denied'}, status=403)
+            session_db.delete(msg)
+            session_db.commit()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_messages_delete_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_outreach_delete_handler(request):
     """Delete an outreach record."""
     try:
@@ -8979,6 +9012,7 @@ app.router.add_get('/api/messages', api_messages_handler)
 app.router.add_post('/api/messages/reply', api_messages_reply_handler)
 app.router.add_post('/api/messages/send', api_messages_send_handler)
 app.router.add_post('/api/messages/read', api_messages_read_handler)
+app.router.add_post('/api/messages/delete', api_messages_delete_handler)
 
 
 # Setup for production

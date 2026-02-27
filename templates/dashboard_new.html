@@ -789,7 +789,7 @@
                         <div id="contact-filter-content" style="margin-bottom: 15px;">
                             <div style="position: relative; width: 100%;">
                                 <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-                                    <option value="messages" data-i18n="opt-messages">💬 Сообщения</option>
+                                    <option value="messages" data-i18n="opt-messages">Сообщения</option>
                                     <option value="favorite" data-i18n="opt-fav">Избранное</option>
                                     <option value="recommended" selected data-i18n="opt-rec">Рекомендуемые</option>
                                     <option value="delegating_to_me" data-i18n="opt-del-me">Поручают мне</option>
@@ -1229,6 +1229,34 @@
                 <div class="rating-modal-actions">
                     <button onclick="closeTimeModal()" class="rating-cancel-btn" data-i18n="cancel" title="Отмена" data-i18n-title="cancel">Отмена</button>
                     <button onclick="submitTimeChange()" class="rating-submit-btn" data-i18n="save" title="Сохранить" data-i18n-title="save">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Send Message Modal -->
+    <div id="send-message-modal" class="rating-modal">
+        <div class="rating-modal-content">
+            <div class="rating-modal-header">
+                <h3 id="send-message-modal-title" data-i18n="send-msg-title">Отправить сообщение</h3>
+                <button onclick="closeSendMessageModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="rating-modal-body">
+                <div id="send-message-recipient-row" style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px;" data-i18n="recipient-label">Получатель</label>
+                    <input type="text" id="send-message-recipient" placeholder="@username" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; box-sizing: border-box;" />
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px;" data-i18n="message-label">Сообщение</label>
+                    <textarea id="send-message-text" rows="4" placeholder="" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; resize: vertical; font-family: inherit; box-sizing: border-box;"></textarea>
+                </div>
+                <div class="rating-modal-actions">
+                    <button onclick="closeSendMessageModal()" class="rating-cancel-btn" data-i18n="cancel">Отмена</button>
+                    <button onclick="submitSendMessage()" class="rating-submit-btn" data-i18n="send-btn">Отправить</button>
                 </div>
             </div>
         </div>
@@ -4767,25 +4795,63 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         async function sendMessageToContact(username) {
             try {
                 const cleanUsername = username.replace('@', '');
-                // Внутреннее сообщение через платформу для всех контактов
-                await sendInternalMessage(cleanUsername);
+                openSendMessageModal(cleanUsername);
             } catch (error) {
                 console.error('Error sending message:', error);
                 showNotification(t('err-send') || 'Ошибка', 'error');
             }
         }
 
-        async function sendInternalMessage(username) {
-            const msg = prompt(t('compose-text') || 'Введите сообщение:');
-            if (!msg) return;
+        // --- Send message modal logic ---
+        let _sendMsgCallback = null;
+
+        function openSendMessageModal(username, replyMessageId) {
+            const modal = document.getElementById('send-message-modal');
+            const recipientRow = document.getElementById('send-message-recipient-row');
+            const recipientInput = document.getElementById('send-message-recipient');
+            const textInput = document.getElementById('send-message-text');
+            const title = document.getElementById('send-message-modal-title');
+            textInput.value = '';
+            if (username) {
+                recipientInput.value = '@' + username.replace('@', '');
+                recipientRow.style.display = 'none';
+                if (replyMessageId) {
+                    title.textContent = t('reply-title') || 'Ответить';
+                    _sendMsgCallback = () => _submitReply(replyMessageId, textInput.value);
+                } else {
+                    title.textContent = (t('send-msg-title') || 'Отправить сообщение') + ' @' + username.replace('@', '');
+                    _sendMsgCallback = () => _submitSendToUser(username.replace('@', ''), textInput.value);
+                }
+            } else {
+                recipientRow.style.display = 'block';
+                recipientInput.value = '';
+                title.textContent = t('new-message') || 'Новое сообщение';
+                _sendMsgCallback = () => _submitSendToUser(recipientInput.value.replace('@', '').trim(), textInput.value);
+            }
+            modal.style.display = 'flex';
+            setTimeout(() => textInput.focus(), 100);
+        }
+
+        function closeSendMessageModal() {
+            document.getElementById('send-message-modal').style.display = 'none';
+            _sendMsgCallback = null;
+        }
+
+        async function submitSendMessage() {
+            if (_sendMsgCallback) await _sendMsgCallback();
+        }
+
+        async function _submitSendToUser(username, text) {
+            if (!username || !text.trim()) return;
             try {
                 const resp = await fetch('/api/messages/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ recipient_username: username, message_text: msg })
+                    body: JSON.stringify({ recipient_username: username, message_text: text.trim() })
                 });
                 if (resp.ok) {
+                    closeSendMessageModal();
                     showNotification(t('msg-sent-internal') || 'Сообщение отправлено', 'success');
                     if (currentContactFilter === 'messages') loadInboxMessages();
                 } else {
@@ -4794,6 +4860,27 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 }
             } catch (e) {
                 console.error('Internal message error:', e);
+                showNotification(t('err-send') || 'Ошибка', 'error');
+            }
+        }
+
+        async function _submitReply(messageId, text) {
+            if (!text.trim()) return;
+            try {
+                const resp = await fetch('/api/messages/reply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ message_id: messageId, reply_text: text.trim() })
+                });
+                if (resp.ok) {
+                    closeSendMessageModal();
+                    showNotification(t('reply-sent') || 'Ответ отправлен', 'success');
+                    loadInboxMessages();
+                } else {
+                    showNotification(t('err-send') || 'Ошибка', 'error');
+                }
+            } catch (e) {
                 showNotification(t('err-send') || 'Ошибка', 'error');
             }
         }
@@ -4888,8 +4975,17 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     }
                     // Reply button for incoming, unreplied messages
                     if (isIn && msg.status !== 'replied') {
-                        html += '<div style="margin-top: 6px;">';
-                        html += '<button onclick="replyToInboxMessage(' + msg.id + ')" style="padding: 4px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-family: inherit;" onmouseover="this.style.background=\'#F6F8FA\'" onmouseout="this.style.background=\'#FFFFFF\'">' + (t('reply-btn') || 'Ответить') + '</button>';
+                        html += '<div style="margin-top: 6px; display: flex; gap: 6px;">';
+                        html += '<button onclick="replyToInboxMessage(' + msg.id + ', \'' + (otherUname || '').replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-family: inherit;" onmouseover="this.style.background=\'#F6F8FA\'" onmouseout="this.style.background=\'#FFFFFF\'">' + (t('reply-btn') || 'Ответить') + '</button>';
+                        html += '<button onclick="deleteInboxMessage(' + msg.id + ')" style="padding: 4px 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0.4; transition: opacity 0.15s;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.4\'" title="' + (t('delete') || 'Удалить') + '">';
+                        html += '<svg width="13" height="13" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>';
+                        html += '</button>';
+                        html += '</div>';
+                    } else {
+                        html += '<div style="margin-top: 6px; display: flex; gap: 6px;">';
+                        html += '<button onclick="deleteInboxMessage(' + msg.id + ')" style="padding: 4px 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0.4; transition: opacity 0.15s;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.4\'" title="' + (t('delete') || 'Удалить') + '">';
+                        html += '<svg width="13" height="13" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>';
+                        html += '</button>';
                         html += '</div>';
                     }
                     html += '</li>';
@@ -4904,45 +5000,27 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             }
         }
 
-        async function replyToInboxMessage(messageId) {
-            const replyText = prompt(t('reply-prompt') || 'Введите ответ:');
-            if (!replyText) return;
-            try {
-                const resp = await fetch('/api/messages/reply', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ message_id: messageId, reply_text: replyText })
-                });
-                if (resp.ok) {
-                    showNotification(t('reply-sent') || 'Ответ отправлен', 'success');
-                    loadInboxMessages();
-                } else {
-                    showNotification(t('err-send') || 'Ошибка', 'error');
-                }
-            } catch (e) {
-                showNotification(t('err-send') || 'Ошибка', 'error');
-            }
+        async function replyToInboxMessage(messageId, senderUsername) {
+            openSendMessageModal(senderUsername || '', messageId);
         }
 
         async function composeNewMessage() {
-            const username = prompt(t('compose-username') || 'Введите @username получателя:');
-            if (!username) return;
-            const text = prompt(t('compose-text') || 'Введите сообщение:');
-            if (!text) return;
+            openSendMessageModal(null);
+        }
+
+        async function deleteInboxMessage(messageId) {
             try {
-                const resp = await fetch('/api/messages/send', {
+                const resp = await fetch('/api/messages/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ recipient_username: username.replace('@', ''), message_text: text })
+                    body: JSON.stringify({ message_id: messageId })
                 });
                 if (resp.ok) {
-                    showNotification(t('msg-sent-internal') || 'Сообщение отправлено', 'success');
+                    showNotification(t('msg-deleted') || 'Сообщение удалено', 'success');
                     loadInboxMessages();
                 } else {
-                    const err = await resp.json();
-                    showNotification(err.error || t('err-send'), 'error');
+                    showNotification(t('err-send') || 'Ошибка', 'error');
                 }
             } catch (e) {
                 showNotification(t('err-send') || 'Ошибка', 'error');
@@ -7404,7 +7482,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         
         function writeToContact(username) {
             closeContactProfileModal();
-            sendInternalMessage(username);
+            openSendMessageModal(username);
         }
         
         async function toggleFavoriteContactFromModal(username) {
@@ -9600,10 +9678,11 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
       'chat-ai':'Чат с ИИ','news-feed':'Лента новостей',
       'msg-placeholder':'Сообщение...',
-      'opt-messages':'💬 Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
+      'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
       'reply':'Ответ','reply-btn':'Ответить','reply-prompt':'Введите ответ:','reply-sent':'Ответ отправлен',
       'new-message':'Новое сообщение','compose-username':'Введите @username получателя:','compose-text':'Введите сообщение:',
+      'send-msg-title':'Отправить сообщение','reply-title':'Ответить','recipient-label':'Получатель','message-label':'Сообщение','send-btn':'Отправить','msg-deleted':'Сообщение удалено',
       'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
 
       'back':'Назад',
@@ -9806,10 +9885,11 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
       'chat-ai':'Chat with AI','news-feed':'News Feed',
       'msg-placeholder':'Message...',
-      'opt-messages':'💬 Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
+      'opt-messages':'Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',
       'reply':'Reply','reply-btn':'Reply','reply-prompt':'Enter reply:','reply-sent':'Reply sent',
       'new-message':'New message','compose-username':'Enter recipient @username:','compose-text':'Enter message:',
+      'send-msg-title':'Send message','reply-title':'Reply','recipient-label':'Recipient','message-label':'Message','send-btn':'Send','msg-deleted':'Message deleted',
       'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
 
       'back':'Back',
