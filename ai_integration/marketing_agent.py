@@ -28,18 +28,55 @@ async def generate_marketing_content(product_name, target_audience, platform, go
     """
     
     logger.info(f"[MARKETING] Generating content for {product_name} on {platform}")
-    
+
+    # DDG: исследуем конкурентов и боли аудитории для data-driven контента
+    competitor_ctx = ""
+    pain_ctx = ""
+    trend_ctx = ""
+    try:
+        from .api_client import get_api_client
+        api = get_api_client()
+
+        # 1. Конкуренты/альтернативы
+        competitors = await api.duckduckgo_search(
+            f'{product_name} альтернативы конкуренты отзывы', num=3, cache_ttl=7200
+        )
+        if competitors:
+            lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in competitors[:3]]
+            competitor_ctx = "\n\nКОНКУРЕНТЫ И РЫНОК (реальные данные из сети):\n" + "\n".join(lines)
+
+        # 2. Боли аудитории
+        pains = await api.duckduckgo_search(
+            f'{target_audience} проблемы жалобы сложности', num=3, cache_ttl=7200
+        )
+        if pains:
+            lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in pains[:3]]
+            pain_ctx = "\n\nБОЛИ АУДИТОРИИ (реальные данные из сети):\n" + "\n".join(lines)
+
+        # 3. Актуальные тренды
+        trends = await api.duckduckgo_search(
+            f'{target_audience} тренды {datetime.now().strftime("%Y")}', num=3, cache_ttl=7200
+        )
+        if trends:
+            lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in trends[:3]]
+            trend_ctx = "\n\nАКТУАЛЬНЫЕ ТРЕНДЫ:\n" + "\n".join(lines)
+
+    except Exception as e:
+        logger.debug(f"[MARKETING] DDG research failed (non-critical): {e}")
+
     prompt = f"""Создай мощный маркетинговый пост для {platform}.
 
 ПРОДУКТ: {product_name}
 АУДИТОРИЯ: {target_audience}
 ЦЕЛЬ: {goal}
+{competitor_ctx}{pain_ctx}{trend_ctx}
 
 Требования:
 1. Цепляющий заголовок (до 10 слов)
 2. Текст 150-200 слов:
-   - Начни с боли/проблемы аудитории
+   - Начни с боли/проблемы аудитории (используй РЕАЛЬНЫЕ данные из раздела "БОЛИ АУДИТОРИИ" выше)
    - Покажи решение через продукт
+   - Отстройся от конкурентов (используй данные из раздела "КОНКУРЕНТЫ")
    - Добавь социальное доказательство (цифры если возможно)
    - Закончи сильным CTA
 3. 5-7 релевантных хэштегов для {platform}

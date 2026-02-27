@@ -121,9 +121,13 @@ class AutoMarketingService:
             # Получаем информацию о контент-стратегии пользователя
             content_strategy = profile.content_strategy if profile and profile.content_strategy else None
             
-            # Базовые параметры для генерации контента
-            product_name = "AI Агент для задач"
-            target_audience = "предприниматели 25-40"
+            # Параметры из профиля пользователя (не хардкод)
+            user_interests = (profile.interests if profile and profile.interests else '') or ''
+            user_goals = (profile.goals if profile and profile.goals else '') or ''
+            user_position = (profile.position if profile and profile.position else '') or ''
+
+            product_name = user_interests[:60] or user_goals[:60] or user_position[:60] or "AI продуктивность"
+            target_audience = user_goals[:60] or user_interests[:60] or "профессионалы"
             platform = "telegram"
             
             if content_strategy:
@@ -137,7 +141,7 @@ class AutoMarketingService:
                 except (json.JSONDecodeError, TypeError, AttributeError) as e:
                     logger.debug(f"Failed to parse content_strategy: {e}")
             
-            # Генерируем контент
+            # Генерируем контент (generate_marketing_content сам делает DDG-исследование)
             marketing_content = await generate_marketing_content(
                 product_name=product_name,
                 target_audience=target_audience,

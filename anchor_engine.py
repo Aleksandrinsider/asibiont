@@ -609,6 +609,9 @@ class AnchorEngine:
         # --- EMAIL OUTREACH (автономная отправка + фоллоу-апы + уведомления о reply) ---
         anchors.extend(self._scan_email_outreach(user, session, now_utc))
 
+        # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
+        anchors = await self._enrich_anchors_with_ddg(anchors, profile)
+
         # Дедупликация: не создаём якорь если уже есть недоставленный с тем же type+source
         # with_for_update() сериализует запись между двумя параллельными инстансами (Railway deploy)
         try:
@@ -636,6 +639,79 @@ class AnchorEngine:
                 unique_anchors.append(a)
 
         return unique_anchors
+
+    async def _enrich_anchors_with_ddg(self, anchors: list, profile) -> list:
+        """Обогащает якоря реальными данными из DuckDuckGo.
+
+        Затрагивает типы: event_discovery, market_insight, content_opportunity.
+        Добавляет результаты поиска прямо в data якоря, чтобы AI получил конкретные факты.
+        Бюджет: ~3-5 DDG-запросов на пользователя за скан, кэш 2ч.
+        """
+        try:
+            from ai_integration.api_client import get_api_client
+            api = get_api_client()
+
+            for anchor in anchors:
+                try:
+                    data = json.loads(anchor.data) if anchor.data else {}
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+                enriched = False
+
+                if anchor.anchor_type == 'event_discovery':
+                    # Выполняем search_query, который уже сформирован в _scan_events
+                    query = data.get('search_query', '')
+                    city = data.get('city', '')
+                    if query:
+                        if city and city.lower() not in query.lower():
+                            query += f' {city}'
+                        results = await api.duckduckgo_search(query, num=5, cache_ttl=7200)
+                        if results:
+                            data['web_events'] = [
+                                {'title': r.get('title', ''), 'snippet': r.get('snippet', '')[:200], 'url': r.get('link', '')}
+                                for r in results[:5]
+                            ]
+                            enriched = True
+                            logger.info(f"[ANCHOR-DDG] event_discovery enriched with {len(results)} results")
+
+                elif anchor.anchor_type == 'market_insight':
+                    niche = data.get('niche', '')
+                    if niche:
+                        from datetime import datetime as dt
+                        year = dt.now().strftime('%Y')
+                        news_query = f'{niche[:50]} новости тренды {year}'
+                        results = await api.duckduckgo_search(news_query, num=5, cache_ttl=7200)
+                        if results:
+                            data['fresh_insights'] = [
+                                {'title': r.get('title', ''), 'snippet': r.get('snippet', '')[:200], 'url': r.get('link', '')}
+                                for r in results[:5]
+                            ]
+                            enriched = True
+                            logger.info(f"[ANCHOR-DDG] market_insight enriched with {len(results)} results")
+
+                elif anchor.anchor_type == 'content_opportunity':
+                    niche = data.get('niche', '')
+                    content_strategy = data.get('content_strategy', '')
+                    topic = content_strategy[:50] if content_strategy else niche[:50]
+                    if topic:
+                        ideas_query = f'{topic} контент идеи тренды'
+                        results = await api.duckduckgo_search(ideas_query, num=5, cache_ttl=7200)
+                        if results:
+                            data['content_ideas_from_web'] = [
+                                {'title': r.get('title', ''), 'snippet': r.get('snippet', '')[:200], 'url': r.get('link', '')}
+                                for r in results[:5]
+                            ]
+                            enriched = True
+                            logger.info(f"[ANCHOR-DDG] content_opportunity enriched with {len(results)} results")
+
+                if enriched:
+                    anchor.data = json.dumps(data, ensure_ascii=False)
+
+        except Exception as e:
+            logger.warning(f"[ANCHOR-DDG] Enrichment failed (non-critical): {e}")
+
+        return anchors
 
     def _scan_tasks(self, user, session, user_tz, user_now, now_utc) -> list:
         """Сканирует задачи: просроченные, ближайшие дедлайны, застойные"""
@@ -2643,6 +2719,26 @@ class AnchorEngine:
             # Сигналы
             signals = anchor_data.get('signals', [])
 
+            # DDG: подтягиваем свежий контекст из интернета по нише/интересам
+            try:
+                from ai_integration.api_client import get_api_client
+                api = get_api_client()
+                niche = ''
+                if profile:
+                    niche = (getattr(profile, 'interests', '') or getattr(profile, 'goals', '') or '')[:60]
+                if niche:
+                    from datetime import datetime as dt
+                    fresh_query = f'{niche} тренды новости {dt.now().strftime("%Y")}'
+                    fresh_results = await api.duckduckgo_search(fresh_query, num=3, cache_ttl=7200)
+                    if fresh_results:
+                        signals.append("СВЕЖИЕ ДАННЫЕ ИЗ СЕТИ:")
+                        for r in fresh_results[:3]:
+                            title = r.get('title', '')
+                            snippet = r.get('snippet', '')[:120]
+                            signals.append(f"  — {title}: {snippet}")
+            except Exception as e:
+                logger.debug(f"[ANCHOR] DDG post enrichment failed (non-critical): {e}")
+
             if mode == 'feed':
                 system_msg = (
                     "Ты — автономный агент ASI Biont. Твоя задача — решить, стоит ли сделать пост в ленту "
@@ -2890,6 +2986,11 @@ class AnchorEngine:
                 "— task_overdue: задача РЕАЛЬНО просрочена (прошло >30 мин после дедлайна). Только тут уместно говорить о просрочке.",
                 "— task_deadline_soon: дедлайн ещё не наступил, но приближается.",
                 "",
+                "ПРАВИЛА ДЛЯ ЯКОРЕЙ INSIGHTS/EVENTS:",
+                "— event_discovery: В data есть web_events — РЕАЛЬНЫЕ мероприятия найденные в интернете. Расскажи про 1-2 самых релевантных с ссылками.",
+                "— market_insight: В data есть fresh_insights — РЕАЛЬНЫЕ новости/тренды из интернета по нише пользователя. Перескажи самое важное со ссылками.",
+                "— content_opportunity: В data есть content_ideas_from_web — реальные идеи контента. Предложи 1-2 конкретные темы на основе данных.",
+                "",
                 "ПРАВИЛА ДЛЯ EMAIL-ЯКОРЕЙ:",
                 "— email_outreach_send: Отправь письма из черновиков кампании. В data будут drafts с email-адресами, именами, контекстом. Для каждого draft используй send_outreach_email с персонализированным subject и body. Пиши уникально для каждого получателя! Учитывай goal и offer кампании. Не уведомляй пользователя о каждом отправленном письме — просто делай молча (верни SKIP). ANTI-SPAM: система автоматически блокирует отправку контактам, которым уже писали из другой кампании за последние 30 дней или у которых ранее был bounced/failed. Если получишь предупреждение — пропусти этот контакт без повторных попыток.",
                 "— email_follow_up: Отправь follow-up письмо. В data будет original_subject, original_body, follow_up_number. Используй send_outreach_email или reply_to_outreach_email. Будь ненавязчив. Верни SKIP.",
@@ -2916,6 +3017,8 @@ class AnchorEngine:
             prompt_parts.append(f"\n=== ЯКОРЯ ({len(anchors)} шт) ===")
             # Типы якорей, для которых нужно передавать полные данные (data) в промпт
             EMAIL_DATA_TYPES = {'email_reply_received', 'email_outreach_send', 'email_follow_up', 'email_campaign_report', 'email_need_leads'}
+            # Типы якорей с DDG-обогащением — показываем веб-данные
+            DDG_ENRICHED_TYPES = {'event_discovery', 'market_insight', 'content_opportunity'}
             for i, ad in enumerate(anchor_descriptions, 1):
                 prompt_parts.append(
                     f"{i}. [{ad['priority']}] {ad['type']}: {ad['topic']} "
@@ -2939,6 +3042,24 @@ class AnchorEngine:
                     if data_lines:
                         prompt_parts.append("   --- DATA ---")
                         prompt_parts.extend(data_lines)
+
+                # Для DDG-обогащённых якорей — показываем реальные результаты веб-поиска
+                if ad.get('type') in DDG_ENRICHED_TYPES and ad.get('data'):
+                    data = ad['data']
+                    web_keys = {'web_events': '🌐 МЕРОПРИЯТИЯ ИЗ СЕТИ', 'fresh_insights': '📊 СВЕЖИЕ ДАННЫЕ ИЗ СЕТИ', 'content_ideas_from_web': '💡 ИДЕИ ИЗ СЕТИ'}
+                    for web_key, label in web_keys.items():
+                        items = data.get(web_key, [])
+                        if items:
+                            prompt_parts.append(f"   --- {label} ---")
+                            for item in items[:5]:
+                                title = item.get('title', '')
+                                snippet = item.get('snippet', '')[:150]
+                                url = item.get('url', '')
+                                prompt_parts.append(f"   • {title}")
+                                if snippet:
+                                    prompt_parts.append(f"     {snippet}")
+                                if url:
+                                    prompt_parts.append(f"     {url}")
 
             if task_lines:
                 prompt_parts.append(f"\n=== АКТИВНЫЕ ЗАДАЧИ ({len(tasks)}) ===")
