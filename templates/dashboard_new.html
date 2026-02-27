@@ -3079,7 +3079,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 contacts.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'contact-card';
-                    card.style.cssText = 'display: flex; gap: 8px; padding: 0; margin-bottom: 8px; font-size: 12px; align-items: center;';
+                    card.style.cssText = 'display: flex; gap: 8px; padding: 0 0 8px 0; margin-bottom: 8px; font-size: 12px; align-items: center; border-bottom: 1px solid #F0F0F0;';
                     const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
                         '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + ((c.name || c.company || c.notes) ? '4px' : '0') + ';">' +
@@ -8035,7 +8035,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                 if (partner.type === 'recommended' && partner.contact_info) {
                                     // Добавляем класс contact-favorite если контакт в избранном
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended" style="display: flex; padding: 0; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
@@ -8130,7 +8130,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '</li>';
                                 } else if (partner.type === 'favorite') {
                                     // Favorite contacts - same formatting as recommended
-                                    html += '<li class="task-item contact-favorite" data-username="' + contactInfoEscaped + '" data-type="favorite" style="display: flex; padding: 0; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-favorite" data-username="' + contactInfoEscaped + '" data-type="favorite" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const clickHandler = `onclick="openContactProfileModal('${contactInfoEscaped}', true)"`;
                                     const cursorStyle = 'cursor: pointer;';
@@ -8233,7 +8233,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                         blockedPartner = data.partners.find(p => p.contact_info && p.contact_info.replace('@', '') === username);
                                     }
                                     
-                                    html += '<li class="task-item contact-blocked" data-username="' + username + '" style="display: flex; padding: 0; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-blocked" data-username="' + username + '" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
                                     
                                     // Avatar for blocked contacts
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
@@ -8320,7 +8320,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                 
                                 if (partner.type === 'delegating_to_me') {
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    html += '<li class="task-item contact-delegating-to-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me" style="display: flex; padding: 0; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-delegating-to-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
@@ -8411,7 +8411,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                                     html += '</li>';
                                 } else if (partner.type === 'delegating_by_me') {
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me" style="display: flex; padding: 0; margin-bottom: 8px; align-items: center;">'; 
+                                    html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">'; 
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
