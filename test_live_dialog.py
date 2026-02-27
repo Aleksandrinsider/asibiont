@@ -466,22 +466,22 @@ class LiveDialogTester:
 
 async def main():
     # Прогон 1: Русский язык
-    print('\n' + '█' * 70)
-    print('  ПРОГОН 1/2 — РУССКИЙ ЯЗЫК')
-    print('█' * 70)
+    print('\n' + '=' * 70)
+    print('  PROGON 1/2 --- RUSSKIJ JAZYK')
+    print('=' * 70)
     t_ru = LiveDialogTester(lang='ru')
     await t_ru.run()
 
     # Прогон 2: Английский язык
-    print('\n' + '█' * 70)
-    print('  ПРОГОН 2/2 — ENGLISH')
-    print('█' * 70)
+    print('\n' + '=' * 70)
+    print('  PROGON 2/2 --- ENGLISH')
+    print('=' * 70)
     t_en = LiveDialogTester(lang='en')
     await t_en.run()
 
-    print('\n' + '█' * 70)
-    print('  ОБА ПРОГОНА ЗАВЕРШЕНЫ')
-    print('█' * 70 + '\n')
+    print('\n' + '=' * 70)
+    print('  OBA PROGONA ZAVERSHENY')
+    print('=' * 70 + '\n')
 
 if __name__ == '__main__':
     loop = asyncio.new_event_loop()

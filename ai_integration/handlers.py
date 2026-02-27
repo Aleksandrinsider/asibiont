@@ -4425,6 +4425,7 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
     try:
         from main import bot
+        from i18n import get_user_lang
         if not bot:
             return
 
@@ -4476,6 +4477,7 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
     from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
     from .prompts import get_extended_system_prompt
     from .utils import clean_technical_details
+    from i18n import get_user_lang
 
     try:
         lang = get_user_lang(user_id)
