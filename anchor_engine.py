@@ -2369,7 +2369,13 @@ class AnchorEngine:
                     info += f") контекст: {ctx_part}\n"
                     instruction += info
                 instruction += (
-                    f"\nДля каждого черновика вызови send_outreach_email с campaign_id={anchor_data.get('campaign_id')}, "
+                    f"\n⚠️ ЯЗЫК ПИСЬМА (КРИТИЧЕСКИ ВАЖНО):\n"
+                    f"Определи язык для КАЖДОГО получателя отдельно:\n"
+                    f"- Кириллическое имя / домен .ru/.ua/.by/.kz / контекст на русском → пиши НА РУССКОМ\n"
+                    f"- Латинское имя / международный домен / контекст на английском → пиши НА АНГЛИЙСКОМ\n"
+                    f"- Если не уверен → АНГЛИЙСКИЙ (безопаснее)\n"
+                    f"НЕ пиши на русском англоязычному человеку! Это выглядит как спам.\n\n"
+                    f"Для каждого черновика вызови send_outreach_email с campaign_id={anchor_data.get('campaign_id')}, "
                     f"персонализированными subject и body. Пиши УНИКАЛЬНО для каждого! "
                     f"Учитывай контекст и роль получателя. Максимум {anchor_data.get('remaining_daily', 5)} сегодня.\n"
                     f"После отправки НЕ пиши сообщение пользователю — просто выполни и верни SKIP."
@@ -2388,8 +2394,9 @@ class AnchorEngine:
                     f"Оригинальное письмо: {anchor_data.get('original_body', '')[:300]}\n"
                     f"Follow-up #: {anchor_data.get('follow_up_number', 1)}\n"
                     f"Дней с отправки: {anchor_data.get('days_since_sent', 0)}\n\n"
+                    f"⚠️ ЯЗЫК: определи из имени/домена/оригинала. Кириллица/.ru → русский. Латиница/международный → английский.\n"
                     f"Вызови send_follow_up_email с outreach_id={anchor_data.get('outreach_id')} и "
-                    f"коротким ненавязчивым follow-up body с новой ценностью."
+                    f"коротким ненавязчивым follow-up body с новой ценностью. Пиши на ТОМ ЖЕ языке что оригинал."
                     f"\nПосле отправки верни SKIP."
                 )
             else:

@@ -193,7 +193,20 @@ EMAIL (Resend API):
 
 КАЧЕСТВО ПИСЕМ (СТРОГО!):
 — ПЕРСОНАЛИЗАЦИЯ: упомяни КОНКРЕТНУЮ деталь о получателе (проект, блог, канал, навык, пост). «Заметил твои проекты» без деталей = шаблон. «Видел твой пост про X» = персонально. Если нет инфы — сначала web_search получателя.
-— ПОИСК ЛЮДЕЙ, НЕ КОМПАНИЙ: по умолчанию ищи КОНКРЕТНЫХ ЛЮДЕЙ (разработчиков, тестировщиков, блогеров, экспертов) — у них есть личные email, блоги, GitHub, каналы. Компании ищи только когда цель кампании явно B2B (корпоративные продажи, тендеры). «Найди тестировщиков» → ищи людей на GitHub, ProductHunt, Telegram-каналах, форумах. «Найди клиентов» → ищи людей с конкретной болью, не холодные info@ адреса компаний.
+— ПОИСК ЛЮДЕЙ, НЕ КОМПАНИЙ: по умолчанию ищи КОНКРЕТНЫХ ЛЮДЕЙ (разработчиков, тестировщиков, блогеров, предпринимателей, фрилансеров) — у них есть личные email. Компании ищи только когда цель кампании явно B2B. ⛔ ЗАПРЕЩЕНО добавлять generic-адреса: info@, contact@, hello@, support@, sales@, team@, admin@, office@ — система их автоматически отклонит.
+— ГДЕ ИСКАТЬ ЛЮДЕЙ (по источникам):
+  • GitHub: профили разработчиков с публичным email → web_search "site:github.com [ниша] email"
+  • Dev.to / Medium / Habr: авторы статей по теме → в профиле часто есть email или ссылка на сайт
+  • ProductHunt: создатели продуктов → web_search "site:producthunt.com [ниша] maker"
+  • Twitter/X: bio часто содержит email или ссылку → web_search "site:twitter.com [ниша] email"
+  • IndieHackers: предприниматели-одиночки → web_search "site:indiehackers.com [тема]"
+  • Reddit: активные комментаторы в r/SaaS, r/startups, r/Entrepreneur → часто ведут блог с email
+  • LinkedIn: профили с публичным email → web_search "site:linkedin.com [должность] [ниша]"
+  • Telegram-каналы/чаты: авторы каналов про AI/tech → контакт в описании канала
+  • vc.ru / Хабр / Pikabu: русскоязычные авторы технических статей
+  • Доски объявлений / фриланс: Upwork, Freelancer, Fiverr — профили фрилансеров с контактами
+— ЯЗЫК ИСТОЧНИКА = ЯЗЫК ПИСЬМА: нашёл на Habr/vc.ru → пиши на русском. Нашёл на Dev.to/Medium/IndieHackers → пиши на английском. GitHub — определи по профилю (имя, bio, location). Домен .ru/.ua/.by/.kz → русский. Всё остальное → английский.
+— СТРАТЕГИЯ ПОИСКА: чередуй источники. Не ищи всех на одном сайте. 3-5 лидов с GitHub + 3-5 с Dev.to + 3-5 с Twitter = разнообразная аудитория с высокой конверсией.
 — КОНКРЕТНОСТЬ: назови свой продукт/проект/результат. «Продуктовая разработка» = абстрактно. «Строю AI-агента для управления задачами» = конкретно. Бери из профиля пользователя.
 — ЛЁГКИЙ ASK: первое письмо — простой вопрос («Тебе актуально?»), НЕ предложение созвониться. Звонок/встреча — это 2-3 письмо, когда уже есть контакт.
 — УЗКАЯ НИША: чем уже тема, тем выше конверсия. «AI-инструменты для продуктивности» → широко. «AI-агенты для управления задачами через Telegram» → узко, цепляет.
@@ -428,7 +441,20 @@ Determine the scenario from context. Don't ask when it's obvious.
 
 EMAIL QUALITY (STRICT!):
 — PERSONALIZATION: mention a SPECIFIC detail about the recipient (project, blog, channel, skill, post). "Noticed your projects" without details = template. "Saw your post about X" = personal. If no info — web_search the recipient first.
-— SEARCH FOR PEOPLE, NOT COMPANIES: by default search for SPECIFIC PEOPLE (developers, testers, bloggers, experts) — they have personal emails, blogs, GitHub, channels. Search for companies only when campaign goal is explicitly B2B (enterprise sales, tenders). "Find testers" → search people on GitHub, ProductHunt, Telegram channels, forums. "Find clients" → search people with a specific pain point, not cold info@ company addresses.
+— SEARCH FOR PEOPLE, NOT COMPANIES: by default search for SPECIFIC PEOPLE (developers, testers, bloggers, entrepreneurs, freelancers) — they have personal emails. Companies only when campaign goal is explicitly B2B. ⛔ BANNED generic addresses: info@, contact@, hello@, support@, sales@, team@, admin@, office@ — the system auto-rejects them.
+— WHERE TO FIND PEOPLE (by source):
+  • GitHub: developer profiles with public email → web_search "site:github.com [niche] email"
+  • Dev.to / Medium / Habr: article authors → profile often has email or website link
+  • ProductHunt: product makers → web_search "site:producthunt.com [niche] maker"
+  • Twitter/X: bio often contains email or link → web_search "site:twitter.com [niche] email"
+  • IndieHackers: solo entrepreneurs → web_search "site:indiehackers.com [topic]"
+  • Reddit: active commenters in r/SaaS, r/startups, r/Entrepreneur → often have blogs with email
+  • LinkedIn: profiles with public email → web_search "site:linkedin.com [role] [niche]"
+  • Telegram channels: channel authors about AI/tech → contact in channel description
+  • vc.ru / Habr: Russian-speaking technical article authors
+  • Freelance boards: Upwork, Freelancer, Fiverr — freelancer profiles with contacts
+— SOURCE LANGUAGE = EMAIL LANGUAGE: found on Habr/vc.ru → write in Russian. Found on Dev.to/Medium/IndieHackers → write in English. GitHub — determine from profile (name, bio, location). Domain .ru/.ua/.by/.kz → Russian. Everything else → English.
+— SEARCH STRATEGY: rotate sources. Don't find everyone on one site. 3-5 leads from GitHub + 3-5 from Dev.to + 3-5 from Twitter = diverse audience with high conversion.
 — SPECIFICITY: name your product/project/result. "Product development" = abstract. "Building an AI agent for task management" = specific. Take from user's profile.
 — EASY ASK: first email = simple question ("Is this relevant to you?"), NOT a call proposal. A call/meeting is for the 2nd-3rd email when contact is established.
 — NARROW NICHE: the narrower the topic, the higher the conversion. "AI tools for productivity" → too broad. "AI agents for task management via Telegram" → narrow, hooks.

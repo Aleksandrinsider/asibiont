@@ -8565,11 +8565,25 @@ async def add_email_leads(
         if not parsed:
             return "❌ Не удалось распарсить email-адреса. Укажи JSON или через запятую."
 
+        # ── ФИЛЬТР: generic-адреса компаний (info@, contact@, etc.) ──
+        GENERIC_PREFIXES = {
+            'info', 'contact', 'contacts', 'hello', 'hi', 'support', 'sales',
+            'admin', 'office', 'team', 'help', 'mail', 'noreply', 'no-reply',
+            'hr', 'billing', 'press', 'media', 'marketing', 'general',
+            'enquiries', 'enquiry', 'feedback', 'service', 'webmaster',
+        }
+
         added = 0
         skipped = 0
+        skipped_generic = 0
         for lead in parsed:
             email = lead.get('email', '').strip().lower()
             if not email or '@' not in email:
+                continue
+            # Отклоняем generic-адреса (info@, contact@, hello@ и т.д.)
+            local_part = email.split('@')[0]
+            if local_part in GENERIC_PREFIXES:
+                skipped_generic += 1
                 continue
             # Дубль-проверка в текущей кампании
             exists = session.query(EmailOutreach).filter_by(
@@ -8628,7 +8642,12 @@ async def add_email_leads(
             except Exception as _trigger_err:
                 logger.warning(f"[EMAIL_LEADS] Failed to trigger anchor engine: {_trigger_err}")
 
-        return f"✅ Добавлено {added} email-адресов в кампанию #{campaign.id}" + (f" (пропущено {skipped} дублей/cooldown)" if skipped else "")
+        parts = [f"✅ Добавлено {added} email-адресов в кампанию #{campaign.id}"]
+        if skipped:
+            parts.append(f"пропущено {skipped} дублей/cooldown")
+        if skipped_generic:
+            parts.append(f"отклонено {skipped_generic} generic-адресов (info@/contact@/hello@ — нужны ЛИЧНЫЕ email людей)")
+        return parts[0] + (f" ({', '.join(parts[1:])})" if len(parts) > 1 else "")
     except Exception as e:
         logger.error(f"[EMAIL_LEADS] Error: {e}", exc_info=True)
         session.rollback()
