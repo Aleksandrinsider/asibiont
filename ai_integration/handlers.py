@@ -8121,16 +8121,39 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     from .api_client import get_api_client
     api = get_api_client()
 
-    # Формируем 3–4 поисковых запроса из целевой аудитории
+    # Формируем поисковые запросы — разные площадки для разных аудиторий
     keywords = target_audience[:200].replace(',', ' ').replace('.', ' ')
     goal_kw = goal[:100].replace(',', ' ').replace('.', ' ')
 
+    # Определяем язык аудитории по кириллице
+    _has_cyrillic = any('\u0400' <= c <= '\u04ff' for c in target_audience)
+
+    # Базовые запросы — работают для любой аудитории
     queries = [
         f'{keywords} email contact',
-        f'site:github.com {keywords} email',
-        f'{goal_kw} blog author email -info@ -support@',
-        f'site:linkedin.com {keywords}',
+        f'{goal_kw} author email -info@ -support@ -noreply@',
     ]
+
+    if _has_cyrillic:
+        # Русскоязычные площадки: бизнес, стартапы, эксперты
+        queries.extend([
+            f'site:vc.ru {keywords} email автор',
+            f'site:habr.com {keywords} email',
+            f'site:spark.ru {keywords} email контакт',
+            f'site:tenchat.ru {keywords}',
+            f'{keywords} telegram email "основатель" OR "CEO" OR "автор"',
+            f'site:facebook.com {keywords} email',
+        ])
+    else:
+        # Англоязычные площадки: business, startups, experts
+        queries.extend([
+            f'site:medium.com {keywords} email',
+            f'site:producthunt.com {keywords} maker email',
+            f'site:linkedin.com {keywords} email',
+            f'site:twitter.com {keywords} email',
+            f'{keywords} founder CEO email "@gmail.com" OR "@outlook.com"',
+            f'site:substack.com {keywords} author',
+        ])
 
     all_snippets = []
     for q in queries:
