@@ -832,8 +832,8 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="email-contacts-content" style="display: block; padding: 0 4px; overflow-y: auto; flex: 1; min-height: 0;">
-                        <div id="email-filter-content" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
+                    <div id="email-contacts-content" style="display: flex; flex-direction: column; padding: 0 4px; flex: 1; min-height: 0;">
+                        <div id="email-filter-content" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; flex-shrink: 0;">
                             <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                             <div style="display: flex; gap: 6px;">
                                 <input type="text" id="contact-name" placeholder="Имя" data-i18n-ph="contact-name-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-company').focus()" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
@@ -845,7 +845,7 @@
                             </button>
                         </div>
                         <!-- Список email-контактов -->
-                        <div class="people-list" id="contacts-list">
+                        <div class="people-list" id="contacts-list" style="overflow-y: auto; flex: 1; min-height: 0;">
                             <div id="contacts-empty" style="padding: 20px; text-align: center; color: #6C727F; font-size: 12px;" data-i18n="contacts-empty-short">Нет контактов</div>
                         </div>
                     </div><!-- /email-contacts-content -->
@@ -882,7 +882,7 @@
 
                     if (content.style.display === 'none') {
                         _collapseAllLeftSections('email');
-                        content.style.display = 'block';
+                        content.style.display = 'flex';
                         if (svg) svg.style.transform = 'rotate(0deg)';
                         if (section) section.classList.remove('collapsed');
                     } else {
