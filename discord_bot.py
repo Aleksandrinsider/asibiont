@@ -40,6 +40,12 @@ async def start_discord_bot():
 
     try:
         import discord
+        # Suppress "PyNaCl is not installed, voice will NOT be supported" — voice not used
+        import warnings
+        warnings.filterwarnings('ignore', message='PyNaCl')
+        logging.getLogger('discord.client').addFilter(
+            lambda r: 'PyNaCl' not in r.getMessage()
+        )
     except ImportError:
         logger.error("discord.py not installed — run: pip install discord.py")
         return
