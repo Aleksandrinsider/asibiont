@@ -2347,27 +2347,38 @@ class AnchorEngine:
                     f"Предложение: {anchor_data.get('offer', '')}\n"
                     f"Тон: {anchor_data.get('tone', 'professional')}\n"
                     f"Отправитель: {anchor_data.get('sender_name', '')}\n\n"
+                    f"ВАЖНО: получатели — не обязательно компании. Это могут быть:\n"
+                    f"- отдельные люди (разработчики, тестировщики, блогеры, фрилансеры)\n"
+                    f"- сообщества, каналы, open-source проекты\n"
+                    f"- компании и стартапы\n"
+                    f"Персонализируй письмо под КОНКРЕТНОГО получателя, его роль и контекст.\n\n"
                     f"Черновики для отправки (ID кампании: {anchor_data.get('campaign_id')}):\n"
                 )
                 for d in drafts:
-                    instruction += (
-                        f"  - {d.get('email')} ({d.get('name', '?')}, {d.get('company', '?')})"
-                        f" контекст: {d.get('context', 'нет')}\n"
-                    )
+                    name_part = d.get('name', '?')
+                    company_part = d.get('company', '')
+                    ctx_part = d.get('context', 'нет')
+                    info = f"  - {d.get('email')} (имя: {name_part}"
+                    if company_part:
+                        info += f", организация/проект: {company_part}"
+                    info += f") контекст: {ctx_part}\n"
+                    instruction += info
                 instruction += (
                     f"\nДля каждого черновика вызови send_outreach_email с campaign_id={anchor_data.get('campaign_id')}, "
                     f"персонализированными subject и body. Пиши УНИКАЛЬНО для каждого! "
-                    f"Учитывай контекст получателя. Максимум {anchor_data.get('remaining_daily', 5)} сегодня.\n"
+                    f"Учитывай контекст и роль получателя. Максимум {anchor_data.get('remaining_daily', 5)} сегодня.\n"
                     f"После отправки НЕ пиши сообщение пользователю — просто выполни и верни SKIP."
                 )
 
             elif anchor.anchor_type == 'email_follow_up':
+                company_info = anchor_data.get('recipient_company', '')
+                company_line = f"Организация/проект: {company_info}\n" if company_info else ""
                 instruction = (
                     f"Отправь follow-up email.\n\n"
                     f"Кампания: {anchor_data.get('campaign_name', '')}\n"
                     f"Цель: {anchor_data.get('campaign_goal', '')}\n"
                     f"Получатель: {anchor_data.get('recipient_email')} ({anchor_data.get('recipient_name', '')})\n"
-                    f"Компания: {anchor_data.get('recipient_company', '')}\n"
+                    f"{company_line}"
                     f"Оригинальная тема: {anchor_data.get('original_subject', '')}\n"
                     f"Оригинальное письмо: {anchor_data.get('original_body', '')[:300]}\n"
                     f"Follow-up #: {anchor_data.get('follow_up_number', 1)}\n"
