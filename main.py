@@ -2107,6 +2107,39 @@ async def clear_history_handler(request):
     return web.json_response({'success': True, 'message': 'History cleared'})
 
 
+async def rollback_checkpoint_handler(request):
+    """Удаляет все взаимодействия начиная с указанного interaction_id (контрольная точка)"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    try:
+        data = await request.json()
+        interaction_id = data.get('interaction_id')
+        if not interaction_id:
+            return web.json_response({'error': 'interaction_id required'}, status=400)
+        interaction_id = int(interaction_id)
+    except Exception:
+        return web.json_response({'error': 'Invalid JSON'}, status=400)
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        deleted = session_db.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.id >= interaction_id
+        ).delete(synchronize_session=False)
+        session_db.commit()
+        logger.info(f"Rollback checkpoint: deleted {deleted} interactions >= {interaction_id} for user {user.id}")
+        return web.json_response({'success': True, 'deleted': deleted})
+    except Exception as e:
+        logger.error(f"Error in rollback_checkpoint: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+    finally:
+        session_db.close()
+
+
 async def clear_user_tasks_handler(request):
     logger.info("clear_user_tasks_handler called")
     session = await get_session(request)
@@ -9313,6 +9346,7 @@ app.router.add_get('/chat/progress', chat_progress_handler)
 app.router.add_post('/api/transcribe', transcribe_handler)
 app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
+app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_email_contacts', clear_email_contacts_handler)

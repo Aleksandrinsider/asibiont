@@ -1656,7 +1656,7 @@
             return true;
         }
         
-        function addMessage(text, sender, timestamp) {
+        function addMessage(text, sender, timestamp, interactionId) {
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
@@ -1723,6 +1723,19 @@
                 processedText = processedText.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">@$1</a>');
             }
             
+            // Add checkpoint separator before user messages
+            if (normalizedSender === 'user') {
+                const sep = document.createElement('div');
+                sep.className = 'chat-checkpoint';
+                sep.dataset.interactionId = interactionId != null ? String(interactionId) : 'pending';
+                sep.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 0 2px;">
+                    <div style="flex:1;border-top:1px dashed #D1D9E0;"></div>
+                    <button onclick="rollbackCheckpoint(this.closest('.chat-checkpoint'))" style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:11px;color:#9198A1;font-family:inherit;white-space:nowrap;transition:color 0.15s;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#9198A1'">Восстановить контрольную точку</button>
+                    <div style="flex:1;border-top:1px dashed #D1D9E0;"></div>
+                </div>`;
+                messages.appendChild(sep);
+            }
+
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${normalizedSender}`;
             
@@ -1781,7 +1794,7 @@
                     if (data.interactions) {
                         data.interactions.forEach((interaction, index) => {
 
-                            addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                            addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
                         });
                     }
                     
@@ -1945,6 +1958,15 @@
                             if (syncData.interactions) {
                                 syncData.interactions.forEach(i => displayedMessageIds.add(i.id));
                                 lastMessageCount = syncData.interactions.length;
+                                // Update pending checkpoint separators with real interaction IDs
+                                document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
+                                    const userMsgEl = sep.nextElementSibling;
+                                    if (!userMsgEl || !userMsgEl.classList.contains('user')) return;
+                                    const userText = (userMsgEl.querySelector('.message-text')?.innerText || '').trim();
+                                    const userInteractions = syncData.interactions.filter(i => i.message_type === 'user');
+                                    const match = userInteractions.filter(i => (i.content || '').trim() === userText).pop();
+                                    if (match) sep.dataset.interactionId = String(match.id);
+                                });
                             }
                         }
                     } catch(syncErr) {}
@@ -2174,6 +2196,53 @@
             } catch (error) {
                 console.error('Error updating timezone:', error);
                 showNotification(t('err-prefix') + ' ' + error.message, 'error');
+            }
+        }
+
+        async function rollbackCheckpoint(separatorEl) {
+            const interactionId = separatorEl && separatorEl.dataset.interactionId;
+            if (!interactionId || interactionId === 'pending') {
+                showNotification('Контрольная точка ещё не синхронизирована, подождите секунду', 'error');
+                return;
+            }
+            if (!confirm('Удалить все сообщения начиная с этой точки? Действие нельзя отменить.')) return;
+            try {
+                const resp = await fetch('/api/rollback_checkpoint', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ interaction_id: parseInt(interactionId) })
+                });
+                if (!await checkAuth(resp)) return;
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    showNotification('Ошибка: ' + (err.error || 'неизвестная'), 'error');
+                    return;
+                }
+                // Remove this separator and everything after it from DOM
+                const messages = document.getElementById('chat-messages');
+                const allChildren = Array.from(messages.children);
+                const idx = allChildren.indexOf(separatorEl);
+                if (idx !== -1) {
+                    for (let i = allChildren.length - 1; i >= idx; i--) {
+                        messages.removeChild(allChildren[i]);
+                    }
+                }
+                // Re-sync counters
+                displayedMessageIds.clear();
+                try {
+                    const syncResp = await fetch('/api/interactions', { credentials: 'include', cache: 'no-store' });
+                    if (syncResp.ok) {
+                        const syncData = await syncResp.json();
+                        if (syncData.interactions) {
+                            syncData.interactions.forEach(i => displayedMessageIds.add(i.id));
+                            lastMessageCount = syncData.interactions.length;
+                        }
+                    }
+                } catch(e) {}
+                showNotification('Контрольная точка восстановлена', 'success');
+            } catch(e) {
+                showNotification('Ошибка: ' + e.message, 'error');
             }
         }
 
