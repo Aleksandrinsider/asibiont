@@ -3156,7 +3156,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 }
 
                 // === Agent Activities — unified chronological timeline ===
-                if (agentActivities.length > 0) {
+                {
                     const agentKey = 'agent-activity-block';
                     const agentExpanded = _reportsExpandedSet.has(agentKey);
                     const agentSection = document.createElement('div');
@@ -3165,10 +3165,11 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     const agentHeader = document.createElement('div');
                     agentHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                     const _ac = agentActivities.length;
+                    const _acLabel = _ac > 0 ? `<span style="font-size: 12px; color: #8C959F;">${_ac} ${_ac===1?t('act-item-1'):(_ac>=2&&_ac<=4?t('act-item-2'):t('act-item-5'))}</span>` : '';
                     agentHeader.innerHTML = `
                         <div style="display: flex; align-items: baseline; gap: 6px;">
                             <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('agent-activity-title')}</span>
-                            <span style="font-size: 12px; color: #8C959F;">${_ac} ${_ac===1?t('act-item-1'):(_ac>=2&&_ac<=4?t('act-item-2'):t('act-item-5'))}</span>
+                            ${_acLabel}
                         </div>
                         <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${agentExpanded ? '0' : '-90'}deg);">
                             <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
