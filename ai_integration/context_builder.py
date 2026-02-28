@@ -321,19 +321,24 @@ class ContextBuilder:
             # ═══ НЕПОЛНЫЙ ПРОФИЛЬ: подсказка ═══
             if profile:
                 _missing = []
-                if not profile.goals: _missing.append('цели')
+                # profile.goals — свободный текст, НЕ проверяем здесь (актуальные проекты — из таблицы Goal)
                 if not profile.skills: _missing.append('навыки')
                 if not profile.city: _missing.append('город')
                 if not profile.interests: _missing.append('интересы')
                 if _missing:
                     hints.append(f"ПРОФИЛЬ НЕПОЛНЫЙ (не заполнено: {', '.join(_missing)}) — спроси у пользователя!")
 
-            # ═══ ЦЕЛИ ═══
+            # ═══ ЦЕЛИ (все статусы) ═══
             from models import Goal
             active_goals = session.query(Goal).filter(
                 Goal.user_id == user.id,
                 Goal.status == 'active'
             ).order_by(Goal.priority.desc()).limit(3).all()
+
+            # Все проекты пользователя для полной картины
+            all_goals = session.query(Goal).filter(
+                Goal.user_id == user.id
+            ).order_by(Goal.created_at.desc()).limit(10).all()
 
             if active_goals:
                 goal_lines = []
@@ -341,9 +346,9 @@ class ContextBuilder:
                     if g.metric_target and g.metric_unit:
                         mc = int(g.metric_current or 0)
                         mt = int(g.metric_target)
-                        line = f"{g.title} ({mc}/{mt} {g.metric_unit}, {g.progress_percentage}%)"
+                        line = f"{g.title} [активен] ({mc}/{mt} {g.metric_unit}, {g.progress_percentage}%)"
                     else:
-                        line = f"{g.title} ({g.progress_percentage}%)"
+                        line = f"{g.title} [активен] ({g.progress_percentage}%)"
                     if g.target_date:
                         days = g.days_until_target()
                         if days is not None and days < 0:
@@ -360,9 +365,20 @@ class ContextBuilder:
                         task_titles = ', '.join(t.title for t in linked_tasks)
                         line += f" [задачи: {task_titles}]"
                     goal_lines.append(line)
-                hints.append("Цели: " + "; ".join(goal_lines))
+                # Добавляем неактивные статусы если есть
+                other_goals = [g for g in all_goals if g.status != 'active']
+                for g in other_goals[:3]:
+                    status_map = {'completed': 'завершён', 'paused': 'на паузе', 'cancelled': 'отменён'}
+                    st = status_map.get(g.status, g.status)
+                    goal_lines.append(f"{g.title} [{st}]")
+                hints.append("Проекты/цели: " + "; ".join(goal_lines))
+            elif all_goals:
+                # Проекты существуют, но ни один не активен
+                status_map = {'completed': 'завершён', 'paused': 'на паузе', 'cancelled': 'отменён', 'active': 'активен'}
+                other_lines = [f"{g.title} [{status_map.get(g.status, g.status)}]" for g in all_goals[:5]]
+                hints.append("АКТИВНЫХ ПРОЕКТОВ НЕТ. Все проекты: " + "; ".join(other_lines))
             else:
-                hints.append("Целей нет")
+                hints.append("ПРОЕКТОВ/ЦЕЛЕЙ НЕТ — пользователь ещё не создавал проекты или удалил все. НЕ упоминай никаких проектов/целей из прошлых сообщений.")
 
             # ═══ КОНТАКТЫ ═══
             real_contacts = []
