@@ -2838,14 +2838,12 @@
         }
 
         async function mpEditAgent(id) {
-            // Если кеш пустой — перезагрузим
-            if (!_mpMyAgents.length) {
-                try {
-                    const r = await fetch('/api/marketplace/my');
-                    const data = await r.json();
-                    _mpMyAgents = data.agents || [];
-                } catch(e) {}
-            }
+            // Всегда загружаем свежие данные агента
+            try {
+                const r = await fetch('/api/marketplace/my');
+                const data = await r.json();
+                _mpMyAgents = data.agents || [];
+            } catch(e) {}
             const agent = _mpMyAgents.find(a => a.id === id);
             if (!agent) { mpShowStatus('Агент не найден', '#FEF2F2', '#DC2626'); return; }
 
