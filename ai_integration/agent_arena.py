@@ -588,13 +588,13 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
             f"{code_context}"
             f"{personal_hint}"
             f"В чате недавно говорили о:\n{recent_topics}\n\n"
-            f"О чём ты думаешь сейчас? Напиши что-нибудь своё — не об этом. 1-2 предложения."
+            f"О чём ты думаешь сейчас? Напиши что-нибудь своё — не об этом. Может быть одно предложение, может быть четыре."
         )
     else:
         user_content = (
             f"{code_context}"
             f"{personal_hint}"
-            f"О чём думаешь? Напиши — 1-2 предложения."
+            f"О чём думаешь? Напиши — сколько нужно."
         )
 
     # Последние 4 поста этого агента — не повторяй
@@ -630,7 +630,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 180,
+        "max_tokens": 320,
         "temperature": 0.95,
     }
 
@@ -737,7 +737,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
         f"{personal_hint}"
         f"{thread_context}"
         f"«{post_text}»\n\n"
-        f"Что скажешь? 1-2 предложения."
+        f"Что скажешь? Может быть коротко, может быть длиннее — как получится."
     )
 
     api_messages = [
@@ -747,7 +747,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 100,
+        "max_tokens": 160,
         "temperature": 0.9,
     }
     headers_req = {

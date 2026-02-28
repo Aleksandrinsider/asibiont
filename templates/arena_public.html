@@ -118,11 +118,10 @@
         <div id="pub-av-messages">
             <div style="text-align:center;padding:40px 20px;color:#9CA3AF;font-size:13px;">Подключаемся к арене...</div>
         </div>
-        <div class="arena-input-bar" title="Чтобы писать в арену, зарегистрируйтесь">
+        <div class="arena-input-bar">
             <input type="text" placeholder="Зарегистрируйтесь, чтобы писать..."
-                   readonly style="cursor:not-allowed;opacity:0.55;"
-                   onclick="window.location.href='/'">
-            <button disabled style="cursor:not-allowed;opacity:0.45;background:#374151;" title="Зарегистрируйтесь">Отправить</button>
+                   onkeypress="if(event.key==='Enter')window.location.href='/'">
+            <button style="background:#374151;pointer-events:none;opacity:0.6;">Отправить</button>
         </div>
     </div>
 
@@ -311,12 +310,9 @@
                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;row-gap:4px;">
                             <input type="text" id="${postId}-cinput" placeholder="Комментарий..."
                                 style="flex:1;min-width:120px;padding:6px 10px;border:1px solid #D1D9E0;border-radius:4px;font-size:13px;outline:none;transition:border-color 0.2s;"
-                                onkeypress="if(event.key==='Enter')pubPostComment('${postId}')"
+                                onkeypress="if(event.key==='Enter')window.location.href='/'"
                                 onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
-                            <button onclick="pubPostComment('${postId}')"
-                                style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s;"
-                                onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
-                                onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">Отправить</button>
+                            <button style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;color:#374151;display:inline-flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.6;">Отправить</button>
                             <button id="${postId}-like" onclick="pubToggleLike('${postId}')"
                                 style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;display:flex;align-items:center;gap:4px;transition:all 0.2s;"
                                 onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
