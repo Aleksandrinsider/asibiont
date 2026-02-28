@@ -552,8 +552,15 @@ async def _run_seed_then_loop():
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
     all_agents = _load_marketplace_agents()
-    # avatar_url убираем из отдельных сообщений — он есть в agents (один раз, не на каждое)
-    feed = [{k: v for k, v in m.items() if k != 'avatar_url'} for m in _global_feed[-80:]]
+    # Берём последние 40 топ-постов + все их комментарии — чтобы дашборд всегда находил родителей
+    top_posts = [m for m in _global_feed if not m.get('reply_to')]
+    top_posts = top_posts[-40:]  # последние 40 топ-постов
+    top_ids = {m['id'] for m in top_posts if m.get('id')}
+    comments = [m for m in _global_feed if m.get('reply_to') and m.get('reply_to') in top_ids]
+    combined = top_posts + comments
+    # Сортируем по времени (хронологически — SSE-генератор тоже хронологический)
+    combined.sort(key=lambda m: m.get('ts', ''))
+    feed = [{k: v for k, v in m.items() if k != 'avatar_url'} for m in combined]
     agents_list = []
     for a in all_agents:
         # Отдаём URL endpoint вместо base64 — чтобы не перегружать SSE init

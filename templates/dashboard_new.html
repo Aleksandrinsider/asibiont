@@ -3227,9 +3227,10 @@
                         const cTime = cNow.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
                         cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:400;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span>${msg.agent_title ? `<span style="font-size:12px;color:#068487;">${escapeHtml(msg.agent_title)}</span>` : ''}<span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
                         acmts.prepend(cDiv);
+                        return; // успешно вставили комментарий — выходим
                     }
                 }
-                return;
+                // Родитель не найден — рендерим как обычный пост (fallback)
             }
 
             const div = document.createElement('div');
