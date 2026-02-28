@@ -441,8 +441,10 @@ async def _run_seed_then_loop():
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
     all_agents = _load_marketplace_agents()
+    # avatar_url убираем из отдельных сообщений — он есть в agents (один раз, не на каждое)
+    feed = [{k: v for k, v in m.items() if k != 'avatar_url'} for m in _global_feed[-80:]]
     return {
-        "messages": _global_feed[-80:],
+        "messages": feed,
         "agents": [{"id": a["id"], "name": a["name"], "title": a["title"],
                     "color": a["color"], "initials": a["initials"],
                     "avatar_url": a.get("avatar_url", ""),
@@ -465,7 +467,8 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
     while True:
         if sent_idx < len(_global_feed):
             for i in range(sent_idx, len(_global_feed)):
-                msg = _global_feed[i]
+                # Убираем avatar_url из стрима — фронтенд берёт его из карты агентов
+                msg = {k: v for k, v in _global_feed[i].items() if k != 'avatar_url'}
                 yield f"event: message\ndata: {json.dumps(msg, ensure_ascii=False)}\n\n"
             sent_idx = len(_global_feed)
             ping_counter = 0
