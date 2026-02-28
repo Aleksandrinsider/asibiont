@@ -1540,16 +1540,11 @@
         <div class="rating-modal-content">
             <div class="rating-modal-header">
                 <h3 data-i18n="contact-profile">Профиль контакта</h3>
-                <div style="display:flex;align-items:center;gap:4px;">
-                <button onclick="if(currentProfileUsername) openRatingModal(currentProfileUsername)" class="rating-close-btn" title="Рекомендовать контакт">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#374151" stroke-width="1"><path d="M10.067.87a2.89 2.89 0 0 0-4.134 0l-.622.638-.89-.011a2.89 2.89 0 0 0-2.924 2.924l.01.89-.636.622a2.89 2.89 0 0 0 0 4.134l.637.622-.011.89a2.89 2.89 0 0 0 2.924 2.924l.89-.01.622.636a2.89 2.89 0 0 0 4.134 0l.622-.637.89.011a2.89 2.89 0 0 0 2.924-2.924l-.01-.89.636-.622a2.89 2.89 0 0 0 0-4.134l-.637-.622.011-.89a2.89 2.89 0 0 0-2.924-2.924l-.89.01-.622-.636zm.287 5.984-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7 8.793l2.646-2.647a.5.5 0 0 1 .708.708z"/></svg>
-                </button>
                 <button onclick="closeContactProfileModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
                 </button>
-                </div>
             </div>
             <div class="rating-modal-body" id="contact-profile-content" style="text-align: center;">
                 <!-- Profile content will be loaded here -->
@@ -2760,7 +2755,6 @@
                             </div>
                             <div style="display:flex;align-items:center;gap:4px;">
                                 ${!a.is_owner ? `<button onclick="openAgentRatingModal(${a.id})" style="padding:5px 8px;height:28px;background:#FFFFFF;border:1px solid ${a.user_rating ? '#068487' : '#D1D9E0'};border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:${a.user_rating ? '#068487' : '#6B7280'};white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';" onmouseout="this.style.background='#FFFFFF';" title="Оценить агента">★${a.user_rating ? ' ' + a.user_rating : ''}</button>` : ''}
-                                ${a.author_username ? `<button onclick="openRatingModal('${escapeHtml(a.author_username)}')" style="padding:5px 8px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#6B7280;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';" title="Рекомендовать автора"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"><path d="M10.067.87a2.89 2.89 0 0 0-4.134 0l-.622.638-.89-.011a2.89 2.89 0 0 0-2.924 2.924l.01.89-.636.622a2.89 2.89 0 0 0 0 4.134l.637.622-.011.89a2.89 2.89 0 0 0 2.924 2.924l.89-.01.622.636a2.89 2.89 0 0 0 4.134 0l.622-.637.89.011a2.89 2.89 0 0 0 2.924-2.924l-.01-.89.636-.622a2.89 2.89 0 0 0 0-4.134l-.637-.622.011-.89a2.89 2.89 0 0 0-2.924-2.924l-.89.01-.622-.636zm.287 5.984-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7 8.793l2.646-2.647a.5.5 0 0 1 .708.708z"/></svg></button>` : ''}
                                 ${a.is_owner
                                     ? `<span style="padding:5px 14px;height:28px;display:inline-flex;align-items:center;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;font-size:12px;color:#9CA3AF;white-space:nowrap;">Ваш агент</span>`
                                     : a.is_subscribed
@@ -9314,13 +9308,10 @@
             html += `<div class="context-item">`;
             if (agent.description) html += `<p style="text-align:left;font-size:13px;">${escapeHtml(agent.description)}</p>`;
             html += `<p style="text-align:left;font-size:13px;"><strong>Цена:</strong> ${priceLabel}</p>`;
-            html += `<p style="text-align:left;font-size:13px;"><strong>Подписчиков:</strong> ${agent.subscribers_count} &nbsp;&middot;&nbsp; <strong>Оценка:</strong> ${ratingLabel}</p>`;
+            html += `<p style="text-align:left;font-size:13px;"><strong>Подписчиков:</strong> ${agent.subscribers_count}</p>`;
             html += `</div>`;
 
             html += `<div class="rating-modal-actions">`;
-            if (agent.author_username) {
-                html += `<button onclick="openRatingModal('${escapeHtml(agent.author_username)}')" class="rating-cancel-btn" title="Рекомендовать автора" style="display:flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"><path d="M10.067.87a2.89 2.89 0 0 0-4.134 0l-.622.638-.89-.011a2.89 2.89 0 0 0-2.924 2.924l.01.89-.636.622a2.89 2.89 0 0 0 0 4.134l.637.622-.011.89a2.89 2.89 0 0 0 2.924 2.924l.89-.01.622.636a2.89 2.89 0 0 0 4.134 0l.622-.637.89.011a2.89 2.89 0 0 0 2.924-2.924l-.01-.89.636-.622a2.89 2.89 0 0 0 0-4.134l-.637-.622.011-.89a2.89 2.89 0 0 0-2.924-2.924l-.89.01-.622-.636zm.287 5.984-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7 8.793l2.646-2.647a.5.5 0 0 1 .708.708z"/></svg>Рекомендовать</button>`;
-            }
             html += `<button onclick="closeAgentProfileModal()" class="rating-cancel-btn">Закрыть</button>`;
             if (!agent.is_owner) {
                 if (agent.is_subscribed) {
