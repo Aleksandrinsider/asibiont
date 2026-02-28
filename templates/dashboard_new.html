@@ -204,6 +204,32 @@
         @media (max-width: 1024px) {
             .stat-today-label { display: none !important; }
         }
+        /* ── Avatar upload page-curl ── */
+        .avatar-wrap { position: relative; display: inline-block; }
+        .avatar-upload-overlay {
+            position: absolute; bottom: 3px; right: 3px;
+            width: 22px; height: 22px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 4;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+        }
+        .avatar-wrap:hover .avatar-upload-overlay { opacity: 1; }
+        .avatar-wrap::after {
+            content: '';
+            position: absolute; bottom: 0; right: 0;
+            width: 26px; height: 26px;
+            background: linear-gradient(225deg, #f0f3f5 38%, rgba(0,0,0,0.13) 39%, transparent 53%);
+            transform: scale(0);
+            transform-origin: bottom right;
+            transition: transform 0.22s cubic-bezier(0.34,1.4,0.64,1);
+            pointer-events: none; z-index: 3;
+            border-radius: 0 0 2px 0;
+        }
+        .avatar-wrap:hover::after { transform: scale(1); }
     </style>
 
     <!-- Structured Data -->
@@ -729,7 +755,7 @@
                             <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">
                                 <!-- Основной аватар -->
                                 <div style="position: relative; margin-bottom: 8px; display: flex; align-items: center; justify-content: center;">
-                                    <div style="position: relative;">
+                                    <div class="avatar-wrap" style="position: relative;">
                                         {% set tier_glow = '#D1D9E0' %}
                                         {% if user_avatar_url %}
                                         <img id="profile-avatar-img" src="{{ user_avatar_url }}" alt="Avatar" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
