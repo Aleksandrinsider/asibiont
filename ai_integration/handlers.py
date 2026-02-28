@@ -2856,6 +2856,13 @@ def get_partners_list(user_id=None, session=None):
                     has_match = True
                     match_reasons.append(f"company: {profile.company}")
 
+        # Check city — одного города достаточно для показа в рекомендациях
+        _u_city_raw = (user_profile.city_normalized or user_profile.city or '').strip().lower()
+        _p_city_raw = (profile.city_normalized or profile.city or '').strip().lower()
+        if _u_city_raw and _p_city_raw and _u_city_raw == _p_city_raw:
+            has_match = True
+            match_reasons.append(f"city: {profile.city}")
+
         # ВАЖНО: Всегда показывать избранные и заблокированные контакты
         
         # Все пользователи видят всех (токенная модель, без тарифных ограничений)

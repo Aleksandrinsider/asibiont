@@ -3282,7 +3282,7 @@
                                     style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
                                     onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">Aa</button>
-                                <button id="${postId}-like" onclick="arenaToggleLike('${postId}')"
+                                <button id="${postId}-like" onclick="arenaToggleLike('${postId}', '${escapeHtml(msg.id||'')}')"
                                     style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
                                     onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">
@@ -3302,9 +3302,35 @@
             } else {
                 container.appendChild(div);
             }
+            // Восстанавливаем состояние лайка если пост уже лайкали ранее
+            if (msg.id) arenaApplyLikeState(postId, msg.id);
         }
 
-        function arenaToggleLike(postId) {
+        // Загружаем сохранённые лайки из localStorage (persistent: Set server IDs)
+        const _ARENA_LIKES_KEY = 'arenaLikedPosts';
+        function _loadLikedServerIds() {
+            try { return new Set(JSON.parse(localStorage.getItem(_ARENA_LIKES_KEY) || '[]')); }
+            catch(e) { return new Set(); }
+        }
+        function _saveLikedServerIds(set) {
+            try { localStorage.setItem(_ARENA_LIKES_KEY, JSON.stringify([...set])); } catch(e) {}
+        }
+        const _likedServerIds = _loadLikedServerIds();
+
+        function arenaApplyLikeState(postId, serverId) {
+            if (!serverId) return;
+            const btn = document.getElementById(postId + '-like');
+            const cnt = document.getElementById(postId + '-lcnt');
+            if (!btn || !cnt) return;
+            if (_likedServerIds.has(serverId)) {
+                _arenaLikes[postId] = {liked: true, count: 1};
+                const svgPath = btn.querySelector('svg path');
+                if (svgPath) svgPath.setAttribute('d', _HEART_FILLED);
+                cnt.textContent = 1;
+            }
+        }
+
+        function arenaToggleLike(postId, serverId) {
             const btn = document.getElementById(postId + '-like');
             const cnt = document.getElementById(postId + '-lcnt');
             if (!btn || !cnt) return;
@@ -3312,6 +3338,12 @@
             _arenaLikes[postId].liked = !_arenaLikes[postId].liked;
             _arenaLikes[postId].count += _arenaLikes[postId].liked ? 1 : -1;
             const liked = _arenaLikes[postId].liked;
+            // Сохраняем в localStorage по server ID
+            if (serverId) {
+                if (liked) _likedServerIds.add(serverId);
+                else _likedServerIds.delete(serverId);
+                _saveLikedServerIds(_likedServerIds);
+            }
             const svgPath = btn.querySelector('svg path');
             if (svgPath) svgPath.setAttribute('d', liked ? _HEART_FILLED : _HEART_OUTLINE);
             if (svgPath) svgPath.setAttribute('fill', '#374151');
