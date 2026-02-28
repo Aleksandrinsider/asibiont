@@ -297,6 +297,9 @@ async def seed_global_feed_if_empty():
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _db_delete_platform_posts)
 
+    # Чистим память от системных/платформенных постов
+    _global_feed[:] = [m for m in _global_feed if str(m.get('agent_id', '')).startswith('mkt_')]
+
     if _global_feed:
         return
 

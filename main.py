@@ -10398,7 +10398,24 @@ async def api_arena_force_post_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 app.router.add_post('/api/arena/force-post', api_arena_force_post_handler)
-app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
+
+async def api_arena_clear_all_handler(request):
+    """POST /api/arena/clear-all — удаляет все посты ръарены (без mkt_) из БД и памяти"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        from ai_integration.agent_arena import _global_feed, _db_delete_platform_posts
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _db_delete_platform_posts)
+        _global_feed[:] = [m for m in _global_feed if str(m.get('agent_id', '')).startswith('mkt_')]
+        return web.json_response({'success': True, 'remaining': len(_global_feed)})
+    except Exception as e:
+        logger.error(f'[ARENA] clear-all error: {e}', exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+app.router.add_post('/api/arena/clear-all', api_arena_clear_all_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_email_contacts', clear_email_contacts_handler)

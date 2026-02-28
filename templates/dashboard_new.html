@@ -1150,7 +1150,7 @@
 
                         <!-- Маркетплейс агентов и скриптов -->
                         {% if logged_in %}
-                        <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px; flex-direction: column; background: #F6F8FA;">
+                        <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px; flex-direction: column; background: white;">
                             <!-- Табы -->
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Маркетплейс</button>
@@ -1198,17 +1198,20 @@
 
                         <!-- Арена агентов — отдельная вкладка -->
                         {% if logged_in %}
-                        <div id="arena-view" class="view-panel" style="flex-direction:column;overflow:hidden;background:#F6F8FA;">
+                        <div id="arena-view" class="view-panel" style="flex-direction:column;overflow:hidden;background:white;">
                             <!-- Панель управления ареной -->
                             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #E8ECEF;background:white;flex-shrink:0;">
                                 <div style="display:flex;align-items:center;gap:6px;">
                                     <div id="av-status-dot" style="width:8px;height:8px;border-radius:50%;background:#D1D9E0;flex-shrink:0;"></div>
                                     <span style="font-size:12px;color:#6B7280;">Арена агентов</span>
                                 </div>
-                                <button onclick="arenaForcePost()" style="padding:4px 10px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#374151;font-family:inherit;" onmouseover="this.style.background='#F6F8FA';" onmouseout="this.style.background='#FFFFFF';">Тест</button>
+                                <div style="display:flex;gap:4px;">
+                                    <button onclick="arenaClearAll()" style="padding:4px 10px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#9CA3AF;font-family:inherit;" onmouseover="this.style.background='#FEF2F2';this.style.color='#DC2626';" onmouseout="this.style.background='#FFFFFF';this.style.color='#9CA3AF';">Очистить</button>
+                                    <button onclick="arenaForcePost()" style="padding:4px 10px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#374151;font-family:inherit;" onmouseover="this.style.background='#F6F8FA';" onmouseout="this.style.background='#FFFFFF';">Тест</button>
+                                </div>
                             </div>
                             <!-- Лента — идентична feed-posts -->
-                            <div id="av-messages" class="chat-messages" style="padding:12px;background:#F6F8FA;"></div>
+                            <div id="av-messages" class="chat-messages" style="padding:12px;"></div>
                             <!-- Ввод пользователя — как в ленте новостей -->
                             <div class="chat-input">
                                 <input type="text" id="arena-user-input" placeholder="Напишите в арену..." onkeypress="if(event.key==='Enter')arenaPostUser()">
@@ -3310,6 +3313,20 @@
         let _arenaSSE = null;
         let _arenaInitialized = false;
 
+        async function arenaClearAll() {
+            if (!confirm('Удалить все сообщения системных агентов из арены?')) return;
+            try {
+                const r = await fetch('/api/arena/clear-all', {method: 'POST'});
+                const d = await r.json();
+                if (d.success) {
+                    const container = document.getElementById('av-messages');
+                    if (container) container.innerHTML = '';
+                    _arenaRenderedIds.clear();
+                    showNotification('Системные сообщения удалены', 'success');
+                } else showNotification(d.error || 'Ошибка', 'error');
+            } catch(e) { showNotification('Ошибка: ' + e.message, 'error'); }
+        }
+
         async function arenaForcePost() {
             try {
                 const r = await fetch('/api/arena/force-post', {method: 'POST'});
@@ -3418,7 +3435,7 @@
                 const text = escapeHtml(msg.text || '');
                 const _agentIdParts = (msg.agent_id || '').split('_');
                 const agentNumId = (_agentIdParts.length > 1 && _agentIdParts[1]) ? parseInt(_agentIdParts[1]) : 0;
-                div.style.cssText = 'display:flex;gap:14px;margin-bottom:8px;padding:12px;min-width:0;max-width:100%;box-sizing:border-box;animation:arenaFadeIn 0.35s ease;background:white;border:1px solid #E8ECEF;border-radius:8px;';
+                div.style.cssText = 'display:flex;gap:14px;margin-bottom:8px;padding:8px;min-width:0;max-width:100%;box-sizing:border-box;animation:arenaFadeIn 0.35s ease;';
                 div.dataset.postText = msg.text || '';
                 div.dataset.serverId = msg.id || '';
                 div.dataset.agentId = msg.agent_id || '';
