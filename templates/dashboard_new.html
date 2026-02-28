@@ -1150,7 +1150,7 @@
                         <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px; flex-direction: column;">
                             <!-- Табы -->
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
-                                <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Агенты</button>
+                                <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Активные агенты</button>
                                 <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" class="mp-tab-btn">Скрипты</button>
                                 <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои</button>
                                 <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать</button>
@@ -1203,7 +1203,7 @@
                                     <span id="av-topic" style="font-size:12px;color:#6B7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Живая дискуссия ИИ-агентов</span>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                                    <span style="font-size:11px;color:#059669;background:#ECFDF5;border-radius:6px;padding:2px 8px;font-weight:500;">LIVE</span>
+                                    <span style="font-size:11px;color:#068487;background:#F0F9F9;border-radius:6px;padding:2px 8px;font-weight:500;">LIVE</span>
                                     <span id="av-status-dot" style="width:8px;height:8px;border-radius:50%;background:#D1D9E0;display:inline-block;"></span>
                                 </div>
                             </div>
@@ -2695,8 +2695,8 @@
                     return;
                 }
                 list.innerHTML = data.agents.map(a => {
-                    const priceLabel = a.price_per_message === 0 ? '<span style="color:#059669;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${a.price_per_message}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/сообщение</span>`;
-                    const trialLabel = a.trial_messages ? `<span style="font-size:11px;color:#059669;background:#ECFDF5;border-radius:4px;padding:1px 6px;">${a.trial_messages} бесплатно</span>` : '';
+                    const priceLabel = a.price_per_message === 0 ? '<span style="color:#068487;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${a.price_per_message}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/сообщение</span>`;
+                    const trialLabel = a.trial_messages ? `<span style="font-size:11px;color:#068487;background:#F0F9F9;border-radius:4px;padding:1px 6px;">${a.trial_messages} бесплатно</span>` : '';
                     return `
                     <div class="mp-card">
                         <div style="display:flex;align-items:center;gap:10px;">
@@ -2736,7 +2736,7 @@
                     return;
                 }
                 list.innerHTML = data.scripts.map(s => {
-                    const priceLabel = s.price_per_run === 0 ? '<span style="color:#059669;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${s.price_per_run}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/запуск</span>`;
+                    const priceLabel = s.price_per_run === 0 ? '<span style="color:#068487;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${s.price_per_run}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/запуск</span>`;
                     return `
                     <div class="mp-card">
                         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
@@ -2772,8 +2772,8 @@
                     html += data.agents.map(a => {
                         const isActive = a.status === 'active';
                         const isPaused = a.status === 'paused';
-                        const statusBg = isActive ? '#ECFDF5' : isPaused ? '#FFF7ED' : '#F3F4F6';
-                        const statusColor = isActive ? '#059669' : isPaused ? '#D97706' : '#6B7280';
+                        const statusBg = isActive ? '#F0F9F9' : isPaused ? '#FFF7ED' : '#F3F4F6';
+                        const statusColor = isActive ? '#068487' : isPaused ? '#D97706' : '#6B7280';
                         const statusLabel = isActive ? 'Активен' : isPaused ? 'Пауза' : a.status;
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
@@ -2802,7 +2802,7 @@
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:8px;">
                             <div>
                                 <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(s.name)}</span>
-                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${s.status==='active'?'#ECFDF5':'#F3F4F6'};color:${s.status==='active'?'#059669':'#6B7280'}">${s.status}</span>
+                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${s.status==='active'?'#F0F9F9':'#F3F4F6'};color:${s.status==='active'?'#068487':'#6B7280'}">${s.status}</span>
                             </div>
                             <span style="font-size:11px;color:#9CA3AF;">${s.installs_count} уст. &middot; ${s.runs_count} запусков</span>
                         </div>`).join('');
@@ -3073,12 +3073,12 @@
 
                     <!-- AI-генерация кода -->
                     <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#15803D;margin-bottom:6px;">Сгенерировать код с помощью ИИ</div>
+                        <div style="font-size:12px;font-weight:500;color:#068487;margin-bottom:6px;">Сгенерировать код с помощью ИИ</div>
                         <div style="display:flex;gap:6px;">
                             <input id="mps-ai-prompt" type="text" placeholder="Опишите задачу: например «разобрать CSV и посчитать среднее»" style="flex:1;padding:7px 10px;border:1px solid #BBF7D0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
-                            <button type="button" id="mps-ai-btn" onclick="mpGenerateScript()" class="mp-action-btn" style="background:#15803D;color:white;border-color:#15803D;white-space:nowrap;padding:7px 12px;">Сгенерировать</button>
+                            <button type="button" id="mps-ai-btn" onclick="mpGenerateScript()" class="mp-action-btn" style="background:#F6F8FA;color:#374151;border-color:#D1D9E0;white-space:nowrap;padding:7px 12px;">Сгенерировать</button>
                         </div>
-                        <div id="mps-ai-status" style="display:none;font-size:11px;color:#15803D;margin-top:4px;"></div>
+                        <div id="mps-ai-status" style="display:none;font-size:11px;color:#068487;margin-top:4px;"></div>
                     </div>
 
                     <textarea id="mps-code" placeholder="Python-код. Используйте переменную input_data (dict) для входных данных, запишите результат в result = {...}" rows="9" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;background:#F9FAFB;color:#374151;"></textarea>
@@ -3187,14 +3187,14 @@
                 try {
                     const state = JSON.parse(e.data);
                     arenaRenderState(state);
-                    if (dot) dot.style.background = '#22C55E';
+                    if (dot) dot.style.background = '#068487';
                 } catch(ex) {}
             });
             _arenaSSE.addEventListener('message', function(e) {
                 try {
                     const msg = JSON.parse(e.data);
                     arenaAppendMessage(msg, true);
-                    if (dot) dot.style.background = '#22C55E';
+                    if (dot) dot.style.background = '#068487';
                 } catch(ex) {}
             });
             _arenaSSE.addEventListener('ping', function() {});
@@ -3316,7 +3316,7 @@
             if (isNew) {
                 container.scrollTop = container.scrollHeight;
                 const dot = document.getElementById('av-status-dot');
-                if (dot) { dot.style.background = '#068487'; setTimeout(() => { dot.style.background = '#22C55E'; }, 400); }
+                if (dot) { dot.style.background = '#068487'; }
             }
         }
 
@@ -6859,7 +6859,7 @@
             navigator.clipboard.writeText(cleanUsername).then(() => {
                 // Показываем подтверждение
                 const originalColor = button.style.color;
-                button.style.color = '#10b981'; // Зелёный цвет
+                button.style.color = '#068487';
                 button.title = t('copied');
                 
                 // Показываем уведомление
