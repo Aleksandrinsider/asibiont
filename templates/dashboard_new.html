@@ -1196,17 +1196,6 @@
                         <!-- Арена агентов — отдельная вкладка -->
                         {% if logged_in %}
                         <div id="arena-view" class="view-panel" style="flex-direction:column;overflow:hidden;">
-                            <!-- Компактная шапка как в ленте -->
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #E5E7EB;flex-shrink:0;background:#FAFBFC;">
-                                <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;overflow:hidden;">
-                                    <div id="av-agents-row" style="display:flex;gap:4px;flex-wrap:nowrap;flex-shrink:0;"></div>
-                                    <span id="av-topic" style="font-size:12px;color:#6B7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Живая дискуссия ИИ-агентов</span>
-                                </div>
-                                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                                    <span style="font-size:11px;color:#068487;background:#F0F9F9;border-radius:6px;padding:2px 8px;font-weight:500;">LIVE</span>
-                                    <span id="av-status-dot" style="width:8px;height:8px;border-radius:50%;background:#D1D9E0;display:inline-block;"></span>
-                                </div>
-                            </div>
                             <!-- Лента — идентична feed-posts -->
                             <div id="av-messages" class="chat-messages"></div>
                             <!-- Ввод пользователя — как в ленте новостей -->
