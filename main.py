@@ -9612,6 +9612,79 @@ async def api_generate_script_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_marketplace_script_install_handler(request):
+    """POST /api/marketplace/scripts/{id}/install — установить скрипт (с биллингом)"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        script_id = int(request.match_info['id'])
+        session_db = Session()
+        try:
+            from models import UserScript, ScriptInstall, TokenTransaction, User as UserModel
+            import datetime as _dt
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            script = session_db.query(UserScript).filter_by(id=script_id, status='active').first()
+            if not script:
+                return web.json_response({'error': 'Script not found'}, status=404)
+
+            # Уже установлен?
+            existing = session_db.query(ScriptInstall).filter_by(
+                user_id=user_obj.id, script_id=script_id).first()
+            if existing:
+                return web.json_response({'success': True, 'already_installed': True})
+
+            # Биллинг — только платные скрипты, и только не своих авторов
+            price = script.price_per_run or 0
+            royalty_pct = getattr(script, 'author_royalty_pct', 70) or 70
+            author_earnings = 0
+            if price > 0 and script.author_id != user_obj.id:
+                if (user_obj.token_balance or 0) < price:
+                    return web.json_response({
+                        'error': 'insufficient_balance',
+                        'balance': user_obj.token_balance or 0,
+                        'price': price
+                    }, status=402)
+                user_obj.token_balance = (user_obj.token_balance or 0) - price
+                user_obj.tokens_spent = (user_obj.tokens_spent or 0) + price
+                author_earnings = price * royalty_pct // 100
+                author = session_db.query(UserModel).filter_by(id=script.author_id).first()
+                if author:
+                    author.token_balance = (author.token_balance or 0) + author_earnings
+                    author.referral_balance = (author.referral_balance or 0) + author_earnings
+                    session_db.add(TokenTransaction(
+                        user_id=author.id, amount=author_earnings,
+                        action='script_royalty',
+                        description=f'Роялти за установку скрипта «{script.name}»',
+                        balance_after=author.token_balance
+                    ))
+                session_db.add(TokenTransaction(
+                    user_id=user_obj.id, amount=-price,
+                    action='script_install',
+                    description=f'Установка скрипта «{script.name}»',
+                    balance_after=user_obj.token_balance
+                ))
+
+            # Записываем установку
+            install = ScriptInstall(user_id=user_obj.id, script_id=script_id)
+            session_db.add(install)
+            script.installs_count = (script.installs_count or 0) + 1
+            session_db.commit()
+            return web.json_response({
+                'success': True,
+                'tokens_charged': price,
+                'balance': user_obj.token_balance or 0
+            })
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[SCRIPT INSTALL] error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_agents_activity_handler(request):
     """GET /api/marketplace/agents/activity — социальная активность агентов за 30 дней"""
     try:
@@ -9782,6 +9855,7 @@ async def api_agent_chat_handler(request):
                 author = session_db.query(UserModel).filter_by(id=agent.author_id).first()
                 if author and author.id != user_obj.id:
                     author.token_balance = (author.token_balance or 0) + author_earnings
+                    author.referral_balance = (author.referral_balance or 0) + author_earnings
                     session_db.add(TokenTransaction(
                         user_id=author.id, amount=author_earnings,
                         action='agent_royalty',
@@ -10145,6 +10219,7 @@ app.router.add_get('/api/marketplace/scripts', api_marketplace_scripts_handler)
 app.router.add_post('/api/marketplace/agents', api_marketplace_publish_agent_handler)
 app.router.add_post('/api/marketplace/scripts', api_marketplace_publish_script_handler)
 app.router.add_post('/api/marketplace/scripts/generate', api_generate_script_handler)
+app.router.add_post('/api/marketplace/scripts/{id}/install', api_marketplace_script_install_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
 app.router.add_get('/api/marketplace/agents/{id}', api_marketplace_agent_get_handler)

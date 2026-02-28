@@ -3002,12 +3002,19 @@
         async function mpInstallScript(id, slug) {
             mpShowStatus('Установка скрипта...', '#F0F3F6', '#374151');
             try {
-                await fetch('/api/marketplace/scripts', {
+                const r = await fetch('/api/marketplace/scripts/' + id + '/install', {
                     method: 'POST',
-                    headers: {'Content-Type':'application/json'},
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({id: id, slug: slug})
                 });
-                mpShowStatus('Скрипт установлен. Используйте его через чат с ИИ.', '#ECFDF5', '#059669');
+                const data = await r.json();
+                if (r.status === 402) {
+                    mpShowStatus(`Недостаточно токенов (баланс: ${data.balance}, необходимо: ${data.price})`, '#FEF2F2', '#DC2626');
+                    return;
+                }
+                if (!data.success) { mpShowStatus(data.error || 'Ошибка', '#FEF2F2', '#DC2626'); return; }
+                const msg = data.already_installed ? 'Скрипт уже установлен.' : `Скрипт установлен! (списано ${data.tokens_charged || 0} ток)`;
+                mpShowStatus(msg, '#ECFDF5', '#059669');
                 setTimeout(() => mpLoadScripts(), 800);
             } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
         }
