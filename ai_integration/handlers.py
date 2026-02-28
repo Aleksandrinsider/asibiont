@@ -10631,6 +10631,8 @@ async def generate_image(
         input_data = {
             "prompt": full_prompt,
             "aspect_ratio": aspect_ratio or "1:1",
+            "width": 550,
+            "height": 550,
             "output_format": "webp",
             "output_quality": 80,
         }

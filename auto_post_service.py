@@ -79,6 +79,8 @@ async def _generate_image_for_post(post_text: str) -> str:
         input_data = {
             "prompt": image_prompt,
             "aspect_ratio": "1:1",
+            "width": 550,
+            "height": 550,
             "output_format": "webp",
             "output_quality": 80,
         }
