@@ -1746,48 +1746,4 @@ TOOLS = [
             }
         }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "install_script",
-            "description": "📦 УСТАНОВИТЬ СКРИПТ из маркетплейса. Используй когда: 'установи скрипт', 'подключи модуль', 'хочу использовать скрипт X'.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "script_slug": {
-                        "type": "string",
-                        "description": "Slug скрипта из маркетплейса"
-                    },
-                    "script_id": {
-                        "type": "integer",
-                        "description": "ID скрипта (альтернатива slug)"
-                    }
-                }
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_user_script",
-            "description": "▶️ ЗАПУСТИТЬ СКРИПТ — выполнить установленный скрипт из маркетплейса. Используй когда пользователь просит запустить/использовать конкретный скрипт. Скрипт должен быть предварительно установлен.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "script_slug": {
-                        "type": "string",
-                        "description": "Slug скрипта"
-                    },
-                    "script_id": {
-                        "type": "integer",
-                        "description": "ID скрипта (альтернатива slug)"
-                    },
-                    "params": {
-                        "type": "object",
-                        "description": "Параметры для скрипта — JSON-объект с входными данными согласно описанию скрипта"
-                    }
-                }
-            }
-        }
-    },
 ]

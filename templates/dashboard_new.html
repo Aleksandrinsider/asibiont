@@ -1153,7 +1153,6 @@
                             <!-- Табы -->
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Маркетплейс</button>
-                                <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" class="mp-tab-btn">Мои скрипты</button>
                                 <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои агенты</button>
                                 <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать</button>
                                 <div style="flex: 1; min-width: 110px;">
@@ -1169,13 +1168,6 @@
                                 </div>
                             </div>
 
-                            <!-- Список скриптов -->
-                            <div id="mp-scripts-panel" style="display: none;">
-                                <div id="mp-scripts-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
-                                    <div style="color: #9CA3AF; font-size: 13px; grid-column: 1/-1; text-align: center; padding: 32px 0;">Загрузка скриптов...</div>
-                                </div>
-                            </div>
-
                             <!-- Мои публикации -->
                             <div id="mp-my-panel" style="display: none;">
                                 <div id="mp-my-content" style="font-size: 13px; color: #374151;">Загрузка...</div>
@@ -1185,7 +1177,6 @@
                             <div id="mp-create-panel" style="display: none;">
                                 <div style="display: flex; gap: 8px; margin-bottom: 14px;">
                                     <button onclick="mpShowCreateAgent()" class="mp-action-btn" style="flex: 1;">Создать агента</button>
-                                    <button onclick="mpShowCreateScript()" class="mp-action-btn" style="flex: 1;">Создать скрипт</button>
                                 </div>
                                 <div id="mp-create-form"></div>
                             </div>
@@ -2723,7 +2714,7 @@
 
         function mpSwitchTab(tab) {
             _mpCurrentTab = tab;
-            const tabs = ['agents','scripts','my','create'];
+            const tabs = ['agents','my','create'];
             tabs.forEach(t => {
                 const btn = document.getElementById('mp-tab-' + t);
                 const panel = document.getElementById('mp-' + t + '-panel');
@@ -2731,7 +2722,6 @@
                 if (panel) panel.style.display = t === tab ? '' : 'none';
             });
             if (tab === 'agents') mpLoadAgents();
-            else if (tab === 'scripts') mpLoadScripts();
             else if (tab === 'my') mpLoadMy();
             else if (tab === 'arena') { _arenaInitialized = false; arenaInit(); }
         }
@@ -2740,7 +2730,6 @@
             clearTimeout(_mpSearchTimer);
             _mpSearchTimer = setTimeout(() => {
                 if (_mpCurrentTab === 'agents') mpLoadAgents(val);
-                else if (_mpCurrentTab === 'scripts') mpLoadScripts(val);
             }, 400);
         }
 
@@ -2794,42 +2783,6 @@
             }
         }
 
-        async function mpLoadScripts(search) {
-            const list = document.getElementById('mp-scripts-list');
-            if (!list) return;
-            list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Загрузка...</div>';
-            try {
-                let url = '/api/marketplace/scripts';
-                if (search) url += '?search=' + encodeURIComponent(search);
-                const r = await fetch(url);
-                const data = await r.json();
-                if (!data.scripts || !data.scripts.length) {
-                    list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Скриптов пока нет</div>';
-                    return;
-                }
-                list.innerHTML = data.scripts.map(s => {
-                    const priceLabel = s.price_per_run === 0 ? '<span style="color:#068487;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${s.price_per_run}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/запуск</span>`;
-                    return `
-                    <div class="mp-card">
-                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-                            <div style="font-size:13px;font-weight:600;color:#374151;flex:1;">${escapeHtml(s.name)}</div>
-                            ${s.category ? `<span style="font-size:10px;color:#6B7280;background:#F3F4F6;border-radius:4px;padding:2px 6px;white-space:nowrap;">${escapeHtml(s.category)}</span>` : ''}
-                        </div>
-                        <div style="font-size:12px;color:#6B7280;line-height:1.5;min-height:28px;">${escapeHtml((s.description || '').substring(0,120))}${(s.description||'').length > 120 ? '...' : ''}</div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;border-top:1px solid #F3F4F6;padding-top:8px;margin-top:2px;">
-                            <div style="display:flex;align-items:center;gap:6px;">
-                                ${priceLabel}
-                                <span style="font-size:11px;color:#9CA3AF;">&middot; ${s.installs_count} установок</span>
-                            </div>
-                            <button onclick="mpInstallScript('${s.id}','${escapeHtml(s.slug)}')" class="mp-action-btn" ${!s.is_installed ? 'style="background:#068487;color:white;border-color:#068487;"' : ''}>${s.is_installed ? 'Установлен' : 'Установить'}</button>
-                        </div>
-                    </div>`;
-                }).join('');
-            } catch(e) {
-                list.innerHTML = '<div style="color:#DC2626;font-size:13px;grid-column:1/-1;text-align:center;padding:24px 0">Ошибка: ' + escapeHtml(e.message) + '</div>';
-            }
-        }
-
         async function mpLoadMy() {
             const el = document.getElementById('mp-my-content');
             if (!el) return;
@@ -2874,17 +2827,6 @@
                             </div>
                         </div>`;
                     }).join('');
-                }
-                if (data.scripts && data.scripts.length) {
-                    html += '<div style="font-weight:600;margin-top:14px;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои скрипты</div>';
-                    html += data.scripts.map(s => `
-                        <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                            <div>
-                                <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(s.name)}</span>
-                                <span style="margin-left:8px;font-size:12px;color:#068487;">${s.status === 'review' ? 'На модерации' : s.status === 'active' ? 'Активен' : s.status === 'paused' ? 'Пауза' : s.status === 'disabled' ? 'Отключён' : s.status}</span>
-                            </div>
-                            <span style="font-size:11px;color:#9CA3AF;">${s.installs_count} уст. &middot; ${s.runs_count} запусков</span>
-                        </div>`).join('');
                 }
                 if (!html) html = '<div style="color:#9CA3AF;text-align:center;padding:32px 0;font-size:13px;">Вы ещё ничего не опубликовали</div>';
                 el.innerHTML = html;
@@ -3061,26 +3003,6 @@
             msgs.scrollTop = msgs.scrollHeight;
         }
 
-        async function mpInstallScript(id, slug) {
-            mpShowStatus('Установка скрипта...', '#F0F3F6', '#374151');
-            try {
-                const r = await fetch('/api/marketplace/scripts/' + id + '/install', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({id: id, slug: slug})
-                });
-                const data = await r.json();
-                if (r.status === 402) {
-                    mpShowStatus(`Недостаточно токенов (баланс: ${data.balance}, необходимо: ${data.price})`, '#FEF2F2', '#DC2626');
-                    return;
-                }
-                if (!data.success) { mpShowStatus(data.error || 'Ошибка', '#FEF2F2', '#DC2626'); return; }
-                const msg = data.already_installed ? 'Скрипт уже установлен.' : `Скрипт установлен! (списано ${data.tokens_charged || 0} ток)`;
-                mpShowStatus(msg, '#ECFDF5', '#059669');
-                setTimeout(() => mpLoadScripts(), 800);
-            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
-        }
-
         function mpShowStatus(msg, bg, color) {
             // Используем toast-уведомления как в дашборде
             if (color === '#DC2626' || bg === '#FEF2F2') showNotification(msg, 'error');
@@ -3149,70 +3071,6 @@
             reader.readAsDataURL(file);
         }
 
-        function mpShowCreateScript() {
-            const form = document.getElementById('mp-create-form');
-            if (!form) return;
-            form.innerHTML = `
-                <div style="display:flex;flex-direction:column;gap:10px;">
-                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:2px;">Новый скрипт</div>
-                    <input id="mps-name" type="text" placeholder="Название скрипта" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
-                    <textarea id="mps-desc" placeholder="Что делает скрипт? Чем полезен?" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
-
-                    <!-- AI-генерация кода -->
-                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#068487;margin-bottom:6px;">Сгенерировать код с помощью ИИ</div>
-                        <div style="display:flex;gap:6px;">
-                            <input id="mps-ai-prompt" type="text" placeholder="Опишите задачу: например «разобрать CSV и посчитать среднее»" style="flex:1;padding:7px 10px;border:1px solid #BBF7D0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
-                            <button type="button" id="mps-ai-btn" onclick="mpGenerateScript()" class="mp-action-btn" style="background:#F6F8FA;color:#374151;border-color:#D1D9E0;white-space:nowrap;padding:7px 12px;">Сгенерировать</button>
-                        </div>
-                        <div id="mps-ai-status" style="display:none;font-size:11px;color:#068487;margin-top:4px;"></div>
-                    </div>
-
-                    <textarea id="mps-code" placeholder="Python-код. Используйте переменную input_data (dict) для входных данных, запишите результат в result = {...}" rows="9" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;background:#F9FAFB;color:#374151;"></textarea>
-
-                    <!-- Цена -->
-                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#374151;margin-bottom:8px;">Стоимость запуска</div>
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <input id="mps-price" type="number" min="1" max="9999" value="10" style="width:60px;padding:6px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;text-align:center;">
-                            <span style="font-size:12px;color:#6B7280;">токенов за каждый запуск</span>
-                        </div>
-                        <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого запуска</div>
-                    </div>
-
-                    <button onclick="mpSubmitScript()" class="mp-action-btn" style="background:#FFFFFF;color:#374151;border-color:#D1D9E0;padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Отправить на модерацию</button>
-                    <div style="font-size:11px;color:#9CA3AF;">Скрипт автоматически проверяется на безопасность.</div>
-                </div>`;
-        }
-
-        async function mpGenerateScript() {
-            const prompt = (document.getElementById('mps-ai-prompt') || {}).value || '';
-            if (!prompt.trim()) { mpShowStatus('Введите описание задачи для генерации', '#FEF2F2', '#DC2626'); return; }
-            const btn = document.getElementById('mps-ai-btn');
-            const status = document.getElementById('mps-ai-status');
-            if (btn) { btn.disabled = true; btn.textContent = 'Генерация...'; }
-            if (status) { status.style.display = ''; status.textContent = 'ИИ пишет код...'; }
-            try {
-                const r = await fetch('/api/marketplace/scripts/generate', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({description: prompt.trim()})
-                });
-                const data = await r.json();
-                if (data.error) throw new Error(data.error);
-                const codeEl = document.getElementById('mps-code');
-                if (codeEl) codeEl.value = data.code || '';
-                if (status) status.textContent = 'Код сгенерирован. Проверьте и отредактируйте при необходимости.';
-                // Автозаполнить название если пустое
-                const nameEl = document.getElementById('mps-name');
-                if (nameEl && !nameEl.value.trim()) nameEl.value = prompt.trim().substring(0, 60);
-            } catch(e) {
-                if (status) { status.style.color = '#DC2626'; status.textContent = 'Ошибка: ' + e.message; }
-            } finally {
-                if (btn) { btn.disabled = false; btn.textContent = 'Сгенерировать'; }
-            }
-        }
-
         async function mpSubmitAgent() {
             // Получаем base64 аватара из preview-img если есть
             let avatarDataUrl = '';
@@ -3237,24 +3095,6 @@
                 if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
                 _mpEditAgentId = null;
                 mpShowStatus(res.message || 'Отправлено на модерацию', '#ECFDF5', '#059669');
-                document.getElementById('mp-create-form').innerHTML = '';
-                setTimeout(() => mpSwitchTab('my'), 1500);
-            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
-        }
-
-        async function mpSubmitScript() {
-            const data = {
-                name: document.getElementById('mps-name').value.trim(),
-                description: document.getElementById('mps-desc').value.trim(),
-                code: document.getElementById('mps-code').value,
-                price_per_run: parseInt(document.getElementById('mps-price').value) || 10,
-            };
-            if (!data.name || !data.code) { mpShowStatus('Заполните название и код', '#FEF2F2', '#DC2626'); return; }
-            try {
-                const r = await fetch('/api/marketplace/scripts', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-                const res = await r.json();
-                if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
-                mpShowStatus(res.message || 'Скрипт отправлен', '#ECFDF5', '#059669');
                 document.getElementById('mp-create-form').innerHTML = '';
                 setTimeout(() => mpSwitchTab('my'), 1500);
             } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }

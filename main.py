@@ -9407,49 +9407,6 @@ async def api_marketplace_agents_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
-async def api_marketplace_scripts_handler(request):
-    """GET /api/marketplace/scripts — список активных скриптов"""
-    try:
-        session_web = await get_session(request)
-        user_id = session_web.get('user_id') if session_web else None
-        if not user_id:
-            return web.json_response({'error': 'Not authenticated'}, status=401)
-        session_db = Session()
-        try:
-            from models import UserScript, ScriptInstall, User as UserModel
-            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
-            category = request.rel_url.query.get('category')
-            search = request.rel_url.query.get('search', '').strip()
-            q = session_db.query(UserScript).filter_by(status='active')
-            if category:
-                q = q.filter(UserScript.category == category)
-            if search:
-                q = q.filter(UserScript.name.ilike(f'%{search}%'))
-            scripts = q.order_by(UserScript.installs_count.desc()).limit(20).all()
-            result = []
-            for s in scripts:
-                is_installed = False
-                if user_obj:
-                    is_installed = bool(session_db.query(ScriptInstall).filter_by(
-                        user_id=user_obj.id, script_id=s.id).first())
-                result.append({
-                    'id': s.id, 'name': s.name, 'slug': s.slug,
-                    'description': s.description, 'category': s.category,
-                    'price_per_run': s.price_per_run,
-                    'installs_count': s.installs_count,
-                    'runs_count': s.runs_count,
-                    'output_description': s.output_description,
-                    'is_installed': is_installed,
-                    'is_adult': s.is_adult,
-                })
-            return web.json_response({'scripts': result})
-        finally:
-            session_db.close()
-    except Exception as e:
-        logger.error(f"[MARKETPLACE] scripts error: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
-
-
 async def api_marketplace_publish_agent_handler(request):
     """POST /api/marketplace/agents — создать/обновить агента"""
     try:
@@ -9517,186 +9474,6 @@ async def api_marketplace_publish_agent_handler(request):
             session_db.close()
     except Exception as e:
         logger.error(f"[MARKETPLACE] publish agent error: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
-
-
-async def api_marketplace_publish_script_handler(request):
-    """POST /api/marketplace/scripts — создать/обновить скрипт"""
-    try:
-        session_web = await get_session(request)
-        user_id = session_web.get('user_id') if session_web else None
-        if not user_id:
-            return web.json_response({'error': 'Not authenticated'}, status=401)
-        data = await request.json()
-        session_db = Session()
-        try:
-            from models import UserScript, User as UserModel
-            from ai_integration.user_agents import validate_script_code
-            import re as _re
-            import json as _json
-            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
-            if not user_obj:
-                return web.json_response({'error': 'User not found'}, status=404)
-
-            code = data.get('code', '')
-            ok, err = validate_script_code(code)
-            if not ok:
-                return web.json_response({'error': f'Небезопасный код: {err}'}, status=400)
-
-            script_id = data.get('id')
-            if script_id:
-                script = session_db.query(UserScript).filter_by(
-                    id=script_id, author_id=user_obj.id).first()
-                if not script:
-                    return web.json_response({'error': 'Not found'}, status=404)
-            else:
-                script = UserScript(author_id=user_obj.id, status='review')
-                session_db.add(script)
-
-            name = (data.get('name') or '').strip()[:100]
-            if not name:
-                return web.json_response({'error': 'name required'}, status=400)
-            slug = data.get('slug') or _re.sub(r'[^a-z0-9-]', '-', name.lower())[:100]
-            slug = _re.sub(r'-+', '-', slug).strip('-')
-
-            script.name = name
-            script.slug = slug
-            script.description = (data.get('description') or '')[:500]
-            script.category = data.get('category', 'misc')
-            script.code = code
-            script.input_schema = _json.dumps(data.get('input_schema') or {})
-            script.output_description = (data.get('output_description') or '')[:500]
-            script.price_per_run = max(1, int(data.get('price_per_run') or 10))
-            script.is_adult = bool(data.get('is_adult', False))
-            script.status = 'review'
-
-            session_db.commit()
-            return web.json_response({'success': True, 'id': script.id, 'slug': script.slug,
-                                      'status': 'review',
-                                      'message': 'Скрипт отправлен на модерацию.'})
-        finally:
-            session_db.close()
-    except Exception as e:
-        logger.error(f"[MARKETPLACE] publish script error: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
-
-
-async def api_generate_script_handler(request):
-    """POST /api/marketplace/scripts/generate — генерация кода через ИИ"""
-    try:
-        session_web = await get_session(request)
-        user_id = session_web.get('user_id') if session_web else None
-        if not user_id:
-            return web.json_response({'error': 'Not authenticated'}, status=401)
-        data = await request.json()
-        description = (data.get('description') or '').strip()[:600]
-        if not description:
-            return web.json_response({'error': 'description required'}, status=400)
-        from config import DEEPSEEK_API_KEY
-        import aiohttp as _aio
-        prompt = (
-            f"Напиши Python-скрипт для задачи: {description}\n\n"
-            "Требования:\n"
-            "- Используй только: json, math, re, datetime, requests, urllib, collections, itertools\n"
-            "- Входные данные получай из переменной input_data (dict, может быть пустым)\n"
-            "- Финальный результат записывай в: result = {...}\n"
-            "- Без классов верхнего уровня, без print(), без input()\n"
-            "- Добавь однострочный комментарий в начале с описанием\n"
-            "- Верни ТОЛЬКО Python-код, без markdown-обёртки ```python"
-        )
-        async with _aio.ClientSession() as sess:
-            resp = await sess.post(
-                'https://api.deepseek.com/v1/chat/completions',
-                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
-                json={'model': 'deepseek-chat',
-                      'messages': [{'role': 'user', 'content': prompt}],
-                      'max_tokens': 2000, 'temperature': 0.3},
-                timeout=_aio.ClientTimeout(total=60)
-            )
-            result = await resp.json()
-        code = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-        # Убираем markdown-обёртку если она есть
-        if code.startswith('```'):
-            lines = code.split('\n')
-            code = '\n'.join(lines[1:])
-        if code.endswith('```'):
-            code = code[:-3].strip()
-        return web.json_response({'code': code})
-    except Exception as e:
-        logger.error(f"[GENERATE SCRIPT] error: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
-
-
-async def api_marketplace_script_install_handler(request):
-    """POST /api/marketplace/scripts/{id}/install — установить скрипт (с биллингом)"""
-    try:
-        session_web = await get_session(request)
-        user_id = session_web.get('user_id') if session_web else None
-        if not user_id:
-            return web.json_response({'error': 'Not authenticated'}, status=401)
-        script_id = int(request.match_info['id'])
-        session_db = Session()
-        try:
-            from models import UserScript, ScriptInstall, TokenTransaction, User as UserModel
-            import datetime as _dt
-            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
-            if not user_obj:
-                return web.json_response({'error': 'User not found'}, status=404)
-            script = session_db.query(UserScript).filter_by(id=script_id, status='active').first()
-            if not script:
-                return web.json_response({'error': 'Script not found'}, status=404)
-
-            # Уже установлен?
-            existing = session_db.query(ScriptInstall).filter_by(
-                user_id=user_obj.id, script_id=script_id).first()
-            if existing:
-                return web.json_response({'success': True, 'already_installed': True})
-
-            # Биллинг — только платные скрипты, и только не своих авторов
-            price = script.price_per_run or 0
-            royalty_pct = getattr(script, 'author_royalty_pct', 70) or 70
-            author_earnings = 0
-            if price > 0 and script.author_id != user_obj.id:
-                if (user_obj.token_balance or 0) < price:
-                    return web.json_response({
-                        'error': 'insufficient_balance',
-                        'balance': user_obj.token_balance or 0,
-                        'price': price
-                    }, status=402)
-                user_obj.token_balance = (user_obj.token_balance or 0) - price
-                user_obj.tokens_spent = (user_obj.tokens_spent or 0) + price
-                author_earnings = price * royalty_pct // 100
-                author = session_db.query(UserModel).filter_by(id=script.author_id).first()
-                if author:
-                    author.token_balance = (author.token_balance or 0) + author_earnings
-                    author.referral_balance = (author.referral_balance or 0) + author_earnings
-                    session_db.add(TokenTransaction(
-                        user_id=author.id, amount=author_earnings,
-                        action='script_royalty',
-                        description=f'Роялти за установку скрипта «{script.name}»',
-                        balance_after=author.token_balance
-                    ))
-                session_db.add(TokenTransaction(
-                    user_id=user_obj.id, amount=-price,
-                    action='script_install',
-                    description=f'Установка скрипта «{script.name}»',
-                    balance_after=user_obj.token_balance
-                ))
-
-            # Записываем установку
-            install = ScriptInstall(user_id=user_obj.id, script_id=script_id)
-            session_db.add(install)
-            script.installs_count = (script.installs_count or 0) + 1
-            session_db.commit()
-            return web.json_response({
-                'success': True,
-                'tokens_charged': price,
-                'balance': user_obj.token_balance or 0
-            })
-        finally:
-            session_db.close()
-    except Exception as e:
-        logger.error(f"[SCRIPT INSTALL] error: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -9768,7 +9545,7 @@ async def api_marketplace_my_handler(request):
             return web.json_response({'error': 'Not authenticated'}, status=401)
         session_db = Session()
         try:
-            from models import UserAgent, UserScript, User as UserModel
+            from models import UserAgent, User as UserModel
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'error': 'Not found'}, status=404)
@@ -9778,8 +9555,6 @@ async def api_marketplace_my_handler(request):
             session_db.commit()
             agents = session_db.query(UserAgent).filter_by(author_id=user_obj.id).order_by(
                 UserAgent.created_at.desc()).all()
-            scripts = session_db.query(UserScript).filter_by(author_id=user_obj.id).order_by(
-                UserScript.created_at.desc()).all()
             from models import AgentSubscription
             def _is_subscribed(agent):
                 return bool(session_db.query(AgentSubscription).filter_by(
@@ -9795,10 +9570,7 @@ async def api_marketplace_my_handler(request):
                              'personality': a.personality or '',
                              'avatar_url': a.avatar_url or '',
                              'is_subscribed': _is_subscribed(a)} for a in agents],
-                'scripts': [{'id': s.id, 'name': s.name, 'slug': s.slug,
-                              'status': s.status, 'installs_count': s.installs_count,
-                              'price_per_run': s.price_per_run,
-                              'runs_count': s.runs_count} for s in scripts],
+                'scripts': [],
             })
         finally:
             session_db.close()
@@ -10343,11 +10115,7 @@ app.router.add_post('/clear_history', clear_history_handler)
 
 # Marketplace API
 app.router.add_get('/api/marketplace/agents', api_marketplace_agents_handler)
-app.router.add_get('/api/marketplace/scripts', api_marketplace_scripts_handler)
 app.router.add_post('/api/marketplace/agents', api_marketplace_publish_agent_handler)
-app.router.add_post('/api/marketplace/scripts', api_marketplace_publish_script_handler)
-app.router.add_post('/api/marketplace/scripts/generate', api_generate_script_handler)
-app.router.add_post('/api/marketplace/scripts/{id}/install', api_marketplace_script_install_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
 app.router.add_get('/api/marketplace/agents/{id}', api_marketplace_agent_get_handler)

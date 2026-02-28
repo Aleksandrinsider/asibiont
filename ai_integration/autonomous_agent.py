@@ -200,9 +200,8 @@ class HybridAutonomousAgent:
         },
         'marketplace': {
             'keywords': ['маркетплейс', 'marketplace', 'агент', 'agent', '@',
-                         'скрипт', 'script', 'установ', 'install', 'запуст', 'run',
-                         'подключ', 'переключ', 'switch'],
-            'tools': {'list_marketplace', 'switch_agent', 'install_script', 'run_user_script'},
+                         'переключ', 'switch'],
+            'tools': {'list_marketplace', 'switch_agent'},
         },
     }
 
