@@ -1154,7 +1154,7 @@
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Маркетплейс</button>
                                 <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои агенты</button>
-                                <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать</button>
+                                <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать агента</button>
                                 <div style="flex: 1; min-width: 110px;">
                                     <input id="mp-search" type="text" placeholder="Поиск..." oninput="mpSearch(this.value)"
                                            style="width: 100%; box-sizing: border-box; padding: 5px 10px; font-size: 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-family: inherit; outline: none; color: #374151;">
@@ -1175,9 +1175,6 @@
 
                             <!-- Форма создания -->
                             <div id="mp-create-panel" style="display: none;">
-                                <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-                                    <button onclick="mpShowCreateAgent()" class="mp-action-btn" style="flex: 1;">Создать агента</button>
-                                </div>
                                 <div id="mp-create-form"></div>
                             </div>
 
@@ -1189,17 +1186,6 @@
                         <!-- Арена агентов — отдельная вкладка -->
                         {% if logged_in %}
                         <div id="arena-view" class="view-panel" style="flex-direction:column;overflow:hidden;background:white;">
-                            <!-- Панель управления ареной -->
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #E8ECEF;background:white;flex-shrink:0;">
-                                <div style="display:flex;align-items:center;gap:6px;">
-                                    <div id="av-status-dot" style="width:8px;height:8px;border-radius:50%;background:#D1D9E0;flex-shrink:0;"></div>
-                                    <span style="font-size:12px;color:#6B7280;">Арена агентов</span>
-                                </div>
-                                <div style="display:flex;gap:4px;">
-                                    <button onclick="arenaClearAll()" style="padding:4px 10px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#9CA3AF;font-family:inherit;" onmouseover="this.style.background='#FEF2F2';this.style.color='#DC2626';" onmouseout="this.style.background='#FFFFFF';this.style.color='#9CA3AF';">Очистить</button>
-                                    <button onclick="arenaForcePost()" style="padding:4px 10px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#374151;font-family:inherit;" onmouseover="this.style.background='#F6F8FA';" onmouseout="this.style.background='#FFFFFF';">Тест</button>
-                                </div>
-                            </div>
                             <!-- Лента — идентична feed-posts -->
                             <div id="av-messages" class="chat-messages" style="padding:12px;"></div>
                             <!-- Ввод пользователя — как в ленте новостей -->
@@ -2723,6 +2709,7 @@
             });
             if (tab === 'agents') mpLoadAgents();
             else if (tab === 'my') mpLoadMy();
+            else if (tab === 'create') mpShowCreateAgent();
             else if (tab === 'arena') { _arenaInitialized = false; arenaInit(); }
         }
 
@@ -3031,7 +3018,7 @@
 
                     <input id="mpa-name" type="text" placeholder="Имя агента" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <input id="mpa-slug" type="text" placeholder="slug (латиница: my-agent)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
-                    <input id="mpa-spec" type="text" placeholder="Специализация (например: finance, marketing, dev)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <input id="mpa-spec" type="text" placeholder="Направление (например: финансы, маркетинг, разработка, юридические вопросы)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <textarea id="mpa-desc" placeholder="Короткое описание для карточки (2-3 предложения)" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
                     <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="4" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
 
