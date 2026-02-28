@@ -563,6 +563,7 @@ class ReminderService:
                     logger.info(f"✅ Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
                     reminder_sent_successfully = True
                     self._save_to_chat_history(user_id, reminder_text)
+                except Exception as send_error:
                     err_text = str(send_error)
                     logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {err_text}")
                     logger.error(f"Full traceback: {traceback.format_exc()}")

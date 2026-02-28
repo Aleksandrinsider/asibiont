@@ -177,7 +177,7 @@ if not OPENWEATHERMAP_API_KEY:
 
 NEWSAPI_API_KEY = os.getenv("NEWSAPI_API_KEY")
 if not NEWSAPI_API_KEY:
-    logger.warning("NEWSAPI_API_KEY not set - news integration will not work")
+    logger.debug("NEWSAPI_API_KEY not set - DDG fallback will be used for news search")
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 if not PINECONE_API_KEY:
