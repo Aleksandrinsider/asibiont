@@ -1954,6 +1954,7 @@
                             await updateTasks();
                             await updateProfile();
                             await updatePeople();
+                            await loadGoalsProgress();
                         } catch (e) {
                             console.error('Error updating after message:', e);
                         }
