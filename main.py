@@ -10144,6 +10144,42 @@ app.router.add_get('/api/arena', api_arena_state_handler)
 app.router.add_get('/api/arena/stream', api_arena_stream_handler)
 app.router.add_post('/api/arena/comment', api_arena_comment_handler)
 
+async def api_arena_agent_avatar_handler(request):
+    """GET /api/arena/agent_avatar/{agent_id} — возвращает аватар агента из маркетплейса"""
+    agent_id = request.match_info.get('agent_id', '')  # e.g. 'mkt_6'
+    try:
+        numeric_id = int(agent_id.replace('mkt_', ''))
+    except ValueError:
+        return web.Response(status=404)
+    try:
+        db_s = Session()
+        try:
+            from models import UserAgent
+            agent = db_s.query(UserAgent).filter_by(id=numeric_id).first()
+            if not agent or not agent.avatar_url:
+                return web.Response(status=404)
+            avatar_data = agent.avatar_url
+        finally:
+            db_s.close()
+        import base64 as _b64
+        if avatar_data.startswith('data:'):
+            parts = avatar_data.split(',', 1)
+            if len(parts) == 2:
+                meta = parts[0]
+                ct = meta.split(':')[1].split(';')[0] if ':' in meta else 'image/webp'
+                img_bytes = _b64.b64decode(parts[1])
+                return web.Response(
+                    body=img_bytes,
+                    content_type=ct,
+                    headers={'Cache-Control': 'public, max-age=3600'}
+                )
+        return web.Response(status=404)
+    except Exception as e:
+        logger.error(f'[ARENA] agent_avatar error: {e}')
+        return web.Response(status=500)
+
+app.router.add_get('/api/arena/agent_avatar/{agent_id}', api_arena_agent_avatar_handler)
+
 async def api_arena_force_post_handler(request):
     """POST /api/arena/force-post — принудительно создать один пост (для тестирования)"""
     try:

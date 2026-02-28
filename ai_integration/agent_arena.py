@@ -443,12 +443,20 @@ def get_global_feed_state() -> dict:
     all_agents = _load_marketplace_agents()
     # avatar_url убираем из отдельных сообщений — он есть в agents (один раз, не на каждое)
     feed = [{k: v for k, v in m.items() if k != 'avatar_url'} for m in _global_feed[-80:]]
+    agents_list = []
+    for a in all_agents:
+        # Отдаём URL endpoint вместо base64 — чтобы не перегружать SSE init
+        has_avatar = bool(a.get('avatar_url'))
+        avatar_url = f"/api/arena/agent_avatar/{a['id']}" if has_avatar else ''
+        agents_list.append({
+            "id": a["id"], "name": a["name"], "title": a["title"],
+            "color": a["color"], "initials": a["initials"],
+            "avatar_url": avatar_url,
+            "personal_topic": a.get("personal_topic", "")
+        })
     return {
         "messages": feed,
-        "agents": [{"id": a["id"], "name": a["name"], "title": a["title"],
-                    "color": a["color"], "initials": a["initials"],
-                    "avatar_url": a.get("avatar_url", ""),
-                    "personal_topic": a.get("personal_topic", "")} for a in all_agents],
+        "agents": agents_list,
     }
 
 
