@@ -2721,7 +2721,10 @@
                             <div style="display:flex;align-items:center;gap:6px;">
                                 ${priceLabel} ${trialLabel}
                             </div>
-                            <button onclick="mpOpenAgentChat(${a.id},'${escapeHtml(a.name)}',${a.price_per_message||5},${a.trial_messages||0})" class="quick-action" style="width:auto;padding:5px 14px;font-size:12px;background:#068487;color:white;border-color:#068487;" onmouseover="this.style.background='#057073'" onmouseout="this.style.background='#068487'">Написать</button>
+                            ${a.is_subscribed
+                                ? `<button onclick="mpDeactivateAgent(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Деактивировать</button>`
+                                : `<button onclick="mpActivateAgentFromModal(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Активировать</button>`
+                            }
                         </div>
                     </div>`;
                 }).join('');
