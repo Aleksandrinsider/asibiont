@@ -843,9 +843,9 @@ if db_url and db_url.startswith('postgresql'):
 
 engine = create_engine(
     db_url,
-    pool_size=25,  # 25 permanent connections (BATCH_CONCURRENCY=10 + AI semaphore=5 + API handlers)
-    max_overflow=25,  # 25 additional overflow connections (max 50 total)
-    pool_timeout=30,  # 30 second timeout before giving up
+    pool_size=50,  # 50 permanent connections
+    max_overflow=50,  # 50 overflow (max 100 total for 1000 users)
+    pool_timeout=15,  # 15s timeout — faster fail under load
     pool_recycle=600,  # Recycle every 10 minutes
     pool_pre_ping=True,
     connect_args=connect_args,

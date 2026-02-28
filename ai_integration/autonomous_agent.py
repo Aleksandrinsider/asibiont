@@ -42,6 +42,20 @@ from .self_learning import get_learner
 
 logger = logging.getLogger(__name__)
 
+# === Concurrency controls для 1000+ пользователей ===
+# Максимум 20 одновременных вызовов DeepSeek (лимит API ~40 req/s → оставляем запас)
+_AI_SEMAPHORE: asyncio.Semaphore | None = None
+_MAX_CONCURRENT_AI = 20
+# Максимум 2 одновременных AI-запроса на одного пользователя (защита от спама)
+_user_ai_in_flight: dict = {}  # user_id -> count
+
+def _get_ai_semaphore() -> asyncio.Semaphore:
+    """Lazy init — семафор нужно создавать внутри event loop."""
+    global _AI_SEMAPHORE
+    if _AI_SEMAPHORE is None:
+        _AI_SEMAPHORE = asyncio.Semaphore(_MAX_CONCURRENT_AI)
+    return _AI_SEMAPHORE
+
 
 # ===== ЧИСТЫЙ ГИБРИДНЫЙ ПОДХОД =====
 # AI с tools решает ВСЁ самостоятельно.
@@ -116,9 +130,10 @@ class HybridAutonomousAgent:
 
         logger.info(f"[AI] Calling model={chosen_model}, tokens={data.get('max_tokens')}")
 
-        for _attempt in range(2):  # 1 retry on transient errors
-            try:
-                async with aiohttp.ClientSession() as session:
+        async with _get_ai_semaphore():
+         for _attempt in range(2):  # 1 retry on transient errors
+          try:
+            async with aiohttp.ClientSession() as session:
                     async with session.post(url, headers=headers, json=data,
                                             timeout=aiohttp.ClientTimeout(total=120)) as resp:
                         if resp.status == 200:
@@ -139,11 +154,11 @@ class HybridAutonomousAgent:
                             raise Exception(f"AI call failed: {resp.status} {error}")
                         logger.warning(f"[AI] Server error {resp.status}, retrying...")
                         await asyncio.sleep(2)
-            except asyncio.TimeoutError:
-                if _attempt >= 1:
-                    raise
-                logger.warning("[AI] Timeout, retrying...")
-                await asyncio.sleep(2)
+          except asyncio.TimeoutError:
+            if _attempt >= 1:
+                raise
+            logger.warning("[AI] Timeout, retrying...")
+            await asyncio.sleep(2)
 
     # ===== SMART TOOL FILTERING (reduces API tokens) =====
 
@@ -574,7 +589,7 @@ class HybridAutonomousAgent:
 
         close_session = False
         if session is None:
-            if self.active_sessions >= 5:
+            if self.active_sessions >= 50:
                 return [{"tool": "limit", "success": False,
                          "error": "Слишком много запросов. Попробуй через минуту."}]
             session = Session()
