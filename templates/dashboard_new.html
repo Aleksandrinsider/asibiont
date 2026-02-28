@@ -2338,7 +2338,7 @@
             startActivityPolling();
         }
 
-var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block']);
+var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block', 'agent-activity-block']);
 
         // ====== Activity Timeline & Polling ======
         let _activityPollTimer = null;
@@ -2365,22 +2365,32 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         function createTimelineItem(a, isNew) {
             const el = document.createElement('div');
             el.setAttribute('data-act-id', a.id || '');
-            el.style.cssText = 'display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F3F4F6;align-items:flex-start;' + (isNew ? 'animation:tlFadeIn 0.5s ease;' : '');
-            const icon = _tlIconMap[a.activity_type] || '⚡';
-            const time = _tlTimeAgo(a.created_at);
+            el.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;' + (isNew ? 'animation:tlFadeIn 0.3s ease;' : '');
+            const _tlTypeLabels = {
+                'task_added': t('act-task-added'), 'task_completed': t('act-task-completed'),
+                'goal_created': t('act-goal-created'), 'goal_updated': t('act-goal-updated'),
+                'goal_completed': t('act-goal-completed'), 'goal_deleted': t('act-goal-deleted'),
+                'profile_updated': t('act-profile-updated'), 'email': t('act-email'),
+                'delegation': t('act-delegation'), 'post_newsfeed': t('act-post-feed'),
+                'post_telegram': t('act-post-tg'), 'post_discord': t('act-post-discord'),
+                'content_campaign': t('act-content-campaign'), 'delegation_campaign': t('act-deleg-campaign'),
+                'background_research': t('act-bg-research'), 'background_research_ready': t('act-bg-research-ready'),
+            };
+            const typeLabel = _tlTypeLabels[a.activity_type] || a.activity_type;
+            const aDate = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
             el.innerHTML = `
-                <span style="font-size:15px;flex-shrink:0;margin-top:1px;">${icon}</span>
-                <div style="flex:1;min-width:0;">
-                    <div style="font-size:13px;color:#1F2328;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.title||''}</div>
-                    ${a.content ? `<div style="font-size:11px;color:#6C727F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content}</div>` : ''}
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span style="font-size:11px;color:#8C959F;flex-shrink:0;">${typeLabel}</span>
+                    <span style="font-size:13px;font-weight:500;color:#1F2328;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.title||''}</span>
+                    ${aDate ? `<span style="font-size:12px;color:#9CA3AF;flex-shrink:0;">${aDate}</span>` : ''}
                 </div>
-                <span style="font-size:11px;color:#9CA3AF;flex-shrink:0;margin-top:2px;white-space:nowrap;">${time}</span>
+                ${a.content ? `<div style="font-size:12px;color:#6C727F;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content}</div>` : ''}
             `;
             return el;
         }
 
         function renderTimeline(activities) {
-            const tl = document.getElementById('activity-timeline-feed');
+            const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
             const sorted = [...activities].sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
@@ -2388,7 +2398,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             if (latest && (!window._activityPollSince || latest > window._activityPollSince)) {
                 window._activityPollSince = latest;
             }
-            sorted.slice(0, 30).forEach(a => tl.appendChild(createTimelineItem(a, false)));
+            sorted.forEach(a => tl.appendChild(createTimelineItem(a, false)));
             if (!sorted.length) tl.innerHTML = '<div style="text-align:center;color:#9CA3AF;font-size:13px;padding:16px 0;">Активность пока пуста</div>';
         }
 
@@ -2404,15 +2414,11 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     if (!newActs.length) return;
                     const latestNew = newActs.reduce((m, a) => (a.created_at||'') > m ? (a.created_at||'') : m, window._activityPollSince || '');
                     window._activityPollSince = latestNew;
-                    const tl = document.getElementById('activity-timeline-feed');
+                    const tl = document.getElementById('agent-activity-timeline');
                     if (tl) {
                         newActs.sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1)
                                .forEach(a => { tl.insertBefore(createTimelineItem(a, true), tl.firstChild); });
                     }
-                    const dot = document.getElementById('activity-live-dot');
-                    if (dot) { dot.style.background='#22c55e'; setTimeout(()=>{ dot.style.background='#068487'; }, 1800); }
-                    const cnt = document.getElementById('activity-new-cnt');
-                    if (cnt) { const n = parseInt(cnt.textContent||'0') + newActs.length; cnt.textContent = '+' + n; cnt.style.display='inline'; setTimeout(()=>{ cnt.textContent=''; cnt.style.display='none'; }, 4000); }
                 } catch(e) { /* non-critical */ }
             }, 10000);
         }
@@ -2430,28 +2436,9 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 const emptyEl = document.getElementById('reports-empty');
                 if (!list) return;
                 list.innerHTML = '';
-
-                // ===== LIVE TIMELINE =====
-                const tlWrap = document.createElement('div');
-                tlWrap.style.cssText = 'margin-bottom:16px;';
-                tlWrap.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                        <span style="font-size:13px;font-weight:600;color:#1F2328;">Таймлайн агента</span>
-                        <span id="activity-live-dot" style="width:8px;height:8px;border-radius:50%;background:#068487;display:inline-block;transition:background 0.4s;"></span>
-                        <span style="font-size:11px;color:#9CA3AF;">live</span>
-                        <span id="activity-new-cnt" style="display:none;font-size:11px;background:#068487;color:#fff;border-radius:10px;padding:1px 7px;"></span>
-                    </div>
-                    <div id="activity-timeline-feed" style="max-height:280px;overflow-y:auto;"></div>
-                `;
-                list.appendChild(tlWrap);
-
-                // separator
-                const sep = document.createElement('div');
-                sep.style.cssText = 'border-top:2px solid #E5E7EB;margin:12px 0 16px;';
-                list.appendChild(sep);
+                const campaigns = data.campaigns || [];
                 const emails = data.emails || [];
                 const agentActivities = data.agent_activities || [];
-                renderTimeline(agentActivities);
                 const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0;
                 if (emptyEl) emptyEl.style.display = hasListItems ? 'none' : '';
 
@@ -3083,13 +3070,63 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     list.appendChild(emailsSec);
                 }
 
-                // === Agent Activities (delegations, posts, TG, etc.) ===
-                // Group by activity_type
-                const activityGroups = {};
-                agentActivities.forEach(a => {
-                    if (!activityGroups[a.activity_type]) activityGroups[a.activity_type] = [];
-                    activityGroups[a.activity_type].push(a);
-                });
+                // === Agent Activities — unified chronological timeline ===
+                if (agentActivities.length > 0) {
+                    const agentKey = 'agent-activity-block';
+                    const agentExpanded = _reportsExpandedSet.has(agentKey);
+                    const agentSection = document.createElement('div');
+                    agentSection.style.cssText = 'padding: 0; margin-bottom: 4px;';
+
+                    const agentHeader = document.createElement('div');
+                    agentHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                    const _ac = agentActivities.length;
+                    agentHeader.innerHTML = `
+                        <div style="display: flex; align-items: baseline; gap: 6px;">
+                            <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('agent-activity-title')}</span>
+                            <span style="font-size: 12px; color: #8C959F;">${_ac} ${_ac===1?t('act-item-1'):(_ac>=2&&_ac<=4?t('act-item-2'):t('act-item-5'))}</span>
+                        </div>
+                        <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${agentExpanded ? '0' : '-90'}deg);">
+                            <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                        </svg>
+                    `;
+
+                    const agentDetails = document.createElement('div');
+                    agentDetails.style.cssText = 'overflow: hidden; transition: max-height 0.3s ease;';
+
+                    const agentTimeline = document.createElement('div');
+                    agentTimeline.id = 'agent-activity-timeline';
+                    agentTimeline.style.cssText = 'border-left: 2px solid #E5E7EB; margin-left: 6px; padding-left: 10px; padding-top: 4px; padding-bottom: 2px;';
+                    agentDetails.appendChild(agentTimeline);
+
+                    agentHeader.onclick = () => {
+                        const chev = agentHeader.querySelector('.rpt-chev');
+                        const isCollapsed = agentDetails.style.maxHeight === '0px';
+                        if (isCollapsed) {
+                            agentDetails.style.overflow = 'hidden';
+                            agentDetails.style.maxHeight = agentDetails.scrollHeight + 'px';
+                            if (chev) chev.style.transform = 'rotate(0deg)';
+                            _reportsExpandedSet.add(agentKey);
+                            agentDetails.addEventListener('transitionend', function h() {
+                                if (_reportsExpandedSet.has(agentKey)) { agentDetails.style.maxHeight = 'none'; agentDetails.style.overflow = 'visible'; }
+                                agentDetails.removeEventListener('transitionend', h);
+                            });
+                        } else {
+                            agentDetails.style.overflow = 'hidden';
+                            agentDetails.style.maxHeight = agentDetails.scrollHeight + 'px';
+                            requestAnimationFrame(() => { agentDetails.style.maxHeight = '0px'; });
+                            if (chev) chev.style.transform = 'rotate(-90deg)';
+                            _reportsExpandedSet.delete(agentKey);
+                        }
+                    };
+
+                    if (agentExpanded) { agentDetails.style.maxHeight = 'none'; } else { agentDetails.style.maxHeight = '0px'; }
+
+                    agentSection.appendChild(agentHeader);
+                    agentSection.appendChild(agentDetails);
+                    list.appendChild(agentSection);
+                    renderTimeline(agentActivities);
+                }
+
                 const activityMeta = {
                     'email': {
                         label: t('act-email'),
@@ -3133,7 +3170,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     }
                 };
 
-                Object.entries(activityGroups).forEach(([type, items]) => {
+                // (activityMeta kept for status labels only, grouped view removed)
+                const _unused_activityGroups_forEach = ([type, items]) => {
                     const meta = activityMeta[type] || activityMeta['other'];
                     const grpKey = 'act-grp-' + type;
                     const grpExpanded = _reportsExpandedSet.has(grpKey);
@@ -3303,7 +3341,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     list.appendChild(section);
 
                     if (grpExpanded) { grpDetails.style.maxHeight = 'none'; } else { grpDetails.style.maxHeight = '0px'; }
-                });
+                };
 
                 if (window.applyLang) applyLang();
             } catch (err) {
