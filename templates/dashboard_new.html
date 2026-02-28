@@ -6962,7 +6962,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         let goalsLoadedOnce = false;
         async function loadGoalsProgress() {
             try {
-                const response = await fetch('/api/goals', { credentials: 'include' });
+                const response = await fetch('/api/goals', { credentials: 'include', cache: 'no-store' });
                 if (!response.ok) return;
                 const data = await response.json();
                 const section = document.getElementById('goals-progress-section');

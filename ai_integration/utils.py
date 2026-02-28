@@ -1140,7 +1140,7 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
 
     try:
         import aiohttp
-        timeout = aiohttp.ClientTimeout(total=30, connect=5)
+        timeout = aiohttp.ClientTimeout(total=8, connect=5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 'https://api.deepseek.com/chat/completions',

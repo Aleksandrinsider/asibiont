@@ -8365,15 +8365,14 @@ async def api_profile_handler(request):
                 session_db.commit()
                 logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")
 
-                # Background normalization for cross-language matching
+                # Background normalization for cross-language matching (non-blocking)
                 try:
-                    from ai_integration.utils import normalize_profile_fields
-                    normalized = await normalize_profile_fields(profile)
-                    if normalized:
-                        session_db.commit()
-                        logger.info(f"[API PROFILE POST] Profile normalized for user {user_id}")
+                    from ai_integration.utils import normalize_profile_background
+                    import asyncio as _asyncio
+                    _asyncio.ensure_future(normalize_profile_background(user.id))
+                    logger.info(f"[API PROFILE POST] Background normalization scheduled for user {user_id}")
                 except Exception as norm_err:
-                    logger.warning(f"[API PROFILE POST] Normalization failed (non-critical): {norm_err}")
+                    logger.warning(f"[API PROFILE POST] Failed to schedule normalization: {norm_err}")
 
                 return web.json_response({'success': True, 'message': 'Profile updated'})
             finally:
