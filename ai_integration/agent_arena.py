@@ -384,10 +384,7 @@ async def _global_posting_loop():
 
     # Ждём завершения seed перед первым постом (не конкурируем с сидингом)
     await _seed_done.wait()
-    # Дополнительная пауза после seed — первый пост через 15-35 мин
-    wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
-    logger.info("[ARENA] First post in %ds (%.1fmin)", wait_sec, wait_sec / 60)
-    await asyncio.sleep(wait_sec)
+    logger.info("[ARENA] Seed done — posting immediately on startup")
 
     while True:
         try:
