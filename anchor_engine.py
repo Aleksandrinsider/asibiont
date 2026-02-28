@@ -115,6 +115,8 @@ BATCH_GROUPS = {
     'post_opportunity': 'posting',
     'channel_post': 'posting',
     'discord_post': 'posting',
+    'weekly_milestone': 'milestones',
+    'goal_milestone': 'milestones',
     'event_discovery': 'insights',
     'contact_activity': 'contacts',
     'incoming_message': 'engagement',
@@ -662,6 +664,10 @@ class AnchorEngine:
         # --- ПОСТЫ В DISCORD (если настроен webhook) ---
         if getattr(user, 'discord_webhook', None):
             anchors.extend(self._scan_discord_post(user, profile, session, now_utc))
+
+        # --- МАЙЛСТОНЫ: недельные итоги + прогресс целей ---
+        anchors.extend(self._scan_weekly_milestone(user, session, now_utc))
+        anchors.extend(self._scan_goal_milestone(user, session, now_utc))
 
         # --- EMAIL OUTREACH (автономная отправка + фоллоу-апы + уведомления о reply) ---
         anchors.extend(self._scan_email_outreach(user, session, now_utc))
@@ -2648,6 +2654,114 @@ class AnchorEngine:
             cooldown_hours=20,
             batch_group='posting',
         ))
+
+        return anchors
+
+    def _scan_weekly_milestone(self, user, session, now_utc) -> list:
+        """Срабатывает в пятн-воск, если за неделю завершено >= 5 задач.
+
+        Όднажды в неделю, социальная валидация продуктивности.
+        """
+        anchors = []
+        user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
+        user_now = datetime.now(user_tz)
+
+        # Пятн-воск: 5-7 день недели
+        if user_now.weekday() not in (4, 5, 6):  # 0=пн, 4=пт, 5=сб, 6=вс
+            return anchors
+
+        # Границы недели (ISO: пн-вс)
+        days_since_monday = user_now.weekday()  # 0=пн
+        week_start_user = user_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_since_monday)
+        week_start_utc = week_start_user.astimezone(pytz.UTC)
+
+        week_key = user_now.strftime('%G-W%V')  # ISO week, e.g. 2026-W09
+        source = f'weekly_milestone:{week_key}'
+
+        # Считаем завершённые за неделю
+        completed_count = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'completed',
+            Task.actual_completion_time >= week_start_utc,
+        ).count()
+
+        if completed_count < 5:
+            return anchors
+
+        # Собираем названия задач для контекста AI
+        completed_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'completed',
+            Task.actual_completion_time >= week_start_utc,
+        ).order_by(Task.actual_completion_time.desc()).limit(7).all()
+        titles = [t.title for t in completed_tasks]
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='weekly_milestone',
+            source=source,
+            topic=_t(user,
+                     f'Недельный итог — {completed_count} задач завершено!',
+                     f'Weekly milestone — {completed_count} tasks completed!'),
+            priority=AnchorPriority.MEDIUM,
+            data=json.dumps({
+                'completed_count': completed_count,
+                'week': week_key,
+                'titles': titles,
+            }, ensure_ascii=False),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=48),
+            cooldown_hours=120,  # не чаще 1 раза в 5 дней
+            batch_group='milestones',
+        ))
+        return anchors
+
+    def _scan_goal_milestone(self, user, session, now_utc) -> list:
+        """Срабатывает когда цель пересекает 25 / 50 / 75 / 100 процентов.
+
+        Каждый порог срабатывает ровно один раз (идентификатор source = goal:{id}:{pct}).
+        """
+        anchors = []
+        thresholds = (25, 50, 75, 100)
+
+        active_goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status == 'active',
+            Goal.progress_percentage > 0,
+        ).all()
+
+        for goal in active_goals:
+            pct = goal.progress_percentage or 0
+            # Находим высший пройденный порог
+            hit_threshold = None
+            for t in sorted(thresholds, reverse=True):
+                if pct >= t:
+                    hit_threshold = t
+                    break
+            if hit_threshold is None:
+                continue
+
+            source = f'goal_milestone:{goal.id}:{hit_threshold}'
+
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='goal_milestone',
+                source=source,
+                topic=_t(user,
+                         f'Цель «{goal.title[:50]}» — {hit_threshold}% выполнено!',
+                         f'Goal «{goal.title[:50]}» — {hit_threshold}% done!'),
+                priority=AnchorPriority.MEDIUM,
+                data=json.dumps({
+                    'goal_id': goal.id,
+                    'title': goal.title,
+                    'progress': pct,
+                    'milestone': hit_threshold,
+                }, ensure_ascii=False),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(days=3),
+                cooldown_hours=168,  # 7 дней — порог не повторится
+                batch_group='milestones',
+            ))
 
         return anchors
 
