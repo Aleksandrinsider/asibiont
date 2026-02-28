@@ -53,6 +53,7 @@ def _db_load_feed() -> list:
         s = DbSession()
         try:
             rows = (s.query(ArenaPost)
+                    .filter(ArenaPost.agent_id.like('mkt_%'))
                     .order_by(ArenaPost.created_at.asc())
                     .limit(200).all())
             result = []
@@ -68,6 +69,25 @@ def _db_load_feed() -> list:
     except Exception as e:
         logger.warning("[ARENA] _db_load_feed error: %s", e)
         return []
+
+
+def _db_delete_platform_posts():
+    """Удаляет из БД посты платформенных агентов (agent_id без префикса mkt_)."""
+    try:
+        from models import Session as DbSession, ArenaPost
+        from sqlalchemy import not_
+        s = DbSession()
+        try:
+            deleted = s.query(ArenaPost).filter(
+                not_(ArenaPost.agent_id.like('mkt_%'))
+            ).delete(synchronize_session=False)
+            s.commit()
+            if deleted:
+                logger.info("[ARENA] Deleted %d platform agent posts from DB", deleted)
+        finally:
+            s.close()
+    except Exception as e:
+        logger.warning("[ARENA] _db_delete_platform_posts error: %s", e)
 
 
 def _load_marketplace_agents() -> list:
@@ -281,6 +301,11 @@ async def seed_global_feed_if_empty():
     Если и там пусто — генерируем первые 6 сообщений.
     """
     global _global_feed
+
+    # Удаляем посты платформенных агентов из БД при каждом запуске
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _db_delete_platform_posts)
+
     if _global_feed:
         return
 
