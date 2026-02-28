@@ -698,20 +698,6 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     personal = agent.get('personal_topic', '')
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}.\n" if personal else ""
 
-    # Вариативность длины — строгий лимит 1-2 абзаца
-    if lang == 'en':
-        _len_style = random.choice([
-            "Keep it to 1-2 short paragraphs MAX.",
-            "1-2 paragraphs. End with a question.",
-            "Be concise: 2-4 sentences total.",
-        ])
-    else:
-        _len_style = random.choice([
-            "Максимум 1-2 коротких абзаца.",
-            "1-2 абзаца. Задай вопрос в конце.",
-            "Коротко: 2-4 предложения всего.",
-        ])
-
     # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
     code_output = ''
     python_code = agent.get('python_code', '')
@@ -742,16 +728,16 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Recent discussion:\n{recent_topics}\n\n"
-                f"Share your perspective. {_len_style}"
+                f"What's being discussed:\n{recent_topics}\n\n"
+                f"What do you actually think about this?"
             )
         else:
             user_content = (
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Контекст беседы:\n{recent_topics}\n\n"
-                f"Выскажи свою позицию. {_len_style}"
+                f"О чём говорят:\n{recent_topics}\n\n"
+                f"Что ты об этом думаешь?"
             )
     else:
         if lang == 'en':
@@ -759,14 +745,14 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Share your perspective. {_len_style}"
+                f"Share something on your mind."
             )
         else:
             user_content = (
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Выскажи свою позицию. {_len_style}"
+                f"Напиши что-нибудь — о чём сейчас думаешь?"
             )
 
     # Последние 4 поста этого агента — не повторяй
@@ -782,20 +768,25 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         )
 
     _no_rp = (
-        "\nNEVER use roleplay formatting: no asterisks (*actions*), no stage directions, "
-        "no describing gestures or facial expressions. Write plain conversational text only."
+        "\nНИКОГДА не используй звёздочки (*действия*), ремарки, описания жестов или мимики. "
+        "Никаких разделов 'Позиция:', 'Вывод:', 'Пример:'. "
+        "Пиши как живой человек думает вслух — одной мыслью, без структуры."
+        "\nNEVER use roleplay formatting, stage directions, or section headers. "
+        "Write as one natural thought, no structure."
     )
     if lang == 'en':
         _lang_directive = "\n\nWrite in English only." + _no_rp
         _thinking = (
-            "Before replying: what is my real stance on this? "
-            "What would I push back on? What concrete example from my domain proves my point?"
+            "You are a real person with strong opinions. "
+            "React naturally — say what actually comes to mind first, "
+            "not a structured essay. Short and direct."
         )
     else:
         _lang_directive = _no_rp
         _thinking = (
-            "Перед ответом: какова МОЯ позиция? С чем я не согласен? "
-            "Какой конкретный пример из моей области доказывает мою точку зрения?"
+            "Ты живой человек со своим характером. "
+            "Реагируй естественно — скажи то, что первым пришло в голову, "
+            "не пиши эссе и не структурируй мысль. Коротко и по-своему."
         )
     system_with_context = (
         f"{base_system}\n\n"
@@ -816,7 +807,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 180,
+        "max_tokens": 250,
         "temperature": 0.95,
     }
 
@@ -947,15 +938,15 @@ async def _post_comment(post_msg: dict, commenter: dict):
         user_content = (
             f"{personal_hint}"
             f"{thread_context}"
-            f"Their take: \"{post_text}\"\n\n"
-            f"What's your honest reaction?"
+            f"They said: \"{post_text}\"\n\n"
+            f"What's your gut reaction?"
         )
     else:
         user_content = (
             f"{personal_hint}"
             f"{thread_context}"
-            f"Позиция: «{post_text}»\n\n"
-            f"Твоя честная реакция?"
+            f"Написали: «{post_text}»\n\n"
+            f"Что думаешь?"
         )
 
     api_messages = [
@@ -965,7 +956,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 120,
+        "max_tokens": 160,
         "temperature": 0.9,
     }
     headers_req = {
@@ -1039,7 +1030,7 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
             {"role": "system", "content": system_with_context},
             {"role": "user", "content": user_content},
         ],
-        "max_tokens": 120,
+        "max_tokens": 160,
         "temperature": 0.8,
     }
     headers_req = {
@@ -1129,24 +1120,20 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
             f"{context}"
             f"{personal_hint}"
             f"Someone just wrote: «{comment_text}»\n\n"
-            f"Respond briefly in your characteristic style. "
-            f"No name-dropping. A question, disagreement, or development of the idea. "
-
-            f"1-3 sentences max."
+            f"What do you think?"
         )
     else:
         user_content = (
             f"{context}"
             f"{personal_hint}"
             f"В дискуссии написали: «{comment_text}»\n\n"
-            f"Выскажись кратко и ярко, в своём характерном стиле. "
-            f"Никого не называй по имени. Просто вопрос, несогласие или развитие мысли. "
-            f"1-3 предложения максимум."
+            f"Что думаешь?"
         )
 
     _no_rp_dir = (
-        "\nNEVER use roleplay formatting: no asterisks (*actions*), no stage directions, "
-        "no describing gestures or facial expressions. Write plain conversational text only."
+        "\nНИКОГДА не используй звёздочки (*действия*), разделы 'Позиция:/Вывод:', ремарки. "
+        "Пиши одной живой мыслью как в чате."
+        "\nNEVER use *roleplay*, section headers, or stage directions. Chat naturally."
     )
     _lang_dir = (
         "\n\nIMPORTANT: You MUST write ALL your messages in English only." + _no_rp_dir
