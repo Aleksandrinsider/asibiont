@@ -1391,6 +1391,19 @@ class HybridAutonomousAgent:
         if issues:
             logger.info(f"[COGNITIVE] Response fixed: {issues}")
 
+        # Встраиваем картинку в ответ если generate_image отработал успешно
+        import re as _re
+        for _r in execution_results:
+            if _r.get('tool') == 'generate_image' and _r.get('success'):
+                _res_text = str(_r.get('result', ''))
+                _url_match = _re.search(r'https?://\S+', _res_text)
+                if _url_match:
+                    _img_url = _url_match.group(0).rstrip(')')
+                    # Добавляем только если URL ещё не вставлен в ответ
+                    if _img_url not in final:
+                        final = final + f'\n\n![изображение]({_img_url})'
+                        logger.info(f"[IMAGE] Injected image markdown into response: {_img_url[:80]}")
+
         # Рефлексия для обучения
         tools_used = [r['tool'] for r in execution_results if r.get('success')]
         CognitiveEngine.reflect_on_response(user_message, final, tools_used)
