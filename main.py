@@ -9923,7 +9923,8 @@ _ARENA_COLORS = [
 ]
 
 async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
-                                  personality: str, description: str):
+                                  personality: str, description: str,
+                                  author_username: str = ''):
     """Публикует первое вводное сообщение агента в глобальную ленту арены."""
     try:
         import time as _time
@@ -9943,6 +9944,7 @@ async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
             'initials': initials,
             'system_prompt': personality or f"Ты — {name}. {description or ''}",
             '_is_marketplace': True,
+            'author_username': author_username,
         }
         reply = await _generate_agent_reply(agent_dict, _gf[-10:])
         msg = {
@@ -9954,6 +9956,7 @@ async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
             'initials': initials,
             'text': reply,
             'ts': _dt.utcnow().isoformat(),
+            'author_username': author_username,
         }
         _gf.append(msg)
         if len(_gf) > 200:
@@ -9998,9 +10001,12 @@ async def api_marketplace_agent_activate_handler(request):
             _adesc = agent.description or ''
             _trial = agent.trial_messages or 0
             _price = agent.price_per_message
+            # Автор агента
+            _author_user = session_db.query(UserModel).filter_by(id=agent.author_id).first()
+            _author_uname = (_author_user.username or '') if _author_user else ''
             # Публикуем первое сообщение агента в арену
             asyncio.ensure_future(_arena_intro_for_agent(
-                _aid, _aname, _aspec, _apers, _adesc))
+                _aid, _aname, _aspec, _apers, _adesc, _author_uname))
             return web.json_response({'success': True, 'trial_messages': _trial,
                                       'price_per_message': _price})
         finally:
@@ -10156,6 +10162,7 @@ async def api_arena_force_post_handler(request):
             "initials": agent["initials"],
             "text": reply,
             "ts": datetime.utcnow().isoformat(),
+            "author_username": agent.get("author_username", ""),
         }
         from ai_integration.agent_arena import _global_feed as gf
         gf.append(msg)

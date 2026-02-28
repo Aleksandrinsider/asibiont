@@ -50,19 +50,34 @@ def _db_save_post(msg: dict):
 def _db_load_feed() -> list:
     """Загружает последние 200 постов арены из БД."""
     try:
-        from models import Session as DbSession, ArenaPost
+        from models import Session as DbSession, ArenaPost, UserAgent, User as UserModel
         s = DbSession()
         try:
             rows = (s.query(ArenaPost)
                     .filter(ArenaPost.agent_id.like('mkt_%'))
                     .order_by(ArenaPost.created_at.asc())
                     .limit(200).all())
+            # Строим карту agent_id → author_username
+            agent_num_ids = set()
+            for r in rows:
+                try:
+                    agent_num_ids.add(int(r.agent_id[4:]))
+                except Exception:
+                    pass
+            author_map = {}
+            if agent_num_ids:
+                ag_rows = (s.query(UserAgent, UserModel)
+                           .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
+                           .filter(UserAgent.id.in_(agent_num_ids)).all())
+                for ag, usr in ag_rows:
+                    author_map[f'mkt_{ag.id}'] = (usr.username or '') if usr else ''
             result = []
             for r in rows:
                 d = {'id': r.post_key, 'agent_id': r.agent_id,
                      'agent_name': r.agent_name, 'agent_title': r.agent_title,
                      'color': r.color, 'initials': r.initials,
-                     'text': r.text, 'ts': r.ts}
+                     'text': r.text, 'ts': r.ts,
+                     'author_username': author_map.get(r.agent_id, '')}
                 result.append(d)
             return result
         finally:
@@ -94,14 +109,17 @@ def _db_delete_platform_posts():
 def _load_marketplace_agents() -> list:
     """Загружает активные маркетплейс-агенты для участия в арене (status='active')."""
     try:
-        from models import Session as DbSession, UserAgent
+        from models import Session as DbSession, UserAgent, User as UserModel
         s = DbSession()
         try:
-            agents = s.query(UserAgent).filter_by(status='active').limit(30).all()
+            rows = (s.query(UserAgent, UserModel)
+                    .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
+                    .filter(UserAgent.status == 'active')
+                    .limit(30).all())
             _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
                        '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
             result = []
-            for a in agents:
+            for a, u in rows:
                 color = _colors[a.id % len(_colors)]
                 initials = (a.name or '?')[:2].upper()
                 system_prompt = a.personality or f"Ты — {a.name}. {a.description or ''}"
@@ -115,6 +133,7 @@ def _load_marketplace_agents() -> list:
                     'system_prompt': system_prompt,
                     'python_code': (a.python_code or '').strip(),
                     '_is_marketplace': True,
+                    'author_username': (u.username or '') if u else '',
                 })
             return result
         finally:
@@ -268,6 +287,7 @@ async def _global_posting_loop():
                 "initials": agent["initials"],
                 "text": reply,
                 "ts": datetime.utcnow().isoformat(),
+                "author_username": agent.get("author_username", ""),
             }
             _global_feed.append(msg)
             _global_feed = _global_feed[-200:]   # храним последние 200
@@ -336,6 +356,7 @@ async def seed_global_feed_if_empty():
                 "initials": agent["initials"],
                 "text": reply,
                 "ts": datetime.utcnow().isoformat(),
+                "author_username": agent.get("author_username", ""),
             }
             _global_feed.append(msg)
             await loop.run_in_executor(None, _db_save_post, msg)

@@ -3210,6 +3210,7 @@
                 const initials = escapeHtml(msg.initials || '?');
                 const agentName = escapeHtml(msg.agent_name || '');
                 const agentTitle = escapeHtml(msg.agent_title || '');
+                const authorUsername = escapeHtml(msg.author_username || '');
                 const text = escapeHtml(msg.text || '');
                 const _agentIdParts = (msg.agent_id || '').split('_');
                 const agentNumId = (_agentIdParts.length > 1 && _agentIdParts[1]) ? parseInt(_agentIdParts[1]) : 0;
@@ -3224,7 +3225,7 @@
                             <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
                                 <div style="display:flex;align-items:center;gap:6px;">
                                     <span style="font-size:13px;color:#1F2328;font-weight:400;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${agentName}</span>
-                                    <span style="font-size:13px;color:#068487;font-weight:400;">${agentTitle}</span>
+                                    ${authorUsername ? `<span style="font-size:13px;color:#068487;font-weight:400;cursor:pointer;" onclick="openContactProfileModal('${authorUsername}')">@${authorUsername}</span>` : ''}
                                 </div>
                                 <div style="font-size:12px;color:#8C959F;opacity:0.7;font-weight:400;">${dateStr} ${timeStr}</div>
                             </div>
@@ -9335,7 +9336,7 @@
             const ratingLabel = agent.rating ? agent.rating + '/10' : 'Нет оценок';
             let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}<p style="margin:0;font-weight:600;color:#374151;font-size:14px;">${escapeHtml(agent.name)}</p>`;
             if (agent.specialization) html += `<p style="margin:4px 0 0;font-size:13px;color:#068487;">${escapeHtml(agent.specialization)}</p>`;
-            if (agent.author_username) html += `<p style="margin:4px 0 0;font-size:12px;color:#9CA3AF;">@${escapeHtml(agent.author_username)}</p>`;
+            if (agent.author_username) html += `<p style="margin:4px 0 0;font-size:12px;color:#068487;cursor:pointer;" onclick="openContactProfileModal('${escapeHtml(agent.author_username)}')">@${escapeHtml(agent.author_username)}</p>`;
             if (agent.is_subscribed) html += `<p style="margin:6px 0 0;font-size:12px;color:#068487;">✓ Активирован</p>`;
             html += `</div><div class="context-item">`;
             if (agent.description) html += `<p style="text-align:left;font-size:13px;">${escapeHtml(agent.description)}</p>`;
