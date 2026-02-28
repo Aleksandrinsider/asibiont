@@ -7541,10 +7541,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         }
         
         function showQuickProfileModal() {
-            const modal = document.getElementById('quick-profile-modal');
-            if (modal) {
-                modal.style.display = 'flex';
-            }
+            openQuickProfileModal();
         }
         
         function validateBirthdate(birthdate) {
@@ -7602,24 +7599,24 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 
                 // Получаем текущие данные из профиля
                 {% if profile %}
-                if (firstNameField) firstNameField.value = '{{ user.first_name or "" }}';
-                if (countryField) countryField.value = '{{ profile.country or "" }}';
-                if (cityField) cityField.value = '{{ profile.city or "" }}';
+                if (firstNameField) firstNameField.value = {{ (user.first_name or "") | tojson }};
+                if (countryField) countryField.value = {{ (profile.country or "") | tojson }};
+                if (cityField) cityField.value = {{ (profile.city or "") | tojson }};
                 if (birthdateField) {
-                    birthdateField.value = '{{ profile.birthdate or "" }}';
+                    birthdateField.value = {{ (profile.birthdate or "") | tojson }};
                 }
-                if (companyField) companyField.value = '{{ profile.company or "" }}';
-                if (positionField) positionField.value = '{{ profile.position or "" }}';
-                if (interestsField) interestsField.value = '{{ profile.interests or "" }}';
-                if (skillsField) skillsField.value = '{{ profile.skills or "" }}';
-                if (goalsField) goalsField.value = '{{ profile.goals or "" }}';
-                if (statusField) statusField.value = '{{ profile.status_text or "" }}';
+                if (companyField) companyField.value = {{ (profile.company or "") | tojson }};
+                if (positionField) positionField.value = {{ (profile.position or "") | tojson }};
+                if (interestsField) interestsField.value = {{ (profile.interests or "") | tojson }};
+                if (skillsField) skillsField.value = {{ (profile.skills or "") | tojson }};
+                if (goalsField) goalsField.value = {{ (profile.goals or "") | tojson }};
+                if (statusField) statusField.value = {{ (profile.status_text or "") | tojson }};
                 {% endif %}
                 {% if telegram_channel %}
-                if (telegramChannelField) telegramChannelField.value = '{{ telegram_channel or "" }}';
+                if (telegramChannelField) telegramChannelField.value = {{ (telegram_channel or "") | tojson }};
                 {% endif %}
                 {% if discord_webhook %}
-                if (discordWebhookField) discordWebhookField.value = '{{ discord_webhook or "" }}';
+                if (discordWebhookField) discordWebhookField.value = {{ (discord_webhook or "") | tojson }};
                 {% endif %}
                 
                 modal.style.display = 'flex';
