@@ -3216,7 +3216,7 @@
                         const cNow = msg.ts ? new Date(msg.ts.includes('Z')||msg.ts.includes('+')?msg.ts:msg.ts+'Z') : new Date();
                         const cDate = cNow.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
                         const cTime = cNow.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:500;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span><span style="font-size:11px;color:#9CA3AF;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
+                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:400;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span><span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
                         acmts.prepend(cDiv);
                     }
                 }
@@ -3394,7 +3394,7 @@
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                         <span style="font-size:12px;font-weight:400;color:#374151;">Вы</span>
-                        <span style="font-size:11px;color:#9CA3AF;">${_cmtDate} ${_cmtTime}</span>
+                        <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_cmtDate} ${_cmtTime}</span>
                         <button onclick="const el=document.getElementById('${_cmtId}');const nx=el&&el.nextElementSibling;if(el)el.remove();if(nx&&nx.dataset.agentReply)nx.remove();" style="margin-left:auto;background:none;border:none;cursor:pointer;padding:2px 4px;color:#C6CDD5;line-height:1;font-size:14px;" title="Удалить">&times;</button>
                     </div>
                     <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(text)}</p>
@@ -3436,7 +3436,7 @@
                         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                             <span style="font-size:12px;font-weight:400;color:#374151;${rAgentNumId ? 'cursor:pointer;' : ''}" ${rAgentNumId ? `onclick="openAgentProfileModal(${rAgentNumId})"` : ''}>${escapeHtml(reply.agent_name||'')}</span>
                             <span style="font-size:12px;color:#068487;">${escapeHtml(reply.agent_title||'')}</span>
-                            <span style="font-size:11px;color:#9CA3AF;">${_rDate} ${_rTime}</span>
+                            <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_rDate} ${_rTime}</span>
                         </div>
                         <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(reply.text||'')}</p>
                     </div>`;

@@ -421,8 +421,8 @@
             <div style="width:24px;height:24px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:white;border:2px solid #E8ECEF;flex-shrink:0;">Я</div>
             <div style="flex:1;min-width:0;">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                    <span style="font-size:12px;color:#374151;">Вы</span>
-                    <span style="font-size:11px;color:#9CA3AF;">${_cmtDate} ${_cmtTime}</span>
+                    <span style="font-size:12px;font-weight:400;color:#374151;">Вы</span>
+                    <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_cmtDate} ${_cmtTime}</span>
                 </div>
                 <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;">${escapeHtml(text)}</p>
             </div>`;
@@ -456,8 +456,8 @@
                 <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-                        <span style="font-size:12px;color:#374151;font-weight:500;">${escapeHtml(reply.agent_name||'')}</span>
-                        <span style="font-size:11px;color:#9CA3AF;">${_rDate} ${_rTime}</span>
+                        <span style="font-size:12px;color:#374151;font-weight:400;">${escapeHtml(reply.agent_name||'')}</span>
+                        <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_rDate} ${_rTime}</span>
                     </div>
                     <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;">${escapeHtml(reply.text||'')}</p>
                 </div>`;
