@@ -383,6 +383,21 @@ def _migrate_email_contacts(session, inspector):
         })
 
 
+def _migrate_marketplace(session, inspector):
+    """Создаёт таблицы маркетплейса агентов и скриптов (идемпотентно)."""
+    from models import Base, engine as _engine
+    # Создаём таблицы через metadata (create_all пропускает существующие)
+    tables_to_create = ['user_agents', 'agent_subscriptions', 'agent_runs',
+                        'user_scripts', 'script_installs', 'script_runs']
+    for tbl in tables_to_create:
+        if not inspector.has_table(tbl):
+            try:
+                Base.metadata.tables[tbl].create(bind=_engine, checkfirst=True)
+                logger.info(f"[MIGRATION] Created table {tbl}")
+            except Exception as e:
+                logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -402,6 +417,7 @@ def run_migrations():
         _migrate_notes(session, inspector)
         _migrate_email_campaigns(session, inspector)
         _migrate_email_contacts(session, inspector)
+        _migrate_marketplace(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

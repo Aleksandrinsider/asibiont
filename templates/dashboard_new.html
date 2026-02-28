@@ -977,6 +977,10 @@
                                 <span id="notes-link" onclick="event.stopPropagation(); switchToNotes()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="notes">Заметки</span>
                                 </span>
+                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span id="marketplace-link" onclick="event.stopPropagation(); switchToMarketplace()" style="cursor: pointer; opacity: 0.5;">
+                                    🛒 <span>Маркетплейс</span>
+                                </span>
                                 {% endif %}
                             </h3>
                         </div>
@@ -1074,6 +1078,54 @@
                                     <p style="margin: 0 auto; font-size: 13px; color: #9CA3AF; max-width: 340px; line-height: 1.5;" data-i18n="reports-empty">Действий агента пока нет</p>
                                 </div>
                             </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Маркетплейс агентов и скриптов -->
+                        {% if logged_in %}
+                        <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px;">
+                            <!-- Табы -->
+                            <div style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap;">
+                                <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" style="background: #068487; color: white; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">🤖 Агенты</button>
+                                <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" style="background: #F3F4F6; color: #374151; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">⚡ Скрипты</button>
+                                <button id="mp-tab-my" onclick="mpSwitchTab('my')" style="background: #F3F4F6; color: #374151; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">📁 Мои</button>
+                                <button id="mp-tab-create" onclick="mpSwitchTab('create')" style="background: #F3F4F6; color: #374151; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">+ Создать</button>
+                                <div style="flex: 1; min-width: 120px;">
+                                    <input id="mp-search" type="text" placeholder="Поиск..." oninput="mpSearch(this.value)"
+                                           style="width: 100%; box-sizing: border-box; padding: 6px 10px; font-size: 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-family: inherit; outline: none;">
+                                </div>
+                            </div>
+
+                            <!-- Список агентов -->
+                            <div id="mp-agents-panel">
+                                <div id="mp-agents-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
+                                    <div style="color: #9CA3AF; font-size: 13px; grid-column: 1/-1; text-align: center; padding: 32px 0;">Загрузка агентов...</div>
+                                </div>
+                            </div>
+
+                            <!-- Список скриптов -->
+                            <div id="mp-scripts-panel" style="display: none;">
+                                <div id="mp-scripts-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
+                                    <div style="color: #9CA3AF; font-size: 13px; grid-column: 1/-1; text-align: center; padding: 32px 0;">Загрузка скриптов...</div>
+                                </div>
+                            </div>
+
+                            <!-- Мои публикации -->
+                            <div id="mp-my-panel" style="display: none;">
+                                <div id="mp-my-content" style="font-size: 13px; color: #374151;">Загрузка...</div>
+                            </div>
+
+                            <!-- Форма создания -->
+                            <div id="mp-create-panel" style="display: none;">
+                                <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+                                    <button onclick="mpShowCreateAgent()" style="flex: 1; padding: 8px; background: #F0FDFA; border: 1px solid #068487; border-radius: 6px; color: #068487; font-size: 12px; cursor: pointer; font-family: inherit;">🤖 Создать агента</button>
+                                    <button onclick="mpShowCreateScript()" style="flex: 1; padding: 8px; background: #F0F9FF; border: 1px solid #0284C7; border-radius: 6px; color: #0284C7; font-size: 12px; cursor: pointer; font-family: inherit;">⚡ Создать скрипт</button>
+                                </div>
+                                <div id="mp-create-form"></div>
+                            </div>
+
+                            <!-- Статус-сообщение -->
+                            <div id="mp-status" style="display: none; margin-top: 12px; padding: 8px 12px; border-radius: 6px; font-size: 12px;"></div>
                         </div>
                         {% endif %}
 
@@ -2422,14 +2474,287 @@
             startActivityPolling();
         }
 
-var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block', 'agent-activity-block']);
+        // ====== MARKETPLACE ======
+        let _mpCurrentTab = 'agents';
+        let _mpSearchTimer = null;
 
-        // ====== Activity Timeline & SSE ======
+        // Activity state
+        var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block', 'agent-activity-block']);
         let _activitySSE = null;
         let _activityPollTimer = null;
         window._activityPollSince = null;
         window._activityLastId = 0;
 
+        function switchToMarketplace() {
+            const allViews = ['chat-view','feed-view','notes-view','reports-view','marketplace-view'];
+            allViews.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.classList.remove('active'); el.style.zIndex = '0'; }
+            });
+            const mpView = document.getElementById('marketplace-view');
+            if (!mpView) return;
+            mpView.classList.add('active');
+            mpView.style.zIndex = '1';
+            currentView = 'marketplace';
+
+            const linkIds = ['chat-link','feed-link','notes-link','reports-link','marketplace-link','contacts-link'];
+            linkIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.opacity = '0.5';
+            });
+            const mpLink = document.getElementById('marketplace-link');
+            if (mpLink) mpLink.style.opacity = '1';
+
+            mpSwitchTab(_mpCurrentTab);
+        }
+
+        function mpSwitchTab(tab) {
+            _mpCurrentTab = tab;
+            const tabs = ['agents','scripts','my','create'];
+            tabs.forEach(t => {
+                const btn = document.getElementById('mp-tab-' + t);
+                const panel = document.getElementById('mp-' + t + '-panel');
+                if (btn) btn.style.background = t === tab ? '#068487' : '#F3F4F6';
+                if (btn) btn.style.color = t === tab ? 'white' : '#374151';
+                if (panel) panel.style.display = t === tab ? '' : 'none';
+            });
+            if (tab === 'agents') mpLoadAgents();
+            else if (tab === 'scripts') mpLoadScripts();
+            else if (tab === 'my') mpLoadMy();
+        }
+
+        function mpSearch(val) {
+            clearTimeout(_mpSearchTimer);
+            _mpSearchTimer = setTimeout(() => {
+                if (_mpCurrentTab === 'agents') mpLoadAgents(val);
+                else if (_mpCurrentTab === 'scripts') mpLoadScripts(val);
+            }, 400);
+        }
+
+        async function mpLoadAgents(search) {
+            const list = document.getElementById('mp-agents-list');
+            if (!list) return;
+            list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Загрузка...</div>';
+            try {
+                let url = '/api/marketplace/agents';
+                if (search) url += '?search=' + encodeURIComponent(search);
+                const r = await fetch(url);
+                const data = await r.json();
+                if (!data.agents || !data.agents.length) {
+                    list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Агентов пока нет</div>';
+                    return;
+                }
+                list.innerHTML = data.agents.map(a => `
+                    <div style="border:1px solid #D1D9E0;border-radius:8px;padding:12px;background:white;display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div style="width:36px;height:36px;border-radius:50%;background:#F0FDFA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
+                                ${a.avatar_url ? `<img src="${a.avatar_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">` : '🤖'}
+                            </div>
+                            <div>
+                                <div style="font-size:13px;font-weight:600;color:#374151;">${escapeHtml(a.name)}</div>
+                                <div style="font-size:11px;color:#6B7280;">${escapeHtml(a.specialization || '')}</div>
+                            </div>
+                        </div>
+                        <div style="font-size:12px;color:#6B7280;line-height:1.5;">${escapeHtml((a.description || '').substring(0,120))}${a.description && a.description.length > 120 ? '...' : ''}</div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">
+                            <div style="font-size:11px;color:#6B7280;">
+                                💬 ${a.price_per_message} тк/сооб
+                                ${a.trial_messages ? ` · ${a.trial_messages} бесплатно` : ''}
+                                ${a.rating ? ` · ⭐${a.rating}` : ''}
+                            </div>
+                            <button onclick="mpSwitchAgent('${escapeHtml(a.slug)}')" style="padding:5px 12px;background:${a.is_subscribed ? '#F3F4F6' : '#068487'};color:${a.is_subscribed ? '#374151' : 'white'};border:1px solid ${a.is_subscribed ? '#D1D9E0' : '#068487'};border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit;">
+                                ${a.is_subscribed ? '✓ Подключён' : 'Подключить'}
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                list.innerHTML = '<div style="color:#DC2626;font-size:13px;grid-column:1/-1;text-align:center;padding:24px 0">Ошибка загрузки: ' + e.message + '</div>';
+            }
+        }
+
+        async function mpLoadScripts(search) {
+            const list = document.getElementById('mp-scripts-list');
+            if (!list) return;
+            list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Загрузка...</div>';
+            try {
+                let url = '/api/marketplace/scripts';
+                if (search) url += '?search=' + encodeURIComponent(search);
+                const r = await fetch(url);
+                const data = await r.json();
+                if (!data.scripts || !data.scripts.length) {
+                    list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Скриптов пока нет</div>';
+                    return;
+                }
+                list.innerHTML = data.scripts.map(s => `
+                    <div style="border:1px solid #D1D9E0;border-radius:8px;padding:12px;background:white;display:flex;flex-direction:column;gap:8px;">
+                        <div style="font-size:13px;font-weight:600;color:#374151;">⚡ ${escapeHtml(s.name)}</div>
+                        <div style="font-size:11px;color:#6B7280;">${escapeHtml(s.category || '')}</div>
+                        <div style="font-size:12px;color:#6B7280;line-height:1.5;">${escapeHtml((s.description || '').substring(0,120))}${s.description && s.description.length > 120 ? '...' : ''}</div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                            <div style="font-size:11px;color:#6B7280;">💸 ${s.price_per_run} тк/запуск · 📥 ${s.installs_count}</div>
+                            <button onclick="mpInstallScript('${s.id}','${escapeHtml(s.slug)}')" style="padding:5px 12px;background:${s.is_installed ? '#F3F4F6' : '#0284C7'};color:${s.is_installed ? '#374151' : 'white'};border:1px solid ${s.is_installed ? '#D1D9E0' : '#0284C7'};border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit;">
+                                ${s.is_installed ? '✓ Установлен' : 'Установить'}
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                list.innerHTML = '<div style="color:#DC2626;font-size:13px;grid-column:1/-1;text-align:center;padding:24px 0">Ошибка: ' + e.message + '</div>';
+            }
+        }
+
+        async function mpLoadMy() {
+            const el = document.getElementById('mp-my-content');
+            if (!el) return;
+            el.textContent = 'Загрузка...';
+            try {
+                const r = await fetch('/api/marketplace/my');
+                const data = await r.json();
+                let html = '';
+                if (data.agents && data.agents.length) {
+                    html += '<div style="font-weight:600;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои агенты</div>';
+                    html += data.agents.map(a => `
+                        <div style="border:1px solid #D1D9E0;border-radius:6px;padding:10px;margin-bottom:8px;background:white;display:flex;align-items:center;justify-content:space-between;">
+                            <div>
+                                <span style="font-size:13px;font-weight:500;color:#374151;">🤖 ${escapeHtml(a.name)}</span>
+                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${a.status==='active'?'#ECFDF5':'#F3F4F6'};color:${a.status==='active'?'#059669':'#6B7280'}">${a.status}</span>
+                            </div>
+                            <span style="font-size:11px;color:#9CA3AF;">👥 ${a.subscribers_count} · 💬 ${a.messages_count}</span>
+                        </div>`).join('');
+                }
+                if (data.scripts && data.scripts.length) {
+                    html += '<div style="font-weight:600;margin-top:14px;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои скрипты</div>';
+                    html += data.scripts.map(s => `
+                        <div style="border:1px solid #D1D9E0;border-radius:6px;padding:10px;margin-bottom:8px;background:white;display:flex;align-items:center;justify-content:space-between;">
+                            <div>
+                                <span style="font-size:13px;font-weight:500;color:#374151;">⚡ ${escapeHtml(s.name)}</span>
+                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${s.status==='active'?'#ECFDF5':'#F3F4F6'};color:${s.status==='active'?'#059669':'#6B7280'}">${s.status}</span>
+                            </div>
+                            <span style="font-size:11px;color:#9CA3AF;">📥 ${s.installs_count} · ▶️ ${s.runs_count}</span>
+                        </div>`).join('');
+                }
+                if (!html) html = '<div style="color:#9CA3AF;text-align:center;padding:32px 0;font-size:13px;">Вы ещё ничего не опубликовали</div>';
+                el.innerHTML = html;
+            } catch(e) {
+                el.textContent = 'Ошибка: ' + e.message;
+            }
+        }
+
+        async function mpSwitchAgent(slug) {
+            mpShowStatus('Подключение агента...', '#F0FDFA', '#059669');
+            try {
+                const r = await fetch('/chat', { method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({message: `@${slug}`, _internal: true}) });
+                // Просто отправляем команду в чат
+                appendMessage('Пользователь', `Подключить агента @${slug}`);
+                switchToChat();
+                sendMessage(`Подключи агента @${slug}`);
+            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+        }
+
+        async function mpInstallScript(id, slug) {
+            mpShowStatus('Установка скрипта...', '#EFF6FF', '#0284C7');
+            try {
+                const r = await fetch('/api/marketplace/scripts', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({id: id, slug: slug, _install: true})
+                });
+                mpShowStatus('Скрипт установлен! Используйте его через чат с ИИ.', '#ECFDF5', '#059669');
+                setTimeout(() => mpLoadScripts(), 1000);
+            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+        }
+
+        function mpShowStatus(msg, bg, color) {
+            const el = document.getElementById('mp-status');
+            if (!el) return;
+            el.style.display = '';
+            el.style.background = bg;
+            el.style.color = color;
+            el.textContent = msg;
+            setTimeout(() => { if (el) el.style.display = 'none'; }, 4000);
+        }
+
+        function mpShowCreateAgent() {
+            const form = document.getElementById('mp-create-form');
+            if (!form) return;
+            form.innerHTML = `
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;">🤖 Новый агент</div>
+                    <input id="mpa-name" type="text" placeholder="Имя агента" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+                    <input id="mpa-slug" type="text" placeholder="slug (латиница, например: my-agent)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+                    <textarea id="mpa-desc" placeholder="Описание (до 1000 символов)" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;resize:vertical;"></textarea>
+                    <textarea id="mpa-personality" placeholder="Личность агента — как он общается, его характер, стиль..." rows="4" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;resize:vertical;"></textarea>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input id="mpa-price" type="number" min="1" value="5" style="width:80px;padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+                        <span style="font-size:12px;color:#6B7280;">токенов/сообщение</span>
+                        <input id="mpa-trial" type="number" min="0" value="3" style="width:60px;padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+                        <span style="font-size:12px;color:#6B7280;">бесплатно</span>
+                    </div>
+                    <button onclick="mpSubmitAgent()" style="padding:9px;background:#068487;color:white;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;">Отправить на модерацию</button>
+                    <div style="font-size:11px;color:#9CA3AF;">Агент будет проверен в течение 24 часов. Вы получите 70% от стоимости каждого сообщения.</div>
+                </div>`;
+        }
+
+        function mpShowCreateScript() {
+            const form = document.getElementById('mp-create-form');
+            if (!form) return;
+            form.innerHTML = `
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;">⚡ Новый скрипт</div>
+                    <input id="mps-name" type="text" placeholder="Название скрипта" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+                    <textarea id="mps-desc" placeholder="Что делает скрипт?" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;resize:vertical;"></textarea>
+                    <textarea id="mps-code" placeholder="Python-код скрипта. Доступны: json, math, re, datetime, requests. Результат записывается в result = {...}" rows="8" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;background:#F9FAFB;"></textarea>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input id="mps-price" type="number" min="1" value="10" style="width:80px;padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
+                        <span style="font-size:12px;color:#6B7280;">токенов/запуск</span>
+                    </div>
+                    <button onclick="mpSubmitScript()" style="padding:9px;background:#0284C7;color:white;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;">Отправить на модерацию</button>
+                    <div style="font-size:11px;color:#9CA3AF;">Скрипт проверяется автоматически на безопасность, затем вручную. 70% от каждого запуска — автору.</div>
+                </div>`;
+        }
+
+        async function mpSubmitAgent() {
+            const data = {
+                name: document.getElementById('mpa-name').value.trim(),
+                slug: document.getElementById('mpa-slug').value.trim(),
+                description: document.getElementById('mpa-desc').value.trim(),
+                personality: document.getElementById('mpa-personality').value.trim(),
+                price_per_message: parseInt(document.getElementById('mpa-price').value) || 5,
+                trial_messages: parseInt(document.getElementById('mpa-trial').value) || 3,
+            };
+            if (!data.name || !data.personality) { mpShowStatus('Заполните имя и личность агента', '#FEF2F2', '#DC2626'); return; }
+            try {
+                const r = await fetch('/api/marketplace/agents', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+                const res = await r.json();
+                if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
+                mpShowStatus(res.message || 'Отправлено на модерацию!', '#ECFDF5', '#059669');
+                document.getElementById('mp-create-form').innerHTML = '';
+                setTimeout(() => mpSwitchTab('my'), 1500);
+            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+        }
+
+        async function mpSubmitScript() {
+            const data = {
+                name: document.getElementById('mps-name').value.trim(),
+                description: document.getElementById('mps-desc').value.trim(),
+                code: document.getElementById('mps-code').value,
+                price_per_run: parseInt(document.getElementById('mps-price').value) || 10,
+            };
+            if (!data.name || !data.code) { mpShowStatus('Заполните название и код скрипта', '#FEF2F2', '#DC2626'); return; }
+            try {
+                const r = await fetch('/api/marketplace/scripts', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+                const res = await r.json();
+                if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
+                mpShowStatus(res.message || 'Скрипт отправлен!', '#ECFDF5', '#059669');
+                document.getElementById('mp-create-form').innerHTML = '';
+                setTimeout(() => mpSwitchTab('my'), 1500);
+            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+        }
+
+        // ====== Reports end / Activity functions ======
         function _tlLabels() {
             return {
                 'task_added': t('act-task-added'), 'task_completed': t('act-task-completed'),

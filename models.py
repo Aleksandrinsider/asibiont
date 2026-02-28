@@ -820,6 +820,177 @@ class AgentActivityLog(Base):
     )
 
 
+# ═══════════════════════════════════════════════════════
+# MARKETPLACE: Пользовательские агенты и скрипты
+# ═══════════════════════════════════════════════════════
+
+class UserAgent(Base):
+    """
+    Пользовательский AI-агент — создаётся и публикуется пользователем в маркетплейсе.
+    Автор задаёт личность, инструменты, цену; другие пользователи подписываются и общаются.
+    """
+    __tablename__ = 'user_agents'
+
+    id = Column(Integer, primary_key=True)
+    author_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Идентификация
+    name = Column(String(100), nullable=False)            # "Крипто-аналитик Алекс"
+    slug = Column(String(100), unique=True, index=True)   # "crypto-alex" — для @упоминания
+    avatar_url = Column(String(500))                       # URL аватарки
+    description = Column(Text)                            # Публичное описание (2-4 предложения)
+    specialization = Column(String(100))                  # marketing/legal/finance/dev/lifestyle/other
+
+    # Характер и поведение
+    personality = Column(Text)                            # System prompt от автора
+    tools_allowed = Column(Text)                          # JSON array: ['add_task', 'research_topic', ...]
+    knowledge_base = Column(Text)                         # JSON array: [{type, content/url, name}]
+    custom_anchors = Column(Text)                         # JSON array: расписание, триггеры
+
+    # Интеграции (зашифрованные ключи)
+    integrations = Column(Text)                           # JSON: {service: key_encrypted}
+
+    # Монетизация
+    price_per_message = Column(Integer, default=5)        # Токенов за сообщение
+    trial_messages = Column(Integer, default=3)           # Бесплатных сообщений для новых
+    author_royalty_pct = Column(Integer, default=70)      # % автору (остальное платформе)
+    is_adult = Column(Boolean, default=False)             # 18+ контент
+
+    # Статус
+    status = Column(String(20), default='draft', index=True)
+    # draft → review → active → disabled
+    moderation_note = Column(Text)                        # Причина отклонения
+
+    # Статистика
+    subscribers_count = Column(Integer, default=0, index=True)
+    messages_count = Column(Integer, default=0)
+    rating_sum = Column(Integer, default=0)
+    rating_count = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    author = relationship("User", foreign_keys=[author_id], backref="created_agents")
+
+    __table_args__ = (
+        Index('ix_user_agent_status_subs', 'status', 'subscribers_count'),
+    )
+
+
+class AgentSubscription(Base):
+    """Подписка пользователя на конкретного агента."""
+    __tablename__ = 'agent_subscriptions'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey('user_agents.id'), nullable=False, index=True)
+    trial_messages_used = Column(Integer, default=0)
+    messages_count = Column(Integer, default=0)
+    tokens_spent = Column(Integer, default=0)
+    subscribed_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    last_message_at = Column(DateTime)
+
+    user = relationship("User", backref="agent_subscriptions")
+    agent = relationship("UserAgent", backref="subscriptions")
+
+    __table_args__ = (UniqueConstraint('user_id', 'agent_id', name='uq_agent_subscription'),)
+
+
+class AgentRun(Base):
+    """Лог каждого сообщения к пользовательскому агенту (биллинг)."""
+    __tablename__ = 'agent_runs'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey('user_agents.id'), nullable=False, index=True)
+    tokens_charged = Column(Integer, default=0)   # Всего списано
+    author_earnings = Column(Integer, default=0)  # Доля автора
+    platform_earnings = Column(Integer, default=0)
+    is_trial = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+
+    user = relationship("User", backref="agent_runs")
+    agent = relationship("UserAgent", backref="runs")
+
+
+class UserScript(Base):
+    """
+    Пользовательский скрипт-модуль — Python-код, запускается в sandbox.
+    Может вызываться агентом как инструмент.
+    """
+    __tablename__ = 'user_scripts'
+
+    id = Column(Integer, primary_key=True)
+    author_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    name = Column(String(100), nullable=False)
+    slug = Column(String(100), unique=True, index=True)
+    description = Column(Text)
+    category = Column(String(50))              # analytics/content/outreach/finance/misc
+    code = Column(Text, nullable=False)        # Python-код скрипта
+    input_schema = Column(Text)               # JSON: параметры входа для ИИ
+    output_description = Column(Text)         # Что возвращает (для tool description)
+
+    price_per_run = Column(Integer, default=10)    # Токенов за запуск
+    author_royalty_pct = Column(Integer, default=70)
+    is_adult = Column(Boolean, default=False)
+
+    status = Column(String(20), default='draft', index=True)
+    moderation_note = Column(Text)
+
+    installs_count = Column(Integer, default=0, index=True)
+    runs_count = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    author = relationship("User", foreign_keys=[author_id], backref="created_scripts")
+
+    __table_args__ = (
+        Index('ix_user_script_status_installs', 'status', 'installs_count'),
+    )
+
+
+class ScriptInstall(Base):
+    """Установка скрипта пользователем."""
+    __tablename__ = 'script_installs'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    script_id = Column(Integer, ForeignKey('user_scripts.id'), nullable=False, index=True)
+    runs_count = Column(Integer, default=0)
+    tokens_spent = Column(Integer, default=0)
+    installed_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="script_installs")
+    script = relationship("UserScript", backref="installs")
+
+    __table_args__ = (UniqueConstraint('user_id', 'script_id', name='uq_script_install'),)
+
+
+class ScriptRun(Base):
+    """Лог каждого запуска скрипта (биллинг)."""
+    __tablename__ = 'script_runs'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    script_id = Column(Integer, ForeignKey('user_scripts.id'), nullable=False, index=True)
+    params_json = Column(Text)     # Входные параметры
+    result_summary = Column(Text)  # Краткий результат (первые 500 символов)
+    success = Column(Boolean, default=True)
+    error_message = Column(Text)
+    tokens_charged = Column(Integer, default=0)
+    author_earnings = Column(Integer, default=0)
+    platform_earnings = Column(Integer, default=0)
+    execution_ms = Column(Integer, default=0)  # Время выполнения
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+
+    user = relationship("User", backref="script_runs")
+    script = relationship("UserScript", backref="runs")
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

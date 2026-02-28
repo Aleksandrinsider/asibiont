@@ -1700,4 +1700,94 @@ TOOLS = [
             }
         }
     },
+    # ─── MARKETPLACE ──────────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "list_marketplace",
+            "description": "🛒 МАРКЕТПЛЕЙС — показать список агентов или скриптов. Используй когда: 'что есть в маркетплейсе', 'покажи агентов', 'какие скрипты доступны', 'найди агента по маркетингу'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_type": {
+                        "type": "string",
+                        "enum": ["agents", "scripts"],
+                        "description": "Что показать: agents (агенты) или scripts (скрипты). По умолчанию agents."
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Фильтр по категории: marketing, legal, finance, dev, lifestyle, analytics, misc"
+                    },
+                    "search": {
+                        "type": "string",
+                        "description": "Поиск по названию"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "switch_agent",
+            "description": "🤖 ПЕРЕКЛЮЧИТЬСЯ НА АГЕНТА — подключиться к кастомному агенту из маркетплейса или вернуться к стандартному ASI Biont. Используй когда: 'хочу поговорить с @slug', 'подключи агента крипто', 'вернись в обычный режим', 'переключись на ASI Biont'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent_slug": {
+                        "type": "string",
+                        "description": "Slug агента (например 'crypto-alex' или '@crypto-alex'). Не нужен при reset=true."
+                    },
+                    "reset": {
+                        "type": "boolean",
+                        "description": "true — вернуться к стандартному ASI Biont"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "install_script",
+            "description": "📦 УСТАНОВИТЬ СКРИПТ из маркетплейса. Используй когда: 'установи скрипт', 'подключи модуль', 'хочу использовать скрипт X'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "script_slug": {
+                        "type": "string",
+                        "description": "Slug скрипта из маркетплейса"
+                    },
+                    "script_id": {
+                        "type": "integer",
+                        "description": "ID скрипта (альтернатива slug)"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_user_script",
+            "description": "▶️ ЗАПУСТИТЬ СКРИПТ — выполнить установленный скрипт из маркетплейса. Используй когда пользователь просит запустить/использовать конкретный скрипт. Скрипт должен быть предварительно установлен.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "script_slug": {
+                        "type": "string",
+                        "description": "Slug скрипта"
+                    },
+                    "script_id": {
+                        "type": "integer",
+                        "description": "ID скрипта (альтернатива slug)"
+                    },
+                    "params": {
+                        "type": "object",
+                        "description": "Параметры для скрипта — JSON-объект с входными данными согласно описанию скрипта"
+                    }
+                }
+            }
+        }
+    },
 ]

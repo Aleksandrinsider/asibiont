@@ -198,6 +198,12 @@ class HybridAutonomousAgent:
             'keywords': ['акци', 'stock', 'биржа', 'курс', 'invest'],
             'tools': {'get_stock_info'},
         },
+        'marketplace': {
+            'keywords': ['маркетплейс', 'marketplace', 'агент', 'agent', '@',
+                         'скрипт', 'script', 'установ', 'install', 'запуст', 'run',
+                         'подключ', 'переключ', 'switch'],
+            'tools': {'list_marketplace', 'switch_agent', 'install_script', 'run_user_script'},
+        },
     }
 
     def _select_tools_for_message(self, user_message):
@@ -1386,6 +1392,20 @@ class HybridAutonomousAgent:
             _lang = get_user_lang(user_id)
             final = content.strip() or ("Done!" if _lang == 'en' else "Готово!")
 
+        # Биллинг кастомного агента
+        try:
+            from .user_agents import get_user_active_agent, bill_agent_message
+            active_agent_id = get_user_active_agent(user_id)
+            if active_agent_id:
+                bill_result = bill_agent_message(user_id, active_agent_id)
+                if not bill_result['success'] and 'токенов' in bill_result.get('error', ''):
+                    # Недостаточно токенов — сбрасываем агента и сообщаем
+                    from .user_agents import set_user_active_agent
+                    set_user_active_agent(user_id, None)
+                    final = f"⚠️ {bill_result['error']}\n\nВозвращаюсь в стандартный режим ASI Biont."
+        except Exception as _be:
+            logger.warning(f"[BILLING] agent billing error: {_be}")
+
         # Когнитивная валидация (quality gate)
         final, issues = CognitiveEngine.validate_response(final, user_message)
         if issues:
@@ -1645,6 +1665,22 @@ class HybridAutonomousAgent:
                 }
 
             system_prompt = base_prompt + mode_instructions.get(mode, '')
+
+            # Инжектируем личность кастомного агента (если активен)
+            try:
+                from .user_agents import get_user_active_agent, load_agent_personality, build_agent_system_prompt
+                active_agent_id = get_user_active_agent(user_id)
+                if active_agent_id:
+                    agent_data = load_agent_personality(active_agent_id)
+                    if agent_data:
+                        system_prompt = build_agent_system_prompt(agent_data, system_prompt)
+                        logger.info(f"[AGENT] Injected personality: {agent_data['name']} (id={active_agent_id})")
+                    else:
+                        # Агент удалён/деактивирован — сбрасываем
+                        from .user_agents import set_user_active_agent
+                        set_user_active_agent(user_id, None)
+            except Exception as _ae:
+                logger.warning(f"[AGENT] personality inject error: {_ae}")
 
             # Собираем messages — БЕЗ истории диалога (это системное сообщение)
             messages = [{"role": "system", "content": system_prompt}]

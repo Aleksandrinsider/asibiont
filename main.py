@@ -9333,6 +9333,250 @@ async def resend_webhook_handler(request):
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
 
+# ═══════════════════════════════════════════════════════
+# MARKETPLACE API
+# ═══════════════════════════════════════════════════════
+
+async def api_marketplace_agents_handler(request):
+    """GET /api/marketplace/agents — список активных агентов"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            from models import UserAgent, AgentSubscription, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            category = request.rel_url.query.get('category')
+            search = request.rel_url.query.get('search', '').strip()
+            q = session_db.query(UserAgent).filter_by(status='active')
+            if category:
+                q = q.filter(UserAgent.specialization == category)
+            if search:
+                q = q.filter(UserAgent.name.ilike(f'%{search}%'))
+            agents = q.order_by(UserAgent.subscribers_count.desc()).limit(20).all()
+            result = []
+            for a in agents:
+                rating = round(a.rating_sum / a.rating_count, 1) if a.rating_count else None
+                is_subscribed = False
+                if user_obj:
+                    is_subscribed = bool(session_db.query(AgentSubscription).filter_by(
+                        user_id=user_obj.id, agent_id=a.id).first())
+                result.append({
+                    'id': a.id, 'name': a.name, 'slug': a.slug,
+                    'description': a.description, 'specialization': a.specialization,
+                    'avatar_url': a.avatar_url,
+                    'price_per_message': a.price_per_message,
+                    'trial_messages': a.trial_messages,
+                    'subscribers_count': a.subscribers_count,
+                    'messages_count': a.messages_count,
+                    'rating': rating, 'is_subscribed': is_subscribed,
+                    'is_adult': a.is_adult,
+                })
+            return web.json_response({'agents': result})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agents error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_scripts_handler(request):
+    """GET /api/marketplace/scripts — список активных скриптов"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            from models import UserScript, ScriptInstall, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            category = request.rel_url.query.get('category')
+            search = request.rel_url.query.get('search', '').strip()
+            q = session_db.query(UserScript).filter_by(status='active')
+            if category:
+                q = q.filter(UserScript.category == category)
+            if search:
+                q = q.filter(UserScript.name.ilike(f'%{search}%'))
+            scripts = q.order_by(UserScript.installs_count.desc()).limit(20).all()
+            result = []
+            for s in scripts:
+                is_installed = False
+                if user_obj:
+                    is_installed = bool(session_db.query(ScriptInstall).filter_by(
+                        user_id=user_obj.id, script_id=s.id).first())
+                result.append({
+                    'id': s.id, 'name': s.name, 'slug': s.slug,
+                    'description': s.description, 'category': s.category,
+                    'price_per_run': s.price_per_run,
+                    'installs_count': s.installs_count,
+                    'runs_count': s.runs_count,
+                    'output_description': s.output_description,
+                    'is_installed': is_installed,
+                    'is_adult': s.is_adult,
+                })
+            return web.json_response({'scripts': result})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] scripts error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_publish_agent_handler(request):
+    """POST /api/marketplace/agents — создать/обновить агента"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        session_db = Session()
+        try:
+            from models import UserAgent, User as UserModel
+            import re as _re
+            import json as _json
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            agent_id = data.get('id')
+            if agent_id:
+                agent = session_db.query(UserAgent).filter_by(
+                    id=agent_id, author_id=user_obj.id).first()
+                if not agent:
+                    return web.json_response({'error': 'Not found'}, status=404)
+            else:
+                agent = UserAgent(author_id=user_obj.id, status='review')
+                session_db.add(agent)
+
+            # Slug из имени если не задан
+            name = (data.get('name') or '').strip()[:100]
+            if not name:
+                return web.json_response({'error': 'name required'}, status=400)
+            slug = data.get('slug') or _re.sub(r'[^a-z0-9-]', '-', name.lower())[:100]
+            slug = _re.sub(r'-+', '-', slug).strip('-')
+
+            agent.name = name
+            agent.slug = slug
+            agent.description = (data.get('description') or '')[:1000]
+            agent.specialization = data.get('specialization', 'misc')
+            agent.personality = (data.get('personality') or '')[:8000]
+            agent.tools_allowed = _json.dumps(data.get('tools_allowed') or [])
+            agent.knowledge_base = _json.dumps(data.get('knowledge_base') or [])
+            agent.price_per_message = max(1, int(data.get('price_per_message') or 5))
+            agent.trial_messages = max(0, int(data.get('trial_messages') or 3))
+            agent.is_adult = bool(data.get('is_adult', False))
+            agent.status = 'review'  # Всегда на ревью после изменений
+
+            session_db.commit()
+            return web.json_response({'success': True, 'id': agent.id, 'slug': agent.slug,
+                                      'status': 'review',
+                                      'message': 'Агент отправлен на модерацию. Обычно занимает до 24 часов.'})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] publish agent error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_publish_script_handler(request):
+    """POST /api/marketplace/scripts — создать/обновить скрипт"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        session_db = Session()
+        try:
+            from models import UserScript, User as UserModel
+            from ai_integration.user_agents import validate_script_code
+            import re as _re
+            import json as _json
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            code = data.get('code', '')
+            ok, err = validate_script_code(code)
+            if not ok:
+                return web.json_response({'error': f'Небезопасный код: {err}'}, status=400)
+
+            script_id = data.get('id')
+            if script_id:
+                script = session_db.query(UserScript).filter_by(
+                    id=script_id, author_id=user_obj.id).first()
+                if not script:
+                    return web.json_response({'error': 'Not found'}, status=404)
+            else:
+                script = UserScript(author_id=user_obj.id, status='review')
+                session_db.add(script)
+
+            name = (data.get('name') or '').strip()[:100]
+            if not name:
+                return web.json_response({'error': 'name required'}, status=400)
+            slug = data.get('slug') or _re.sub(r'[^a-z0-9-]', '-', name.lower())[:100]
+            slug = _re.sub(r'-+', '-', slug).strip('-')
+
+            script.name = name
+            script.slug = slug
+            script.description = (data.get('description') or '')[:500]
+            script.category = data.get('category', 'misc')
+            script.code = code
+            script.input_schema = _json.dumps(data.get('input_schema') or {})
+            script.output_description = (data.get('output_description') or '')[:500]
+            script.price_per_run = max(1, int(data.get('price_per_run') or 10))
+            script.is_adult = bool(data.get('is_adult', False))
+            script.status = 'review'
+
+            session_db.commit()
+            return web.json_response({'success': True, 'id': script.id, 'slug': script.slug,
+                                      'status': 'review',
+                                      'message': 'Скрипт отправлен на модерацию.'})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] publish script error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_my_handler(request):
+    """GET /api/marketplace/my — мои агенты и скрипты"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            from models import UserAgent, UserScript, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'Not found'}, status=404)
+            agents = session_db.query(UserAgent).filter_by(author_id=user_obj.id).order_by(
+                UserAgent.created_at.desc()).all()
+            scripts = session_db.query(UserScript).filter_by(author_id=user_obj.id).order_by(
+                UserScript.created_at.desc()).all()
+            return web.json_response({
+                'agents': [{'id': a.id, 'name': a.name, 'slug': a.slug,
+                             'status': a.status, 'subscribers_count': a.subscribers_count,
+                             'price_per_message': a.price_per_message,
+                             'messages_count': a.messages_count} for a in agents],
+                'scripts': [{'id': s.id, 'name': s.name, 'slug': s.slug,
+                              'status': s.status, 'installs_count': s.installs_count,
+                              'price_per_run': s.price_per_run,
+                              'runs_count': s.runs_count} for s in scripts],
+            })
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] my handler error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)
@@ -9356,6 +9600,13 @@ app.router.add_get('/chat/progress', chat_progress_handler)
 app.router.add_post('/api/transcribe', transcribe_handler)
 app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
+
+# Marketplace API
+app.router.add_get('/api/marketplace/agents', api_marketplace_agents_handler)
+app.router.add_get('/api/marketplace/scripts', api_marketplace_scripts_handler)
+app.router.add_post('/api/marketplace/agents', api_marketplace_publish_agent_handler)
+app.router.add_post('/api/marketplace/scripts', api_marketplace_publish_script_handler)
+app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)

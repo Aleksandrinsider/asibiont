@@ -11266,3 +11266,210 @@ async def manage_delegation_campaign(
     finally:
         if close_session:
             session.close()
+
+
+# ═══════════════════════════════════════════════════════
+# MARKETPLACE: Агенты и скрипты
+# ═══════════════════════════════════════════════════════
+
+async def list_marketplace(category: str = None, search: str = None,
+                           item_type: str = 'agents',
+                           user_id: int = None, session=None) -> str:
+    """Показывает маркетплейс: активных агентов или скрипты."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserAgent, UserScript
+        import json as _json
+
+        if item_type == 'scripts':
+            q = session.query(UserScript).filter_by(status='active')
+            if category:
+                q = q.filter(UserScript.category == category)
+            if search:
+                q = q.filter(UserScript.name.ilike(f'%{search}%'))
+            items = q.order_by(UserScript.installs_count.desc()).limit(10).all()
+            if not items:
+                return "🛒 Скриптов пока нет. Будьте первым — создайте скрипт!"
+            lines = ["🛒 **Маркетплейс скриптов:**\n"]
+            for s in items:
+                lines.append(f"• **{s.name}** (#{s.id}) — {s.price_per_run} токенов/запуск | {s.installs_count} установок\n  {s.description or ''}")
+            return "\n".join(lines)
+        else:
+            q = session.query(UserAgent).filter_by(status='active')
+            if category:
+                q = q.filter(UserAgent.specialization == category)
+            if search:
+                q = q.filter(UserAgent.name.ilike(f'%{search}%'))
+            items = q.order_by(UserAgent.subscribers_count.desc()).limit(10).all()
+            if not items:
+                return "🤖 Агентов пока нет. Создай первого!"
+            lines = ["🤖 **Маркетплейс агентов:**\n"]
+            for a in items:
+                rating = round(a.rating_sum / a.rating_count, 1) if a.rating_count else "—"
+                lines.append(f"• **{a.name}** (@{a.slug}) — {a.price_per_message} токенов/сообщение | ⭐ {rating} | {a.subscribers_count} подписчиков\n  {a.description or ''}")
+            return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] list error: {e}", exc_info=True)
+        return f"❌ Ошибка загрузки маркетплейса: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def switch_agent(agent_slug: str = None, reset: bool = False,
+                       user_id: int = None, session=None) -> str:
+    """Переключает пользователя на кастомного агента или сбрасывает на основного."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserAgent, AgentSubscription, User
+        from .user_agents import set_user_active_agent, bill_agent_message
+
+        if reset:
+            set_user_active_agent(user_id, None)
+            return "✅ Возвращаюсь в стандартный режим ASI Biont."
+
+        if not agent_slug:
+            return "❌ Укажи slug агента (например @crypto-alex)"
+
+        slug = agent_slug.lstrip('@').strip()
+        agent = session.query(UserAgent).filter_by(slug=slug, status='active').first()
+        if not agent:
+            return f"❌ Агент @{slug} не найден или ещё не опубликован."
+
+        # Проверяем/создаём подписку
+        user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user_obj:
+            return "❌ Пользователь не найден."
+
+        sub = session.query(AgentSubscription).filter_by(
+            user_id=user_obj.id, agent_id=agent.id).first()
+        is_new = not sub
+        if is_new:
+            sub = AgentSubscription(user_id=user_obj.id, agent_id=agent.id)
+            session.add(sub)
+            agent.subscribers_count = (agent.subscribers_count or 0) + 1
+            session.commit()
+
+        set_user_active_agent(user_id, agent.id)
+
+        trial_left = agent.trial_messages - (sub.trial_messages_used if sub else 0)
+        trial_note = f" У тебя {trial_left} пробных сообщений 🎁" if trial_left > 0 else ""
+        return (f"✅ Подключён агент **{agent.name}**!{trial_note}\n"
+                f"Цена: {agent.price_per_message} токенов/сообщение.\n"
+                f"Чтобы вернуться к стандартному режиму — скажи «переключись на ASI Biont».")
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] switch_agent error: {e}", exc_info=True)
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def run_user_script(script_id: int = None, script_slug: str = None,
+                          params: dict = None,
+                          user_id: int = None, session=None) -> str:
+    """Запускает установленный скрипт из маркетплейса в sandbox."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserScript, ScriptInstall, User
+        from .user_agents import run_script_sandbox, bill_script_run
+
+        user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user_obj:
+            return "❌ Пользователь не найден."
+
+        # Ищем скрипт по id или slug
+        if script_id:
+            script = session.query(UserScript).filter_by(id=script_id, status='active').first()
+        elif script_slug:
+            script = session.query(UserScript).filter_by(slug=script_slug, status='active').first()
+        else:
+            return "❌ Укажи id или slug скрипта."
+
+        if not script:
+            return "❌ Скрипт не найден или недоступен."
+
+        # Проверяем установку
+        install = session.query(ScriptInstall).filter_by(
+            user_id=user_obj.id, script_id=script.id).first()
+        if not install:
+            return (f"❌ Скрипт «{script.name}» не установлен. "
+                    f"Установи его в маркетплейсе за {script.price_per_run} токенов/запуск.")
+
+        # Запускаем в sandbox
+        run_params = params or {}
+        exec_result = run_script_sandbox(script.code, run_params)
+
+        # Биллинг
+        bill_script_run(
+            user_id=user_id, script_id=script.id,
+            params=run_params, result=exec_result['result'],
+            success=exec_result['success'], exec_ms=exec_result['exec_ms'],
+        )
+
+        if exec_result['success']:
+            return f"✅ Скрипт «{script.name}» выполнен за {exec_result['exec_ms']}мс:\n\n{exec_result['result']}"
+        else:
+            return f"❌ Скрипт «{script.name}» завершился с ошибкой:\n{exec_result['error']}"
+
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] run_script error: {e}", exc_info=True)
+        return f"❌ Ошибка запуска скрипта: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def install_script(script_id: int = None, script_slug: str = None,
+                         user_id: int = None, session=None) -> str:
+    """Устанавливает скрипт из маркетплейса."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserScript, ScriptInstall, User
+
+        user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user_obj:
+            return "❌ Пользователь не найден."
+
+        if script_id:
+            script = session.query(UserScript).filter_by(id=script_id, status='active').first()
+        elif script_slug:
+            script = session.query(UserScript).filter_by(slug=script_slug, status='active').first()
+        else:
+            return "❌ Укажи id или slug скрипта."
+
+        if not script:
+            return "❌ Скрипт не найден."
+
+        existing = session.query(ScriptInstall).filter_by(
+            user_id=user_obj.id, script_id=script.id).first()
+        if existing:
+            return f"ℹ️ Скрипт «{script.name}» уже установлен."
+
+        install = ScriptInstall(user_id=user_obj.id, script_id=script.id)
+        session.add(install)
+        script.installs_count = (script.installs_count or 0) + 1
+        session.commit()
+
+        return (f"✅ Скрипт «{script.name}» установлен!\n"
+                f"Цена: {script.price_per_run} токенов/запуск.\n"
+                f"Запусти его: «запусти скрипт {script.slug}»")
+    except Exception as e:
+        session.rollback()
+        logger.error(f"[MARKETPLACE] install_script error: {e}", exc_info=True)
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
