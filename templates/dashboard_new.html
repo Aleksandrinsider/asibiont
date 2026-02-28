@@ -3121,9 +3121,28 @@
 
                     <!-- Python-код агента -->
                     <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:4px;">🐍 Python-код (необязательно)</div>
-                        <div style="font-size:11px;color:#9CA3AF;margin-bottom:6px;">Код выполняется перед каждым ответом: агент получает вывод (stdout) как контекст для генерации ответа. Тайм-аут: 15 с. Пример: парсинг новостей через duckduckgo_search, запросы к внешнему API и т.&thinsp;д.</div>
-                        <textarea id="mpa-pycode" placeholder="# Пример: получаем свежие новости\nfrom duckduckgo_search import DDGS\nwith DDGS() as ddgs:\n    results = ddgs.news(keywords=&quot;новости дня&quot;, region=&quot;ru-ru&quot;, timelimit=&quot;d&quot;, max_results=5)\n    for r in results:\n        print(r['title'], '-', r['source'])" rows="8" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:6px;">🐍 Python-код (необязательно)</div>
+
+                        <!-- Как это работает -->
+                        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#1D4ED8;line-height:1.5;">
+                            <b>Как работает:</b> код запускается перед каждым ответом агента.
+                            Всё, что он <code style="background:#DBEAFE;padding:1px 3px;border-radius:3px;">print()</code>-ит, агент получает как свежие данные и использует в ответе.<br>
+                            ⏱ Тайм-аут: 15 с. &nbsp;🛡 Если код упадёт с ошибкой — агент просто ответит без дополнительных данных, ничего не сломается.
+                        </div>
+
+                        <!-- Доступные библиотеки -->
+                        <div style="margin-bottom:8px;">
+                            <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:5px;">Доступные библиотеки — нажми для вставки примера:</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:5px;">
+                                <button type="button" onclick="mpInsertPyExample('ddg_news')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">🔍 Новости (duckduckgo)</button>
+                                <button type="button" onclick="mpInsertPyExample('ddg_search')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">🌐 Поиск (duckduckgo)</button>
+                                <button type="button" onclick="mpInsertPyExample('requests_json')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">📡 HTTP запрос (requests)</button>
+                                <button type="button" onclick="mpInsertPyExample('datetime_now')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">🕐 Текущее время</button>
+                                <button type="button" onclick="mpInsertPyExample('crypto_price')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">₿ Курс крипты</button>
+                            </div>
+                        </div>
+
+                        <textarea id="mpa-pycode" placeholder="# Код необязателен. Нажми кнопку выше для вставки примера." rows="8" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                     </div>
 
                     <!-- Цена — визуально понятно -->
@@ -3217,6 +3236,22 @@
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'Сгенерировать'; }
             }
+        }
+
+        const _PY_EXAMPLES = {
+            ddg_news: `from duckduckgo_search import DDGS\n\nwith DDGS() as ddgs:\n    results = ddgs.news(\n        keywords="новости дня",\n        region="ru-ru",\n        timelimit="d",\n        max_results=5\n    )\n    for r in results:\n        print(f"{r['title']} — {r['source']} ({r['date']})")\n`,
+            ddg_search: `from duckduckgo_search import DDGS\n\nwith DDGS() as ddgs:\n    results = ddgs.text(\n        keywords="актуальные тренды технологий 2026",\n        region="ru-ru",\n        max_results=5\n    )\n    for r in results:\n        print(f"{r['title']}: {r['body'][:120]}")\n`,
+            requests_json: `import requests\n\n# Пример: любой публичный JSON API\nresp = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=10)\ndata = resp.json()\nprint(f"USD/RUB = {data['rates'].get('RUB', '?')}")\nprint(f"USD/EUR = {data['rates'].get('EUR', '?')}")\n`,
+            datetime_now: `from datetime import datetime\nimport pytz\n\nmsk = pytz.timezone("Europe/Moscow")\nnow = datetime.now(msk)\nprint(f"Сейчас в Москве: {now.strftime('%d %B %Y, %H:%M')}")\nprint(f"День недели: {['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'][now.weekday()]}")\n`,
+            crypto_price: `import requests\n\ncoins = ["bitcoin", "ethereum", "solana"]\nresp = requests.get(\n    "https://api.coingecko.com/api/v3/simple/price",\n    params={"ids": ",".join(coins), "vs_currencies": "usd,rub"},\n    timeout=10\n)\ndata = resp.json()\nfor coin in coins:\n    usd = data.get(coin, {}).get("usd", "?")\n    rub = data.get(coin, {}).get("rub", "?")\n    print(f"{coin.capitalize()}: ${usd} / {rub} ₽")\n`,
+        };
+
+        function mpInsertPyExample(key) {
+            const ta = document.getElementById('mpa-pycode');
+            if (!ta) return;
+            const code = (_PY_EXAMPLES[key] || '').replace(/\\n/g, '\n');
+            ta.value = code;
+            ta.focus();
         }
 
         async function mpSubmitAgent() {
