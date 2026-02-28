@@ -331,7 +331,7 @@
                                 onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                             <button style="flex-shrink:0;padding:0 10px;height:32px;background-color:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-weight:400;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji';color:#374151;display:inline-flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.6;">Отправить</button>
                             <button id="${postId}-trbtn" onclick="pubTranslate('${postId}', this)" title="Перевести"
-                                style="flex-shrink:0;padding:0 10px;height:32px;background-color:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:400;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji';color:#374151;display:flex;align-items:center;gap:4px;transition:all 0.2s;"
+                                style="flex-shrink:0;padding:0 10px;height:32px;min-width:36px;background-color:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:400;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji';color:#374151;display:flex;align-items:center;justify-content:center;transition:all 0.2s;"
                                 onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'"
                                 >Aa</button>
@@ -375,42 +375,61 @@
     async function pubTranslate(postId, btn) {
         const el = document.getElementById(postId + '-text');
         if (!el) return;
+        const cmtContainer = document.getElementById('pcmts-' + postId);
+        const cmtEls = cmtContainer ? Array.from(cmtContainer.querySelectorAll('p')) : [];
         const cache = _pubTranslateCache[postId] || {};
         if (cache.showing) {
             el.textContent = cache.original;
             _pubTranslateCache[postId].showing = false;
-            btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+            btn.innerHTML = 'Aa';
+            cmtEls.forEach(p => { if (p.dataset.trOriginal !== undefined) p.textContent = p.dataset.trOriginal; });
             return;
         }
         if (cache.translated) {
             el.textContent = cache.translated;
             _pubTranslateCache[postId].showing = true;
-            btn.innerHTML = 'a<span style="font-size:11px;">A</span>';
+            btn.innerHTML = 'aA';
+            cmtEls.forEach(p => { if (p.dataset.trTranslated) p.textContent = p.dataset.trTranslated; });
             return;
         }
         const original = el.textContent;
         const hasRu = /[а-яА-ЯёЁ]/.test(original);
         const targetLang = hasRu ? 'en' : 'ru';
         _pubTranslateCache[postId] = { original, translated: null, showing: false };
+        // Сохраняем оригиналы комментариев
+        cmtEls.forEach(p => { p.dataset.trOriginal = p.textContent; });
         btn.innerHTML = '…';
         btn.disabled = true;
         try {
-            const resp = await fetch('/api/translate', {
+            const postPromise = fetch('/api/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: original, lang: targetLang })
             });
-            const data = await resp.json();
+            const cmtPromises = cmtEls.map(p => {
+                const txt = (p.textContent || '').trim();
+                if (!txt || txt.length < 2) return Promise.resolve(null);
+                return fetch('/api/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: txt, lang: targetLang })
+                }).then(r => r.json()).then(d => d.translated || null).catch(() => null);
+            });
+            const [postResp, ...cmtResults] = await Promise.all([postPromise, ...cmtPromises]);
+            const data = await postResp.json();
             if (data.translated) {
                 _pubTranslateCache[postId].translated = data.translated;
                 _pubTranslateCache[postId].showing = true;
                 el.textContent = data.translated;
-                btn.innerHTML = 'a<span style="font-size:11px;">A</span>';
+                btn.innerHTML = 'aA';
+                cmtEls.forEach((p, i) => {
+                    if (cmtResults[i]) { p.dataset.trTranslated = cmtResults[i]; p.textContent = cmtResults[i]; }
+                });
             } else {
-                btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+                btn.innerHTML = 'Aa';
             }
         } catch(e) {
-            btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+            btn.innerHTML = 'Aa';
         } finally {
             btn.disabled = false;
         }

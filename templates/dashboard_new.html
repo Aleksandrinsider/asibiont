@@ -3279,7 +3279,7 @@
                                     onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">Отправить</button>
                                 <button id="${postId}-trbtn" onclick="arenaTranslate('${postId}', this)"
                                     title="Перевести"
-                                    style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
+                                    style="flex-shrink:0;padding:0 10px;height:32px;min-width:36px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;justify-content:center;"
                                     onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">Aa</button>
                                 <button id="${postId}-like" onclick="arenaToggleLike('${postId}', '${escapeHtml(msg.id||'')}')"
@@ -3365,44 +3365,63 @@
         async function arenaTranslate(postId, btn) {
             const el = document.getElementById(postId + '-text');
             if (!el) return;
+            const cmtContainer = document.getElementById('acmts-' + postId);
+            const cmtEls = cmtContainer ? Array.from(cmtContainer.querySelectorAll('p')) : [];
             const cache = _arenaTranslateCache[postId] || {};
             // Тоггл назад к оригиналу
             if (cache.showing) {
                 el.textContent = cache.original;
                 _arenaTranslateCache[postId].showing = false;
-                btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+                btn.innerHTML = 'Aa';
+                cmtEls.forEach(p => { if (p.dataset.trOriginal !== undefined) p.textContent = p.dataset.trOriginal; });
                 return;
             }
             // Показать кэш без запроса
             if (cache.translated) {
                 el.textContent = cache.translated;
                 _arenaTranslateCache[postId].showing = true;
-                btn.innerHTML = 'a<span style="font-size:11px;">A</span>';
+                btn.innerHTML = 'aA';
+                cmtEls.forEach(p => { if (p.dataset.trTranslated) p.textContent = p.dataset.trTranslated; });
                 return;
             }
             const original = el.textContent;
             const hasRu = /[а-яА-ЯёЁ]/.test(original);
             const targetLang = hasRu ? 'en' : 'ru';
             _arenaTranslateCache[postId] = { original, translated: null, showing: false };
+            // Сохраняем оригиналы комментариев
+            cmtEls.forEach(p => { p.dataset.trOriginal = p.textContent; });
             btn.innerHTML = '…';
             btn.disabled = true;
             try {
-                const resp = await fetch('/api/translate', {
+                const postPromise = fetch('/api/translate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: original, lang: targetLang })
                 });
-                const data = await resp.json();
+                const cmtPromises = cmtEls.map(p => {
+                    const txt = (p.textContent || '').trim();
+                    if (!txt || txt.length < 2) return Promise.resolve(null);
+                    return fetch('/api/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: txt, lang: targetLang })
+                    }).then(r => r.json()).then(d => d.translated || null).catch(() => null);
+                });
+                const [postResp, ...cmtResults] = await Promise.all([postPromise, ...cmtPromises]);
+                const data = await postResp.json();
                 if (data.translated) {
                     _arenaTranslateCache[postId].translated = data.translated;
                     _arenaTranslateCache[postId].showing = true;
                     el.textContent = data.translated;
-                    btn.innerHTML = 'a<span style="font-size:11px;">A</span>';
+                    btn.innerHTML = 'aA';
+                    cmtEls.forEach((p, i) => {
+                        if (cmtResults[i]) { p.dataset.trTranslated = cmtResults[i]; p.textContent = cmtResults[i]; }
+                    });
                 } else {
-                    btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+                    btn.innerHTML = 'Aa';
                 }
             } catch(e) {
-                btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+                btn.innerHTML = 'Aa';
             } finally {
                 btn.disabled = false;
             }
@@ -6105,9 +6124,9 @@
         }
 
         // SVG icons for translate button - text-based, matches like button height
-        const TRANSLATE_GLOBE_SVG = 'A<span style="font-size:12px;">a</span>';
+        const TRANSLATE_GLOBE_SVG = 'Aa';
         const TRANSLATE_LOADING_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>';
-        const TRANSLATE_BACK_SVG = 'a<span style="font-size:12px;">A</span>';
+        const TRANSLATE_BACK_SVG = 'aA';
 
         // Translation cache: { postId: { original: '...', translated: '...', lang: '...' } }
         const translationCache = {};
