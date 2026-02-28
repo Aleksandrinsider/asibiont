@@ -6841,15 +6841,44 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 .map(t => ({...t, date: new Date(t.reminder_time)}))
                 .filter(t => t.date.getTime() > nowTimestamp) // Сравниваем UTC milliseconds
                 .sort((a, b) => a.date - b.date);
+
+            // Ближайшая будущая задача
+            const nextUpcoming = upcomingTasks.length > 0 ? upcomingTasks[0] : null;
+            // Ближайшая просроченная — та у которой deadline ближе всего к сейчас (самая свежая)
+            const nearestOverdue = overdueTasks.length > 0
+                ? overdueTasks
+                    .filter(t => t.reminder_time)
+                    .sort((a, b) => new Date(b.reminder_time) - new Date(a.reminder_time))[0]
+                    || overdueTasks[0]
+                : null;
+
+            // Показываем ближайшую: если есть будущая И просроченная — берём ту что ближе к now
+            let showTask = null;
+            let showMode = null; // 'overdue' | 'upcoming'
+            if (nextUpcoming && nearestOverdue) {
+                const upcomingDelta = nextUpcoming.date.getTime() - nowTimestamp;
+                const overdueDelta = nearestOverdue.reminder_time
+                    ? nowTimestamp - new Date(nearestOverdue.reminder_time).getTime()
+                    : Infinity;
+                // Если будущая задача ближе чем самая свежая просроченная — показываем будущую
+                if (upcomingDelta <= overdueDelta) {
+                    showTask = nextUpcoming; showMode = 'upcoming';
+                } else {
+                    showTask = nearestOverdue; showMode = 'overdue';
+                }
+            } else if (nextUpcoming) {
+                showTask = nextUpcoming; showMode = 'upcoming';
+            } else if (nearestOverdue) {
+                showTask = nearestOverdue; showMode = 'overdue';
+            }
             
             const nextTaskCenterEl = document.getElementById('next-task-center');
             const nextTaskTextEl = document.getElementById('next-task-text');
             const headerDotEl = document.getElementById('header-task-dot');
             const headerLabelEl = document.getElementById('header-task-label');
             
-            if (overdueTasks.length > 0) {
-                // Есть просроченные — показываем первую
-                const overdue = overdueTasks[0];
+            if (showMode === 'overdue') {
+                const overdue = showTask;
                 if (headerDotEl) { headerDotEl.className = 'overdue-pulse'; }
                 if (headerLabelEl) { headerLabelEl.textContent = t('overdue-stat') || 'С отставанием:'; }
                 let displayTitle = overdue.title.replace(/(@\w+)/g, (match, p1) => {
@@ -6875,9 +6904,10 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 }
                 nextTaskTextEl.innerHTML = `${displayTitle}${overdueTimeText ? ' <span style="color:#d73a49;">' + overdueTimeText + '</span>' : ''}`;
                 nextTaskCenterEl.style.display = 'flex';
-            } else if (upcomingTasks.length > 0) {
-                const next = upcomingTasks[0];
-                const delta = next.date.getTime() - nowTimestamp; // Разница в UTC milliseconds
+            } else if (showMode === 'upcoming') {
+                const next = showTask;
+                const taskDate = next.date || new Date(next.reminder_time);
+                const delta = taskDate.getTime() - nowTimestamp; // Разница в UTC milliseconds
                 const minutes = Math.floor(delta / 60000);
                 const hours = Math.floor(minutes / 60);
                 const days = Math.floor(hours / 24);
@@ -6893,7 +6923,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 
                 if (headerDotEl) { headerDotEl.className = 'reminder-pulse'; }
                 if (headerLabelEl) { headerLabelEl.textContent = t('next-up') || 'На очереди:'; }
-                // Делаем ники кликабельными
                 let displayTitle = next.title.replace(/(@\w+)/g, (match, p1) => {
                     const usernameWithoutAt = p1.substring(1);
                     return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
