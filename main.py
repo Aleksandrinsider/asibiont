@@ -9484,7 +9484,7 @@ async def api_marketplace_publish_agent_handler(request):
             agent.price_per_message = max(1, int(data.get('price_per_message') or 5))
             agent.trial_messages = max(0, int(data.get('trial_messages') or 3))
             agent.is_adult = bool(data.get('is_adult', False))
-            agent.status = 'review'  # Всегда на ревью после изменений
+            agent.status = 'active'  # Авто-одобрение: агент сразу активен
 
             # Аватар из base64 data URL (сохраняем напрямую; в продакшене заменить на upload в CDN)
             avatar_data = (data.get('avatar_data_url') or '').strip()
@@ -9495,8 +9495,8 @@ async def api_marketplace_publish_agent_handler(request):
 
             session_db.commit()
             return web.json_response({'success': True, 'id': agent.id, 'slug': agent.slug,
-                                      'status': 'review',
-                                      'message': 'Агент отправлен на модерацию. Обычно занимает до 24 часов.'})
+                                      'status': 'active',
+                                      'message': 'Агент опубликован и активен.'})
         finally:
             session_db.close()
     except Exception as e:
@@ -9683,6 +9683,10 @@ async def api_marketplace_my_handler(request):
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'error': 'Not found'}, status=404)
+            # Авто-активация агентов на модерации (авто-одобрение)
+            session_db.query(UserAgent).filter_by(
+                author_id=user_obj.id, status='review').update({'status': 'active'})
+            session_db.commit()
             agents = session_db.query(UserAgent).filter_by(author_id=user_obj.id).order_by(
                 UserAgent.created_at.desc()).all()
             scripts = session_db.query(UserScript).filter_by(author_id=user_obj.id).order_by(

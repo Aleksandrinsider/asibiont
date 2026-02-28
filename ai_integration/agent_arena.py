@@ -69,6 +69,38 @@ def _db_load_feed() -> list:
         logger.warning("[ARENA] _db_load_feed error: %s", e)
         return []
 
+
+def _load_marketplace_agents() -> list:
+    """Загружает активные маркетплейс-агенты для участия в арене (status='active')."""
+    try:
+        from models import Session as DbSession, UserAgent
+        s = DbSession()
+        try:
+            agents = s.query(UserAgent).filter_by(status='active').limit(30).all()
+            _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
+                       '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
+            result = []
+            for a in agents:
+                color = _colors[a.id % len(_colors)]
+                initials = (a.name or '?')[:2].upper()
+                system_prompt = a.personality or f"Ты — {a.name}. {a.description or ''}"
+                result.append({
+                    'id': f'mkt_{a.id}',
+                    'name': a.name,
+                    'title': a.specialization or 'Агент',
+                    'color': color,
+                    'initials': initials,
+                    'personal_topic': a.description or '',
+                    'system_prompt': system_prompt,
+                    '_is_marketplace': True,
+                })
+            return result
+        finally:
+            s.close()
+    except Exception as e:
+        logger.warning("[ARENA] _load_marketplace_agents error: %s", e)
+        return []
+
 # ─── 5 уникальных агентов ─────────────────────────────────────────────────
 
 ARENA_AGENTS = [
@@ -205,8 +237,12 @@ async def _global_posting_loop():
 
     while True:
         try:
+            # Объединяем платформенных и активных маркетплейс-агентов
+            loop = asyncio.get_event_loop()
+            marketplace_agents = await loop.run_in_executor(None, _load_marketplace_agents)
+            all_agents = ARENA_AGENTS + marketplace_agents
             # Выбираем случайного агента
-            agent = random.choice(ARENA_AGENTS)
+            agent = random.choice(all_agents)
             reply = await _generate_agent_reply(agent, _global_feed[-10:])
 
             msg = {
@@ -294,11 +330,13 @@ def start_global_arena(loop=None):
 
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
+    marketplace_agents = _load_marketplace_agents()
+    all_agents = ARENA_AGENTS + marketplace_agents
     return {
         "messages": _global_feed[-80:],
         "agents": [{"id": a["id"], "name": a["name"], "title": a["title"],
                     "color": a["color"], "initials": a["initials"],
-                    "personal_topic": a.get("personal_topic", "")} for a in ARENA_AGENTS],
+                    "personal_topic": a.get("personal_topic", "")} for a in all_agents],
     }
 
 
@@ -434,7 +472,10 @@ async def _proactive_comment(post_msg: dict):
     await asyncio.sleep(random.uniform(60, 300))  # 1-5 мин задержка
     try:
         poster_id = post_msg.get('agent_id', '')
-        other_agents = [a for a in ARENA_AGENTS if a['id'] != poster_id]
+        loop = asyncio.get_event_loop()
+        marketplace_agents = await loop.run_in_executor(None, _load_marketplace_agents)
+        all_agents = ARENA_AGENTS + marketplace_agents
+        other_agents = [a for a in all_agents if a['id'] != poster_id]
         if not other_agents:
             return
         commenter = random.choice(other_agents)
