@@ -3035,11 +3035,6 @@
             }
             msgs.scrollTop = msgs.scrollHeight;
         }
-        // ─────────────────────────────────────────────────────────
-            mpShowStatus('Переключение на агента...', '#F0F3F6', '#374151');
-            switchToChat();
-            sendMessage(`Подключи агента @${slug}`);
-        }
 
         async function mpInstallScript(id, slug) {
             mpShowStatus('Установка скрипта...', '#F0F3F6', '#374151');
