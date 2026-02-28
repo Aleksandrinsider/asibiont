@@ -10001,6 +10001,110 @@ async def api_marketplace_agent_delete_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_marketplace_agent_get_handler(request):
+    """GET /api/marketplace/agents/{id} — данные одного агента"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        session_db = Session()
+        try:
+            from models import UserAgent, AgentSubscription, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
+            if not agent:
+                return web.json_response({'error': 'Not found'}, status=404)
+            rating = round(agent.rating_sum / agent.rating_count, 1) if agent.rating_count else None
+            is_subscribed = False
+            if user_obj:
+                is_subscribed = bool(session_db.query(AgentSubscription).filter_by(
+                    user_id=user_obj.id, agent_id=agent.id).first())
+            return web.json_response({'agent': {
+                'id': agent.id, 'name': agent.name, 'slug': agent.slug,
+                'description': agent.description or '',
+                'specialization': agent.specialization or '',
+                'avatar_url': agent.avatar_url or '',
+                'price_per_message': agent.price_per_message,
+                'trial_messages': agent.trial_messages,
+                'subscribers_count': agent.subscribers_count,
+                'messages_count': agent.messages_count,
+                'author_royalty_pct': agent.author_royalty_pct or 30,
+                'rating': rating,
+                'is_subscribed': is_subscribed,
+            }})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agent get error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_agent_activate_handler(request):
+    """POST /api/marketplace/agents/{id}/activate — активировать (подписаться) на агента"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        session_db = Session()
+        try:
+            from models import UserAgent, AgentSubscription, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            agent = session_db.query(UserAgent).filter_by(id=agent_id, status='active').first()
+            if not agent:
+                return web.json_response({'error': 'Agent not found or not active'}, status=404)
+            existing = session_db.query(AgentSubscription).filter_by(
+                user_id=user_obj.id, agent_id=agent_id).first()
+            if existing:
+                return web.json_response({'success': True, 'already': True})
+            sub = AgentSubscription(user_id=user_obj.id, agent_id=agent_id)
+            session_db.add(sub)
+            agent.subscribers_count = (agent.subscribers_count or 0) + 1
+            session_db.commit()
+            return web.json_response({'success': True, 'trial_messages': agent.trial_messages or 0,
+                                      'price_per_message': agent.price_per_message})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agent activate error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_agent_deactivate_handler(request):
+    """DELETE /api/marketplace/agents/{id}/activate — деактивировать (отписаться) от агента"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        session_db = Session()
+        try:
+            from models import UserAgent, AgentSubscription, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            sub = session_db.query(AgentSubscription).filter_by(
+                user_id=user_obj.id, agent_id=agent_id).first()
+            if sub:
+                session_db.delete(sub)
+                agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
+                if agent and (agent.subscribers_count or 0) > 0:
+                    agent.subscribers_count = agent.subscribers_count - 1
+                session_db.commit()
+            return web.json_response({'success': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agent deactivate error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)
@@ -10033,9 +10137,12 @@ app.router.add_post('/api/marketplace/scripts', api_marketplace_publish_script_h
 app.router.add_post('/api/marketplace/scripts/generate', api_generate_script_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
+app.router.add_get('/api/marketplace/agents/{id}', api_marketplace_agent_get_handler)
 app.router.add_put('/api/marketplace/agents/{id}/status', api_marketplace_agent_status_handler)
 app.router.add_delete('/api/marketplace/agents/{id}', api_marketplace_agent_delete_handler)
 app.router.add_post('/api/marketplace/agents/{id}/chat', api_agent_chat_handler)
+app.router.add_post('/api/marketplace/agents/{id}/activate', api_marketplace_agent_activate_handler)
+app.router.add_delete('/api/marketplace/agents/{id}/activate', api_marketplace_agent_deactivate_handler)
 # Arena — глобальная лента (не требует авторизации)
 app.router.add_get('/api/arena', api_arena_state_handler)
 app.router.add_get('/api/arena/stream', api_arena_stream_handler)

@@ -1536,6 +1536,23 @@
         </div>
     </div>
 
+    <!-- Agent Profile Modal -->
+    <div id="agent-profile-modal" class="rating-modal" style="display:none;">
+        <div class="rating-modal-content">
+            <div class="rating-modal-header">
+                <h3>&#1055;&#1088;&#1086;&#1092;&#1080;&#1083;&#1100; &#1072;&#1075;&#1077;&#1085;&#1090;&#1072;</h3>
+                <button onclick="closeAgentProfileModal()" class="rating-close-btn" title="&#1047;&#1072;&#1082;&#1088;&#1099;&#1090;&#1100;">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="rating-modal-body" id="agent-profile-content" style="text-align:center;">
+                <!-- Agent profile will be loaded here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Quick Profile Setup Modal -->
     <div id="quick-profile-modal" class="rating-modal" style="display: none;">
         <div class="rating-modal-content" style="max-width: 1200px; max-height: 90vh; overflow-y: auto;">
@@ -2590,6 +2607,7 @@
         // ====== MARKETPLACE ======
         let _mpCurrentTab = 'agents';
         let _mpSearchTimer = null;
+        let _mpAgentsCache = {}; // кэш данных агентов по id
 
         // Activity state
         var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block', 'agent-activity-block']);
@@ -3337,13 +3355,20 @@
             input.value = '';
 
             // Комментарий пользователя — стиль feed
+            const _cmtId = 'cmt-' + Date.now();
+            const _cmtNow = new Date();
+            const _cmtDate = _cmtNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
+            const _cmtTime = _cmtNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
             const userDiv = document.createElement('div');
+            userDiv.id = _cmtId;
             userDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
             userDiv.innerHTML = `
                 <div style="width:24px;height:24px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:white;border:2px solid #E8ECEF;flex-shrink:0;">Вы</div>
                 <div style="flex:1;min-width:0;">
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                         <span style="font-size:12px;font-weight:400;color:#374151;">Вы</span>
+                        <span style="font-size:11px;color:#9CA3AF;">${_cmtDate} ${_cmtTime}</span>
+                        <button onclick="const el=document.getElementById('${_cmtId}');const nx=el&&el.nextElementSibling;if(el)el.remove();if(nx&&nx.dataset.agentReply)nx.remove();" style="margin-left:auto;background:none;border:none;cursor:pointer;padding:2px 4px;color:#C6CDD5;line-height:1;font-size:14px;" title="Удалить">&times;</button>
                     </div>
                     <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(text)}</p>
                 </div>`;
@@ -3365,6 +3390,7 @@
                 </div>`;
             clist.appendChild(agentDiv);
 
+            agentDiv.dataset.agentReply = '1';
             fetch('/api/arena/comment', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -3372,12 +3398,16 @@
             }).then(r => r.json()).then(reply => {
                 const rc = escapeHtml(reply.color || '#6C727F');
                 const ri = escapeHtml(reply.initials || '?');
+                const _rNow = new Date();
+                const _rDate = _rNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
+                const _rTime = _rNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
                 agentDiv.innerHTML = `
                     <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
                     <div style="flex:1;min-width:0;">
-                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                             <span style="font-size:12px;font-weight:400;color:#374151;">${escapeHtml(reply.agent_name||'')}</span>
                             <span style="font-size:12px;color:#068487;">${escapeHtml(reply.agent_title||'')}</span>
+                            <span style="font-size:11px;color:#9CA3AF;">${_rDate} ${_rTime}</span>
                         </div>
                         <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(reply.text||'')}</p>
                     </div>`;
@@ -9281,7 +9311,90 @@
             document.getElementById('contact-profile-modal').style.display = 'none';
             currentProfileUsername = null;
         }
-        
+
+        // ====== Agent Profile Modal ======
+        async function openAgentProfileModal(agentId) {
+            const modal = document.getElementById('agent-profile-modal');
+            const content = document.getElementById('agent-profile-content');
+            if (!modal || !content) return;
+            const cached = _mpAgentsCache[agentId];
+            if (cached) {
+                renderAgentProfileModal(cached);
+            } else {
+                content.innerHTML = '<div style="text-align:center;padding:32px;color:#9CA3AF;">&#1047;&#1072;&#1075;&#1088;&#1091;&#1079;&#1082;&#1072;...</div>';
+                modal.style.display = 'flex';
+                try {
+                    const r = await fetch('/api/marketplace/agents/' + agentId);
+                    const data = await r.json();
+                    if (data.agent) {
+                        _mpAgentsCache[agentId] = data.agent;
+                        renderAgentProfileModal(data.agent);
+                    }
+                } catch(e) { content.innerHTML = '<div style="color:#DC2626;padding:24px;">&#1054;&#1096;&#1080;&#1073;&#1082;&#1072; &#1079;&#1072;&#1075;&#1088;&#1091;&#1079;&#1082;&#1080;</div>'; }
+            }
+        }
+
+        function renderAgentProfileModal(agent) {
+            const modal = document.getElementById('agent-profile-modal');
+            const content = document.getElementById('agent-profile-content');
+            if (!modal || !content) return;
+            const initial = (agent.name || '?').substring(0, 2).toUpperCase();
+            const avatarHtml = agent.avatar_url
+                ? `<img src="${escapeHtml(agent.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;margin-bottom:8px;">
+                   <div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:none;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`
+                : `<div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`;
+            const priceLabel = agent.price_per_message === 0 ? '&#1041;&#1077;&#1089;&#1087;&#1083;&#1072;&#1090;&#1085;&#1086;' : `${agent.price_per_message} &#1090;&#1082;/&#1089;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1077;`;
+            const trialLabel = agent.trial_messages ? `${agent.trial_messages} &#1073;&#1077;&#1089;&#1087;&#1083;&#1072;&#1090;&#1085;&#1099;&#1093; &#1089;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1103;` : '&#1041;&#1077;&#1079; &#1087;&#1088;&#1086;&#1073;&#1085;&#1086;&#1075;&#1086; &#1087;&#1077;&#1088;&#1080;&#1086;&#1076;&#1072;';
+            const ratingLabel = agent.rating ? agent.rating + '/10' : '&#1053;&#1077;&#1090; &#1086;&#1094;&#1077;&#1085;&#1086;&#1082;';
+            let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}<p style="margin:0;font-weight:600;color:#374151;font-size:14px;">${escapeHtml(agent.name)}</p>`;
+            if (agent.specialization) html += `<p style="margin:4px 0 0;font-size:12px;color:#068487;">${escapeHtml(agent.specialization)}</p>`;
+            if (agent.is_subscribed) html += `<p style="margin:6px 0 0;font-size:12px;color:#068487;">&#10003; &#1040;&#1082;&#1090;&#1080;&#1074;&#1080;&#1088;&#1086;&#1074;&#1072;&#1085;</p>`;
+            html += `</div><div class="context-item">`;
+            if (agent.description) html += `<p style="text-align:left;">${escapeHtml(agent.description)}</p>`;
+            html += `<p style="text-align:left;"><strong>&#1062;&#1077;&#1085;&#1072;:</strong> ${priceLabel} &nbsp;&middot;&nbsp; <strong>&#1055;&#1088;&#1086;&#1073;&#1085;&#1099;&#1081; &#1087;&#1077;&#1088;&#1080;&#1086;&#1076;:</strong> ${trialLabel}</p>`;
+            html += `<p style="text-align:left;"><strong>&#1055;&#1086;&#1076;&#1087;&#1080;&#1089;&#1095;&#1080;&#1082;&#1086;&#1074;:</strong> ${agent.subscribers_count} &nbsp;&middot;&nbsp; <strong>&#1057;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1081;:</strong> ${agent.messages_count} &nbsp;&middot;&nbsp; <strong>&#1054;&#1094;&#1077;&#1085;&#1082;&#1072;:</strong> ${ratingLabel}</p>`;
+            html += `</div><div class="rating-modal-actions">`;
+            html += `<button onclick="closeAgentProfileModal()" class="rating-cancel-btn">&#1047;&#1072;&#1082;&#1088;&#1099;&#1090;&#1100;</button>`;
+            if (agent.is_subscribed) {
+                html += `<button onclick="mpDeactivateAgent(${agent.id})" class="rating-cancel-btn" style="border-color:#FECACA;color:#DC2626;">&#1044;&#1077;&#1072;&#1082;&#1090;&#1080;&#1074;&#1080;&#1088;&#1086;&#1074;&#1072;&#1090;&#1100;</button>`;
+                html += `<button onclick="closeAgentProfileModal();mpOpenAgentChat(${agent.id},'${escapeHtml(agent.name).replace(/'/g,"\\'").replace(/"/g,'&quot;')}',${agent.price_per_message||5},${agent.trial_messages||0})" class="rating-submit-btn">&#1053;&#1072;&#1087;&#1080;&#1089;&#1072;&#1090;&#1100;</button>`;
+            } else {
+                html += `<button onclick="mpActivateAgentFromModal(${agent.id})" class="rating-submit-btn">&#1040;&#1082;&#1090;&#1080;&#1074;&#1080;&#1088;&#1086;&#1074;&#1072;&#1090;&#1100;</button>`;
+            }
+            html += `</div>`;
+            content.innerHTML = html;
+            modal.style.display = 'flex';
+        }
+
+        function closeAgentProfileModal() {
+            const m = document.getElementById('agent-profile-modal');
+            if (m) m.style.display = 'none';
+        }
+
+        async function mpActivateAgentFromModal(agentId) {
+            try {
+                const r = await fetch('/api/marketplace/agents/' + agentId + '/activate', {method: 'POST'});
+                const data = await r.json();
+                if (data.success) {
+                    if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = true;
+                    if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
+                    mpLoadAgents();
+                }
+            } catch(e) {}
+        }
+
+        async function mpDeactivateAgent(agentId) {
+            try {
+                const r = await fetch('/api/marketplace/agents/' + agentId + '/activate', {method: 'DELETE'});
+                const data = await r.json();
+                if (data.success) {
+                    if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = false;
+                    if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
+                    mpLoadAgents();
+                }
+            } catch(e) {}
+        }
+
         function writeToContact(username) {
             closeContactProfileModal();
             openSendMessageModal(username);
