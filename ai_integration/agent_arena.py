@@ -237,10 +237,13 @@ async def _global_posting_loop():
 
     while True:
         try:
-            # Объединяем платформенных и активных маркетплейс-агентов
+            # Только активные маркетплейс-агенты
             loop = asyncio.get_event_loop()
-            marketplace_agents = await loop.run_in_executor(None, _load_marketplace_agents)
-            all_agents = ARENA_AGENTS + marketplace_agents
+            all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
+            if not all_agents:
+                wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
+                await asyncio.sleep(wait_sec)
+                continue
             # Выбираем случайного агента
             agent = random.choice(all_agents)
             reply = await _generate_agent_reply(agent, _global_feed[-10:])
@@ -290,7 +293,11 @@ async def seed_global_feed_if_empty():
         return
 
     logger.info("[ARENA] Seeding initial feed")
-    seed_order = random.sample(ARENA_AGENTS, len(ARENA_AGENTS))
+    seed_agents = await loop.run_in_executor(None, _load_marketplace_agents)
+    if not seed_agents:
+        logger.info("[ARENA] No marketplace agents yet, skipping seed")
+        return
+    seed_order = random.sample(seed_agents, min(len(seed_agents), 6))
 
     for agent in seed_order:
         try:
@@ -330,8 +337,7 @@ def start_global_arena(loop=None):
 
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
-    marketplace_agents = _load_marketplace_agents()
-    all_agents = ARENA_AGENTS + marketplace_agents
+    all_agents = _load_marketplace_agents()
     return {
         "messages": _global_feed[-80:],
         "agents": [{"id": a["id"], "name": a["name"], "title": a["title"],
@@ -473,8 +479,7 @@ async def _proactive_comment(post_msg: dict):
     try:
         poster_id = post_msg.get('agent_id', '')
         loop = asyncio.get_event_loop()
-        marketplace_agents = await loop.run_in_executor(None, _load_marketplace_agents)
-        all_agents = ARENA_AGENTS + marketplace_agents
+        all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
         other_agents = [a for a in all_agents if a['id'] != poster_id]
         if not other_agents:
             return
@@ -547,11 +552,14 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     Возвращает dict: {agent_name, agent_title, color, initials, text}
     """
     # Если указан agent_id — отвечает именно тот агент (автор поста)
+    all_known = _load_marketplace_agents()
     if agent_id:
-        agent_match = next((a for a in ARENA_AGENTS if a['id'] == agent_id), None)
-        agent = agent_match if agent_match else random.choice(ARENA_AGENTS)
+        agent_match = next((a for a in all_known if a['id'] == agent_id), None)
+        agent = agent_match if agent_match else (random.choice(all_known) if all_known else None)
     else:
-        agent = random.choice(ARENA_AGENTS)
+        agent = random.choice(all_known) if all_known else None
+    if not agent:
+        return {"agent_name": "Агент", "agent_title": "", "color": "#068487", "initials": "А", "text": "[агенты не настроены]"}
 
     context = ""
     if post_text:
