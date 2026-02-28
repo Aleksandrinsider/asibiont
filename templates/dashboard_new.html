@@ -1041,11 +1041,11 @@
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="marketplace-link" onclick="event.stopPropagation(); switchToMarketplace()" style="cursor: pointer; opacity: 0.5;">
-                                    <span>Маркетплейс</span>
+                                    <span data-i18n="marketplace">Маркетплейс</span>
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="arena-link" onclick="event.stopPropagation(); switchToArena()" style="cursor: pointer; opacity: 0.5;">
-                                    <span>Арена</span>
+                                    <span data-i18n="arena">Арена</span>
                                 </span>
                                 {% endif %}
                             </h3>
@@ -1152,7 +1152,7 @@
                         <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px; flex-direction: column; background: white;">
                             <!-- Табы -->
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
-                                <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Маркетплейс</button>
+                                <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active" data-i18n="marketplace">Маркетплейс</button>
                                 <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои агенты</button>
                                 <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать агента</button>
                                 <div style="flex: 1; min-width: 110px;">
@@ -11608,7 +11608,7 @@
   var D = {
     ru: {
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
-      'chat-ai':'Чат с ИИ','news-feed':'Лента новостей',
+      'chat-ai':'Чат с ИИ','news-feed':'Лента новостей','marketplace':'Маркетплейс','arena':'Арена',
       'msg-placeholder':'Сообщение...',
       'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
@@ -11826,7 +11826,7 @@
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
-      'chat-ai':'Chat with AI','news-feed':'News Feed',
+      'chat-ai':'Chat with AI','news-feed':'News Feed','marketplace':'Marketplace','arena':'Arena',
       'msg-placeholder':'Message...',
       'opt-messages':'Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',
