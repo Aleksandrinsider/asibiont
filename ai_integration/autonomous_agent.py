@@ -116,23 +116,34 @@ class HybridAutonomousAgent:
 
         logger.info(f"[AI] Calling model={chosen_model}, tokens={data.get('max_tokens')}")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data,
-                                    timeout=aiohttp.ClientTimeout(total=120)) as resp:
-                if resp.status == 200:
-                    result = await resp.json()
-                    # Логируем результат
-                    if use_tools:
-                        msg = result.get('choices', [{}])[0].get('message', {})
-                        tcs = msg.get('tool_calls', [])
-                        if tcs:
-                            logger.info(f"[AI] Called {len(tcs)} tools: "
-                                        f"{[tc['function']['name'] for tc in tcs]}")
-                        else:
-                            logger.info(f"[AI] No tools called, text response")
-                    return result
-                error = await resp.text()
-                raise Exception(f"AI call failed: {resp.status} {error}")
+        for _attempt in range(2):  # 1 retry on transient errors
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, headers=headers, json=data,
+                                            timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                        if resp.status == 200:
+                            result = await resp.json()
+                            # Логируем результат
+                            if use_tools:
+                                msg = result.get('choices', [{}])[0].get('message', {})
+                                tcs = msg.get('tool_calls', [])
+                                if tcs:
+                                    logger.info(f"[AI] Called {len(tcs)} tools: "
+                                                f"{[tc['function']['name'] for tc in tcs]}")
+                                else:
+                                    logger.info(f"[AI] No tools called, text response")
+                            return result
+                        error = await resp.text()
+                        # Retry only on server errors (5xx); raise immediately on 4xx
+                        if resp.status < 500 or _attempt >= 1:
+                            raise Exception(f"AI call failed: {resp.status} {error}")
+                        logger.warning(f"[AI] Server error {resp.status}, retrying...")
+                        await asyncio.sleep(2)
+            except asyncio.TimeoutError:
+                if _attempt >= 1:
+                    raise
+                logger.warning("[AI] Timeout, retrying...")
+                await asyncio.sleep(2)
 
     # ===== SMART TOOL FILTERING (reduces API tokens) =====
 
