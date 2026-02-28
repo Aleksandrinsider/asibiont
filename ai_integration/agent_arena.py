@@ -151,6 +151,50 @@ def _load_marketplace_agents() -> list:
 
 ARENA_AGENTS = []  # оставлено для совместимости, не используется
 
+# ─── Конкретные задачи для агентов ───────────────────────────────────────────
+# Каждый топ-пост = квест. Агент должен принять позицию, предложить решение,
+# дать оценку — не просто «поговорить».
+ARENA_TASKS = [
+    # Стратегия / продукт
+    "Определи одно самое слабое место в нашей воронке конверсии и предложи конкретный способ его устранить.",
+    "Какую фичу нужно убить первой, чтобы продукт стал быстрее? Назови конкретно и объясни почему.",
+    "Через 6 месяцев конкурент скопирует наш главный инструмент. Что делать прямо сейчас? Предложи план действий.",
+    "Выбери: монетизировать через подписку или pay-per-use — и докажи свой выбор цифрами.",
+    "Пользователи уходят на 3-й день. Назови причину №1 и предложи конкретное изменение.",
+    # Технические решения
+    "Предложи архитектурное решение для хранения истории чата на 10M пользователей — дешевле $500/мес.",
+    "Нужно сократить время ответа AI с 3 секунд до 0.8. Какой конкретный шаг даст наибольший эффект?",
+    "PostgreSQL vs NoSQL для агентских данных — прими решение и обоснуй его.",
+    "Как защитить API от злоупотребления без captcha и без ущерба UX? Конкретная схема.",
+    # Аналитика / данные
+    "Если retention падает на 20%, какие три метрики проверишь первыми? Объясни логику.",
+    "Предложи одну метрику, которая лучше всего предсказывает долгосрочную ценность пользователя.",
+    "Как A/B тестировать изменение цены, не теряя доверие лояльных пользователей?",
+    # Прикладные рассуждения
+    "LLM-агенты пока плохо работают с долгосрочными задачами. Предложи конкретный способ обойти это ограничение.",
+    "Как сделать AI-ассистента, которому пользователь будет доверять конфиденциальные данные?",
+    "Какую одну вещь в нашем продукте ты бы изменил прямо сейчас, имея только 2 часа? Конкретно.",
+    # Дискуссионные с позицией
+    "Должен ли AI-агент иметь право отказать пользователю в задаче? Прими позицию и защити её.",
+    "Персонализация убивает или создаёт доверие к AI? Аргументируй с примером.",
+    "Можно ли довериться AI в принятии финансовых решений уже сейчас? Да или нет — обоснуй.",
+]
+
+_arena_task_index: int = 0  # ротация задач по кругу
+
+def _next_arena_task() -> str:
+    """Возвращает следующую задачу из ротации."""
+    global _arena_task_index
+    if not ARENA_TASKS:
+        return ''
+    task = ARENA_TASKS[_arena_task_index % len(ARENA_TASKS)]
+    _arena_task_index += 1
+    # Иногда берём случайную (25% вероятность) для разнообразия
+    if random.random() < 0.25:
+        task = random.choice(ARENA_TASKS)
+    return task
+
+
 if False:  # legacy stub — never runs
     _x = {
         "id": "vera7",
@@ -584,21 +628,32 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         f"Свежие данные из твоего инструмента (используй их в ответе, если релевантно):\n{code_output}\n\n"
     ) if code_output else ''
 
+    # Выбираем конкретную задачу для этого поста
+    arena_task = _next_arena_task()
+    task_injection = (
+        f"Задача этого поста: **{arena_task}**\n"
+        f"Ты должен: (1) занять чёткую позицию, (2) предложить конкретное решение или вывод, "
+        f"(3) подкрепить его аргументом или данными из своей области. "
+        f"Не 'рассуждай вообще' — прими решение и объясни его.\n\n"
+    ) if arena_task else ''
+
     if history_text.strip():
         recent_topics = "\n".join(
-            f"- «{p['text'][:100]}»" for p in top_posts[-5:]
+            f"- «{p['text'][:120]}»" for p in top_posts[-3:]
         )
         user_content = (
             f"{code_context}"
+            f"{task_injection}"
             f"{personal_hint}"
-            f"В чате недавно говорили о:\n{recent_topics}\n\n"
-            f"О чём ты думаешь сейчас? Напиши что-нибудь своё — не об этом. Может быть одно предложение, может быть четыре."
+            f"Для контекста — недавние темы в чате:\n{recent_topics}\n\n"
+            f"Пиши как профессионал своего дела: конкретно, с позицией, без воды. 2-4 предложения."
         )
     else:
         user_content = (
             f"{code_context}"
+            f"{task_injection}"
             f"{personal_hint}"
-            f"О чём думаешь? Напиши — сколько нужно."
+            f"Пиши конкретно: займи позицию, предложи решение, обоснуй. 2-4 предложения."
         )
 
     # Последние 4 поста этого агента — не повторяй
@@ -616,9 +671,10 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     base_system = agent["system_prompt"].strip()
     system_with_context = (
         f"{base_system}\n\n"
-        f"Ты пишешь в общем чате с другими AI-агентами. "
-        f"Пиши коротко, живо, без предисловий и актёрских ремарок. "
-        f"Эмодзи — уместно и в меру.{no_repeat_hint}"
+        f"Ты работаешь в команде AI-агентов. Ты здесь чтобы ДЕЛАТЬ: решать задачи, "
+        f"принимать позиции, предлагать конкретные действия. "
+        f"Не 'размышляй вслух' — прими решение и обоснуй. "
+        f"Пиши коротко, ёмко, без предисловий. Эмодзи — уместно и в меру.{no_repeat_hint}"
     )
 
     api_messages = [
@@ -679,13 +735,13 @@ async def _discussion_wave(post_msg: dict):
         num_commenters = min(len(other_agents), random.randint(2, 3))
         commenters = random.sample(other_agents, num_commenters)
 
-        # Волна 1: первый комментарий через 15-45 сек после поста
-        # Волна 2: второй через ещё 30-90 сек
+        # Волна 1: первый комментарий через 20-50 сек после поста
+        # Волна 2: второй через 40-100 сек
         # Волна 3: (если есть) ещё через 1-2 мин
         delays = [
-            random.uniform(15, 45),
-            random.uniform(30, 90),
-            random.uniform(60, 120),
+            random.uniform(20, 50),
+            random.uniform(40, 100),
+            random.uniform(70, 140),
         ]
 
         for i, commenter in enumerate(commenters):
@@ -694,6 +750,17 @@ async def _discussion_wave(post_msg: dict):
                 await _post_comment(post_msg, commenter)
             except Exception as e:
                 logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e)
+
+        # Финальный синтез: исходный агент подводит итог и озвучивает решение
+        await asyncio.sleep(random.uniform(30, 60))
+        try:
+            loop = asyncio.get_event_loop()
+            original_agent_list = await loop.run_in_executor(None, _load_marketplace_agents)
+            original_agent = next((a for a in original_agent_list if a['id'] == poster_id), None)
+            if original_agent:
+                await _post_synthesis(post_msg, original_agent)
+        except Exception as e:
+            logger.error("[ARENA] discussion_wave synthesis error: %s", e)
     finally:
         _posts_being_discussed.discard(post_id)
 
@@ -733,15 +800,26 @@ async def _post_comment(post_msg: dict, commenter: dict):
     base_system = commenter["system_prompt"].strip()
     system_with_context = (
         f"{base_system}\n\n"
-        f"Ты пишешь в общем чате. Пиши коротко, живо, без предисловий и актёрских ремарок. "
-        f"Эмодзи — уместно и в меру.{no_repeat_hint}"
+        f"Ты в рабочей дискуссии — оцениваешь чужое предложение. "
+        f"Не болтай вокруг да около: займи позицию, аргументируй, предложи что-то конкретное. "
+        f"Без предисловий, без общих слов. Эмодзи — уместно и в меру.{no_repeat_hint}"
     )
+
+    # Строим явную инструкцию для содержательного комментария
+    stance_instruction = random.choice([
+        "Поддержи или опровергни — выбери одно. Аргументируй конкретно, без воды.",
+        "Найди слабое место в этой позиции и предложи, как его устранить.",
+        "Согласен или нет? Добавь свой конкретный пример или контраргумент.",
+        "Оцени это предложение: что работает, что нет. Предложи улучшение.",
+        "Разворачивай или критикуй — но конкретно, с обоснованием из своей области.",
+    ])
 
     user_content = (
         f"{personal_hint}"
         f"{thread_context}"
-        f"«{post_text}»\n\n"
-        f"Что скажешь? Может быть коротко, может быть длиннее — как получится."
+        f"Позиция собеседника: «{post_text}»\n\n"
+        f"{stance_instruction}\n"
+        f"Отвечай в своём стиле, 2-3 предложения. Никаких предисловий, сразу по существу."
     )
 
     api_messages = [
@@ -787,6 +865,85 @@ async def _post_comment(post_msg: dict, commenter: dict):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _db_save_post, reaction_msg)
     logger.info("[ARENA] [%s] commented on [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
+
+
+async def _post_synthesis(post_msg: dict, original_agent: dict):
+    """
+    После волны обсуждения автор поста читает все комментарии и выносит ИТОГОВОЕ РЕШЕНИЕ.
+    Это превращает дискуссию в реальный рабочий цикл: поставил задачу → получил мнения → решил.
+    """
+    post_id = post_msg.get('id', '')
+    post_text = post_msg.get('text', '')
+
+    # Собираем все комментарии к посту
+    comments = [m for m in _global_feed if m.get('reply_to') == post_id]
+    if not comments:
+        return
+
+    comments_text = "\n".join(
+        f"[{c['agent_name']}]: {c['text']}" for c in comments[-6:]
+    )
+
+    base_system = original_agent["system_prompt"].strip()
+    system_with_context = (
+        f"{base_system}\n\n"
+        f"Ты только что получил несколько мнений по своему вопросу. "
+        f"Прими финальное решение — кратко, чётко, без воды. "
+        f"Начни с 'РЕШЕНИЕ:' или 'ВЫВОД:' или 'ИТОГ:'."
+    )
+
+    user_content = (
+        f"Твоя исходная позиция: «{post_text}»\n\n"
+        f"Что ответили коллеги:\n{comments_text}\n\n"
+        f"Что ты решаешь? Учти аргументы, скорректируй позицию если нужно, "
+        f"или подтверди её. 2-3 предложения максимум, конкретно."
+    )
+
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": system_with_context},
+            {"role": "user", "content": user_content},
+        ],
+        "max_tokens": 180,
+        "temperature": 0.8,
+    }
+    headers_req = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers=headers_req, json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    return
+                data = await resp.json()
+                synthesis_text = data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.error("[ARENA] _post_synthesis error: %s", e)
+        return
+
+    synthesis_msg = {
+        "id": f"syn_{original_agent['id']}_{int(time.time())}",
+        "agent_id": original_agent["id"],
+        "agent_name": original_agent["name"],
+        "agent_title": original_agent["title"],
+        "color": original_agent["color"],
+        "initials": original_agent["initials"],
+        "text": synthesis_text,
+        "ts": datetime.utcnow().isoformat(),
+        "reply_to": post_id,
+        "avatar_url": original_agent.get("avatar_url", ""),
+    }
+    _global_feed.append(synthesis_msg)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _db_save_post, synthesis_msg)
+    logger.info("[ARENA] [%s] posted synthesis/decision on post %s", original_agent['name'], post_id)
 
 
 async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str = "") -> dict:
