@@ -582,7 +582,8 @@ class HybridAutonomousAgent:
     # ===== EXECUTE =====
 
     async def execute_actions(self, actions, user_id, session=None,
-                              user_message=None, progress_callback=None):
+                              user_message=None, progress_callback=None,
+                              web_context: bool = False):
         """Выполняет tool calls через handlers.
         
         Включает:
@@ -627,6 +628,9 @@ class HybridAutonomousAgent:
                         # Не закрываем переданную извне сессию — это ответственность вызывающего
                         if 'close_session' in sig.parameters:
                             params['close_session'] = False
+                    # Web-контекст: не отправляем изображения в Telegram при запросе с дашборда
+                    if web_context and tool_name == 'generate_image' and 'send_to_telegram' in sig.parameters:
+                        params['send_to_telegram'] = False
 
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
@@ -1024,7 +1028,7 @@ class HybridAutonomousAgent:
 
     async def process_request(self, user_message, user_id, context=None,
                               session=None, subscription_tier=None,
-                              progress_callback=None):
+                              progress_callback=None, web_context: bool = False):
         """
         Адаптивный tool calling loop:
         1. Собираем контекст (1 запрос к БД)
@@ -1295,7 +1299,8 @@ class HybridAutonomousAgent:
                         results = await self.execute_actions(
                             action, user_id, session=session,
                             user_message=user_message,
-                            progress_callback=progress_callback)
+                            progress_callback=progress_callback,
+                            web_context=web_context)
 
                         r = results[0] if results else {"success": False,
                                                          "error": "no result"}
@@ -1911,7 +1916,7 @@ def get_autonomous_agent():
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                        db_session=None, message_type=None, subscription_tier=None,
-                       progress_callback=None):
+                       progress_callback=None, web_context: bool = False):
     """Главная точка входа. Совместима со всеми вызовами в проекте."""
     logger.info(f"[AGENT] START user={user_id} msg='{str(message)[:50]}...'")
 
@@ -1924,7 +1929,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
 
         response_text = await agent.process_request(
             message, user_id, context, db_session,
-            subscription_tier, progress_callback=progress_callback)
+            subscription_tier, progress_callback=progress_callback,
+            web_context=web_context)
 
         # Извлекаем tool_calls для тестов и мониторинга
         tool_calls = []

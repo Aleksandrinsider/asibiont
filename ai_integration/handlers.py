@@ -10612,8 +10612,9 @@ async def generate_image(
     user_id: int = None,
     session=None,
     close_session: bool = True,
+    send_to_telegram: bool = True,
 ) -> str:
-    """Генерация изображения через Replicate (Flux) и отправка пользователю в Telegram."""
+    """Генерация изображения через Replicate (Flux). send_to_telegram=False — только URL, без отправки в TG."""
     if not session:
         session = Session()
         close_session = True
@@ -10691,21 +10692,24 @@ async def generate_image(
             # output — URL или список URL
             image_url = output[0] if isinstance(output, list) else output
 
-            # Отправляем фото в Telegram
-            send_resp = await http.post(
-                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
-                json={
-                    "chat_id": user.telegram_id,
-                    "photo": image_url,
-                },
-                timeout=_aiohttp.ClientTimeout(total=30),
-            )
-            send_data = await send_resp.json()
+            # Отправляем фото в Telegram (только если send_to_telegram=True)
+            send_data = {"ok": False}
+            if send_to_telegram:
+                send_resp = await http.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
+                    json={
+                        "chat_id": user.telegram_id,
+                        "photo": image_url,
+                    },
+                    timeout=_aiohttp.ClientTimeout(total=30),
+                )
+                send_data = await send_resp.json()
 
-        if send_data.get("ok"):
+        if send_to_telegram and send_data.get("ok"):
+            # Telegram получил фото — возвращаем без URL чтобы не было дублирования
             result_msg = f"✅ Изображение отправлено!"
         else:
-            # Telegram не принял — отдаём прямой URL без markdown-синтаксиса
+            # Web-контекст или Telegram не принял — возвращаем URL для вставки в ответ
             result_msg = f"🎨 Изображение сгенерировано: {image_url}"
 
         return result_msg

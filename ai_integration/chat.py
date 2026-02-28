@@ -483,7 +483,7 @@ def _build_session_summary(user_db_id, session):
         return None
 
 
-async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None, progress_callback=None):
+async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None, progress_callback=None, web_context: bool = False):
     """Функция чата — делегирует в автономный агент (единая точка входа)."""
 
     logger.info(f"[CHAT_WITH_AI] START - user_id={user_id}, message='{message[:50]}...'")
@@ -503,7 +503,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             db_session=db_session,
             message_type=message_type,
             subscription_tier=None,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            web_context=web_context
         )
         
         if response_data and 'response' in response_data:

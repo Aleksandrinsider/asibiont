@@ -1904,7 +1904,8 @@ async def chat_handler(request):
                 ai_result = await chat_with_ai(
                     message, context, user_id, file_content,
                     db_session=session_db,
-                    progress_callback=web_progress_callback
+                    progress_callback=web_progress_callback,
+                    web_context=True
                 )
                 response = ai_result['response']
                 logger.info("AI response: %s...", response[:100])

@@ -3166,16 +3166,25 @@
                     </div>`).join('');
             }
 
-            // Сообщения — дедупликация при reconnect, сортировка: новые сверху
+            // Сообщения — полный сброс при reconnect, два прохода: топ-посты, затем комментарии
             const msgs = document.getElementById('av-messages');
             if (msgs && state.messages && state.messages.length) {
-                let added = 0;
+                msgs.innerHTML = '';
+                _arenaRenderedIds.clear();
+                _arenaMsgIdx = 0;
                 const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+                const pendingReplies = [];
                 sorted.forEach(m => {
-                    const key = m.id || m.ts;
-                    if (!_arenaRenderedIds.has(key)) { arenaAppendMessage(m, false); added++; }
+                    if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
+                    arenaAppendMessage(m, false);
                 });
-                if (added > 0) msgs.scrollTop = 0;
+                // Второй проход: привязать комментарии к родительским постам
+                pendingReplies.forEach(m => arenaAppendMessage(m, false));
+                msgs.scrollTop = 0;
+            } else if (msgs) {
+                msgs.innerHTML = '';
+                _arenaRenderedIds.clear();
+                _arenaMsgIdx = 0;
             }
         }
 
