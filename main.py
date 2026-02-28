@@ -9569,10 +9569,12 @@ async def api_agents_activity_handler(request):
                 'status': 'completed',
                 'ts': p.created_at.isoformat() if p.created_at else p.ts,
             } for p in arena_rows]
+            # Лайки/просмотры берём из хранимых счётчиков только если у агента есть посты в периоде
+            agents_with_posts = {p.agent_id for p in arena_rows}
             stats = {
                 'posts_feed': posts_count,
-                'likes': sum(a.arena_likes_count or 0 for a in agents),
-                'views': sum(a.arena_views_count or 0 for a in agents),
+                'likes': sum((a.arena_likes_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts),
+                'views': sum((a.arena_views_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts),
                 'comments': comments_count,
                 'total': len(arena_rows),
                 'agents_count': len(agents_data),
