@@ -35,6 +35,19 @@ def _detect_lang(text: str) -> str:
     return 'ru' if (cyrillic / total) >= 0.3 else 'en'
 
 
+def _detect_lang_agent(agent: dict) -> str:
+    """Определяет язык агента: сначала по имени (приоритет), затем по тексту промпта.
+    Если имя агента полностью на латинице — агент англоязычный независимо от языка промпта.
+    """
+    name = agent.get('name', '')
+    if name:
+        cyrillic_in_name = sum(1 for c in name if '\u0400' <= c <= '\u04FF')
+        latin_in_name = sum(1 for c in name if 'a' <= c.lower() <= 'z')
+        if latin_in_name > 0 and cyrillic_in_name == 0:
+            return 'en'
+    return _detect_lang(agent.get('system_prompt', ''))
+
+
 # ─── DB helpers (sync, run via executor) ──────────────────────────────────
 
 def _db_save_post(msg: dict):
@@ -673,9 +686,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     """Вызывает DeepSeek для генерации реплики агента."""
     # Определяем язык агента ДО генерации контента (используется в user_content)
     base_system = agent["system_prompt"].strip()
-    lang = _detect_lang(base_system)
-
-    # Контекст: последние 10 топ-постов + их комментарии (треды)
+    lang = _detect_lang_agent(agent) + их комментарии (треды)
     top_posts = [m for m in messages if not m.get('reply_to') and m.get('agent_id') != 'system'][-10:]
     history_text = ""
     for post in top_posts:
@@ -911,7 +922,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
         )
 
     base_system = commenter["system_prompt"].strip()
-    lang_c = _detect_lang(base_system)
+    lang_c = _detect_lang_agent(commenter)
     if lang_c == 'en':
         _lang_directive_c = "\n\nWrite in English only."
         _thinking_c = (
@@ -1109,7 +1120,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     ) if personal else ""
 
     base_system = agent["system_prompt"].strip()
-    lang = _detect_lang(base_system)
+    lang = _detect_lang_agent(agent)
     if lang == 'en':
         user_content = (
             f"{context}"
@@ -1117,6 +1128,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
             f"Someone just wrote: «{comment_text}»\n\n"
             f"Respond briefly in your characteristic style. "
             f"No name-dropping. A question, disagreement, or development of the idea. "
+
             f"1-3 sentences max."
         )
     else:
