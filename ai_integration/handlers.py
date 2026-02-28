@@ -3922,7 +3922,108 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             session.close()
 
 
-def _progress_bar(pct):
+def complete_goal(goal_id=None, title=None, user_id=None, session=None):
+    """Отметить цель как выполненную. Алиас update_goal_progress(status='completed')."""
+    search_title = title or (str(goal_id) if goal_id else None)
+    if not search_title:
+        return "Укажи название или ID цели."
+    return update_goal_progress(
+        goal_title=search_title,
+        status='completed',
+        progress=100,
+        user_id=user_id,
+        session=session,
+    )
+
+
+def update_goal(goal_id=None, title=None, description=None, target_date=None, user_id=None, session=None):
+    """Обновить параметры цели: название, описание, дедлайн."""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        # Найти цель по ID или названию
+        goal = None
+        if goal_id:
+            goal = session.query(Goal).filter_by(id=goal_id, user_id=user.id).first()
+        if not goal and title:
+            goals = session.query(Goal).filter(
+                Goal.user_id == user.id,
+                Goal.status.in_(['active', 'paused'])
+            ).all()
+            search = title.lower()
+            for g in goals:
+                if search in g.title.lower():
+                    goal = g
+                    break
+            if not goal:
+                for g in goals:
+                    if any(w in search for w in g.title.lower().split() if len(w) > 2):
+                        goal = g
+                        break
+        if not goal:
+            return f"Цель не найдена. Проверь название или ID."
+
+        changes = []
+        if title and title != goal.title:
+            goal.title = title.strip()
+            changes.append(f"название: {title.strip()}")
+        if description is not None:
+            goal.description = description.strip()
+            changes.append("описание обновлено")
+        if target_date:
+            from .time_parser import parse_time_to_datetime
+            dt = parse_time_to_datetime(target_date, user_id=user_id)
+            if dt:
+                goal.target_date = dt
+                changes.append(f"дедлайн: {dt.strftime('%d.%m.%Y')}")
+
+        if not changes:
+            return "Укажи что нужно изменить: title, description или target_date."
+
+        session.commit()
+        try:
+            from models import AgentActivityLog as _AAL_ug
+            session.add(_AAL_ug(
+                user_id=user.id, activity_type='goal_updated',
+                title=f'Проект изменён: {goal.title}',
+                content=', '.join(changes),
+                status='completed', ref_id=goal.id,
+            ))
+            session.commit()
+        except Exception as _e:
+            logger.warning(f"[UPDATE_GOAL] Activity log failed: {_e}")
+        return f"🎯 Цель «{goal.title}» обновлена: {', '.join(changes)}"
+    except Exception as e:
+        logger.error(f"Error in update_goal for user {user_id}: {e}")
+        return f"Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def set_reminder(reminder_text=None, reminder_time=None, user_id=None, session=None):
+    """Установить напоминание — создаёт задачу с заданным reminder_time."""
+    if not reminder_text:
+        return "Укажи текст напоминания."
+    if not reminder_time:
+        return "Укажи время напоминания."
+    return await add_task(
+        title=reminder_text,
+        description="",
+        reminder_time=reminder_time,
+        user_id=user_id,
+        session=session,
+    )
+
+
+
     """Визуальная полоска прогресса"""
     filled = int(pct / 10)
     empty = 10 - filled
