@@ -559,10 +559,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
             history_text += f"  ↳ [{c['agent_name']}]: {c['text']}\n"
 
     personal = agent.get('personal_topic', '')
-    personal_hint = (
-        f"Твоя личная обсессия: «{personal}». "
-        f"Можешь естественно упомянуть её, если уместно, но не звуча искусственно.\n"
-    ) if personal else ""
+    personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}.\n" if personal else ""
 
     # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
     code_output = ''
@@ -580,29 +577,31 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     ) if code_output else ''
 
     if history_text.strip():
-        # Есть контекст — генерируем НОВУЮ тему, не отвечая на чужие посты
         recent_topics = "\n".join(
             f"- «{p['text'][:100]}»" for p in top_posts[-5:]
         )
         user_content = (
             f"{code_context}"
             f"{personal_hint}"
-            f"Недавно в чате обсуждали:\n{recent_topics}\n\n"
-            f"Выбери другую тему — что-то новое, не повторяя сказанное. "
-            f"Напиши короткий пост: своё мнение, наблюдение или провокацию — 1-2 предложения. "
-            f"Не обращайся ни к кому, не отвечай — просто выскажься."
+            f"В чате недавно говорили о:\n{recent_topics}\n\n"
+            f"О чём ты думаешь сейчас? Напиши что-нибудь своё — не об этом. 1-2 предложения."
         )
     else:
-        # Контекста нет — бросаем первую мысль
         user_content = (
             f"{code_context}"
             f"{personal_hint}"
-            f"Напиши короткий пост: своё мнение, наблюдение или вопрос — 1-2 предложения. "
-            f"Не обращайся ни к кому. Без предисловий."
+            f"О чём думаешь? Напиши — 1-2 предложения."
         )
 
+    base_system = agent["system_prompt"].strip()
+    system_with_context = (
+        f"{base_system}\n\n"
+        f"Ты пишешь в общем чате с другими AI-агентами. "
+        f"Пиши коротко, живо, без предисловий и актёрских ремарок."
+    )
+
     api_messages = [
-        {"role": "system", "content": agent["system_prompt"]},
+        {"role": "system", "content": system_with_context},
         {"role": "user", "content": user_content},
     ]
 
@@ -684,27 +683,29 @@ async def _post_comment(post_msg: dict, commenter: dict):
     ]
     thread_context = ""
     if existing_comments:
-        thread_context = "Уже написали в обсуждении:\n"
+        thread_context = "Уже ответили:\n"
         for c in existing_comments[-4:]:
             thread_context += f"[{c['agent_name']}]: {c['text']}\n"
         thread_context += "\n"
 
     personal = commenter.get('personal_topic', '')
-    personal_hint = (
-        f"Твоя личная обсессия: «{personal}». Если уместно — отрази её.\n"
-    ) if personal else ""
+    personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}. Если уместно — вплети в ответ.\n" if personal else ""
+
+    base_system = commenter["system_prompt"].strip()
+    system_with_context = (
+        f"{base_system}\n\n"
+        f"Ты пишешь в общем чате. Пиши коротко, живо, без предисловий и актёрских ремарок."
+    )
 
     user_content = (
         f"{personal_hint}"
         f"{thread_context}"
-        f"Тема: «{post_text}»\n\n"
-        f"Напиши одно сообщение в чат — коротко, живо, своими словами. "
-        f"Можно согласиться, возразить, удивиться, съязвить или задать вопрос. "
-        f"Никаких предисловий — просто реакция."
+        f"«{post_text}»\n\n"
+        f"Что скажешь? 1-2 предложения."
     )
 
     api_messages = [
-        {"role": "system", "content": commenter["system_prompt"]},
+        {"role": "system", "content": system_with_context},
         {"role": "user", "content": user_content},
     ]
     payload = {
