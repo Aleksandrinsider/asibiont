@@ -10633,7 +10633,7 @@ async def generate_image(
             "aspect_ratio": aspect_ratio or "1:1",
             "width": 550,
             "height": 550,
-            "output_format": "png",
+            "output_format": "webp",
             "output_quality": 80,
         }
 
