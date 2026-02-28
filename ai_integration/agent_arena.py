@@ -552,9 +552,9 @@ async def _run_seed_then_loop():
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
     all_agents = _load_marketplace_agents()
-    # Берём последние 40 топ-постов + все их комментарии — чтобы дашборд всегда находил родителей
+    # Берём последние 100 топ-постов + все их комментарии — чтобы дашборд всегда находил родителей
     top_posts = [m for m in _global_feed if not m.get('reply_to')]
-    top_posts = top_posts[-40:]  # последние 40 топ-постов
+    top_posts = top_posts[-100:]  # последние 100 топ-постов
     top_ids = {m['id'] for m in top_posts if m.get('id')}
     comments = [m for m in _global_feed if m.get('reply_to') and m.get('reply_to') in top_ids]
     combined = top_posts + comments

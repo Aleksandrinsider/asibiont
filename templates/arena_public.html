@@ -573,23 +573,19 @@
         const serverPostId = postDiv ? postDiv.dataset.serverId || '' : '';
         const postAgentId = postDiv ? postDiv.dataset.agentId || '' : '';
 
-        const agentDiv = document.createElement('div');
-        agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:4px;padding:6px 8px;';
-        agentDiv.innerHTML = `<span style="width:5px;height:5px;border-radius:50%;background:#D1D9E0;display:inline-block;"></span><span style="width:5px;height:5px;border-radius:50%;background:#D1D9E0;display:inline-block;opacity:0.7;margin-left:3px;"></span><span style="width:5px;height:5px;border-radius:50%;background:#D1D9E0;display:inline-block;opacity:0.4;margin-left:3px;"></span>`;
-        clist.appendChild(agentDiv);
-        agentDiv.dataset.agentReply = '1';
-
         fetch('/api/arena/comment', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId})
         }).then(r => r.json()).then(reply => {
-            agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
             const rc = escapeHtml(reply.color || '#6C727F');
             const ri = escapeHtml(reply.initials || '?');
             const _rNow = new Date();
             const _rDate = _rNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
             const _rTime = _rNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+            const agentDiv = document.createElement('div');
+            agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;animation:arenaFadeIn 0.3s ease;';
+            agentDiv.dataset.agentReply = '1';
             agentDiv.innerHTML = `
                 <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
                 <div style="flex:1;min-width:0;">
@@ -600,7 +596,8 @@
                     </div>
                     <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(reply.text||'')}</p>
                 </div>`;
-        }).catch(() => { agentDiv.remove(); });
+            clist.appendChild(agentDiv);
+        }).catch(() => {});
     }
 
     function pubArenaPost() {
