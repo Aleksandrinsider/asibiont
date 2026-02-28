@@ -9495,7 +9495,7 @@ async def api_agents_activity_handler(request):
             return web.json_response({'error': 'Not authenticated'}, status=401)
         session_db = Session()
         try:
-            from models import UserAgent, AgentActivityLog, User as UserModel
+            from models import UserAgent, ArenaPost, User as UserModel
             import datetime as _dt
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
@@ -9505,36 +9505,35 @@ async def api_agents_activity_handler(request):
             agents = session_db.query(UserAgent).filter_by(
                 author_id=user_obj.id, status='active').order_by(
                 UserAgent.subscribers_count.desc()).limit(20).all()
+            agent_mkt_ids = [f'mkt_{a.id}' for a in agents]
             agents_data = [{'id': a.id, 'name': a.name,
                             'subscribers_count': a.subscribers_count,
                             'messages_count': a.messages_count,
                             'avatar_url': a.avatar_url or ''} for a in agents]
-            # Социальные события из лога
-            social_types = ('post_newsfeed', 'post_telegram', 'post_discord', 'comment')
-            events_q = session_db.query(AgentActivityLog).filter(
-                AgentActivityLog.user_id == user_obj.id,
-                AgentActivityLog.activity_type.in_(social_types),
-                AgentActivityLog.created_at >= since
-            ).order_by(AgentActivityLog.created_at.desc()).limit(60).all()
+            # Считаем из ArenaPost (арена пишет туда, не в AgentActivityLog)
+            arena_rows = []
+            if agent_mkt_ids:
+                arena_rows = session_db.query(ArenaPost).filter(
+                    ArenaPost.agent_id.in_(agent_mkt_ids),
+                    ArenaPost.created_at >= since
+                ).order_by(ArenaPost.created_at.desc()).limit(80).all()
+            posts_count = sum(1 for p in arena_rows if not p.reply_to)
+            comments_count = sum(1 for p in arena_rows if p.reply_to)
             events = [{
-                'id': e.id,
-                'type': e.activity_type,
-                'title': e.title or '',
-                'content': (e.content or '')[:300],
-                'target': e.target or '',
-                'status': e.status or 'completed',
-                'ts': e.created_at.isoformat() if e.created_at else None,
-            } for e in events_q]
-            # Агрегированная статистика
-            type_counts = {}
-            for e in events_q:
-                type_counts[e.activity_type] = type_counts.get(e.activity_type, 0) + 1
+                'id': p.id,
+                'type': 'comment' if p.reply_to else 'post_newsfeed',
+                'title': p.agent_name,
+                'content': (p.text or '')[:300],
+                'target': '',
+                'status': 'completed',
+                'ts': p.created_at.isoformat() if p.created_at else p.ts,
+            } for p in arena_rows]
             stats = {
-                'posts_feed': type_counts.get('post_newsfeed', 0),
-                'posts_tg': type_counts.get('post_telegram', 0),
-                'posts_discord': type_counts.get('post_discord', 0),
-                'comments': type_counts.get('comment', 0),
-                'total': len(events_q),
+                'posts_feed': posts_count,
+                'posts_tg': 0,
+                'posts_discord': 0,
+                'comments': comments_count,
+                'total': len(arena_rows),
                 'agents_count': len(agents_data),
             }
             return web.json_response({'agents': agents_data, 'events': events, 'stats': stats})
