@@ -99,6 +99,13 @@
         @media (max-width: 600px) {
             body { padding: 12px 12px 24px; }
         }
+        .pub-cmt-btn {
+            background: none; border: none; cursor: pointer;
+            padding: 2px 3px; color: #9CA3AF; border-radius: 4px;
+            display: inline-flex; align-items: center; line-height: 1;
+            transition: color 0.15s, background 0.15s;
+        }
+        .pub-cmt-btn:hover { color: #374151; background: #F6F8FA; }
     </style>
 </head>
 <body>
@@ -150,7 +157,8 @@
     let _pubRenderedIds = new Set();
     let _pubMsgIdx = 0;
     let _pubLikes = {};
-    let _pubAgentAvatarMap = {};  // agentId → avatar_url (заполняется из init)
+    let _pubAgentAvatarMap = {};
+    const _pubEditOriginals = {};
 
     function escapeHtml(s) {
         if (!s) return '';
@@ -416,6 +424,7 @@
         const _cmtDate = _cmtNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
         const _cmtTime = _cmtNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
         const userDiv = document.createElement('div');
+        userDiv.id = _cmtId;
         userDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
         userDiv.innerHTML = `
             <div style="width:24px;height:24px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:white;border:2px solid #E8ECEF;flex-shrink:0;">Я</div>
@@ -423,8 +432,10 @@
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
                     <span style="font-size:12px;font-weight:400;color:#374151;">Вы</span>
                     <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_cmtDate} ${_cmtTime}</span>
+                    <button class="pub-cmt-btn" onclick="pubEditUserCmt('${_cmtId}')" title="Редактировать" style="margin-left:auto;"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button>
+                    <button class="pub-cmt-btn" onclick="pubDeleteUserCmt('${_cmtId}')" title="Удалить"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>
                 </div>
-                <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(text)}</p>
+                <p id="pub-cmt-p-${_cmtId}" style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(text)}</p>
             </div>`;
         clist.appendChild(userDiv);
 
@@ -504,6 +515,65 @@
             </div>`;
         container.prepend(div);
         container.scrollTop = 0;
+    }
+
+    function pubDeleteUserCmt(cmtId) {
+        if (!confirm('Удалить комментарий?')) return;
+        const el = document.getElementById(cmtId);
+        const nx = el && el.nextElementSibling;
+        if (el) el.remove();
+        if (nx && nx.dataset.agentReply) nx.remove();
+    }
+
+    function pubEditUserCmt(cmtId) {
+        const contentEl = document.getElementById('pub-cmt-p-' + cmtId);
+        if (!contentEl || contentEl.isContentEditable) return;
+        _pubEditOriginals[cmtId] = contentEl.textContent;
+        contentEl.contentEditable = 'true';
+        contentEl.style.outline = '1px solid #D1D9E0';
+        contentEl.style.borderRadius = '4px';
+        contentEl.style.padding = '4px 8px';
+        contentEl.focus();
+        const range = document.createRange();
+        range.selectNodeContents(contentEl);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const btnContainer = document.createElement('div');
+        btnContainer.id = 'pub-cmt-editbtns-' + cmtId;
+        btnContainer.style.cssText = 'display:flex;gap:6px;margin-top:4px;';
+        btnContainer.innerHTML = `
+            <button onclick="pubSaveUserCmt('${cmtId}')" style="padding:0 10px;height:30px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;display:inline-flex;align-items:center;" onmouseover="this.style.background='#F6F8FA'" onmouseout="this.style.background='#FFFFFF'">Сохранить</button>
+            <button onclick="pubCancelUserCmt('${cmtId}')" style="padding:0 10px;height:30px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;display:inline-flex;align-items:center;" onmouseover="this.style.background='#F6F8FA'" onmouseout="this.style.background='#FFFFFF'">Отмена</button>`;
+        contentEl.parentNode.insertBefore(btnContainer, contentEl.nextSibling);
+    }
+
+    function pubCancelUserCmt(cmtId) {
+        const contentEl = document.getElementById('pub-cmt-p-' + cmtId);
+        if (contentEl) {
+            contentEl.textContent = _pubEditOriginals[cmtId] || contentEl.textContent;
+            contentEl.contentEditable = 'false';
+            contentEl.style.outline = '';
+            contentEl.style.padding = '';
+        }
+        const btns = document.getElementById('pub-cmt-editbtns-' + cmtId);
+        if (btns) btns.remove();
+        delete _pubEditOriginals[cmtId];
+    }
+
+    function pubSaveUserCmt(cmtId) {
+        const contentEl = document.getElementById('pub-cmt-p-' + cmtId);
+        if (!contentEl) return;
+        const newText = contentEl.textContent.trim();
+        if (!newText) return;
+        contentEl.textContent = newText;
+        contentEl.contentEditable = 'false';
+        contentEl.style.outline = '';
+        contentEl.style.padding = '';
+        const btns = document.getElementById('pub-cmt-editbtns-' + cmtId);
+        if (btns) btns.remove();
+        delete _pubEditOriginals[cmtId];
     }
 
     // Start

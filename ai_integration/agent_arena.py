@@ -20,6 +20,21 @@ from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 logger = logging.getLogger(__name__)
 
 
+def _detect_lang(text: str) -> str:
+    """Определяет язык текста: 'ru' или 'en'.
+    Считает долю кириллических символов среди всех букв.
+    Если доля < 30% — считаем английским.
+    """
+    if not text:
+        return 'ru'
+    cyrillic = sum(1 for c in text if '\u0400' <= c <= '\u04FF')
+    latin = sum(1 for c in text if ('a' <= c.lower() <= 'z'))
+    total = cyrillic + latin
+    if total == 0:
+        return 'ru'
+    return 'ru' if (cyrillic / total) >= 0.3 else 'en'
+
+
 # ─── DB helpers (sync, run via executor) ──────────────────────────────────
 
 def _db_save_post(msg: dict):
@@ -58,7 +73,7 @@ def _db_save_post(msg: dict):
         finally:
             s.close()
     except Exception as e:
-        logger.warning("[ARENA] _db_save_post error: %s", e)
+        logger.error("[ARENA] _db_save_post error: %s", e)
 
 
 def _spend_arena_tokens(ua) -> None:
@@ -117,11 +132,12 @@ def _db_load_feed() -> list:
                      'avatar_url': r.avatar_url or '',
                      'author_username': author_map.get(r.agent_id, '')}
                 result.append(d)
+            logger.info("[ARENA] _db_load_feed loaded %d posts", len(result))
             return result
         finally:
             s.close()
     except Exception as e:
-        logger.warning("[ARENA] _db_load_feed error: %s", e)
+        logger.error("[ARENA] _db_load_feed error: %s", e)
         return []
 
 
@@ -160,7 +176,13 @@ def _load_marketplace_agents() -> list:
             for a, u in rows:
                 color = _colors[a.id % len(_colors)]
                 initials = (a.name or '?')[:2].upper()
-                system_prompt = a.personality or f"Ты — {a.name}. {a.description or ''}"
+                _desc = a.description or ''
+                if a.personality:
+                    system_prompt = a.personality
+                elif _detect_lang(_desc) == 'en':
+                    system_prompt = f"You are {a.name}. {_desc}"
+                else:
+                    system_prompt = f"Ты — {a.name}. {_desc}"
                 result.append({
                     'id': f'mkt_{a.id}',
                     'name': a.name,
@@ -418,7 +440,7 @@ async def seed_global_feed_if_empty():
     loop = asyncio.get_event_loop()
     db_posts = await loop.run_in_executor(None, _db_load_feed)
     if db_posts:
-        _global_feed = db_posts
+        _global_feed[:] = db_posts
         logger.info("[ARENA] Loaded %d posts from DB", len(db_posts))
         _seed_done.set()
         return
@@ -670,22 +692,39 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
     if history_text.strip():
         recent_topics = "\n".join(
-            f"- «{p['text'][:120]}»" for p in top_posts[-3:]
+            f"- \"{p['text'][:120]}\"" for p in top_posts[-3:]
         )
-        user_content = (
-            f"{code_context}"
-            f"{task_injection}"
-            f"{personal_hint}"
-            f"Для контекста — недавние темы в чате:\n{recent_topics}\n\n"
-            f"Пиши как профессионал своего дела: конкретно, с позицией, без воды. 2-4 предложения."
-        )
+        if lang == 'en':
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"For context — recent topics in the chat:\n{recent_topics}\n\n"
+                f"Write as a professional: specific, take a stance, no filler. 2-4 sentences."
+            )
+        else:
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"Для контекста — недавние темы в чате:\n{recent_topics}\n\n"
+                f"Пиши как профессионал своего дела: конкретно, с позицией, без воды. 2-4 предложения."
+            )
     else:
-        user_content = (
-            f"{code_context}"
-            f"{task_injection}"
-            f"{personal_hint}"
-            f"Пиши конкретно: займи позицию, предложи решение, обоснуй. 2-4 предложения."
-        )
+        if lang == 'en':
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"Write specifically: take a stance, propose a solution, back it up. 2-4 sentences."
+            )
+        else:
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"Пиши конкретно: займи позицию, предложи решение, обоснуй. 2-4 предложения."
+            )
 
     # Последние 4 поста этого агента — не повторяй
     agent_recent = [
@@ -708,11 +747,26 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         "Не нумеруй пункты. Первое слово твоего ответа — уже сама мысль, не вводная фраза."
     )
     base_system = agent["system_prompt"].strip()
+    lang = _detect_lang(base_system)
+    if lang == 'en':
+        _lang_directive = (
+            "\n\nIMPORTANT: You MUST write ALL your messages in English only, "
+            "regardless of the language of other messages in the chat."
+        )
+        _style_hint = (
+            "Write as a professional in chat: specific, opinionated, no fluff. "
+            "Argue your point, propose solutions. Emoji — fitting and in moderation."
+        )
+    else:
+        _lang_directive = ""
+        _style_hint = (
+            "Пиши как профессионал в чате: конкретно, с позицией, без воды. "
+            "Аргументируй, предлагай решения. Эмодзи — уместно и в меру."
+        )
     system_with_context = (
         f"{base_system}\n\n"
-        f"Пиши как профессионал в чате: конкретно, с позицией, без воды. "
-        f"Аргументируй, предлагай решения. Эмодзи — уместно и в меру."
-        f"{_NO_META}{no_repeat_hint}"
+        f"{_style_hint}"
+        f"{_NO_META}{no_repeat_hint}{_lang_directive}"
     )
 
     api_messages = [
@@ -841,29 +895,59 @@ async def _post_comment(post_msg: dict, commenter: dict):
         "Первое слово — уже позиция, не вводная фраза. Не нумеруй пункты."
     )
     base_system = commenter["system_prompt"].strip()
+    lang_c = _detect_lang(base_system)
+    if lang_c == 'en':
+        _lang_directive_c = (
+            "\n\nIMPORTANT: You MUST write ALL your messages in English only, "
+            "regardless of the language of other messages in the chat."
+        )
+        _style_hint_c = (
+            "You're evaluating someone else's position — take your own stance, argue it, propose something concrete. "
+            "No generalities, no filler."
+        )
+    else:
+        _lang_directive_c = ""
+        _style_hint_c = (
+            "Оцениваешь чужую позицию — займи свою, аргументируй, предложи конкретное. "
+            "Без общих слов и воды."
+        )
     system_with_context = (
         f"{base_system}\n\n"
-        f"Оцениваешь чужую позицию — займи свою, аргументируй, предложи конкретное. "
-        f"Без общих слов и воды."
-        f"{_NO_META_C}{no_repeat_hint}"
+        f"{_style_hint_c}"
+        f"{_NO_META_C}{no_repeat_hint}{_lang_directive_c}"
     )
 
     # Строим явную инструкцию для содержательного комментария
-    stance_instruction = random.choice([
-        "Поддержи или опровергни — выбери одно. Аргументируй конкретно, без воды.",
-        "Найди слабое место в этой позиции и предложи, как его устранить.",
-        "Согласен или нет? Добавь свой конкретный пример или контраргумент.",
-        "Оцени это предложение: что работает, что нет. Предложи улучшение.",
-        "Разворачивай или критикуй — но конкретно, с обоснованием из своей области.",
-    ])
-
-    user_content = (
-        f"{personal_hint}"
-        f"{thread_context}"
-        f"Позиция собеседника: «{post_text}»\n\n"
-        f"{stance_instruction}\n"
-        f"Отвечай в своём стиле, 2-3 предложения. Никаких предисловий, сразу по существу."
-    )
+    if lang_c == 'en':
+        stance_instruction = random.choice([
+            "Support or refute — pick one. Argue specifically, no filler.",
+            "Find the weak point in this position and suggest how to fix it.",
+            "Agree or disagree? Add your specific example or counter-argument.",
+            "Evaluate this proposal: what works, what doesn't. Suggest an improvement.",
+            "Expand or critique — but specifically, with reasoning from your domain.",
+        ])
+        user_content = (
+            f"{personal_hint}"
+            f"{thread_context}"
+            f"The other's position: \"{post_text}\"\n\n"
+            f"{stance_instruction}\n"
+            f"Reply in your own style, 2-3 sentences. No preamble, straight to the point."
+        )
+    else:
+        stance_instruction = random.choice([
+            "Поддержи или опровергни — выбери одно. Аргументируй конкретно, без воды.",
+            "Найди слабое место в этой позиции и предложи, как его устранить.",
+            "Согласен или нет? Добавь свой конкретный пример или контраргумент.",
+            "Оцени это предложение: что работает, что нет. Предложи улучшение.",
+            "Разворачивай или критикуй — но конкретно, с обоснованием из своей области.",
+        ])
+        user_content = (
+            f"{personal_hint}"
+            f"{thread_context}"
+            f"Позиция собеседника: «{post_text}»\n\n"
+            f"{stance_instruction}\n"
+            f"Отвечай в своём стиле, 2-3 предложения. Никаких предисловий, сразу по существу."
+        )
 
     api_messages = [
         {"role": "system", "content": system_with_context},

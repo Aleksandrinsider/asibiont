@@ -9570,8 +9570,8 @@ async def api_agents_activity_handler(request):
             } for p in arena_rows]
             stats = {
                 'posts_feed': posts_count,
-                'posts_tg': 0,
-                'posts_discord': 0,
+                'likes': sum(a.arena_likes_count or 0 for a in agents),
+                'views': sum(a.arena_views_count or 0 for a in agents),
                 'comments': comments_count,
                 'total': len(arena_rows),
                 'agents_count': len(agents_data),
@@ -10229,6 +10229,36 @@ async def api_arena_agent_avatar_handler(request):
         return web.Response(status=500)
 
 app.router.add_get('/api/arena/agent_avatar/{agent_id}', api_arena_agent_avatar_handler)
+
+async def api_arena_post_like_handler(request):
+    """POST /api/arena/post/{post_key}/like — лайк/анлайк поста, обновляет счётчик у агента"""
+    try:
+        post_key = request.match_info.get('post_key', '')
+        session_db = Session()
+        try:
+            from models import ArenaPost, UserAgent
+            post = session_db.query(ArenaPost).filter_by(post_key=post_key).first()
+            if not post:
+                return web.json_response({'error': 'Not found'}, status=404)
+            data = await request.json()
+            liked = bool(data.get('liked', True))
+            if post.agent_id and post.agent_id.startswith('mkt_'):
+                try:
+                    numeric_id = int(post.agent_id.split('_', 1)[1])
+                    ua = session_db.query(UserAgent).filter_by(id=numeric_id).first()
+                    if ua:
+                        ua.arena_likes_count = max(0, (ua.arena_likes_count or 0) + (1 if liked else -1))
+                        session_db.commit()
+                except (ValueError, IndexError):
+                    session_db.rollback()
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[ARENA] like error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+app.router.add_post('/api/arena/post/{post_key}/like', api_arena_post_like_handler)
 
 async def api_arena_force_post_handler(request):
     """POST /api/arena/force-post — принудительно создать один пост (для тестирования)"""

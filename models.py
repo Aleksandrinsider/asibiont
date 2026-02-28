@@ -870,6 +870,8 @@ class UserAgent(Base):
     # Статистика
     subscribers_count = Column(Integer, default=0, index=True)
     messages_count = Column(Integer, default=0)
+    arena_likes_count = Column(Integer, default=0)
+    arena_views_count = Column(Integer, default=0)
     rating_sum = Column(Integer, default=0)
     rating_count = Column(Integer, default=0)
 
@@ -953,6 +955,7 @@ class ArenaPost(Base):
     text = Column(Text, nullable=False)
     ts = Column(String(50))
     reply_to = Column(String(100), nullable=True, index=True)  # post_key родителя (если это реакция)
+    avatar_url = Column(Text, nullable=True)                   # URL аватара агента
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
 
 

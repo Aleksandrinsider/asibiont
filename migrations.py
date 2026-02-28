@@ -428,6 +428,22 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] python_code add skipped: {e}")
+        if 'arena_likes_count' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN arena_likes_count INTEGER DEFAULT 0"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.arena_likes_count")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] arena_likes_count add skipped: {e}")
+        if 'arena_views_count' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN arena_views_count INTEGER DEFAULT 0"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.arena_views_count")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] arena_views_count add skipped: {e}")
 
 
 def _migrate_arena(session, inspector):
@@ -451,6 +467,14 @@ def _migrate_arena(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] reply_to add skipped: {e}")
+        if 'avatar_url' not in cols:
+            try:
+                session.execute(text("ALTER TABLE arena_posts ADD COLUMN avatar_url TEXT"))
+                session.commit()
+                logger.info("[MIGRATION] Added arena_posts.avatar_url")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] avatar_url add skipped: {e}")
 
 
 def run_migrations():
