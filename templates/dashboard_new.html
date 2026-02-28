@@ -2489,6 +2489,10 @@
             if (reportsLink) reportsLink.style.opacity = '0.5';
             const contactsLink = document.getElementById('contacts-link');
             if (contactsLink) contactsLink.style.opacity = '0.5';
+            const mpLinkC = document.getElementById('marketplace-link');
+            if (mpLinkC) mpLinkC.style.opacity = '0.5';
+            const arenaLinkC = document.getElementById('arena-link');
+            if (arenaLinkC) arenaLinkC.style.opacity = '0.5';
         }
 
         function switchToFeed() {
@@ -2521,6 +2525,10 @@
             if (reportsLinkF) reportsLinkF.style.opacity = '0.5';
             const contactsLinkF = document.getElementById('contacts-link');
             if (contactsLinkF) contactsLinkF.style.opacity = '0.5';
+            const mpLinkF = document.getElementById('marketplace-link');
+            if (mpLinkF) mpLinkF.style.opacity = '0.5';
+            const arenaLinkF = document.getElementById('arena-link');
+            if (arenaLinkF) arenaLinkF.style.opacity = '0.5';
             
             // Скрыть индикатор новых постов и обновить lastSeenPostId
             const indicator = document.getElementById('new-posts-indicator');
@@ -2566,6 +2574,10 @@
             if (reportsLinkN) reportsLinkN.style.opacity = '0.5';
             const contactsLinkN = document.getElementById('contacts-link');
             if (contactsLinkN) contactsLinkN.style.opacity = '0.5';
+            const mpLinkN = document.getElementById('marketplace-link');
+            if (mpLinkN) mpLinkN.style.opacity = '0.5';
+            const arenaLinkN = document.getElementById('arena-link');
+            if (arenaLinkN) arenaLinkN.style.opacity = '0.5';
 
             loadNotes();
         }
@@ -2599,6 +2611,10 @@
             if (reportsLink) reportsLink.style.opacity = '1';
             const contactsLinkR = document.getElementById('contacts-link');
             if (contactsLinkR) contactsLinkR.style.opacity = '0.5';
+            const mpLinkR = document.getElementById('marketplace-link');
+            if (mpLinkR) mpLinkR.style.opacity = '0.5';
+            const arenaLinkR = document.getElementById('arena-link');
+            if (arenaLinkR) arenaLinkR.style.opacity = '0.5';
 
             loadReports();
             startActivityPolling();
@@ -2802,9 +2818,9 @@
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354l-1.086-1.086ZM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.953 1.953-.558a.25.25 0 0 0 .108-.064l6.286-6.286Z"/></svg>
                                 </button>
                                 ${isActive
-                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="quick-action" title="Поставить на паузу"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5a.75.75 0 0 1 .75-.75Z"/></svg></button>`
-                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="quick-action" title="Запустить / возобновить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`}
-                                <button onclick="mpAgentDelete(${a.id})" class="quick-action" title="Удалить агента" style="border-color:#FECACA;" onmouseover="this.style.borderColor='#DC2626';this.style.background='#FEF2F2'" onmouseout="this.style.borderColor='#FECACA';this.style.background='#FFFFFF'">
+                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="quick-action" title="Поставить на паузу в чате"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5a.75.75 0 0 1 .75-.75Z"/></svg></button>`
+                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="quick-action" title="Запустить в чат"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`}
+                                <button onclick="mpAgentDelete(${a.id})" class="quick-action" title="Удалить агента">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#DC2626"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
                                 </button>
                                 ${a.is_subscribed
