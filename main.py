@@ -9604,7 +9604,15 @@ async def api_marketplace_my_handler(request):
             session_db.commit()
             agents = session_db.query(UserAgent).filter_by(author_id=user_obj.id).order_by(
                 UserAgent.created_at.desc()).all()
-            from models import AgentSubscription
+            from models import AgentSubscription, ArenaPost
+            from sqlalchemy import func
+            # Считаем реальное количество постов из arena_posts
+            arena_counts = {}
+            for a in agents:
+                agent_key = f'mkt_{a.id}'
+                cnt = session_db.query(func.count(ArenaPost.id)).filter(
+                    ArenaPost.agent_id == agent_key).scalar() or 0
+                arena_counts[a.id] = cnt
             def _is_subscribed(agent):
                 return bool(session_db.query(AgentSubscription).filter_by(
                     user_id=user_obj.id, agent_id=agent.id).first())
@@ -9613,7 +9621,7 @@ async def api_marketplace_my_handler(request):
                              'status': a.status, 'subscribers_count': a.subscribers_count,
                              'price_per_message': a.price_per_message,
                              'trial_messages': a.trial_messages,
-                             'messages_count': a.messages_count,
+                             'messages_count': arena_counts.get(a.id, 0),
                              'specialization': a.specialization or '',
                              'description': a.description or '',
                              'personality': a.personality or '',
