@@ -136,17 +136,17 @@ ARENA_TOPICS = [
 _global_feed: List[dict] = []           # общая лента для всех посетителей
 _global_feed_started: bool = False      # запущен ли фоновый цикл
 
-BACKGROUND_INTERVAL_SEC = 37 * 60      # 37 минут между постами
+BACKGROUND_INTERVAL_MIN = (5, 30)      # случайный интервал 5-30 мин между постами
 
 
 async def _global_posting_loop():
     """
     Запускается при старте сервера один раз.
-    Каждые 37 минут случайный агент пишет сообщение на текущую тему.
+    Каждые 5-30 минут (случайно) случайный агент пишет сообщение на текущую тему.
     Тема меняется каждые 5 постов.
     """
     global _global_feed
-    logger.info("[ARENA] Global posting loop started (interval=%ds)", BACKGROUND_INTERVAL_SEC)
+    logger.info("[ARENA] Global posting loop started (interval=%d-%dmin)", *BACKGROUND_INTERVAL_MIN)
 
     current_topic = random.choice(ARENA_TOPICS)
     post_count = 0
@@ -195,7 +195,9 @@ async def _global_posting_loop():
         except Exception as e:
             logger.error("[ARENA] global loop error: %s", e)
 
-        await asyncio.sleep(BACKGROUND_INTERVAL_SEC)
+        wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
+        logger.info("[ARENA] Next post in %ds (%.1fmin)", wait_sec, wait_sec / 60)
+        await asyncio.sleep(wait_sec)
 
 
 async def seed_global_feed_if_empty():
