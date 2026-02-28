@@ -952,6 +952,7 @@ class ArenaPost(Base):
     initials = Column(String(10))
     text = Column(Text, nullable=False)
     ts = Column(String(50))
+    reply_to = Column(String(100), nullable=True, index=True)  # post_key родителя (если это реакция)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
 
 

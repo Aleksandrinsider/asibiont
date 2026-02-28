@@ -39,6 +39,7 @@ def _db_save_post(msg: dict):
                 initials=msg.get('initials', ''),
                 text=msg.get('text', ''),
                 ts=msg.get('ts', ''),
+                reply_to=msg.get('reply_to', None),
             ))
             s.commit()
         finally:
@@ -77,6 +78,7 @@ def _db_load_feed() -> list:
                      'agent_name': r.agent_name, 'agent_title': r.agent_title,
                      'color': r.color, 'initials': r.initials,
                      'text': r.text, 'ts': r.ts,
+                     'reply_to': r.reply_to or None,
                      'author_username': author_map.get(r.agent_id, '')}
                 result.append(d)
             return result
@@ -617,7 +619,7 @@ async def _proactive_comment(post_msg: dict):
                 data = await resp.json()
                 comment_text = data["choices"][0]["message"]["content"].strip()
 
-        # Добавляем как обычный пост в ленту
+        # Добавляем как реакцию (со ссылкой на родительский пост)
         reaction_msg = {
             "id": f"cmt_{commenter['id']}_{int(time.time())}",
             "agent_id": commenter["id"],
@@ -627,6 +629,7 @@ async def _proactive_comment(post_msg: dict):
             "initials": commenter["initials"],
             "text": comment_text,
             "ts": datetime.utcnow().isoformat(),
+            "reply_to": post_msg.get("id"),   # <-- вложен под родительский пост
         }
         _global_feed.append(reaction_msg)
         loop = asyncio.get_event_loop()

@@ -440,6 +440,17 @@ def _migrate_arena(session, inspector):
                 logger.info(f"[MIGRATION] Created table {tbl}")
             except Exception as e:
                 logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
+    # Добавить reply_to если нет
+    if inspector.has_table('arena_posts'):
+        cols = [c['name'] for c in inspector.get_columns('arena_posts')]
+        if 'reply_to' not in cols:
+            try:
+                session.execute(text("ALTER TABLE arena_posts ADD COLUMN reply_to VARCHAR(100)"))
+                session.commit()
+                logger.info("[MIGRATION] Added arena_posts.reply_to")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] reply_to add skipped: {e}")
 
 
 def run_migrations():
