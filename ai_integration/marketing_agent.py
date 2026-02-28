@@ -263,9 +263,9 @@ async def research_topic(query, depth="full", user_id=None, session=None):
                     title = r.get('title', '')
                     link = r.get('link', '')
                     if link:
-                        sources.append(f"{title}: {link}")
+                        sources.append(f"{title} — {link}")
                 if sources:
-                    parts.append("Источники: " + ", ".join(sources))
+                    parts.append("Источники:\n" + "\n".join(sources))
             
             summary = ". ".join(parts)
             

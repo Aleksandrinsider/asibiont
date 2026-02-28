@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 import aiohttp
-from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach
+from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach, Anchor, AnchorPriority
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
@@ -6071,6 +6071,61 @@ async def research_topic(query: str, depth: str = 'full', user_id: int = None, s
         if close_session:
             session.close()
 
+
+async def schedule_background_task(
+    query: str,
+    reason: str = '',
+    delay_minutes: int = 60,
+    user_id: int = None,
+    session=None,
+):
+    """
+    Запланировать фоновое исследование.
+    Агент ставит себе задачу: через delay_minutes выполнить research_topic(query)
+    и автоматически отправить результат пользователю.
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        delay_minutes = max(5, min(int(delay_minutes or 60), 1440))  # 5мин..24ч
+        from datetime import timezone as _tz
+        now_utc = datetime.utcnow().replace(tzinfo=_tz.utc)
+        trigger_at = now_utc + timedelta(minutes=delay_minutes)
+        expires_at = trigger_at + timedelta(hours=48)
+
+        anchor = Anchor(
+            user_id=user.id,
+            anchor_type='background_research',
+            source=f'agent_scheduled:{user_id}',
+            topic=f"Фоновое исследование: «{query[:80]}»",
+            priority=AnchorPriority.HIGH,
+            data=json.dumps({'query': query, 'reason': reason}, ensure_ascii=False),
+            triggered_at=trigger_at,
+            expires_at=expires_at,
+            cooldown_hours=0,
+            batch_group='insights',
+        )
+        session.add(anchor)
+        session.commit()
+
+        t = trigger_at.strftime('%H:%M')
+        reason_str = f" ({reason})" if reason else ""
+        logger.info(f"[BG_TASK] Scheduled research '{query[:60]}' at {t} for user {user_id}")
+        return f"Поставил фоновую задачу себе{reason_str}: в {t} исследую «{query[:60]}» и пришлю результат."
+    except Exception as e:
+        logger.error(f"[BG_TASK] Schedule error: {e}")
+        return f"Ошибка планирования: {e}"
+    finally:
+        if close_session:
+            session.close()
+
+
 async def set_content_strategy(strategy: str, user_id: int, session):
     """
     🎯 СОХРАНИТЬ СТРАТЕГИЮ КОНТЕНТА для автоматического маркетинга
@@ -9199,9 +9254,20 @@ async def send_outreach_email(
                 if resp.status in (200, 201):
                     resend_id = resp_data.get('id')
                     logger.info(f"[EMAIL_OUTREACH] Sent to {recipient_email}: {resend_id}")
+                    # Сбрасываем запись ошибки при успехе
+                    try:
+                        from .service_health import clear_error as _clr_svc
+                        _clr_svc('resend')
+                    except Exception:
+                        pass
                 else:
                     err = resp_data.get('message', str(resp_data))
                     logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
+                    try:
+                        from .service_health import record_error as _rec_svc
+                        _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
+                    except Exception:
+                        pass
                     return f"❌ Ошибка Resend API: {err}"
         except Exception as e:
             logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
@@ -9995,8 +10061,18 @@ async def send_email(
                 resp_data = await resp.json()
                 if resp.status not in (200, 201):
                     err = resp_data.get('message', str(resp_data))
+                    try:
+                        from .service_health import record_error as _rec_svc2
+                        _rec_svc2('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
+                    except Exception:
+                        pass
                     return f"❌ Ошибка Resend API: {err}"
                 resend_id = resp_data.get('id', '')
+                try:
+                    from .service_health import clear_error as _clr_svc2
+                    _clr_svc2('resend')
+                except Exception:
+                    pass
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
 
@@ -10409,6 +10485,64 @@ async def generate_image(
 # КОНТЕНТ-КАМПАНИИ — автономная публикация постов
 # ═══════════════════════════════════════════════════════
 
+async def get_system_status(
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+) -> dict:
+    """Получить текущее состояние всех сервисов и квоты пользователя.
+
+    Используй когда:
+    — пользователь спрашивает почему что-то не работает
+    — перед началом рассылки или публикации
+    — при ошибке email/API чтобы объяснить причину
+
+    Returns структуру:
+        {
+            'overall': 'ok' | 'degraded',
+            'summary': '...',
+            'services': {...},
+            'email_quota': {'sent_today': N, 'daily_limit': 50, 'remaining': N, 'exhausted': bool},
+            'token_balance': {'balance': N, 'low': bool},
+        }
+    """
+    from .service_health import get_all_services_report
+
+    report = get_all_services_report(user_id=user_id)
+
+    # Добавьём остаток токенов
+    try:
+        from token_service import get_balance
+        balance = get_balance(user_id) if user_id else 0
+        report['token_balance'] = {
+            'balance': balance,
+            'low': balance < 50,
+        }
+    except Exception:
+        report['token_balance'] = None
+
+    # Статистика email-кампаний
+    if user_id and not report.get('email_quota'):
+        try:
+            if not session:
+                session = Session()
+                close_session = True
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                from models import EmailCampaign
+                active_campaigns = session.query(EmailCampaign).filter_by(
+                    user_id=user.id, status='active'
+                ).count()
+                report['active_email_campaigns'] = active_campaigns
+        except Exception as _e:
+            logger.debug(f"[SYSTEM_STATUS] campaign count error: {_e}")
+        finally:
+            if close_session and session:
+                session.close()
+
+    return report
+
+
 async def start_content_campaign(
     name: str,
     goal: str,
@@ -10533,6 +10667,23 @@ async def start_content_campaign(
 
         if warnings:
             result += "\n\n" + "\n".join(warnings)
+
+        # Логируем в AgentActivityLog → отображается в «Активность» на дашборде
+        try:
+            from models import AgentActivityLog
+            activity = AgentActivityLog(
+                user_id=user.id,
+                activity_type='content_campaign',
+                title=f"Контент-кампания «{name[:80]}» запущена",
+                content=f"Площадки: {platforms_str} | Частота: {freq_map.get(frequency, frequency)} | Цель: {goal[:200]}",
+                target=platforms_str,
+                status='active',
+                ref_id=campaign.id,
+            )
+            session.add(activity)
+            session.commit()
+        except Exception as _ae:
+            logger.warning(f"[CONTENT_CAMPAIGN] Failed to log activity: {_ae}")
 
         logger.info(f"[CONTENT_CAMPAIGN] Created #{campaign.id} «{name}» for user {user_id}: {platforms}, {frequency}")
         return result
@@ -10744,6 +10895,23 @@ async def start_delegation_campaign(
             result += f"🎁 Мотивация: {offer[:100]}\n"
 
         result += "\nАгент будет автономно находить подходящих исполнителей и делегировать задачи."
+
+        # Логируем в AgentActivityLog → отображается в «Активность» на дашборде
+        try:
+            from models import AgentActivityLog
+            activity = AgentActivityLog(
+                user_id=user.id,
+                activity_type='delegation_campaign',
+                title=f"Кампания делегирования «{name[:80]}» запущена",
+                content=f"Цель: {goal[:200]} | Аудитория: {target_audience[:200]}",
+                target=target_audience[:200],
+                status='active',
+                ref_id=campaign.id,
+            )
+            session.add(activity)
+            session.commit()
+        except Exception as _ae:
+            logger.warning(f"[DELEGATION_CAMPAIGN] Failed to log activity: {_ae}")
 
         logger.info(f"[DELEGATION_CAMPAIGN] Created #{campaign.id} «{name}» for user {user_id}")
         return result

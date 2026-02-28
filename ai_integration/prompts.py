@@ -27,14 +27,18 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
             balance = get_balance(user_id_param)
             if lang == 'en':
                 token_balance_info = f"\nToken balance: {balance} (1 token = 1₽). Each action costs tokens."
-                if balance < 100:
-                    token_balance_info += " ⚠️ User has low tokens — warn about balance, but DON'T reduce response quality."
+                if balance < 500:
+                    token_balance_info += " ⚠️ User has low tokens (less than 1 day left) — warn about balance, suggest /buy, but DON'T reduce response quality."
+                elif balance < 1500:
+                    token_balance_info += " Balance is getting low — mention /buy naturally if relevant."
                 else:
                     token_balance_info += " DO NOT mention token balance in your response unless user asks about it."
             else:
                 token_balance_info = f"\nБаланс токенов: {balance} (1 токен = 1₽). Каждое действие стоит токены."
-                if balance < 100:
-                    token_balance_info += " ⚠️ У пользователя мало токенов — предупреди о балансе, но НЕ снижай качество ответа."
+                if balance < 500:
+                    token_balance_info += " ⚠️ У пользователя мало токенов (менее суток) — предупреди, предложи /buy, но НЕ снижай качество ответа."
+                elif balance < 1500:
+                    token_balance_info += " Токены на исходе — при случае естественно упомяни /buy."
                 else:
                     token_balance_info += " НЕ упоминай баланс токенов в ответе, если пользователь не спрашивает."
         except Exception:
@@ -49,7 +53,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         delegate_cost = ACTION_COSTS.get('delegate_task', 40)
         research_cost = ACTION_COSTS.get('research_topic', 20)
     except Exception:
-        msg_cost, task_cost_min, task_cost_max, delegate_cost, research_cost = 20, 5, 15, 40, 20
+        # Дефолты соответствуют текущей token_service.ACTION_COSTS
+        msg_cost, task_cost_min, task_cost_max, delegate_cost, research_cost = 10, 2, 7, 20, 10
 
     if lang == 'en':
         tier_info = f"""\n## TOKEN SYSTEM

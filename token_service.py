@@ -79,7 +79,7 @@ ACTION_COSTS = {
     'get_news_trends':    5,   # Новости
     'quick_topic_search': 5,   # Быстрый поиск
     'research_topic':    10,   # Глубокое исследование
-    'get_crypto_price':   2,   # Котировки
+    'get_system_status':  0,   # Диагностика сервисов — бесплатно
 
     # ── Email-аутрич ──
     'start_email_campaign':     15,  # Создание email-кампании
@@ -106,7 +106,6 @@ ACTION_COSTS = {
     'manage_delegation_campaign': 5,  # Управление кампанией делегирования
 
     # ── Задачи (дополнительно) ──
-    'skip_task':                 2,  # Пропуск/откладывание задачи
     'accept_delegated_task':     3,  # Принятие делегированной задачи
     'reject_delegated_task':     3,  # Отклонение делегированной задачи
     'check_time_conflicts':      2,  # Проверка конфликтов времени
@@ -345,11 +344,6 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
 def grant_signup_tokens(user_id: int, session=None) -> dict:
     """Начисляет бесплатные токены при регистрации."""
     return add_tokens(user_id, FREE_TOKENS_ON_SIGNUP, reason='signup', session=session)
-
-
-def get_action_cost(action: str) -> int:
-    """Возвращает стоимость действия."""
-    return ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
 
 
 def get_balance_info(user_id: int, session=None) -> str:

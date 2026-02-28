@@ -442,6 +442,32 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "schedule_background_task",
+            "description": "⏳ Поставить себе фоновую задачу-исследование. Используй когда вопрос требует времени (15+ мин), пользователь занят и не ждёт ответа прямо сейчас, или когда лучше изучить тему глубже и прислать полный результат позже. Агент сам выполнит исследование через delay_minutes минут и СРАЗУ пришлёт результат пользователю в Telegram. После вызова — скажи пользователю что именно изучишь и когда пришлёшь.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Тема для исследования. Конкретный поисковый запрос."
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Почему откладываешь: 'требует глубокого анализа', 'нужны свежие данные', 'займёт 15+ мин'"
+                    },
+                    "delay_minutes": {
+                        "type": "integer",
+                        "description": "Через сколько минут выполнить. По умолчанию 30.",
+                        "default": 30
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_post",
             "description": "📝 ПОСТ В ЛЕНТУ НОВОСТЕЙ ПЛАТФОРМЫ (НЕ в TG-канал!): Создаёт пост от имени пользователя в ОБЩУЮ ЛЕНТУ НОВОСТЕЙ на платформе — её видят ВСЕ пользователи. Это основной инструмент публикации. ВАЖНО: публикуй ТОЛЬКО после согласия пользователя. Флоу: 1) предложи тему → 2) получи 'ок/давай/да' → 3) create_post. Ключевые слова: 'опубликуй', 'запости', 'пост', 'пост в ленту', 'да, публикуй', 'ок, давай'. По умолчанию, когда пользователь говорит 'сделай пост' — это ЛЕНТА, не TG-канал.",
             "parameters": {
@@ -1342,6 +1368,335 @@ TOOLS = [
                     }
                 },
                 "required": ["prompt"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_system_status",
+            "description": "ℹ️ CТАТУС СЕРВИСОВ — проверить работают ли все сервисы (емайл, новости, AI, погода, платёжка). Показывает активные ошибки, остаток квоты email (N/50 сегодня), баланс токенов. Используй когда: 'почему не отправляются письма', 'не работают новости', 'есть ли ошибки сейчас', 'есть ли проблемы с API', 'сколько писем осталось сегодня'.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reschedule_task",
+            "description": "Перенести задачу на другое время. Используй когда пользователь говорит 'перенеси задачу', 'сдвинь на завтра', 'отложи на час' и т.п.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название или часть названия задачи"
+                    },
+                    "new_time": {
+                        "type": "string",
+                        "description": "Новое время в формате ISO 8601 или естественном языке: 'завтра в 15:00', '2026-03-01T10:00'"
+                    }
+                },
+                "required": ["task_title", "new_time"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "restore_task",
+            "description": "Восстановить удалённую или пропущенную задачу. Используй когда пользователь говорит 'верни задачу', 'восстанови', 'я передумал удалять'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название или часть названия задачи"
+                    },
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи (если известен)"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_task_details",
+            "description": "Получить подробную информацию о конкретной задаче: описание, дедлайн, делегирование, статус. Используй когда спрашивают детали одной задачи.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название или часть названия задачи"
+                    },
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи (если известен)"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_time_conflicts",
+            "description": "Проверить нет ли конфликтов в расписании на указанное время. Используй перед созданием задачи с конкретным временем или постановкой напоминания.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reminder_time": {
+                        "type": "string",
+                        "description": "Время для проверки: ISO 8601 или человекочитаемое 'завтра в 14:00'"
+                    }
+                },
+                "required": ["reminder_time"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_delegation",
+            "description": "Отменить делегирование задачи. Задача вернётся к пользователю.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID делегированной задачи"
+                    }
+                },
+                "required": ["task_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather_info",
+            "description": "🌤 Получить погоду в указанном городе с практическими рекомендациями. Используй когда пользователь спрашивает о погоде или планирует выход на улицу.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "Город. Примеры: 'Москва', 'Санкт-Петербург', 'Дубай', 'New York'"
+                    }
+                },
+                "required": ["city"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_news_trends",
+            "description": "📰 Получить актуальные новости и тренды по теме. Используй когда нужна подборка новостей для анализа рынка, контент-плана или просто «что происходит в нише».",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Тема для поиска, например 'AI стартапы', 'крипторынок', 'маркетинг 2026'"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Период: 'day' (сутки), 'week' (неделя), 'month' (месяц)",
+                        "enum": ["day", "week", "month"]
+                    },
+                    "focus": {
+                        "type": "string",
+                        "description": "Фокус анализа: 'trends' (тренды), 'news' (новости), 'insights' (инсайты для бизнеса)",
+                        "enum": ["trends", "news", "insights"]
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quick_topic_search",
+            "description": "⚡ Быстрый поиск краткой справки по теме (3-5 предложений). Используй для быстрых фактических вопросов, определений, числовых данных. Для глубокого анализа — используй research_topic.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Тема или вопрос для быстрого поиска"
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "research_and_plan",
+            "description": "🧠 Исследовать тему И сразу составить план действий. Используй когда пользователь хочет не только узнать о чём-то, но и понять что делать дальше. Возвращает анализ + конкретные шаги.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Запрос для исследования. Примеры: 'как запустить SaaS продукт в 2026', 'продвижение в B2B без бюджета'"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_situation_and_suggest_tasks",
+            "description": "🔭 Полный анализ текущей ситуации пользователя: задачи, цели, активность — и предложение конкретных задач для движения вперёд. Используй когда пользователь говорит 'что мне делать', 'помоги разобраться', 'застрял', 'не знаю с чего начать'.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_group_opportunities",
+            "description": "Найти потенциальных партнёров, клиентов или коллаборации среди других пользователей платформы на основе совпадения интересов, целей и навыков.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_partners",
+            "description": "Найти партнёров / соисполнителей / клиентов для конкретной задачи или проекта среди пользователей платформы. Используй когда пользователь ищет команду, партнёра или подрядчика.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_marketing_content",
+            "description": "✍️ Создать маркетинговый контент для продукта/услуги: пост, объявление, pitch, описание. Используй когда нужен готовый текст для продвижения.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_name": {
+                        "type": "string",
+                        "description": "Название продукта или услуги"
+                    },
+                    "target_audience": {
+                        "type": "string",
+                        "description": "Целевая аудитория, например 'малый бизнес', 'фрилансеры', 'стартапы'"
+                    },
+                    "platform": {
+                        "type": "string",
+                        "description": "Площадка: 'telegram', 'instagram', 'linkedin', 'email', 'website'",
+                        "enum": ["telegram", "instagram", "linkedin", "email", "website", "vk"]
+                    },
+                    "goal": {
+                        "type": "string",
+                        "description": "Цель контента: 'привлечение', 'конверсия', 'удержание', 'awareness'",
+                        "enum": ["привлечение", "конверсия", "удержание", "awareness"]
+                    }
+                },
+                "required": ["product_name", "target_audience", "platform"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_message_status",
+            "description": "Проверить статус отправленного сообщения другому пользователю платформы: доставлено ли, прочитано, есть ли ответ.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_reminder",
+            "description": "Установить напоминание для задачи или произвольное напоминание на конкретное время. Используй когда пользователь говорит 'напомни мне', 'поставь напоминание'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reminder_text": {
+                        "type": "string",
+                        "description": "Текст напоминания или название задачи"
+                    },
+                    "reminder_time": {
+                        "type": "string",
+                        "description": "Время напоминания: ISO 8601 или 'завтра в 10:00', 'через 2 часа', '1 марта в 9:00'"
+                    }
+                },
+                "required": ["reminder_text", "reminder_time"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_goal",
+            "description": "Обновить параметры цели: название, описание, дедлайн, статус. Используй когда пользователь хочет изменить существующую цель.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal_id": {
+                        "type": "integer",
+                        "description": "ID цели (если известен)"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Новое название цели"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Новое описание"
+                    },
+                    "target_date": {
+                        "type": "string",
+                        "description": "Новый дедлайн в формате ISO 8601 или 'через 3 месяца'"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "complete_goal",
+            "description": "Отметить цель как выполненную. Используй когда пользователь говорит 'цель достигнута', 'выполнил цель', 'закрой цель'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal_id": {
+                        "type": "integer",
+                        "description": "ID цели (если известен)"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Название цели (если ID не известен)"
+                    }
+                }
             }
         }
     },

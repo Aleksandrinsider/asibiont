@@ -554,6 +554,57 @@ class ContextBuilder:
             except Exception as e:
                 logger.warning(f"[CAMPAIGNS_CTX] Error: {e}")
 
+            # ═══ АКТИВНЫЕ КОНТЕНТ-КАМПАНИИ ═══
+            try:
+                from models import ContentCampaign as _CCamp
+                import json as _ccj
+                active_cc = session.query(_CCamp).filter(
+                    _CCamp.user_id == user.id,
+                    _CCamp.status.in_(['active', 'paused'])
+                ).all()
+                if active_cc:
+                    cc_lines = []
+                    for c in active_cc:
+                        try:
+                            platforms = ', '.join(_ccj.loads(c.platforms or '["feed"]'))
+                        except Exception:
+                            platforms = str(c.platforms or 'feed')
+                        badge = '⏸️ НА ПАУЗЕ' if c.status == 'paused' else '🟢 РАБОТАЕТ'
+                        cc_lines.append(
+                            f"  {badge} id={c.id} «{c.name}» | {platforms} | "
+                            f"{c.frequency or '?'}/день в {c.post_time or '?'} | "
+                            f"опубликовано: {c.posts_published or 0}/{c.max_posts or '∞'}"
+                        )
+                    hints.append(
+                        "КОНТЕНТ-КАМПАНИИ — УЖЕ ЗАПУЩЕНЫ, НЕ предлагай создавать новые:\n" + "\n".join(cc_lines)
+                    )
+            except Exception as e:
+                logger.warning(f"[CONTENT_CAMP_CTX] Error: {e}")
+
+            # ═══ АКТИВНЫЕ КАМПАНИИ ДЕЛЕГИРОВАНИЯ ═══
+            try:
+                from models import DelegationCampaign as _DCamp
+                active_dc = session.query(_DCamp).filter(
+                    _DCamp.user_id == user.id,
+                    _DCamp.status.in_(['active', 'paused'])
+                ).all()
+                if active_dc:
+                    dc_lines = []
+                    for d in active_dc:
+                        badge = '⏸️ НА ПАУЗЕ' if d.status == 'paused' else '🟢 РАБОТАЕТ'
+                        dc_lines.append(
+                            f"  {badge} id={d.id} «{d.name}» | "
+                            f"отправлено: {d.delegations_sent or 0}/{d.max_delegations or '∞'} | "
+                            f"принято: {d.delegations_accepted or 0} | "
+                            f"выполнено: {d.delegations_completed or 0} | "
+                            f"лимит/день: {d.daily_limit or '?'}"
+                        )
+                    hints.append(
+                        "КАМПАНИИ ДЕЛЕГИРОВАНИЯ — УЖЕ ЗАПУЩЕНЫ, НЕ предлагай создавать новые:\n" + "\n".join(dc_lines)
+                    )
+            except Exception as e:
+                logger.warning(f"[DELEG_CAMP_CTX] Error: {e}")
+
             # ═══ ПОСТ ЗА СЕГОДНЯ ═══
             try:
                 from models import Post as _Post
@@ -658,8 +709,11 @@ class ContextBuilder:
             # ═══ ТОКЕНЫ И TELEGRAM-КАНАЛ ═══
             try:
                 _tokens = getattr(user, 'token_balance', 0) or 0
-                if _tokens < 5000:
-                    hints.append(f"ТОКЕНЫ: осталось {_tokens} — скоро закончатся, предупреди пользователя.")
+                if _tokens < 500:
+                    # < 500 ≈ ~1 день использования (средний расход ~450/день)
+                    hints.append(f"ТОКЕНЫ: осталось {_tokens} — это менее суток использования, предупреди пользователя и предложи /buy.")
+                elif _tokens < 1500:
+                    hints.append(f"ТОКЕНЫ: осталось {_tokens} (~{round(_tokens/450,1)} дней). При удобном случае упомяни что стоит пополнить.")
                 _channel = getattr(user, 'telegram_channel', None)
                 if not _channel:
                     hints.append("TELEGRAM-КАНАЛ: не настроен в профиле — publish_to_telegram работать не будет до добавления канала.")

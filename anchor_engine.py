@@ -80,15 +80,16 @@ PRIORITY_COOLDOWN = {
 
 # Якоря, которые ВСЕГДА доставляются (кроме DND/ночь)
 ALWAYS_DELIVER_TYPES = {
-    'task_reminder',          # Точное напоминание по reminder_time
-    'task_overdue',           # Просроченная задача — критично
-    'task_deadline_soon',     # Дедлайн скоро — критично
-    'delegation_update',      # Результат делегирования — пользователь ждёт
-    'goal_deadline',          # Горящий дедлайн цели
-    'incoming_message',       # Непрочитанные входящие сообщения
-    'token_low_balance',      # Критически низкий баланс токенов
-    'email_reply_received',   # Входящий ответ на email-кампанию — критически важно
-    'payment_failed',         # Неудачная попытка пополнить токены
+    'task_reminder',             # Точное напоминание по reminder_time
+    'task_overdue',              # Просроченная задача — критично
+    'task_deadline_soon',        # Дедлайн скоро — критично
+    'delegation_update',         # Результат делегирования — пользователь ждёт
+    'goal_deadline',             # Горящий дедлайн цели
+    'incoming_message',          # Непрочитанные входящие сообщения
+    'token_low_balance',         # Критически низкий баланс токенов
+    'email_reply_received',      # Входящий ответ на email-кампанию — критически важно
+    'payment_failed',            # Неудачная попытка пополнить токены
+    'background_research_ready', # Фоновое исследование завершено — пользователь ждёт результат
 }
 
 # Группы батчинга
@@ -138,6 +139,8 @@ BATCH_GROUPS = {
     # System
     'service_degraded': 'system',
     'payment_failed': 'system',
+    # Background research
+    'background_research_ready': 'insights',
 }
 
 
@@ -461,7 +464,19 @@ class AnchorEngine:
         ).order_by(
             Anchor.priority.asc(),  # CRITICAL first (enum order)
             Anchor.created_at.asc()
-        ).limit(15).all()
+        ).limit(20).all()
+
+        # ── 0. BACKGROUND RESEARCH — выполнить отложенные исследования ──
+        bg_due = [a for a in deliverable if a.anchor_type == 'background_research'
+                  and a.triggered_at <= datetime.now(timezone.utc)]
+        if bg_due and not is_night:
+            for bra in bg_due[:2]:
+                async with self._ai_semaphore:
+                    await self._process_background_research_anchor(user, bra, session)
+        elif bg_due and is_night:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ background research deferred (night hours)")
+        # Исключаем background_research из потока доставки — они выполняются тихо
+        deliverable = [a for a in deliverable if a.anchor_type != 'background_research']
 
         logger.info(f"[ANCHOR] User {user_id}: найдено {len(deliverable)} deliverable якорей")
 
@@ -593,6 +608,72 @@ class AnchorEngine:
                     await self._process_delegation_campaign_anchor(user, dc, session)
         elif delegation_silent_anchors and is_night:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ delegation campaigns blocked (night hours)")
+
+    # ═══════════════════════════════════════════════════════
+    # BACKGROUND RESEARCH — выполнение отложенных исследований
+    # ═══════════════════════════════════════════════════════
+
+    async def _process_background_research_anchor(self, user, anchor, session):
+        """Выполняет фоновое исследование и создаёт background_research_ready якорь для доставки."""
+        try:
+            data = anchor.data or {}
+            query = data.get('query', '')
+            if not query:
+                anchor.delivered_at = datetime.now(timezone.utc)
+                session.commit()
+                return
+
+            logger.info(f"[ANCHOR] User {user.id}: 🔍 executing background research: '{query[:60]}'")
+
+            # Выполняем исследование
+            from ai_integration.handlers import research_topic
+            result = await research_topic(query, depth='full', user_id=user.id, session=session)
+            result_str = ''
+            if isinstance(result, dict):
+                result_str = result.get('summary', '') or result.get('result', '') or str(result)
+            else:
+                result_str = str(result) if result else ''
+            result_str = result_str[:3000]
+
+            now_utc = datetime.now(timezone.utc)
+
+            # Помечаем исходный якорь выполненным
+            anchor.delivered_at = now_utc
+
+            # Создаём якорь для доставки результата пользователю
+            reason = data.get('reason', '')
+            ready_anchor = Anchor(
+                user_id=user.id,
+                anchor_type='background_research_ready',
+                source=f'background_research:{anchor.id}',
+                topic=query[:200],
+                priority=AnchorPriority.HIGH,
+                data={'query': query, 'result': result_str, 'reason': reason},
+                triggered_at=now_utc,
+            )
+            session.add(ready_anchor)
+
+            # Логируем в AgentActivityLog (отображается в дашборде → Активность)
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='background_research',
+                title=query[:200],
+                content=query,
+                status='completed',
+                result=result_str[:500],
+            )
+            session.add(log_entry)
+
+            session.commit()
+            logger.info(f"[ANCHOR] User {user.id}: ✅ background_research done → ready anchor queued for '{query[:50]}'")
+
+        except Exception as e:
+            logger.error(f"[ANCHOR] _process_background_research_anchor error: {e}")
+            try:
+                anchor.delivered_at = datetime.now(timezone.utc)
+                session.commit()
+            except Exception:
+                session.rollback()
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей

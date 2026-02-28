@@ -196,16 +196,3 @@ def clear_conversation_history(user_id, session=None):
             session.close()
 
 
-def get_last_assistant_message(user_id, session=None):
-    """
-    Get the last assistant message for context
-    Useful for understanding what AI just proposed/offered
-    """
-    history = get_conversation_history(user_id, session, limit=5)
-    
-    # Find last assistant message
-    for msg in reversed(history):
-        if msg["role"] == "assistant":
-            return msg["content"]
-    
-    return None

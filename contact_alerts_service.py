@@ -320,42 +320,6 @@ class ContactAlertsService:
 _contact_alerts_service = None
 
 
-def init_contact_alerts_service(bot=None, check_interval_minutes=30):
-    """
-    Инициализирует глобальный экземпляр сервиса
-
-    Args:
-        bot: Telegram bot instance
-        check_interval_minutes: Интервал проверки
-
-    Returns:
-        ContactAlertsService instance
-    """
-    global _contact_alerts_service
-    _contact_alerts_service = ContactAlertsService(bot, check_interval_minutes)
-    return _contact_alerts_service
-
-
-def get_contact_alerts_service():
-    """
-    Возвращает глобальный экземпляр сервиса
-    """
-    return _contact_alerts_service
-
-
-async def start_contact_alerts_service(bot=None, check_interval_minutes=30):
-    """
-    Запускает сервис алертов о контактах
-
-    Usage in main.py:
-        import contact_alerts_service
-        asyncio.create_task(contact_alerts_service.start_contact_alerts_service(bot))
-    """
-    service = init_contact_alerts_service(bot, check_interval_minutes)
-    await service.start()
-
-
-# Тестирование
 async def test_service():
     """
     Тест сервиса (запускает один цикл)

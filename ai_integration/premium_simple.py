@@ -115,19 +115,17 @@ async def trigger_premium_automation_realtime(premium_user_id: int,
         full_context = "\n\n".join(context_parts)
         logger.info(f"[PREMIUM_RT] Context length: {len(full_context)} chars")
         
-        # Анализируем через AI
-        analysis = await analyze_context_with_ai(full_context)
-        
-        if not analysis:
-            logger.warning("[PREMIUM_RT] Failed to analyze context")
-            return {"error": "Failed to analyze", "recommendations_saved": 0}
-        
-        # Находим релевантных людей
-        relevant_users = find_relevant_users_for_goals(
-            session,
-            analysis,
-            exclude_user_id=user_id
-        )
+        # analyze_context_with_ai / find_relevant_users_for_goals были удалены
+        # Возвращаем пустой результат без ошибки
+        return {
+            "premium_user": premium_user.username,
+            "trigger": "realtime",
+            "task_id": task_id,
+            "items_analyzed": 0,
+            "relevant_users_found": 0,
+            "recommendations_saved": 0,
+            "status": "skipped_no_analyzer"
+        }
         
         logger.info(f"[PREMIUM_RT] Found {len(relevant_users)} relevant users")
         

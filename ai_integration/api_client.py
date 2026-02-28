@@ -28,6 +28,13 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# Запись ошибок сервисов (ленивая загрузка — избегаем циклических импортов)
+try:
+    from .service_health import record_error as _rec_err, clear_error as _clr_err
+except ImportError:
+    def _rec_err(*a, **kw): pass
+    def _clr_err(*a, **kw): pass
+
 # ============================================================================
 # КЭШИРОВАНИЕ
 # ============================================================================
@@ -474,9 +481,11 @@ class ExternalAPIClient:
             self._track_call('ddg')
             await self.cache.set('ddg', cache_params, results, cache_ttl)
             logger.info(f"[DDG] Found {len(results)} results for: {query[:50]}")
+            _clr_err('ddg')
             return results
 
         except Exception as e:
+            _rec_err('ddg', f"Search failed: {e}")
             logger.warning(f"[DDG] Error: {e}")
             return None
 
@@ -587,21 +596,75 @@ class ExternalAPIClient:
                         'wind_speed': data['wind']['speed'],
                         'city_name': data['name']
                     }
-                    
+                    _clr_err('openweathermap')
                     await self.cache.set('weather', cache_params, result, cache_ttl)
                     return result
                 else:
+                    _rec_err('openweathermap', f'API error {response.status}', code=response.status)
                     logger.warning(f"[WEATHER] API error {response.status} for: {city}")
                     return None
                     
         except Exception as e:
+            _rec_err('openweathermap', f'Exception: {e}')
             logger.error(f"[WEATHER] Error: {e}")
             return None
     
     # ========================================================================
-    # NewsAPI
+    # NewsAPI  (с DDG-fallback — бесплатно, без лимита)
     # ========================================================================
-    
+
+    async def _get_news_ddg(
+        self,
+        topic: str,
+        max_results: int = 10,
+        cache_ttl: int = 3600,
+    ) -> Optional[List[dict]]:
+        """Получить новости через DuckDuckGo (бесплатно, без API-ключа).
+
+        Returns тот же формат, что и get_news():
+            [{'title', 'description', 'url', 'published', 'source'}]
+        """
+        cache_params = {'topic': topic, 'n': max_results, 'src': 'ddg_news'}
+        cached = await self.cache.get('ddg', cache_params)
+        if cached is not None:
+            return cached
+
+        try:
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
+            import asyncio as _aio_n
+
+            def _sync_news():
+                with DDGS() as ddgs:
+                    raw = list(ddgs.news(topic, max_results=max_results))
+                return [
+                    {
+                        'title': r.get('title', ''),
+                        'description': r.get('body', '') or r.get('excerpt', ''),
+                        'url': r.get('url', ''),
+                        'published': r.get('date', ''),
+                        'source': r.get('source', '') or r.get('publisher', ''),
+                    }
+                    for r in raw
+                    if r.get('title')
+                ]
+
+            loop = _aio_n.get_event_loop()
+            results = await loop.run_in_executor(None, _sync_news)
+
+            self._track_call('ddg')
+            await self.cache.set('ddg', cache_params, results, cache_ttl)
+            logger.info(f"[DDG_NEWS] Found {len(results)} articles for: {topic[:50]}")
+            _clr_err('ddg')
+            return results
+
+        except Exception as e:
+            _rec_err('ddg', f"DDG news failed: {e}")
+            logger.warning(f"[DDG_NEWS] Error: {e}")
+            return None
+
     async def get_news(
         self,
         topic: Optional[str] = None,
@@ -619,7 +682,8 @@ class ExternalAPIClient:
                       'published': ..., 'source': ...}]
         """
         if not NEWSAPI_API_KEY:
-            return None
+            # Нет ключа NewsAPI → сразу используем DDG
+            return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
         
         cache_params = {'topic': topic, 'lang': language, 'sort': sort_by, 'from': from_date}
         
@@ -628,16 +692,17 @@ class ExternalAPIClient:
         if cached is not None:
             return cached
         
-        # Backoff: если сервер вернул 429 — ждём 12 ч прежде чем снова дёргать API
+        # Backoff: если сервер вернул 429 — ждём 12 ч, пуская трафик на DDG
         blocked_until = self._backoff_until.get('newsapi', 0)
         if time.time() < blocked_until:
             remaining = int((blocked_until - time.time()) / 60)
-            logger.info(f"[NEWS] Rate-limited by NewsAPI, backoff {remaining} min remaining")
-            return None
+            logger.info(f"[NEWS] NewsAPI backoff {remaining} min → fallback to DDG news")
+            return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
 
         # Rate-limit
         if not await self.rate_limiter.acquire('newsapi'):
-            return None
+            # Мягкий rate-limit — тоже уходим на DDG
+            return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
         
         session = await self._get_session()
         
@@ -669,7 +734,8 @@ class ExternalAPIClient:
                     data = await response.json()
                     
                     if data.get('status') != 'ok' or not data.get('articles'):
-                        return []
+                        logger.info(f"[NEWS] NewsAPI empty/error status → DDG fallback")
+                        return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
                     
                     articles = []
                     for article in data['articles'][:page_size]:
@@ -685,25 +751,36 @@ class ExternalAPIClient:
                             'source': article.get('source', {}).get('name', '')
                         })
                     
-                    await self.cache.set('news', cache_params, articles, cache_ttl)
-                    logger.info(f"[NEWS] Found {len(articles)} articles for: {topic or 'headlines'}")
-                    return articles
+                    if articles:
+                        await self.cache.set('news', cache_params, articles, cache_ttl)
+                        logger.info(f"[NEWS] Found {len(articles)} articles for: {topic or 'headlines'}")
+                        _clr_err('newsapi')
+                        return articles
+                    else:
+                        # NewsAPI вернул 200 но без статей → DDG
+                        logger.info(f"[NEWS] NewsAPI returned 0 articles → DDG fallback")
+                        return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
                 else:
                     if response.status == 429:
                         # 429 Too Many Requests — блокируем запросы на 12 часов
-                        self._backoff_until['newsapi'] = time.time() + 43200
+                        blocked_ts = time.time() + 43200
+                        self._backoff_until['newsapi'] = blocked_ts
                         _body = await response.text()
                         logger.warning(
                             f"[NEWS] 429 received — NewsAPI dev quota exhausted. "
-                            f"Backoff 12h set. Body: {_body[:200]}"
+                            f"Backoff 12h set. Switching to DDG news. Body: {_body[:200]}"
                         )
+                        _rec_err('newsapi', 'Исчерпан дневной лимит запросов', code=429,
+                                   detail=_body[:200], blocked_until=blocked_ts)
+                        return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
                     else:
-                        logger.warning(f"[NEWS] API error {response.status} for: {topic}")
-                    return None
+                        _rec_err('newsapi', f'API error {response.status}', code=response.status)
+                        logger.warning(f"[NEWS] API error {response.status} for: {topic} → DDG fallback")
+                        return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
                     
         except Exception as e:
-            logger.error(f"[NEWS] Error: {e}")
-            return None
+            logger.error(f"[NEWS] Error: {e} → DDG fallback")
+            return await self._get_news_ddg(topic or 'новости', max_results=page_size, cache_ttl=cache_ttl)
     
     # ========================================================================
     # DeepSeek AI
@@ -769,6 +846,7 @@ class ExternalAPIClient:
                 if response.status == 200:
                     data = await response.json()
                     content = data['choices'][0]['message']['content'].strip()
+                    _clr_err('deepseek')
                     
                     if parse_json:
                         try:
@@ -786,13 +864,21 @@ class ExternalAPIClient:
                     
                     return content
                 else:
+                    _body_ds = ''
+                    try:
+                        _body_ds = (await response.text())[:300]
+                    except Exception:
+                        pass
+                    _rec_err('deepseek', f'API error {response.status}', code=response.status, detail=_body_ds)
                     logger.error(f"[DEEPSEEK] API error: {response.status}")
                     return None
                     
         except asyncio.TimeoutError:
+            _rec_err('deepseek', 'Тайм-аут запроса к AI-модели')
             logger.warning("[DEEPSEEK] Timeout")
             return None
         except Exception as e:
+            _rec_err('deepseek', f'Exception: {e}')
             logger.error(f"[DEEPSEEK] Error: {e}")
             return None
     

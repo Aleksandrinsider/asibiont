@@ -106,21 +106,7 @@ def get_lang_badge(lang: str) -> str:
     return '🇷🇺'
 
 
-def get_platform_badge(platform: str) -> str:
-    """Return a platform icon for display in contacts."""
-    if platform == 'discord':
-        return '🎮'  # Discord
-    return '✈️'  # Telegram
-
-
-# ═══════════════════════════════════════════════════════
-# ПЕРЕВОДЫ
-# ═══════════════════════════════════════════════════════
-
-STRINGS = {
-    'ru': {},
-    'en': {},
-}
+STRINGS: dict = {'ru': {}, 'en': {}}
 
 
 def _register(key: str, ru: str, en: str):

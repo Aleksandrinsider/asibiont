@@ -78,6 +78,3 @@ def create_payment(amount, description, user_id, tier='tokens_small', promo_code
         logger.error(f"Detailed error info: {traceback.format_exc()}")
         raise
 
-def get_token_pack_info(pack_key):
-    """Get info for a token pack"""
-    return TOKEN_PACK_PRICES.get(pack_key, TOKEN_PACK_PRICES['tokens_small'])
