@@ -88,6 +88,7 @@ ALWAYS_DELIVER_TYPES = {
     'incoming_message',       # Непрочитанные входящие сообщения
     'token_low_balance',      # Критически низкий баланс токенов
     'email_reply_received',   # Входящий ответ на email-кампанию — критически важно
+    'payment_failed',         # Неудачная попытка пополнить токены
 }
 
 # Группы батчинга
@@ -113,6 +114,7 @@ BATCH_GROUPS = {
     'recurring_task_due': 'tasks',
     'post_opportunity': 'posting',
     'channel_post': 'posting',
+    'discord_post': 'posting',
     'event_discovery': 'insights',
     'contact_activity': 'contacts',
     'incoming_message': 'engagement',
@@ -131,6 +133,9 @@ BATCH_GROUPS = {
     # Delegation campaigns
     'delegation_campaign_send': 'delegation',
     'delegation_campaign_follow_up': 'delegation',
+    # System
+    'service_degraded': 'system',
+    'payment_failed': 'system',
 }
 
 
@@ -393,6 +398,7 @@ class AnchorEngine:
         dialog_count = 0
         post_count = 0
         channel_count = 0
+        discord_count = 0
         for log in today_logs:
             try:
                 types = json.loads(log.anchor_types) if log.anchor_types else []
@@ -400,6 +406,8 @@ class AnchorEngine:
                 types = []
             if 'channel_post' in types:
                 channel_count += 1
+            elif 'discord_post' in types:
+                discord_count += 1
             elif 'post_opportunity' in types:
                 post_count += 1
             else:
@@ -493,7 +501,7 @@ class AnchorEngine:
         DELEGATION_SILENT_TYPES = {'delegation_campaign_send', 'delegation_campaign_follow_up'}
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
-        post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post')]
+        post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post', 'discord_post')]
         email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
         delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
@@ -540,6 +548,13 @@ class AnchorEngine:
             channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
             if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
                 for pa in channel_posts[:1]:
+                    async with self._ai_semaphore:
+                        await self._process_post_anchor(user, pa, session)
+
+            # ── 3e. DISCORD POSTS — автономный постинг в Discord-канал ──
+            discord_posts = [a for a in post_anchors if a.anchor_type == 'discord_post']
+            if discord_posts and discord_count < MAX_CHANNEL_PER_DAY:
+                for pa in discord_posts[:1]:
                     async with self._ai_semaphore:
                         await self._process_post_anchor(user, pa, session)
         elif post_anchors:
@@ -644,6 +659,10 @@ class AnchorEngine:
         if user.telegram_channel:
             anchors.extend(self._scan_channel_post(user, profile, session, now_utc))
 
+        # --- ПОСТЫ В DISCORD (если настроен webhook) ---
+        if getattr(user, 'discord_webhook', None):
+            anchors.extend(self._scan_discord_post(user, profile, session, now_utc))
+
         # --- EMAIL OUTREACH (автономная отправка + фоллоу-апы + уведомления о reply) ---
         anchors.extend(self._scan_email_outreach(user, session, now_utc))
 
@@ -652,6 +671,12 @@ class AnchorEngine:
 
         # --- КАМПАНИИ ДЕЛЕГИРОВАНИЯ (автономное распределение задач) ---
         anchors.extend(self._scan_delegation_campaigns(user, session, now_utc))
+
+        # --- ДЕГРАДАЦИЯ СЕРВИСОВ (service_health) ---
+        anchors.extend(self._scan_service_degraded(user, session, now_utc))
+
+        # --- НЕУДАЧНЫЕ ПЛАТЕЖИ ---
+        anchors.extend(self._scan_payment_failed(user, session, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         anchors = await self._enrich_anchors_with_ddg(anchors, profile)
@@ -2470,21 +2495,46 @@ class AnchorEngine:
         if channel_posts_today >= MAX_CHANNEL_PER_DAY:
             return anchors
 
-        # Проверяем предпочтительное время для постинга
-        post_time_str = getattr(profile, 'auto_post_time', '12:00') if profile else '12:00'
-        try:
-            post_h, post_m = map(int, (post_time_str or '12:00').split(':'))
-        except (ValueError, AttributeError):
-            post_h, post_m = 12, 0
-
-        current_minutes = user_now.hour * 60 + user_now.minute
-        target_minutes = post_h * 60 + post_m
-
-        # Окно: ±90 мин от предпочтительного времени (широкое окно, чтобы не пропустить при перезапусках)
-        if abs(current_minutes - target_minutes) > 90:
+        # Рабочие часы (10:00–22:00) — единственный ограничитель времени
+        if user_now.hour < 10 or user_now.hour >= 22:
             return anchors
 
-        # Собираем контекст для AI
+        # Сигнально-ориентированный подход: постим когда есть реальный контент
+        signals = []
+        recent_completed = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'completed',
+            Task.actual_completion_time >= now_utc - timedelta(hours=24)
+        ).all()
+        if recent_completed:
+            titles = [t.title for t in recent_completed[:5]]
+            signals.append(f'completed_tasks:{len(recent_completed)}:{",".join(titles)}')
+        if len(recent_completed) >= 3:
+            signals.append(f'productivity_streak:{len(recent_completed)}')
+        achieved_goals = session.query(Goal).filter(
+            Goal.user_id == user.id, Goal.progress_percentage >= 100, Goal.status == 'active'
+        ).all()
+        if achieved_goals:
+            signals.append(f'achieved_goals:{",".join(g.title for g in achieved_goals[:3])}')
+        if profile:
+            if profile.skills:
+                signals.append(f'skills:{profile.skills[:100]}')
+            if profile.interests:
+                signals.append(f'interests:{profile.interests[:100]}')
+            if getattr(profile, 'content_strategy', None):
+                signals.append(f'content_strategy:{profile.content_strategy[:200]}')
+            if profile.position:
+                signals.append(f'position:{profile.position[:80]}')
+        if not signals:
+            active_tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['pending', 'in_progress', 'active'])
+            ).order_by(Task.due_date.asc()).limit(3).all()
+            if active_tasks:
+                signals.append(f'active_tasks:{",".join(t.title for t in active_tasks)}')
+        if not signals:
+            return anchors
+
         content_strategy = getattr(profile, 'content_strategy', '') or '' if profile else ''
         interests = getattr(profile, 'interests', '') or '' if profile else ''
         goals = getattr(profile, 'goals', '') or '' if profile else ''
@@ -2494,10 +2544,11 @@ class AnchorEngine:
             user_id=user.id,
             anchor_type='channel_post',
             source=f'channel:{user_now.strftime("%Y-%m-%d")}',
-            topic=_t(user, f'Время для поста в канал {channel}', f'Time for a post in channel {channel}'),
+            topic=_t(user, f'Есть материал для поста в канал {channel}', f'Content ready for channel {channel} post'),
             priority=AnchorPriority.LOW,
             data=json.dumps({
                 'channel': channel,
+                'signals': signals,
                 'content_strategy': content_strategy[:300],
                 'interests': interests[:200],
                 'goals': goals[:200],
@@ -2505,7 +2556,95 @@ class AnchorEngine:
                 'user_name': user.first_name or user.username or 'user',
             }, ensure_ascii=False),
             triggered_at=now_utc,
-            expires_at=now_utc + timedelta(hours=4),
+            expires_at=now_utc + timedelta(hours=12),
+            cooldown_hours=20,
+            batch_group='posting',
+        ))
+
+        return anchors
+
+    def _scan_discord_post(self, user, profile, session, now_utc) -> list:
+        """Сигнально-ориентированный автопостинг в Discord-канал.
+
+        Срабатывает когда есть контент — не по расписанию.
+        Независим от channel_post и post_opportunity.
+        """
+        anchors = []
+
+        discord_wh = getattr(user, 'discord_webhook', None)
+        if not discord_wh or not discord_wh.startswith('https://discord.com/api/webhooks/'):
+            return anchors
+
+        # Лимит 1 пост в Discord в день (через AgentActivityLog)
+        user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
+        user_now = datetime.now(user_tz)
+        today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start.astimezone(pytz.UTC)
+
+        from models import AgentActivityLog as _AAL_dc
+        discord_today = session.query(_AAL_dc).filter(
+            _AAL_dc.user_id == user.id,
+            _AAL_dc.activity_type == 'post_discord',
+            _AAL_dc.created_at >= today_start_utc,
+            _AAL_dc.status == 'published'
+        ).count()
+        if discord_today >= MAX_CHANNEL_PER_DAY:
+            return anchors
+
+        # Рабочие часы
+        if user_now.hour < 10 or user_now.hour >= 22:
+            return anchors
+
+        # Сигналы контента
+        signals = []
+        recent_completed = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'completed',
+            Task.actual_completion_time >= now_utc - timedelta(hours=24)
+        ).all()
+        if recent_completed:
+            titles = [t.title for t in recent_completed[:5]]
+            signals.append(f'completed_tasks:{len(recent_completed)}:{",".join(titles)}')
+        if len(recent_completed) >= 3:
+            signals.append(f'productivity_streak:{len(recent_completed)}')
+        achieved_goals = session.query(Goal).filter(
+            Goal.user_id == user.id, Goal.progress_percentage >= 100, Goal.status == 'active'
+        ).all()
+        if achieved_goals:
+            signals.append(f'achieved_goals:{",".join(g.title for g in achieved_goals[:3])}')
+        if profile:
+            if profile.skills:
+                signals.append(f'skills:{profile.skills[:100]}')
+            if profile.interests:
+                signals.append(f'interests:{profile.interests[:100]}')
+            if getattr(profile, 'content_strategy', None):
+                signals.append(f'content_strategy:{profile.content_strategy[:200]}')
+        if not signals:
+            active_tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['pending', 'in_progress', 'active'])
+            ).order_by(Task.due_date.asc()).limit(3).all()
+            if active_tasks:
+                signals.append(f'active_tasks:{",".join(t.title for t in active_tasks)}')
+        if not signals:
+            return anchors
+
+        content_strategy = getattr(profile, 'content_strategy', '') or '' if profile else ''
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='discord_post',
+            source=f'discord:{user_now.strftime("%Y-%m-%d")}',
+            topic=_t(user, 'Есть материал для поста в Discord', 'Content ready for Discord post'),
+            priority=AnchorPriority.LOW,
+            data=json.dumps({
+                'discord_webhook': discord_wh,
+                'signals': signals,
+                'content_strategy': content_strategy[:300],
+                'user_name': user.first_name or user.username or 'user',
+            }, ensure_ascii=False),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=12),
             cooldown_hours=20,
             batch_group='posting',
         ))
@@ -2797,6 +2936,71 @@ class AnchorEngine:
                     await self.bot.send_message(chat_id=user.telegram_id, text=notify)
                 status_icon = "✅" if published else "❌"
                 logger.info(f"[ANCHOR] {status_icon} Channel post for {user.telegram_id} -> {channel}: {post_text[:80]}...")
+
+            elif anchor.anchor_type == 'discord_post':
+                discord_wh = anchor_data.get('discord_webhook', '') or getattr(user, 'discord_webhook', '')
+                if not discord_wh:
+                    return
+
+                post_text = await self._ai_compose_post(user, anchor_data, session, mode='discord')
+                if not post_text:
+                    logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for discord post")
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
+
+                # Публикуем в Discord
+                dc_ok = False
+                try:
+                    import aiohttp as _aiohttp_dp
+                    async with _aiohttp_dp.ClientSession() as http_dc:
+                        resp = await http_dc.post(
+                            discord_wh,
+                            json={"content": post_text},
+                            timeout=_aiohttp_dp.ClientTimeout(total=15),
+                        )
+                        dc_ok = resp.status in (200, 204)
+                except Exception as dc_err:
+                    logger.error(f"[ANCHOR] Discord webhook error: {dc_err}")
+
+                # Помечаем якорь
+                anchor.delivered_at = datetime.now(timezone.utc)
+
+                # Логируем в AgentActivityLog
+                from models import AgentActivityLog as _AAL_dpost
+                activity = _AAL_dpost(
+                    user_id=user.id,
+                    activity_type='post_discord',
+                    title=post_text[:80],
+                    content=post_text,
+                    target='Discord канал',
+                    status='published' if dc_ok else 'failed',
+                )
+                session.add(activity)
+
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[DISCORD] {post_text[:200]}',
+                    anchor_types=json.dumps([anchor.anchor_type]),
+                )
+                session.add(log)
+                session.commit()
+
+                # Уведомляем пользователя
+                if self.bot:
+                    status = "опубликован" if dc_ok else "ошибка при публикации (проверь webhook)"
+                    notify = (
+                        f"Discord пост — {status}:\n\n"
+                        f"{post_text[:500]}\n\n"
+                        f"Если нужно поправить — скажи."
+                    )
+                    await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+                status_icon = "✅" if dc_ok else "❌"
+                logger.info(f"[ANCHOR] {status_icon} Discord post for {user.telegram_id}: {post_text[:80]}...")
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_post_anchor error: {e}\n{traceback.format_exc()}")
@@ -3657,7 +3861,7 @@ class AnchorEngine:
         - В каком стиле
 
         Args:
-            mode: 'feed' | 'channel'
+            mode: 'feed' | 'channel' | 'discord'
         Returns:
             str текст поста или None (если SKIP)
         """
@@ -3713,6 +3917,18 @@ class AnchorEngine:
                     "6. НЕ ВЫДУМЫВАЙ факты. Основывайся ТОЛЬКО на реальных сигналах ниже\n"
                     "7. Верни ТОЛЬКО текст поста или SKIP. Ничего больше."
                 )
+            elif mode == 'discord':
+                content_strategy = anchor_data.get('content_strategy', '')
+                system_msg = (
+                    "Ты — контент-менеджер, создающий посты для Discord-сервера пользователя.\n\n"
+                    "ПРАВИЛА:\n"
+                    "1. ВСЕГДА старайся написать пост. Верни SKIP ТОЛЬКО если нет ни одного сигнала\n"
+                    "2. Пиши от лица автора, живо и по-человечески — Discord ценит человечность\n"
+                    "3. Допустимо использование Discord Markdown (**bold**, _italic_)\n"
+                    f"4. Контент-стратегия: {content_strategy or 'не указана'}\n"
+                    "5. 2-5 предложений — Discord-аудитория предпочитает лаконичность\n"
+                    "6. Верни ТОЛЬКО текст поста или SKIP."
+                )
             else:  # channel
                 content_strategy = anchor_data.get('content_strategy', '')
                 system_msg = (
@@ -3737,8 +3953,8 @@ class AnchorEngine:
                 user_prompt_parts.append(f"\nСИГНАЛЫ ({len(signals)}):")
                 for s in signals:
                     user_prompt_parts.append(f"- {s}")
-            elif mode == 'channel':
-                # Для канала сигналов нет, AI пишет на основе профиля/стратегии
+            elif mode in ('channel', 'discord'):
+                # Для канала/Discord без сигналов — AI пишет на основе профиля/стратегии
                 user_prompt_parts.append("\nСоздай пост на основе профиля и контент-стратегии.")
 
             user_prompt_parts.append("\nРешение: напиши пост или SKIP.")
@@ -4293,6 +4509,75 @@ class AnchorEngine:
             session.close()
 
     # ═══════════════════════════════════════════════════════
+    def _scan_service_degraded(self, user, session, now_utc) -> list:
+        """Создаёт якорь когда один или больше внешних сервисов сломаны."""
+        anchors = []
+        try:
+            from ai_integration.service_health import get_status
+            errors = get_status()
+            if not errors:
+                return anchors
+
+            _labels = {
+                'resend': 'email-рассылка', 'deepseek': 'AI-модель',
+                'newsapi': 'новости', 'ddg': 'веб-поиск',
+                'openweathermap': 'погода', 'payments': 'платёжная система',
+                'github': 'поиск контактов',
+            }
+            affected_ru = [_labels.get(s, s) for s in errors]
+            affected_en = list(errors.keys())
+
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='service_degraded',
+                source=f'service_health:{",".join(sorted(errors.keys()))}',
+                topic=_t(user,
+                    f'Проблемы с сервисами: {", ".join(affected_ru)}',
+                    f'Service issues: {", ".join(affected_en)}'),
+                priority=AnchorPriority.HIGH,
+                data=json.dumps({'services': list(errors.keys()), 'count': len(errors)}),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(hours=6),
+                cooldown_hours=4,
+                batch_group='system',
+            ))
+        except Exception as e:
+            logger.debug(f'[ANCHOR] service_degraded scan error: {e}')
+        return anchors
+
+    def _scan_payment_failed(self, user, session, now_utc) -> list:
+        """Уведомляет если последняя попытка пополнить токены завершилась ошибкой."""
+        anchors = []
+        try:
+            from models import PaymentHistory
+            since = now_utc - timedelta(days=2)
+            recent = session.query(PaymentHistory).filter(
+                PaymentHistory.user_id == user.id,
+                PaymentHistory.action == 'payment_failed',
+                PaymentHistory.created_at >= since,
+            ).order_by(PaymentHistory.created_at.desc()).first()
+
+            if not recent:
+                return anchors
+
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='payment_failed',
+                source=f'payment:{recent.id}',
+                topic=_t(user,
+                    'Последний платёж не прошёл — токены не зачислены. Попробуй снова: /buy',
+                    'Last payment failed — tokens not credited. Try again: /buy'),
+                priority=AnchorPriority.HIGH,
+                data=json.dumps({'payment_id': recent.payment_id, 'amount': str(recent.amount or '')}),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(days=3),
+                cooldown_hours=12,
+                batch_group='system',
+            ))
+        except Exception as e:
+            logger.debug(f'[ANCHOR] payment_failed scan error: {e}')
+        return anchors
+
     # CLEANUP
     # ═══════════════════════════════════════════════════════
 
