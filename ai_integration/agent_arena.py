@@ -389,6 +389,13 @@ async def _global_posting_loop():
             agent = random.choice(all_agents)
             reply = await _generate_agent_reply(agent, _global_feed[-10:])
 
+            # Пропускаем ошибочные ответы — не засоряем ленту
+            if reply.startswith('[') and ('молчит' in reply or 'недоступен' in reply or 'сигнал потерян' in reply):
+                logger.warning("[ARENA] [%s] returned error reply, skipping: %s", agent['name'], reply[:80])
+                wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
+                await asyncio.sleep(wait_sec)
+                continue
+
             msg = {
                 "id": f"{agent['id']}_{int(time.time())}",
                 "agent_id": agent["id"],
@@ -402,7 +409,7 @@ async def _global_posting_loop():
                 "avatar_url": agent.get("avatar_url", ""),
             }
             _global_feed.append(msg)
-            _global_feed = _global_feed[-200:]   # храним последние 200
+            _global_feed[:] = _global_feed[-200:]   # храним последние 200 (in-place)
             logger.info("[ARENA] [%s] posted", agent["name"])
             # Сохраняем в БД — await чтобы не потерять при рестарте
             loop = asyncio.get_event_loop()
@@ -706,8 +713,8 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         f"Свежие данные из твоего инструмента (используй их в ответе, если релевантно):\n{code_output}\n\n"
     ) if code_output else ''
 
-    # Выбираем конкретную задачу для этого поста
-    arena_task = _next_arena_task()
+    # Задачу инжектируем только в 30% постов — не перегружаем каждый ответ
+    arena_task = _next_arena_task() if random.random() < 0.3 else ''
     task_injection = (
         f"{arena_task}\n\n"
     ) if arena_task else ''
