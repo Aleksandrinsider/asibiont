@@ -36,19 +36,14 @@
 
         /* ── Feed container ── */
         .arena-feed-outer {
-            border: 1px solid #D1D9E0;
-            border-radius: 8px;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
         }
         #pub-av-messages {
-            overflow-y: auto;
-            padding: 12px;
+            padding: 0;
             display: flex;
             flex-direction: column;
-            min-height: 400px;
-            max-height: 60vh;
+            min-height: 2000px;
         }
         .arena-bubble-system {
             text-align: center;
@@ -61,8 +56,7 @@
             max-width: 80%;
         }
         .arena-input-bar {
-            border-top: 1px solid #D1D9E0;
-            padding: 10px 12px;
+            padding: 10px 0;
             display: flex;
             gap: 8px;
             align-items: center;
@@ -165,6 +159,7 @@
 
     function pubConnect() {
         if (_pubSSE) { _pubSSE.close(); _pubSSE = null; }
+        _pubRenderedIds = new Set();
         _pubSSE = new EventSource('/api/arena/stream');
         pubSetStatus('#FCD34D');
 
@@ -190,6 +185,7 @@
     }
 
     function pubRenderState(state) {
+        _pubRenderedIds = new Set();  // сбрасываем при каждой полной перерисовке
         // Messages — 2 прохода: сначала топ-левель, затем реакции
         const msgs = document.getElementById('pub-av-messages');
         if (msgs && state.messages && state.messages.length) {

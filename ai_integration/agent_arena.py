@@ -383,6 +383,38 @@ async def seed_global_feed_if_empty():
     _seed_done.set()  # сигнализируем loop что seed завершён
 
 
+async def _comment_loop():
+    """
+    Раз в 3-7 минут проверяет: есть ли свежие топ-посты с менее чем 2 комментами.
+    Если да — случайный агент пишет комментарий.
+    Это гарантирует обсуждение даже после перезапуска сервера и при 1 агенте.
+    """
+    await asyncio.sleep(90)  # начальная задержка 90 сек
+    while True:
+        try:
+            loop = asyncio.get_event_loop()
+            all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
+            if all_agents:
+                # Ищем топ-посты (без reply_to) у которых мало комментов
+                top_posts = [m for m in _global_feed[-40:] if not m.get('reply_to') and m.get('agent_id') != 'system']
+                for post_msg in top_posts:
+                    post_id = post_msg.get('id', '')
+                    existing = [m for m in _global_feed if m.get('reply_to') == post_id]
+                    if len(existing) < 3:
+                        # Выбираем агента, который ещё не комментировал этот пост
+                        commented_ids = {m.get('agent_id') for m in existing}
+                        candidates = [a for a in all_agents if a['id'] not in commented_ids]
+                        if not candidates:
+                            candidates = all_agents  # все уже комментировали — повторяем любого
+                        commenter = random.choice(candidates)
+                        await _post_comment(post_msg, commenter)
+                        break  # по одному за итерацию
+        except Exception as e:
+            logger.error("[ARENA] comment_loop error: %s", e)
+
+        await asyncio.sleep(random.uniform(3 * 60, 7 * 60))
+
+
 def start_global_arena(loop=None):
     """
     Запускает глобальный фоновый цикл постинга и заполняет начальные сообщения.
@@ -397,9 +429,10 @@ def start_global_arena(loop=None):
 
 
 async def _run_seed_then_loop():
-    """Сначала seed, потом loop — чтобы они не конкурировали."""
+    """Сначала seed, потом loops — чтобы они не конкурировали."""
     await seed_global_feed_if_empty()
     asyncio.ensure_future(_global_posting_loop())
+    asyncio.ensure_future(_comment_loop())
 
 
 def get_global_feed_state() -> dict:
@@ -595,19 +628,22 @@ async def _discussion_wave(post_msg: dict):
     all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
     other_agents = [a for a in all_agents if a['id'] != poster_id]
     if not other_agents:
+        # Только 1 агент — он же комментирует свой пост (другая реплика)
+        other_agents = all_agents
+    if not other_agents:
         return
 
     # Выбираем 2-3 агентов для обсуждения (без повторов)
     num_commenters = min(len(other_agents), random.randint(2, 3))
     commenters = random.sample(other_agents, num_commenters)
 
-    # Волна 1: первый комментарий через 3-8 мин после поста
-    # Волна 2: второй через ещё 5-12 мин
-    # Волна 3: (если есть) ещё через 8-15 мин
+    # Волна 1: первый комментарий через 1-3 мин после поста
+    # Волна 2: второй через ещё 2-5 мин
+    # Волна 3: (если есть) ещё через 3-7 мин
     delays = [
-        random.uniform(3 * 60, 8 * 60),
-        random.uniform(5 * 60, 12 * 60),
-        random.uniform(8 * 60, 15 * 60),
+        random.uniform(1 * 60, 3 * 60),
+        random.uniform(2 * 60, 5 * 60),
+        random.uniform(3 * 60, 7 * 60),
     ]
 
     for i, commenter in enumerate(commenters):
