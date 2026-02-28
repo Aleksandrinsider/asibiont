@@ -328,55 +328,45 @@ class ContextBuilder:
                 if _missing:
                     hints.append(f"ПРОФИЛЬ НЕПОЛНЫЙ (не заполнено: {', '.join(_missing)}) — спроси у пользователя!")
 
-            # ═══ ЦЕЛИ (все статусы) ═══
+            # ═══ ЦЕЛИ (все статусы, все проекты) ═══
             from models import Goal
-            active_goals = session.query(Goal).filter(
-                Goal.user_id == user.id,
-                Goal.status == 'active'
-            ).order_by(Goal.priority.desc()).limit(3).all()
-
-            # Все проекты пользователя для полной картины
             all_goals = session.query(Goal).filter(
                 Goal.user_id == user.id
-            ).order_by(Goal.created_at.desc()).limit(10).all()
+            ).order_by(Goal.priority.desc().nullslast(), Goal.created_at.desc()).all()
 
-            if active_goals:
+            status_map_full = {
+                'active': 'активен', 'completed': 'завершён',
+                'paused': 'на паузе', 'cancelled': 'отменён'
+            }
+
+            if all_goals:
                 goal_lines = []
-                for g in active_goals:
+                for g in all_goals:
+                    st = status_map_full.get(g.status, g.status)
                     if g.metric_target and g.metric_unit:
                         mc = int(g.metric_current or 0)
                         mt = int(g.metric_target)
-                        line = f"{g.title} [активен] ({mc}/{mt} {g.metric_unit}, {g.progress_percentage}%)"
+                        line = f"{g.title} [{st}] ({mc}/{mt} {g.metric_unit}, {g.progress_percentage}%)"
                     else:
-                        line = f"{g.title} [активен] ({g.progress_percentage}%)"
+                        line = f"{g.title} [{st}] ({g.progress_percentage}%)"
                     if g.target_date:
                         days = g.days_until_target()
                         if days is not None and days < 0:
                             line += " ПРОСРОЧЕНО"
                         elif days is not None and days <= 7:
                             line += f" осталось {days}дн"
-                    # Показываем активные задачи привязанные к цели (goal_id)
-                    linked_tasks = session.query(Task).filter(
-                        Task.user_id == user.id,
-                        Task.goal_id == g.id,
-                        Task.status.in_(['pending', 'active', 'in_progress'])
-                    ).limit(3).all()
-                    if linked_tasks:
-                        task_titles = ', '.join(t.title for t in linked_tasks)
-                        line += f" [задачи: {task_titles}]"
+                    # Активные задачи привязанные к проекту
+                    if g.status == 'active':
+                        linked_tasks = session.query(Task).filter(
+                            Task.user_id == user.id,
+                            Task.goal_id == g.id,
+                            Task.status.in_(['pending', 'active', 'in_progress'])
+                        ).limit(5).all()
+                        if linked_tasks:
+                            task_titles = ', '.join(t.title for t in linked_tasks)
+                            line += f" [задачи: {task_titles}]"
                     goal_lines.append(line)
-                # Добавляем неактивные статусы если есть
-                other_goals = [g for g in all_goals if g.status != 'active']
-                for g in other_goals[:3]:
-                    status_map = {'completed': 'завершён', 'paused': 'на паузе', 'cancelled': 'отменён'}
-                    st = status_map.get(g.status, g.status)
-                    goal_lines.append(f"{g.title} [{st}]")
                 hints.append("Проекты/цели: " + "; ".join(goal_lines))
-            elif all_goals:
-                # Проекты существуют, но ни один не активен
-                status_map = {'completed': 'завершён', 'paused': 'на паузе', 'cancelled': 'отменён', 'active': 'активен'}
-                other_lines = [f"{g.title} [{status_map.get(g.status, g.status)}]" for g in all_goals[:5]]
-                hints.append("АКТИВНЫХ ПРОЕКТОВ НЕТ. Все проекты: " + "; ".join(other_lines))
             else:
                 hints.append("ПРОЕКТОВ/ЦЕЛЕЙ НЕТ — пользователь ещё не создавал проекты или удалил все. НЕ упоминай никаких проектов/целей из прошлых сообщений.")
 
@@ -421,6 +411,7 @@ class ContextBuilder:
             hints.append(f"Время суток: {time_label}")
 
             # ═══ УНИВЕРСАЛЬНЫЕ МЕТРИКИ ═══
+            active_goals = [g for g in all_goals if g.status == 'active']
             metric_hints = self._build_universal_metrics(user, session, user_tz, user_now, tasks, active_goals, today_tasks, tomorrow_tasks, overdue)
             if metric_hints:
                 hints.extend(metric_hints)
