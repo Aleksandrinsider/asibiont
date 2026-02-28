@@ -914,28 +914,18 @@ class AnchorEngine:
                                         'scheduled_time': sched_time_str,
                                         'scan_delay_minutes': scan_delay}),
                         triggered_at=now_utc,
-                        expires_at=now_utc + timedelta(minutes=30),
+                        expires_at=now_utc + timedelta(minutes=90),  # 90 мин — запас на cold start
                         cooldown_hours=0.5,
                         batch_group='tasks',
                     ))
-                    # Помечаем как отправленное чтобы не дублировать
-                    task.reminder_sent = True
-                    try:
-                        session.commit()
-                    except Exception:
-                        session.rollback()
+                    # reminder_sent НЕ ставим здесь — ставим только при доставке
+                    # (иначе если якорь истечёт до доставки — напоминание потеряно навсегда)
+                    # Дедупликация обеспечивается existing_keys в _scan_anchors
 
                 # ПРОСРОЧЕННЫЕ (более 30 мин назад)
-                # Доставляем ВСЕГДА — даже если reminder_sent=False (бот был офлайн в момент X)
+                # Доставляем ВСЕГДА — reminder_sent ставим при реальной доставке, не здесь
                 elif minutes_diff < -30:
                     hours_overdue = abs(minutes_diff) / 60
-                    # Помечаем reminder_sent чтобы не дублировать точное напоминание после
-                    if not getattr(task, 'reminder_sent', False):
-                        task.reminder_sent = True
-                        try:
-                            session.commit()
-                        except Exception:
-                            session.rollback()
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_overdue',
@@ -951,8 +941,9 @@ class AnchorEngine:
                         batch_group='tasks',
                     ))
 
-                # ДЕДЛАЙН СКОРО (до 24ч до reminder_time)
-                elif 0 < minutes_diff <= 24 * 60:
+                # ДЕДЛАЙН СКОРО (от 15 мин до 24ч до reminder_time)
+                # Нижний порог 15 мин — ближе этого task_reminder сам справится
+                elif 15 <= minutes_diff <= 24 * 60:
                     hours_left = minutes_diff / 60
                     anchors.append(Anchor(
                         user_id=user.id,
@@ -990,7 +981,7 @@ class AnchorEngine:
                         cooldown_hours=2,
                         batch_group='tasks',
                     ))
-                elif 0 < minutes_diff_dd <= 24 * 60:
+                elif 15 <= minutes_diff_dd <= 24 * 60:
                     hours_left = minutes_diff_dd / 60
                     anchors.append(Anchor(
                         user_id=user.id,
@@ -4610,6 +4601,15 @@ class AnchorEngine:
                 anchor.delivered_at = now_utc
                 anchor_ids.append(anchor.id)
                 anchor_types.append(anchor.anchor_type)
+                # Для task_reminder: ставим reminder_sent=True ЗДЕСЬ (при реальной доставке)
+                if anchor.anchor_type in ('task_reminder', 'task_overdue') and anchor.source and anchor.source.startswith('task:'):
+                    try:
+                        tid = int(anchor.source.split(':')[1])
+                        src_task = session.query(Task).filter_by(id=tid).first()
+                        if src_task and not src_task.reminder_sent:
+                            src_task.reminder_sent = True
+                    except Exception:
+                        pass
 
             # Создаём запись в interactions (для совместимости с anti-spam логикой)
             interaction = Interaction(
