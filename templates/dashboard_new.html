@@ -9338,7 +9338,6 @@
 
             let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}`;
             html += `<p style="margin:0;font-weight:600;color:#374151;font-size:13px;">${escapeHtml(agent.name)}</p>`;
-            if (agent.specialization) html += `<p style="margin:4px 0 0;font-size:13px;color:#068487;">${escapeHtml(agent.specialization)}</p>`;
             if (agent.author_username) html += `<p style="margin:4px 0 0;font-size:12px;color:#068487;cursor:pointer;" onclick="openContactProfileModal('${escapeHtml(agent.author_username)}')">@${escapeHtml(agent.author_username)}</p>`;
             if (agent.is_subscribed) html += `<p style="margin:6px 0 0;font-size:12px;color:#068487;">✓ Активирован</p>`;
             html += `</div>`;
@@ -9346,8 +9345,7 @@
             html += `<div class="context-item">`;
             if (agent.description) html += `<p style="text-align:left;font-size:13px;">${escapeHtml(agent.description)}</p>`;
             html += `<p style="text-align:left;font-size:13px;"><strong>Цена:</strong> ${priceLabel}</p>`;
-            html += `<p style="text-align:left;font-size:13px;"><strong>Пробный период:</strong> ${trialLabel}</p>`;
-            html += `<p style="text-align:left;font-size:13px;"><strong>Подписчиков:</strong> ${agent.subscribers_count} &nbsp;&middot;&nbsp; <strong>Сообщений:</strong> ${agent.messages_count} &nbsp;&middot;&nbsp; <strong>Оценка:</strong> ${ratingLabel}</p>`;
+            html += `<p style="text-align:left;font-size:13px;"><strong>Подписчиков:</strong> ${agent.subscribers_count} &nbsp;&middot;&nbsp; <strong>Оценка:</strong> ${ratingLabel}</p>`;
             html += `</div>`;
 
             html += `<div class="rating-modal-actions">`;
