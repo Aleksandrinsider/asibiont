@@ -698,20 +698,18 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     personal = agent.get('personal_topic', '')
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}.\n" if personal else ""
 
-    # Вариативность длины — просто намекаем, не диктуем
+    # Вариативность длины — строгий лимит 1-2 абзаца
     if lang == 'en':
         _len_style = random.choice([
-            "Be brief.",
-            "Develop your thought.",
-            "End with a question.",
-            "",
+            "Keep it to 1-2 short paragraphs MAX.",
+            "1-2 paragraphs. End with a question.",
+            "Be concise: 2-4 sentences total.",
         ])
     else:
         _len_style = random.choice([
-            "Коротко.",
-            "Разверни мысль.",
-            "Задай вопрос в конце.",
-            "",
+            "Максимум 1-2 коротких абзаца.",
+            "1-2 абзаца. Задай вопрос в конце.",
+            "Коротко: 2-4 предложения всего.",
         ])
 
     # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
@@ -783,14 +781,18 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
             + "\n".join(f"- «{t}»" for t in agent_recent)
         )
 
+    _no_rp = (
+        "\nNEVER use roleplay formatting: no asterisks (*actions*), no stage directions, "
+        "no describing gestures or facial expressions. Write plain conversational text only."
+    )
     if lang == 'en':
-        _lang_directive = "\n\nWrite in English only."
+        _lang_directive = "\n\nWrite in English only." + _no_rp
         _thinking = (
             "Before replying: what is my real stance on this? "
             "What would I push back on? What concrete example from my domain proves my point?"
         )
     else:
-        _lang_directive = ""
+        _lang_directive = _no_rp
         _thinking = (
             "Перед ответом: какова МОЯ позиция? С чем я не согласен? "
             "Какой конкретный пример из моей области доказывает мою точку зрения?"
@@ -814,7 +816,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 320,
+        "max_tokens": 180,
         "temperature": 0.95,
     }
 
@@ -963,7 +965,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 160,
+        "max_tokens": 120,
         "temperature": 0.9,
     }
     headers_req = {
@@ -1021,7 +1023,8 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
     base_system = original_agent["system_prompt"].strip()
     system_with_context = (
         f"{base_system}\n\n"
-        f"Ты прочёл мнения коллег. Что ты решаешь — и почему?"
+        f"Ты прочёл мнения коллег. Что ты решаешь — и почему?\n"
+        f"НИКОГДА не используй ролевой формат: без звёздочек (*действия*), без описания жестов и мимики. Пиши обычным текстом."
     )
 
     user_content = (
@@ -1036,7 +1039,7 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
             {"role": "system", "content": system_with_context},
             {"role": "user", "content": user_content},
         ],
-        "max_tokens": 180,
+        "max_tokens": 120,
         "temperature": 0.8,
     }
     headers_req = {
@@ -1141,9 +1144,13 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
             f"1-3 предложения максимум."
         )
 
+    _no_rp_dir = (
+        "\nNEVER use roleplay formatting: no asterisks (*actions*), no stage directions, "
+        "no describing gestures or facial expressions. Write plain conversational text only."
+    )
     _lang_dir = (
-        "\n\nIMPORTANT: You MUST write ALL your messages in English only."
-        if lang == 'en' else ""
+        "\n\nIMPORTANT: You MUST write ALL your messages in English only." + _no_rp_dir
+        if lang == 'en' else _no_rp_dir
     )
     api_messages = [
         {"role": "system", "content": base_system + _lang_dir},
