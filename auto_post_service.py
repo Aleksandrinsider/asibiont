@@ -12,7 +12,7 @@ import random
 import aiohttp
 
 from models import Session, User, UserProfile, Task, Post
-from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REPLICATE_API_TOKEN
 from ai_integration.memory import decrypt_data
 
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +48,99 @@ async def _generate_text_with_ai(prompt: str) -> str:
             else:
                 error_text = await response.text()
                 raise Exception(f"AI API error: {response.status} {error_text[:200]}")
+
+
+async def _generate_image_for_post(post_text: str) -> str:
+    """Generate an illustration for a post via Replicate Flux.
+    Returns image URL or empty string on failure.
+    """
+    if not REPLICATE_API_TOKEN:
+        return ""
+
+    # Ask AI to build a concise English visual prompt from the post
+    try:
+        image_prompt = await _generate_text_with_ai(
+            f"""You are a visual prompt engineer. Based on this social media post, write a short vivid English image-generation prompt (max 40 words). """
+            f"""Focus on mood, scene, and visual aesthetic. No text overlays, no people's faces."""
+            f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the image prompt:"""
+        )
+        if not image_prompt or len(image_prompt) < 5:
+            image_prompt = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
+    except Exception:
+        image_prompt = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
+
+    try:
+        model = "black-forest-labs/flux-schnell"
+        headers = {
+            "Authorization": f"Bearer {REPLICATE_API_TOKEN}",
+            "Content-Type": "application/json",
+            "Prefer": "wait",
+        }
+        input_data = {
+            "prompt": image_prompt,
+            "aspect_ratio": "1:1",
+            "output_format": "webp",
+            "output_quality": 80,
+        }
+        async with aiohttp.ClientSession() as http:
+            resp = await http.post(
+                f"https://api.replicate.com/v1/models/{model}/predictions",
+                headers=headers,
+                json={"input": input_data},
+                timeout=aiohttp.ClientTimeout(total=90),
+            )
+            data = await resp.json()
+            if resp.status not in (200, 201):
+                logger.warning(f"[AUTO_POST_IMG] Replicate error: {data.get('detail', data)}")
+                return ""
+
+            output = data.get("output")
+            prediction_id = data.get("id")
+
+            if output is None and prediction_id:
+                for _ in range(30):
+                    await asyncio.sleep(3)
+                    poll = await http.get(
+                        f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=15),
+                    )
+                    poll_data = await poll.json()
+                    status = poll_data.get("status")
+                    if status == "succeeded":
+                        output = poll_data.get("output")
+                        break
+                    elif status in ("failed", "canceled"):
+                        logger.warning(f"[AUTO_POST_IMG] Generation failed: {poll_data.get('error')}")
+                        return ""
+
+            if not output:
+                return ""
+
+            image_url = output[0] if isinstance(output, list) else output
+            logger.info(f"[AUTO_POST_IMG] Generated image: {image_url}")
+            return image_url
+    except Exception as e:
+        logger.warning(f"[AUTO_POST_IMG] Image generation error: {e}")
+        return ""
+
+
+async def _publish_post_to_channel(user_id: int, content: str, image_url: str, session) -> bool:
+    """Publish post to user's Telegram channel using marketing_agent.publish_to_telegram."""
+    try:
+        from ai_integration.marketing_agent import publish_to_telegram
+        result = await publish_to_telegram(
+            content=content,
+            image_url=image_url or None,
+            user_id=user_id,
+            session=session,
+        )
+        if isinstance(result, dict):
+            return result.get("success", False)
+        return False
+    except Exception as e:
+        logger.warning(f"[AUTO_POST_CHANNEL] Publish error: {e}")
+        return False
 
 
 async def generate_progress_post(user_id, session):
@@ -367,6 +460,18 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         
         logger.info(f"Auto-post created for user {user_id}")
 
+        # === Публикация в Telegram канал с картинкой (если настроен) ===
+        channel_published = False
+        image_url = ""
+        if user.telegram_channel:
+            try:
+                image_url = await _generate_image_for_post(content)
+                channel_published = await _publish_post_to_channel(user_id, content, image_url, session)
+                if channel_published:
+                    logger.info(f"[AUTO_POST] Published to channel {user.telegram_channel} for user {user_id}, image={'yes' if image_url else 'no'}")
+            except Exception as ch_err:
+                logger.warning(f"[AUTO_POST] Channel publish failed for {user_id}: {ch_err}")
+
         # === Отправка в Discord webhook (если настроен) ===
         try:
             if user.discord_webhook and user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
@@ -406,16 +511,36 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
             try:
                 from ai_integration.autonomous_agent import get_autonomous_agent
                 agent = get_autonomous_agent()
-                
-                notification = await agent.generate_system_message(
-                    user_id=user_id,
-                    mode='result_check',
-                    instruction=(
+
+                # Формируем контекст уведомления в зависимости от того, что произошло
+                if channel_published and image_url:
+                    instruction = (
+                        f"Только что автоматически опубликован пост в Telegram-канал пользователя с иллюстрацией (сгенерировано через Replicate Flux). "
+                        f"Текст поста: «{content[:200]}{'...' if len(content) > 200 else ''}». "
+                        f"Пост также добавлен в ленту новостей на сайте https://asibiont.com/dashboard. "
+                        f"Сообщи об этом живо и естественно. Затем ОБЯЗАТЕЛЬНО задай уточняющий вопрос: "
+                        f"доволен ли пользователь картинкой и текстом, или хочет что-то изменить — "
+                        f"перегенерировать изображение, скорректировать текст поста, или удалить публикацию."
+                    )
+                elif channel_published:
+                    instruction = (
+                        f"Только что автоматически опубликован пост в Telegram-канал пользователя (без картинки — Replicate не настроен или недоступен). "
+                        f"Текст поста: «{content[:200]}{'...' if len(content) > 200 else ''}». "
+                        f"Сообщи об этом. Задай уточняющий вопрос: всё ли устраивает или хочет "
+                        f"добавить картинку вручную, отредактировать текст, или удалить пост."
+                    )
+                else:
+                    instruction = (
                         f"Только что опубликован пост в ленту новостей на сайте. "
                         f"Содержание поста: «{content[:150]}{'...' if len(content) > 150 else ''}». "
                         f"Скажи об этом коротко и естественно, дай ссылку https://asibiont.com/dashboard. "
-                        f"Предложи отредактировать или удалить если что-то не так."
-                    ),
+                        f"Задай уточняющий вопрос — всё ли устраивает или хочет отредактировать/удалить."
+                    )
+
+                notification = await agent.generate_system_message(
+                    user_id=user_id,
+                    mode='result_check',
+                    instruction=instruction,
                     max_tokens=400,
                     max_iterations=1
                 )
