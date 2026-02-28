@@ -5631,6 +5631,12 @@
                 const feedContainer = document.getElementById('feed-posts');
                 if (!feedContainer) return;
 
+                // Не добавлять, если пост с таким id уже в DOM
+                if (post && post.id && feedContainer.querySelector('[data-post-id="' + post.id + '"]')) return;
+
+                // Обновляем счётчик, чтобы checkForNewPosts не добавил дубль
+                lastPostCount++;
+
                 const postDiv = document.createElement('div');
                 postDiv.setAttribute('data-post-id', post.id);
                 
@@ -7222,6 +7228,8 @@
                             const feedContainer = document.getElementById('feed-posts');
                             if (feedContainer) {
                                 newPosts.reverse().forEach((post) => {
+                                    // Пропускаем посты, уже отображённые в DOM
+                                    if (post && post.id && feedContainer.querySelector('[data-post-id="' + post.id + '"]')) return;
                                     const postDiv = createPostElement(post);
                                     feedContainer.insertBefore(postDiv, feedContainer.firstChild);
                                 });
