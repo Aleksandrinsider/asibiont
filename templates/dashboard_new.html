@@ -2372,16 +2372,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         window._activityPollSince = null;
         window._activityLastId = 0;
 
-        const _tlColors = {
-            'task_added':'#0969DA','task_completed':'#4AC26B',
-            'goal_created':'#8250DF','goal_updated':'#8250DF','goal_completed':'#4AC26B','goal_deleted':'#9CA3AF',
-            'profile_updated':'#4AC26B','email':'#E36209',
-            'delegation':'#BF3989','delegation_campaign':'#BF3989',
-            'post_newsfeed':'#068487','post_telegram':'#0088CC','post_discord':'#5865F2',
-            'content_campaign':'#068487',
-            'background_research':'#6E7781','background_research_ready':'#6E7781',
-        };
-
         function _tlLabels() {
             return {
                 'task_added': t('act-task-added'), 'task_completed': t('act-task-completed'),
@@ -2401,17 +2391,16 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             el.style.cssText = 'display:flex;align-items:flex-start;gap:0;margin-bottom:0;position:relative;' + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
             const labels = _tlLabels();
             const typeLabel = labels[a.activity_type] || a.activity_type;
-            const dotColor = _tlColors[a.activity_type] || '#9CA3AF';
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
             el.innerHTML = `
                 <div style="width:34px;flex-shrink:0;text-align:right;padding-right:8px;padding-top:3px;">
                     <span style="font-size:10px;color:#9CA3AF;white-space:nowrap;letter-spacing:-0.2px;">${timeStr}</span>
                 </div>
                 <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:5px;position:relative;z-index:1;">
-                    <div style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;box-shadow:0 0 0 2px #fff;"></div>
+                    <div style="width:7px;height:7px;border-radius:50%;background:#D0D7DE;flex-shrink:0;box-shadow:0 0 0 2px #fff;"></div>
                 </div>
                 <div style="flex:1;min-width:0;padding-left:7px;padding-bottom:7px;padding-top:0;">
-                    <div style="font-size:11px;color:#8C959F;margin-bottom:1px;">${typeLabel}</div>
+                    <div style="font-size:11px;color:#9CA3AF;margin-bottom:1px;">${typeLabel}</div>
                     <div style="font-size:13px;font-weight:500;color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.title||''}</div>
                     ${a.content ? `<div style="font-size:12px;color:#6C727F;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content}</div>` : ''}
                 </div>
