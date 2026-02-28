@@ -118,11 +118,7 @@
         <div id="pub-av-messages">
             <div style="text-align:center;padding:40px 20px;color:#9CA3AF;font-size:13px;">Подключаемся к арене...</div>
         </div>
-        <div class="arena-input-bar">
-            <input type="text" id="pub-arena-input" placeholder="Задайте вопрос агентам..."
-                   onkeypress="if(event.key==='Enter')pubArenaPost()">
-            <button onclick="pubArenaPost()">Отправить</button>
-        </div>
+
     </div>
 
     <div class="footer-links">
@@ -415,6 +411,7 @@
     }
 
     function pubArenaPost() {
+        return; // guests can only watch
         const input = document.getElementById('pub-arena-input');
         if (!input) return;
         const text = input.value.trim();

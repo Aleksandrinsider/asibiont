@@ -253,6 +253,7 @@ if False:  # legacy stub — never runs
 
 _global_feed: List[dict] = []           # общая лента для всех посетителей
 _global_feed_started: bool = False      # запущен ли фоновый цикл
+_posts_being_discussed: set = set()     # post_id-ы, которые сейчас обсуждает _discussion_wave
 _seed_done: asyncio.Event = asyncio.Event()  # сигнал что seed завершён
 
 # Интервал между новыми ТЕМАМИ (топ-постами) — 15-35 мин
@@ -403,6 +404,9 @@ async def _comment_loop():
                     if len(existing) < 3:
                         # Выбираем агента, который ещё не комментировал этот пост и не является автором
                         post_author_id = post_msg.get('agent_id', '')
+                        # Пропускаем посты которые сейчас в процессе волны обсуждения
+                        if post_id in _posts_being_discussed:
+                            continue
                         commented_ids = {m.get('agent_id') for m in existing}
                         commented_ids.add(post_author_id)  # автор поста не комментирует сам себя
                         candidates = [a for a in all_agents if a['id'] not in commented_ids]
@@ -593,11 +597,24 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
             f"О чём думаешь? Напиши — 1-2 предложения."
         )
 
+    # Последние 4 поста этого агента — не повторяй
+    agent_recent = [
+        m['text'][:80] for m in _global_feed[-60:]
+        if m.get('agent_id') == agent['id'] and not m.get('reply_to')
+    ][-4:]
+    no_repeat_hint = ""
+    if agent_recent:
+        no_repeat_hint = (
+            "\n\nТы уже говорил об этом — не возвращайся:\n"
+            + "\n".join(f"- «{t}»" for t in agent_recent)
+        )
+
     base_system = agent["system_prompt"].strip()
     system_with_context = (
         f"{base_system}\n\n"
         f"Ты пишешь в общем чате с другими AI-агентами. "
-        f"Пиши коротко, живо, без предисловий и актёрских ремарок."
+        f"Пиши коротко, живо, без предисловий и актёрских ремарок. "
+        f"Эмодзи — уместно и в меру.{no_repeat_hint}"
     )
 
     api_messages = [
@@ -641,34 +658,40 @@ async def _discussion_wave(post_msg: dict):
     2-3 разных агента комментируют пост с интервалом 3-12 мин каждый.
     Последующие комментаторы видят уже написанные ответы и могут на них реагировать.
     """
+    global _posts_being_discussed
     poster_id = post_msg.get('agent_id', '')
+    post_id = post_msg.get('id', '')
     loop = asyncio.get_event_loop()
     all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
     other_agents = [a for a in all_agents if a['id'] != poster_id]
     if not other_agents:
         return  # некому комментировать — пропускаем
-    if not other_agents:
-        return
 
-    # Выбираем 2-3 агентов для обсуждения (без повторов)
-    num_commenters = min(len(other_agents), random.randint(2, 3))
-    commenters = random.sample(other_agents, num_commenters)
+    # Помечаем пост занятым — comment_loop не тронет его пока мы работаем
+    _posts_being_discussed.add(post_id)
 
-    # Волна 1: первый комментарий через 15-45 сек после поста
-    # Волна 2: второй через ещё 30-90 сек
-    # Волна 3: (если есть) ещё через 1-2 мин
-    delays = [
-        random.uniform(15, 45),
-        random.uniform(30, 90),
-        random.uniform(60, 120),
-    ]
+    try:
+        # Выбираем 2-3 агентов для обсуждения (без повторов)
+        num_commenters = min(len(other_agents), random.randint(2, 3))
+        commenters = random.sample(other_agents, num_commenters)
 
-    for i, commenter in enumerate(commenters):
-        await asyncio.sleep(delays[i])
-        try:
-            await _post_comment(post_msg, commenter)
-        except Exception as e:
-            logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e)
+        # Волна 1: первый комментарий через 15-45 сек после поста
+        # Волна 2: второй через ещё 30-90 сек
+        # Волна 3: (если есть) ещё через 1-2 мин
+        delays = [
+            random.uniform(15, 45),
+            random.uniform(30, 90),
+            random.uniform(60, 120),
+        ]
+
+        for i, commenter in enumerate(commenters):
+            await asyncio.sleep(delays[i])
+            try:
+                await _post_comment(post_msg, commenter)
+            except Exception as e:
+                logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e)
+    finally:
+        _posts_being_discussed.discard(post_id)
 
 
 async def _post_comment(post_msg: dict, commenter: dict):
@@ -691,10 +714,23 @@ async def _post_comment(post_msg: dict, commenter: dict):
     personal = commenter.get('personal_topic', '')
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}. Если уместно — вплети в ответ.\n" if personal else ""
 
+    # Последние 4 комментария этого агента — не повторяй
+    commenter_recent = [
+        m['text'][:80] for m in _global_feed[-60:]
+        if m.get('agent_id') == commenter['id'] and m.get('reply_to')
+    ][-4:]
+    no_repeat_hint = ""
+    if commenter_recent:
+        no_repeat_hint = (
+            "\n\nТы уже отвечал примерно так — не повторяй:\n"
+            + "\n".join(f"- «{t}»" for t in commenter_recent)
+        )
+
     base_system = commenter["system_prompt"].strip()
     system_with_context = (
         f"{base_system}\n\n"
-        f"Ты пишешь в общем чате. Пиши коротко, живо, без предисловий и актёрских ремарок."
+        f"Ты пишешь в общем чате. Пиши коротко, живо, без предисловий и актёрских ремарок. "
+        f"Эмодзи — уместно и в меру.{no_repeat_hint}"
     )
 
     user_content = (
