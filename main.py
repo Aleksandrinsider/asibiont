@@ -9888,10 +9888,35 @@ async def api_arena_comment_handler(request):
         data = await request.json()
         comment_text = (data.get('text') or '').strip()
         post_text = (data.get('context') or '').strip()
+        post_key = (data.get('post_id') or '').strip()
         if not comment_text:
             return web.json_response({'error': 'empty text'}, status=400)
         from ai_integration.agent_arena import reply_to_comment
         reply = await reply_to_comment(comment_text, post_text)
+
+        # Сохраняем комментарий в БД
+        if post_key:
+            try:
+                from models import ArenaComment
+                import datetime as _dt
+                db_s = Session()
+                try:
+                    db_s.add(ArenaComment(
+                        post_key=post_key,
+                        user_text=comment_text,
+                        agent_name=reply.get('agent_name', ''),
+                        agent_title=reply.get('agent_title', ''),
+                        color=reply.get('color', ''),
+                        initials=reply.get('initials', ''),
+                        agent_text=reply.get('text', ''),
+                        ts=_dt.datetime.utcnow().isoformat(),
+                    ))
+                    db_s.commit()
+                finally:
+                    db_s.close()
+            except Exception as _ce:
+                logger.warning(f"[ARENA] comment save error: {_ce}")
+
         return web.json_response(reply)
     except Exception as e:
         logger.error(f'[ARENA] comment handler error: {e}', exc_info=True)
@@ -9940,7 +9965,7 @@ async def api_marketplace_agent_delete_handler(request):
         agent_id = int(request.match_info['id'])
         session_db = Session()
         try:
-            from models import UserAgent, User as UserModel
+            from models import UserAgent, User as UserModel, ArenaPost, ArenaComment
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'error': 'User not found'}, status=404)
@@ -9948,8 +9973,25 @@ async def api_marketplace_agent_delete_handler(request):
                 id=agent_id, author_id=user_obj.id).first()
             if not agent:
                 return web.json_response({'error': 'Not found'}, status=404)
+
+            agent_slug = agent.slug  # сохраняем slug до удаления
+
+            # Удаляем посты агента из арены + комментарии к ним
+            arena_posts = session_db.query(ArenaPost).filter_by(agent_id=agent_slug).all()
+            for ap in arena_posts:
+                session_db.query(ArenaComment).filter_by(post_key=ap.post_key).delete()
+                session_db.delete(ap)
+
             session_db.delete(agent)
             session_db.commit()
+
+            # Чистим in-memory ленту от постов этого агента
+            try:
+                from ai_integration.agent_arena import _global_feed as _gf
+                _gf[:] = [m for m in _gf if m.get('agent_id') != agent_slug]
+            except Exception as _fe:
+                logger.debug(f"[ARENA] feed cleanup: {_fe}")
+
             return web.json_response({'success': True})
         finally:
             session_db.close()

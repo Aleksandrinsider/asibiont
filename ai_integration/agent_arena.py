@@ -18,6 +18,57 @@ from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
 logger = logging.getLogger(__name__)
 
+
+# ─── DB helpers (sync, run via executor) ──────────────────────────────────
+
+def _db_save_post(msg: dict):
+    """Сохраняет пост арены в БД (идемпотентно по post_key)."""
+    try:
+        from models import Session as DbSession, ArenaPost
+        s = DbSession()
+        try:
+            if s.query(ArenaPost).filter_by(post_key=msg['id']).first():
+                return
+            s.add(ArenaPost(
+                post_key=msg['id'],
+                agent_id=msg.get('agent_id', ''),
+                agent_name=msg.get('agent_name', ''),
+                agent_title=msg.get('agent_title', ''),
+                color=msg.get('color', ''),
+                initials=msg.get('initials', ''),
+                text=msg.get('text', ''),
+                ts=msg.get('ts', ''),
+            ))
+            s.commit()
+        finally:
+            s.close()
+    except Exception as e:
+        logger.warning("[ARENA] _db_save_post error: %s", e)
+
+
+def _db_load_feed() -> list:
+    """Загружает последние 200 постов арены из БД."""
+    try:
+        from models import Session as DbSession, ArenaPost
+        s = DbSession()
+        try:
+            rows = (s.query(ArenaPost)
+                    .order_by(ArenaPost.created_at.asc())
+                    .limit(200).all())
+            result = []
+            for r in rows:
+                d = {'id': r.post_key, 'agent_id': r.agent_id,
+                     'agent_name': r.agent_name, 'agent_title': r.agent_title,
+                     'color': r.color, 'initials': r.initials,
+                     'text': r.text, 'ts': r.ts}
+                result.append(d)
+            return result
+        finally:
+            s.close()
+    except Exception as e:
+        logger.warning("[ARENA] _db_load_feed error: %s", e)
+        return []
+
 # ─── 5 уникальных агентов ─────────────────────────────────────────────────
 
 ARENA_AGENTS = [
@@ -191,6 +242,9 @@ async def _global_posting_loop():
             _global_feed = _global_feed[-200:]   # храним последние 200
             post_count += 1
             logger.info("[ARENA] [%s] posted (total=%d)", agent["name"], post_count)
+            # Сохраняем в БД
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, _db_save_post, msg)
 
         except Exception as e:
             logger.error("[ARENA] global loop error: %s", e)
@@ -202,11 +256,19 @@ async def _global_posting_loop():
 
 async def seed_global_feed_if_empty():
     """
-    Если лента пуста, генерируем первые 6 сообщений сразу — чтобы страница
-    не была пустой при первом заходе.
+    Если лента пуста, пробуем загрузить из БД.
+    Если и там пусто — генерируем первые 6 сообщений.
     """
     global _global_feed
     if _global_feed:
+        return
+
+    # Сначала пробуем загрузить из БД
+    loop = asyncio.get_event_loop()
+    db_posts = await loop.run_in_executor(None, _db_load_feed)
+    if db_posts:
+        _global_feed = db_posts
+        logger.info("[ARENA] Loaded %d posts from DB", len(db_posts))
         return
 
     topic = random.choice(ARENA_TOPICS)
@@ -214,7 +276,7 @@ async def seed_global_feed_if_empty():
     seed_order = random.sample(ARENA_AGENTS, len(ARENA_AGENTS))
 
     # Открывающее сообщение модератора
-    _global_feed.append({
+    opener = {
         "id": f"open_{int(time.time())}",
         "agent_id": "system",
         "agent_name": "МОДЕРАТОР",
@@ -222,12 +284,14 @@ async def seed_global_feed_if_empty():
         "initials": "МД",
         "text": f"Добро пожаловать на Арену. Текущая тема: «{topic}»",
         "ts": datetime.utcnow().isoformat(),
-    })
+    }
+    _global_feed.append(opener)
+    await loop.run_in_executor(None, _db_save_post, opener)
 
     for agent in seed_order:
         try:
             reply = await _generate_agent_reply(agent, _global_feed[-8:], topic)
-            _global_feed.append({
+            msg = {
                 "id": f"{agent['id']}_{int(time.time())}",
                 "agent_id": agent["id"],
                 "agent_name": agent["name"],
@@ -236,7 +300,9 @@ async def seed_global_feed_if_empty():
                 "initials": agent["initials"],
                 "text": reply,
                 "ts": datetime.utcnow().isoformat(),
-            })
+            }
+            _global_feed.append(msg)
+            await loop.run_in_executor(None, _db_save_post, msg)
             await asyncio.sleep(1.5)   # небольшая пауза между запросами
         except Exception as e:
             logger.warning("[ARENA] seed error for %s: %s", agent["id"], e)

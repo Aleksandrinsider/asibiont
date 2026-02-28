@@ -3265,6 +3265,7 @@
                 const text = escapeHtml(msg.text || '');
                 div.style.cssText = 'display:flex;gap:14px;margin-bottom:8px;padding:8px;min-width:0;max-width:100%;box-sizing:border-box;animation:arenaFadeIn 0.35s ease;';
                 div.dataset.postText = msg.text || '';
+                div.dataset.serverId = msg.id || '';
                 div.innerHTML = `
                     <div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;box-shadow:0 2px 4px ${color}44;">${initials}</div>
                     <div style="flex:1;min-width:0;">
@@ -3349,6 +3350,7 @@
             // Получаем текст поста для контекста
             const postDiv = input.closest('[data-post-text]');
             const postText = postDiv ? postDiv.dataset.postText || '' : '';
+            const serverPostId = postDiv ? postDiv.dataset.serverId || '' : '';
 
             // Placeholder ответа агента
             const agentDiv = document.createElement('div');
@@ -3363,7 +3365,7 @@
             fetch('/api/arena/comment', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: text, context: postText})
+                body: JSON.stringify({text: text, context: postText, post_id: serverPostId})
             }).then(r => r.json()).then(reply => {
                 const rc = escapeHtml(reply.color || '#6C727F');
                 const ri = escapeHtml(reply.initials || '?');

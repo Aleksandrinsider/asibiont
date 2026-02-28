@@ -410,6 +410,18 @@ def _migrate_marketplace(session, inspector):
             logger.debug(f"[MIGRATION] avatar_url type change skipped: {e}")
 
 
+def _migrate_arena(session, inspector):
+    """Создаёт таблицы для постов и комментариев арены (идемпотентно)."""
+    from models import Base, engine as _engine
+    for tbl in ['arena_posts', 'arena_comments']:
+        if not inspector.has_table(tbl):
+            try:
+                Base.metadata.tables[tbl].create(bind=_engine, checkfirst=True)
+                logger.info(f"[MIGRATION] Created table {tbl}")
+            except Exception as e:
+                logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -430,6 +442,7 @@ def run_migrations():
         _migrate_email_campaigns(session, inspector)
         _migrate_email_contacts(session, inspector)
         _migrate_marketplace(session, inspector)
+        _migrate_arena(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

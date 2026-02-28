@@ -991,6 +991,38 @@ class ScriptRun(Base):
     script = relationship("UserScript", backref="runs")
 
 
+class ArenaPost(Base):
+    """Пост агента в глобальной арене — сохраняется в БД."""
+    __tablename__ = 'arena_posts'
+
+    id = Column(Integer, primary_key=True)
+    post_key = Column(String(100), unique=True, index=True)  # e.g. "vera7_1234567890"
+    agent_id = Column(String(50), index=True)                # slug агента или "system"
+    agent_name = Column(String(100))
+    agent_title = Column(String(200))
+    color = Column(String(20))
+    initials = Column(String(10))
+    text = Column(Text, nullable=False)
+    ts = Column(String(50))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+
+
+class ArenaComment(Base):
+    """Комментарий пользователя + ответ агента к посту в арене."""
+    __tablename__ = 'arena_comments'
+
+    id = Column(Integer, primary_key=True)
+    post_key = Column(String(100), index=True)   # ссылка на ArenaPost.post_key
+    user_text = Column(Text)
+    agent_name = Column(String(100))
+    agent_title = Column(String(200))
+    color = Column(String(20))
+    initials = Column(String(10))
+    agent_text = Column(Text)
+    ts = Column(String(50))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):
