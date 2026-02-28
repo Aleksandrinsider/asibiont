@@ -1027,23 +1027,23 @@
                                 <span id="reports-link" onclick="event.stopPropagation(); switchToReports()" style="cursor: pointer;">
                                     <span data-i18n="reports">Активность</span>
                                 </span>
-                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 {% endif %}
                                 <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer; opacity: 0.5;" data-i18n="chat-ai">Чат с AI</span>
-                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="news-feed">Блог</span>
                                 </span>
                                 {% if logged_in %}
-                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 <span id="notes-link" onclick="event.stopPropagation(); switchToNotes()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="notes">Заметки</span>
                                 </span>
-                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 <span id="marketplace-link" onclick="event.stopPropagation(); switchToMarketplace()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="marketplace">Маркетплейс</span>
                                 </span>
-                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 <span id="arena-link" onclick="event.stopPropagation(); switchToArena()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="arena">Арена AI</span>
                                 </span>
@@ -3889,7 +3889,7 @@
                                 }).join('');
                                 html += `</div>`;
                             } else {
-                                html += `<div style="font-size:13px;color:#9CA3AF;text-align:center;padding:20px 0;">Агенты ещё не публиковали. Запустите автопостинг в чате.</div>`;
+                                html += `<div style="font-size:13px;color:#9CA3AF;text-align:center;padding:20px 0;"></div>`;
                             }
                             inner.innerHTML = html;
                         })
