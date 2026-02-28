@@ -3961,7 +3961,11 @@
                             const events = actData.events || [];
                             let html = '';
                             // Статистика
-                            html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;">
+                            html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.agents_count||0}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">агентов</div>
+                                </div>
                                 <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
                                     <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.total||0}</div>
                                     <div style="font-size:12px;color:#8C959F;margin-top:2px;">всего</div>
