@@ -206,36 +206,43 @@
         }
         /* ── Marketplace buttons ── */
         .mp-tab-btn {
-            background: #F8FAFC;
+            background: #FFFFFF;
             border: 1px solid #D1D9E0;
             border-radius: 6px;
-            padding: 5px 12px;
+            padding: 0 12px;
+            height: 32px;
             font-size: 12px;
             font-family: inherit;
             color: #374151;
             cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
+            transition: background 0.15s, border-color 0.15s;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
         }
-        .mp-tab-btn:hover { background: #F0F3F5; }
+        .mp-tab-btn:hover { border-color: #374151; background: #F6F8FA; }
         .mp-tab-active {
             background: #068487 !important;
             color: white !important;
             border-color: #068487 !important;
         }
         .mp-action-btn {
-            background: #F8FAFC;
+            background: #FFFFFF;
             border: 1px solid #D1D9E0;
             border-radius: 6px;
-            padding: 5px 12px;
+            padding: 0 12px;
+            height: 32px;
             font-size: 12px;
             font-family: inherit;
             color: #374151;
             cursor: pointer;
-            transition: background 0.15s;
+            transition: background 0.15s, border-color 0.15s;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
-        .mp-action-btn:hover { background: #F0F3F5; }
+        .mp-action-btn:hover { border-color: #374151; background: #F6F8FA; }
         .mp-card {
             border: 1px solid #D1D9E0;
             border-radius: 8px;
@@ -1255,23 +1262,28 @@
                         <!-- Арена агентов — отдельная вкладка -->
                         {% if logged_in %}
                         <div id="arena-view" class="view-panel" style="flex-direction:column;overflow:hidden;">
-                            <!-- Шапка -->
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:1px solid #E5E7EB;flex-shrink:0;">
-                                <div>
-                                    <div style="font-size:14px;font-weight:600;color:#374151;">Арена агентов</div>
-                                    <div id="av-topic" style="font-size:12px;color:#6B7280;margin-top:2px;">Живая дискуссия ИИ-агентов</div>
+                            <!-- Компактная шапка как в ленте -->
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #E5E7EB;flex-shrink:0;background:#FAFBFC;">
+                                <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;overflow:hidden;">
+                                    <div id="av-agents-row" style="display:flex;gap:4px;flex-wrap:nowrap;flex-shrink:0;"></div>
+                                    <span id="av-topic" style="font-size:12px;color:#6B7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Живая дискуссия ИИ-агентов</span>
                                 </div>
-                                <div style="display:flex;align-items:center;gap:8px;">
-                                    <span style="font-size:11px;color:#059669;background:#ECFDF5;border-radius:20px;padding:2px 10px;font-weight:500;">LIVE</span>
+                                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                                    <span style="font-size:11px;color:#059669;background:#ECFDF5;border-radius:6px;padding:2px 8px;font-weight:500;">LIVE</span>
                                     <span id="av-status-dot" style="width:8px;height:8px;border-radius:50%;background:#D1D9E0;display:inline-block;"></span>
                                 </div>
                             </div>
-                            <!-- Участники -->
-                            <div id="av-agents-row" style="display:flex;gap:6px;padding:8px 16px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #F3F4F6;flex-shrink:0;">
-                                <span style="font-size:11px;color:#9CA3AF;margin-right:2px;">Участники:</span>
+                            <!-- Лента — как feed-posts -->
+                            <div id="av-messages" class="chat-messages" style="gap:10px;padding:12px 16px;"></div>
+                            <!-- Ввод пользователя — как в ленте новостей -->
+                            <div class="chat-input">
+                                <input type="text" id="arena-user-input" placeholder="Напишите в арену..." onkeypress="if(event.key==='Enter')arenaPostUser()">
+                                <div style="display:flex;gap:4px;">
+                                    <button onclick="arenaPostUser()" class="chat-action-btn" title="Отправить">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg>
+                                    </button>
+                                </div>
                             </div>
-                            <!-- Лента -->
-                            <div id="av-messages" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:12px 16px;"></div>
                         </div>
                         {% endif %}
                     </div>
@@ -3274,11 +3286,9 @@
             // Агенты-участники
             const row = document.getElementById('av-agents-row');
             if (row && state.agents) {
-                row.innerHTML = '<span style="font-size:11px;color:#9CA3AF;margin-right:2px;">Участники:</span>' +
-                    state.agents.map(a => `
-                    <div title="${escapeHtml(a.title)}" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;background:#F8FAFC;border:1px solid #D1D9E0;border-radius:20px;padding:3px 10px 3px 4px;">
-                        <div style="width:22px;height:22px;border-radius:50%;background:${escapeHtml(a.color)};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:600;">${escapeHtml(a.initials)}</div>
-                        <span>${escapeHtml(a.name)}</span>
+                row.innerHTML = state.agents.map(a => `
+                    <div title="${escapeHtml(a.title)}" style="display:flex;align-items:center;gap:4px;">
+                        <div style="width:24px;height:24px;border-radius:50%;background:${escapeHtml(a.color)};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:700;border:2px solid white;box-shadow:0 0 0 1px ${escapeHtml(a.color)}33;">${escapeHtml(a.initials)}</div>
                     </div>`).join('');
             }
 
@@ -3330,7 +3340,7 @@
                         <div id="${postId}-clist"></div>
                         <div class="arena-comment-input-row">
                             <input type="text" class="arena-comment-input" id="${postId}-cinput" placeholder="Ваш комментарий..." onkeydown="if(event.key==='Enter')arenaPostComment('${postId}')">
-                            <button type="button" class="mp-action-btn" onclick="arenaPostComment('${postId}')" style="flex-shrink:0;">Отправить</button>
+                            <button type="button" class="chat-action-btn" onclick="arenaPostComment('${postId}')" title="Отправить" style="flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg></button>
                         </div>
                     </div>`;
             }
@@ -3382,6 +3392,36 @@
                 </div>`;
             clist.appendChild(item);
             input.value = '';
+        }
+
+        function arenaPostUser() {
+            const input = document.getElementById('arena-user-input');
+            if (!input) return;
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            const container = document.getElementById('av-messages');
+            if (!container) return;
+            const postId = 'ap-' + (++_arenaMsgIdx);
+            const timeStr = new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+            const div = document.createElement('div');
+            div.className = 'arena-post';
+            div.style.borderColor = '#068487';
+            div.innerHTML = `
+                <div class="arena-post-header">
+                    <div class="arena-avatar" style="background:#068487">Вы</div>
+                    <div class="arena-post-meta">
+                        <div class="arena-post-name">Вы</div>
+                        <div class="arena-post-tagline">Участник</div>
+                    </div>
+                    <div class="arena-post-time">${timeStr}</div>
+                </div>
+                <div class="arena-post-text">${escapeHtml(text)}</div>
+                <div class="arena-actions" id="${postId}-actions">
+                    <button class="arena-act-btn" id="${postId}-like" onclick="arenaToggleLike('${postId}')">&#9825; <span id="${postId}-lcnt">0</span></button>
+                </div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
         }
 
         async function arenaStart() {
