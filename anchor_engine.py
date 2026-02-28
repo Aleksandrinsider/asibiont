@@ -3378,11 +3378,24 @@ class AnchorEngine:
             }
             tone_desc = tone_map.get(anchor_data.get('tone', 'professional'), 'профессиональный')
 
-            profile_info = []
-            if profile:
-                if profile.skills: profile_info.append(f"Навыки: {profile.skills[:100]}")
-                if profile.interests: profile_info.append(f"Интересы: {profile.interests[:100]}")
-                if profile.position: profile_info.append(f"Должность: {profile.position}")
+            # Номер поста и формат для ротации
+            post_num = (campaign.posts_published or 0) + 1
+            _formats = [
+                "КЕЙС: реальная ситуация → применение инструмента/подхода → конкретный результат в цифрах",
+                "СОВЕТ + ПРИМЕР: практический лайфхак с конкретным примером применения",
+                "СТАТИСТИКА + ВЫВОД: реальный факт или цифра → практический вывод для читателя",
+                "СРАВНЕНИЕ ДО/ПОСЛЕ: как было без инструмента/подхода → как стало после",
+                "РАЗВЕНЧАНИЕ МИФА: распространённое заблуждение → реальность + доказательство",
+            ]
+            post_format = _formats[(post_num - 1) % len(_formats)]
+
+            # История предыдущих постов этой кампании (чтобы не повторяться)
+            prev_posts_logs = session.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.result == f'campaign:{campaign.id}',
+                AgentActivityLog.status == 'published'
+            ).order_by(AgentActivityLog.created_at.desc()).limit(3).all()
+            prev_posts_texts = [p.content for p in prev_posts_logs if p.content]
 
             # DDG: свежий контекст из интернета по темам кампании
             # Делаем 2-3 разных запроса для более глубокого контента
@@ -3418,33 +3431,39 @@ class AnchorEngine:
                 pass
 
             system_msg = (
-                f"Ты — контент-менеджер. Пишешь пост для контент-кампании пользователя.\n\n"
+                f"Ты — SMM-специалист, продвигающий конкретный продукт или идею в социальных сетях.\n\n"
                 f"КАМПАНИЯ: {campaign.name}\n"
-                f"ЦЕЛЬ: {anchor_data.get('goal', 'не указана')}\n"
+                f"ЦЕЛЬ КАМПАНИИ: {anchor_data.get('goal', 'не указана')}\n"
                 f"ТЕМЫ: {anchor_data.get('topics', 'любые')}\n"
                 f"ТОН: {tone_desc}\n"
-                f"ПОСТ #{(campaign.posts_published or 0) + 1}"
-                f"{f' из {campaign.max_posts}' if campaign.max_posts else ''}\n\n"
+                f"ПОСТ #{post_num}"
+                f"{f' из {campaign.max_posts}' if campaign.max_posts else ''}\n"
+                f"ФОРМАТ ЭТОГО ПОСТА: {post_format}\n\n"
                 f"ПРАВИЛА:\n"
                 f"1. Пиши от ПЕРВОГО лица, как будто сам пользователь\n"
-                f"2. Пост должен соответствовать цели и темам кампании\n"
-                f"3. Каждый пост должен быть УНИКАЛЬНЫМ — не повторяй предыдущие\n"
-                f"4. 3-8 предложений, {tone_desc} стиль\n"
-                f"5. БЕЗ эмодзи, без хештегов, без призывов вроде 'подписывайтесь'\n"
-                f"6. Если есть свежие данные из сети — ОБЯЗАТЕЛЬНО используй их: цитируй статистику, упоминай конкретные примеры, ссылайся на реальные факты. Это делает пост ценным.\n"
-                f"7. Верни ТОЛЬКО текст поста. Ничего больше.\n"
-                f"8. Пиши КОНКРЕТНО: не 'AI помогает в работе', а 'AI-агент за 15 секунд составляет email по 3 ключевым словам — экономит 20 минут'.\n"
-                f"9. Каждый пост = ОДНА практическая фишка/совет/кейс. Не пытайся охватить всё."
+                f"2. СТРОГО придерживайся цели и тем кампании — пиши ТОЛЬКО про них\n"
+                f"3. ИГНОРИРУЙ любые личные интересы автора, не связанные с темой кампании\n"
+                f"4. Каждый пост должен быть УНИКАЛЬНЫМ — НЕ повторяй предыдущие посты кампании\n"
+                f"5. 3-8 предложений, {tone_desc} стиль\n"
+                f"6. БЕЗ эмодзи, без хештегов, без призывов вроде 'подписывайтесь'\n"
+                f"7. Если есть свежие данные из сети — используй их: цитируй статистику, упоминай конкретные примеры, ссылайся на реальные факты\n"
+                f"8. Верни ТОЛЬКО текст поста. Ничего больше.\n"
+                f"9. Пиши КОНКРЕТНО: не 'AI помогает в работе', а 'AI-агент за 15 секунд составляет email по 3 ключевым словам — экономит 20 минут'\n"
+                f"10. Каждый пост = ОДНА практическая фишка/совет/кейс. Не пытайся охватить всё.\n\n"
+                f"ВАЖНО: Тема кампании — приоритет №1. Посторонние темы ЗАПРЕЩЕНЫ."
             )
 
-            user_prompt_parts = [f"Пользователь: {user_name}"]
-            if profile_info:
-                user_prompt_parts.append("\nПРОФИЛЬ:")
-                user_prompt_parts.extend(profile_info)
+            user_prompt_parts = [f"Автор: {user_name}"]
+            if prev_posts_texts:
+                user_prompt_parts.append("\nПРЕДЫДУЩИЕ ПОСТЫ ЭТОЙ КАМПАНИИ (НЕ ПОВТОРЯЙ):")
+                for _i, _pt in enumerate(prev_posts_texts, 1):
+                    user_prompt_parts.append(f"  Пост {_i}: {_pt[:250]}")
             if fresh_data:
                 user_prompt_parts.append("\nСВЕЖИЕ ДАННЫЕ ИЗ СЕТИ:")
                 user_prompt_parts.extend(fresh_data)
-            user_prompt_parts.append("\nНапиши пост для этой кампании.")
+            user_prompt_parts.append(
+                f"\nНапиши пост #{post_num} строго по теме кампании: {anchor_data.get('topics', anchor_data.get('goal', campaign.name))}"
+            )
 
             user_prompt = "\n".join(user_prompt_parts)
 
