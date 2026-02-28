@@ -1206,7 +1206,7 @@
 
                         <!-- Маркетплейс агентов и скриптов -->
                         {% if logged_in %}
-                        <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column;">
+                        <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px; flex-direction: column;">
                             <!-- Табы -->
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Агенты</button>
@@ -1254,7 +1254,7 @@
 
                         <!-- Арена агентов — отдельная вкладка -->
                         {% if logged_in %}
-                        <div id="arena-view" class="view-panel" style="display:flex;flex-direction:column;overflow:hidden;">
+                        <div id="arena-view" class="view-panel" style="flex-direction:column;overflow:hidden;">
                             <!-- Шапка -->
                             <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:1px solid #E5E7EB;flex-shrink:0;">
                                 <div>
@@ -1504,6 +1504,27 @@
                     <button onclick="closeSendMessageModal()" class="rating-cancel-btn" data-i18n="cancel">Отмена</button>
                     <button onclick="submitSendMessage()" class="rating-submit-btn" data-i18n="send-btn">Отправить</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Chat Modal -->
+    <div id="agent-chat-modal" class="rating-modal">
+        <div class="rating-modal-content" style="max-width:480px;width:90%;max-height:80vh;display:flex;flex-direction:column;">
+            <div class="rating-modal-header" style="flex-shrink:0;">
+                <h3 id="agent-chat-title" style="font-size:14px;">Чат с агентом</h3>
+                <button onclick="closeAgentChat()" class="rating-close-btn" title="Закрыть">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>
+                </button>
+            </div>
+            <div id="agent-chat-info" style="font-size:11px;color:#6B7280;padding:6px 16px;border-bottom:1px solid #F3F4F6;flex-shrink:0;"></div>
+            <div id="agent-chat-messages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;min-height:200px;max-height:40vh;"></div>
+            <div style="flex-shrink:0;padding:10px 16px;border-top:1px solid #D1D9E0;display:flex;gap:6px;">
+                <input id="agent-chat-input" type="text" placeholder="Сообщение агенту..."
+                    style="flex:1;padding:8px 12px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;"
+                    onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'"
+                    onkeypress="if(event.key==='Enter')mpSendAgentMessage()">
+                <button onclick="mpSendAgentMessage()" style="padding:8px 14px;background:#068487;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;">→</button>
             </div>
         </div>
     </div>
@@ -2746,7 +2767,7 @@
                             <div style="display:flex;align-items:center;gap:6px;">
                                 ${priceLabel} ${trialLabel}
                             </div>
-                            <button onclick="mpSwitchAgent('${escapeHtml(a.slug)}')" class="mp-action-btn" ${!a.is_subscribed ? 'style="background:#068487;color:white;border-color:#068487;"' : ''}>${a.is_subscribed ? 'Подключён' : 'Подключить'}</button>
+                            <button onclick="mpOpenAgentChat(${a.id},'${escapeHtml(a.name)}',${a.price_per_message||5},${a.trial_messages||0})" class="mp-action-btn" style="background:#068487;color:white;border-color:#068487;">Написать</button>
                         </div>
                     </div>`;
                 }).join('');
@@ -2864,7 +2885,107 @@
             } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
         }
 
-        async function mpSwitchAgent(slug) {
+        // ─── Agent Chat Modal ──────────────────────────────────────
+        let _agentChatId = null;
+        let _agentChatHistory = [];
+        let _agentChatPrice = 0;
+        let _agentChatTrial = 0;
+
+        function mpOpenAgentChat(agentId, agentName, price, trial) {
+            _agentChatId = agentId;
+            _agentChatHistory = [];
+            _agentChatPrice = price;
+            _agentChatTrial = trial;
+            const modal = document.getElementById('agent-chat-modal');
+            const title = document.getElementById('agent-chat-title');
+            const info = document.getElementById('agent-chat-info');
+            const msgs = document.getElementById('agent-chat-messages');
+            if (!modal) return;
+            title.textContent = agentName;
+            info.textContent = trial > 0
+                ? `${trial} бесплатных сообщений, затем ${price} тк/сообщение`
+                : `${price} тк/сообщение`;
+            msgs.innerHTML = '';
+            modal.style.display = 'flex';
+            document.getElementById('agent-chat-input').focus();
+        }
+
+        function closeAgentChat() {
+            const modal = document.getElementById('agent-chat-modal');
+            if (modal) modal.style.display = 'none';
+            _agentChatId = null;
+            _agentChatHistory = [];
+        }
+
+        async function mpSendAgentMessage() {
+            if (!_agentChatId) return;
+            const input = document.getElementById('agent-chat-input');
+            const msgs = document.getElementById('agent-chat-messages');
+            const info = document.getElementById('agent-chat-info');
+            const text = (input.value || '').trim();
+            if (!text) return;
+            input.value = '';
+
+            // Append user bubble
+            const userBubble = document.createElement('div');
+            userBubble.style.cssText = 'display:flex;justify-content:flex-end;';
+            userBubble.innerHTML = `<div style="background:#068487;color:white;padding:7px 12px;border-radius:12px 12px 2px 12px;font-size:13px;max-width:80%;word-break:break-word;">${escapeHtml(text)}</div>`;
+            msgs.appendChild(userBubble);
+
+            // Typing indicator
+            const typing = document.createElement('div');
+            typing.style.cssText = 'display:flex;justify-content:flex-start;';
+            typing.innerHTML = '<div style="background:#F3F4F6;color:#9CA3AF;padding:7px 12px;border-radius:12px 12px 12px 2px;font-size:13px;">...</div>';
+            msgs.appendChild(typing);
+            msgs.scrollTop = msgs.scrollHeight;
+
+            try {
+                const r = await fetch('/api/marketplace/agents/' + _agentChatId + '/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: text, history: _agentChatHistory})
+                });
+                const data = await r.json();
+                typing.remove();
+
+                if (data.error === 'insufficient_balance') {
+                    const errDiv = document.createElement('div');
+                    errDiv.style.cssText = 'text-align:center;font-size:12px;color:#DC2626;padding:6px 0;';
+                    errDiv.textContent = `Недостаточно токенов (нужно ${data.price}, есть ${data.balance})`;
+                    msgs.appendChild(errDiv);
+                } else if (data.error) {
+                    const errDiv = document.createElement('div');
+                    errDiv.style.cssText = 'text-align:center;font-size:12px;color:#DC2626;padding:6px 0;';
+                    errDiv.textContent = data.error;
+                    msgs.appendChild(errDiv);
+                } else {
+                    const aiBubble = document.createElement('div');
+                    aiBubble.style.cssText = 'display:flex;justify-content:flex-start;';
+                    aiBubble.innerHTML = `<div style="background:#F3F4F6;color:#374151;padding:7px 12px;border-radius:12px 12px 12px 2px;font-size:13px;max-width:80%;word-break:break-word;white-space:pre-wrap;">${escapeHtml(data.reply)}</div>`;
+                    msgs.appendChild(aiBubble);
+
+                    _agentChatHistory.push({role: 'user', content: text});
+                    _agentChatHistory.push({role: 'assistant', content: data.reply});
+                    if (_agentChatHistory.length > 20) _agentChatHistory = _agentChatHistory.slice(-20);
+
+                    // Update info line
+                    if (info) {
+                        const trialLeft = data.trial_remaining || 0;
+                        info.textContent = data.is_trial
+                            ? `Пробный период: ещё ${trialLeft} бесплатных сообщений`
+                            : `Списано ${data.tokens_charged} тк · Баланс ${data.balance} тк`;
+                    }
+                }
+            } catch(e) {
+                typing.remove();
+                const errDiv = document.createElement('div');
+                errDiv.style.cssText = 'text-align:center;font-size:12px;color:#DC2626;padding:6px 0;';
+                errDiv.textContent = 'Ошибка соединения';
+                msgs.appendChild(errDiv);
+            }
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+        // ─────────────────────────────────────────────────────────
             mpShowStatus('Переключение на агента...', '#F0F3F6', '#374151');
             switchToChat();
             sendMessage(`Подключи агента @${slug}`);
@@ -3641,24 +3762,8 @@
                         .then(r => r.json())
                         .then(actData => {
                             const stats = actData.stats || {};
-                            const agents = actData.agents || [];
                             const events = actData.events || [];
                             let html = '';
-                            // Карточки агентов
-                            if (agents.length) {
-                                html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">`;
-                                html += agents.slice(0,5).map(a => `
-                                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
-                                        <div style="width:28px;height:28px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;">
-                                            ${a.avatar_url ? `<img src="${escapeHtml(a.avatar_url)}" style="width:28px;height:28px;object-fit:cover;">` : escapeHtml((a.name||'?').substring(0,2).toUpperCase())}
-                                        </div>
-                                        <div>
-                                            <div style="font-size:12px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</div>
-                                            <div style="font-size:11px;color:#9CA3AF;">${a.subscribers_count} подп.</div>
-                                        </div>
-                                    </div>`).join('');
-                                html += `</div>`;
-                            }
                             // Статистика
                             html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
                                 <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">

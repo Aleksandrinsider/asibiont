@@ -9704,6 +9704,135 @@ async def api_marketplace_my_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_agent_chat_handler(request):
+    """POST /api/marketplace/agents/{id}/chat — чат с агентом, биллинг"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        data = await request.json()
+        user_message = (data.get('message') or '').strip()
+        history = data.get('history', [])
+        if not user_message:
+            return web.json_response({'error': 'message required'}, status=400)
+
+        # ─── Billing and DB updates ──────────────────────────────────
+        session_db = Session()
+        try:
+            from models import UserAgent, AgentSubscription, AgentRun, TokenTransaction, User as UserModel
+            import datetime as _dt
+
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
+            if not agent:
+                return web.json_response({'error': 'Agent not found'}, status=404)
+            if agent.status == 'disabled':
+                return web.json_response({'error': 'Agent not available'}, status=400)
+
+            # Get or create subscription
+            sub = session_db.query(AgentSubscription).filter_by(
+                user_id=user_obj.id, agent_id=agent_id).first()
+            if not sub:
+                sub = AgentSubscription(user_id=user_obj.id, agent_id=agent_id)
+                session_db.add(sub)
+                session_db.flush()
+                agent.subscribers_count = (agent.subscribers_count or 0) + 1
+
+            # Billing
+            is_trial = (sub.trial_messages_used or 0) < (agent.trial_messages or 0)
+            tokens_charged = 0
+            author_earnings = 0
+            platform_earnings = 0
+
+            if not is_trial:
+                price = agent.price_per_message or 5
+                if (user_obj.token_balance or 0) < price:
+                    session_db.close()
+                    return web.json_response({
+                        'error': 'insufficient_balance',
+                        'balance': user_obj.token_balance or 0,
+                        'price': price
+                    }, status=402)
+                user_obj.token_balance = (user_obj.token_balance or 0) - price
+                user_obj.tokens_spent = (user_obj.tokens_spent or 0) + price
+                tokens_charged = price
+                royalty_pct = agent.author_royalty_pct or 70
+                author_earnings = price * royalty_pct // 100
+                platform_earnings = price - author_earnings
+                author = session_db.query(UserModel).filter_by(id=agent.author_id).first()
+                if author and author.id != user_obj.id:
+                    author.token_balance = (author.token_balance or 0) + author_earnings
+                    session_db.add(TokenTransaction(
+                        user_id=author.id, amount=author_earnings,
+                        action='agent_royalty',
+                        description=f'Роялти за сообщение агенту «{agent.name}»',
+                        balance_after=author.token_balance
+                    ))
+                session_db.add(TokenTransaction(
+                    user_id=user_obj.id, amount=-price,
+                    action='agent_message',
+                    description=f'Сообщение агенту «{agent.name}»',
+                    balance_after=user_obj.token_balance
+                ))
+            else:
+                sub.trial_messages_used = (sub.trial_messages_used or 0) + 1
+
+            sub.messages_count = (sub.messages_count or 0) + 1
+            sub.tokens_spent = (sub.tokens_spent or 0) + tokens_charged
+            sub.last_message_at = _dt.datetime.now(_dt.timezone.utc)
+            agent.messages_count = (agent.messages_count or 0) + 1
+            session_db.add(AgentRun(
+                user_id=user_obj.id, agent_id=agent_id,
+                tokens_charged=tokens_charged, author_earnings=author_earnings,
+                platform_earnings=platform_earnings, is_trial=is_trial
+            ))
+            session_db.commit()
+
+            # Capture values before session closes
+            agent_personality = agent.personality or f'Ты полезный AI-ассистент по имени {agent.name}.'
+            trial_remaining = max(0, (agent.trial_messages or 0) - (sub.trial_messages_used or 0))
+            user_balance = user_obj.token_balance or 0
+        finally:
+            session_db.close()
+
+        # ─── DeepSeek call ───────────────────────────────────────────
+        import aiohttp as _aio
+        messages = [{'role': 'system', 'content': agent_personality}]
+        for m in history[-10:]:
+            if isinstance(m, dict) and m.get('role') in ('user', 'assistant') and m.get('content'):
+                messages.append({'role': m['role'], 'content': str(m['content'])})
+        messages.append({'role': 'user', 'content': user_message})
+
+        async with _aio.ClientSession() as sess:
+            resp = await sess.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                json={'model': DEEPSEEK_MODEL, 'messages': messages,
+                      'max_tokens': 1000, 'temperature': 0.7},
+                timeout=_aio.ClientTimeout(total=60)
+            )
+            result = await resp.json()
+
+        ai_reply = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip() or '...'
+        return web.json_response({
+            'reply': ai_reply,
+            'is_trial': is_trial,
+            'trial_remaining': trial_remaining,
+            'tokens_charged': tokens_charged,
+            'balance': user_balance
+        })
+    except web.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[AGENT CHAT] error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 # ═══════════════════════════════════════════════════════
 # AGENT ARENA API
 # ═══════════════════════════════════════════════════════
@@ -9842,6 +9971,7 @@ app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
 app.router.add_put('/api/marketplace/agents/{id}/status', api_marketplace_agent_status_handler)
 app.router.add_delete('/api/marketplace/agents/{id}', api_marketplace_agent_delete_handler)
+app.router.add_post('/api/marketplace/agents/{id}/chat', api_agent_chat_handler)
 # Arena — глобальная лента (не требует авторизации)
 app.router.add_get('/api/arena', api_arena_state_handler)
 app.router.add_get('/api/arena/stream', api_arena_stream_handler)
