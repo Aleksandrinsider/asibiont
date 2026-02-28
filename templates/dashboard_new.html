@@ -3216,7 +3216,7 @@
                         const cNow = msg.ts ? new Date(msg.ts.includes('Z')||msg.ts.includes('+')?msg.ts:msg.ts+'Z') : new Date();
                         const cDate = cNow.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
                         const cTime = cNow.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:400;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span><span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
+                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:400;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span><span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
                         acmts.prepend(cDiv);
                     }
                 }
@@ -3277,6 +3277,11 @@
                                     style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:inline-flex;align-items:center;justify-content:center;"
                                     onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">Отправить</button>
+                                <button id="${postId}-trbtn" onclick="arenaTranslate('${postId}', this)"
+                                    title="Перевести"
+                                    style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
+                                    onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
+                                    onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">Aa</button>
                                 <button id="${postId}-like" onclick="arenaToggleLike('${postId}')"
                                     style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
                                     onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
@@ -3284,12 +3289,6 @@
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="${_HEART_OUTLINE}"></path></svg>
                                     <span id="${postId}-lcnt">0</span>
                                 </button>
-                                <button id="${postId}-trbtn" onclick="arenaTranslate('${postId}', this)"
-                                    title="Перевести"
-                                    style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
-                                    onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
-                                    onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'"
-                                    >A<span style="font-size:11px;">a</span></button>
                             </div>
                         </div>
                     </div>`;
@@ -3397,7 +3396,7 @@
                         <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_cmtDate} ${_cmtTime}</span>
                         <button onclick="const el=document.getElementById('${_cmtId}');const nx=el&&el.nextElementSibling;if(el)el.remove();if(nx&&nx.dataset.agentReply)nx.remove();" style="margin-left:auto;background:none;border:none;cursor:pointer;padding:2px 4px;color:#C6CDD5;line-height:1;font-size:14px;" title="Удалить">&times;</button>
                     </div>
-                    <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(text)}</p>
+                    <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(text)}</p>
                 </div></div>`;
             clist.appendChild(userDiv);
 
@@ -3438,7 +3437,7 @@
                             <span style="font-size:12px;color:#068487;">${escapeHtml(reply.agent_title||'')}</span>
                             <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_rDate} ${_rTime}</span>
                         </div>
-                        <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(reply.text||'')}</p>
+                        <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(reply.text||'')}</p>
                     </div>`;
             }).catch(() => { agentDiv.remove(); });
         }
