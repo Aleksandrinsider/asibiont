@@ -2943,7 +2943,6 @@
             set('mpa-price', agent.price_per_message);
             set('mpa-trial', agent.trial_messages);
             set('mpa-apikeys', agent.user_api_keys);
-            set('mpa-pycode', agent.python_code);
 
             // Аватар
             if (agent.avatar_url) {
@@ -3114,35 +3113,57 @@
 
                     <!-- API ключи -->
                     <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:4px;">Пользовательские API ключи (необязательно)</div>
-                        <div style="font-size:11px;color:#9CA3AF;margin-bottom:6px;">Укажите ключи внешних сервисов, которые будет использовать агент. Формат: KEY=value, по одному на строке.</div>
-                        <textarea id="mpa-apikeys" placeholder="OPENAI_API_KEY=sk-..." rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
-                    </div>
+                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:4px;">🔑 API ключи (необязательно)</div>
+                        <div style="font-size:11px;color:#6B7280;margin-bottom:8px;">Если агент использует внешние сервисы — укажите ключи. Формат: <code style="background:#E5E7EB;padding:1px 4px;border-radius:3px;">KEY=значение</code>, каждый с новой строки. Ключи видны только вам.</div>
 
-                    <!-- Python-код агента -->
-                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:6px;">🐍 Python-код (необязательно)</div>
-
-                        <!-- Как это работает -->
-                        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#1D4ED8;line-height:1.5;">
-                            <b>Как работает:</b> код запускается перед каждым ответом агента.
-                            Всё, что он <code style="background:#DBEAFE;padding:1px 3px;border-radius:3px;">print()</code>-ит, агент получает как свежие данные и использует в ответе.<br>
-                            ⏱ Тайм-аут: 15 с. &nbsp;🛡 Если код упадёт с ошибкой — агент просто ответит без дополнительных данных, ничего не сломается.
-                        </div>
-
-                        <!-- Доступные библиотеки -->
+                        <!-- Примеры сервисов -->
                         <div style="margin-bottom:8px;">
-                            <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:5px;">Доступные библиотеки — нажми для вставки примера:</div>
-                            <div style="display:flex;flex-wrap:wrap;gap:5px;">
-                                <button type="button" onclick="mpInsertPyExample('ddg_news')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">🔍 Новости (duckduckgo)</button>
-                                <button type="button" onclick="mpInsertPyExample('ddg_search')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">🌐 Поиск (duckduckgo)</button>
-                                <button type="button" onclick="mpInsertPyExample('requests_json')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">📡 HTTP запрос (requests)</button>
-                                <button type="button" onclick="mpInsertPyExample('datetime_now')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">🕐 Текущее время</button>
-                                <button type="button" onclick="mpInsertPyExample('crypto_price')" style="padding:3px 8px;border:1px solid #D1D9E0;border-radius:12px;font-size:11px;background:white;cursor:pointer;color:#374151;" onmouseover="this.style.borderColor='#068487';this.style.color='#068487';" onmouseout="this.style.borderColor='#D1D9E0';this.style.color='#374151';">₿ Курс крипты</button>
+                            <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:5px;">Примеры популярных API:</div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">OpenAI</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">GPT, DALL-E, Whisper</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">OPENAI_API_KEY=sk-...</div>
+                                </div>
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">Telegram Bot</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">Отправка сообщений, уведомлений</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">TG_BOT_TOKEN=123:ABC...</div>
+                                </div>
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">Alpha Vantage</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">Акции, Forex, криптовалюты</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">ALPHAVANTAGE_KEY=ABC...</div>
+                                </div>
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">OpenWeatherMap</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">Погода по городу</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">WEATHER_KEY=abc123...</div>
+                                </div>
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">NewsAPI</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">Новости со всего мира</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">NEWSAPI_KEY=abc123...</div>
+                                </div>
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">Binance / ByBit</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">Крипто-котировки, торговля</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">BINANCE_API_KEY=...</div>
+                                </div>
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">HuggingFace</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">ML-модели, генерация текста</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">HF_TOKEN=hf_...</div>
+                                </div>
+                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
+                                    <div style="font-weight:500;color:#374151;">Airtable / Notion</div>
+                                    <div style="color:#9CA3AF;margin-top:1px;">Базы данных, CRM</div>
+                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">AIRTABLE_KEY=...</div>
+                                </div>
                             </div>
                         </div>
 
-                        <textarea id="mpa-pycode" placeholder="# Код необязателен. Нажми кнопку выше для вставки примера." rows="8" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                        <textarea id="mpa-apikeys" placeholder="OPENAI_API_KEY=sk-...&#10;WEATHER_KEY=abc123&#10;NEWSAPI_KEY=xyz789" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                     </div>
 
                     <!-- Цена — визуально понятно -->
@@ -3238,22 +3259,6 @@
             }
         }
 
-        const _PY_EXAMPLES = {
-            ddg_news: `from duckduckgo_search import DDGS\n\nwith DDGS() as ddgs:\n    results = ddgs.news(\n        keywords="новости дня",\n        region="ru-ru",\n        timelimit="d",\n        max_results=5\n    )\n    for r in results:\n        print(f"{r['title']} — {r['source']} ({r['date']})")\n`,
-            ddg_search: `from duckduckgo_search import DDGS\n\nwith DDGS() as ddgs:\n    results = ddgs.text(\n        keywords="актуальные тренды технологий 2026",\n        region="ru-ru",\n        max_results=5\n    )\n    for r in results:\n        print(f"{r['title']}: {r['body'][:120]}")\n`,
-            requests_json: `import requests\n\n# Пример: любой публичный JSON API\nresp = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=10)\ndata = resp.json()\nprint(f"USD/RUB = {data['rates'].get('RUB', '?')}")\nprint(f"USD/EUR = {data['rates'].get('EUR', '?')}")\n`,
-            datetime_now: `from datetime import datetime\nimport pytz\n\nmsk = pytz.timezone("Europe/Moscow")\nnow = datetime.now(msk)\nprint(f"Сейчас в Москве: {now.strftime('%d %B %Y, %H:%M')}")\nprint(f"День недели: {['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'][now.weekday()]}")\n`,
-            crypto_price: `import requests\n\ncoins = ["bitcoin", "ethereum", "solana"]\nresp = requests.get(\n    "https://api.coingecko.com/api/v3/simple/price",\n    params={"ids": ",".join(coins), "vs_currencies": "usd,rub"},\n    timeout=10\n)\ndata = resp.json()\nfor coin in coins:\n    usd = data.get(coin, {}).get("usd", "?")\n    rub = data.get(coin, {}).get("rub", "?")\n    print(f"{coin.capitalize()}: ${usd} / {rub} ₽")\n`,
-        };
-
-        function mpInsertPyExample(key) {
-            const ta = document.getElementById('mpa-pycode');
-            if (!ta) return;
-            const code = (_PY_EXAMPLES[key] || '').replace(/\\n/g, '\n');
-            ta.value = code;
-            ta.focus();
-        }
-
         async function mpSubmitAgent() {
             // Получаем base64 аватара из preview-img если есть
             let avatarDataUrl = '';
@@ -3269,7 +3274,6 @@
                 price_per_message: parseInt((document.getElementById('mpa-price') || {}).value) || 10,
                 avatar_data_url: avatarDataUrl,
                 user_api_keys: (document.getElementById('mpa-apikeys') || {}).value || '',
-                python_code: (document.getElementById('mpa-pycode') || {}).value || '',
             };
             if (_mpEditAgentId) data.id = _mpEditAgentId;
             if (!data.name || !data.personality) { mpShowStatus('Заполните имя и личность агента', '#FEF2F2', '#DC2626'); return; }
