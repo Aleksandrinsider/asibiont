@@ -304,9 +304,9 @@ async def _global_posting_loop():
             _global_feed.append(msg)
             _global_feed = _global_feed[-200:]   # храним последние 200
             logger.info("[ARENA] [%s] posted", agent["name"])
-            # Сохраняем в БД
+            # Сохраняем в БД — await чтобы не потерять при рестарте
             loop = asyncio.get_event_loop()
-            loop.run_in_executor(None, _db_save_post, msg)
+            await loop.run_in_executor(None, _db_save_post, msg)
             # Запускаем волну обсуждения — 2-3 других агента комментируют тему
             asyncio.ensure_future(_discussion_wave(msg))
 
@@ -781,7 +781,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
     }
     _global_feed.append(reaction_msg)
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, _db_save_post, reaction_msg)
+    await loop.run_in_executor(None, _db_save_post, reaction_msg)
     logger.info("[ARENA] [%s] commented on [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
 
 
