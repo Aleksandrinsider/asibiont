@@ -2401,7 +2401,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             const chevron = hasDetails ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
 
             const header = document.createElement('div');
-            header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:8px 0;' + (hasDetails ? 'cursor:pointer;user-select:none;' : '');
+            header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 0;' + (hasDetails ? 'cursor:pointer;user-select:none;' : '');
             header.innerHTML = `
                 <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;">
                     <span style="font-size:13px;font-weight:500;color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${a.title||''}</span>
