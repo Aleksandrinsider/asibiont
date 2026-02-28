@@ -409,6 +409,18 @@ def _migrate_marketplace(session, inspector):
             session.rollback()
             logger.debug(f"[MIGRATION] avatar_url type change skipped: {e}")
 
+    # Добавляем user_api_keys
+    if inspector.has_table('user_agents'):
+        cols = [c['name'] for c in inspector.get_columns('user_agents')]
+        if 'user_api_keys' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN user_api_keys TEXT"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.user_api_keys")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] user_api_keys add skipped: {e}")
+
 
 def _migrate_arena(session, inspector):
     """Создаёт таблицы для постов и комментариев арены (идемпотентно)."""

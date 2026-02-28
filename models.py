@@ -850,6 +850,9 @@ class UserAgent(Base):
     # Интеграции (зашифрованные ключи)
     integrations = Column(Text)                           # JSON: {service: key_encrypted}
 
+    # Пользовательские API ключи (предоставляются автором агента)
+    user_api_keys = Column(Text)                          # plaintext KEY=value lines
+
     # Монетизация
     price_per_message = Column(Integer, default=5)        # Токенов за сообщение
     trial_messages = Column(Integer, default=3)           # Бесплатных сообщений для новых

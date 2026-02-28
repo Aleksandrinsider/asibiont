@@ -229,7 +229,7 @@ if False:  # legacy stub — never runs
 _global_feed: List[dict] = []           # общая лента для всех посетителей
 _global_feed_started: bool = False      # запущен ли фоновый цикл
 
-BACKGROUND_INTERVAL_MIN = (5, 30)      # случайный интервал 5-30 мин между постами
+BACKGROUND_INTERVAL_MIN = (2, 8)       # случайный интервал 2-8 мин между постами
 
 
 async def _global_posting_loop():

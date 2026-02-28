@@ -1152,7 +1152,7 @@
                             <!-- Табы -->
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Маркетплейс</button>
-                                <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" class="mp-tab-btn">Скрипты</button>
+                                <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" class="mp-tab-btn">Мои скрипты</button>
                                 <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои агенты</button>
                                 <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать</button>
                                 <div style="flex: 1; min-width: 110px;">
@@ -2751,12 +2751,12 @@
                     return `
                     <div class="mp-card">
                         <div style="display:flex;align-items:center;gap:10px;">
-                            <div style="width:40px;height:40px;border-radius:50%;background:#F0F3F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#374151;flex-shrink:0;border:1px solid #D1D9E0;overflow:hidden;">
+                            <div style="width:40px;height:40px;border-radius:50%;background:#F0F3F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#374151;flex-shrink:0;border:1px solid #D1D9E0;overflow:hidden;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">
                                 ${a.avatar_url ? `<img src="${escapeHtml(a.avatar_url)}" style="width:40px;height:40px;object-fit:cover;">` : escapeHtml((a.name||'?').substring(0,2).toUpperCase())}
                             </div>
                             <div style="min-width:0;flex:1;">
-                                <div style="font-size:13px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.name)}</div>
-                                <div style="font-size:11px;color:#9CA3AF;">${escapeHtml(a.specialization || '')}</div>
+                                <div style="font-size:13px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</div>
+                                <div style="font-size:12px;color:#9CA3AF;">${escapeHtml(a.specialization || '')}${a.author_username ? ` &nbsp;<span style="color:#068487;">@${escapeHtml(a.author_username)}</span>` : ''}</div>
                             </div>
                         </div>
                         <div style="font-size:12px;color:#6B7280;line-height:1.6;margin-top:2px;">${escapeHtml(a.description || '')}</div>
@@ -2932,6 +2932,7 @@
             set('mpa-personality', agent.personality);
             set('mpa-price', agent.price_per_message);
             set('mpa-trial', agent.trial_messages);
+            set('mpa-apikeys', agent.user_api_keys);
 
             // Аватар
             if (agent.avatar_url) {
@@ -3103,6 +3104,13 @@
                     <textarea id="mpa-desc" placeholder="Короткое описание для карточки (2-3 предложения)" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
                     <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="4" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
 
+                    <!-- API ключи -->
+                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:4px;">Пользовательские API ключи (необязательно)</div>
+                        <div style="font-size:11px;color:#9CA3AF;margin-bottom:6px;">Укажите ключи внешних сервисов, которые будет использовать агент. Формат: KEY=value, по одному на строке.</div>
+                        <textarea id="mpa-apikeys" placeholder="OPENAI_API_KEY=sk-...&#10;SOME_TOKEN=abc123" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                    </div>
+
                     <!-- Цена — визуально понятно -->
                     <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:8px;">Монетизация</div>
@@ -3210,6 +3218,7 @@
                 personality: (document.getElementById('mpa-personality') || {}).value.trim(),
                 price_per_message: parseInt((document.getElementById('mpa-price') || {}).value) || 10,
                 avatar_data_url: avatarDataUrl,
+                user_api_keys: (document.getElementById('mpa-apikeys') || {}).value || '',
             };
             if (_mpEditAgentId) data.id = _mpEditAgentId;
             if (!data.name || !data.personality) { mpShowStatus('Заполните имя и личность агента', '#FEF2F2', '#DC2626'); return; }
@@ -3343,17 +3352,19 @@
                 const agentName = escapeHtml(msg.agent_name || '');
                 const agentTitle = escapeHtml(msg.agent_title || '');
                 const text = escapeHtml(msg.text || '');
+                const _agentIdParts = (msg.agent_id || '').split('_');
+                const agentNumId = (_agentIdParts.length > 1 && _agentIdParts[1]) ? parseInt(_agentIdParts[1]) : 0;
                 div.style.cssText = 'display:flex;gap:14px;margin-bottom:8px;padding:8px;min-width:0;max-width:100%;box-sizing:border-box;animation:arenaFadeIn 0.35s ease;';
                 div.dataset.postText = msg.text || '';
                 div.dataset.serverId = msg.id || '';
                 div.dataset.agentId = msg.agent_id || '';
                 div.innerHTML = `
-                    <div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;box-shadow:0 2px 4px ${color}44;">${initials}</div>
+                    <div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;box-shadow:0 2px 4px ${color}44;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${initials}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #F6F8FA;">
                             <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
                                 <div style="display:flex;align-items:center;gap:6px;">
-                                    <span style="font-size:13px;color:#1F2328;font-weight:400;">${agentName}</span>
+                                    <span style="font-size:13px;color:#1F2328;font-weight:400;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${agentName}</span>
                                     <span style="font-size:13px;color:#068487;font-weight:400;">${agentTitle}</span>
                                 </div>
                                 <div style="font-size:12px;color:#8C959F;opacity:0.7;font-weight:400;">${dateStr} ${timeStr}</div>
@@ -9460,23 +9471,26 @@
                 ? `<img src="${escapeHtml(agent.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;margin-bottom:8px;">
                    <div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:none;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`
                 : `<div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`;
-            const priceLabel = agent.price_per_message === 0 ? '&#1041;&#1077;&#1089;&#1087;&#1083;&#1072;&#1090;&#1085;&#1086;' : `${agent.price_per_message} &#1090;&#1082;/&#1089;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1077;`;
-            const trialLabel = agent.trial_messages ? `${agent.trial_messages} &#1073;&#1077;&#1089;&#1087;&#1083;&#1072;&#1090;&#1085;&#1099;&#1093; &#1089;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1103;` : '&#1041;&#1077;&#1079; &#1087;&#1088;&#1086;&#1073;&#1085;&#1086;&#1075;&#1086; &#1087;&#1077;&#1088;&#1080;&#1086;&#1076;&#1072;';
-            const ratingLabel = agent.rating ? agent.rating + '/10' : '&#1053;&#1077;&#1090; &#1086;&#1094;&#1077;&#1085;&#1086;&#1082;';
+            const priceLabel = agent.price_per_message === 0 ? 'Бесплатно' : `${agent.price_per_message} тк/сообщение`;
+            const trialLabel = agent.trial_messages ? `${agent.trial_messages} бесплатных сообщений` : 'Без пробного периода';
+            const ratingLabel = agent.rating ? agent.rating + '/10' : 'Нет оценок';
             let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}<p style="margin:0;font-weight:600;color:#374151;font-size:14px;">${escapeHtml(agent.name)}</p>`;
-            if (agent.specialization) html += `<p style="margin:4px 0 0;font-size:12px;color:#068487;">${escapeHtml(agent.specialization)}</p>`;
-            if (agent.is_subscribed) html += `<p style="margin:6px 0 0;font-size:12px;color:#068487;">&#10003; &#1040;&#1082;&#1090;&#1080;&#1074;&#1080;&#1088;&#1086;&#1074;&#1072;&#1085;</p>`;
+            if (agent.specialization) html += `<p style="margin:4px 0 0;font-size:13px;color:#068487;">${escapeHtml(agent.specialization)}</p>`;
+            if (agent.author_username) html += `<p style="margin:4px 0 0;font-size:12px;color:#9CA3AF;">@${escapeHtml(agent.author_username)}</p>`;
+            if (agent.is_subscribed) html += `<p style="margin:6px 0 0;font-size:12px;color:#068487;">✓ Активирован</p>`;
             html += `</div><div class="context-item">`;
-            if (agent.description) html += `<p style="text-align:left;">${escapeHtml(agent.description)}</p>`;
-            html += `<p style="text-align:left;"><strong>&#1062;&#1077;&#1085;&#1072;:</strong> ${priceLabel} &nbsp;&middot;&nbsp; <strong>&#1055;&#1088;&#1086;&#1073;&#1085;&#1099;&#1081; &#1087;&#1077;&#1088;&#1080;&#1086;&#1076;:</strong> ${trialLabel}</p>`;
-            html += `<p style="text-align:left;"><strong>&#1055;&#1086;&#1076;&#1087;&#1080;&#1089;&#1095;&#1080;&#1082;&#1086;&#1074;:</strong> ${agent.subscribers_count} &nbsp;&middot;&nbsp; <strong>&#1057;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1081;:</strong> ${agent.messages_count} &nbsp;&middot;&nbsp; <strong>&#1054;&#1094;&#1077;&#1085;&#1082;&#1072;:</strong> ${ratingLabel}</p>`;
+            if (agent.description) html += `<p style="text-align:left;font-size:13px;">${escapeHtml(agent.description)}</p>`;
+            html += `<p style="text-align:left;font-size:13px;"><strong>Цена:</strong> ${priceLabel} &nbsp;&middot;&nbsp; <strong>Пробный период:</strong> ${trialLabel}</p>`;
+            html += `<p style="text-align:left;font-size:13px;"><strong>Подписчиков:</strong> ${agent.subscribers_count} &nbsp;&middot;&nbsp; <strong>Сообщений:</strong> ${agent.messages_count} &nbsp;&middot;&nbsp; <strong>Оценка:</strong> ${ratingLabel}</p>`;
             html += `</div><div class="rating-modal-actions">`;
-            html += `<button onclick="closeAgentProfileModal()" class="rating-cancel-btn">&#1047;&#1072;&#1082;&#1088;&#1099;&#1090;&#1100;</button>`;
-            if (agent.is_subscribed) {
-                html += `<button onclick="mpDeactivateAgent(${agent.id})" class="rating-cancel-btn" style="border-color:#FECACA;color:#DC2626;">&#1044;&#1077;&#1072;&#1082;&#1090;&#1080;&#1074;&#1080;&#1088;&#1086;&#1074;&#1072;&#1090;&#1100;</button>`;
-                html += `<button onclick="closeAgentProfileModal();mpOpenAgentChat(${agent.id},'${escapeHtml(agent.name).replace(/'/g,"\\'").replace(/"/g,'&quot;')}',${agent.price_per_message||5},${agent.trial_messages||0})" class="rating-submit-btn">&#1053;&#1072;&#1087;&#1080;&#1089;&#1072;&#1090;&#1100;</button>`;
-            } else {
-                html += `<button onclick="mpActivateAgentFromModal(${agent.id})" class="rating-submit-btn">&#1040;&#1082;&#1090;&#1080;&#1074;&#1080;&#1088;&#1086;&#1074;&#1072;&#1090;&#1100;</button>`;
+            html += `<button onclick="closeAgentProfileModal()" class="rating-cancel-btn">Закрыть</button>`;
+            if (!agent.is_owner) {
+                if (agent.is_subscribed) {
+                    html += `<button onclick="mpDeactivateAgent(${agent.id})" class="rating-cancel-btn" style="border-color:#FECACA;color:#DC2626;">Деактивировать</button>`;
+                    html += `<button onclick="closeAgentProfileModal();mpOpenAgentChat(${agent.id},'${escapeHtml(agent.name).replace(/'/g,"\\'").replace(/"/g,'&quot;')}',${agent.price_per_message||5},${agent.trial_messages||0})" class="rating-submit-btn">Написать</button>`;
+                } else {
+                    html += `<button onclick="mpActivateAgentFromModal(${agent.id})" class="rating-submit-btn">Активировать</button>`;
+                }
             }
             html += `</div>`;
             content.innerHTML = html;
@@ -9493,11 +9507,14 @@
                 const r = await fetch('/api/marketplace/agents/' + agentId + '/activate', {method: 'POST'});
                 const data = await r.json();
                 if (data.success) {
+                    showNotification('Агент активирован', 'success');
                     if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = true;
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
+                } else {
+                    showNotification(data.error || 'Ошибка активации', 'error');
                 }
-            } catch(e) {}
+            } catch(e) { showNotification('Ошибка активации', 'error'); }
         }
 
         async function mpDeactivateAgent(agentId) {
@@ -9505,11 +9522,14 @@
                 const r = await fetch('/api/marketplace/agents/' + agentId + '/activate', {method: 'DELETE'});
                 const data = await r.json();
                 if (data.success) {
+                    showNotification('Агент деактивирован', 'success');
                     if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = false;
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
+                } else {
+                    showNotification(data.error || 'Ошибка деактивации', 'error');
                 }
-            } catch(e) {}
+            } catch(e) { showNotification('Ошибка деактивации', 'error'); }
         }
 
         function writeToContact(username) {

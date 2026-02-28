@@ -9384,6 +9384,7 @@ async def api_marketplace_agents_handler(request):
                         rater_user_id=user_obj.id, agent_id=a.id).first()
                     if ar:
                         user_rating = ar.rating
+                author_username = a.author.username if a.author and a.author.username else None
                 result.append({
                     'id': a.id, 'name': a.name, 'slug': a.slug,
                     'description': a.description, 'specialization': a.specialization,
@@ -9395,6 +9396,7 @@ async def api_marketplace_agents_handler(request):
                     'rating': rating, 'user_rating': user_rating,
                     'is_subscribed': is_subscribed,
                     'is_adult': a.is_adult,
+                    'author_username': author_username,
                     'is_owner': bool(user_obj and a.author_id == user_obj.id),
                 })
             return web.json_response({'agents': result})
@@ -9493,6 +9495,9 @@ async def api_marketplace_publish_agent_handler(request):
             agent.trial_messages = max(0, int(data.get('trial_messages') or 3))
             agent.is_adult = bool(data.get('is_adult', False))
             agent.status = 'active'  # Авто-одобрение: агент сразу активен
+
+            # Пользовательские API ключи
+            agent.user_api_keys = (data.get('user_api_keys') or '').strip()
 
             # Аватар из base64 data URL (сохраняем напрямую; в продакшене заменить на upload в CDN)
             avatar_data = (data.get('avatar_data_url') or '').strip()
@@ -10112,6 +10117,7 @@ async def api_marketplace_agent_get_handler(request):
             if user_obj:
                 is_subscribed = bool(session_db.query(AgentSubscription).filter_by(
                     user_id=user_obj.id, agent_id=agent.id).first())
+            author_username = agent.author.username if agent.author and agent.author.username else None
             return web.json_response({'agent': {
                 'id': agent.id, 'name': agent.name, 'slug': agent.slug,
                 'description': agent.description or '',
@@ -10124,6 +10130,9 @@ async def api_marketplace_agent_get_handler(request):
                 'author_royalty_pct': agent.author_royalty_pct or 30,
                 'rating': rating,
                 'is_subscribed': is_subscribed,
+                'author_username': author_username,
+                'is_owner': bool(user_obj and agent.author_id == user_obj.id),
+                'user_api_keys': (agent.user_api_keys or '') if (user_obj and agent.author_id == user_obj.id) else '',
             }})
         finally:
             session_db.close()
