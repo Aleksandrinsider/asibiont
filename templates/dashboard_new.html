@@ -5331,13 +5331,9 @@
                 const existingIds = new Set(existingPosts.map(el => el.getAttribute('data-post-id')));
 
                 if (data.posts && data.posts.length > 0) {
-                    // Полностью перезагружаем посты в правильном порядке (новые первыми)
                     feedContainer.innerHTML = '';
                     
-                    // Сортируем от новых к старым (на случай если бэкенд вернул в другом порядке)
-                    data.posts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-                    // Посты уже отсортированы от новых к старым с бэкенда
+                    // Посты отображаются в порядке с бэкенда
                     data.posts.forEach((post, index) => {
                         try {
                             const postDiv = document.createElement('div');
@@ -5451,10 +5447,6 @@
                         }
                     });
 
-                    // Прокручиваем вверх — новые посты сверху
-                    const feedScroll = feedContainer.closest('.tab-panel') || feedContainer.parentElement;
-                    if (feedScroll) feedScroll.scrollTop = 0;
-                    
                     // Обновляем лайки и комментарии для существующих постов
                     data.posts.forEach(post => {
                         if (existingIds.has(String(post.id))) {
