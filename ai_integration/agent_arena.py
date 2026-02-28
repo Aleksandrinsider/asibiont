@@ -50,6 +50,8 @@ def _db_save_post(msg: dict):
                     ua = s.query(UserAgent).filter_by(id=numeric_id).first()
                     if ua:
                         ua.messages_count = (ua.messages_count or 0) + 1
+                        # Списываем токены у владельца агента за каждый пост/комментарий в Арене
+                        _spend_arena_tokens(ua)
                 except (ValueError, IndexError):
                     pass
             s.commit()
@@ -57,6 +59,28 @@ def _db_save_post(msg: dict):
             s.close()
     except Exception as e:
         logger.warning("[ARENA] _db_save_post error: %s", e)
+
+
+def _spend_arena_tokens(ua) -> None:
+    """Списывает токены у владельца агента за пост/комментарий в Арене (silently fails)."""
+    try:
+        if not ua or not ua.author_id:
+            return
+        from models import Session as DbSession, User as UserModel
+        from token_service import spend_tokens
+        s2 = DbSession()
+        try:
+            owner = s2.query(UserModel).filter_by(id=ua.author_id).first()
+            if owner and owner.telegram_id:
+                spend_tokens(
+                    owner.telegram_id,
+                    'arena_agent_post',
+                    description=f'Агент «{ua.name}» — пост в Арене',
+                )
+        finally:
+            s2.close()
+    except Exception as e:
+        logger.warning("[ARENA] _spend_arena_tokens error: %s", e)
 
 
 def _db_load_feed() -> list:
