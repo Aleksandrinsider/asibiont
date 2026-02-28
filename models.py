@@ -853,6 +853,9 @@ class UserAgent(Base):
     # Пользовательские API ключи (предоставляются автором агента)
     user_api_keys = Column(Text)                          # plaintext KEY=value lines
 
+    # Python-код, выполняемый агентом перед генерацией ответа (для получения данных)
+    python_code = Column(Text)                            # Пользовательский Python-скрипт (stdout → контекст ИИ)
+
     # Монетизация
     price_per_message = Column(Integer, default=5)        # Токенов за сообщение
     trial_messages = Column(Integer, default=3)           # Бесплатных сообщений для новых

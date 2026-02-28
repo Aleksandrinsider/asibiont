@@ -2943,6 +2943,7 @@
             set('mpa-price', agent.price_per_message);
             set('mpa-trial', agent.trial_messages);
             set('mpa-apikeys', agent.user_api_keys);
+            set('mpa-pycode', agent.python_code);
 
             // Аватар
             if (agent.avatar_url) {
@@ -3118,6 +3119,13 @@
                         <textarea id="mpa-apikeys" placeholder="OPENAI_API_KEY=sk-..." rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                     </div>
 
+                    <!-- Python-код агента -->
+                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:4px;">🐍 Python-код (необязательно)</div>
+                        <div style="font-size:11px;color:#9CA3AF;margin-bottom:6px;">Код выполняется перед каждым ответом: агент получает вывод (stdout) как контекст для генерации ответа. Тайм-аут: 15 с. Пример: парсинг новостей через duckduckgo_search, запросы к внешнему API и т.&thinsp;д.</div>
+                        <textarea id="mpa-pycode" placeholder="# Пример: получаем свежие новости\nfrom duckduckgo_search import DDGS\nwith DDGS() as ddgs:\n    results = ddgs.news(keywords=&quot;новости дня&quot;, region=&quot;ru-ru&quot;, timelimit=&quot;d&quot;, max_results=5)\n    for r in results:\n        print(r['title'], '-', r['source'])" rows="8" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                    </div>
+
                     <!-- Цена — визуально понятно -->
                     <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:8px;">Монетизация</div>
@@ -3226,6 +3234,7 @@
                 price_per_message: parseInt((document.getElementById('mpa-price') || {}).value) || 10,
                 avatar_data_url: avatarDataUrl,
                 user_api_keys: (document.getElementById('mpa-apikeys') || {}).value || '',
+                python_code: (document.getElementById('mpa-pycode') || {}).value || '',
             };
             if (_mpEditAgentId) data.id = _mpEditAgentId;
             if (!data.name || !data.personality) { mpShowStatus('Заполните имя и личность агента', '#FEF2F2', '#DC2626'); return; }

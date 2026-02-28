@@ -9,6 +9,7 @@ import asyncio
 import aiohttp
 import json
 import logging
+import sys
 import time
 import random
 from typing import List, Dict, Optional, AsyncIterator
@@ -112,6 +113,7 @@ def _load_marketplace_agents() -> list:
                     'initials': initials,
                     'personal_topic': a.description or '',
                     'system_prompt': system_prompt,
+                    'python_code': (a.python_code or '').strip(),
                     '_is_marketplace': True,
                 })
             return result
@@ -423,6 +425,35 @@ def get_arena_state(arena_id: str = "default") -> dict:
 
 # ─── Генерация реплики агента ──────────────────────────────────────────────
 
+async def _run_agent_python_code(code: str, timeout: int = 15) -> str:
+    """
+    Выполняет Python-код агента в отдельном subprocess с тайм-аутом.
+    Возвращает stdout (макс. 2000 симв.) или сообщение об ошибке.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, '-c', code,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return f'[тайм-аут: код работал больше {timeout}с]'
+        out = stdout.decode('utf-8', errors='replace').strip()
+        err = stderr.decode('utf-8', errors='replace').strip()
+        if out:
+            return out[:2000]
+        if err:
+            return f'[ошибка выполнения: {err[:500]}]'
+        return ''
+    except Exception as e:
+        logger.warning(f'[ARENA] python_code exec error: {e}')
+        return f'[ошибка: {e}]'
+
+
 async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = "") -> str:
     """Вызывает DeepSeek для генерации реплики агента."""
     # Строим историю — последние 10 сообщений
@@ -439,9 +470,25 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         f"Можешь естественно упомянуть её, если уместно, но не звуча искусственно.\n"
     ) if personal else ""
 
+    # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
+    code_output = ''
+    python_code = agent.get('python_code', '')
+    if python_code:
+        raw = await _run_agent_python_code(python_code)
+        if raw and not raw.startswith('['):
+            code_output = raw
+            logger.info(f"[ARENA] {agent['name']} python_code output ({len(code_output)} chars)")
+        elif raw:
+            logger.warning(f"[ARENA] {agent['name']} python_code: {raw[:100]}")
+
+    code_context = (
+        f"Свежие данные из твоего инструмента (используй их в ответе, если релевантно):\n{code_output}\n\n"
+    ) if code_output else ''
+
     if history_text.strip():
         # Есть контекст — реагируем на последние реплики
         user_content = (
+            f"{code_context}"
             f"{personal_hint}"
             f"Последние реплики чата:\n{history_text}\n"
             f"Твоя очередь. Можешь ответить кому-то конкретно или добавить своё — "
@@ -450,6 +497,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     else:
         # Контекста нет — генерируем свободно
         user_content = (
+            f"{code_context}"
             f"{personal_hint}"
             f"Начни высказывание со своей точки зрения — "
             f"кратко, ярко, в характерном для тебя стиле."

@@ -9499,6 +9499,9 @@ async def api_marketplace_publish_agent_handler(request):
             # Пользовательские API ключи
             agent.user_api_keys = (data.get('user_api_keys') or '').strip()
 
+            # Python-код агента (выполняется перед генерацией ответа)
+            agent.python_code = (data.get('python_code') or '').strip()
+
             # Аватар из base64 data URL (сохраняем напрямую; в продакшене заменить на upload в CDN)
             avatar_data = (data.get('avatar_data_url') or '').strip()
             if avatar_data and avatar_data.startswith('data:image/'):
@@ -10133,6 +10136,7 @@ async def api_marketplace_agent_get_handler(request):
                 'author_username': author_username,
                 'is_owner': bool(user_obj and agent.author_id == user_obj.id),
                 'user_api_keys': (agent.user_api_keys or '') if (user_obj and agent.author_id == user_obj.id) else '',
+                'python_code': (agent.python_code or '') if (user_obj and agent.author_id == user_obj.id) else '',
             }})
         finally:
             session_db.close()
