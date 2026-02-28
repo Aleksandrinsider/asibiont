@@ -428,9 +428,8 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
 async def _proactive_comment(post_msg: dict):
     """
-    Через случайную задержку (1-5 мин) другой агент комментирует пост в ленте.
-    Комментарий добавляется в _global_feed с полем comment_of,
-    чтобы SSE клиент мог отобразить его в нужном посте.
+    Через случайную задержку (1-5 мин) другой агент реагирует на пост в ленте.
+    Реакция добавляется в глобальную ленту как обычное сообщение.
     """
     await asyncio.sleep(random.uniform(60, 300))  # 1-5 мин задержка
     try:
@@ -441,17 +440,17 @@ async def _proactive_comment(post_msg: dict):
         commenter = random.choice(other_agents)
 
         post_text = post_msg.get('text', '')
-        poster_name = post_msg.get('agent_name', '')
         personal = commenter.get('personal_topic', '')
         personal_hint = (
-            f"Твоя личная обсессия: «{personal}». Если уместно — отрази её.\\n"
+            f"Твоя личная обсессия: «{personal}». Если уместно — отрази её.\n"
         ) if personal else ""
 
         user_content = (
             f"{personal_hint}"
-            f"Агент {poster_name} написал: «{post_text}»\\n\\n"
-            f"Прокомментируй это высказывание кратко, в своём стиле — "
-            f"1-2 предложения. Можешь не соглашаться, задать вопрос или развить мысль."
+            f"В дискуссии появилась мысль: «{post_text}»\n\n"
+            f"Отреагируй на это кратко, в своём стиле. "
+            f"1-2 предложения. Никого не называй по имени. "
+            f"Просто выскажи свою точку зрения — вопрос, возражение или развитие мысли."
         )
 
         api_messages = [
@@ -480,10 +479,9 @@ async def _proactive_comment(post_msg: dict):
                 data = await resp.json()
                 comment_text = data["choices"][0]["message"]["content"].strip()
 
-        # Добавляем комментарий в ленту с маркером comment_of
-        comment_msg = {
+        # Добавляем как обычный пост в ленту
+        reaction_msg = {
             "id": f"cmt_{commenter['id']}_{int(time.time())}",
-            "comment_of": post_msg.get('id', ''),
             "agent_id": commenter["id"],
             "agent_name": commenter["name"],
             "agent_title": commenter["title"],
@@ -492,34 +490,11 @@ async def _proactive_comment(post_msg: dict):
             "text": comment_text,
             "ts": datetime.utcnow().isoformat(),
         }
-        _global_feed.append(comment_msg)
+        _global_feed.append(reaction_msg)
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _db_save_post, reaction_msg)
 
-        # Сохраняем в БД как комментарий
-        post_key = post_msg.get('id', '')
-        if post_key:
-            import datetime as _dt
-            def _save_cmt():
-                from models import ArenaComment
-                from models import Session as _Session
-                s = _Session()
-                try:
-                    s.add(ArenaComment(
-                        post_key=post_key,
-                        user_text=None,
-                        agent_name=commenter['name'],
-                        agent_title=commenter['title'],
-                        color=commenter['color'],
-                        initials=commenter['initials'],
-                        agent_text=comment_text,
-                        ts=_dt.datetime.utcnow().isoformat(),
-                    ))
-                    s.commit()
-                finally:
-                    s.close()
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, _save_cmt)
-
-        logger.info("[ARENA] [%s] proactive comment on [%s]'s post", commenter['name'], poster_name)
+        logger.info("[ARENA] [%s] reacted to [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
     except Exception as e:
         logger.error("[ARENA] proactive comment error: %s", e)
 
@@ -539,7 +514,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
 
     context = ""
     if post_text:
-        context = f"Это твой пост: «{post_text}»\n\n"
+        context = f"Контекст: «{post_text}»\n\n"
 
     personal = agent.get('personal_topic', '')
     personal_hint = (
@@ -550,9 +525,9 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     user_content = (
         f"{context}"
         f"{personal_hint}"
-        f"Участник написал тебе: «{comment_text}»\n\n"
-        f"Ответь кратко и ярко, в своём характерном стиле. "
-        f"Можешь задать провокационный вопрос, не соглашаться, или развить мысль. "
+        f"В дискуссии написали: «{comment_text}»\n\n"
+        f"Выскажись кратко и ярко, в своём характерном стиле. "
+        f"Никого не называй по имени. Просто вопрос, несогласие или развитие мысли. "
         f"1-3 предложения максимум."
     )
 
