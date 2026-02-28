@@ -2372,29 +2372,18 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         window._activityPollSince = null;
         window._activityLastId = 0;
 
-        const _tlIconMap = {
-            'task_added': '📋', 'task_completed': '✅', 'goal_created': '🎯',
-            'goal_updated': '📊', 'goal_completed': '🏆', 'goal_deleted': '🗑️',
-            'profile_updated': '👤', 'email': '📧', 'delegation': '🤝',
-            'post_newsfeed': '📰', 'post_telegram': '📢', 'post_discord': '💬',
-            'content_campaign': '📅', 'delegation_campaign': '👥',
-            'background_research': '🔍', 'background_research_ready': '💡',
+        const _tlColors = {
+            'task_added':'#0969DA','task_completed':'#4AC26B',
+            'goal_created':'#8250DF','goal_updated':'#8250DF','goal_completed':'#4AC26B','goal_deleted':'#9CA3AF',
+            'profile_updated':'#4AC26B','email':'#E36209',
+            'delegation':'#BF3989','delegation_campaign':'#BF3989',
+            'post_newsfeed':'#068487','post_telegram':'#0088CC','post_discord':'#5865F2',
+            'content_campaign':'#068487',
+            'background_research':'#6E7781','background_research_ready':'#6E7781',
         };
 
-        function _tlTimeAgo(iso) {
-            if (!iso) return '';
-            const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-            if (diff < 60) return 'только что';
-            if (diff < 3600) return Math.floor(diff/60) + ' мин назад';
-            if (diff < 86400) return Math.floor(diff/3600) + ' ч назад';
-            return Math.floor(diff/86400) + ' дн назад';
-        }
-
-        function createTimelineItem(a, isNew) {
-            const el = document.createElement('div');
-            el.setAttribute('data-act-id', a.id || '');
-            el.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;' + (isNew ? 'animation:tlFadeIn 0.3s ease;' : '');
-            const _tlTypeLabels = {
+        function _tlLabels() {
+            return {
                 'task_added': t('act-task-added'), 'task_completed': t('act-task-completed'),
                 'goal_created': t('act-goal-created'), 'goal_updated': t('act-goal-updated'),
                 'goal_completed': t('act-goal-completed'), 'goal_deleted': t('act-goal-deleted'),
@@ -2404,15 +2393,28 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 'content_campaign': t('act-content-campaign'), 'delegation_campaign': t('act-deleg-campaign'),
                 'background_research': t('act-bg-research'), 'background_research_ready': t('act-bg-research-ready'),
             };
-            const typeLabel = _tlTypeLabels[a.activity_type] || a.activity_type;
-            const aDate = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+        }
+
+        function createTimelineItem(a, isNew) {
+            const el = document.createElement('div');
+            el.setAttribute('data-act-id', a.id || '');
+            el.style.cssText = 'display:flex;align-items:flex-start;gap:0;margin-bottom:0;position:relative;' + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
+            const labels = _tlLabels();
+            const typeLabel = labels[a.activity_type] || a.activity_type;
+            const dotColor = _tlColors[a.activity_type] || '#9CA3AF';
+            const timeStr = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
             el.innerHTML = `
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                    <span style="font-size:11px;color:#8C959F;flex-shrink:0;">${typeLabel}</span>
-                    <span style="font-size:13px;font-weight:500;color:#1F2328;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.title||''}</span>
-                    ${aDate ? `<span style="font-size:12px;color:#9CA3AF;flex-shrink:0;">${aDate}</span>` : ''}
+                <div style="width:34px;flex-shrink:0;text-align:right;padding-right:8px;padding-top:3px;">
+                    <span style="font-size:10px;color:#9CA3AF;white-space:nowrap;letter-spacing:-0.2px;">${timeStr}</span>
                 </div>
-                ${a.content ? `<div style="font-size:12px;color:#6C727F;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content}</div>` : ''}
+                <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:5px;position:relative;z-index:1;">
+                    <div style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;box-shadow:0 0 0 2px #fff;"></div>
+                </div>
+                <div style="flex:1;min-width:0;padding-left:7px;padding-bottom:7px;padding-top:0;">
+                    <div style="font-size:11px;color:#8C959F;margin-bottom:1px;">${typeLabel}</div>
+                    <div style="font-size:13px;font-weight:500;color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.title||''}</div>
+                    ${a.content ? `<div style="font-size:12px;color:#6C727F;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content}</div>` : ''}
+                </div>
             `;
             return el;
         }
@@ -2429,7 +2431,26 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             if (sorted.length) {
                 window._activityLastId = Math.max(...sorted.map(a => a.id || 0));
             }
-            sorted.forEach(a => tl.appendChild(createTimelineItem(a, false)));
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:relative;padding-top:4px;padding-bottom:4px;';
+            const guideLine = document.createElement('div');
+            guideLine.style.cssText = 'position:absolute;left:41px;top:0;bottom:0;width:1px;background:#E5E7EB;';
+            wrap.appendChild(guideLine);
+            let lastDate = '';
+            sorted.forEach(a => {
+                if (a.created_at) {
+                    const itemDate = new Date(a.created_at).toLocaleDateString('ru-RU', {day:'2-digit',month:'long',timeZone:window.USER_TIMEZONE||'UTC'});
+                    if (itemDate !== lastDate) {
+                        lastDate = itemDate;
+                        const sep = document.createElement('div');
+                        sep.style.cssText = 'display:flex;align-items:center;gap:0;margin-bottom:2px;margin-top:6px;';
+                        sep.innerHTML = `<div style="width:50px;flex-shrink:0;"></div><span style="font-size:10px;color:#9CA3AF;font-weight:500;background:#fff;padding:0 6px 0 0;position:relative;z-index:1;letter-spacing:0.2px;text-transform:lowercase;">${itemDate}</span>`;
+                        wrap.appendChild(sep);
+                    }
+                }
+                wrap.appendChild(createTimelineItem(a, false));
+            });
+            tl.appendChild(wrap);
         }
 
         function startActivityPolling() {
@@ -2444,13 +2465,11 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         const newActs = data.activities || [];
                         if (!newActs.length) return;
                         if (newActs.length) window._activityLastId = Math.max(...newActs.map(a => a.id || 0));
-                        const tl = document.getElementById('agent-activity-timeline');
-                        if (tl) {
-                            newActs.forEach(a => {
-                                if (!tl.querySelector('[data-act-id="' + a.id + '"]')) {
-                                    tl.insertBefore(createTimelineItem(a, true), tl.firstChild);
-                                }
-                            });
+                        const newUniq = newActs.filter(a => !document.querySelector('[data-act-id="' + a.id + '"]'));
+                        if (newUniq.length) {
+                            const currentAll = window._allActivities || [];
+                            window._allActivities = [...newUniq, ...currentAll];
+                            renderTimeline(window._allActivities);
                         }
                     } catch(ex) { /* non-critical */ }
                 };
@@ -3198,7 +3217,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
 
                     const agentTimeline = document.createElement('div');
                     agentTimeline.id = 'agent-activity-timeline';
-                    agentTimeline.style.cssText = 'border-left: 2px solid #E5E7EB; margin-left: 6px; padding-left: 10px; padding-top: 4px; padding-bottom: 2px;';
+                    agentTimeline.style.cssText = 'padding: 0 0 4px 0; overflow:hidden;';
                     agentDetails.appendChild(agentTimeline);
 
                     agentHeader.onclick = () => {
@@ -3227,6 +3246,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     agentSection.appendChild(agentHeader);
                     agentSection.appendChild(agentDetails);
                     list.appendChild(agentSection);
+                    window._allActivities = agentActivities;
                     renderTimeline(agentActivities);
                 }
 
@@ -10302,8 +10322,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'camp-sending':'Отправляет','camp-wait-day':'Ждёт завтра','camp-no-leads':'Нет лидов','camp-searching':'Ищет контакты',
       'camp-pause-tip':'Поставить на паузу','camp-resume-tip':'Возобновить','camp-wait-tip':'Дневной лимит исчерпан, продолжит завтра',
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
-      'act-email':'Отчёт по Email-рассылке','act-delegation':'Делегирование','act-post-feed':'Посты в ленту новостей','act-post-tg':'Посты в Telegram-канал','act-post-discord':'Посты в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Кампания делегирования','act-other':'Прочая активность','act-bg-research':'Фоновое исследование','act-bg-research-ready':'Исследование завершено','agent-activity-title':'Активность агента',
-      'act-task-added':'Задачи созданы','act-task-completed':'Задачи выполнены','act-goal-created':'Проекты созданы','act-goal-updated':'Проекты обновлены','act-goal-completed':'Проекты завершены','act-goal-deleted':'Проекты удалены','act-profile-updated':'Профиль обновлён',
+      'act-email':'Email','act-delegation':'Делегирование','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Кампания делегирования','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология',
+      'act-task-added':'Задача создана','act-task-completed':'Задача выполнена','act-goal-created':'Цель создана','act-goal-updated':'Цель обновлена','act-goal-completed':'Цель достигнута','act-goal-deleted':'Цель удалена','act-profile-updated':'Профиль',
       'cc-title':'Контент-кампания','cc-goal':'Цель:','cc-topics':'Темы:','cc-freq':'Частота:','cc-last':'Посл. пост:','cc-posts':'п.','cc-freq-daily':'Ежедн.','cc-freq-weekly':'Еженед.','cc-del-confirm':'Удалить контент-кампанию?','plat-feed':'Лента',
       'dc-title':'Кампания делегирования','dc-audience':'Аудитория:','dc-sent':'Отпр.','dc-accepted':'Прин.','dc-del-confirm':'Удалить кампанию делегирования?',
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
@@ -10517,8 +10537,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'camp-sending':'Sending','camp-wait-day':'Waiting tomorrow','camp-no-leads':'No leads','camp-searching':'Searching contacts',
       'camp-pause-tip':'Pause campaign','camp-resume-tip':'Resume campaign','camp-wait-tip':'Daily limit reached, will continue tomorrow',
       'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
-      'act-email':'Email Report','act-delegation':'Delegation','act-post-feed':'Feed posts','act-post-tg':'Telegram channel posts','act-post-discord':'Discord posts','act-content-campaign':'Content campaign','act-deleg-campaign':'Delegation campaign','act-other':'Other activity','act-bg-research':'Background research','act-bg-research-ready':'Research complete','agent-activity-title':'Agent activity',
-      'act-task-added':'Tasks created','act-task-completed':'Tasks completed','act-goal-created':'Projects created','act-goal-updated':'Projects updated','act-goal-completed':'Projects completed','act-goal-deleted':'Projects deleted','act-profile-updated':'Profile updated',
+      'act-email':'Email','act-delegation':'Delegation','act-post-feed':'Feed post','act-post-tg':'Telegram post','act-post-discord':'Discord post','act-content-campaign':'Content campaign','act-deleg-campaign':'Delegation campaign','act-other':'Other','act-bg-research':'Research','act-bg-research-ready':'Research ready','agent-activity-title':'Timeline',
+      'act-task-added':'Task created','act-task-completed':'Task completed','act-goal-created':'Goal created','act-goal-updated':'Goal updated','act-goal-completed':'Goal achieved','act-goal-deleted':'Goal deleted','act-profile-updated':'Profile',
       'cc-title':'Content campaign','cc-goal':'Goal:','cc-topics':'Topics:','cc-freq':'Frequency:','cc-last':'Last post:','cc-posts':'p.','cc-freq-daily':'Daily','cc-freq-weekly':'Weekly','cc-del-confirm':'Delete content campaign?','plat-feed':'Feed',
       'dc-title':'Delegation campaign','dc-audience':'Audience:','dc-sent':'Sent','dc-accepted':'Accepted','dc-del-confirm':'Delete delegation campaign?',
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',
