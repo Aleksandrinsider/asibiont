@@ -245,6 +245,14 @@ class ReminderService:
         global REMINDER_SERVICE
         REMINDER_SERVICE = self
 
+    def _save_to_chat_history(self, user_id: int, text: str):
+        """Saves a bot message to user's ConversationHistory so it appears in AI chat."""
+        try:
+            from ai_integration.conversation_history import save_message_to_history
+            save_message_to_history(user_id, 'assistant', text)
+        except Exception as _e:
+            logger.debug(f"[REMINDER] Failed to sync message to chat history for {user_id}: {_e}")
+
     async def start(self):
         if not self.scheduler.running:
             self.scheduler.start()
@@ -340,7 +348,7 @@ class ReminderService:
                     )
                     logger.info(f"✅ Result check sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
                     result_check_sent_successfully = True
-                        
+                    self._save_to_chat_history(user_id, result_text)
                 except Exception as send_error:
                     logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {send_error}")
                     logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -436,7 +444,7 @@ class ReminderService:
                 try:
                     await self.bot.send_message(user_id, reminder_text)
                     logger.info(f"Followup reminder sent to user {user_id}")
-                    # Лог в хронологию агента
+                    self._save_to_chat_history(user_id, reminder_text)
                     try:
                         _fdb = Session()
                         try:
@@ -554,7 +562,7 @@ class ReminderService:
                     )
                     logger.info(f"✅ Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
                     reminder_sent_successfully = True
-                except Exception as send_error:
+                    self._save_to_chat_history(user_id, reminder_text)
                     err_text = str(send_error)
                     logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {err_text}")
                     logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -640,6 +648,7 @@ class ReminderService:
                     chat_id=user_id,
                     text=report_text
                 )
+                self._save_to_chat_history(user_id, report_text)
                 # Лог в хронологию агента
                 try:
                     _rdb = Session()
@@ -786,6 +795,7 @@ class ReminderService:
                         text=proactive_text
                     )
                     logger.info(f"Sent checkpoint message to user {user_id}")
+                    self._save_to_chat_history(user_id, proactive_text)
                     # Лог в хронологию агента
                     try:
                         from models import AgentActivityLog
@@ -1089,6 +1099,7 @@ class ReminderService:
                         chat_id=user_id,
                         text=proactive_text
                     )
+                    self._save_to_chat_history(user_id, proactive_text)
                 else:
                     logger.info(f"[PROACTIVE] To user {user_id}: {proactive_text}")
             except Exception as e:
@@ -1169,6 +1180,7 @@ class ReminderService:
                     chat_id=user_id,
                     text=overdue_text
                 )
+                self._save_to_chat_history(user_id, overdue_text)
             else:
                 logger.info(f"[OVERDUE] To user {user_id}: {overdue_text}")
         except Exception as e:
@@ -1241,6 +1253,7 @@ class ReminderService:
                             text=message
                         )
                         logger.info(f"Sent progress request to recipient {recipient_id} for task {task_id}")
+                        self._save_to_chat_history(recipient_id, message)
                         
                         # Also notify delegator about the progress check
                         try:
@@ -1250,6 +1263,7 @@ class ReminderService:
                                 text=delegator_message
                             )
                             logger.info(f"Notified delegator {delegator_id} about progress request for task {task_id}")
+                            self._save_to_chat_history(delegator_id, delegator_message)
                                 
                         except Exception as e:
                             logger.error(f"Failed to notify delegator: {e}")

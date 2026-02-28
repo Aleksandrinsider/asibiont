@@ -3082,6 +3082,10 @@ class AnchorEngine:
                         f"Если не нравится — скажи, удалю."
                     )
                     await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh
+                        _smh(user.telegram_id, 'assistant', notify, session=session)
+                    except Exception: pass
                 logger.info(f"[ANCHOR] ✅ Feed post for {user.telegram_id}: {post_text[:80]}...")
 
             elif anchor.anchor_type == 'channel_post':
@@ -3129,6 +3133,10 @@ class AnchorEngine:
                         f"Если нужно поправить — скажи."
                     )
                     await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh
+                        _smh(user.telegram_id, 'assistant', notify, session=session)
+                    except Exception: pass
                 status_icon = "✅" if published else "❌"
                 logger.info(f"[ANCHOR] {status_icon} Channel post for {user.telegram_id} -> {channel}: {post_text[:80]}...")
 
@@ -3194,6 +3202,10 @@ class AnchorEngine:
                         f"Если нужно поправить — скажи."
                     )
                     await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh
+                        _smh(user.telegram_id, 'assistant', notify, session=session)
+                    except Exception: pass
                 status_icon = "✅" if dc_ok else "❌"
                 logger.info(f"[ANCHOR] {status_icon} Discord post for {user.telegram_id}: {post_text[:80]}...")
 
@@ -3231,6 +3243,10 @@ class AnchorEngine:
 
             campaign = session.query(ContentCampaign).filter_by(id=campaign_id).first()
             if not campaign or campaign.status != 'active':
+                # Кампания удалена/остановлена — помечаем якорь доставленным, чтобы не срабатывал снова
+                anchor.delivered_at = datetime.now(timezone.utc)
+                session.commit()
+                logger.info(f"[ANCHOR] Content campaign #{campaign_id} not active — marking anchor #{anchor.id} delivered")
                 return
 
             platforms = anchor_data.get('platforms', ['feed'])
@@ -3341,7 +3357,7 @@ class AnchorEngine:
             session.add(log)
             session.commit()
 
-            # Уведомляем пользователя
+            # Уведомляем пользователя + сохраняем в историю чата для синхронизации
             if self.bot and published_to:
                 platforms_str = ', '.join(published_to)
                 notify = (
@@ -3351,6 +3367,12 @@ class AnchorEngine:
                     f"Если нужно поправить — скажи."
                 )
                 await self.bot.send_message(chat_id=user.telegram_id, text=notify)
+                # Синхронизация: сохраняем сообщение агента в историю чата
+                try:
+                    from ai_integration.conversation_history import save_message_to_history
+                    save_message_to_history(user.telegram_id, 'assistant', notify, session=session)
+                except Exception as _hist_err:
+                    logger.debug(f"[ANCHOR] Failed to save campaign notify to history: {_hist_err}")
             logger.info(f"[ANCHOR] ✅ Content campaign #{campaign.id} post #{campaign.posts_published} for {user.telegram_id}: {published_to}")
 
         except Exception as e:
@@ -4635,6 +4657,11 @@ class AnchorEngine:
                             chat_id=user.telegram_id,
                             text=message
                         )
+                    # Синхронизация: сохраняем в историю чата
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh
+                        _smh(user.telegram_id, 'assistant', message, session=session)
+                    except Exception: pass
                     session.commit()
                     logger.info(f"[ANCHOR] ✅ Delivered to {user.telegram_id}: {message[:80]}...")
                 except Exception as send_err:
