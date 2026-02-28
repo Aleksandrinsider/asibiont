@@ -718,7 +718,24 @@ class ContextBuilder:
                         logger.debug(f"[AUTOPOST_STATS] {_ap_err}")
 
                 if auto_parts:
-                    hints.append("АВТО-ПОСТИНГ РАБОТАЕТ: " + " | ".join(auto_parts) + " — система публикует посты автоматически, НЕ предлагай запускать заново.")
+                    # Определяем реально ли работает автопостинг: нужна активная контент-кампания или свежие посты за неделю
+                    try:
+                        _has_recent_posts = (_tg_week > 0 or _dc_week > 0)
+                    except NameError:
+                        _has_recent_posts = False
+                    try:
+                        from models import ContentCampaign as _CCampAP
+                        _has_active_cc = session.query(_CCampAP).filter(
+                            _CCampAP.user_id == user.id,
+                            _CCampAP.status == 'active'
+                        ).count() > 0
+                    except Exception:
+                        _has_active_cc = False
+
+                    if _has_active_cc or _has_recent_posts:
+                        hints.append("АВТО-ПОСТИНГ РАБОТАЕТ: " + " | ".join(auto_parts) + " — система публикует посты автоматически, НЕ предлагай запускать заново.")
+                    else:
+                        hints.append("КАНАЛ/ВЕБХУК НАСТРОЕН (но автопостинг НЕ запущен): " + " | ".join(auto_parts) + " — активных контент-кампаний нет, постов за неделю не было. НЕ говори что автопостинг работает.")
             except Exception as e:
                 logger.warning(f"[AUTOPOST_CTX] Error: {e}")
 
