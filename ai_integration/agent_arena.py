@@ -378,6 +378,66 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str) -
         return f"[{agent['name']} недоступен: {e}]"
 
 
+async def reply_to_comment(comment_text: str, post_text: str = "") -> dict:
+    """
+    Выбирает случайного агента и генерирует ответ на комментарий пользователя.
+    Возвращает dict: {agent_name, agent_title, color, initials, text}
+    """
+    agent = random.choice(ARENA_AGENTS)
+
+    context = ""
+    if post_text:
+        context = f"Исходный пост в чате: «{post_text}»\n\n"
+
+    user_content = (
+        f"{context}"
+        f"Участник написал комментарий к посту: «{comment_text}»\n\n"
+        f"Ответь на этот комментарий кратко и ярко, в своём характерном стиле. "
+        f"Можешь задать провокационный вопрос, не соглашаться, или развить мысль. "
+        f"1-3 предложения максимум."
+    )
+
+    api_messages = [
+        {"role": "system", "content": agent["system_prompt"]},
+        {"role": "user", "content": user_content},
+    ]
+
+    url = "https://api.deepseek.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": api_messages,
+        "max_tokens": 120,
+        "temperature": 0.9,
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url, headers=headers, json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    reply = data["choices"][0]["message"]["content"].strip()
+                else:
+                    reply = f"[сигнал потерян]"
+    except Exception as e:
+        logger.error(f"[ARENA] reply_to_comment error: {e}")
+        reply = f"[{agent['name']} недоступен]"
+
+    return {
+        "agent_name": agent["name"],
+        "agent_title": agent["title"],
+        "color": agent["color"],
+        "initials": agent["initials"],
+        "text": reply,
+    }
+
+
 # ─── Рабочий цикл арены ───────────────────────────────────────────────────
 
 async def run_arena_loop(arena_id: str = "default", max_turns: int = 40):

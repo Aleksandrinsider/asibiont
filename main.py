@@ -9877,6 +9877,22 @@ async def api_arena_stream_handler(request):
     return response
 
 
+async def api_arena_comment_handler(request):
+    """POST /api/arena/comment — пользователь оставил комментарий, агент отвечает"""
+    try:
+        data = await request.json()
+        comment_text = (data.get('text') or '').strip()
+        post_text = (data.get('context') or '').strip()
+        if not comment_text:
+            return web.json_response({'error': 'empty text'}, status=400)
+        from ai_integration.agent_arena import reply_to_comment
+        reply = await reply_to_comment(comment_text, post_text)
+        return web.json_response(reply)
+    except Exception as e:
+        logger.error(f'[ARENA] comment handler error: {e}', exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_marketplace_agent_status_handler(request):
     """PUT /api/marketplace/agents/{id}/status — пауза/запуск агента автором"""
     try:
@@ -9975,6 +9991,7 @@ app.router.add_post('/api/marketplace/agents/{id}/chat', api_agent_chat_handler)
 # Arena — глобальная лента (не требует авторизации)
 app.router.add_get('/api/arena', api_arena_state_handler)
 app.router.add_get('/api/arena/stream', api_arena_stream_handler)
+app.router.add_post('/api/arena/comment', api_arena_comment_handler)
 app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)

@@ -3292,12 +3292,15 @@
                     </div>`).join('');
             }
 
-            // Сообщения
+            // Сообщения — только новые (не повторять при reconnect)
             const msgs = document.getElementById('av-messages');
             if (msgs && state.messages && state.messages.length) {
-                msgs.innerHTML = '';
-                state.messages.forEach(m => arenaAppendMessage(m, false));
-                msgs.scrollTop = msgs.scrollHeight;
+                let added = 0;
+                state.messages.forEach(m => {
+                    const key = m.id || m.ts;
+                    if (!_arenaRenderedIds.has(key)) { arenaAppendMessage(m, false); added++; }
+                });
+                if (added > 0) msgs.scrollTop = msgs.scrollHeight;
             }
         }
 
@@ -3305,10 +3308,16 @@
         let _arenaMsgIdx = 0;
         const _arenaLikes = {};
         const _arenaComments = {};
+        const _arenaRenderedIds = new Set(); // чтобы не дублировать при reconnect
 
         function arenaAppendMessage(msg, isNew) {
             const container = document.getElementById('av-messages');
             if (!container) return;
+
+            // Дедупликация по server-side id
+            const msgKey = msg.id || msg.ts;
+            if (msgKey && _arenaRenderedIds.has(msgKey)) return;
+            if (msgKey) _arenaRenderedIds.add(msgKey);
 
             const div = document.createElement('div');
 
@@ -3322,6 +3331,8 @@
                           .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
                     : '';
                 div.className = 'arena-post';
+                // Сохраняем текст поста для контекста при ответе на комментарий
+                div.dataset.postText = msg.text || '';
                 div.innerHTML = `
                     <div class="arena-post-header">
                         <div class="arena-avatar" style="background:${escapeHtml(msg.color||'#6C727F')}">${escapeHtml(msg.initials||'?')}</div>
@@ -3382,16 +3393,46 @@
             if (!input || !clist) return;
             const text = input.value.trim();
             if (!text) return;
-            const item = document.createElement('div');
-            item.className = 'arena-comment-item';
-            item.innerHTML = `
-                <div class="arena-comment-av">Вы</div>
+            input.value = '';
+
+            // Добавляем комментарий пользователя
+            const userItem = document.createElement('div');
+            userItem.className = 'arena-comment-item';
+            userItem.innerHTML = `
+                <div class="arena-comment-av" style="background:#068487;color:white;font-size:10px;">Вы</div>
                 <div class="arena-comment-bubble">
                     <div class="arena-comment-name">Вы</div>
                     ${escapeHtml(text)}
                 </div>`;
-            clist.appendChild(item);
-            input.value = '';
+            clist.appendChild(userItem);
+
+            // Получаем текст поста для контекста
+            const postDiv = document.getElementById(postId + '-comments');
+            const postText = postDiv ? (postDiv.closest('.arena-post') || {dataset:{}}).dataset.postText || '' : '';
+
+            // Placeholder ответа агента
+            const agentItem = document.createElement('div');
+            agentItem.className = 'arena-comment-item';
+            agentItem.innerHTML = `
+                <div class="arena-comment-av" style="background:#6C727F;color:white;font-size:10px;">...</div>
+                <div class="arena-comment-bubble" style="color:#9CA3AF;font-style:italic;">агент думает...</div>`;
+            clist.appendChild(agentItem);
+
+            // Вызов API
+            fetch('/api/arena/comment', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text, context: postText})
+            }).then(r => r.json()).then(reply => {
+                agentItem.innerHTML = `
+                    <div class="arena-comment-av" style="background:${escapeHtml(reply.color||'#6C727F')};color:white;font-size:10px;">${escapeHtml(reply.initials||'?')}</div>
+                    <div class="arena-comment-bubble">
+                        <div class="arena-comment-name" style="color:#068487;">${escapeHtml(reply.agent_name||'')}</div>
+                        ${escapeHtml(reply.text||'')}
+                    </div>`;
+            }).catch(() => {
+                agentItem.remove();
+            });
         }
 
         function arenaPostUser() {
