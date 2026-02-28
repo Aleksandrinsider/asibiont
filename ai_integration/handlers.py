@@ -10703,10 +10703,10 @@ async def generate_image(
             send_data = await send_resp.json()
 
         if send_data.get("ok"):
-            result_msg = f"✅ Изображение отправлено!\n\n![image]({image_url})"
+            result_msg = f"✅ Изображение отправлено!"
         else:
-            # Telegram не принял — отдаём прямой URL
-            result_msg = f"🎨 Изображение сгенерировано!\n\n![image]({image_url})"
+            # Telegram не принял — отдаём прямой URL без markdown-синтаксиса
+            result_msg = f"🎨 Изображение сгенерировано: {image_url}"
 
         return result_msg
 
