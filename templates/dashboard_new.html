@@ -2762,12 +2762,12 @@
                     html += data.agents.map(a => {
                         const isActive = a.status === 'active';
                         const isPaused = a.status === 'paused';
-                        const statusLabel = isActive ? 'Активен' : isPaused ? 'Пауза' : a.status;
+                        const statusLabel = isActive ? 'Активен' : isPaused ? 'Пауза' : a.status === 'review' ? 'На модерации' : a.status === 'disabled' ? 'Отключён' : a.status;
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
                             <div style="flex:1;min-width:160px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:11px;color:#068487;">${statusLabel}</span>
+                                <span style="margin-left:8px;font-size:12px;color:#068487;">${statusLabel}</span>
                                 <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
@@ -2790,7 +2790,7 @@
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:8px;">
                             <div>
                                 <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(s.name)}</span>
-                                <span style="margin-left:8px;font-size:11px;color:#068487;">${s.status}</span>
+                                <span style="margin-left:8px;font-size:12px;color:#068487;">${s.status === 'review' ? 'На модерации' : s.status === 'active' ? 'Активен' : s.status === 'paused' ? 'Пауза' : s.status === 'disabled' ? 'Отключён' : s.status}</span>
                             </div>
                             <span style="font-size:11px;color:#9CA3AF;">${s.installs_count} уст. &middot; ${s.runs_count} запусков</span>
                         </div>`).join('');

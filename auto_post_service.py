@@ -81,7 +81,7 @@ async def _generate_image_for_post(post_text: str) -> str:
             "aspect_ratio": "1:1",
             "width": 550,
             "height": 550,
-            "output_format": "webp",
+            "output_format": "png",
             "output_quality": 80,
         }
         async with aiohttp.ClientSession() as http:
