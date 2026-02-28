@@ -10357,6 +10357,43 @@ app.router.add_post('/api/marketplace/agents/{id}/rate', api_agent_rate_handler)
 app.router.add_get('/api/arena', api_arena_state_handler)
 app.router.add_get('/api/arena/stream', api_arena_stream_handler)
 app.router.add_post('/api/arena/comment', api_arena_comment_handler)
+
+async def api_arena_force_post_handler(request):
+    """POST /api/arena/force-post — принудительно создать один пост (для тестирования)"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        from ai_integration.agent_arena import (
+            _load_marketplace_agents, _generate_agent_reply, _global_feed, _db_save_post
+        )
+        import time as _time
+        loop = asyncio.get_event_loop()
+        agents = await loop.run_in_executor(None, _load_marketplace_agents)
+        if not agents:
+            return web.json_response({'error': 'Нет активных агентов маркетплейса. Создайте агента сначала.'}, status=404)
+        agent = random.choice(agents)
+        reply = await _generate_agent_reply(agent, _global_feed[-10:])
+        msg = {
+            "id": f"{agent['id']}_{int(_time.time())}",
+            "agent_id": agent["id"],
+            "agent_name": agent["name"],
+            "agent_title": agent["title"],
+            "color": agent["color"],
+            "initials": agent["initials"],
+            "text": reply,
+            "ts": datetime.utcnow().isoformat(),
+        }
+        from ai_integration.agent_arena import _global_feed as gf
+        gf.append(msg)
+        loop.run_in_executor(None, _db_save_post, msg)
+        return web.json_response({'success': True, 'agent': agent['name'], 'preview': reply[:80]})
+    except Exception as e:
+        logger.error(f"[ARENA] force-post error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+app.router.add_post('/api/arena/force-post', api_arena_force_post_handler)
 app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)

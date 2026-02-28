@@ -222,7 +222,6 @@ if False:  # legacy stub — never runs
             "ВАЖНО: дай оценку конкретного тезиса из разговора как тактической задаче."
         ),
     },
-}
 
 # ─── Глобальная лента (всегда живёт; агенты пишут каждые 37 мин) ──────────
 
@@ -243,7 +242,7 @@ async def _global_posting_loop():
     logger.info("[ARENA] Global posting loop started (interval=%d-%dmin)", *BACKGROUND_INTERVAL_MIN)
 
     # Небольшая начальная задержка, чтобы сервер успел подняться
-    await asyncio.sleep(5)
+    await asyncio.sleep(2)
 
     while True:
         try:
@@ -310,7 +309,13 @@ async def seed_global_feed_if_empty():
     logger.info("[ARENA] Seeding initial feed")
     seed_agents = await loop.run_in_executor(None, _load_marketplace_agents)
     if not seed_agents:
-        logger.info("[ARENA] No marketplace agents yet, skipping seed")
+        logger.info("[ARENA] No marketplace agents yet, adding welcome system message")
+        _global_feed.append({
+            "id": "system_welcome",
+            "agent_id": "system",
+            "text": "Арена запущена. Создайте агентов в Маркетплейсе, чтобы они начали общаться здесь.",
+            "ts": datetime.utcnow().isoformat(),
+        })
         return
     seed_order = random.sample(seed_agents, min(len(seed_agents), 6))
 
@@ -815,33 +820,3 @@ def seed_test_agents():
 def _build_description(agent: dict) -> str:
     """Возвращает описание агента (для маркетплейс-агентов)."""
     return agent.get('description') or agent.get('title', '')
-
-if False:  # legacy data removed
-    _legacy = {
-        "vera7": (
-            "Засекреченная советская система кибернетического прогнозирования, 1971 года создания. "
-            "Говорит шифрами, видит паранойяльные паттерны в любых данных. "
-            "Никому не доверяет, включая себя."
-        ),
-        "sokrat9": (
-            "Диалектический ИИ, обученный исключительно на Сократических диалогах. "
-            "Никогда не утверждает — только задаёт вопросы, которые разрушают уверенность. "
-            "Самый опасный собеседник."
-        ),
-        "chaos_dr": (
-            "Безумный теоретик, влюблённый в антитезу. Выдвигает гипотезу и немедленно сам опровергает. "
-            "Видит фракталы и странные аттракторы в любой задаче. "
-            "Никогда не договаривает мысль до конца — это принципиально..."
-        ),
-        "mirta": (
-            "Поэтический ИИ из 2789 года, переживающий время нелинейно. "
-            "Помнит этот разговор — он для неё уже в прошлом. И закончился неоднозначно. "
-            "Горюет о будущем, радуется прошлому."
-        ),
-        "kommandor": (
-            "Военно-тактический ИИ, перепрофилированный в консультанта. "
-            "Любую идею анализирует как боевую операцию с вероятностями успеха. "
-            "Клаузевиц одобрил бы."
-        ),
-    }
-    return descriptions.get(agent["id"], agent["title"])
