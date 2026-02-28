@@ -151,7 +151,7 @@ class LiveDialogTester:
         """Подготовка: чистим старого юзера, создаём пустой профиль."""
         old = self.db.query(User).filter_by(telegram_id=self.tg_id).first()
         if old:
-            from models import Interaction, Post, Subscription, ContactAlert, ActivityAlert, TokenTransaction, AnchorDeliveryLog, UserMessage, Anchor, EmailOutreach, EmailCampaign, AgentActivityLog, UserRating
+            from models import Interaction, Post, Subscription, ContactAlert, ActivityAlert, TokenTransaction, AnchorDeliveryLog, UserMessage, Anchor, EmailOutreach, EmailCampaign, AgentActivityLog, UserRating, ContentCampaign, DelegationCampaign, EmailContact
             # Удаляем сообщения где пользователь — отправитель или получатель
             for msg_filter in [UserMessage.sender_id == old.id, UserMessage.recipient_id == old.id]:
                 try:
@@ -164,7 +164,7 @@ class LiveDialogTester:
                     self.db.query(UserRating).filter(rating_filter).delete()
                 except Exception:
                     pass
-            for model in [EmailOutreach, EmailCampaign, AgentActivityLog, Anchor, AnchorDeliveryLog, TokenTransaction, ContactAlert, ActivityAlert, Task, Goal, UserProfile, Interaction, Post, Subscription]:
+            for model in [DelegationCampaign, ContentCampaign, EmailOutreach, EmailCampaign, EmailContact, AgentActivityLog, Anchor, AnchorDeliveryLog, TokenTransaction, ContactAlert, ActivityAlert, Task, Goal, UserProfile, Interaction, Post, Subscription]:
                 try:
                     self.db.query(model).filter_by(user_id=old.id).delete()
                 except Exception:
@@ -262,7 +262,8 @@ class LiveDialogTester:
 
             preview = text.replace('\n', ' ')[:200]
             tool_s = f'  tools: {", ".join(names)}' if names else ''
-            print(f'  [{turn:2d}] BOT:  {preview}')
+            safe_preview = preview.encode('ascii', 'replace').decode('ascii')
+            print(f'  [{turn:2d}] BOT:  {safe_preview}')
             if len(text) > 200:
                 print(f'        ...({len(text)} chars)')
             print(f'        ({elapsed:.1f}s){tool_s}\n')

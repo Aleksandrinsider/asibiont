@@ -60,6 +60,7 @@ EXCLUDED_TOOLS = {
     'get_partners_list',                 # дубль find_relevant_contacts_for_task
     # 'toggle_autonomous_feature' — разблокирован, AI может управлять автопостингом
     'cancel_delegation',                 # покрывается reject_delegated_task
+    'web_search',                        # дубль research_topic (поиск + анализ)
     'and_',                              # SQLAlchemy operator leak
     'or_',                               # SQLAlchemy operator leak
 }
@@ -367,23 +368,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "check_time_conflicts",
-            "description": "Проверить свободно ли время. НЕ вызывай перед add_task — add_task сам проверяет конфликты. Используй ТОЛЬКО если пользователь спрашивает о свободном времени БЕЗ создания задачи.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "reminder_time": {
-                        "type": "string",
-                        "description": "Время для проверки в формате 'завтра в 10:00', 'через 2 часа', '2026-01-15 14:30'"
-                    }
-                },
-                "required": ["reminder_time"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "set_contact_alert",
             "description": "Мониторинг контактов (все тарифы). Уведомит когда появится пользователь с нужными навыками/интересами.",
             "parameters": {
@@ -436,7 +420,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "research_topic",
-            "description": "🔍 ГЛУБОКИЙ АНАЛИЗ темы с AI-экспертизой. Используй когда нужен АНАЛИТИЧЕСКИЙ разбор: тренды рынка, стратегии, сравнение подходов, экспертные выводы. НЕ используй если пользователю нужны просто ссылки/ресурсы — для этого есть web_search.",
+            "description": "🔍 ПОИСК И АНАЛИЗ любой темы. Единственный инструмент для поиска информации в интернете. Используй для: поиск ссылок/ресурсов, анализ рынка, тренды, стратегии, факты, цифры. depth='basic' для быстрого поиска ссылок, 'full' для анализа, 'deep' для глубокого исследования.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -452,35 +436,6 @@ TOOLS = [
                     }
                 },
                 "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_news_trends",
-            "description": "📰 Новости и тренды по теме. Вызывай при вопросах о новостях/трендах.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "topic": {
-                        "type": "string",
-                        "description": "Тема для поиска новостей. Примеры: 'AI', 'бизнес', 'технологии', 'стартапы', 'финансы'"
-                    },
-                    "period": {
-                        "type": "string",
-                        "description": "Период времени: 'today' (сегодня), 'week' (неделя), 'month' (месяц)",
-                        "default": "week",
-                        "enum": ["today", "week", "month"]
-                    },
-                    "focus": {
-                        "type": "string",
-                        "description": "Фокус анализа: 'news' (новости), 'trends' (тренды), 'opportunities' (возможности), 'business' (бизнес)",
-                        "default": "trends",
-                        "enum": ["news", "trends", "opportunities", "business"]
-                    }
-                },
-                "required": ["topic"]
             }
         }
     },
@@ -692,52 +647,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "skip_task",
-            "description": "ПРОПУСТИТЬ ЗАДАЧУ: Помечает задачу как пропущенную (не выполнена, не удалена). Для случаев когда задача неактуальна но удалять не хочется. Ключевые слова: 'пропустить', 'пропусти задачу', 'неактуально'.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {
-                        "type": "integer",
-                        "description": "ID задачи для пропуска (опционально если есть task_title)"
-                    },
-                    "task_title": {
-                        "type": "string",
-                        "description": "Ключевые слова задачи для пропуска (опционально если есть task_id)"
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": "Причина пропуска (почему неактуальна, что помешало)"
-                    }
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "restore_task",
-            "description": "♻️ ВОССТАНОВИТЬ ЗАДАЧУ: Возвращает завершённую или пропущенную задачу обратно в pending. Ключевые: 'верни задачу', 'восстанови', 'задача снова актуальна'.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {
-                        "type": "integer",
-                        "description": "ID задачи для восстановления (опционально если есть task_title)"
-                    },
-                    "task_title": {
-                        "type": "string",
-                        "description": "Ключевые слова задачи для восстановления (опционально если есть task_id)"
-                    }
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "publish_to_telegram",
             "description": "📢 ПОСТ В TELEGRAM КАНАЛ (НЕ в ленту!): Публикует пост в личный Telegram-канал пользователя. АВТОМАТИЧЕСКОЕ ПРАВИЛО: перед публикацией ВСЕГДА сначала вызывай generate_image и передавай URL в image_url. Если generate_image вернул ошибку — публикуй без image_url, пост должен выйти в любом случае. Ключевые слова: 'пост в канал', 'опубликуй в телеграм', 'запости в мой канал'.",
             "parameters": {
@@ -887,18 +796,6 @@ TOOLS = [
                         "description": "Фильтр: unread (непрочитанные), all (все), replied (отвеченные)"
                     }
                 },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_message_status",
-            "description": "📊 Показать статус отправленных сообщений — кто прочитал, кто ответил. Вызывай когда пользователь спрашивает 'ответил ли?', 'что с сообщением?', 'статус переписки' или когда в контексте есть НОВЫЕ ОТВЕТЫ.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
                 "required": []
             }
         }

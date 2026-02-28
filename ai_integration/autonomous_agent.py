@@ -99,7 +99,7 @@ class HybridAutonomousAgent:
         data = {
             "model": chosen_model,
             "messages": messages,
-            "max_tokens": kwargs.pop("max_tokens", 1800),
+            "max_tokens": kwargs.pop("max_tokens", 1000),
             "temperature": kwargs.pop("temperature", 0.7),
             **kwargs
         }
@@ -134,17 +134,86 @@ class HybridAutonomousAgent:
                 error = await resp.text()
                 raise Exception(f"AI call failed: {resp.status} {error}")
 
+    # ===== SMART TOOL FILTERING (reduces API tokens) =====
+
+    # Core tools sent with every call (~15 tools instead of 46)
+    CORE_TOOLS = {
+        'add_task', 'complete_task', 'edit_task', 'delete_task', 'list_tasks',
+        'update_profile', 'research_topic',
+        'create_goal', 'delete_goal', 'list_goals', 'update_goal_progress',
+        'find_relevant_contacts_for_task', 'set_contact_alert', 'generate_image',
+    }
+
+    # Extended tool groups — activated by keywords in user message
+    TOOL_GROUPS = {
+        'email': {
+            'keywords': ['email', 'e-mail', 'почт', 'письм', 'рассылк', 'лид', 'lead', 'outreach', 'campaign', 'кампани'],
+            'tools': {'send_email', 'send_outreach_email', 'send_follow_up_email', 'reply_to_outreach_email',
+                      'add_email_leads', 'start_email_campaign', 'pause_email_campaign',
+                      'get_email_campaign_status', 'update_email_campaign', 'list_email_contacts', 'save_email_contact'},
+        },
+        'delegation': {
+            'keywords': ['делегир', 'delegat', 'поруч', 'назнач'],
+            'tools': {'delegate_task', 'accept_delegated_task', 'reject_delegated_task',
+                      'get_delegation_progress', 'start_delegation_campaign', 'manage_delegation_campaign'},
+        },
+        'content': {
+            'keywords': ['пост', 'post', 'публик', 'publish', 'контент', 'content', 'discord', 'telegram', 'канал', 'channel', 'стратег'],
+            'tools': {'create_post', 'edit_post', 'delete_post', 'get_posts',
+                      'publish_to_telegram', 'publish_to_discord',
+                      'set_content_strategy', 'start_content_campaign', 'manage_content_campaign'},
+        },
+        'messaging': {
+            'keywords': ['сообщ', 'message', 'написа', 'отправ', 'напис', 'inbox', 'входящ'],
+            'tools': {'send_message_to_user', 'reply_to_user_message',
+                      'get_incoming_messages', 'find_and_message_relevant_users'},
+        },
+        'finance': {
+            'keywords': ['акци', 'stock', 'биржа', 'курс', 'invest'],
+            'tools': {'get_stock_info'},
+        },
+    }
+
+    def _select_tools_for_message(self, user_message):
+        """Dynamically select tools based on message content.
+        Returns set of tool names to EXCLUDE (all not selected)."""
+        msg_lower = user_message.lower()
+
+        # Start with core tools
+        selected = set(self.CORE_TOOLS)
+
+        # Add tool groups where keywords match
+        for group_name, group in self.TOOL_GROUPS.items():
+            if any(kw in msg_lower for kw in group['keywords']):
+                selected.update(group['tools'])
+
+        # Get all available tool names
+        all_tools = get_available_tools()
+        all_names = {t['function']['name'] for t in all_tools}
+
+        # Exclude tools not selected
+        exclude = all_names - selected
+        return exclude
+
     # ===== ADAPTIVE TOOL CHOICE =====
 
     # Тривиальные сообщения — tool_choice=auto (не заставляем)
     def _determine_tool_choice(self, user_message, profile_data=None, tasks_data=None):
-        """ГИБРИДНЫЙ ПОДХОД: всегда 'auto' — DeepSeek сам решает.
+        """ГИБРИДНЫЙ ПОДХОД: 'required' если профиль пуст, иначе 'auto'.
         
-        Модель получает полный контекст (профиль, задачи, цели, время суток)
-        и сама определяет, нужно ли вызывать инструменты.
-        Никаких keyword-правил — AI гибче любых regex.
+        Когда профиль почти пустой, форсируем вызов инструментов
+        чтобы AI обязательно вызвал update_profile/create_goal.
         """
-        logger.info(f"[HYBRID] tool_choice=auto for: '{user_message[:50]}'")
+        profile_data = profile_data or {}
+        # Считаем заполненные ключевые поля
+        key_fields = ['city', 'company', 'position', 'skills', 'interests', 'goals']
+        filled = sum(1 for f in key_fields if profile_data.get(f))
+        
+        if filled < 2:
+            logger.info(f"[HYBRID] tool_choice=required (profile {filled}/6 filled) for: '{user_message[:50]}'")
+            return "required"
+        
+        logger.info(f"[HYBRID] tool_choice=auto (profile {filled}/6) for: '{user_message[:50]}'")
         return "auto"
 
     # Phrases moved to i18n.py — these are fallbacks only
@@ -189,9 +258,9 @@ class HybridAutonomousAgent:
 
     # ===== TOKEN BUDGET =====
 
-    # Максимальный бюджет в символах (~12000 токенов для рус. текста, ratio ~3 chars/token)
-    MAX_PROMPT_CHARS = 36000  # ~12000 tokens
-    MAX_HISTORY_CHARS = 12000  # ~4000 tokens для истории
+    # Максимальный бюджет в символах (~9000 токенов для рус. текста, ratio ~3 chars/token)
+    MAX_PROMPT_CHARS = 27000  # ~9000 tokens (matched to pre-growth prompt size)
+    MAX_HISTORY_CHARS = 8000  # ~2700 tokens для истории
 
     @staticmethod
     def _estimate_tokens(text):
@@ -1068,16 +1137,19 @@ class HybridAutonomousAgent:
                 user_message, profile_data=profile_data, tasks_data=tasks_data
             )
 
-            # ===== Tool calling loop (max 2 итераций) =====
+            # ===== Tool calling loop (max 2 итераций для скорости) =====
             all_execution_results = []
             MAX_ITERATIONS = 2
-            MAX_TOOLS_PER_ITERATION = 4  # Лимит инструментов за одну итерацию
+            MAX_TOOLS_PER_ITERATION = 3  # Лимит инструментов за одну итерацию
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'delegate_task'}  # строго 1 раз
-            multi_limit_tools = {'add_task': 3, 'web_search': 5, 'add_email_leads': 3}  # лимиты per turn
+            multi_limit_tools = {'add_task': 3, 'add_email_leads': 3, 'update_profile': 2, 'create_goal': 2}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
+
+            # Smart tool filtering — reduce tokens sent to API
+            tools_to_exclude = self._select_tools_for_message(user_message)
 
             # Прогресс — живые фразы
             if _cb:
@@ -1099,7 +1171,8 @@ class HybridAutonomousAgent:
 
                 response = await self.call_ai(
                     messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc, max_tokens=500)
+                    tool_choice=tc, max_tokens=600,
+                    exclude_tools=tools_to_exclude)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')

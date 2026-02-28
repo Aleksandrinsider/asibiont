@@ -2986,6 +2986,7 @@ class AnchorEngine:
                 if profile.position: profile_info.append(f"Должность: {profile.position}")
 
             # DDG: свежий контекст из интернета по темам кампании
+            # Делаем 2-3 разных запроса для более глубокого контента
             fresh_data = []
             try:
                 from ai_integration.api_client import get_api_client
@@ -2993,10 +2994,27 @@ class AnchorEngine:
                 search_query = (anchor_data.get('topics', '') or anchor_data.get('goal', ''))[:60]
                 if search_query:
                     from datetime import datetime as dt
-                    fresh_results = await api.duckduckgo_search(f'{search_query} тренды {dt.now().strftime("%Y")}', num=3, cache_ttl=7200)
-                    if fresh_results:
-                        for r in fresh_results[:3]:
-                            fresh_data.append(f"  — {r.get('title', '')}: {r.get('snippet', '')[:120]}")
+                    import asyncio as _aio_ddg
+                    year = dt.now().strftime('%Y')
+                    # Параллельные запросы для разностороннего контента
+                    queries = [
+                        f'{search_query} тренды {year}',
+                        f'{search_query} советы лайфхаки примеры использования',
+                        f'{search_query} кейсы автоматизация практика',
+                    ]
+                    tasks_ddg = [api.duckduckgo_search(q, num=3, cache_ttl=7200) for q in queries]
+                    results_all = await _aio_ddg.gather(*tasks_ddg, return_exceptions=True)
+                    seen_titles = set()
+                    for batch in results_all:
+                        if isinstance(batch, Exception) or not batch:
+                            continue
+                        for r in batch[:3]:
+                            title = r.get('title', '')
+                            if title and title not in seen_titles:
+                                seen_titles.add(title)
+                                fresh_data.append(f"  — {title}: {r.get('snippet', '')[:120]}")
+                    # Ограничиваем до 6 самых релевантных
+                    fresh_data = fresh_data[:6]
             except Exception:
                 pass
 
@@ -3014,8 +3032,10 @@ class AnchorEngine:
                 f"3. Каждый пост должен быть УНИКАЛЬНЫМ — не повторяй предыдущие\n"
                 f"4. 3-8 предложений, {tone_desc} стиль\n"
                 f"5. БЕЗ эмодзи, без хештегов, без призывов вроде 'подписывайтесь'\n"
-                f"6. Если есть свежие данные из сети — используй их как основу\n"
-                f"7. Верни ТОЛЬКО текст поста. Ничего больше."
+                f"6. Если есть свежие данные из сети — ОБЯЗАТЕЛЬНО используй их: цитируй статистику, упоминай конкретные примеры, ссылайся на реальные факты. Это делает пост ценным.\n"
+                f"7. Верни ТОЛЬКО текст поста. Ничего больше.\n"
+                f"8. Пиши КОНКРЕТНО: не 'AI помогает в работе', а 'AI-агент за 15 секунд составляет email по 3 ключевым словам — экономит 20 минут'.\n"
+                f"9. Каждый пост = ОДНА практическая фишка/совет/кейс. Не пытайся охватить всё."
             )
 
             user_prompt_parts = [f"Пользователь: {user_name}"]
