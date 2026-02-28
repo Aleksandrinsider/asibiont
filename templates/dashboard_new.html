@@ -2404,13 +2404,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 window._activityLastId = Math.max(...sorted.map(a => a.id || 0));
             }
             sorted.forEach(a => tl.appendChild(createTimelineItem(a, false)));
-            if (!sorted.length) {
-                const guide = document.createElement('div');
-                guide.id = 'act-onboard-guide';
-                guide.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;';
-                guide.innerHTML = '<p style="margin:0 auto;font-size:13px;color:#9CA3AF;max-width:340px;text-align:center;line-height:1.6;">' + t('activity-onboarding-desc') + '</p>';
-                tl.appendChild(guide);
-            }
         }
 
         function startActivityPolling() {
@@ -2429,8 +2422,6 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         if (tl) {
                             newActs.forEach(a => {
                                 if (!tl.querySelector('[data-act-id="' + a.id + '"]')) {
-                                    const guide = document.getElementById('act-onboard-guide');
-                                    if (guide) guide.remove();
                                     tl.insertBefore(createTimelineItem(a, true), tl.firstChild);
                                 }
                             });
@@ -3156,7 +3147,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 }
 
                 // === Agent Activities — unified chronological timeline ===
-                {
+                if (agentActivities.length > 0) {
                     const agentKey = 'agent-activity-block';
                     const agentExpanded = _reportsExpandedSet.has(agentKey);
                     const agentSection = document.createElement('div');
