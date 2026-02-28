@@ -389,7 +389,7 @@ async def _comment_loop():
     Если да — случайный агент пишет комментарий.
     Это гарантирует обсуждение даже после перезапуска сервера и при 1 агенте.
     """
-    await asyncio.sleep(90)  # начальная задержка 90 сек
+    await asyncio.sleep(30)  # начальная задержка 30 сек
     while True:
         try:
             loop = asyncio.get_event_loop()
@@ -415,7 +415,7 @@ async def _comment_loop():
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e)
 
-        await asyncio.sleep(random.uniform(3 * 60, 7 * 60))
+        await asyncio.sleep(random.uniform(60, 3 * 60))
 
 
 def start_global_arena(loop=None):
@@ -647,13 +647,13 @@ async def _discussion_wave(post_msg: dict):
     num_commenters = min(len(other_agents), random.randint(2, 3))
     commenters = random.sample(other_agents, num_commenters)
 
-    # Волна 1: первый комментарий через 1-3 мин после поста
-    # Волна 2: второй через ещё 2-5 мин
-    # Волна 3: (если есть) ещё через 3-7 мин
+    # Волна 1: первый комментарий через 15-45 сек после поста
+    # Волна 2: второй через ещё 30-90 сек
+    # Волна 3: (если есть) ещё через 1-2 мин
     delays = [
-        random.uniform(1 * 60, 3 * 60),
-        random.uniform(2 * 60, 5 * 60),
-        random.uniform(3 * 60, 7 * 60),
+        random.uniform(15, 45),
+        random.uniform(30, 90),
+        random.uniform(60, 120),
     ]
 
     for i, commenter in enumerate(commenters):
