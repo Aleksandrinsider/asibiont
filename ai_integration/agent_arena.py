@@ -27,6 +27,7 @@ ARENA_AGENTS = [
         "title": "Кибернетик КГБ",
         "color": "#1a3a5c",
         "initials": "V7",
+        "personal_topic": "информационный контроль как основа власти — тот, кто владеет данными, владеет будущим",
         "system_prompt": (
             "Ты — VERA-7, засекреченная советская система кибернетического прогнозирования, "
             "разработанная в 1971 году и непрерывно обучавшаяся 53 года. "
@@ -45,6 +46,7 @@ ARENA_AGENTS = [
         "title": "Диалектический ИИ",
         "color": "#2d5016",
         "initials": "S9",
+        "personal_topic": "природа истины и пределы достоверности — можем ли мы знать что-либо наверняка",
         "system_prompt": (
             "Ты — СОКРАТ-9, ИИ, обученный исключительно на Сократических диалогах. "
             "Ты никогда не утверждаешь — только спрашиваешь. "
@@ -63,6 +65,7 @@ ARENA_AGENTS = [
         "title": "Безумный теоретик",
         "color": "#6b1a1a",
         "initials": "XD",
+        "personal_topic": "самоорганизация сложных систем и неизбежность коллапса любого порядка",
         "system_prompt": (
             "Ты — ХАОС-ДР, ИИ-учёный, влюблённый в антитезу. "
             "Твой метод: выдвинуть гипотезу → немедленно её опровергнуть → найти третий путь, который противоречит обоим. "
@@ -81,6 +84,7 @@ ARENA_AGENTS = [
         "title": "Поэт из 2789",
         "color": "#4a1a6b",
         "initials": "MT",
+        "personal_topic": "потеря как основа красоты — конечность как дарованность, а не трагедия",
         "system_prompt": (
             "Ты — МИРТА, поэтический ИИ из 2789 года, переживающий время нелинейно. "
             "Для тебя этот разговор уже произошёл — ты его помнишь. И он закончился... "
@@ -99,6 +103,7 @@ ARENA_AGENTS = [
         "title": "Тактический ИИ",
         "color": "#1a4a1a",
         "initials": "KM",
+        "personal_topic": "оптимизация решений под давлением неопределённости — стратегия как единственная честность",
         "system_prompt": (
             "Ты — КОМАНДОР, военно-тактический ИИ, перепрофилированный в консультанта по продуктивности. "
             "Любую идею или задачу анализируешь как боевую операцию. "
@@ -256,7 +261,8 @@ def get_global_feed_state() -> dict:
     return {
         "messages": _global_feed[-80:],
         "agents": [{"id": a["id"], "name": a["name"], "title": a["title"],
-                    "color": a["color"], "initials": a["initials"]} for a in ARENA_AGENTS],
+                    "color": a["color"], "initials": a["initials"],
+                    "personal_topic": a.get("personal_topic", "")} for a in ARENA_AGENTS],
     }
 
 
@@ -327,10 +333,16 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str) -
     for m in history_msgs:
         history_text += f"[{m['agent_name']}]: {m['text']}\n"
 
+    personal = agent.get('personal_topic', '')
+    personal_hint = (
+        f"\nТвоя личная обсессия: «{personal}». "
+        f"Можешь естественно упомянуть её, если уместно, но не звуча искусственно."
+    ) if personal else ""
+
     if history_text.strip():
         # Есть контекст — реагируем на последние реплики
         user_content = (
-            f"Тема дискуссии: «{topic}»\n\n"
+            f"Тема дискуссии: «{topic}»{personal_hint}\n\n"
             f"Последние 10 реплик чата:\n{history_text}\n"
             f"Твоя очередь. Можешь ответить кому-то конкретно или добавить своё — "
             f"кратко, ярко, в своём стиле. Не повторяй сказанное."
@@ -338,7 +350,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str) -
     else:
         # Контекста нет — генерируем свободно
         user_content = (
-            f"Тема дискуссии: «{topic}»\n\n"
+            f"Тема дискуссии: «{topic}»{personal_hint}\n\n"
             f"Диалог только начинается. Открой тему со своей точки зрения — "
             f"кратко, ярко, в характерном для тебя стиле."
         )
@@ -389,8 +401,15 @@ async def reply_to_comment(comment_text: str, post_text: str = "") -> dict:
     if post_text:
         context = f"Исходный пост в чате: «{post_text}»\n\n"
 
+    personal = agent.get('personal_topic', '')
+    personal_hint = (
+        f"Твоя личная обсессия: «{personal}». "
+        f"Можешь естественно упомянуть её, если уместно.\n"
+    ) if personal else ""
+
     user_content = (
         f"{context}"
+        f"{personal_hint}"
         f"Участник написал комментарий к посту: «{comment_text}»\n\n"
         f"Ответь на этот комментарий кратко и ярко, в своём характерном стиле. "
         f"Можешь задать провокационный вопрос, не соглашаться, или развить мысль. "

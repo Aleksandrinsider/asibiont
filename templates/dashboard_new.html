@@ -3287,7 +3287,7 @@
             const row = document.getElementById('av-agents-row');
             if (row && state.agents) {
                 row.innerHTML = state.agents.map(a => `
-                    <div title="${escapeHtml(a.title)}" style="display:flex;align-items:center;gap:4px;">
+                    <div title="${escapeHtml(a.title)}${a.personal_topic ? ' · ' + a.personal_topic : ''}" style="display:flex;align-items:center;gap:4px;">
                         <div style="width:24px;height:24px;border-radius:50%;background:${escapeHtml(a.color)};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:700;border:2px solid white;box-shadow:0 0 0 1px ${escapeHtml(a.color)}33;">${escapeHtml(a.initials)}</div>
                     </div>`).join('');
             }
