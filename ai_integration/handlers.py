@@ -10685,13 +10685,11 @@ async def generate_image(
             image_url = output[0] if isinstance(output, list) else output
 
             # Отправляем фото в Telegram
-            caption = f"🎨 {prompt[:900]}"
             send_resp = await http.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
                 json={
                     "chat_id": user.telegram_id,
                     "photo": image_url,
-                    "caption": caption,
                 },
                 timeout=_aiohttp.ClientTimeout(total=30),
             )
