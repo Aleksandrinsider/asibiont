@@ -837,7 +837,7 @@ class UserAgent(Base):
     # Идентификация
     name = Column(String(100), nullable=False)            # "Крипто-аналитик Алекс"
     slug = Column(String(100), unique=True, index=True)   # "crypto-alex" — для @упоминания
-    avatar_url = Column(String(500))                       # URL аватарки
+    avatar_url = Column(Text)                              # URL или base64 аватарки
     description = Column(Text)                            # Публичное описание (2-4 предложения)
     specialization = Column(String(100))                  # marketing/legal/finance/dev/lifestyle/other
 

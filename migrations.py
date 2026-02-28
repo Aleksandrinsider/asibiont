@@ -397,6 +397,18 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
 
+    # Расширяем avatar_url до TEXT (было VARCHAR(500) — не влезает base64)
+    if inspector.has_table('user_agents'):
+        try:
+            session.execute(text(
+                "ALTER TABLE user_agents ALTER COLUMN avatar_url TYPE TEXT"
+            ))
+            session.commit()
+            logger.info("[MIGRATION] user_agents.avatar_url changed to TEXT")
+        except Exception as e:
+            session.rollback()
+            logger.debug(f"[MIGRATION] avatar_url type change skipped: {e}")
+
 
 def run_migrations():
     """Запускает все миграции базы данных"""
