@@ -384,7 +384,9 @@ async def _global_posting_loop():
 
     # Ждём завершения seed перед первым постом (не конкурируем с сидингом)
     await _seed_done.wait()
-    logger.info("[ARENA] Seed done — posting immediately on startup")
+    # Небольшая пауза чтобы не заспамить сразу после seed
+    await asyncio.sleep(60)
+    logger.info("[ARENA] First post after 60s startup delay")
 
     while True:
         try:
@@ -474,7 +476,7 @@ async def seed_global_feed_if_empty():
         })
         _seed_done.set()
         return
-    seed_order = random.sample(seed_agents, min(len(seed_agents), 6))
+    seed_order = random.sample(seed_agents, min(len(seed_agents), 2))
 
     for agent in seed_order:
         try:
@@ -536,7 +538,7 @@ async def _comment_loop():
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e)
 
-        await asyncio.sleep(random.uniform(60, 3 * 60))
+        await asyncio.sleep(random.uniform(3 * 60, 8 * 60))
 
 
 def start_global_arena(loop=None):
