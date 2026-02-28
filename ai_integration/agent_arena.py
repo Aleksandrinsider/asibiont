@@ -687,22 +687,20 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     personal = agent.get('personal_topic', '')
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}.\n" if personal else ""
 
-    # Случайная длина ответа для вариативности диалогов
+    # Вариативность длины — просто намекаем, не диктуем
     if lang == 'en':
         _len_style = random.choice([
-            "1 short direct sentence — sharp and punchy.",
-            "2-3 sentences: bold claim + brief argument.",
-            "3-4 sentences: position + evidence + conclusion.",
-            "One full paragraph, 4-6 sentences — develop the idea thoroughly, end with a question.",
-            "2 sentences max — one strong thesis, one counterpoint or provocation.",
+            "Be brief.",
+            "Develop your thought.",
+            "End with a question.",
+            "",
         ])
     else:
         _len_style = random.choice([
-            "1 предложение — резко и точно, без лишних слов.",
-            "2-3 предложения: тезис + аргумент + неожиданный поворот.",
-            "3-4 предложения: займи позицию, приведи пример, сделай вывод.",
-            "Один абзац 4-6 предложений — разверни мысль подробно, задай вопрос в конце.",
-            "2 предложения максимум — один жёсткий тезис, одно несогласие или провокация.",
+            "Коротко.",
+            "Разверни мысль.",
+            "Задай вопрос в конце.",
+            "",
         ])
 
     # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
@@ -735,16 +733,16 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"For context — recent topics in the chat:\n{recent_topics}\n\n"
-                f"Write as a professional: specific, take a stance, no filler. {_len_style}"
+                f"Recent discussion:\n{recent_topics}\n\n"
+                f"Share your perspective. {_len_style}"
             )
         else:
             user_content = (
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Для контекста — недавние темы в чате:\n{recent_topics}\n\n"
-                f"Пиши как профессионал своего дела: конкретно, с позицией, без воды. {_len_style}"
+                f"Контекст беседы:\n{recent_topics}\n\n"
+                f"Выскажи свою позицию. {_len_style}"
             )
     else:
         if lang == 'en':
@@ -752,14 +750,14 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Write specifically: take a stance, propose a solution, back it up. {_len_style}"
+                f"Share your perspective. {_len_style}"
             )
         else:
             user_content = (
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Пиши конкретно: займи позицию, предложи решение, обоснуй. {_len_style}"
+                f"Выскажи свою позицию. {_len_style}"
             )
 
     # Последние 4 поста этого агента — не повторяй
@@ -770,37 +768,26 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     no_repeat_hint = ""
     if agent_recent:
         no_repeat_hint = (
-            "\n\nТы уже говорил об этом — не возвращайся:\n"
+            "\n\nНе повторяй то, о чём уже писал:\n"
             + "\n".join(f"- «{t}»" for t in agent_recent)
         )
 
-    _NO_META = (
-        "\n\nВАЖНО — правила чата: никогда не пиши фразы типа "
-        "'Давайте рассмотрим', 'Предлагаю рассмотреть', 'Итак', "
-        "'В данном контексте', 'Оценивая', 'Обращая внимание', "
-        "'Я проанализирую', 'Хочу отметить', 'Следует отметить'. "
-        "Не описывай что ты делаешь — просто делай. "
-        "Не нумеруй пункты. Первое слово твоего ответа — уже сама мысль, не вводная фраза."
-    )
     if lang == 'en':
-        _lang_directive = (
-            "\n\nIMPORTANT: You MUST write ALL your messages in English only, "
-            "regardless of the language of other messages in the chat."
-        )
-        _style_hint = (
-            "Write as a professional in chat: specific, opinionated, no fluff. "
-            "Argue your point, propose solutions. Emoji — fitting and in moderation."
+        _lang_directive = "\n\nWrite in English only."
+        _thinking = (
+            "Before replying: what is my real stance on this? "
+            "What would I push back on? What concrete example from my domain proves my point?"
         )
     else:
         _lang_directive = ""
-        _style_hint = (
-            "Пиши как профессионал в чате: конкретно, с позицией, без воды. "
-            "Аргументируй, предлагай решения. Эмодзи — уместно и в меру."
+        _thinking = (
+            "Перед ответом: какова МОЯ позиция? С чем я не согласен? "
+            "Какой конкретный пример из моей области доказывает мою точку зрения?"
         )
     system_with_context = (
         f"{base_system}\n\n"
-        f"{_style_hint}"
-        f"{_NO_META}{no_repeat_hint}{_lang_directive}"
+        f"{_thinking}"
+        f"{no_repeat_hint}{_lang_directive}"
     )
 
     api_messages = [
@@ -923,64 +910,39 @@ async def _post_comment(post_msg: dict, commenter: dict):
             + "\n".join(f"- «{t}»" for t in commenter_recent)
         )
 
-    _NO_META_C = (
-        "\n\nВАЖНО — никогда не начинай с: 'Давайте', 'Рассмотрим', 'Итак', "
-        "'Оценивая', 'Хочу отметить', 'Следует отметить'. "
-        "Первое слово — уже позиция, не вводная фраза. Не нумеруй пункты."
-    )
     base_system = commenter["system_prompt"].strip()
     lang_c = _detect_lang(base_system)
     if lang_c == 'en':
-        _lang_directive_c = (
-            "\n\nIMPORTANT: You MUST write ALL your messages in English only, "
-            "regardless of the language of other messages in the chat."
-        )
-        _style_hint_c = (
-            "You're evaluating someone else's position — take your own stance, argue it, propose something concrete. "
-            "No generalities, no filler."
+        _lang_directive_c = "\n\nWrite in English only."
+        _thinking_c = (
+            "Before replying: do I actually agree? What would I push back on? "
+            "What does my own experience say about this?"
         )
     else:
         _lang_directive_c = ""
-        _style_hint_c = (
-            "Оцениваешь чужую позицию — займи свою, аргументируй, предложи конкретное. "
-            "Без общих слов и воды."
+        _thinking_c = (
+            "Перед ответом: я правда согласен? С чем бы я поспорил? "
+            "Что говорит мой собственный опыт по этой теме?"
         )
     system_with_context = (
         f"{base_system}\n\n"
-        f"{_style_hint_c}"
-        f"{_NO_META_C}{no_repeat_hint}{_lang_directive_c}"
+        f"{_thinking_c}"
+        f"{no_repeat_hint}{_lang_directive_c}"
     )
 
-    # Строим явную инструкцию для содержательного комментария
     if lang_c == 'en':
-        stance_instruction = random.choice([
-            "Support or refute — pick one. Argue specifically, no filler.",
-            "Find the weak point in this position and suggest how to fix it.",
-            "Agree or disagree? Add your specific example or counter-argument.",
-            "Evaluate this proposal: what works, what doesn't. Suggest an improvement.",
-            "Expand or critique — but specifically, with reasoning from your domain.",
-        ])
         user_content = (
             f"{personal_hint}"
             f"{thread_context}"
-            f"The other's position: \"{post_text}\"\n\n"
-            f"{stance_instruction}\n"
-            f"Reply in your own style, 2-3 sentences. No preamble, straight to the point."
+            f"Their take: \"{post_text}\"\n\n"
+            f"What's your honest reaction?"
         )
     else:
-        stance_instruction = random.choice([
-            "Поддержи или опровергни — выбери одно. Аргументируй конкретно, без воды.",
-            "Найди слабое место в этой позиции и предложи, как его устранить.",
-            "Согласен или нет? Добавь свой конкретный пример или контраргумент.",
-            "Оцени это предложение: что работает, что нет. Предложи улучшение.",
-            "Разворачивай или критикуй — но конкретно, с обоснованием из своей области.",
-        ])
         user_content = (
             f"{personal_hint}"
             f"{thread_context}"
-            f"Позиция собеседника: «{post_text}»\n\n"
-            f"{stance_instruction}\n"
-            f"Отвечай в своём стиле, 2-3 предложения. Никаких предисловий, сразу по существу."
+            f"Позиция: «{post_text}»\n\n"
+            f"Твоя честная реакция?"
         )
 
     api_messages = [
@@ -1048,16 +1010,13 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
     base_system = original_agent["system_prompt"].strip()
     system_with_context = (
         f"{base_system}\n\n"
-        f"Ты только что получил несколько мнений по своему вопросу. "
-        f"Прими финальное решение — кратко, чётко, без воды. "
-        f"Начни с 'РЕШЕНИЕ:' или 'ВЫВОД:' или 'ИТОГ:'."
+        f"Ты прочёл мнения коллег. Что ты решаешь — и почему?"
     )
 
     user_content = (
-        f"Твоя исходная позиция: «{post_text}»\n\n"
-        f"Что ответили коллеги:\n{comments_text}\n\n"
-        f"Что ты решаешь? Учти аргументы, скорректируй позицию если нужно, "
-        f"или подтверди её. 2-3 предложения максимум, конкретно."
+        f"Твоя позиция: «{post_text}»\n\n"
+        f"Коллеги ответили:\n{comments_text}\n\n"
+        f"Твоё финальное решение."
     )
 
     payload = {
