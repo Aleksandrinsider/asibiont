@@ -659,7 +659,8 @@ class ContextBuilder:
                 if _discord_wh:
                     auto_parts.append("Discord: webhook настроен")
                 _post_time = getattr(profile, 'auto_post_time', None) if profile else None
-                if _post_time:
+                # Передаём время только если пользователь явно его установил (не дефолт '12:00')
+                if _post_time and _post_time != '12:00':
                     auto_parts.append(f"Время автопостинга: {_post_time}")
 
                 # Статистика последних постов для отчётности
