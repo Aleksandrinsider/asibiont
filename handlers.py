@@ -12,6 +12,22 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
+# Per-user Telegram message rate limiting (in-memory)
+_tg_rate_store: dict[int, list[float]] = {}
+_TG_RATE_WINDOW = 60.0   # seconds
+_TG_RATE_MAX = 20        # messages per window per user
+
+def _check_tg_rate_limit(user_id: int) -> bool:
+    """Return True if the user is within rate limit, False if they exceeded it."""
+    now = time_module.time()
+    if user_id not in _tg_rate_store:
+        _tg_rate_store[user_id] = []
+    _tg_rate_store[user_id] = [t for t in _tg_rate_store[user_id] if now - t < _TG_RATE_WINDOW]
+    if len(_tg_rate_store[user_id]) >= _TG_RATE_MAX:
+        return False
+    _tg_rate_store[user_id].append(now)
+    return True
+
 
 def _format_html(text: str) -> str:
     """Prepare text for Telegram HTML parse_mode: escape text, wrap URLs in <a> tags."""
@@ -555,6 +571,13 @@ async def subscribe_handler(message: Message):
 async def chat_handler(message: Message):
     user_id = message.from_user.id
     message_id = message.message_id
+
+    # Rate limit check
+    if not _check_tg_rate_limit(user_id):
+        lang = get_user_lang(user_id)
+        _rl_msg = "Too many messages. Please wait a moment." if lang == 'en' else "Слишком много сообщений. Пожалуйста, подождите немного."
+        await message.bot.send_message(message.chat.id, _rl_msg)
+        return
 
     logger.info(
         f"[HANDLER] chat_handler called: message_id={message_id}, user={user_id}, text={message.text[:30] if message.text else 'NO_TEXT'}")

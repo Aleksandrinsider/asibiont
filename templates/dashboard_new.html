@@ -836,8 +836,8 @@
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
                                 </button>
                             </div>
-                            <button onclick="clearEmailContacts()" style="width: 100%; padding: 8px 12px; background: #FFF5F5; color: #B91C1C; border: 1px solid #FCA5A5; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 400; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#FEE2E2'; this.style.borderColor='#B91C1C';" onmouseout="this.style.background='#FFF5F5'; this.style.borderColor='#FCA5A5';" title="Удалить все контакты" data-i18n-title="delete-all-email-contacts">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="#B91C1C"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+                            <button onclick="clearEmailContacts()" style="width: 100%; padding: 8px 12px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 400; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Удалить все контакты" data-i18n-title="delete-all-email-contacts">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
                                 <span data-i18n="delete-all-email-contacts">Удалить все контакты</span>
                             </button>
                         </div>
@@ -2340,9 +2340,11 @@
 
 var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block', 'agent-activity-block']);
 
-        // ====== Activity Timeline & Polling ======
+        // ====== Activity Timeline & SSE ======
+        let _activitySSE = null;
         let _activityPollTimer = null;
         window._activityPollSince = null;
+        window._activityLastId = 0;
 
         const _tlIconMap = {
             'task_added': '📋', 'task_completed': '✅', 'goal_created': '🎯',
@@ -2398,33 +2400,53 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             if (latest && (!window._activityPollSince || latest > window._activityPollSince)) {
                 window._activityPollSince = latest;
             }
+            if (sorted.length) {
+                window._activityLastId = Math.max(...sorted.map(a => a.id || 0));
+            }
             sorted.forEach(a => tl.appendChild(createTimelineItem(a, false)));
-            if (!sorted.length) tl.innerHTML = '<div style="text-align:center;color:#9CA3AF;font-size:13px;padding:16px 0;">Активность пока пуста</div>';
+            if (!sorted.length) {
+                const guide = document.createElement('div');
+                guide.id = 'act-onboard-guide';
+                guide.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;';
+                guide.innerHTML = '<p style="margin:0 auto;font-size:13px;color:#9CA3AF;max-width:340px;text-align:center;line-height:1.6;">' + t('activity-onboarding-desc') + '</p>';
+                tl.appendChild(guide);
+            }
         }
 
         function startActivityPolling() {
             stopActivityPolling();
-            _activityPollTimer = setInterval(async () => {
-                try {
-                    const since = window._activityPollSince || '';
-                    const resp = await fetch('/api/activities/latest?since=' + encodeURIComponent(since), { credentials: 'include' });
-                    if (!resp.ok) return;
-                    const data = await resp.json();
-                    const newActs = (data.activities || []).filter(a => a.created_at > since);
-                    if (!newActs.length) return;
-                    const latestNew = newActs.reduce((m, a) => (a.created_at||'') > m ? (a.created_at||'') : m, window._activityPollSince || '');
-                    window._activityPollSince = latestNew;
-                    const tl = document.getElementById('agent-activity-timeline');
-                    if (tl) {
-                        newActs.sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1)
-                               .forEach(a => { tl.insertBefore(createTimelineItem(a, true), tl.firstChild); });
-                    }
-                } catch(e) { /* non-critical */ }
-            }, 10000);
+            if (typeof EventSource === 'undefined') return;
+            try {
+                const lastId = window._activityLastId || 0;
+                _activitySSE = new EventSource('/api/activities/stream?last_id=' + encodeURIComponent(lastId));
+                _activitySSE.onmessage = function(e) {
+                    try {
+                        const data = JSON.parse(e.data);
+                        const newActs = data.activities || [];
+                        if (!newActs.length) return;
+                        if (newActs.length) window._activityLastId = Math.max(...newActs.map(a => a.id || 0));
+                        const tl = document.getElementById('agent-activity-timeline');
+                        if (tl) {
+                            newActs.forEach(a => {
+                                if (!tl.querySelector('[data-act-id="' + a.id + '"]')) {
+                                    const guide = document.getElementById('act-onboard-guide');
+                                    if (guide) guide.remove();
+                                    tl.insertBefore(createTimelineItem(a, true), tl.firstChild);
+                                }
+                            });
+                        }
+                    } catch(ex) { /* non-critical */ }
+                };
+                _activitySSE.onerror = function() {
+                    if (_activitySSE) { _activitySSE.close(); _activitySSE = null; }
+                    _activityPollTimer = setTimeout(() => { _activityPollTimer = null; startActivityPolling(); }, 15000);
+                };
+            } catch(ex) { /* SSE not supported */ }
         }
 
         function stopActivityPolling() {
-            if (_activityPollTimer) { clearInterval(_activityPollTimer); _activityPollTimer = null; }
+            if (_activitySSE) { _activitySSE.close(); _activitySSE = null; }
+            if (_activityPollTimer) { clearTimeout(_activityPollTimer); _activityPollTimer = null; }
         }
 
         async function loadReports() {
@@ -2671,6 +2693,68 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 bizSection.appendChild(bizHeader);
                 bizSection.appendChild(bizDetails);
                 list.appendChild(bizSection);
+
+                // === COLLAPSIBLE: Статистика расходов токенов ===
+                const tokenStatsData = data.token_stats_30d || {};
+                const tokenTotal = tokenStatsData._total || 0;
+                const tokenKey = 'token-stats-block';
+                const tokenExpanded = _reportsExpandedSet.has(tokenKey);
+                const tokenSection = document.createElement('div');
+                tokenSection.style.cssText = 'padding: 0; margin-bottom: 4px;';
+
+                const tokenHeader = document.createElement('div');
+                tokenHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                tokenHeader.innerHTML = `
+                    <div style="display: flex; align-items: baseline; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('stat-token-expenses')}</span>
+                        <span style="font-size: 12px; color: #8C959F;">${t('stat-30d')}</span>
+                    </div>
+                    <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${tokenExpanded ? '0' : '-90'}deg);">
+                        <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                    </svg>
+                `;
+
+                const tokenCatLabels = {
+                    chat: t('tokcat-chat'), proactive: t('tokcat-proactive'),
+                    reminders: t('tokcat-reminders'), autoposts: t('tokcat-autoposts'),
+                    research: t('tokcat-research'), other: t('tokcat-other'),
+                };
+                const tokenCats = Object.entries(tokenStatsData).filter(([k]) => k !== '_total').sort((a, b) => b[1] - a[1]);
+                const tokenDetailsHtml = tokenTotal > 0
+                    ? `<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 0 14px 0;">
+                        ${sc(tokenTotal, t('tokcat-total'), 0)}
+                        ${tokenCats.map(([k, v]) => sc(v, tokenCatLabels[k] || k, 0)).join('')}
+                       </div>`
+                    : `<div style="padding: 12px 0; font-size: 13px; color: #9CA3AF;">${t('stat-no-token-data')}</div>`;
+
+                const tokenDetails = document.createElement('div');
+                tokenDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${tokenExpanded ? 'none' : '0px'};`;
+                tokenDetails.innerHTML = tokenDetailsHtml;
+
+                tokenHeader.onclick = () => {
+                    const chev = tokenHeader.querySelector('.rpt-chev');
+                    const isCollapsed = tokenDetails.style.maxHeight === '0px';
+                    if (isCollapsed) {
+                        tokenDetails.style.overflow = 'hidden';
+                        tokenDetails.style.maxHeight = tokenDetails.scrollHeight + 'px';
+                        if (chev) chev.style.transform = 'rotate(0deg)';
+                        _reportsExpandedSet.add(tokenKey);
+                        tokenDetails.addEventListener('transitionend', function h() {
+                            if (_reportsExpandedSet.has(tokenKey)) { tokenDetails.style.maxHeight = 'none'; tokenDetails.style.overflow = 'visible'; }
+                            tokenDetails.removeEventListener('transitionend', h);
+                        });
+                    } else {
+                        tokenDetails.style.overflow = 'hidden';
+                        tokenDetails.style.maxHeight = tokenDetails.scrollHeight + 'px';
+                        requestAnimationFrame(() => { tokenDetails.style.maxHeight = '0px'; });
+                        if (chev) chev.style.transform = 'rotate(-90deg)';
+                        _reportsExpandedSet.delete(tokenKey);
+                    }
+                };
+
+                tokenSection.appendChild(tokenHeader);
+                tokenSection.appendChild(tokenDetails);
+                list.appendChild(tokenSection);
 
                 // === Campaigns ===
                 campaigns.forEach((c, idx) => {
@@ -10192,7 +10276,9 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'stat-goals-done':'Целей достигнуто','stat-tasks-done':'Задач выполнено','stat-tasks-deleted':'Задач удалено','stat-activity-index':'Индекс активности',
       'stat-email-sent':'Email отправлено','stat-email-replied':'Email ответов','stat-email-conv':'Email конверсия','stat-email-campaigns':'Email кампаний',
       'stat-deleg-me':'Поручено мне','stat-deleg-by-me':'Поручено мной','stat-posts-feed':'Постов в ленту','stat-posts-tg':'Постов в Telegram','stat-posts-discord':'Постов в Discord',
-      'stat-tokens-today':'Токены сегодня','stat-content-camps':'Контент-кампаний','stat-deleg-camps':'Деле-кампаний',
+      'stat-tokens-today':'Токены сегодня','стат-content-camps':'Контент-кампаний','stat-content-camps':'Контент-кампаний','stat-deleg-camps':'Деле-кампаний',
+      'stat-token-expenses':'Статистика расходов','tokcat-total':'Всего списано','tokcat-chat':'Диалоги','tokcat-proactive':'Проактив','tokcat-reminders':'Напоминания','tokcat-autoposts':'Автопосты','tokcat-research':'Исследования','tokcat-other':'Прочее','stat-no-token-data':'Расходов за 30 дней нет',
+      'activity-onboarding-desc':'Здесь будут отображаться все действия агента: созданные задачи, достигнутые цели, отправленные посты. Напишите агенту — и активность появится здесь.',
       'camp-active':'Активна','camp-paused':'На паузе','camp-completed':'Завершена','camp-launched':'Кампания запущена','camp-on-pause':'Кампания на паузе',
       'camp-sending':'Отправляет','camp-wait-day':'Ждёт завтра','camp-no-leads':'Нет лидов','camp-searching':'Ищет контакты',
       'camp-pause-tip':'Поставить на паузу','camp-resume-tip':'Возобновить','camp-wait-tip':'Дневной лимит исчерпан, продолжит завтра',
@@ -10406,6 +10492,8 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'stat-email-sent':'Emails sent','stat-email-replied':'Email replies','stat-email-conv':'Email conversion','stat-email-campaigns':'Email campaigns',
       'stat-deleg-me':'Assigned to me','stat-deleg-by-me':'Assigned by me','stat-posts-feed':'Feed posts','stat-posts-tg':'Telegram posts','stat-posts-discord':'Discord posts',
       'stat-tokens-today':'Tokens today','stat-content-camps':'Content campaigns','stat-deleg-camps':'Deleg. campaigns',
+      'stat-token-expenses':'Expense stats','tokcat-total':'Total spent','tokcat-chat':'Dialogs','tokcat-proactive':'Proactive','tokcat-reminders':'Reminders','tokcat-autoposts':'Autoposts','tokcat-research':'Research','tokcat-other':'Other','stat-no-token-data':'No token expenses in 30 days',
+      'activity-onboarding-desc':'All agent actions will appear here: created tasks, achieved goals, sent posts. Write to the agent — and the activity will show up here.',
       'camp-active':'Active','camp-paused':'Paused','camp-completed':'Completed','camp-launched':'Campaign launched','camp-on-pause':'Campaign paused',
       'camp-sending':'Sending','camp-wait-day':'Waiting tomorrow','camp-no-leads':'No leads','camp-searching':'Searching contacts',
       'camp-pause-tip':'Pause campaign','camp-resume-tip':'Resume campaign','camp-wait-tip':'Daily limit reached, will continue tomorrow',

@@ -14,6 +14,9 @@ TIMEZONE = timezone.utc
 PORT = int(os.getenv("PORT", 8080))
 LOCAL = os.getenv("LOCAL", "0").lower() in ("true", "1", "yes")  # Production by default
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "0").lower() in ("true", "1", "yes")  # For testing
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")  # Secret token for Telegram webhook verification
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")          # Sentry DSN for error tracking
+ADMIN_TELEGRAM_USERNAME = os.getenv("ADMIN_TELEGRAM_USERNAME", "aleksandrinsider")  # Admin for error alerts
 USE_OPTIMIZED_PROMPT = os.getenv("USE_OPTIMIZED_PROMPT", "True").lower() in ("true", "1", "yes")
 CURRENT_DATE_STR = os.getenv("CURRENT_DATE")
 if CURRENT_DATE_STR:

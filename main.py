@@ -3,7 +3,7 @@ from reminder_service import ReminderService
 from auto_post_service import run_service as auto_post_run_service
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET, WEBHOOK_SECRET, SENTRY_DSN, ADMIN_TELEGRAM_USERNAME
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
@@ -52,6 +52,19 @@ def get_db_session_context():
 # Aiogram imports
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiogram import Bot, Dispatcher
+
+# Sentry error tracking (optional)
+try:
+    import sentry_sdk as _sentry_sdk
+    if SENTRY_DSN:
+        _sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            traces_sample_rate=0.05,
+            environment='production' if not LOCAL else 'development',
+        )
+        logging.getLogger(__name__).info("✅ Sentry initialized")
+except ImportError:
+    pass
 
 # Скрываем некритичные предупреждения
 warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
@@ -2616,7 +2629,21 @@ except Exception as e:
     bot = None
 
 
-# Global app for Railway
+async def _notify_admin_error(error_msg: str, url: str = ''):
+    """Send critical error notification to admin Telegram."""
+    if not bot:
+        return
+    try:
+        with Session() as _sdb:
+            _admin = _sdb.query(User).filter_by(username=ADMIN_TELEGRAM_USERNAME).first()
+            if _admin and _admin.telegram_id:
+                _text = f"🚨 <b>Ошибка сервера</b>\n\n<code>{error_msg[:450]}</code>"
+                if url:
+                    _text += f"\n\n🔗 <code>{url[:200]}</code>"
+                await bot.send_message(_admin.telegram_id, _text, parse_mode='HTML')
+    except Exception as _ex:
+        logger.warning(f"[ADMIN_NOTIFY] {_ex}")
+
 app = web.Application(client_max_size=5 * 1024 * 1024)  # 5MB for avatar uploads
 
 # Add bot to app
@@ -2697,6 +2724,7 @@ async def logging_middleware(request, handler):
         raise
     except Exception as e:
         logger.error(f"Error handling {request.method} {path}: {e}")
+        asyncio.create_task(_notify_admin_error(f"{type(e).__name__}: {e}", str(request.url)))
         raise
 
 
@@ -6265,7 +6293,7 @@ async def on_startup(app):
     if bot and not LOCAL:
         webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
         try:
-            await bot.set_webhook(webhook_url)
+            await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None)
             logger.info(f"✅ Webhook set to: {webhook_url}")
         except Exception as e:
             logger.error(f"❌ Failed to set webhook: {e}")
@@ -7610,6 +7638,85 @@ async def api_activities_latest_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def sse_activities_handler(request):
+    """Server-Sent Events stream: push new agent activities in real time."""
+    try:
+        session = await get_session(request)
+        uid = session.get('user_id')
+        if not uid:
+            return web.Response(status=401)
+
+        last_id = 0
+        try:
+            last_id = int(request.rel_url.query.get('last_id', '0'))
+        except (ValueError, TypeError):
+            last_id = 0
+
+        response = web.StreamResponse(headers={
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive',
+        })
+        await response.prepare(request)
+
+        poll_interval = 5   # seconds between DB polls
+        hb_interval = 30    # seconds between heartbeats
+        last_hb = asyncio.get_event_loop().time()
+
+        while True:
+            try:
+                with Session() as sdb:
+                    new_acts = sdb.query(AgentActivityLog).filter(
+                        AgentActivityLog.user_id == uid,
+                        AgentActivityLog.id > last_id
+                    ).order_by(AgentActivityLog.id.asc()).limit(20).all()
+
+                    if new_acts:
+                        last_id = new_acts[-1].id
+                        payload = json.dumps({'activities': [
+                            {
+                                'id': a.id,
+                                'activity_type': a.activity_type,
+                                'title': a.title,
+                                'content': a.content,
+                                'created_at': (a.created_at.isoformat() + 'Z') if a.created_at else None,
+                            } for a in new_acts
+                        ]})
+                        await response.write(f'data: {payload}\n\n'.encode())
+                        last_hb = asyncio.get_event_loop().time()
+                    elif asyncio.get_event_loop().time() - last_hb >= hb_interval:
+                        await response.write(b': heartbeat\n\n')
+                        last_hb = asyncio.get_event_loop().time()
+            except (ConnectionResetError, asyncio.CancelledError):
+                break
+            except Exception as _e:
+                logger.warning(f"[SSE] query error: {_e}")
+            await asyncio.sleep(poll_interval)
+
+        return response
+    except (ConnectionResetError, asyncio.CancelledError):
+        pass
+    except Exception as e:
+        logger.warning(f"[SSE] stream error: {e}")
+
+
+def _categorize_token_action(action: str) -> str:
+    """Categorize a token transaction action for 30-day expense stats."""
+    a = action.lower()
+    if 'proactive' in a or 'проактив' in a:
+        return 'proactive'
+    if 'message' in a or 'chat' in a:
+        return 'chat'
+    if 'anchor' in a or 'reminder' in a or 'напомин' in a:
+        return 'reminders'
+    if 'post' in a or 'пост' in a:
+        return 'autoposts'
+    if 'research' in a or 'исслед' in a:
+        return 'research'
+    return 'other'
+
+
 async def api_reports_handler(request):
     """API for getting email reports — campaigns + standalone emails."""
     try:
@@ -7899,6 +8006,24 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading token stats: {e}")
 
+            # Token spend breakdown for last 30 days
+            token_stats_30d = {}
+            try:
+                tt_thirty_ago = datetime.now(dt_timezone.utc) - timedelta(days=30)
+                tt_list = session_db.query(TokenTransaction).filter(
+                    TokenTransaction.user_id == user.id,
+                    TokenTransaction.amount < 0,
+                    TokenTransaction.created_at >= tt_thirty_ago
+                ).all()
+                total_30d = 0
+                for tx in tt_list:
+                    cat = _categorize_token_action(tx.action or '')
+                    token_stats_30d[cat] = token_stats_30d.get(cat, 0) + abs(tx.amount)
+                    total_30d += abs(tx.amount)
+                token_stats_30d['_total'] = total_30d
+            except Exception as e:
+                logger.warning(f"[API_REPORTS] Error loading token stats 30d: {e}")
+
             # Delegations TO me (tasks assigned to my username)
             delegated_to_me = 0
             delegated_to_me_today = 0
@@ -7989,6 +8114,7 @@ async def api_reports_handler(request):
                 'task_stats': task_stats,
                 'personal_stats': personal_stats,
                 'tokens_today': tokens_today,
+                'token_stats_30d': token_stats_30d,
                 'delegated_to_me': delegated_to_me,
                 'delegated_to_me_today': delegated_to_me_today,
             })
@@ -9313,6 +9439,7 @@ app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 app.router.add_get('/api/reports', api_reports_handler)
 app.router.add_get('/api/activities/latest', api_activities_latest_handler)
+app.router.add_get('/api/activities/stream', sse_activities_handler)
 app.router.add_patch('/api/campaigns/{campaign_id}/status', api_campaign_status_handler)
 app.router.add_delete('/api/campaigns/{campaign_id}', api_campaign_delete_handler)
 app.router.add_patch('/api/content-campaigns/{campaign_id}/status', api_content_campaign_status_handler)
@@ -9503,6 +9630,7 @@ if bot:
     webhook_requests_handler = SimpleRequestHandler(
         dispatcher=dp,
         bot=bot,
+        secret_token=WEBHOOK_SECRET or None,
     )
     webhook_requests_handler.register(app, path="/webhook")
     setup_application(app, dp, bot=bot)

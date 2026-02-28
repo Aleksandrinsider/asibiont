@@ -20,3 +20,4 @@ discord.py>=2.3.0
 pywebpush>=2.0.0
 dnspython>=2.6.0
 ddgs>=7.0.0
+sentry-sdk[aiohttp]>=2.0.0
