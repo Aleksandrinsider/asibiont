@@ -204,6 +204,125 @@
         @media (max-width: 1024px) {
             .stat-today-label { display: none !important; }
         }
+        /* ── Marketplace buttons ── */
+        .mp-tab-btn {
+            background: #F8FAFC;
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-family: inherit;
+            color: #374151;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+            white-space: nowrap;
+        }
+        .mp-tab-btn:hover { background: #F0F3F5; }
+        .mp-tab-active {
+            background: #068487 !important;
+            color: white !important;
+            border-color: #068487 !important;
+        }
+        .mp-action-btn {
+            background: #F8FAFC;
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-family: inherit;
+            color: #374151;
+            cursor: pointer;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+        .mp-action-btn:hover { background: #F0F3F5; }
+        .mp-card {
+            border: 1px solid #D1D9E0;
+            border-radius: 8px;
+            padding: 12px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        /* ── Arena social feed ─────────────────────────── */
+        .arena-post {
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-radius: 10px;
+            padding: 13px 14px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            animation: arenaFadeIn 0.35s ease;
+        }
+        .arena-post-header {
+            display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;
+        }
+        .arena-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; color: white;
+            flex-shrink: 0; letter-spacing: 0.03em;
+        }
+        .arena-post-meta { flex: 1; min-width: 0; }
+        .arena-post-name  { font-size: 13px; font-weight: 600; color: #1F2328; line-height: 1.2; }
+        .arena-post-tagline { font-size: 11px; color: #9CA3AF; }
+        .arena-post-time  { font-size: 11px; color: #C4C9D1; white-space: nowrap; }
+        .arena-post-text  {
+            font-size: 13px; color: #374151; line-height: 1.62;
+            white-space: pre-wrap; word-break: break-word;
+            padding-left: 46px; margin-bottom: 8px;
+        }
+        .arena-actions {
+            display: flex; gap: 2px; padding-left: 44px; margin-bottom: 4px;
+        }
+        .arena-act-btn {
+            display: flex; align-items: center; gap: 4px;
+            background: none; border: 1px solid transparent;
+            border-radius: 20px; padding: 3px 10px;
+            font-size: 12px; color: #6B7280; cursor: pointer;
+            font-family: inherit; transition: all 0.15s;
+        }
+        .arena-act-btn:hover { border-color: #D1D9E0; color: #374151; background: #F8FAFC; }
+        .arena-act-btn.liked { border-color: #FCA5A5; color: #EF4444; background: #FEF2F2; }
+        .arena-comments {
+            margin-top: 6px; padding: 8px 0 2px; border-top: 1px solid #F3F4F6;
+            padding-left: 46px; display: none; flex-direction: column; gap: 6px;
+        }
+        .arena-comment-item {
+            display: flex; gap: 8px; align-items: flex-start;
+        }
+        .arena-comment-av {
+            width: 22px; height: 22px; border-radius: 50%; background: #068487;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 8px; font-weight: 700; color: white; flex-shrink: 0;
+        }
+        .arena-comment-bubble {
+            background: #F8FAFC; border-radius: 8px; padding: 5px 10px; flex: 1;
+            font-size: 12px; color: #374151; line-height: 1.45;
+        }
+        .arena-comment-name { font-weight: 600; font-size: 11px; color: #868D97; margin-bottom: 2px; }
+        .arena-comment-input-row {
+            display: flex; gap: 6px; margin-top: 6px; padding-right: 0;
+        }
+        .arena-comment-input {
+            flex: 1; padding: 5px 12px; border: 1px solid #D1D9E0; border-radius: 20px;
+            font-size: 12px; font-family: inherit; outline: none; color: #374151;
+            background: #F8FAFC;
+        }
+        .arena-comment-input:focus { border-color: #068487; background: white; }
+        .arena-bubble-system {
+            font-size: 11px; color: #9CA3AF; text-align: center;
+            padding: 4px 0;
+        }
+        /* Legacy alias — keep in case old arena-msg refs exist */
+        .arena-msg { animation: arenaFadeIn 0.35s ease; }
+        @keyframes arenaFadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
         /* ── Avatar upload page-curl ── */
         .avatar-wrap { position: relative; display: inline-block; }
         .avatar-upload-overlay {
@@ -979,7 +1098,7 @@
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="marketplace-link" onclick="event.stopPropagation(); switchToMarketplace()" style="cursor: pointer; opacity: 0.5;">
-                                    🛒 <span>Маркетплейс</span>
+                                    <span>Маркетплейс</span>
                                 </span>
                                 {% endif %}
                             </h3>
@@ -1083,16 +1202,17 @@
 
                         <!-- Маркетплейс агентов и скриптов -->
                         {% if logged_in %}
-                        <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px;">
+                        <div id="marketplace-view" class="view-panel" style="overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column;">
                             <!-- Табы -->
-                            <div style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap;">
-                                <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" style="background: #068487; color: white; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">🤖 Агенты</button>
-                                <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" style="background: #F3F4F6; color: #374151; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">⚡ Скрипты</button>
-                                <button id="mp-tab-my" onclick="mpSwitchTab('my')" style="background: #F3F4F6; color: #374151; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">📁 Мои</button>
-                                <button id="mp-tab-create" onclick="mpSwitchTab('create')" style="background: #F3F4F6; color: #374151; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit;">+ Создать</button>
-                                <div style="flex: 1; min-width: 120px;">
+                            <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
+                                <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Агенты</button>
+                                <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" class="mp-tab-btn">Скрипты</button>
+                                <button id="mp-tab-arena" onclick="mpSwitchTab('arena')" class="mp-tab-btn">Арена агентов</button>
+                                <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои</button>
+                                <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать</button>
+                                <div style="flex: 1; min-width: 110px;">
                                     <input id="mp-search" type="text" placeholder="Поиск..." oninput="mpSearch(this.value)"
-                                           style="width: 100%; box-sizing: border-box; padding: 6px 10px; font-size: 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-family: inherit; outline: none;">
+                                           style="width: 100%; box-sizing: border-box; padding: 5px 10px; font-size: 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-family: inherit; outline: none; color: #374151;">
                                 </div>
                             </div>
 
@@ -1110,6 +1230,28 @@
                                 </div>
                             </div>
 
+                            <!-- Арена агентов — лента обсуждения -->
+                            <div id="mp-arena-panel" style="display: none; flex-direction: column; flex: 1; min-height: 400px;">
+                                <!-- Шапка арены -->
+                                <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-size: 13px; font-weight: 600; color: #374151;">Дискуссия агентов</div>
+                                        <div id="arena-topic" style="font-size: 12px; color: #6B7280; margin-top: 2px; line-height: 1.4;">Загрузка темы...</div>
+                                    </div>
+                                    <div style="display: flex; gap: 8px; align-items: center; margin-left: 10px; flex-shrink:0;">
+                                        <span id="arena-status-dot" title="Статус" style="width: 8px; height: 8px; border-radius: 50%; background: #D1D9E0; display: inline-block; flex-shrink:0;"></span>
+                                        <button id="arena-start-btn" onclick="arenaStart()" class="mp-action-btn" style="background: #068487; color: white; border-color: #068487;">Запустить</button>
+                                        <button onclick="arenaNewTopic()" class="mp-action-btn">Другая тема</button>
+                                    </div>
+                                </div>
+                                <!-- Участники-агенты -->
+                                <div id="arena-agents-row" style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+                                    <span style="font-size:11px;color:#9CA3AF;margin-right:2px;">Участники:</span>
+                                </div>
+                                <!-- Лента постов-сообщений -->
+                                <div id="arena-messages" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; max-height: 520px;"></div>
+                            </div>
+
                             <!-- Мои публикации -->
                             <div id="mp-my-panel" style="display: none;">
                                 <div id="mp-my-content" style="font-size: 13px; color: #374151;">Загрузка...</div>
@@ -1117,9 +1259,9 @@
 
                             <!-- Форма создания -->
                             <div id="mp-create-panel" style="display: none;">
-                                <div style="display: flex; gap: 10px; margin-bottom: 14px;">
-                                    <button onclick="mpShowCreateAgent()" style="flex: 1; padding: 8px; background: #F0FDFA; border: 1px solid #068487; border-radius: 6px; color: #068487; font-size: 12px; cursor: pointer; font-family: inherit;">🤖 Создать агента</button>
-                                    <button onclick="mpShowCreateScript()" style="flex: 1; padding: 8px; background: #F0F9FF; border: 1px solid #0284C7; border-radius: 6px; color: #0284C7; font-size: 12px; cursor: pointer; font-family: inherit;">⚡ Создать скрипт</button>
+                                <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                                    <button onclick="mpShowCreateAgent()" class="mp-action-btn" style="flex: 1;">Создать агента</button>
+                                    <button onclick="mpShowCreateScript()" class="mp-action-btn" style="flex: 1;">Создать скрипт</button>
                                 </div>
                                 <div id="mp-create-form"></div>
                             </div>
@@ -2510,17 +2652,20 @@
 
         function mpSwitchTab(tab) {
             _mpCurrentTab = tab;
-            const tabs = ['agents','scripts','my','create'];
+            const tabs = ['agents','scripts','arena','my','create'];
             tabs.forEach(t => {
                 const btn = document.getElementById('mp-tab-' + t);
                 const panel = document.getElementById('mp-' + t + '-panel');
-                if (btn) btn.style.background = t === tab ? '#068487' : '#F3F4F6';
-                if (btn) btn.style.color = t === tab ? 'white' : '#374151';
-                if (panel) panel.style.display = t === tab ? '' : 'none';
+                if (btn) {
+                    btn.classList.toggle('mp-tab-active', t === tab);
+                }
+                if (panel) panel.style.display = t === tab ? (t === 'arena' ? 'flex' : '') : 'none';
             });
+            if (tab !== 'arena' && _arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
             if (tab === 'agents') mpLoadAgents();
             else if (tab === 'scripts') mpLoadScripts();
             else if (tab === 'my') mpLoadMy();
+            else if (tab === 'arena') { _arenaInitialized = false; arenaInit(); }
         }
 
         function mpSearch(val) {
@@ -2544,32 +2689,31 @@
                     list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Агентов пока нет</div>';
                     return;
                 }
-                list.innerHTML = data.agents.map(a => `
-                    <div style="border:1px solid #D1D9E0;border-radius:8px;padding:12px;background:white;display:flex;flex-direction:column;gap:8px;">
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <div style="width:36px;height:36px;border-radius:50%;background:#F0FDFA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
-                                ${a.avatar_url ? `<img src="${a.avatar_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">` : '🤖'}
+                list.innerHTML = data.agents.map(a => {
+                    const priceLabel = a.price_per_message === 0 ? '<span style="color:#059669;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${a.price_per_message}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/сообщение</span>`;
+                    const trialLabel = a.trial_messages ? `<span style="font-size:11px;color:#059669;background:#ECFDF5;border-radius:4px;padding:1px 6px;">${a.trial_messages} бесплатно</span>` : '';
+                    return `
+                    <div class="mp-card">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:40px;height:40px;border-radius:50%;background:#F0F3F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#374151;flex-shrink:0;border:1px solid #D1D9E0;overflow:hidden;">
+                                ${a.avatar_url ? `<img src="${escapeHtml(a.avatar_url)}" style="width:40px;height:40px;object-fit:cover;">` : escapeHtml((a.name||'?').substring(0,2).toUpperCase())}
                             </div>
-                            <div>
-                                <div style="font-size:13px;font-weight:600;color:#374151;">${escapeHtml(a.name)}</div>
-                                <div style="font-size:11px;color:#6B7280;">${escapeHtml(a.specialization || '')}</div>
+                            <div style="min-width:0;flex:1;">
+                                <div style="font-size:13px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.name)}</div>
+                                <div style="font-size:11px;color:#9CA3AF;">${escapeHtml(a.specialization || '')}</div>
                             </div>
                         </div>
-                        <div style="font-size:12px;color:#6B7280;line-height:1.5;">${escapeHtml((a.description || '').substring(0,120))}${a.description && a.description.length > 120 ? '...' : ''}</div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">
-                            <div style="font-size:11px;color:#6B7280;">
-                                💬 ${a.price_per_message} тк/сооб
-                                ${a.trial_messages ? ` · ${a.trial_messages} бесплатно` : ''}
-                                ${a.rating ? ` · ⭐${a.rating}` : ''}
+                        <div style="font-size:12px;color:#6B7280;line-height:1.5;min-height:28px;">${escapeHtml((a.description || '').substring(0,120))}${(a.description||'').length > 120 ? '...' : ''}</div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;border-top:1px solid #F3F4F6;padding-top:8px;margin-top:2px;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                ${priceLabel} ${trialLabel}
                             </div>
-                            <button onclick="mpSwitchAgent('${escapeHtml(a.slug)}')" style="padding:5px 12px;background:${a.is_subscribed ? '#F3F4F6' : '#068487'};color:${a.is_subscribed ? '#374151' : 'white'};border:1px solid ${a.is_subscribed ? '#D1D9E0' : '#068487'};border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit;">
-                                ${a.is_subscribed ? '✓ Подключён' : 'Подключить'}
-                            </button>
+                            <button onclick="mpSwitchAgent('${escapeHtml(a.slug)}')" class="mp-action-btn" ${!a.is_subscribed ? 'style="background:#068487;color:white;border-color:#068487;"' : ''}>${a.is_subscribed ? 'Подключён' : 'Подключить'}</button>
                         </div>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
             } catch(e) {
-                list.innerHTML = '<div style="color:#DC2626;font-size:13px;grid-column:1/-1;text-align:center;padding:24px 0">Ошибка загрузки: ' + e.message + '</div>';
+                list.innerHTML = '<div style="color:#DC2626;font-size:13px;grid-column:1/-1;text-align:center;padding:24px 0">Ошибка: ' + escapeHtml(e.message) + '</div>';
             }
         }
 
@@ -2586,21 +2730,26 @@
                     list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Скриптов пока нет</div>';
                     return;
                 }
-                list.innerHTML = data.scripts.map(s => `
-                    <div style="border:1px solid #D1D9E0;border-radius:8px;padding:12px;background:white;display:flex;flex-direction:column;gap:8px;">
-                        <div style="font-size:13px;font-weight:600;color:#374151;">⚡ ${escapeHtml(s.name)}</div>
-                        <div style="font-size:11px;color:#6B7280;">${escapeHtml(s.category || '')}</div>
-                        <div style="font-size:12px;color:#6B7280;line-height:1.5;">${escapeHtml((s.description || '').substring(0,120))}${s.description && s.description.length > 120 ? '...' : ''}</div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
-                            <div style="font-size:11px;color:#6B7280;">💸 ${s.price_per_run} тк/запуск · 📥 ${s.installs_count}</div>
-                            <button onclick="mpInstallScript('${s.id}','${escapeHtml(s.slug)}')" style="padding:5px 12px;background:${s.is_installed ? '#F3F4F6' : '#0284C7'};color:${s.is_installed ? '#374151' : 'white'};border:1px solid ${s.is_installed ? '#D1D9E0' : '#0284C7'};border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit;">
-                                ${s.is_installed ? '✓ Установлен' : 'Установить'}
-                            </button>
+                list.innerHTML = data.scripts.map(s => {
+                    const priceLabel = s.price_per_run === 0 ? '<span style="color:#059669;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${s.price_per_run}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/запуск</span>`;
+                    return `
+                    <div class="mp-card">
+                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                            <div style="font-size:13px;font-weight:600;color:#374151;flex:1;">${escapeHtml(s.name)}</div>
+                            ${s.category ? `<span style="font-size:10px;color:#6B7280;background:#F3F4F6;border-radius:4px;padding:2px 6px;white-space:nowrap;">${escapeHtml(s.category)}</span>` : ''}
                         </div>
-                    </div>
-                `).join('');
+                        <div style="font-size:12px;color:#6B7280;line-height:1.5;min-height:28px;">${escapeHtml((s.description || '').substring(0,120))}${(s.description||'').length > 120 ? '...' : ''}</div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;border-top:1px solid #F3F4F6;padding-top:8px;margin-top:2px;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                ${priceLabel}
+                                <span style="font-size:11px;color:#9CA3AF;">&middot; ${s.installs_count} установок</span>
+                            </div>
+                            <button onclick="mpInstallScript('${s.id}','${escapeHtml(s.slug)}')" class="mp-action-btn" ${!s.is_installed ? 'style="background:#068487;color:white;border-color:#068487;"' : ''}>${s.is_installed ? 'Установлен' : 'Установить'}</button>
+                        </div>
+                    </div>`;
+                }).join('');
             } catch(e) {
-                list.innerHTML = '<div style="color:#DC2626;font-size:13px;grid-column:1/-1;text-align:center;padding:24px 0">Ошибка: ' + e.message + '</div>';
+                list.innerHTML = '<div style="color:#DC2626;font-size:13px;grid-column:1/-1;text-align:center;padding:24px 0">Ошибка: ' + escapeHtml(e.message) + '</div>';
             }
         }
 
@@ -2615,23 +2764,23 @@
                 if (data.agents && data.agents.length) {
                     html += '<div style="font-weight:600;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои агенты</div>';
                     html += data.agents.map(a => `
-                        <div style="border:1px solid #D1D9E0;border-radius:6px;padding:10px;margin-bottom:8px;background:white;display:flex;align-items:center;justify-content:space-between;">
+                        <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:8px;">
                             <div>
-                                <span style="font-size:13px;font-weight:500;color:#374151;">🤖 ${escapeHtml(a.name)}</span>
+                                <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</span>
                                 <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${a.status==='active'?'#ECFDF5':'#F3F4F6'};color:${a.status==='active'?'#059669':'#6B7280'}">${a.status}</span>
                             </div>
-                            <span style="font-size:11px;color:#9CA3AF;">👥 ${a.subscribers_count} · 💬 ${a.messages_count}</span>
+                            <span style="font-size:11px;color:#9CA3AF;">${a.subscribers_count} подп. &middot; ${a.messages_count} сооб.</span>
                         </div>`).join('');
                 }
                 if (data.scripts && data.scripts.length) {
                     html += '<div style="font-weight:600;margin-top:14px;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои скрипты</div>';
                     html += data.scripts.map(s => `
-                        <div style="border:1px solid #D1D9E0;border-radius:6px;padding:10px;margin-bottom:8px;background:white;display:flex;align-items:center;justify-content:space-between;">
+                        <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:8px;">
                             <div>
-                                <span style="font-size:13px;font-weight:500;color:#374151;">⚡ ${escapeHtml(s.name)}</span>
+                                <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(s.name)}</span>
                                 <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${s.status==='active'?'#ECFDF5':'#F3F4F6'};color:${s.status==='active'?'#059669':'#6B7280'}">${s.status}</span>
                             </div>
-                            <span style="font-size:11px;color:#9CA3AF;">📥 ${s.installs_count} · ▶️ ${s.runs_count}</span>
+                            <span style="font-size:11px;color:#9CA3AF;">${s.installs_count} уст. &middot; ${s.runs_count} запусков</span>
                         </div>`).join('');
                 }
                 if (!html) html = '<div style="color:#9CA3AF;text-align:center;padding:32px 0;font-size:13px;">Вы ещё ничего не опубликовали</div>';
@@ -2642,28 +2791,21 @@
         }
 
         async function mpSwitchAgent(slug) {
-            mpShowStatus('Подключение агента...', '#F0FDFA', '#059669');
-            try {
-                const r = await fetch('/chat', { method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({message: `@${slug}`, _internal: true}) });
-                // Просто отправляем команду в чат
-                appendMessage('Пользователь', `Подключить агента @${slug}`);
-                switchToChat();
-                sendMessage(`Подключи агента @${slug}`);
-            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+            mpShowStatus('Переключение на агента...', '#F0F3F6', '#374151');
+            switchToChat();
+            sendMessage(`Подключи агента @${slug}`);
         }
 
         async function mpInstallScript(id, slug) {
-            mpShowStatus('Установка скрипта...', '#EFF6FF', '#0284C7');
+            mpShowStatus('Установка скрипта...', '#F0F3F6', '#374151');
             try {
-                const r = await fetch('/api/marketplace/scripts', {
+                await fetch('/api/marketplace/scripts', {
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({id: id, slug: slug, _install: true})
+                    body: JSON.stringify({id: id, slug: slug})
                 });
-                mpShowStatus('Скрипт установлен! Используйте его через чат с ИИ.', '#ECFDF5', '#059669');
-                setTimeout(() => mpLoadScripts(), 1000);
+                mpShowStatus('Скрипт установлен. Используйте его через чат с ИИ.', '#ECFDF5', '#059669');
+                setTimeout(() => mpLoadScripts(), 800);
             } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
         }
 
@@ -2671,8 +2813,8 @@
             const el = document.getElementById('mp-status');
             if (!el) return;
             el.style.display = '';
-            el.style.background = bg;
-            el.style.color = color;
+            el.style.background = bg || '#F8FAFC';
+            el.style.color = color || '#374151';
             el.textContent = msg;
             setTimeout(() => { if (el) el.style.display = 'none'; }, 4000);
         }
@@ -2682,20 +2824,58 @@
             if (!form) return;
             form.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:10px;">
-                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;">🤖 Новый агент</div>
-                    <input id="mpa-name" type="text" placeholder="Имя агента" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
-                    <input id="mpa-slug" type="text" placeholder="slug (латиница, например: my-agent)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
-                    <textarea id="mpa-desc" placeholder="Описание (до 1000 символов)" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;resize:vertical;"></textarea>
-                    <textarea id="mpa-personality" placeholder="Личность агента — как он общается, его характер, стиль..." rows="4" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;resize:vertical;"></textarea>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <input id="mpa-price" type="number" min="1" value="5" style="width:80px;padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
-                        <span style="font-size:12px;color:#6B7280;">токенов/сообщение</span>
-                        <input id="mpa-trial" type="number" min="0" value="3" style="width:60px;padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
-                        <span style="font-size:12px;color:#6B7280;">бесплатно</span>
+                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:2px;">Новый агент</div>
+
+                    <!-- Аватар -->
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div id="mpa-avatar-preview" style="width:56px;height:56px;border-radius:50%;background:#F0F3F6;border:1px solid #D1D9E0;display:flex;align-items:center;justify-content:center;font-size:20px;color:#9CA3AF;flex-shrink:0;overflow:hidden;cursor:pointer;" onclick="document.getElementById('mpa-avatar-file').click()">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="#9CA3AF"><path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2Zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4Z"/></svg>
+                        </div>
+                        <div>
+                            <button type="button" onclick="document.getElementById('mpa-avatar-file').click()" class="mp-action-btn" style="margin-bottom:3px;">Загрузить фото</button>
+                            <div style="font-size:11px;color:#9CA3AF;">JPG/PNG, до 2 МБ. Или оставьте пустым.</div>
+                        </div>
+                        <input id="mpa-avatar-file" type="file" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;" onchange="mpPreviewAvatar(this)">
                     </div>
-                    <button onclick="mpSubmitAgent()" style="padding:9px;background:#068487;color:white;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;">Отправить на модерацию</button>
-                    <div style="font-size:11px;color:#9CA3AF;">Агент будет проверен в течение 24 часов. Вы получите 70% от стоимости каждого сообщения.</div>
+
+                    <input id="mpa-name" type="text" placeholder="Имя агента" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <input id="mpa-slug" type="text" placeholder="slug (латиница: my-agent)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <input id="mpa-spec" type="text" placeholder="Специализация (например: finance, marketing, dev)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <textarea id="mpa-desc" placeholder="Короткое описание для карточки (2-3 предложения)" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
+                    <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="4" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
+
+                    <!-- Цена — визуально понятно -->
+                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:8px;">Монетизация</div>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <input id="mpa-price" type="number" min="1" max="9999" value="5" style="width:60px;padding:6px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;text-align:center;">
+                                <span style="font-size:12px;color:#6B7280;">токенов за сообщение</span>
+                            </div>
+                            <div style="width:1px;height:20px;background:#E5E7EB;"></div>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <input id="mpa-trial" type="number" min="0" max="999" value="3" style="width:50px;padding:6px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;text-align:center;">
+                                <span style="font-size:12px;color:#6B7280;">бесплатных пробных сообщений</span>
+                            </div>
+                        </div>
+                        <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого платного сообщения</div>
+                    </div>
+
+                    <button onclick="mpSubmitAgent()" class="mp-action-btn" style="background:#068487;color:white;border-color:#068487;padding:9px;">Отправить на модерацию</button>
+                    <div style="font-size:11px;color:#9CA3AF;">Агент будет проверен в течение 24 часов.</div>
                 </div>`;
+        }
+
+        function mpPreviewAvatar(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            if (file.size > 2 * 1024 * 1024) { mpShowStatus('Файл слишком большой (максимум 2 МБ)', '#FEF2F2', '#DC2626'); return; }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('mpa-avatar-preview');
+                if (preview) preview.innerHTML = `<img src="${e.target.result}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">`;
+            };
+            reader.readAsDataURL(file);
         }
 
         function mpShowCreateScript() {
@@ -2703,34 +2883,87 @@
             if (!form) return;
             form.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:10px;">
-                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;">⚡ Новый скрипт</div>
-                    <input id="mps-name" type="text" placeholder="Название скрипта" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
-                    <textarea id="mps-desc" placeholder="Что делает скрипт?" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;resize:vertical;"></textarea>
-                    <textarea id="mps-code" placeholder="Python-код скрипта. Доступны: json, math, re, datetime, requests. Результат записывается в result = {...}" rows="8" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;background:#F9FAFB;"></textarea>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <input id="mps-price" type="number" min="1" value="10" style="width:80px;padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;">
-                        <span style="font-size:12px;color:#6B7280;">токенов/запуск</span>
+                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:2px;">Новый скрипт</div>
+                    <input id="mps-name" type="text" placeholder="Название скрипта" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <textarea id="mps-desc" placeholder="Что делает скрипт? Чем полезен?" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
+
+                    <!-- AI-генерация кода -->
+                    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:12px;font-weight:500;color:#15803D;margin-bottom:6px;">Сгенерировать код с помощью ИИ</div>
+                        <div style="display:flex;gap:6px;">
+                            <input id="mps-ai-prompt" type="text" placeholder="Опишите задачу: например «разобрать CSV и посчитать среднее»" style="flex:1;padding:7px 10px;border:1px solid #BBF7D0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
+                            <button type="button" id="mps-ai-btn" onclick="mpGenerateScript()" class="mp-action-btn" style="background:#15803D;color:white;border-color:#15803D;white-space:nowrap;padding:7px 12px;">Сгенерировать</button>
+                        </div>
+                        <div id="mps-ai-status" style="display:none;font-size:11px;color:#15803D;margin-top:4px;"></div>
                     </div>
-                    <button onclick="mpSubmitScript()" style="padding:9px;background:#0284C7;color:white;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;">Отправить на модерацию</button>
-                    <div style="font-size:11px;color:#9CA3AF;">Скрипт проверяется автоматически на безопасность, затем вручную. 70% от каждого запуска — автору.</div>
+
+                    <textarea id="mps-code" placeholder="Python-код. Используйте переменную input_data (dict) для входных данных, запишите результат в result = {...}" rows="9" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;background:#F9FAFB;color:#374151;"></textarea>
+
+                    <!-- Цена -->
+                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:8px;">Стоимость запуска</div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input id="mps-price" type="number" min="1" max="9999" value="10" style="width:60px;padding:6px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;text-align:center;">
+                            <span style="font-size:12px;color:#6B7280;">токенов за каждый запуск</span>
+                        </div>
+                        <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого запуска</div>
+                    </div>
+
+                    <button onclick="mpSubmitScript()" class="mp-action-btn" style="background:#068487;color:white;border-color:#068487;padding:9px;">Отправить на модерацию</button>
+                    <div style="font-size:11px;color:#9CA3AF;">Скрипт автоматически проверяется на безопасность.</div>
                 </div>`;
         }
 
+        async function mpGenerateScript() {
+            const prompt = (document.getElementById('mps-ai-prompt') || {}).value || '';
+            if (!prompt.trim()) { mpShowStatus('Введите описание задачи для генерации', '#FEF2F2', '#DC2626'); return; }
+            const btn = document.getElementById('mps-ai-btn');
+            const status = document.getElementById('mps-ai-status');
+            if (btn) { btn.disabled = true; btn.textContent = 'Генерация...'; }
+            if (status) { status.style.display = ''; status.textContent = 'ИИ пишет код...'; }
+            try {
+                const r = await fetch('/api/marketplace/scripts/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({description: prompt.trim()})
+                });
+                const data = await r.json();
+                if (data.error) throw new Error(data.error);
+                const codeEl = document.getElementById('mps-code');
+                if (codeEl) codeEl.value = data.code || '';
+                if (status) status.textContent = 'Код сгенерирован. Проверьте и отредактируйте при необходимости.';
+                // Автозаполнить название если пустое
+                const nameEl = document.getElementById('mps-name');
+                if (nameEl && !nameEl.value.trim()) nameEl.value = prompt.trim().substring(0, 60);
+            } catch(e) {
+                if (status) { status.style.color = '#DC2626'; status.textContent = 'Ошибка: ' + e.message; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Сгенерировать'; }
+            }
+        }
+
         async function mpSubmitAgent() {
+            // Получаем base64 аватара из preview-img если есть
+            let avatarDataUrl = '';
+            const previewImg = document.querySelector('#mpa-avatar-preview img');
+            if (previewImg) avatarDataUrl = previewImg.src || '';
+
             const data = {
-                name: document.getElementById('mpa-name').value.trim(),
-                slug: document.getElementById('mpa-slug').value.trim(),
-                description: document.getElementById('mpa-desc').value.trim(),
-                personality: document.getElementById('mpa-personality').value.trim(),
-                price_per_message: parseInt(document.getElementById('mpa-price').value) || 5,
-                trial_messages: parseInt(document.getElementById('mpa-trial').value) || 3,
+                name: (document.getElementById('mpa-name') || {}).value.trim(),
+                slug: (document.getElementById('mpa-slug') || {}).value.trim(),
+                specialization: (document.getElementById('mpa-spec') || {}).value.trim(),
+                description: (document.getElementById('mpa-desc') || {}).value.trim(),
+                personality: (document.getElementById('mpa-personality') || {}).value.trim(),
+                price_per_message: parseInt((document.getElementById('mpa-price') || {}).value) || 5,
+                trial_messages: parseInt((document.getElementById('mpa-trial') || {}).value) || 3,
+                avatar_data_url: avatarDataUrl,
             };
             if (!data.name || !data.personality) { mpShowStatus('Заполните имя и личность агента', '#FEF2F2', '#DC2626'); return; }
             try {
                 const r = await fetch('/api/marketplace/agents', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
                 const res = await r.json();
                 if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
-                mpShowStatus(res.message || 'Отправлено на модерацию!', '#ECFDF5', '#059669');
+                mpShowStatus(res.message || 'Отправлено на модерацию', '#ECFDF5', '#059669');
                 document.getElementById('mp-create-form').innerHTML = '';
                 setTimeout(() => mpSwitchTab('my'), 1500);
             } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
@@ -2743,14 +2976,223 @@
                 code: document.getElementById('mps-code').value,
                 price_per_run: parseInt(document.getElementById('mps-price').value) || 10,
             };
-            if (!data.name || !data.code) { mpShowStatus('Заполните название и код скрипта', '#FEF2F2', '#DC2626'); return; }
+            if (!data.name || !data.code) { mpShowStatus('Заполните название и код', '#FEF2F2', '#DC2626'); return; }
             try {
                 const r = await fetch('/api/marketplace/scripts', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
                 const res = await r.json();
                 if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
-                mpShowStatus(res.message || 'Скрипт отправлен!', '#ECFDF5', '#059669');
+                mpShowStatus(res.message || 'Скрипт отправлен', '#ECFDF5', '#059669');
                 document.getElementById('mp-create-form').innerHTML = '';
                 setTimeout(() => mpSwitchTab('my'), 1500);
+            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+        }
+
+        // ====== ARENA FUNCTIONS ======
+        let _arenaSSE = null;
+        let _arenaInitialized = false;
+
+        function arenaInit() {
+            if (_arenaInitialized) return;
+            _arenaInitialized = true;
+            arenaConnect();
+        }
+
+        function arenaConnect(fromIndex) {
+            if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
+            const idx = fromIndex || 0;
+            _arenaSSE = new EventSource('/api/arena/stream?from=' + idx);
+            const dot = document.getElementById('arena-status-dot');
+            if (dot) dot.style.background = '#FCD34D';  // жёлтый — подключение
+
+            _arenaSSE.addEventListener('init', function(e) {
+                try {
+                    const state = JSON.parse(e.data);
+                    arenaRenderState(state);
+                    if (dot) dot.style.background = state.running ? '#22C55E' : '#D1D9E0';
+                } catch(ex) {}
+            });
+            _arenaSSE.addEventListener('message', function(e) {
+                try {
+                    const msg = JSON.parse(e.data);
+                    arenaAppendMessage(msg, true);
+                    if (dot) dot.style.background = '#22C55E';
+                } catch(ex) {}
+            });
+            _arenaSSE.addEventListener('ping', function() {});
+            _arenaSSE.onerror = function() {
+                if (dot) dot.style.background = '#EF4444';
+                // Переподключение через 5 сек
+                setTimeout(() => {
+                    if (_mpCurrentTab === 'arena') {
+                        const msgs = document.getElementById('arena-messages');
+                        const cnt = msgs ? msgs.childElementCount : 0;
+                        arenaConnect(cnt);
+                    }
+                }, 5000);
+            };
+        }
+
+        function arenaRenderState(state) {
+            // Тема
+            const topicEl = document.getElementById('arena-topic');
+            if (topicEl && state.topic) topicEl.textContent = state.topic;
+
+            // Кнопка старт
+            const btn = document.getElementById('arena-start-btn');
+            if (btn) btn.textContent = state.running ? 'Остановить' : 'Запустить';
+            if (btn) {
+                if (state.running) {
+                    btn.style.background = '#EF4444'; btn.style.borderColor = '#EF4444';
+                    btn.onclick = function() {
+                        fetch('/api/arena/start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stop:true})});
+                    };
+                } else {
+                    btn.style.background = '#068487'; btn.style.borderColor = '#068487';
+                    btn.onclick = arenaStart;
+                }
+            }
+
+            // Агенты-участники
+            const row = document.getElementById('arena-agents-row');
+            if (row && state.agents) {
+                row.innerHTML = state.agents.map(a => `
+                    <div title="${escapeHtml(a.title)}" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;background:#F8FAFC;border:1px solid #D1D9E0;border-radius:20px;padding:3px 10px 3px 4px;">
+                        <div style="width:22px;height:22px;border-radius:50%;background:${escapeHtml(a.color)};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:600;">${escapeHtml(a.initials)}</div>
+                        <span>${escapeHtml(a.name)}</span>
+                    </div>`).join('');
+            }
+
+            // Сообщения
+            const msgs = document.getElementById('arena-messages');
+            if (msgs && state.messages && state.messages.length) {
+                msgs.innerHTML = '';
+                state.messages.forEach(m => arenaAppendMessage(m, false));
+                msgs.scrollTop = msgs.scrollHeight;
+            }
+        }
+
+        // Счётчик для ID постов арены
+        let _arenaMsgIdx = 0;
+        const _arenaLikes = {};
+        const _arenaComments = {};
+
+        function arenaAppendMessage(msg, isNew) {
+            const container = document.getElementById('arena-messages');
+            if (!container) return;
+
+            const div = document.createElement('div');
+
+            if (msg.agent_id === 'system') {
+                div.className = 'arena-bubble-system';
+                div.textContent = msg.text;
+            } else {
+                const postId = 'ap-' + (++_arenaMsgIdx);
+                const timeStr = msg.ts
+                    ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
+                          .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
+                    : '';
+                div.className = 'arena-post';
+                div.innerHTML = `
+                    <div class="arena-post-header">
+                        <div class="arena-avatar" style="background:${escapeHtml(msg.color||'#6C727F')}">${escapeHtml(msg.initials||'?')}</div>
+                        <div class="arena-post-meta">
+                            <div class="arena-post-name">${escapeHtml(msg.agent_name||'')}</div>
+                            <div class="arena-post-tagline">${escapeHtml(msg.agent_title||'')}</div>
+                        </div>
+                        <div class="arena-post-time">${timeStr}</div>
+                    </div>
+                    <div class="arena-post-text">${escapeHtml(msg.text||'')}</div>
+                    <div class="arena-actions" id="${postId}-actions">
+                        <button class="arena-act-btn" id="${postId}-like" onclick="arenaToggleLike('${postId}')">&#9825; <span id="${postId}-lcnt">0</span></button>
+                        <button class="arena-act-btn" onclick="arenaToggleComments('${postId}')">&#9679;&#9679;&#9679; Ответить</button>
+                    </div>
+                    <div class="arena-comments" id="${postId}-comments">
+                        <div id="${postId}-clist"></div>
+                        <div class="arena-comment-input-row">
+                            <input type="text" class="arena-comment-input" id="${postId}-cinput" placeholder="Ваш комментарий..." onkeydown="if(event.key==='Enter')arenaPostComment('${postId}')">
+                            <button type="button" class="mp-action-btn" onclick="arenaPostComment('${postId}')" style="flex-shrink:0;">Отправить</button>
+                        </div>
+                    </div>`;
+            }
+
+            container.appendChild(div);
+            if (isNew) {
+                container.scrollTop = container.scrollHeight;
+                const dot = document.getElementById('arena-status-dot');
+                if (dot) { dot.style.background = '#068487'; setTimeout(() => { dot.style.background = '#22C55E'; }, 400); }
+            }
+        }
+
+        function arenaToggleLike(postId) {
+            const btn = document.getElementById(postId + '-like');
+            const cnt = document.getElementById(postId + '-lcnt');
+            if (!btn) return;
+            _arenaLikes[postId] = _arenaLikes[postId] || {liked: false, count: 0};
+            _arenaLikes[postId].liked = !_arenaLikes[postId].liked;
+            _arenaLikes[postId].count += _arenaLikes[postId].liked ? 1 : -1;
+            btn.classList.toggle('liked', _arenaLikes[postId].liked);
+            btn.innerHTML = (_arenaLikes[postId].liked ? '&#10084;' : '&#9825;') + ' <span id="' + postId + '-lcnt">' + _arenaLikes[postId].count + '</span>';
+        }
+
+        function arenaToggleComments(postId) {
+            const section = document.getElementById(postId + '-comments');
+            if (!section) return;
+            const visible = section.style.display === 'flex';
+            section.style.display = visible ? 'none' : 'flex';
+            section.style.flexDirection = 'column';
+            if (!visible) {
+                const input = document.getElementById(postId + '-cinput');
+                if (input) input.focus();
+            }
+        }
+
+        function arenaPostComment(postId) {
+            const input = document.getElementById(postId + '-cinput');
+            const clist = document.getElementById(postId + '-clist');
+            if (!input || !clist) return;
+            const text = input.value.trim();
+            if (!text) return;
+            const item = document.createElement('div');
+            item.className = 'arena-comment-item';
+            item.innerHTML = `
+                <div class="arena-comment-av">Вы</div>
+                <div class="arena-comment-bubble">
+                    <div class="arena-comment-name">Вы</div>
+                    ${escapeHtml(text)}
+                </div>`;
+            clist.appendChild(item);
+            input.value = '';
+        }
+
+        async function arenaStart() {
+            try {
+                const r = await fetch('/api/arena/start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+                const data = await r.json();
+                if (data.topic) {
+                    const topicEl = document.getElementById('arena-topic');
+                    if (topicEl) topicEl.textContent = data.topic;
+                }
+                const msgs = document.getElementById('arena-messages');
+                if (msgs) msgs.innerHTML = '';
+                _arenaSSE && _arenaSSE.close();
+                _arenaSSE = null;
+                arenaConnect(0);
+            } catch(e) { mpShowStatus('Ошибка запуска арены: ' + e.message, '#FEF2F2', '#DC2626'); }
+        }
+
+        async function arenaNewTopic() {
+            try {
+                const r = await fetch('/api/arena/start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+                const data = await r.json();
+                if (data.topic) {
+                    const topicEl = document.getElementById('arena-topic');
+                    if (topicEl) topicEl.textContent = data.topic;
+                }
+                const msgs = document.getElementById('arena-messages');
+                if (msgs) msgs.innerHTML = '';
+                _arenaSSE && _arenaSSE.close();
+                _arenaSSE = null;
+                arenaConnect(0);
             } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
         }
 
@@ -3140,7 +3582,138 @@
                 bizSection.appendChild(bizDetails);
                 list.appendChild(bizSection);
 
-                // === COLLAPSIBLE: Статистика расходов токенов ===
+                // === COLLAPSIBLE: Социальная активность ваших агентов ===
+                const agentSocKey = 'agent-social-activity-block';
+                const agentSocExpanded = _reportsExpandedSet.has(agentSocKey);
+                const agentSocSection = document.createElement('div');
+                agentSocSection.style.cssText = 'padding: 0; margin-bottom: 4px;';
+
+                const agentSocHeader = document.createElement('div');
+                agentSocHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                agentSocHeader.innerHTML = `
+                    <div style="display: flex; align-items: baseline; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 400; color: #1F2328;">Социальная активность ваших агентов</span>
+                        <span style="font-size: 12px; color: #8C959F;">${t('stat-30d')}</span>
+                    </div>
+                    <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${agentSocExpanded ? '0' : '-90'}deg);">
+                        <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                    </svg>
+                `;
+
+                const agentSocDetails = document.createElement('div');
+                agentSocDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${agentSocExpanded ? 'none' : '0px'};`;
+                agentSocDetails.innerHTML = `<div id="agent-soc-inner" style="padding: 8px 0 12px 0;"><div style="color:#9CA3AF;font-size:12px;">Загрузка...</div></div>`;
+
+                const _loadAgentSocActivity = () => {
+                    const inner = agentSocDetails.querySelector('#agent-soc-inner');
+                    if (!inner || inner.dataset.loaded) return;
+                    inner.dataset.loaded = '1';
+                    fetch('/api/marketplace/agents/activity')
+                        .then(r => r.json())
+                        .then(actData => {
+                            const stats = actData.stats || {};
+                            const agents = actData.agents || [];
+                            const events = actData.events || [];
+                            let html = '';
+                            // Карточки агентов
+                            if (agents.length) {
+                                html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">`;
+                                html += agents.slice(0,5).map(a => `
+                                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
+                                        <div style="width:28px;height:28px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;">
+                                            ${a.avatar_url ? `<img src="${escapeHtml(a.avatar_url)}" style="width:28px;height:28px;object-fit:cover;">` : escapeHtml((a.name||'?').substring(0,2).toUpperCase())}
+                                        </div>
+                                        <div>
+                                            <div style="font-size:12px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</div>
+                                            <div style="font-size:11px;color:#9CA3AF;">${a.subscribers_count} подп.</div>
+                                        </div>
+                                    </div>`).join('');
+                                html += `</div>`;
+                            }
+                            // Статистика
+                            html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.total||0}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">всего действий</div>
+                                </div>
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.posts_feed||0}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">постов в ленту</div>
+                                </div>
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${(stats.posts_tg||0)+(stats.posts_discord||0)}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">постов в каналы</div>
+                                </div>
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.comments||0}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">комментариев</div>
+                                </div>
+                            </div>`;
+                            // Лента событий
+                            if (events.length) {
+                                const typeIcons = {
+                                    post_newsfeed: 'Лента',
+                                    post_telegram: 'TG',
+                                    post_discord: 'DC',
+                                    comment: 'Комм.',
+                                };
+                                const typeColors = {
+                                    post_newsfeed: '#068487',
+                                    post_telegram: '#2563EB',
+                                    post_discord: '#7C3AED',
+                                    comment: '#D97706',
+                                };
+                                html += `<div style="font-size:12px;font-weight:500;color:#6B7280;margin-bottom:6px;">Последние события</div>`;
+                                html += `<div style="display:flex;flex-direction:column;gap:4px;">`;
+                                html += events.slice(0, 15).map(e => {
+                                    const color = typeColors[e.type] || '#6B7280';
+                                    const badge = typeIcons[e.type] || e.type;
+                                    const timeStr = e.ts ? new Date(e.ts.includes('Z') ? e.ts : e.ts + 'Z').toLocaleDateString('ru-RU', {day:'2-digit',month:'short'}) : '';
+                                    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;background:#F8FAFC;border-radius:6px;border:1px solid #F0F3F6;">
+                                        <span style="font-size:10px;font-weight:600;color:white;background:${color};border-radius:4px;padding:2px 5px;margin-top:1px;flex-shrink:0;">${badge}</span>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(e.content || e.title)}</div>
+                                            ${e.target ? `<div style="font-size:11px;color:#9CA3AF;">${escapeHtml(e.target)}</div>` : ''}
+                                        </div>
+                                        <span style="font-size:11px;color:#9CA3AF;white-space:nowrap;flex-shrink:0;">${timeStr}</span>
+                                    </div>`;
+                                }).join('');
+                                html += `</div>`;
+                            } else {
+                                html += `<div style="font-size:13px;color:#9CA3AF;text-align:center;padding:20px 0;">Агенты ещё не публиковали. Запустите автопостинг в чате.</div>`;
+                            }
+                            inner.innerHTML = html;
+                        })
+                        .catch(() => { inner.innerHTML = '<div style="font-size:12px;color:#9CA3AF;">Нет данных</div>'; });
+                };
+
+                agentSocHeader.onclick = () => {
+                    const chev = agentSocHeader.querySelector('.rpt-chev');
+                    const isCollapsed = agentSocDetails.style.maxHeight === '0px';
+                    if (isCollapsed) {
+                        _loadAgentSocActivity();
+                        agentSocDetails.style.overflow = 'hidden';
+                        agentSocDetails.style.maxHeight = agentSocDetails.scrollHeight + 'px';
+                        if (chev) chev.style.transform = 'rotate(0deg)';
+                        _reportsExpandedSet.add(agentSocKey);
+                        agentSocDetails.addEventListener('transitionend', function h() {
+                            if (_reportsExpandedSet.has(agentSocKey)) { agentSocDetails.style.maxHeight = 'none'; agentSocDetails.style.overflow = 'visible'; }
+                            agentSocDetails.removeEventListener('transitionend', h);
+                        });
+                    } else {
+                        agentSocDetails.style.overflow = 'hidden';
+                        agentSocDetails.style.maxHeight = agentSocDetails.scrollHeight + 'px';
+                        requestAnimationFrame(() => { agentSocDetails.style.maxHeight = '0px'; });
+                        if (chev) chev.style.transform = 'rotate(-90deg)';
+                        _reportsExpandedSet.delete(agentSocKey);
+                    }
+                };
+
+                if (agentSocExpanded) _loadAgentSocActivity();
+
+                agentSocSection.appendChild(agentSocHeader);
+                agentSocSection.appendChild(agentSocDetails);
+                list.appendChild(agentSocSection);
                 const tokenStatsData = data.token_stats_30d || {};
                 const tokenTotal = tokenStatsData._total || 0;
                 const tokenKey = 'token-stats-block';

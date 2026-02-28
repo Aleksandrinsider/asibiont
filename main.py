@@ -118,6 +118,13 @@ init_db()
 from migrations import run_migrations
 run_migrations()
 
+# Seed arena test agents
+try:
+    from ai_integration.agent_arena import seed_test_agents, start_arena, stop_arena, get_arena_state, arena_sse_generator
+    seed_test_agents()
+except Exception as _arena_init_err:
+    import logging as _l; _l.getLogger(__name__).warning(f'Arena init: {_arena_init_err}')
+
 # Database connection already verified above
 
 # Helper functions for context management
@@ -9471,6 +9478,13 @@ async def api_marketplace_publish_agent_handler(request):
             agent.is_adult = bool(data.get('is_adult', False))
             agent.status = 'review'  # Всегда на ревью после изменений
 
+            # Аватар из base64 data URL (сохраняем напрямую; в продакшене заменить на upload в CDN)
+            avatar_data = (data.get('avatar_data_url') or '').strip()
+            if avatar_data and avatar_data.startswith('data:image/'):
+                # Обрезаем до 2МБ (safety limit)
+                if len(avatar_data) < 2_800_000:
+                    agent.avatar_url = avatar_data
+
             session_db.commit()
             return web.json_response({'success': True, 'id': agent.id, 'slug': agent.slug,
                                       'status': 'review',
@@ -9543,6 +9557,111 @@ async def api_marketplace_publish_script_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_generate_script_handler(request):
+    """POST /api/marketplace/scripts/generate — генерация кода через ИИ"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        description = (data.get('description') or '').strip()[:600]
+        if not description:
+            return web.json_response({'error': 'description required'}, status=400)
+        from config import DEEPSEEK_API_KEY
+        import aiohttp as _aio
+        prompt = (
+            f"Напиши Python-скрипт для задачи: {description}\n\n"
+            "Требования:\n"
+            "- Используй только: json, math, re, datetime, requests, urllib, collections, itertools\n"
+            "- Входные данные получай из переменной input_data (dict, может быть пустым)\n"
+            "- Финальный результат записывай в: result = {...}\n"
+            "- Без классов верхнего уровня, без print(), без input()\n"
+            "- Добавь однострочный комментарий в начале с описанием\n"
+            "- Верни ТОЛЬКО Python-код, без markdown-обёртки ```python"
+        )
+        async with _aio.ClientSession() as sess:
+            resp = await sess.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                json={'model': 'deepseek-chat',
+                      'messages': [{'role': 'user', 'content': prompt}],
+                      'max_tokens': 2000, 'temperature': 0.3},
+                timeout=_aio.ClientTimeout(total=60)
+            )
+            result = await resp.json()
+        code = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        # Убираем markdown-обёртку если она есть
+        if code.startswith('```'):
+            lines = code.split('\n')
+            code = '\n'.join(lines[1:])
+        if code.endswith('```'):
+            code = code[:-3].strip()
+        return web.json_response({'code': code})
+    except Exception as e:
+        logger.error(f"[GENERATE SCRIPT] error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_agents_activity_handler(request):
+    """GET /api/marketplace/agents/activity — социальная активность агентов за 30 дней"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            from models import UserAgent, AgentActivityLog, User as UserModel
+            import datetime as _dt
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'agents': [], 'events': [], 'stats': {}})
+            since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=30)
+            # Агенты пользователя
+            agents = session_db.query(UserAgent).filter_by(
+                author_id=user_obj.id, status='active').order_by(
+                UserAgent.subscribers_count.desc()).limit(20).all()
+            agents_data = [{'id': a.id, 'name': a.name,
+                            'subscribers_count': a.subscribers_count,
+                            'messages_count': a.messages_count,
+                            'avatar_url': a.avatar_url or ''} for a in agents]
+            # Социальные события из лога
+            social_types = ('post_newsfeed', 'post_telegram', 'post_discord', 'comment')
+            events_q = session_db.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user_obj.id,
+                AgentActivityLog.activity_type.in_(social_types),
+                AgentActivityLog.created_at >= since
+            ).order_by(AgentActivityLog.created_at.desc()).limit(60).all()
+            events = [{
+                'id': e.id,
+                'type': e.activity_type,
+                'title': e.title or '',
+                'content': (e.content or '')[:300],
+                'target': e.target or '',
+                'status': e.status or 'completed',
+                'ts': e.created_at.isoformat() if e.created_at else None,
+            } for e in events_q]
+            # Агрегированная статистика
+            type_counts = {}
+            for e in events_q:
+                type_counts[e.activity_type] = type_counts.get(e.activity_type, 0) + 1
+            stats = {
+                'posts_feed': type_counts.get('post_newsfeed', 0),
+                'posts_tg': type_counts.get('post_telegram', 0),
+                'posts_discord': type_counts.get('post_discord', 0),
+                'comments': type_counts.get('comment', 0),
+                'total': len(events_q),
+                'agents_count': len(agents_data),
+            }
+            return web.json_response({'agents': agents_data, 'events': events, 'stats': stats})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[AGENTS ACTIVITY] error: {e}", exc_info=True)
+        return web.json_response({'agents': [], 'events': [], 'stats': {}})
+
+
 async def api_marketplace_my_handler(request):
     """GET /api/marketplace/my — мои агенты и скрипты"""
     try:
@@ -9577,6 +9696,81 @@ async def api_marketplace_my_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+# ═══════════════════════════════════════════════════════
+# AGENT ARENA API
+# ═══════════════════════════════════════════════════════
+
+async def api_arena_state_handler(request):
+    """GET /api/arena — состояние арены агентов"""
+    session_web = await get_session(request)
+    user_id = session_web.get('user_id') if session_web else None
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    try:
+        from ai_integration.agent_arena import get_arena_state
+        state = get_arena_state('default')
+        return web.json_response(state)
+    except Exception as e:
+        logger.error(f"[ARENA] state error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_arena_start_handler(request):
+    """POST /api/arena/start — запустить/перезапустить арену"""
+    session_web = await get_session(request)
+    user_id = session_web.get('user_id') if session_web else None
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    try:
+        data = {}
+        try:
+            data = await request.json()
+        except Exception:
+            pass
+        from ai_integration.agent_arena import start_arena
+        result = start_arena('default', new_topic=data.get('topic'))
+        return web.json_response({'success': True, **result})
+    except Exception as e:
+        logger.error(f"[ARENA] start error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_arena_stream_handler(request):
+    """GET /api/arena/stream — SSE стрим сообщений арены"""
+    session_web = await get_session(request)
+    user_id = session_web.get('user_id') if session_web else None
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+
+    last_index = int(request.rel_url.query.get('from', 0))
+
+    response = web.StreamResponse(
+        status=200,
+        reason='OK',
+        headers={
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        }
+    )
+    await response.prepare(request)
+
+    try:
+        from ai_integration.agent_arena import arena_sse_generator
+        async for chunk in arena_sse_generator('default', last_index=last_index):
+            try:
+                await response.write(chunk.encode('utf-8'))
+            except (ConnectionResetError, asyncio.CancelledError):
+                break
+    except (ConnectionResetError, asyncio.CancelledError):
+        pass
+    except Exception as e:
+        logger.error(f"[ARENA] stream error: {e}", exc_info=True)
+
+    return response
+
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)
@@ -9606,7 +9800,9 @@ app.router.add_get('/api/marketplace/agents', api_marketplace_agents_handler)
 app.router.add_get('/api/marketplace/scripts', api_marketplace_scripts_handler)
 app.router.add_post('/api/marketplace/agents', api_marketplace_publish_agent_handler)
 app.router.add_post('/api/marketplace/scripts', api_marketplace_publish_script_handler)
+app.router.add_post('/api/marketplace/scripts/generate', api_generate_script_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
+app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
 app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)

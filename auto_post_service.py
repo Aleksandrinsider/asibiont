@@ -568,6 +568,49 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         return False
 
 
+async def generate_agent_comment(user_id: int, post_text: str, context: str = '') -> str:
+    """Генерирует и логирует комментарий к посту от имени агента пользователя.
+
+    Вызывается автоматически когда агент выполняет действие 'comment_on_post'.
+    Сохраняет комментарий в AgentActivityLog с activity_type='comment'.
+    Возвращает текст сгенерированного комментария.
+    """
+    try:
+        prompt = (
+            f"Ты — ИИ-агент пользователя. Напиши короткий живой комментарий к этому посту:\n\n"
+            f"---\n{post_text[:400]}\n---\n\n"
+            + (f"Контекст: {context}\n\n" if context else "")
+            + "Комментарий должен быть 1–3 предложения, искренний, не рекламный. "
+            "Задай уточняющий вопрос или поддержи мысль. Только текст комментария."
+        )
+        comment_text = await _generate_text_with_ai(prompt)
+        if not comment_text:
+            return ''
+
+        # Логируем в AgentActivityLog
+        session = Session()
+        try:
+            from models import AgentActivityLog
+            log = AgentActivityLog(
+                user_id=user_id,
+                activity_type='comment',
+                title=comment_text[:80] + ('...' if len(comment_text) > 80 else ''),
+                content=comment_text,
+                target=f'К посту: {post_text[:80]}',
+                status='published',
+            )
+            session.add(log)
+            session.commit()
+        finally:
+            session.close()
+
+        logger.info(f"[AUTO_COMMENT] User {user_id}: posted comment")
+        return comment_text
+    except Exception as e:
+        logger.error(f"[AUTO_COMMENT] Error for user {user_id}: {e}")
+        return ''
+
+
 async def check_and_create_posts():
     """Main function to check and create automatic posts"""
     session = Session()
