@@ -8305,7 +8305,32 @@ async def api_profile_handler(request):
                 if 'skills' in data:
                     profile.skills = data['skills'].strip() if data['skills'] and data['skills'].strip() else None
                 if 'goals' in data:
-                    profile.goals = data['goals'].strip() if data['goals'] and data['goals'].strip() else None
+                    new_goals_text = data['goals'].strip() if data['goals'] and data['goals'].strip() else None
+                    profile.goals = new_goals_text
+                    # Sync goals text → Goal objects (create missing ones)
+                    if new_goals_text:
+                        import re as _re
+                        _goal_parts = [g.strip() for g in _re.split(r'[;,]', new_goals_text) if g.strip() and len(g.strip()) > 2]
+                        if _goal_parts:
+                            # Get existing goal titles (case-insensitive)
+                            _existing_goals = session_db.query(Goal).filter(
+                                Goal.user_id == user.id,
+                                Goal.status.in_(['active', 'paused', 'in_progress'])
+                            ).all()
+                            _existing_titles_lower = {g.title.lower() for g in _existing_goals}
+                            for _gtitle in _goal_parts:
+                                if _gtitle.lower() not in _existing_titles_lower:
+                                    _new_goal = Goal(
+                                        user_id=user.id,
+                                        title=_gtitle[:255],
+                                        status='active',
+                                        priority='medium',
+                                        category='personal',
+                                        progress_percentage=0,
+                                        metric_current=0,
+                                    )
+                                    session_db.add(_new_goal)
+                                    logger.info(f"[API PROFILE] Auto-created goal '{_gtitle}' for user {user_id}")
                 if 'status_text' in data:
                     profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
                 if 'bio' in data:
