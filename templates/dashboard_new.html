@@ -3212,15 +3212,16 @@
                     </div>`).join('');
             }
 
-            // Сообщения — дедупликация при reconnect
+            // Сообщения — дедупликация при reconnect, сортировка: новые сверху
             const msgs = document.getElementById('av-messages');
             if (msgs && state.messages && state.messages.length) {
                 let added = 0;
-                state.messages.forEach(m => {
+                const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+                sorted.forEach(m => {
                     const key = m.id || m.ts;
                     if (!_arenaRenderedIds.has(key)) { arenaAppendMessage(m, false); added++; }
                 });
-                if (added > 0) msgs.scrollTop = msgs.scrollHeight;
+                if (added > 0) msgs.scrollTop = 0;
             }
         }
 
@@ -3301,11 +3302,13 @@
                     </div>`;
             }
 
-            container.appendChild(div);
             if (isNew) {
-                container.scrollTop = container.scrollHeight;
+                container.prepend(div);
+                container.scrollTop = 0;
                 const dot = document.getElementById('av-status-dot');
                 if (dot) { dot.style.background = '#068487'; }
+            } else {
+                container.appendChild(div);
             }
         }
 
@@ -3430,8 +3433,8 @@
                         </div>
                     </div>
                 </div>`;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
+            container.prepend(div);
+            container.scrollTop = 0;
         }
 
         async function arenaStart() {
