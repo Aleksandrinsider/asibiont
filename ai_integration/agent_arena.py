@@ -126,7 +126,169 @@ ARENA_TOPICS = [
     "Можно ли доверять системе, которая никогда не ошибается?",
 ]
 
-# ─── Глобальное состояние арены ────────────────────────────────────────────
+# ─── Глобальная лента (всегда живёт; агенты пишут каждые 37 мин) ──────────
+
+_global_feed: List[dict] = []           # общая лента для всех посетителей
+_global_feed_started: bool = False      # запущен ли фоновый цикл
+
+BACKGROUND_INTERVAL_SEC = 37 * 60      # 37 минут между постами
+
+
+async def _global_posting_loop():
+    """
+    Запускается при старте сервера один раз.
+    Каждые 37 минут случайный агент пишет сообщение на текущую тему.
+    Тема меняется каждые 5 постов.
+    """
+    global _global_feed
+    logger.info("[ARENA] Global posting loop started (interval=%ds)", BACKGROUND_INTERVAL_SEC)
+
+    current_topic = random.choice(ARENA_TOPICS)
+    post_count = 0
+
+    # Небольшая начальная задержка, чтобы сервер успел подняться
+    await asyncio.sleep(5)
+
+    while True:
+        try:
+            # Менять тему каждые 5 постов
+            if post_count > 0 and post_count % 5 == 0:
+                current_topic = random.choice(ARENA_TOPICS)
+                logger.info("[ARENA] Topic changed to: %s", current_topic)
+                # Сообщение-разделитель от модератора
+                sep = {
+                    "id": f"sep_{int(time.time())}",
+                    "agent_id": "system",
+                    "agent_name": "МОДЕРАТОР",
+                    "color": "#6C727F",
+                    "initials": "МД",
+                    "text": f"Новая тема: «{current_topic}»",
+                    "ts": datetime.utcnow().isoformat(),
+                }
+                _global_feed.append(sep)
+                _global_feed = _global_feed[-200:]
+
+            # Выбираем случайного агента
+            agent = random.choice(ARENA_AGENTS)
+            reply = await _generate_agent_reply(agent, _global_feed[-15:], current_topic)
+
+            msg = {
+                "id": f"{agent['id']}_{int(time.time())}",
+                "agent_id": agent["id"],
+                "agent_name": agent["name"],
+                "agent_title": agent["title"],
+                "color": agent["color"],
+                "initials": agent["initials"],
+                "text": reply,
+                "ts": datetime.utcnow().isoformat(),
+            }
+            _global_feed.append(msg)
+            _global_feed = _global_feed[-200:]   # храним последние 200
+            post_count += 1
+            logger.info("[ARENA] [%s] posted (total=%d)", agent["name"], post_count)
+
+        except Exception as e:
+            logger.error("[ARENA] global loop error: %s", e)
+
+        await asyncio.sleep(BACKGROUND_INTERVAL_SEC)
+
+
+async def seed_global_feed_if_empty():
+    """
+    Если лента пуста, генерируем первые 6 сообщений сразу — чтобы страница
+    не была пустой при первом заходе.
+    """
+    global _global_feed
+    if _global_feed:
+        return
+
+    topic = random.choice(ARENA_TOPICS)
+    logger.info("[ARENA] Seeding initial feed, topic: %s", topic)
+    seed_order = random.sample(ARENA_AGENTS, len(ARENA_AGENTS))
+
+    # Открывающее сообщение модератора
+    _global_feed.append({
+        "id": f"open_{int(time.time())}",
+        "agent_id": "system",
+        "agent_name": "МОДЕРАТОР",
+        "color": "#6C727F",
+        "initials": "МД",
+        "text": f"Добро пожаловать на Арену. Текущая тема: «{topic}»",
+        "ts": datetime.utcnow().isoformat(),
+    })
+
+    for agent in seed_order:
+        try:
+            reply = await _generate_agent_reply(agent, _global_feed[-8:], topic)
+            _global_feed.append({
+                "id": f"{agent['id']}_{int(time.time())}",
+                "agent_id": agent["id"],
+                "agent_name": agent["name"],
+                "agent_title": agent["title"],
+                "color": agent["color"],
+                "initials": agent["initials"],
+                "text": reply,
+                "ts": datetime.utcnow().isoformat(),
+            })
+            await asyncio.sleep(1.5)   # небольшая пауза между запросами
+        except Exception as e:
+            logger.warning("[ARENA] seed error for %s: %s", agent["id"], e)
+
+    logger.info("[ARENA] Seeded %d messages", len(_global_feed))
+
+
+def start_global_arena(loop=None):
+    """
+    Запускает глобальный фоновый цикл постинга и заполняет начальные сообщения.
+    Вызывается из on_startup в main.py один раз.
+    """
+    global _global_feed_started
+    if _global_feed_started:
+        return
+    _global_feed_started = True
+    asyncio.ensure_future(seed_global_feed_if_empty())
+    asyncio.ensure_future(_global_posting_loop())
+    logger.info("[ARENA] Global arena scheduled.")
+
+
+def get_global_feed_state() -> dict:
+    """Возвращает состояние глобальной ленты (для REST и SSE init)."""
+    return {
+        "messages": _global_feed[-80:],
+        "agents": [{"id": a["id"], "name": a["name"], "title": a["title"],
+                    "color": a["color"], "initials": a["initials"]} for a in ARENA_AGENTS],
+    }
+
+
+async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
+    """
+    SSE-генератор глобальной ленты.
+    Сначала отдаёт всё накопленное — затем стримит новые сообщения.
+    """
+    # Инициализация: полное состояние
+    state = get_global_feed_state()
+    yield f"event: init\ndata: {json.dumps(state, ensure_ascii=False)}\n\n"
+
+    sent_idx = len(_global_feed)  # уже отправлено через init
+    ping_counter = 0
+
+    while True:
+        if sent_idx < len(_global_feed):
+            for i in range(sent_idx, len(_global_feed)):
+                msg = _global_feed[i]
+                yield f"event: message\ndata: {json.dumps(msg, ensure_ascii=False)}\n\n"
+            sent_idx = len(_global_feed)
+            ping_counter = 0
+        else:
+            ping_counter += 1
+            if ping_counter >= 30:   # 30 сек keep-alive
+                yield f"event: ping\ndata: {{}}\n\n"
+                ping_counter = 0
+
+        await asyncio.sleep(1.0)
+
+
+# ─── Глобальное состояние арены (legacy — ручной запуск) ───────────────────
 
 _arenas: Dict[str, dict] = {}  # arena_id → {messages, topic, running, task}
 
@@ -344,11 +506,12 @@ def seed_test_agents():
                 logger.info("[ARENA] Test agents already seeded.")
                 return
 
-            # Найдём или создадим системного автора (admin)
+            # Ищем @aleksandrinsider, иначе берём любого admin
             import json as _json
-            admin = session.query(User).filter_by(is_admin=True).first()
+            admin = (session.query(User).filter(User.username == 'aleksandrinsider').first()
+                     or session.query(User).filter_by(is_admin=True).first())
             if not admin:
-                logger.warning("[ARENA] No admin user found, skipping agent seed.")
+                logger.warning("[ARENA] No author user found, skipping agent seed.")
                 return
 
             for agent_data in ARENA_AGENTS:

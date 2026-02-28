@@ -120,7 +120,7 @@ run_migrations()
 
 # Seed arena test agents
 try:
-    from ai_integration.agent_arena import seed_test_agents, start_arena, stop_arena, get_arena_state, arena_sse_generator
+    from ai_integration.agent_arena import seed_test_agents, start_global_arena
     seed_test_agents()
 except Exception as _arena_init_err:
     import logging as _l; _l.getLogger(__name__).warning(f'Arena init: {_arena_init_err}')
@@ -6229,6 +6229,14 @@ async def on_startup(app):
     
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware set up")
+
+    # Запускаем глобальную ленту арены агентов
+    try:
+        from ai_integration.agent_arena import start_global_arena
+        start_global_arena()
+        logger.info("[ARENA] Global arena started.")
+    except Exception as _ae:
+        logger.warning(f"[ARENA] Failed to start global arena: {_ae}")
     
     # Синхрозируем users.subscription_tier с subscriptions.tier при старте
     session_db = None
@@ -9701,49 +9709,18 @@ async def api_marketplace_my_handler(request):
 # ═══════════════════════════════════════════════════════
 
 async def api_arena_state_handler(request):
-    """GET /api/arena — состояние арены агентов"""
-    session_web = await get_session(request)
-    user_id = session_web.get('user_id') if session_web else None
-    if not user_id:
-        return web.json_response({'error': 'Not authenticated'}, status=401)
+    """GET /api/arena — глобальное состояние арены (без авторизации)"""
     try:
-        from ai_integration.agent_arena import get_arena_state
-        state = get_arena_state('default')
+        from ai_integration.agent_arena import get_global_feed_state
+        state = get_global_feed_state()
         return web.json_response(state)
     except Exception as e:
         logger.error(f"[ARENA] state error: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
 
 
-async def api_arena_start_handler(request):
-    """POST /api/arena/start — запустить/перезапустить арену"""
-    session_web = await get_session(request)
-    user_id = session_web.get('user_id') if session_web else None
-    if not user_id:
-        return web.json_response({'error': 'Not authenticated'}, status=401)
-    try:
-        data = {}
-        try:
-            data = await request.json()
-        except Exception:
-            pass
-        from ai_integration.agent_arena import start_arena
-        result = start_arena('default', new_topic=data.get('topic'))
-        return web.json_response({'success': True, **result})
-    except Exception as e:
-        logger.error(f"[ARENA] start error: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
-
-
 async def api_arena_stream_handler(request):
-    """GET /api/arena/stream — SSE стрим сообщений арены"""
-    session_web = await get_session(request)
-    user_id = session_web.get('user_id') if session_web else None
-    if not user_id:
-        return web.json_response({'error': 'Not authenticated'}, status=401)
-
-    last_index = int(request.rel_url.query.get('from', 0))
-
+    """GET /api/arena/stream — SSE стрим глобальной ленты арены"""
     response = web.StreamResponse(
         status=200,
         reason='OK',
@@ -9757,8 +9734,8 @@ async def api_arena_stream_handler(request):
     await response.prepare(request)
 
     try:
-        from ai_integration.agent_arena import arena_sse_generator
-        async for chunk in arena_sse_generator('default', last_index=last_index):
+        from ai_integration.agent_arena import global_feed_sse_generator
+        async for chunk in global_feed_sse_generator():
             try:
                 await response.write(chunk.encode('utf-8'))
             except (ConnectionResetError, asyncio.CancelledError):
@@ -9769,6 +9746,66 @@ async def api_arena_stream_handler(request):
         logger.error(f"[ARENA] stream error: {e}", exc_info=True)
 
     return response
+
+
+async def api_marketplace_agent_status_handler(request):
+    """PUT /api/marketplace/agents/{id}/status — пауза/запуск агента автором"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        data = await request.json()
+        new_status = data.get('status', 'active')
+        if new_status not in ('active', 'paused', 'disabled'):
+            return web.json_response({'error': 'Invalid status'}, status=400)
+        session_db = Session()
+        try:
+            from models import UserAgent, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            agent = session_db.query(UserAgent).filter_by(
+                id=agent_id, author_id=user_obj.id).first()
+            if not agent:
+                return web.json_response({'error': 'Not found'}, status=404)
+            agent.status = new_status
+            session_db.commit()
+            return web.json_response({'success': True, 'status': new_status})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agent status error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_agent_delete_handler(request):
+    """DELETE /api/marketplace/agents/{id} — удалить агента"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        session_db = Session()
+        try:
+            from models import UserAgent, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            agent = session_db.query(UserAgent).filter_by(
+                id=agent_id, author_id=user_obj.id).first()
+            if not agent:
+                return web.json_response({'error': 'Not found'}, status=404)
+            session_db.delete(agent)
+            session_db.commit()
+            return web.json_response({'success': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agent delete error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
 
 
 # Routes
@@ -9803,6 +9840,11 @@ app.router.add_post('/api/marketplace/scripts', api_marketplace_publish_script_h
 app.router.add_post('/api/marketplace/scripts/generate', api_generate_script_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
+app.router.add_put('/api/marketplace/agents/{id}/status', api_marketplace_agent_status_handler)
+app.router.add_delete('/api/marketplace/agents/{id}', api_marketplace_agent_delete_handler)
+# Arena — глобальная лента (не требует авторизации)
+app.router.add_get('/api/arena', api_arena_state_handler)
+app.router.add_get('/api/arena/stream', api_arena_stream_handler)
 app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)

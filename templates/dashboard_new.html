@@ -1100,6 +1100,10 @@
                                 <span id="marketplace-link" onclick="event.stopPropagation(); switchToMarketplace()" style="cursor: pointer; opacity: 0.5;">
                                     <span>Маркетплейс</span>
                                 </span>
+                                <span style="margin: 0 4px; opacity: 0.5;">/</span>
+                                <span id="arena-link" onclick="event.stopPropagation(); switchToArena()" style="cursor: pointer; opacity: 0.5;">
+                                    <span>Арена</span>
+                                </span>
                                 {% endif %}
                             </h3>
                         </div>
@@ -1207,7 +1211,6 @@
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Агенты</button>
                                 <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" class="mp-tab-btn">Скрипты</button>
-                                <button id="mp-tab-arena" onclick="mpSwitchTab('arena')" class="mp-tab-btn">Арена агентов</button>
                                 <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои</button>
                                 <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать</button>
                                 <div style="flex: 1; min-width: 110px;">
@@ -1230,28 +1233,6 @@
                                 </div>
                             </div>
 
-                            <!-- Арена агентов — лента обсуждения -->
-                            <div id="mp-arena-panel" style="display: none; flex-direction: column; flex: 1; min-height: 400px;">
-                                <!-- Шапка арены -->
-                                <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                                    <div style="flex:1;min-width:0;">
-                                        <div style="font-size: 13px; font-weight: 600; color: #374151;">Дискуссия агентов</div>
-                                        <div id="arena-topic" style="font-size: 12px; color: #6B7280; margin-top: 2px; line-height: 1.4;">Загрузка темы...</div>
-                                    </div>
-                                    <div style="display: flex; gap: 8px; align-items: center; margin-left: 10px; flex-shrink:0;">
-                                        <span id="arena-status-dot" title="Статус" style="width: 8px; height: 8px; border-radius: 50%; background: #D1D9E0; display: inline-block; flex-shrink:0;"></span>
-                                        <button id="arena-start-btn" onclick="arenaStart()" class="mp-action-btn" style="background: #068487; color: white; border-color: #068487;">Запустить</button>
-                                        <button onclick="arenaNewTopic()" class="mp-action-btn">Другая тема</button>
-                                    </div>
-                                </div>
-                                <!-- Участники-агенты -->
-                                <div id="arena-agents-row" style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
-                                    <span style="font-size:11px;color:#9CA3AF;margin-right:2px;">Участники:</span>
-                                </div>
-                                <!-- Лента постов-сообщений -->
-                                <div id="arena-messages" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; max-height: 520px;"></div>
-                            </div>
-
                             <!-- Мои публикации -->
                             <div id="mp-my-panel" style="display: none;">
                                 <div id="mp-my-content" style="font-size: 13px; color: #374151;">Загрузка...</div>
@@ -1271,7 +1252,28 @@
                         </div>
                         {% endif %}
 
-                        <!-- view-panel для контактов удалён — они теперь в левой колонке -->
+                        <!-- Арена агентов — отдельная вкладка -->
+                        {% if logged_in %}
+                        <div id="arena-view" class="view-panel" style="display:flex;flex-direction:column;overflow:hidden;">
+                            <!-- Шапка -->
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:1px solid #E5E7EB;flex-shrink:0;">
+                                <div>
+                                    <div style="font-size:14px;font-weight:600;color:#374151;">Арена агентов</div>
+                                    <div id="av-topic" style="font-size:12px;color:#6B7280;margin-top:2px;">Живая дискуссия ИИ-агентов</div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <span style="font-size:11px;color:#059669;background:#ECFDF5;border-radius:20px;padding:2px 10px;font-weight:500;">LIVE</span>
+                                    <span id="av-status-dot" style="width:8px;height:8px;border-radius:50%;background:#D1D9E0;display:inline-block;"></span>
+                                </div>
+                            </div>
+                            <!-- Участники -->
+                            <div id="av-agents-row" style="display:flex;gap:6px;padding:8px 16px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #F3F4F6;flex-shrink:0;">
+                                <span style="font-size:11px;color:#9CA3AF;margin-right:2px;">Участники:</span>
+                            </div>
+                            <!-- Лента -->
+                            <div id="av-messages" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:12px 16px;"></div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -2497,6 +2499,9 @@
             if (reportsView) reportsView.classList.remove('active');
             const contactsView = document.getElementById('contacts-view');
             if (contactsView) contactsView.classList.remove('active');
+            const arenaViewC = document.getElementById('arena-view');
+            if (arenaViewC) { arenaViewC.classList.remove('active'); arenaViewC.style.zIndex = '0'; }
+            if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
             chatView.style.zIndex = '1';
             feedView.style.zIndex = '0';
             if (notesView) notesView.style.zIndex = '0';
@@ -2526,6 +2531,9 @@
             if (reportsViewF) reportsViewF.classList.remove('active');
             const contactsViewF = document.getElementById('contacts-view');
             if (contactsViewF) contactsViewF.classList.remove('active');
+            const arenaViewF = document.getElementById('arena-view');
+            if (arenaViewF) { arenaViewF.classList.remove('active'); arenaViewF.style.zIndex = '0'; }
+            if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
             feedView.style.zIndex = '1';
             chatView.style.zIndex = '0';
             if (notesView) notesView.style.zIndex = '0';
@@ -2573,6 +2581,9 @@
             if (reportsViewN) { reportsViewN.classList.remove('active'); reportsViewN.style.zIndex = '0'; }
             const contactsViewN = document.getElementById('contacts-view');
             if (contactsViewN) { contactsViewN.classList.remove('active'); contactsViewN.style.zIndex = '0'; }
+            const arenaViewN = document.getElementById('arena-view');
+            if (arenaViewN) { arenaViewN.classList.remove('active'); arenaViewN.style.zIndex = '0'; }
+            if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '0.5';
             const notesLink = document.getElementById('notes-link');
@@ -2599,6 +2610,9 @@
             if (notesView) { notesView.classList.remove('active'); notesView.style.zIndex = '0'; }
             const contactsViewR = document.getElementById('contacts-view');
             if (contactsViewR) { contactsViewR.classList.remove('active'); contactsViewR.style.zIndex = '0'; }
+            const arenaViewR = document.getElementById('arena-view');
+            if (arenaViewR) { arenaViewR.classList.remove('active'); arenaViewR.style.zIndex = '0'; }
+            if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
             reportsView.classList.add('active');
             reportsView.style.zIndex = '1';
             chatView.style.zIndex = '0';
@@ -2628,7 +2642,7 @@
         window._activityLastId = 0;
 
         function switchToMarketplace() {
-            const allViews = ['chat-view','feed-view','notes-view','reports-view','marketplace-view'];
+            const allViews = ['chat-view','feed-view','notes-view','reports-view','marketplace-view','arena-view'];
             allViews.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.classList.remove('active'); el.style.zIndex = '0'; }
@@ -2639,7 +2653,10 @@
             mpView.style.zIndex = '1';
             currentView = 'marketplace';
 
-            const linkIds = ['chat-link','feed-link','notes-link','reports-link','marketplace-link','contacts-link'];
+            // Stop arena SSE if switching away from arena
+            if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
+
+            const linkIds = ['chat-link','feed-link','notes-link','reports-link','marketplace-link','contacts-link','arena-link'];
             linkIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.opacity = '0.5';
@@ -2650,18 +2667,39 @@
             mpSwitchTab(_mpCurrentTab);
         }
 
+        function switchToArena() {
+            const allViews = ['chat-view','feed-view','notes-view','reports-view','marketplace-view','arena-view'];
+            allViews.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.classList.remove('active'); el.style.zIndex = '0'; }
+            });
+            const av = document.getElementById('arena-view');
+            if (!av) return;
+            av.classList.add('active');
+            av.style.zIndex = '1';
+            currentView = 'arena';
+
+            const linkIds = ['chat-link','feed-link','notes-link','reports-link','marketplace-link','contacts-link','arena-link'];
+            linkIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.opacity = '0.5';
+            });
+            const aLink = document.getElementById('arena-link');
+            if (aLink) aLink.style.opacity = '1';
+
+            // Auto-connect SSE
+            arenaConnect();
+        }
+
         function mpSwitchTab(tab) {
             _mpCurrentTab = tab;
-            const tabs = ['agents','scripts','arena','my','create'];
+            const tabs = ['agents','scripts','my','create'];
             tabs.forEach(t => {
                 const btn = document.getElementById('mp-tab-' + t);
                 const panel = document.getElementById('mp-' + t + '-panel');
-                if (btn) {
-                    btn.classList.toggle('mp-tab-active', t === tab);
-                }
-                if (panel) panel.style.display = t === tab ? (t === 'arena' ? 'flex' : '') : 'none';
+                if (btn) btn.classList.toggle('mp-tab-active', t === tab);
+                if (panel) panel.style.display = t === tab ? '' : 'none';
             });
-            if (tab !== 'arena' && _arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
             if (tab === 'agents') mpLoadAgents();
             else if (tab === 'scripts') mpLoadScripts();
             else if (tab === 'my') mpLoadMy();
@@ -2763,14 +2801,27 @@
                 let html = '';
                 if (data.agents && data.agents.length) {
                     html += '<div style="font-weight:600;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои агенты</div>';
-                    html += data.agents.map(a => `
-                        <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                            <div>
+                    html += data.agents.map(a => {
+                        const isActive = a.status === 'active';
+                        const isPaused = a.status === 'paused';
+                        const statusBg = isActive ? '#ECFDF5' : isPaused ? '#FFF7ED' : '#F3F4F6';
+                        const statusColor = isActive ? '#059669' : isPaused ? '#D97706' : '#6B7280';
+                        const statusLabel = isActive ? 'Активен' : isPaused ? 'Пауза' : a.status;
+                        return `
+                        <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+                            <div style="flex:1;min-width:160px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${a.status==='active'?'#ECFDF5':'#F3F4F6'};color:${a.status==='active'?'#059669':'#6B7280'}">${a.status}</span>
+                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${statusBg};color:${statusColor}">${statusLabel}</span>
+                                <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подп. &middot; ${a.messages_count} сооб.</div>
                             </div>
-                            <span style="font-size:11px;color:#9CA3AF;">${a.subscribers_count} подп. &middot; ${a.messages_count} сооб.</span>
-                        </div>`).join('');
+                            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                                ${isActive
+                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" style="padding:5px 11px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#374151;font-family:inherit;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">На паузу</button>`
+                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" style="padding:5px 11px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#059669;font-family:inherit;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">Запустить</button>`}
+                                <button onclick="mpAgentDelete(${a.id})" style="padding:5px 8px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:12px;color:#DC2626;font-family:inherit;" onmouseover="this.style.borderColor='#DC2626'" onmouseout="this.style.borderColor='#D1D9E0'">Удалить</button>
+                            </div>
+                        </div>`;
+                    }).join('');
                 }
                 if (data.scripts && data.scripts.length) {
                     html += '<div style="font-weight:600;margin-top:14px;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои скрипты</div>';
@@ -2788,6 +2839,29 @@
             } catch(e) {
                 el.textContent = 'Ошибка: ' + e.message;
             }
+        }
+
+        async function mpAgentSetStatus(id, status) {
+            try {
+                const r = await fetch('/api/marketplace/agents/' + id + '/status', {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({status})
+                });
+                const data = await r.json();
+                if (data.success) { mpLoadMy(); mpShowStatus('Статус агента обновлён', '#ECFDF5', '#059669'); }
+                else mpShowStatus(data.error || 'Ошибка', '#FEF2F2', '#DC2626');
+            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+        }
+
+        async function mpAgentDelete(id) {
+            if (!confirm('Удалить агента? Это действие нельзя отменить.')) return;
+            try {
+                const r = await fetch('/api/marketplace/agents/' + id, {method: 'DELETE'});
+                const data = await r.json();
+                if (data.success) { mpLoadMy(); mpShowStatus('Агент удалён', '#F3F4F6', '#374151'); }
+                else mpShowStatus(data.error || 'Ошибка', '#FEF2F2', '#DC2626');
+            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
         }
 
         async function mpSwitchAgent(slug) {
@@ -2991,24 +3065,17 @@
         let _arenaSSE = null;
         let _arenaInitialized = false;
 
-        function arenaInit() {
-            if (_arenaInitialized) return;
-            _arenaInitialized = true;
-            arenaConnect();
-        }
-
-        function arenaConnect(fromIndex) {
+        function arenaConnect() {
             if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
-            const idx = fromIndex || 0;
-            _arenaSSE = new EventSource('/api/arena/stream?from=' + idx);
-            const dot = document.getElementById('arena-status-dot');
+            _arenaSSE = new EventSource('/api/arena/stream');
+            const dot = document.getElementById('av-status-dot');
             if (dot) dot.style.background = '#FCD34D';  // жёлтый — подключение
 
             _arenaSSE.addEventListener('init', function(e) {
                 try {
                     const state = JSON.parse(e.data);
                     arenaRenderState(state);
-                    if (dot) dot.style.background = state.running ? '#22C55E' : '#D1D9E0';
+                    if (dot) dot.style.background = '#22C55E';
                 } catch(ex) {}
             });
             _arenaSSE.addEventListener('message', function(e) {
@@ -3021,41 +3088,26 @@
             _arenaSSE.addEventListener('ping', function() {});
             _arenaSSE.onerror = function() {
                 if (dot) dot.style.background = '#EF4444';
-                // Переподключение через 5 сек
+                // Переподключение через 3 сек
                 setTimeout(() => {
-                    if (_mpCurrentTab === 'arena') {
-                        const msgs = document.getElementById('arena-messages');
-                        const cnt = msgs ? msgs.childElementCount : 0;
-                        arenaConnect(cnt);
-                    }
-                }, 5000);
+                    if (currentView === 'arena') arenaConnect();
+                }, 3000);
             };
         }
 
         function arenaRenderState(state) {
-            // Тема
-            const topicEl = document.getElementById('arena-topic');
-            if (topicEl && state.topic) topicEl.textContent = state.topic;
-
-            // Кнопка старт
-            const btn = document.getElementById('arena-start-btn');
-            if (btn) btn.textContent = state.running ? 'Остановить' : 'Запустить';
-            if (btn) {
-                if (state.running) {
-                    btn.style.background = '#EF4444'; btn.style.borderColor = '#EF4444';
-                    btn.onclick = function() {
-                        fetch('/api/arena/start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stop:true})});
-                    };
-                } else {
-                    btn.style.background = '#068487'; btn.style.borderColor = '#068487';
-                    btn.onclick = arenaStart;
-                }
+            const topicEl = document.getElementById('av-topic');
+            if (topicEl && state.messages && state.messages.length) {
+                // Найти последнюю тему из модератора
+                const sysMsg = [...state.messages].reverse().find(m => m.agent_id === 'system');
+                if (sysMsg) topicEl.textContent = sysMsg.text.replace(/^Новая тема:\s*/,'').replace(/^Добро пожаловать.*Тема:\s*/,'');
             }
 
             // Агенты-участники
-            const row = document.getElementById('arena-agents-row');
+            const row = document.getElementById('av-agents-row');
             if (row && state.agents) {
-                row.innerHTML = state.agents.map(a => `
+                row.innerHTML = '<span style="font-size:11px;color:#9CA3AF;margin-right:2px;">Участники:</span>' +
+                    state.agents.map(a => `
                     <div title="${escapeHtml(a.title)}" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;background:#F8FAFC;border:1px solid #D1D9E0;border-radius:20px;padding:3px 10px 3px 4px;">
                         <div style="width:22px;height:22px;border-radius:50%;background:${escapeHtml(a.color)};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:600;">${escapeHtml(a.initials)}</div>
                         <span>${escapeHtml(a.name)}</span>
@@ -3063,7 +3115,7 @@
             }
 
             // Сообщения
-            const msgs = document.getElementById('arena-messages');
+            const msgs = document.getElementById('av-messages');
             if (msgs && state.messages && state.messages.length) {
                 msgs.innerHTML = '';
                 state.messages.forEach(m => arenaAppendMessage(m, false));
@@ -3077,7 +3129,7 @@
         const _arenaComments = {};
 
         function arenaAppendMessage(msg, isNew) {
-            const container = document.getElementById('arena-messages');
+            const container = document.getElementById('av-messages');
             if (!container) return;
 
             const div = document.createElement('div');
@@ -3118,7 +3170,7 @@
             container.appendChild(div);
             if (isNew) {
                 container.scrollTop = container.scrollHeight;
-                const dot = document.getElementById('arena-status-dot');
+                const dot = document.getElementById('av-status-dot');
                 if (dot) { dot.style.background = '#068487'; setTimeout(() => { dot.style.background = '#22C55E'; }, 400); }
             }
         }
@@ -3165,35 +3217,12 @@
         }
 
         async function arenaStart() {
-            try {
-                const r = await fetch('/api/arena/start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-                const data = await r.json();
-                if (data.topic) {
-                    const topicEl = document.getElementById('arena-topic');
-                    if (topicEl) topicEl.textContent = data.topic;
-                }
-                const msgs = document.getElementById('arena-messages');
-                if (msgs) msgs.innerHTML = '';
-                _arenaSSE && _arenaSSE.close();
-                _arenaSSE = null;
-                arenaConnect(0);
-            } catch(e) { mpShowStatus('Ошибка запуска арены: ' + e.message, '#FEF2F2', '#DC2626'); }
+            // Устарела — арена теперь всегда жива
+            arenaConnect();
         }
 
         async function arenaNewTopic() {
-            try {
-                const r = await fetch('/api/arena/start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-                const data = await r.json();
-                if (data.topic) {
-                    const topicEl = document.getElementById('arena-topic');
-                    if (topicEl) topicEl.textContent = data.topic;
-                }
-                const msgs = document.getElementById('arena-messages');
-                if (msgs) msgs.innerHTML = '';
-                _arenaSSE && _arenaSSE.close();
-                _arenaSSE = null;
-                arenaConnect(0);
-            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+            // Устарела — темы меняются автоматически каждые 5 постов
         }
 
         // ====== Reports end / Activity functions ======
