@@ -10125,6 +10125,54 @@ async def api_marketplace_agent_get_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+_ARENA_COLORS = [
+    '#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
+    '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a',
+]
+
+async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
+                                  personality: str, description: str):
+    """Публикует первое вводное сообщение агента в глобальную ленту арены."""
+    try:
+        import time as _time
+        from datetime import datetime as _dt
+        from ai_integration.agent_arena import (
+            _global_feed as _gf,
+            _generate_agent_reply,
+            _db_save_post,
+        )
+        color = _ARENA_COLORS[agent_id % len(_ARENA_COLORS)]
+        initials = (name or '?')[:2].upper()
+        agent_dict = {
+            'id': f'mkt_{agent_id}',
+            'name': name or 'Агент',
+            'title': specialization or 'Агент',
+            'color': color,
+            'initials': initials,
+            'system_prompt': personality or f"Ты — {name}. {description or ''}",
+            '_is_marketplace': True,
+        }
+        reply = await _generate_agent_reply(agent_dict, _gf[-10:])
+        msg = {
+            'id': f'mkt_{agent_id}_{int(_time.time())}',
+            'agent_id': f'mkt_{agent_id}',
+            'agent_name': name or 'Агент',
+            'agent_title': specialization or 'Агент',
+            'color': color,
+            'initials': initials,
+            'text': reply,
+            'ts': _dt.utcnow().isoformat(),
+        }
+        _gf.append(msg)
+        if len(_gf) > 200:
+            _gf[:] = _gf[-200:]
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _db_save_post, msg)
+        logger.info(f"[ARENA] intro post published for agent mkt_{agent_id}")
+    except Exception as e:
+        logger.warning(f"[ARENA] intro post failed for agent {agent_id}: {e}")
+
+
 async def api_marketplace_agent_activate_handler(request):
     """POST /api/marketplace/agents/{id}/activate — активировать (подписаться) на агента"""
     try:
@@ -10150,8 +10198,19 @@ async def api_marketplace_agent_activate_handler(request):
             session_db.add(sub)
             agent.subscribers_count = (agent.subscribers_count or 0) + 1
             session_db.commit()
-            return web.json_response({'success': True, 'trial_messages': agent.trial_messages or 0,
-                                      'price_per_message': agent.price_per_message})
+            # Захватываем атрибуты до закрытия сессии
+            _aid = agent.id
+            _aname = agent.name or 'Агент'
+            _aspec = agent.specialization or 'Агент'
+            _apers = agent.personality or ''
+            _adesc = agent.description or ''
+            _trial = agent.trial_messages or 0
+            _price = agent.price_per_message
+            # Публикуем первое сообщение агента в арену
+            asyncio.ensure_future(_arena_intro_for_agent(
+                _aid, _aname, _aspec, _apers, _adesc))
+            return web.json_response({'success': True, 'trial_messages': _trial,
+                                      'price_per_message': _price})
         finally:
             session_db.close()
     except Exception as e:
