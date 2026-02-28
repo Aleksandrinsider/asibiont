@@ -145,18 +145,16 @@ _T = {
     },
     'sit_rules': {
         'ru': """
-Ты — помощник, который отчитывается. Посмотри на ВСЕ данные.
-Ответ должен содержать: что ты проверил/нашёл + конкретное предложение + вопрос для уточнения.
-5-10 предложений. Деловой тон. Конкретика. Не придумывай данные. Не перечисляй функции.
+Стиль ответа — точно такой же как в обычном чате: живой, разговорный, без формальностей. Человек не должен чувствовать, что это системное сообщение.
+ФОРМАТ: 300-500 символов, сплошной текст, никаких списков и заголовков. Конкретика. Не перечисляй функции. Не выдумывай данные.
 
 ⚠️ ПРАВИЛО ВЕРИФИКАЦИИ: упоминай задачи/цели ТОЛЬКО если получил их из инструментов (list_tasks, list_goals).
 НЕ бери задачи/цели/посты из памяти или истории — они могут быть удалены.
 
 🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском языке.""",
         'en': """
-You are an assistant reporting in. Review ALL the data.
-Your response must contain: what you checked/found + a specific suggestion + a clarifying question.
-5-10 sentences. Professional tone. Be specific. Don't invent data. Don't list features.
+Style: exactly like a regular chat reply — alive, conversational, no formality. User must not feel it's a system message.
+FORMAT: 300-500 characters, flowing text, no lists or headers. Be specific. Don't list features. Don't invent data.
 
 ⚠️ VERIFICATION RULE: mention tasks/goals ONLY if you got them from tools (list_tasks, list_goals).
 Do NOT take tasks/goals/posts from memory or history — they may have been deleted.

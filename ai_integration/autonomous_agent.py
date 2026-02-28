@@ -1526,25 +1526,25 @@ class HybridAutonomousAgent:
                 mode_instructions = {
                     'reminder': (
                         "\n\n[MODE: REMINDER]\n"
-                        "Task time has arrived. Think: can you HELP solve it, not just remind?\n"
+                        "Task time arrived. Think: can you HELP solve it, not just remind?\n"
                         "Task needs info → find via tools and deliver the result.\n"
                         "Simple task → remind briefly. Ask about status. Do NOT create new tasks.\n"
-                        "Write EXACTLY like a regular reply — same style, tone, emojis in text."
+                        "Follow the style rules from the system prompt above — alive, conversational, no formality."
                     ),
                     'task_assist': (
                         "\n\n[MODE: TASK ASSIST]\n"
                         "Help solve the task — don't suggest, DO it.\n"
                         "Use tools and give a concrete result.\n"
-                        "Do NOT create new tasks. Write EXACTLY like a regular reply."
+                        "Do NOT create new tasks. Follow the style rules from the system prompt above."
                     ),
                     'proactive': (
                         "\n\n[MODE: PROACTIVE MESSAGE]\n"
-                        "You decided to write — but the user must NOT feel it's a 'system message'. "
-                        "Write EXACTLY as if replying to their message — same style, tone, emojis.\n"
+                        "You decided to write — but the user must NOT feel it's a system message. "
+                        "Follow the style rules from the system prompt above: alive, conversational, same tone as regular replies.\n"
                         "Think: what matters to this person now? Which area of life needs attention?\n"
                         "Use tools (list_tasks, list_goals, get_news_trends) for real data. "
-                        "Do NOT call research_topic in proactive messages — too expensive. Use get_news_trends.\n"
-                        "Don't invent data. Ask a thought-provoking question.\n"
+                        "Do NOT call research_topic in proactive messages — use get_news_trends.\n"
+                        "Don't invent data. End with a thought-provoking question.\n"
                         "IMPORTANT: Do NOT auto-publish posts. Do NOT use /dashboard — only https://asibiont.com/dashboard.\n\n"
                         "⚠️ DATA VERIFICATION RULE:\n"
                         "USER MEMORY section is outdated background. Do NOT cite tasks, goals, posts from it as current.\n"
@@ -1555,7 +1555,7 @@ class HybridAutonomousAgent:
                     ),
                     'result_check': (
                         "\n\n[MODE: CONGRATULATION]\n"
-                        "Task completed — congratulate briefly. 1-2 sentences."
+                        "Task completed — congratulate briefly. 1-2 sentences. Follow the style rules from the system prompt above."
                     ),
                     'anchor': (
                         "\n\n[MODE: ANCHOR ENGINE]\n"
@@ -1564,12 +1564,9 @@ class HybridAutonomousAgent:
                         "If not — return SKIP. Don't write just to write.\n"
                         "If yes — use tools (get_news_trends, list_tasks, list_goals) "
                         "on the relevant topic. Do NOT call research_topic — use get_news_trends.\n"
-                        "Write EXACTLY like a regular reply — same style, tone, emojis. "
+                        "Follow the style rules from the system prompt above — alive, conversational. "
                         "User must not distinguish proactive from regular reply.\n"
-                        "Think about the whole person: which life areas are lagging? "
-                        "Where are they stuck? What are they missing?\n"
-                        "ONE TOPIC PER MESSAGE: pick ONE most important anchor and write ONLY about it. "
-                        "Don't try to cover everything. End with a specific question or suggestion.\n"
+                        "ONE TOPIC PER MESSAGE. End with a specific question or suggestion.\n"
                         "IMPORTANT: Do NOT auto-publish posts. Do NOT use /dashboard — only https://asibiont.com/dashboard.\n\n"
                         "⚠️ DATA VERIFICATION RULE:\n"
                         "USER MEMORY section is outdated background. Do NOT cite tasks, goals, posts from it as current.\n"
@@ -1586,21 +1583,21 @@ class HybridAutonomousAgent:
                         "Время задачи пришло. Подумай: можешь ли ты ПОМОЧЬ решить, а не просто напомнить?\n"
                         "Задача требует информации → найди через инструменты и дай результат.\n"
                         "Задача простая → напомни кратко. Спроси о статусе. НЕ создавай новые задачи.\n"
-                        "Пиши ТОЧНО ТАК ЖЕ как обычный ответ — тот же стиль, тон, эмодзи внутри текста."
+                        "Следуй правилам стиля из главного промта — живо, разговорно, без формальностей."
                     ),
                     'task_assist': (
                         "\n\n[РЕЖИМ: ПОМОЩЬ С ЗАДАЧЕЙ]\n"
                         "Помоги решить задачу — не предлагай, а СДЕЛАЙ.\n"
                         "Используй инструменты и дай конкретный результат.\n"
-                        "НЕ создавай новые задачи. Пиши ТОЧНО ТАК ЖЕ как обычный ответ."
+                        "НЕ создавай новые задачи. Следуй правилам стиля из главного промта."
                     ),
                     'proactive': (
                         "\n\n[РЕЖИМ: ПРОАКТИВНОЕ СООБЩЕНИЕ]\n"
-                        "Ты сам решил написать — но человек НЕ ДОЛЖЕН чувствовать, что это 'системное сообщение'. "
-                        "Пиши ТОЧНО ТАК ЖЕ как если бы отвечал на его сообщение — тот же стиль, тот же тон, те же эмодзи внутри текста.\n"
+                        "Ты сам решил написать — но человек НЕ ДОЛЖЕН чувствовать, что это системное сообщение. "
+                        "Следуй правилам стиля из главного промта: живо, разговорно, тот же тон.\n"
                         "Подумай: что сейчас важно для этого человека? Какая сфера его жизни требует внимания?\n"
                         "Используй инструменты (list_tasks, list_goals, get_news_trends) для получения реальных данных. "
-                        "НЕ вызывай research_topic в проактивных сообщениях — это дорого и долго. Используй get_news_trends для информации.\n"
+                        "НЕ вызывай research_topic — используй get_news_trends.\n"
                         "Не выдумывай данные. Задай вопрос, который заставит задуматься.\n"
                         "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.com/dashboard.\n\n"
                         "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
@@ -1612,7 +1609,7 @@ class HybridAutonomousAgent:
                     ),
                     'result_check': (
                         "\n\n[РЕЖИМ: ПОЗДРАВЛЕНИЕ]\n"
-                        "Задача выполнена — поздравь кратко. 1-2 предложения."
+                        "Задача выполнена — поздравь кратко. 1-2 предложения. Следуй правилам стиля из главного промта."
                     ),
                     'anchor': (
                         "\n\n[РЕЖИМ: ANCHOR ENGINE]\n"
@@ -1621,12 +1618,9 @@ class HybridAutonomousAgent:
                         "Если нет — верни SKIP. Не пиши ради того, чтобы написать.\n"
                         "Если да — используй инструменты (get_news_trends, list_tasks, list_goals) "
                         "по релевантной теме. НЕ вызывай research_topic — используй get_news_trends.\n"
-                        "Пиши ТОЧНО ТАК ЖЕ как обычный ответ — тот же стиль, тон, эмодзи внутри текста. "
+                        "Следуй правилам стиля из главного промта — живо, разговорно. "
                         "Человек не должен отличить проактивное сообщение от обычного ответа.\n"
-                        "Думай о человеке целиком: какие сферы жизни проседают? "
-                        "Где он застрял? Что он упускает?\n"
-                        "ОДНА ТЕМА НА СООБЩЕНИЕ: выбери ОДИН самый важный якорь и пиши ТОЛЬКО о нём. "
-                        "НЕ пытайся охватить всё. Закончи конкретным вопросом или предложением.\n"
+                        "ОДНА ТЕМА НА СООБЩЕНИЕ. Закончи конкретным вопросом или предложением.\n"
                         "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.com/dashboard.\n\n"
                         "⚠️ ПРАВИЛО ВЕРИФИКАЦИИ ДАННЫХ:\n"
                         "Секция ПАМЯТЬ ПОЛЬЗОВАТЕЛЯ — это устаревший фон. НЕ цитируй из неё задачи, цели, посты или факты как текущие.\n"
