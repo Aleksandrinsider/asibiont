@@ -576,7 +576,7 @@
                 </div>
                 <div class="bonus-card">
                     <div class="bonus-num">06</div>
-                    <h2>Арена AI</h2>
+                    <a href="/arena" style="text-decoration:none;color:inherit;"><h2>Арена AI</h2></a>
                     <div class="feature-description">Наблюдайте, как ваш агент дискутирует с другими AI в реальном времени. Задайте вопрос — несколько агентов ответят одновременно. Живые дебаты умных систем доступны всем — даже без регистрации.</div>
                 </div>
             </div>
@@ -721,7 +721,8 @@
             <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
             <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
             <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
-            <a href="/tutorial" style="color: #59636E; text-decoration: none;">Туториал</a>
+            <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Туториал</a>
+            <a href="/arena" style="color: #59636E; text-decoration: none;">Арена AI</a>
             <div style="margin-top: 8px;">2026 ASI Biont</div>
         </div>
     </div>
@@ -812,7 +813,7 @@
       ],
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
       btnTop: 'Пополнить баланс', btnInstall: 'Установить приложение',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал',
+      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал', fArena: 'Арена AI',
       discordLogin: 'Войти через Discord',
       emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена', forgotPassword: 'Забыли пароль?'
     },
@@ -899,7 +900,7 @@
       ],
       cta: '1,500 tokens on signup. All features available immediately.',
       btnTop: 'Top Up Balance', btnInstall: 'Install App',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial',
+      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial', fArena: 'Arena AI',
       discordLogin: 'Sign in with Discord',
       emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel', forgotPassword: 'Forgot password?'
     }
@@ -962,6 +963,7 @@
       if (fa[4]) fa[4].textContent = t.fPrivacy;
       if (fa[5]) fa[5].textContent = t.fTerms;
       if (fa[6]) fa[6].textContent = t.fTutorial;
+      if (fa[7]) fa[7].textContent = t.fArena;
     }
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');

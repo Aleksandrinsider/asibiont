@@ -367,7 +367,8 @@
             <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
             <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
             <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
-            <a href="/tutorial" style="color: #59636E; text-decoration: none;">Туториал</a>
+            <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Туториал</a>
+            <a href="/arena" style="color: #59636E; text-decoration: none;">Арена AI</a>
             <div style="margin-top: 8px;">2026 ASI Biont</div>
         </div>
     </div>
@@ -404,7 +405,7 @@
       howTo: 'В Telegram: откройте <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, нажмите /start. В Discord: напишите в личные сообщения @asibiont_bot. Бот зарегистрирует вас и начислит 1 500 бесплатных токенов. Просто пишите, что нужно сделать — на любом языке. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a>.',
       cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
       btnTop: 'Пополнить баланс', btnInstall: 'Установить приложение',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал'
+      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал', fArena: 'Арена AI'
     },
     en: {
       title: 'FAQ — ASI Biont | Frequently Asked Questions about Multilingual AI Agent',
@@ -434,7 +435,7 @@
       howTo: 'In Telegram: open <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, press /start. On Discord: DM @asibiont_bot. The bot registers you and gives 1,500 free tokens. Just write what you need in any language. A <a href="/dashboard" style="color: #374151; font-weight: 500;">web dashboard</a> is also available.',
       cta: '1,500 tokens on signup. All features available immediately.',
       btnTop: 'Top Up Balance', btnInstall: 'Install App',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial'
+      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial', fArena: 'Arena AI'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -496,6 +497,7 @@
     if (fl[4]) fl[4].textContent = t.fPrivacy;
     if (fl[5]) fl[5].textContent = t.fTerms;
     if (fl[6]) fl[6].textContent = t.fTutorial;
+    if (fl[7]) fl[7].textContent = t.fArena;
   }
   window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {
