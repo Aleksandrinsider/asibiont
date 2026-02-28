@@ -226,7 +226,6 @@
             background: #F3F4F6 !important;
             color: #1F2328 !important;
             border-color: #8C959F !important;
-            font-weight: 500 !important;
         }
         .mp-action-btn {
             background: #FFFFFF;
@@ -3115,70 +3114,22 @@
                     <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="4" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
 
                     <!-- API ключи -->
-                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:4px;">🔑 API ключи (необязательно)</div>
-                        <div style="font-size:11px;color:#6B7280;margin-bottom:8px;">Если агент использует внешние сервисы — укажите ключи. Формат: <code style="background:#E5E7EB;padding:1px 4px;border-radius:3px;">KEY=значение</code>, каждый с новой строки. Ключи видны только вам.</div>
-
-                        <!-- Примеры сервисов -->
-                        <div style="margin-bottom:8px;">
-                            <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:5px;">Примеры популярных API:</div>
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">OpenAI</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">GPT, DALL-E, Whisper</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">OPENAI_API_KEY=sk-...</div>
-                                </div>
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">Telegram Bot</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">Отправка сообщений, уведомлений</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">TG_BOT_TOKEN=123:ABC...</div>
-                                </div>
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">Alpha Vantage</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">Акции, Forex, криптовалюты</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">ALPHAVANTAGE_KEY=ABC...</div>
-                                </div>
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">OpenWeatherMap</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">Погода по городу</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">WEATHER_KEY=abc123...</div>
-                                </div>
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">NewsAPI</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">Новости со всего мира</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">NEWSAPI_KEY=abc123...</div>
-                                </div>
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">Binance / ByBit</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">Крипто-котировки, торговля</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">BINANCE_API_KEY=...</div>
-                                </div>
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">HuggingFace</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">ML-модели, генерация текста</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">HF_TOKEN=hf_...</div>
-                                </div>
-                                <div style="font-size:11px;background:white;border:1px solid #E5E7EB;border-radius:5px;padding:5px 7px;">
-                                    <div style="font-weight:500;color:#374151;">Airtable / Notion</div>
-                                    <div style="color:#9CA3AF;margin-top:1px;">Базы данных, CRM</div>
-                                    <div style="font-family:monospace;color:#6B7280;margin-top:2px;font-size:10px;">AIRTABLE_KEY=...</div>
-                                </div>
-                            </div>
-                        </div>
-
+                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:13px;color:#374151;margin-bottom:4px;">🔑 API ключи (необязательно)</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Если агент использует внешние сервисы — укажите ключи. Формат: <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=значение</code>, каждый с новой строки. Ключи видны только вам.</div>
                         <textarea id="mpa-apikeys" placeholder="OPENAI_API_KEY=sk-...&#10;WEATHER_KEY=abc123&#10;NEWSAPI_KEY=xyz789" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                     </div>
 
                     <!-- Цена — визуально понятно -->
-                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:8px;">Монетизация</div>
+                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:13px;color:#374151;margin-bottom:8px;">Монетизация</div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <input id="mpa-price" type="number" min="1" max="9999" value="10" style="width:60px;padding:6px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;text-align:center;">
                                 <span style="font-size:12px;color:#6B7280;">токенов за сообщение</span>
                             </div>
                         </div>
-                        <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого сообщения агента</div>
+                        <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого сообщения агента</div>
                     </div>
 
                     <button onclick="mpSubmitAgent()" class="mp-action-btn" style="background:#FFFFFF;color:#374151;border-color:#D1D9E0;padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Отправить на модерацию</button>
@@ -3208,8 +3159,8 @@
                     <textarea id="mps-desc" placeholder="Что делает скрипт? Чем полезен?" rows="2" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;"></textarea>
 
                     <!-- AI-генерация кода -->
-                    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#068487;margin-bottom:6px;">Сгенерировать код с помощью ИИ</div>
+                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:13px;color:#068487;margin-bottom:6px;">Сгенерировать код с помощью ИИ</div>
                         <div style="display:flex;gap:6px;">
                             <input id="mps-ai-prompt" type="text" placeholder="Опишите задачу: например «разобрать CSV и посчитать среднее»" style="flex:1;padding:7px 10px;border:1px solid #BBF7D0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
                             <button type="button" id="mps-ai-btn" onclick="mpGenerateScript()" class="mp-action-btn" style="background:#F6F8FA;color:#374151;border-color:#D1D9E0;white-space:nowrap;padding:7px 12px;">Сгенерировать</button>
@@ -3220,13 +3171,13 @@
                     <textarea id="mps-code" placeholder="Python-код. Используйте переменную input_data (dict) для входных данных, запишите результат в result = {...}" rows="9" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;background:#F9FAFB;color:#374151;"></textarea>
 
                     <!-- Цена -->
-                    <div style="background:#F8FAFC;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:12px;font-weight:500;color:#374151;margin-bottom:8px;">Стоимость запуска</div>
+                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:13px;color:#374151;margin-bottom:8px;">Стоимость запуска</div>
                         <div style="display:flex;align-items:center;gap:8px;">
                             <input id="mps-price" type="number" min="1" max="9999" value="10" style="width:60px;padding:6px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;text-align:center;">
                             <span style="font-size:12px;color:#6B7280;">токенов за каждый запуск</span>
                         </div>
-                        <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого запуска</div>
+                        <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого запуска</div>
                     </div>
 
                     <button onclick="mpSubmitScript()" class="mp-action-btn" style="background:#FFFFFF;color:#374151;border-color:#D1D9E0;padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Отправить на модерацию</button>
