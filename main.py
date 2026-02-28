@@ -2132,6 +2132,8 @@ async def rollback_checkpoint_handler(request):
         ).delete(synchronize_session=False)
         session_db.commit()
         logger.info(f"Rollback checkpoint: deleted {deleted} interactions >= {interaction_id} for user {user.id}")
+        from ai_integration.conversation_history import clear_conversation_history
+        clear_conversation_history(user_id)
         return web.json_response({'success': True, 'deleted': deleted})
     except Exception as e:
         logger.error(f"Error in rollback_checkpoint: {e}")

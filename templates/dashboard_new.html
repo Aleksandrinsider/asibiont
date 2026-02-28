@@ -999,7 +999,7 @@
                                 <button onclick="document.getElementById('file-input').click()" class="chat-action-btn" title="Прикрепить файл" data-i18n-title="attach-file">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
                                 </button>
-                                <button onclick="clearChatHistory()" class="chat-action-btn" title="Очистить чат" data-i18n-title="clear-chat">
+                                <button onclick="clearChatHistory()" class="chat-action-btn" title="Очистить контекст" data-i18n-title="clear-chat">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg>
                                 </button>
                                 <button onclick="sendChatMessage()" class="chat-action-btn" title="Отправить" data-i18n-title="send">
@@ -10412,7 +10412,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'remove-image':'Убрать картинку','write-something':'Напишите что-нибудь...',
       'insert-image':'Вставить картинку','add-emoji':'Добавить эмодзи','publish-post':'Опубликовать пост',
       'write-comment':'Написать комментарий...','send':'Отправить',
-      'like':'Нравится','voice-input':'Голосовой ввод','attach-file':'Прикрепить файл','clear-chat':'Очистить чат',
+      'like':'Нравится','voice-input':'Голосовой ввод','attach-file':'Прикрепить файл','clear-chat':'Очистить контекст',
       'edit-post':'Редактировать пост','delete-post':'Удалить пост',
       'edit-comment':'Редактировать комментарий','delete-comment':'Удалить комментарий',
       'translate':'Перевести','original':'Оригинал',
@@ -10497,7 +10497,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'blocked-ips':'Заблокировано IP','suspicious-ips':'Подозрительных IP',
       'quick-actions':'Быстрые действия','detailed-security':'Подробная безопасность',
       'user-management':'Управление пользователями','self-heal-test':'Тест самоисправления',
-      'confirm-clear-chat':'Вы уверены, что хотите очистить всю историю чата? Это действие нельзя отменить.',
+      'confirm-clear-chat':'Очистить контекст диалога? Агент забудет всю историю переписки. Действие нельзя отменить.',
       'confirm-delete-post':'Вы уверены, что хотите удалить этот пост?',
       'confirm-delete-comment':'Вы уверены, что хотите удалить этот комментарий?',
       'confirm-delete-task':'Вы уверены, что хотите удалить задачу',
@@ -10546,7 +10546,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'err-geo-unavail':'Местоположение недоступно','err-geo-timeout':'Таймаут при определении местоположения',
       'err-geo-detect':'Ошибка при определении местоположения',
       'ok-withdraw':'Заявка на вывод отправлена! Обработка до 24 часов.',
-      'ok-tz':'Часовой пояс обновлен','ok-chat-clear':'История чата очищена',
+      'ok-tz':'Часовой пояс обновлен','ok-chat-clear':'Контекст очищен — агент начнёт с чистого листа',
       'ok-post':'Пост опубликован','ok-post-delete':'Пост удален',
       'ok-comment-delete':'Комментарий удален','ok-post-update':'Пост обновлён','ok-comment-update':'Комментарий обновлён',
       'ok-fav-add':'Контакт добавлен в избранное','ok-fav-remove':'Контакт удалён из избранного',
@@ -10628,7 +10628,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'remove-image':'Remove image','write-something':'Write something...',
       'insert-image':'Insert image','add-emoji':'Add emoji','publish-post':'Publish post',
       'write-comment':'Write a comment...','send':'Send',
-      'like':'Like','voice-input':'Voice input','attach-file':'Attach file','clear-chat':'Clear chat',
+      'like':'Like','voice-input':'Voice input','attach-file':'Attach file','clear-chat':'Clear context',
       'edit-post':'Edit post','delete-post':'Delete post',
       'edit-comment':'Edit comment','delete-comment':'Delete comment',
       'translate':'Translate','original':'Original',
@@ -10713,7 +10713,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'blocked-ips':'Blocked IPs','suspicious-ips':'Suspicious IPs',
       'quick-actions':'Quick actions','detailed-security':'Detailed security',
       'user-management':'User management','self-heal-test':'Self-healing test',
-      'confirm-clear-chat':'Are you sure you want to clear chat history? This cannot be undone.',
+      'confirm-clear-chat':'Clear conversation context? The agent will forget all chat history. This cannot be undone.',
       'confirm-delete-post':'Are you sure you want to delete this post?',
       'confirm-delete-comment':'Are you sure you want to delete this comment?',
       'confirm-delete-task':'Are you sure you want to delete task',
@@ -10763,7 +10763,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'err-geo-unavail':'Location unavailable','err-geo-timeout':'Geolocation timeout',
       'err-geo-detect':'Error determining location',
       'ok-withdraw':'Withdrawal request sent! Processing up to 24 hours.',
-      'ok-tz':'Timezone updated','ok-chat-clear':'Chat history cleared',
+      'ok-tz':'Timezone updated','ok-chat-clear':'Context cleared — agent starts fresh',
       'ok-post':'Post published','ok-post-delete':'Post deleted',
       'ok-comment-delete':'Comment deleted','ok-post-update':'Post updated','ok-comment-update':'Comment updated',
       'ok-fav-add':'Contact added to favorites','ok-fav-remove':'Contact removed from favorites',
