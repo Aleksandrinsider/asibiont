@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -1730,7 +1730,7 @@
                 sep.dataset.interactionId = interactionId != null ? String(interactionId) : 'pending';
                 sep.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 0 2px;">
                     <div style="flex:1;border-top:1px dashed #D1D9E0;"></div>
-                    <button onclick="rollbackCheckpoint(this.closest('.chat-checkpoint'))" style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:11px;color:#9198A1;font-family:inherit;white-space:nowrap;transition:color 0.15s;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#9198A1'">Восстановить контрольную точку</button>
+                    <button onclick="rollbackCheckpoint(this.closest('.chat-checkpoint'))" style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:12px;color:#9198A1;font-family:inherit;white-space:nowrap;transition:color 0.15s;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#9198A1'">Восстановить контрольную точку</button>
                     <div style="flex:1;border-top:1px dashed #D1D9E0;"></div>
                 </div>`;
                 messages.appendChild(sep);
@@ -2932,7 +2932,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px;">
                             <span style="font-size: 12px; color: #8C959F;">${isActive && c.daily_limit ? `${c.sent_today || 0}/${c.daily_limit} ` : ''}${sent} → ${replied}</span>
                             ${waitingNextDay
-                                ? `<span style="font-size: 11px; color: #068487;" title="${t('camp-wait-tip')}">⏳</span>
+                                ? `<span style="font-size:12px; color: #068487;" title="${t('camp-wait-tip')}">⏳</span>
                                    <button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'paused')" title="${t('camp-pause-tip')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 10.25 3Z"/></svg></button>`
                                 : isActive
                                 ? `<button class="quick-action" onclick="event.stopPropagation(); campaignSetStatus(${c.id}, 'paused')" title="${t('camp-pause-tip')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 10.25 3Z"/></svg></button>`
@@ -3115,7 +3115,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     else if (cc.status === 'completed') { stLabel = t('camp-completed'); stColor = '#6E7781'; }
                     else { stLabel = cc.status || ''; stColor = '#8C959F'; }
                     const pMap = { feed: t('plat-feed') || '\u041b\u0435\u043d\u0442\u0430', telegram: 'TG', discord: 'DC' };
-                    const platformBadges = (cc.platforms || []).map(p => `<span style="font-size:11px;background:#F6F8FA;color:#374151;border:1px solid #D1D9E0;border-radius:4px;padding:1px 5px;">${pMap[p] || p}</span>`).join(' ');
+                    const platformBadges = (cc.platforms || []).map(p => `<span style="font-size:12px;background:#F6F8FA;color:#374151;border:1px solid #D1D9E0;border-radius:4px;padding:1px 5px;">${pMap[p] || p}</span>`).join(' ');
                     const pub = cc.posts_published || 0;
                     const maxP = cc.max_posts || 0;
                     const wasExpanded = _reportsExpandedSet.has(ccKey);
@@ -5588,10 +5588,10 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     const arrow = isIn ? '📩' : '📤';
                     const dirLabel = isIn ? (t('msg-from') || 'от') : (t('msg-to') || 'для');
                     const date = msg.created_at ? new Date(msg.created_at).toLocaleString() : '';
-                    const statusBadge = msg.status === 'replied' ? '<span style="color: #068487; font-size: 11px; margin-left: 6px;">✓ ' + (t('replied') || 'ответили') + '</span>'
-                        : msg.status === 'read' ? '<span style="color: #6C727F; font-size: 11px; margin-left: 6px;">👁 ' + (t('read') || 'прочитано') + '</span>'
-                        : msg.status === 'delivered' ? '<span style="color: #068487; font-size: 11px; margin-left: 6px;">✓ ' + (t('delivered') || 'доставлено') + '</span>'
-                        : '<span style="color: #D97706; font-size: 11px; margin-left: 6px;">⏳ ' + (t('pending') || 'ожидание') + '</span>';
+                    const statusBadge = msg.status === 'replied' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">✓ ' + (t('replied') || 'ответили') + '</span>'
+                        : msg.status === 'read' ? '<span style="color: #6C727F; font-size:12px; margin-left: 6px;">👁 ' + (t('read') || 'прочитано') + '</span>'
+                        : msg.status === 'delivered' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">✓ ' + (t('delivered') || 'доставлено') + '</span>'
+                        : '<span style="color: #D97706; font-size:12px; margin-left: 6px;">⏳ ' + (t('pending') || 'ожидание') + '</span>';
                     
                     html += '<li class="task-item" style="display: flex; flex-direction: column; margin-bottom: 8px; padding: 10px 12px;">';
                     // Header
@@ -5604,7 +5604,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                         html += '<span style="font-size: 13px; color: #1F2328;">' + otherName + '</span>';
                     }
                     html += statusBadge;
-                    html += '<span style="margin-left: auto; font-size: 11px; color: #6C727F;">' + date + '</span>';
+                    html += '<span style="margin-left: auto; font-size:12px; color: #6C727F;">' + date + '</span>';
                     html += '</div>';
                     // Message text
                     const truncText = msg.message_text.length > 200 ? msg.message_text.substring(0, 200) + '...' : msg.message_text;
@@ -5612,7 +5612,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                     // Reply
                     if (msg.reply_text) {
                         html += '<div style="background: #F6F8FA; border-left: 3px solid #068487; padding: 6px 10px; margin-top: 4px; border-radius: 4px;">';
-                        html += '<span style="font-size: 11px; color: #6C727F;">' + (t('reply') || 'Ответ') + ':</span><br>';
+                        html += '<span style="font-size:12px; color: #6C727F;">' + (t('reply') || 'Ответ') + ':</span><br>';
                         html += '<span style="font-size: 13px; color: #1F2328;">' + msg.reply_text.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</span>';
                         html += '</div>';
                     }
