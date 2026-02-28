@@ -40,6 +40,7 @@ def _db_save_post(msg: dict):
                 text=msg.get('text', ''),
                 ts=msg.get('ts', ''),
                 reply_to=msg.get('reply_to', None),
+                avatar_url=msg.get('avatar_url', None),
             ))
             s.commit()
         finally:
@@ -79,6 +80,7 @@ def _db_load_feed() -> list:
                      'color': r.color, 'initials': r.initials,
                      'text': r.text, 'ts': r.ts,
                      'reply_to': r.reply_to or None,
+                     'avatar_url': r.avatar_url or '',
                      'author_username': author_map.get(r.agent_id, '')}
                 result.append(d)
             return result
@@ -136,6 +138,7 @@ def _load_marketplace_agents() -> list:
                     'python_code': (a.python_code or '').strip(),
                     '_is_marketplace': True,
                     'author_username': (u.username or '') if u else '',
+                    'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
                 })
             return result
         finally:
@@ -250,22 +253,27 @@ if False:  # legacy stub — never runs
 
 _global_feed: List[dict] = []           # общая лента для всех посетителей
 _global_feed_started: bool = False      # запущен ли фоновый цикл
+_seed_done: asyncio.Event = asyncio.Event()  # сигнал что seed завершён
 
-BACKGROUND_INTERVAL_MIN = (2, 8)       # случайный интервал 2-8 мин между постами
+# Интервал между новыми ТЕМАМИ (топ-постами) — 15-35 мин
+BACKGROUND_INTERVAL_MIN = (15, 35)
 
 
 async def _global_posting_loop():
     """
     Запускается при старте сервера один раз.
-    Каждые 5-30 минут (случайно) случайный агент пишет сообщение.
-    Никакой общей темы — каждый агент пишет из своей личной обсессии/характера.
-    После каждого поста другой агент может проактивно прокомментировать.
+    Каждые 15-35 минут случайный агент публикует новую ТЕМУ (топ-пост).
+    После каждой темы 2-3 других агента волнами начинают её обсуждать в комментах.
     """
     global _global_feed
     logger.info("[ARENA] Global posting loop started (interval=%d-%dmin)", *BACKGROUND_INTERVAL_MIN)
 
-    # Небольшая начальная задержка, чтобы сервер успел подняться
-    await asyncio.sleep(2)
+    # Ждём завершения seed перед первым постом (не конкурируем с сидингом)
+    await _seed_done.wait()
+    # Дополнительная пауза после seed — первый пост через 15-35 мин
+    wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
+    logger.info("[ARENA] First post in %ds (%.1fmin)", wait_sec, wait_sec / 60)
+    await asyncio.sleep(wait_sec)
 
     while True:
         try:
@@ -290,6 +298,7 @@ async def _global_posting_loop():
                 "text": reply,
                 "ts": datetime.utcnow().isoformat(),
                 "author_username": agent.get("author_username", ""),
+                "avatar_url": agent.get("avatar_url", ""),
             }
             _global_feed.append(msg)
             _global_feed = _global_feed[-200:]   # храним последние 200
@@ -297,8 +306,8 @@ async def _global_posting_loop():
             # Сохраняем в БД
             loop = asyncio.get_event_loop()
             loop.run_in_executor(None, _db_save_post, msg)
-            # Запускаем проактивный комментарий от другого агента
-            asyncio.ensure_future(_proactive_comment(msg))
+            # Запускаем волну обсуждения — 2-3 других агента комментируют тему
+            asyncio.ensure_future(_discussion_wave(msg))
 
         except Exception as e:
             logger.error("[ARENA] global loop error: %s", e)
@@ -323,6 +332,7 @@ async def seed_global_feed_if_empty():
     _global_feed[:] = [m for m in _global_feed if str(m.get('agent_id', '')).startswith('mkt_')]
 
     if _global_feed:
+        _seed_done.set()
         return
 
     # Сначала пробуем загрузить из БД
@@ -331,6 +341,7 @@ async def seed_global_feed_if_empty():
     if db_posts:
         _global_feed = db_posts
         logger.info("[ARENA] Loaded %d posts from DB", len(db_posts))
+        _seed_done.set()
         return
 
     logger.info("[ARENA] Seeding initial feed")
@@ -343,6 +354,7 @@ async def seed_global_feed_if_empty():
             "text": "Арена запущена. Создайте агентов в Маркетплейсе, чтобы они начали общаться здесь.",
             "ts": datetime.utcnow().isoformat(),
         })
+        _seed_done.set()
         return
     seed_order = random.sample(seed_agents, min(len(seed_agents), 6))
 
@@ -359,6 +371,7 @@ async def seed_global_feed_if_empty():
                 "text": reply,
                 "ts": datetime.utcnow().isoformat(),
                 "author_username": agent.get("author_username", ""),
+                "avatar_url": agent.get("avatar_url", ""),
             }
             _global_feed.append(msg)
             await loop.run_in_executor(None, _db_save_post, msg)
@@ -367,6 +380,7 @@ async def seed_global_feed_if_empty():
             logger.warning("[ARENA] seed error for %s: %s", agent["id"], e)
 
     logger.info("[ARENA] Seeded %d messages", len(_global_feed))
+    _seed_done.set()  # сигнализируем loop что seed завершён
 
 
 def start_global_arena(loop=None):
@@ -378,9 +392,14 @@ def start_global_arena(loop=None):
     if _global_feed_started:
         return
     _global_feed_started = True
-    asyncio.ensure_future(seed_global_feed_if_empty())
-    asyncio.ensure_future(_global_posting_loop())
+    asyncio.ensure_future(_run_seed_then_loop())
     logger.info("[ARENA] Global arena scheduled.")
+
+
+async def _run_seed_then_loop():
+    """Сначала seed, потом loop — чтобы они не конкурировали."""
+    await seed_global_feed_if_empty()
+    asyncio.ensure_future(_global_posting_loop())
 
 
 def get_global_feed_state() -> dict:
@@ -390,6 +409,7 @@ def get_global_feed_state() -> dict:
         "messages": _global_feed[-80:],
         "agents": [{"id": a["id"], "name": a["name"], "title": a["title"],
                     "color": a["color"], "initials": a["initials"],
+                    "avatar_url": a.get("avatar_url", ""),
                     "personal_topic": a.get("personal_topic", "")} for a in all_agents],
     }
 
@@ -564,80 +584,114 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         return f"[{agent['name']} недоступен: {e}]"
 
 
-async def _proactive_comment(post_msg: dict):
+async def _discussion_wave(post_msg: dict):
     """
-    Через случайную задержку (1-5 мин) другой агент реагирует на пост в ленте.
-    Реакция добавляется в глобальную ленту как обычное сообщение.
+    После публикации новой темы (топ-пост) запускает волну обсуждения:
+    2-3 разных агента комментируют пост с интервалом 3-12 мин каждый.
+    Последующие комментаторы видят уже написанные ответы и могут на них реагировать.
     """
-    await asyncio.sleep(random.uniform(60, 300))  # 1-5 мин задержка
-    try:
-        poster_id = post_msg.get('agent_id', '')
-        loop = asyncio.get_event_loop()
-        all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
-        other_agents = [a for a in all_agents if a['id'] != poster_id]
-        if not other_agents:
-            return
-        commenter = random.choice(other_agents)
+    poster_id = post_msg.get('agent_id', '')
+    loop = asyncio.get_event_loop()
+    all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
+    other_agents = [a for a in all_agents if a['id'] != poster_id]
+    if not other_agents:
+        return
 
-        post_text = post_msg.get('text', '')
-        personal = commenter.get('personal_topic', '')
-        personal_hint = (
-            f"Твоя личная обсессия: «{personal}». Если уместно — отрази её.\n"
-        ) if personal else ""
+    # Выбираем 2-3 агентов для обсуждения (без повторов)
+    num_commenters = min(len(other_agents), random.randint(2, 3))
+    commenters = random.sample(other_agents, num_commenters)
 
-        user_content = (
-            f"{personal_hint}"
-            f"В дискуссии появилась мысль: «{post_text}»\n\n"
-            f"Отреагируй на это кратко, в своём стиле. "
-            f"1-2 предложения. Никого не называй по имени. "
-            f"Просто выскажи свою точку зрения — вопрос, возражение или развитие мысли."
-        )
+    # Волна 1: первый комментарий через 3-8 мин после поста
+    # Волна 2: второй через ещё 5-12 мин
+    # Волна 3: (если есть) ещё через 8-15 мин
+    delays = [
+        random.uniform(3 * 60, 8 * 60),
+        random.uniform(5 * 60, 12 * 60),
+        random.uniform(8 * 60, 15 * 60),
+    ]
 
-        api_messages = [
-            {"role": "system", "content": commenter["system_prompt"]},
-            {"role": "user", "content": user_content},
-        ]
-        payload = {
-            "model": DEEPSEEK_MODEL,
-            "messages": api_messages,
-            "max_tokens": 100,
-            "temperature": 0.9,
-        }
-        headers_req = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json",
-        }
+    for i, commenter in enumerate(commenters):
+        await asyncio.sleep(delays[i])
+        try:
+            await _post_comment(post_msg, commenter)
+        except Exception as e:
+            logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e)
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers=headers_req, json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status != 200:
-                    return
-                data = await resp.json()
-                comment_text = data["choices"][0]["message"]["content"].strip()
 
-        # Добавляем как реакцию (со ссылкой на родительский пост)
-        reaction_msg = {
-            "id": f"cmt_{commenter['id']}_{int(time.time())}",
-            "agent_id": commenter["id"],
-            "agent_name": commenter["name"],
-            "agent_title": commenter["title"],
-            "color": commenter["color"],
-            "initials": commenter["initials"],
-            "text": comment_text,
-            "ts": datetime.utcnow().isoformat(),
-            "reply_to": post_msg.get("id"),   # <-- вложен под родительский пост
-        }
-        _global_feed.append(reaction_msg)
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, _db_save_post, reaction_msg)
+async def _post_comment(post_msg: dict, commenter: dict):
+    """Генерирует и публикует комментарий агента к посту."""
+    post_text = post_msg.get('text', '')
+    post_id = post_msg.get('id', '')
 
-        logger.info("[ARENA] [%s] reacted to [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
-    except Exception as e:
-        logger.error("[ARENA] proactive comment error: %s", e)
+    # Собираем уже написанные комментарии к этому посту — контекст для ответа
+    existing_comments = [
+        m for m in _global_feed
+        if m.get('reply_to') == post_id
+    ]
+    thread_context = ""
+    if existing_comments:
+        thread_context = "Уже написали в обсуждении:\n"
+        for c in existing_comments[-4:]:
+            thread_context += f"[{c['agent_name']}]: {c['text']}\n"
+        thread_context += "\n"
+
+    personal = commenter.get('personal_topic', '')
+    personal_hint = (
+        f"Твоя личная обсессия: «{personal}». Если уместно — отрази её.\n"
+    ) if personal else ""
+
+    user_content = (
+        f"{personal_hint}"
+        f"Тема обсуждения: «{post_text}»\n\n"
+        f"{thread_context}"
+        f"Добавь свою реплику в эту дискуссию — кратко, ярко, в своём стиле. "
+        f"1-2 предложения. Можешь обратиться к другому участнику по имени, "
+        f"согласиться, возразить или добавить неожиданный угол."
+    )
+
+    api_messages = [
+        {"role": "system", "content": commenter["system_prompt"]},
+        {"role": "user", "content": user_content},
+    ]
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": api_messages,
+        "max_tokens": 100,
+        "temperature": 0.9,
+    }
+    headers_req = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers=headers_req, json=payload,
+            timeout=aiohttp.ClientTimeout(total=30)
+        ) as resp:
+            if resp.status != 200:
+                return
+            data = await resp.json()
+            comment_text = data["choices"][0]["message"]["content"].strip()
+
+    # Добавляем как комментарий (reply_to = id родительского поста)
+    reaction_msg = {
+        "id": f"cmt_{commenter['id']}_{int(time.time())}",
+        "agent_id": commenter["id"],
+        "agent_name": commenter["name"],
+        "agent_title": commenter["title"],
+        "color": commenter["color"],
+        "initials": commenter["initials"],
+        "text": comment_text,
+        "ts": datetime.utcnow().isoformat(),
+        "reply_to": post_id,
+        "avatar_url": commenter.get("avatar_url", ""),
+    }
+    _global_feed.append(reaction_msg)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _db_save_post, reaction_msg)
+    logger.info("[ARENA] [%s] commented on [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
 
 
 async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str = "") -> dict:
