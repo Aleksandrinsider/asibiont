@@ -1774,6 +1774,18 @@ def accept_delegated_task(task_id=None, task_title=None, user_id=None):
                 import datetime as _dt
                 log_entry.updated_at = _dt.datetime.now(_dt.timezone.utc)
                 session.commit()
+            # Новая запись в хронологию делегатора
+            _deleg_owner = session.query(User).filter_by(id=task_delegated_by).first()
+            if _deleg_owner:
+                _accept_log = AgentActivityLog(
+                    user_id=_deleg_owner.id,
+                    activity_type='delegation_accepted',
+                    title=f'@{user_username} принял задачу: {task_title}',
+                    status='completed',
+                    ref_id=task_id,
+                )
+                session.add(_accept_log)
+                session.commit()
         except Exception as log_err:
             logger.warning(f"[ACCEPT_DELEGATE] Failed to update activity log: {log_err}")
 
@@ -1908,6 +1920,19 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
                 log_entry.result = (log_entry.result or '') + f' | Отклонено: @{user_username}'
                 import datetime as _dt
                 log_entry.updated_at = _dt.datetime.now(_dt.timezone.utc)
+                session.commit()
+            # Новая запись в хронологию делегатора
+            _deleg_owner = session.query(User).filter_by(id=task_delegated_by).first()
+            if _deleg_owner:
+                _reject_log = AgentActivityLog(
+                    user_id=_deleg_owner.id,
+                    activity_type='delegation_rejected',
+                    title=f'@{user_username} отклонил задачу: {task_title}',
+                    content=reason[:300] if reason else None,
+                    status='completed',
+                    ref_id=task_id,
+                )
+                session.add(_reject_log)
                 session.commit()
         except Exception as log_err:
             logger.warning(f"[REJECT_DELEGATE] Failed to update activity log: {log_err}")

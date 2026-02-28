@@ -363,6 +363,21 @@ class ReminderService:
                     task.result_check_sent = True
                     db.commit()
                     logger.info(f"Task {task_id} marked as result_check_sent=True")
+                    # Лог в хронологию агента
+                    try:
+                        from models import AgentActivityLog
+                        _aal = AgentActivityLog(
+                            user_id=task.user_id,
+                            activity_type='result_check',
+                            title=f'Проверка результата: {task_title}',
+                            content=result_text[:500] if result_text else None,
+                            status='completed',
+                            ref_id=task_id,
+                        )
+                        db.add(_aal)
+                        db.commit()
+                    except Exception as _ae:
+                        logger.warning(f"[RESULT_CHECK] Activity log failed: {_ae}")
                     
                     # Установить pending_action для обработки ответа пользователя
                     user = db.query(User).filter(User.telegram_id == user_id).first()
@@ -421,6 +436,27 @@ class ReminderService:
                 try:
                     await self.bot.send_message(user_id, reminder_text)
                     logger.info(f"Followup reminder sent to user {user_id}")
+                    # Лог в хронологию агента
+                    try:
+                        _fdb = Session()
+                        try:
+                            from models import AgentActivityLog, User as _FUser
+                            _fu = _fdb.query(_FUser).filter_by(telegram_id=user_id).first()
+                            if _fu:
+                                _aal = AgentActivityLog(
+                                    user_id=_fu.id,
+                                    activity_type='followup_reminder',
+                                    title=f'Повторное напоминание: {task_title}',
+                                    content=reminder_text[:500] if reminder_text else None,
+                                    status='completed',
+                                    ref_id=task_id,
+                                )
+                                _fdb.add(_aal)
+                                _fdb.commit()
+                        finally:
+                            _fdb.close()
+                    except Exception as _fe:
+                        logger.warning(f"[FOLLOWUP] Activity log failed: {_fe}")
                 except Exception as send_err:
                     error_code = getattr(send_err, 'status_code', None) or getattr(getattr(send_err, 'response', None), 'status_code', 0)
                     if 500 <= error_code < 600:
@@ -556,6 +592,21 @@ class ReminderService:
                     task.reminder_sent = True
                     db.commit()
                     logger.info(f"Task {task_id} marked as reminder_sent=True")
+                    # Лог в хронологию агента
+                    try:
+                        from models import AgentActivityLog
+                        _aal = AgentActivityLog(
+                            user_id=task.user_id,
+                            activity_type='reminder_sent',
+                            title=f'Напоминание: {task_title}',
+                            content=reminder_text[:500] if reminder_text else None,
+                            status='completed',
+                            ref_id=task_id,
+                        )
+                        db.add(_aal)
+                        db.commit()
+                    except Exception as _ae:
+                        logger.warning(f"[REMINDER] Activity log failed: {_ae}")
             except Exception as e:
                 logger.error(f"Failed to update reminder_sent for task {task_id}: {e}")
                 db.rollback()
@@ -589,6 +640,26 @@ class ReminderService:
                     chat_id=user_id,
                     text=report_text
                 )
+                # Лог в хронологию агента
+                try:
+                    _rdb = Session()
+                    try:
+                        from models import AgentActivityLog, User as _RUser
+                        _ru = _rdb.query(_RUser).filter_by(telegram_id=user_id).first()
+                        if _ru:
+                            _aal = AgentActivityLog(
+                                user_id=_ru.id,
+                                activity_type='daily_report',
+                                title='Дневной отчёт',
+                                content=report_text[:1000] if report_text else None,
+                                status='completed',
+                            )
+                            _rdb.add(_aal)
+                            _rdb.commit()
+                    finally:
+                        _rdb.close()
+                except Exception as _re:
+                    logging.warning(f"[DAILY_REPORT] Activity log failed: {_re}")
             else:
                 logger.info(f"[DAILY REPORT] To user {user_id}: {report_text}")
         except Exception as e:
@@ -715,6 +786,20 @@ class ReminderService:
                         text=proactive_text
                     )
                     logger.info(f"Sent checkpoint message to user {user_id}")
+                    # Лог в хронологию агента
+                    try:
+                        from models import AgentActivityLog
+                        _aal = AgentActivityLog(
+                            user_id=user.id,
+                            activity_type='checkpoint',
+                            title=f'Чекпоинт задач ({checkpoint_type})',
+                            content=proactive_text[:500] if proactive_text else None,
+                            status='completed',
+                        )
+                        db.add(_aal)
+                        db.commit()
+                    except Exception as _ce:
+                        logger.warning(f"[CHECKPOINT] Activity log failed: {_ce}")
                 else:
                     logger.info(f"[CHECKPOINT] To user {user_id}: {proactive_text}")
             except Exception as e:
