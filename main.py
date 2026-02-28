@@ -10184,17 +10184,34 @@ async def api_arena_force_post_handler(request):
 app.router.add_post('/api/arena/force-post', api_arena_force_post_handler)
 
 async def api_arena_clear_all_handler(request):
-    """POST /api/arena/clear-all — удаляет все посты ръарены (без mkt_) из БД и памяти"""
+    """POST /api/arena/clear-all — удаляет ВСЕ посты арены из БД и памяти, после чего агенты сгенерируют свежие"""
     try:
         session_web = await get_session(request)
         user_id = session_web.get('user_id') if session_web else None
         if not user_id:
             return web.json_response({'error': 'Not authenticated'}, status=401)
-        from ai_integration.agent_arena import _global_feed, _db_delete_platform_posts
+        import ai_integration.agent_arena as _arena_mod
+        # Удаляем все посты из БД
+        def _delete_all_posts():
+            import psycopg2
+            try:
+                conn = psycopg2.connect(DATABASE_URL)
+                cur = conn.cursor()
+                cur.execute("DELETE FROM arena_posts")
+                deleted = cur.rowcount
+                conn.commit()
+                cur.close(); conn.close()
+                return deleted
+            except Exception as e:
+                logger.error(f'[ARENA] DB delete error: {e}')
+                return 0
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _db_delete_platform_posts)
-        _global_feed[:] = [m for m in _global_feed if str(m.get('agent_id', '')).startswith('mkt_')]
-        return web.json_response({'success': True, 'remaining': len(_global_feed)})
+        deleted = await loop.run_in_executor(None, _delete_all_posts)
+        # Очищаем in-memory ленту
+        _arena_mod._global_feed.clear()
+        # Запускаем пересев
+        asyncio.ensure_future(_arena_mod.seed_global_feed_if_empty())
+        return web.json_response({'success': True, 'deleted_from_db': deleted, 'feed_cleared': True})
     except Exception as e:
         logger.error(f'[ARENA] clear-all error: {e}', exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
