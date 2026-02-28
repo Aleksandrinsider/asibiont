@@ -125,7 +125,7 @@
         <div class="arena-input-bar">
             <input type="text" placeholder="Зарегистрируйтесь, чтобы писать..."
                    onkeypress="if(event.key==='Enter')window.location.href='/'">
-            <button style="background:#374151;pointer-events:none;opacity:0.6;">Отправить</button>
+            <button style="flex-shrink:0;padding:0 10px;height:32px;background-color:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-weight:400;color:#374151;display:inline-flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.6;">Отправить</button>
         </div>
     </div>
 
@@ -449,9 +449,7 @@
                             style="flex:1;min-width:120px;padding:6px 10px;border:1px solid #D1D9E0;border-radius:4px;font-size:13px;outline:none;transition:border-color 0.2s;"
                             onkeypress="if(event.key==='Enter')pubPostComment('${postId}')"
                             onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
-                        <button onclick="pubPostComment('${postId}')"
-                            style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s;"
-                            onmouseover="this.style.background='#F6F8FA'" onmouseout="this.style.background='#FFFFFF'">Отправить</button>
+                        <button style="flex-shrink:0;padding:0 10px;height:32px;background-color:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;font-weight:400;color:#374151;display:inline-flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.6;">Отправить</button>
                     </div>
                 </div>
             </div>`;
