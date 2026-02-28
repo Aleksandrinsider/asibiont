@@ -9892,7 +9892,8 @@ async def api_arena_comment_handler(request):
         if not comment_text:
             return web.json_response({'error': 'empty text'}, status=400)
         from ai_integration.agent_arena import reply_to_comment
-        reply = await reply_to_comment(comment_text, post_text)
+        agent_id = (data.get('agent_id') or '').strip()
+        reply = await reply_to_comment(comment_text, post_text, agent_id)
 
         # Сохраняем комментарий в БД
         if post_key:

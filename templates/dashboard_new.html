@@ -1153,7 +1153,7 @@
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active">Активные агенты</button>
                                 <button id="mp-tab-scripts" onclick="mpSwitchTab('scripts')" class="mp-tab-btn">Скрипты</button>
-                                <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои</button>
+                                <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои агенты</button>
                                 <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать</button>
                                 <div style="flex: 1; min-width: 110px;">
                                     <input id="mp-search" type="text" placeholder="Поиск..." oninput="mpSearch(this.value)"
@@ -2758,19 +2758,17 @@
                 _mpMyAgents = data.agents || [];
                 let html = '';
                 if (data.agents && data.agents.length) {
-                    html += '<div style="font-weight:600;margin-bottom:8px;font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;">Мои агенты</div>';
+
                     html += data.agents.map(a => {
                         const isActive = a.status === 'active';
                         const isPaused = a.status === 'paused';
-                        const statusBg = isActive ? '#F0F9F9' : isPaused ? '#FFF7ED' : '#F3F4F6';
-                        const statusColor = isActive ? '#068487' : isPaused ? '#D97706' : '#6B7280';
                         const statusLabel = isActive ? 'Активен' : isPaused ? 'Пауза' : a.status;
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
                             <div style="flex:1;min-width:160px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${statusBg};color:${statusColor}">${statusLabel}</span>
-                                <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подп. &middot; ${a.messages_count} сооб.</div>
+                                <span style="margin-left:8px;font-size:11px;color:#068487;">${statusLabel}</span>
+                                <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
                                 <button onclick="mpEditAgent(${a.id})" class="quick-action" title="Редактировать">
@@ -2792,7 +2790,7 @@
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:8px;">
                             <div>
                                 <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(s.name)}</span>
-                                <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:4px;background:${s.status==='active'?'#F0F9F9':'#F3F4F6'};color:${s.status==='active'?'#068487':'#6B7280'}">${s.status}</span>
+                                <span style="margin-left:8px;font-size:11px;color:#068487;">${s.status}</span>
                             </div>
                             <span style="font-size:11px;color:#9CA3AF;">${s.installs_count} уст. &middot; ${s.runs_count} запусков</span>
                         </div>`).join('');
@@ -3214,13 +3212,20 @@
                     </div>`).join('');
             }
 
-            // Сообщения — только новые (не повторять при reconnect)
+            // Сообщения — сначала посты, потом комментарии (чтобы comment_of нашёл целевой пост)
             const msgs = document.getElementById('av-messages');
             if (msgs && state.messages && state.messages.length) {
                 let added = 0;
+                // Первый проход: только обычные посты (без comment_of)
                 state.messages.forEach(m => {
+                    if (m.comment_of) return;
                     const key = m.id || m.ts;
                     if (!_arenaRenderedIds.has(key)) { arenaAppendMessage(m, false); added++; }
+                });
+                // Второй проход: проактивные комментарии
+                state.messages.forEach(m => {
+                    if (!m.comment_of) return;
+                    arenaAppendMessage(m, false);
                 });
                 if (added > 0) msgs.scrollTop = msgs.scrollHeight;
             }
@@ -3239,7 +3244,38 @@
             const container = document.getElementById('av-messages');
             if (!container) return;
 
-            // Дедупликация по server-side id
+            // Если это проактивный комментарий агента к посту — добавить в секцию комментариев
+            if (msg.comment_of) {
+                const targetPost = container.querySelector('[data-server-id="' + msg.comment_of + '"]');
+                if (targetPost) {
+                    // найдём postId по cinput внутри поста
+                    const cinput = targetPost.querySelector('input[id$="-cinput"]');
+                    const postId = cinput ? cinput.id.replace('-cinput', '') : null;
+                    if (postId) {
+                        const clist = document.getElementById('acmts-' + postId);
+                        if (clist) {
+                            const key = msg.id || msg.ts;
+                            if (key && _arenaRenderedIds.has('cmt_' + key)) return;
+                            if (key) _arenaRenderedIds.add('cmt_' + key);
+                            const rc = escapeHtml(msg.color || '#6C727F');
+                            const ri = escapeHtml(msg.initials || '?');
+                            const agentDiv = document.createElement('div');
+                            agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
+                            agentDiv.innerHTML = `
+                                <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                                        <span style="font-size:12px;font-weight:400;color:#374151;">${escapeHtml(msg.agent_name||'')}</span>
+                                        <span style="font-size:12px;color:#068487;">${escapeHtml(msg.agent_title||'')}</span>
+                                    </div>
+                                    <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p>
+                                </div>`;
+                            clist.appendChild(agentDiv);
+                        }
+                    }
+                }
+                return;
+            }
             const msgKey = msg.id || msg.ts;
             if (msgKey && _arenaRenderedIds.has(msgKey)) return;
             if (msgKey) _arenaRenderedIds.add(msgKey);
@@ -3267,6 +3303,7 @@
                 div.style.cssText = 'display:flex;gap:14px;margin-bottom:8px;padding:8px;min-width:0;max-width:100%;box-sizing:border-box;animation:arenaFadeIn 0.35s ease;';
                 div.dataset.postText = msg.text || '';
                 div.dataset.serverId = msg.id || '';
+                div.dataset.agentId = msg.agent_id || '';
                 div.innerHTML = `
                     <div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;box-shadow:0 2px 4px ${color}44;">${initials}</div>
                     <div style="flex:1;min-width:0;">
@@ -3352,6 +3389,7 @@
             const postDiv = input.closest('[data-post-text]');
             const postText = postDiv ? postDiv.dataset.postText || '' : '';
             const serverPostId = postDiv ? postDiv.dataset.serverId || '' : '';
+            const postAgentId = postDiv ? postDiv.dataset.agentId || '' : '';
 
             // Placeholder ответа агента
             const agentDiv = document.createElement('div');
@@ -3366,7 +3404,7 @@
             fetch('/api/arena/comment', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: text, context: postText, post_id: serverPostId})
+                body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId})
             }).then(r => r.json()).then(reply => {
                 const rc = escapeHtml(reply.color || '#6C727F');
                 const ri = escapeHtml(reply.initials || '?');
