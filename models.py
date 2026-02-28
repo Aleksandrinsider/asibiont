@@ -914,6 +914,25 @@ class AgentRun(Base):
     agent = relationship("UserAgent", backref="runs")
 
 
+class AgentRating(Base):
+    """Оценка агента конкретным пользователем (1–10)."""
+    __tablename__ = 'agent_ratings'
+
+    id = Column(Integer, primary_key=True)
+    rater_user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey('user_agents.id'), nullable=False, index=True)
+    rating = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    rater = relationship("User", foreign_keys=[rater_user_id])
+    agent = relationship("UserAgent", foreign_keys=[agent_id])
+
+    __table_args__ = (
+        UniqueConstraint('rater_user_id', 'agent_id', name='uq_agent_rating'),
+    )
+
+
 class UserScript(Base):
     """
     Пользовательский скрипт-модуль — Python-код, запускается в sandbox.

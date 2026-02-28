@@ -1391,6 +1391,33 @@
         </div>
     </div>
 
+    <!-- Agent Rating Modal -->
+    <div id="agent-rating-modal" class="rating-modal">
+        <div class="rating-modal-content">
+            <div class="rating-modal-header">
+                <h3>Оценить агента</h3>
+                <button onclick="closeAgentRatingModal()" class="rating-close-btn" title="Закрыть">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>
+                </button>
+            </div>
+            <div class="rating-modal-body">
+                <p>Оцениваете агента <span id="agent-rating-name" style="font-weight: 600; color: #068487;"></span></p>
+                <p style="font-size: 13px; color: #374151; margin-bottom: 8px;">1 — очень плохо, 10 — отлично</p>
+                <p style="font-size: 13px; color: #068487; margin-bottom: 16px;">Оценка влияет на позицию агента в каталоге</p>
+                <div class="rating-slider-container">
+                    <input type="range" id="agent-rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="document.getElementById('agent-rating-value').textContent=this.value">
+                    <div class="rating-value-display">
+                        <span id="agent-rating-value">5</span>/10
+                    </div>
+                </div>
+                <div class="rating-modal-actions">
+                    <button onclick="closeAgentRatingModal()" class="rating-cancel-btn">Отмена</button>
+                    <button onclick="submitAgentRating()" class="rating-submit-btn" style="display:flex;align-items:center;justify-content:center;">Оценить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Time Change Modal -->
     <div id="time-modal" class="rating-modal">
         <div class="rating-modal-content">
@@ -2718,6 +2745,7 @@
                     list.innerHTML = '<div style="color:#9CA3AF;font-size:13px;grid-column:1/-1;text-align:center;padding:32px 0">Агентов пока нет</div>';
                     return;
                 }
+                _mpCatalogAgents = data.agents;
                 list.innerHTML = data.agents.map(a => {
                     const priceLabel = a.price_per_message === 0 ? '<span style="color:#068487;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${a.price_per_message}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/сообщение</span>`;
                     return `
@@ -2735,13 +2763,17 @@
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;border-top:1px solid #F3F4F6;padding-top:8px;margin-top:6px;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 ${priceLabel}
+                                ${a.rating !== null && a.rating !== undefined ? `<span style="font-size:11px;color:#9CA3AF;">·</span><span style="font-size:11px;color:#068487;">★ ${a.rating}</span>` : ''}
                             </div>
-                            ${a.is_owner
-                                ? `<span style="padding:5px 14px;height:28px;display:inline-flex;align-items:center;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;font-size:12px;color:#9CA3AF;white-space:nowrap;">Ваш агент</span>`
-                                : a.is_subscribed
-                                    ? `<button onclick="mpDeactivateAgent(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Деактивировать</button>`
-                                    : `<button onclick="mpActivateAgentFromModal(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Активировать</button>`
-                            }
+                            <div style="display:flex;align-items:center;gap:4px;">
+                                ${!a.is_owner ? `<button onclick="openAgentRatingModal(${a.id})" style="padding:5px 8px;height:28px;background:#FFFFFF;border:1px solid ${a.user_rating ? '#068487' : '#D1D9E0'};border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:${a.user_rating ? '#068487' : '#6B7280'};white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';" onmouseout="this.style.background='#FFFFFF';" title="Оценить агента">★${a.user_rating ? ' ' + a.user_rating : ''}</button>` : ''}
+                                ${a.is_owner
+                                    ? `<span style="padding:5px 14px;height:28px;display:inline-flex;align-items:center;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;font-size:12px;color:#9CA3AF;white-space:nowrap;">Ваш агент</span>`
+                                    : a.is_subscribed
+                                        ? `<button onclick="mpDeactivateAgent(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Деактивировать</button>`
+                                        : `<button onclick="mpActivateAgentFromModal(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Активировать</button>`
+                                }
+                            </div>
                         </div>
                     </div>`;
                 }).join('');
@@ -2918,6 +2950,7 @@
         let _agentChatPrice = 0;
         let _agentChatTrial = 0;
         let _mpMyAgents = [];      // кеш моих агентов для редактирования
+        let _mpCatalogAgents = []; // кеш агентов каталога
         let _mpEditAgentId = null; // id агента при редактировании (null = создание)
 
         function mpOpenAgentChat(agentId, agentName, price, trial) {
@@ -8763,6 +8796,50 @@
             } catch (error) {
                 console.error('Error submitting rating:', error);
                 showNotification(t('err-rating-send'), 'error');
+            }
+        }
+
+        // Agent Rating (Marketplace)
+        let _currentRatingAgentId = null;
+
+        function openAgentRatingModal(agentId) {
+            _currentRatingAgentId = agentId;
+            const agent = _mpCatalogAgents.find(a => a.id == agentId);
+            document.getElementById('agent-rating-name').textContent = agent ? agent.name : '#' + agentId;
+            const slider = document.getElementById('agent-rating-slider');
+            const val = document.getElementById('agent-rating-value');
+            const preset = agent && agent.user_rating ? agent.user_rating : 5;
+            slider.value = preset;
+            val.textContent = preset;
+            document.getElementById('agent-rating-modal').style.display = 'flex';
+        }
+
+        function closeAgentRatingModal() {
+            document.getElementById('agent-rating-modal').style.display = 'none';
+            _currentRatingAgentId = null;
+        }
+
+        async function submitAgentRating() {
+            if (!_currentRatingAgentId) return;
+            const rating = parseInt(document.getElementById('agent-rating-slider').value);
+            try {
+                const r = await fetch(`/api/marketplace/agents/${_currentRatingAgentId}/rate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rating }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(r)) return;
+                if (r.ok) {
+                    showNotification('Оценка сохранена', 'success');
+                    closeAgentRatingModal();
+                    mpLoadAgents();
+                } else {
+                    const err = await r.json();
+                    showNotification(err.error || 'Ошибка при сохранении оценки', 'error');
+                }
+            } catch (e) {
+                showNotification('Ошибка при сохранении оценки', 'error');
             }
         }
 

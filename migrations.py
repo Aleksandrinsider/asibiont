@@ -387,7 +387,7 @@ def _migrate_marketplace(session, inspector):
     """Создаёт таблицы маркетплейса агентов и скриптов (идемпотентно)."""
     from models import Base, engine as _engine
     # Создаём таблицы через metadata (create_all пропускает существующие)
-    tables_to_create = ['user_agents', 'agent_subscriptions', 'agent_runs',
+    tables_to_create = ['user_agents', 'agent_subscriptions', 'agent_runs', 'agent_ratings',
                         'user_scripts', 'script_installs', 'script_runs']
     for tbl in tables_to_create:
         if not inspector.has_table(tbl):

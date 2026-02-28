@@ -9375,9 +9375,15 @@ async def api_marketplace_agents_handler(request):
             for a in agents:
                 rating = round(a.rating_sum / a.rating_count, 1) if a.rating_count else None
                 is_subscribed = False
+                user_rating = None
                 if user_obj:
                     is_subscribed = bool(session_db.query(AgentSubscription).filter_by(
                         user_id=user_obj.id, agent_id=a.id).first())
+                    from models import AgentRating as AgentRatingModel
+                    ar = session_db.query(AgentRatingModel).filter_by(
+                        rater_user_id=user_obj.id, agent_id=a.id).first()
+                    if ar:
+                        user_rating = ar.rating
                 result.append({
                     'id': a.id, 'name': a.name, 'slug': a.slug,
                     'description': a.description, 'specialization': a.specialization,
@@ -9386,7 +9392,8 @@ async def api_marketplace_agents_handler(request):
                     'trial_messages': a.trial_messages,
                     'subscribers_count': a.subscribers_count,
                     'messages_count': a.messages_count,
-                    'rating': rating, 'is_subscribed': is_subscribed,
+                    'rating': rating, 'user_rating': user_rating,
+                    'is_subscribed': is_subscribed,
                     'is_adult': a.is_adult,
                     'is_owner': bool(user_obj and a.author_id == user_obj.id),
                 })
@@ -10248,6 +10255,55 @@ async def api_marketplace_agent_deactivate_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_agent_rate_handler(request):
+    """POST /api/marketplace/agents/{id}/rate — оценить агента (1–10)"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        data = await request.json()
+        rating_val = data.get('rating')
+        try:
+            rating_val = int(rating_val)
+            if not 1 <= rating_val <= 10:
+                raise ValueError
+        except (TypeError, ValueError):
+            return web.json_response({'error': 'Rating must be 1–10'}, status=400)
+        session_db = Session()
+        try:
+            from models import UserAgent, User as UserModel, AgentRating as AgentRatingModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
+            if not agent:
+                return web.json_response({'error': 'Agent not found'}, status=404)
+            if agent.author_id == user_obj.id:
+                return web.json_response({'error': 'Cannot rate own agent'}, status=400)
+            existing = session_db.query(AgentRatingModel).filter_by(
+                rater_user_id=user_obj.id, agent_id=agent_id).first()
+            if existing:
+                old = existing.rating
+                existing.rating = rating_val
+                # Обновляем сумму
+                agent.rating_sum = (agent.rating_sum or 0) - old + rating_val
+            else:
+                new_ar = AgentRatingModel(rater_user_id=user_obj.id, agent_id=agent_id, rating=rating_val)
+                session_db.add(new_ar)
+                agent.rating_sum = (agent.rating_sum or 0) + rating_val
+                agent.rating_count = (agent.rating_count or 0) + 1
+            session_db.commit()
+            new_rating = round(agent.rating_sum / agent.rating_count, 1) if agent.rating_count else None
+            return web.json_response({'success': True, 'rating': new_rating})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agent rate error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)
@@ -10287,6 +10343,7 @@ app.router.add_delete('/api/marketplace/agents/{id}', api_marketplace_agent_dele
 app.router.add_post('/api/marketplace/agents/{id}/chat', api_agent_chat_handler)
 app.router.add_post('/api/marketplace/agents/{id}/activate', api_marketplace_agent_activate_handler)
 app.router.add_delete('/api/marketplace/agents/{id}/activate', api_marketplace_agent_deactivate_handler)
+app.router.add_post('/api/marketplace/agents/{id}/rate', api_agent_rate_handler)
 # Arena — глобальная лента (не требует авторизации)
 app.router.add_get('/api/arena', api_arena_state_handler)
 app.router.add_get('/api/arena/stream', api_arena_stream_handler)
