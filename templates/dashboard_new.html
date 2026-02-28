@@ -2388,22 +2388,18 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
         function createTimelineItem(a, isNew) {
             const el = document.createElement('div');
             el.setAttribute('data-act-id', a.id || '');
-            el.style.cssText = 'display:flex;align-items:flex-start;gap:0;margin-bottom:0;position:relative;' + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
+            el.style.cssText = 'display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid #F0F3F5;' + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
             const labels = _tlLabels();
             const typeLabel = labels[a.activity_type] || a.activity_type;
-            const timeStr = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+            const timeStr = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
+            const deleteBtn = a.id ? `<button onclick="event.stopPropagation();activityDeleteGroup([${a.id}],'${a.activity_type||''}')" class="delete-btn" title="${t('act-del-one')||'Удалить'}"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>` : '';
             el.innerHTML = `
-                <div style="width:34px;flex-shrink:0;text-align:right;padding-right:8px;padding-top:3px;">
-                    <span style="font-size:10px;color:#9CA3AF;white-space:nowrap;letter-spacing:-0.2px;">${timeStr}</span>
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:13px;font-weight:500;color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${a.title||''}</span>
+                    <span style="font-size:12px;color:#6C727F;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>
                 </div>
-                <div style="width:16px;flex-shrink:0;display:flex;justify-content:center;padding-top:5px;position:relative;z-index:1;">
-                    <div style="width:7px;height:7px;border-radius:50%;background:#D0D7DE;flex-shrink:0;box-shadow:0 0 0 2px #fff;"></div>
-                </div>
-                <div style="flex:1;min-width:0;padding-left:7px;padding-bottom:7px;padding-top:0;">
-                    <div style="font-size:11px;color:#9CA3AF;margin-bottom:1px;">${typeLabel}</div>
-                    <div style="font-size:13px;font-weight:500;color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.title||''}</div>
-                    ${a.content ? `<div style="font-size:12px;color:#6C727F;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content}</div>` : ''}
-                </div>
+                <span style="font-size:12px;color:#9CA3AF;flex-shrink:0;white-space:nowrap;">${timeStr}</span>
+                ${deleteBtn}
             `;
             return el;
         }
@@ -2420,26 +2416,20 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
             if (sorted.length) {
                 window._activityLastId = Math.max(...sorted.map(a => a.id || 0));
             }
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'position:relative;padding-top:4px;padding-bottom:4px;';
-            const guideLine = document.createElement('div');
-            guideLine.style.cssText = 'position:absolute;left:41px;top:0;bottom:0;width:1px;background:#E5E7EB;';
-            wrap.appendChild(guideLine);
             let lastDate = '';
             sorted.forEach(a => {
                 if (a.created_at) {
-                    const itemDate = new Date(a.created_at).toLocaleDateString('ru-RU', {day:'2-digit',month:'long',timeZone:window.USER_TIMEZONE||'UTC'});
+                    const itemDate = new Date(a.created_at).toLocaleDateString('ru-RU', {day:'2-digit',month:'long',year:'numeric',timeZone:window.USER_TIMEZONE||'UTC'});
                     if (itemDate !== lastDate) {
                         lastDate = itemDate;
                         const sep = document.createElement('div');
-                        sep.style.cssText = 'display:flex;align-items:center;gap:0;margin-bottom:2px;margin-top:6px;';
-                        sep.innerHTML = `<div style="width:50px;flex-shrink:0;"></div><span style="font-size:10px;color:#9CA3AF;font-weight:500;background:#fff;padding:0 6px 0 0;position:relative;z-index:1;letter-spacing:0.2px;text-transform:lowercase;">${itemDate}</span>`;
-                        wrap.appendChild(sep);
+                        sep.style.cssText = 'padding:8px 0 4px 0;font-size:12px;font-weight:600;color:#1F2328;border-bottom:1px solid #D1D9E0;margin-top:4px;';
+                        sep.textContent = itemDate;
+                        tl.appendChild(sep);
                     }
                 }
-                wrap.appendChild(createTimelineItem(a, false));
+                tl.appendChild(createTimelineItem(a, false));
             });
-            tl.appendChild(wrap);
         }
 
         function startActivityPolling() {
@@ -3206,7 +3196,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
 
                     const agentTimeline = document.createElement('div');
                     agentTimeline.id = 'agent-activity-timeline';
-                    agentTimeline.style.cssText = 'padding: 0 0 4px 0; overflow:hidden;';
+                    agentTimeline.style.cssText = 'margin-top: 2px;';
                     agentDetails.appendChild(agentTimeline);
 
                     agentHeader.onclick = () => {
