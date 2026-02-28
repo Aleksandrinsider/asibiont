@@ -469,7 +469,11 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
     SSE-генератор глобальной ленты.
     Сначала отдаёт всё накопленное — затем стримит новые сообщения.
     """
-    # Инициализация: полное состояние
+    # Инициализация: ждём завершения seed, затем отдаём полное состояние
+    try:
+        await asyncio.wait_for(_seed_done.wait(), timeout=30.0)
+    except asyncio.TimeoutError:
+        pass
     state = get_global_feed_state()
     yield f"event: init\ndata: {json.dumps(state, ensure_ascii=False)}\n\n"
 
@@ -858,6 +862,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
         "color": agent["color"],
         "initials": agent["initials"],
         "text": reply,
+        "agent_id": agent["id"],
     }
 
 

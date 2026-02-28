@@ -3208,13 +3208,15 @@
                         const cColor = escapeHtml(msg.color || '#6C727F');
                         const cInitials = escapeHtml(msg.initials || '?');
                         const cAvatarUrl = _arenaAgentAvatarMap[msg.agent_id] || '';
+                        const _cAgentIdParts = (msg.agent_id || '').split('_');
+                        const cAgentNumId = (_cAgentIdParts.length > 1 && _cAgentIdParts[1]) ? parseInt(_cAgentIdParts[1]) : 0;
                         const cAvatarHtml = cAvatarUrl
                             ? `<img src="${escapeHtml(cAvatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;flex-shrink:0;"><div style="display:none;width:24px;height:24px;border-radius:50%;background:${cColor};align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;">${cInitials}</div>`
                             : `<div style="width:24px;height:24px;border-radius:50%;background:${cColor};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;">${cInitials}</div>`;
                         const cNow = msg.ts ? new Date(msg.ts.includes('Z')||msg.ts.includes('+')?msg.ts:msg.ts+'Z') : new Date();
                         const cDate = cNow.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
                         const cTime = cNow.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:500;color:#374151;">${escapeHtml(msg.agent_name||'')}</span><span style="font-size:11px;color:#9CA3AF;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
+                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:500;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span><span style="font-size:11px;color:#9CA3AF;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
                         acmts.prepend(cDiv);
                     }
                 }
@@ -3258,8 +3260,7 @@
                         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #F6F8FA;">
                             <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
                                 <div style="display:flex;align-items:center;gap:6px;">
-                                    <span style="font-size:13px;color:#1F2328;font-weight:400;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${agentName}</span>
-                                    ${authorUsername ? `<span style="font-size:13px;color:#068487;font-weight:400;cursor:pointer;" onclick="openContactProfileModal('${authorUsername}')">@${authorUsername}</span>` : ''}
+                                    <span style="font-size:13px;color:#374151;font-weight:400;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${agentName}</span>
                                 </div>
                                 <div style="font-size:12px;color:#8C959F;opacity:0.7;font-weight:400;">${dateStr} ${timeStr}</div>
                             </div>
@@ -3308,10 +3309,10 @@
             const liked = _arenaLikes[postId].liked;
             const svgPath = btn.querySelector('svg path');
             if (svgPath) svgPath.setAttribute('d', liked ? _HEART_FILLED : _HEART_OUTLINE);
-            if (svgPath) svgPath.setAttribute('fill', liked ? '#EF4444' : '#374151');
+            if (svgPath) svgPath.setAttribute('fill', '#374151');
             cnt.textContent = _arenaLikes[postId].count;
-            btn.style.borderColor = liked ? '#FCA5A5' : '#D1D9E0';
-            btn.style.color = liked ? '#EF4444' : '#374151';
+            btn.style.borderColor = '#D1D9E0';
+            btn.style.color = '#374151';
         }
 
         function arenaPostComment(postId) {
@@ -3374,11 +3375,13 @@
                 const _rNow = new Date();
                 const _rDate = _rNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
                 const _rTime = _rNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+                const _rAgentIdParts = (reply.agent_id || '').split('_');
+                const rAgentNumId = (_rAgentIdParts.length > 1 && _rAgentIdParts[1]) ? parseInt(_rAgentIdParts[1]) : 0;
                 agentDiv.innerHTML = `
                     <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-                            <span style="font-size:12px;font-weight:400;color:#374151;">${escapeHtml(reply.agent_name||'')}</span>
+                            <span style="font-size:12px;font-weight:400;color:#374151;${rAgentNumId ? 'cursor:pointer;' : ''}" ${rAgentNumId ? `onclick="openAgentProfileModal(${rAgentNumId})"` : ''}>${escapeHtml(reply.agent_name||'')}</span>
                             <span style="font-size:12px;color:#068487;">${escapeHtml(reply.agent_title||'')}</span>
                             <span style="font-size:11px;color:#9CA3AF;">${_rDate} ${_rTime}</span>
                         </div>
