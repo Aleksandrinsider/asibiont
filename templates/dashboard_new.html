@@ -9331,28 +9331,36 @@
                 ? `<img src="${escapeHtml(agent.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;margin-bottom:8px;">
                    <div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:none;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`
                 : `<div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`;
+
             const priceLabel = agent.price_per_message === 0 ? 'Бесплатно' : `${agent.price_per_message} тк/сообщение`;
             const trialLabel = agent.trial_messages ? `${agent.trial_messages} бесплатных сообщений` : 'Без пробного периода';
             const ratingLabel = agent.rating ? agent.rating + '/10' : 'Нет оценок';
-            let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}<p style="margin:0;font-weight:600;color:#374151;font-size:14px;">${escapeHtml(agent.name)}</p>`;
+
+            let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}`;
+            html += `<p style="margin:0;font-weight:600;color:#374151;font-size:13px;">${escapeHtml(agent.name)}</p>`;
             if (agent.specialization) html += `<p style="margin:4px 0 0;font-size:13px;color:#068487;">${escapeHtml(agent.specialization)}</p>`;
             if (agent.author_username) html += `<p style="margin:4px 0 0;font-size:12px;color:#068487;cursor:pointer;" onclick="openContactProfileModal('${escapeHtml(agent.author_username)}')">@${escapeHtml(agent.author_username)}</p>`;
             if (agent.is_subscribed) html += `<p style="margin:6px 0 0;font-size:12px;color:#068487;">✓ Активирован</p>`;
-            html += `</div><div class="context-item">`;
+            html += `</div>`;
+
+            html += `<div class="context-item">`;
             if (agent.description) html += `<p style="text-align:left;font-size:13px;">${escapeHtml(agent.description)}</p>`;
-            html += `<p style="text-align:left;font-size:13px;"><strong>Цена:</strong> ${priceLabel} &nbsp;&middot;&nbsp; <strong>Пробный период:</strong> ${trialLabel}</p>`;
+            html += `<p style="text-align:left;font-size:13px;"><strong>Цена:</strong> ${priceLabel}</p>`;
+            html += `<p style="text-align:left;font-size:13px;"><strong>Пробный период:</strong> ${trialLabel}</p>`;
             html += `<p style="text-align:left;font-size:13px;"><strong>Подписчиков:</strong> ${agent.subscribers_count} &nbsp;&middot;&nbsp; <strong>Сообщений:</strong> ${agent.messages_count} &nbsp;&middot;&nbsp; <strong>Оценка:</strong> ${ratingLabel}</p>`;
-            html += `</div><div class="rating-modal-actions">`;
+            html += `</div>`;
+
+            html += `<div class="rating-modal-actions">`;
             html += `<button onclick="closeAgentProfileModal()" class="rating-cancel-btn">Закрыть</button>`;
             if (!agent.is_owner) {
                 if (agent.is_subscribed) {
                     html += `<button onclick="mpDeactivateAgent(${agent.id})" class="rating-cancel-btn" style="border-color:#FECACA;color:#DC2626;">Деактивировать</button>`;
-                    html += `<button onclick="closeAgentProfileModal();mpOpenAgentChat(${agent.id},'${escapeHtml(agent.name).replace(/'/g,"\\'").replace(/"/g,'&quot;')}',${agent.price_per_message||5},${agent.trial_messages||0})" class="rating-submit-btn">Написать</button>`;
                 } else {
                     html += `<button onclick="mpActivateAgentFromModal(${agent.id})" class="rating-submit-btn">Активировать</button>`;
                 }
             }
             html += `</div>`;
+
             content.innerHTML = html;
             modal.style.display = 'flex';
         }
