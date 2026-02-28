@@ -688,7 +688,7 @@
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"/>
                     </svg>
-                    <span data-i18n="search-contacts">Поиск контактов</span>
+                    <span data-i18n="search-contacts">Поиск</span>
                 </button>
 
                 <!-- Сообщения -->
@@ -747,7 +747,7 @@
     <div id="search-modal" class="search-modal" onclick="closeSearchModal(event)">
         <div class="search-modal-content" onclick="event.stopPropagation()">
             <div class="search-modal-header">
-                <h3 data-i18n="search-contacts-title">Поиск контактов</h3>
+                <h3 data-i18n="search-contacts-title">Поиск</h3>
                 <button onclick="closeSearchModal()" class="search-modal-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
@@ -755,7 +755,7 @@
                 </button>
             </div>
             <div class="search-modal-search">
-                <input type="text" id="modal-search-input" placeholder="Введите никнейм в Telegram (например, @username)" data-i18n-ph="search-ph" 
+                <input type="text" id="modal-search-input" placeholder="Поиск по нику, городу или интересам..." data-i18n-ph="search-ph" 
                     onkeyup="searchContactsInModal(event)">
             </div>
             <div id="modal-search-results" class="search-modal-results">
@@ -763,7 +763,7 @@
                     <svg width="48" height="48" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.5; margin-bottom: 16px;">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
                     </svg>
-                    <div style="font-size: 13px;" data-i18n="search-hint">Начните вводить никнейм для поиска</div>
+                    <div style="font-size: 13px;" data-i18n="search-hint">Начните вводить никнейм, город или интересы</div>
                 </div>
             </div>
         </div>
@@ -1029,10 +1029,10 @@
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 {% endif %}
-                                <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer; opacity: 0.5;" data-i18n="chat-ai">Чат с ИИ</span>
+                                <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer; opacity: 0.5;" data-i18n="chat-ai">Чат с AI</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
-                                    <span data-i18n="news-feed">Лента новостей</span>
+                                    <span data-i18n="news-feed">Блог</span>
                                 </span>
                                 {% if logged_in %}
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
@@ -1045,7 +1045,7 @@
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="arena-link" onclick="event.stopPropagation(); switchToArena()" style="cursor: pointer; opacity: 0.5;">
-                                    <span data-i18n="arena">Арена</span>
+                                    <span data-i18n="arena">Арена AI</span>
                                 </span>
                                 {% endif %}
                             </h3>
@@ -11608,7 +11608,7 @@
   var D = {
     ru: {
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
-      'chat-ai':'Чат с ИИ','news-feed':'Лента новостей','marketplace':'Маркетплейс','arena':'Арена',
+      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'Маркетплейс','arena':'Арена AI',
       'msg-placeholder':'Сообщение...',
       'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
@@ -11618,11 +11618,11 @@
       'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
 
       'back':'Назад',
-      'search-contacts':'Поиск контактов',
-      'search-contacts-title':'Поиск контактов',
+      'search-contacts':'Поиск',
+      'search-contacts-title':'Поиск',
       'header-messages':'Сообщения',
-      'search-ph':'Введите никнейм в Telegram (например, @username)',
-      'search-hint':'Начните вводить никнейм для поиска',
+      'search-ph':'Поиск по нику, городу или интересам...',
+      'search-hint':'Начните вводить никнейм, город или интересы',
       'next-up':'На очереди:',
       'token-balance':'Баланс токенов',
       'tokens':'токенов',
@@ -11658,7 +11658,7 @@
       'edit-post':'Редактировать пост','delete-post':'Удалить пост',
       'edit-comment':'Редактировать комментарий','delete-comment':'Удалить комментарий',
       'translate':'Перевести','original':'Оригинал',
-      'feed-empty':'Лента новостей пуста',
+      'feed-empty':'Блог пуст',  
       'feed-empty-desc':'Здесь будут отображаться публикации ваших избранных контактов. Добавьте контакты в избранное, чтобы видеть их посты.',
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Активность','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
@@ -11826,7 +11826,7 @@
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
-      'chat-ai':'Chat with AI','news-feed':'News Feed','marketplace':'Marketplace','arena':'Arena',
+      'chat-ai':'Chat with AI','news-feed':'Blog','marketplace':'Marketplace','arena':'Arena AI',
       'msg-placeholder':'Message...',
       'opt-messages':'Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',
@@ -11836,11 +11836,11 @@
       'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
 
       'back':'Back',
-      'search-contacts':'Contact search',
-      'search-contacts-title':'Search contacts',
+      'search-contacts':'Search',
+      'search-contacts-title':'Search',
       'header-messages':'Messages',
-      'search-ph':'Enter Telegram username (e.g., @username)',
-      'search-hint':'Start typing a username to search',
+      'search-ph':'Search by username, city or interests...',
+      'search-hint':'Start typing a username, city or interests',
       'next-up':'Next up:',
       'token-balance':'Token balance',
       'tokens':'tokens',

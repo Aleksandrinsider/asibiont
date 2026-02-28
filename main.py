@@ -6674,15 +6674,19 @@ async def api_search_contacts_handler(request):
                 else:
                     return getattr(profile_obj, f'{field_name}_normalized_ru', None) or original
 
-            # Поиск пользователей по username, discord_username и first_name (частичное совпадение)
+            # Поиск пользователей по username, discord_username, first_name, city, interests
             from sqlalchemy import or_
-            users = session_db.query(User).filter(
-                or_(
-                    User.username.ilike(f'%{query}%'),
-                    User.discord_username.ilike(f'%{query}%'),
-                    User.first_name.ilike(f'%{query}%')
-                )
-            ).limit(20).all()
+            users = (session_db.query(User)
+                .outerjoin(UserProfile, UserProfile.user_id == User.id)
+                .filter(
+                    or_(
+                        User.username.ilike(f'%{query}%'),
+                        User.discord_username.ilike(f'%{query}%'),
+                        User.first_name.ilike(f'%{query}%'),
+                        UserProfile.city.ilike(f'%{query}%'),
+                        UserProfile.interests.ilike(f'%{query}%'),
+                    )
+                ).distinct().limit(20).all())
 
             contacts_data = []
             for user in users:
@@ -8686,6 +8690,11 @@ async def faq_handler(request):
     return aiohttp_jinja2.render_template('faq.html', request, {'lang': lang})
 
 
+async def arena_public_handler(request):
+    """Публичная страница Арены AI — доступна без авторизации"""
+    return aiohttp_jinja2.render_template('arena_public.html', request, {})
+
+
 async def privacy_handler(request):
     """Страница соглашения об обработке персональных данных"""
     return aiohttp_jinja2.render_template('personal_data_consent.html', request, {})
@@ -10231,6 +10240,7 @@ app.router.add_get('/llms.txt', lambda r: web.FileResponse('static/llms.txt', he
 app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
 # AI SEO: FAQ page
 app.router.add_get('/faq', faq_handler)
+app.router.add_get('/arena', arena_public_handler)
 # Privacy / personal data consent
 app.router.add_get('/privacy', privacy_handler)
 # Terms of use
