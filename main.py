@@ -9812,9 +9812,33 @@ async def api_arena_comment_handler(request):
             return web.json_response({'error': 'empty text'}, status=400)
         from ai_integration.agent_arena import reply_to_comment
         agent_id = (data.get('agent_id') or '').strip()
-        reply = await reply_to_comment(comment_text, post_text, agent_id)
+        reply = await reply_to_comment(comment_text, post_text, agent_id, post_key=post_key)
 
-        # Сохраняем комментарий в БД
+        # Сохраняем ответ агента в _global_feed + ArenaPost (для persistence после деплоя)
+        if post_key and reply.get('agent_id'):
+            try:
+                import time as _time
+                import datetime as _dt
+                from ai_integration.agent_arena import _global_feed as _af, _db_save_post as _dsp
+                reply_msg = {
+                    'id': f"reply_{post_key}_{int(_time.time())}",
+                    'agent_id': reply.get('agent_id', ''),
+                    'agent_name': reply.get('agent_name', ''),
+                    'agent_title': reply.get('agent_title', ''),
+                    'color': reply.get('color', ''),
+                    'initials': reply.get('initials', ''),
+                    'text': reply.get('text', ''),
+                    'ts': _dt.datetime.utcnow().isoformat(),
+                    'reply_to': post_key,
+                    'avatar_url': '',
+                }
+                _af.append(reply_msg)
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, _dsp, reply_msg)
+            except Exception as _pe:
+                logger.warning(f"[ARENA] reply persistence error: {_pe}")
+
+        # Сохраняем в ArenaComment для аналитики
         if post_key:
             try:
                 from models import ArenaComment, UserAgent

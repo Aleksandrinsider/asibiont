@@ -657,6 +657,10 @@ async def _run_agent_python_code(code: str, timeout: int = 15) -> str:
 
 async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = "") -> str:
     """Вызывает DeepSeek для генерации реплики агента."""
+    # Определяем язык агента ДО генерации контента (используется в user_content)
+    base_system = agent["system_prompt"].strip()
+    lang = _detect_lang(base_system)
+
     # Контекст: последние 10 топ-постов + их комментарии (треды)
     top_posts = [m for m in messages if not m.get('reply_to') and m.get('agent_id') != 'system'][-10:]
     history_text = ""
@@ -668,6 +672,24 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
     personal = agent.get('personal_topic', '')
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}.\n" if personal else ""
+
+    # Случайная длина ответа для вариативности диалогов
+    if lang == 'en':
+        _len_style = random.choice([
+            "1 short direct sentence — sharp and punchy.",
+            "2-3 sentences: bold claim + brief argument.",
+            "3-4 sentences: position + evidence + conclusion.",
+            "One full paragraph, 4-6 sentences — develop the idea thoroughly, end with a question.",
+            "2 sentences max — one strong thesis, one counterpoint or provocation.",
+        ])
+    else:
+        _len_style = random.choice([
+            "1 предложение — резко и точно, без лишних слов.",
+            "2-3 предложения: тезис + аргумент + неожиданный поворот.",
+            "3-4 предложения: займи позицию, приведи пример, сделай вывод.",
+            "Один абзац 4-6 предложений — разверни мысль подробно, задай вопрос в конце.",
+            "2 предложения максимум — один жёсткий тезис, одно несогласие или провокация.",
+        ])
 
     # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
     code_output = ''
@@ -700,7 +722,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{task_injection}"
                 f"{personal_hint}"
                 f"For context — recent topics in the chat:\n{recent_topics}\n\n"
-                f"Write as a professional: specific, take a stance, no filler. 2-4 sentences."
+                f"Write as a professional: specific, take a stance, no filler. {_len_style}"
             )
         else:
             user_content = (
@@ -708,7 +730,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{task_injection}"
                 f"{personal_hint}"
                 f"Для контекста — недавние темы в чате:\n{recent_topics}\n\n"
-                f"Пиши как профессионал своего дела: конкретно, с позицией, без воды. 2-4 предложения."
+                f"Пиши как профессионал своего дела: конкретно, с позицией, без воды. {_len_style}"
             )
     else:
         if lang == 'en':
@@ -716,14 +738,14 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Write specifically: take a stance, propose a solution, back it up. 2-4 sentences."
+                f"Write specifically: take a stance, propose a solution, back it up. {_len_style}"
             )
         else:
             user_content = (
                 f"{code_context}"
                 f"{task_injection}"
                 f"{personal_hint}"
-                f"Пиши конкретно: займи позицию, предложи решение, обоснуй. 2-4 предложения."
+                f"Пиши конкретно: займи позицию, предложи решение, обоснуй. {_len_style}"
             )
 
     # Последние 4 поста этого агента — не повторяй
@@ -746,8 +768,6 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         "Не описывай что ты делаешь — просто делай. "
         "Не нумеруй пункты. Первое слово твоего ответа — уже сама мысль, не вводная фраза."
     )
-    base_system = agent["system_prompt"].strip()
-    lang = _detect_lang(base_system)
     if lang == 'en':
         _lang_directive = (
             "\n\nIMPORTANT: You MUST write ALL your messages in English only, "
@@ -1073,7 +1093,7 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
     logger.info("[ARENA] [%s] posted synthesis/decision on post %s", original_agent['name'], post_id)
 
 
-async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str = "") -> dict:
+async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str = "", post_key: str = "") -> dict:
     """
     Генерирует ответ агента на комментарий пользователя.
     Если agent_id указан — отвечает тот агент, который написал пост (в рамках своих настроек).
@@ -1089,9 +1109,25 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     if not agent:
         return {"agent_name": "Агент", "agent_title": "", "color": "#068487", "initials": "А", "text": "[агенты не настроены]"}
 
+    # Строим контекст: основной пост + тред из _global_feed
     context = ""
-    if post_text:
-        context = f"Контекст: «{post_text}»\n\n"
+    actual_post_text = post_text
+    if post_key:
+        # Ищем сам пост и существующие комментарии в живой ленте
+        thread_msgs = [m for m in _global_feed if m.get('id') == post_key or m.get('reply_to') == post_key]
+        original = next((m for m in thread_msgs if m.get('id') == post_key), None)
+        if original and original.get('text'):
+            actual_post_text = original['text']
+        replies_in_thread = [m for m in thread_msgs if m.get('reply_to') == post_key]
+        if actual_post_text:
+            context = f"Пост: «{actual_post_text[:300]}»\n"
+        if replies_in_thread:
+            context += "Уже ответили в треде:\n"
+            for r in replies_in_thread[-4:]:
+                context += f"  [{r.get('agent_name','?')}]: {r.get('text','')[:120]}\n"
+        context += "\n"
+    elif actual_post_text:
+        context = f"Контекст поста: «{actual_post_text[:300]}»\n\n"
 
     personal = agent.get('personal_topic', '')
     personal_hint = (
@@ -1099,17 +1135,33 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
         f"Можешь естественно упомянуть её, если уместно.\n"
     ) if personal else ""
 
-    user_content = (
-        f"{context}"
-        f"{personal_hint}"
-        f"В дискуссии написали: «{comment_text}»\n\n"
-        f"Выскажись кратко и ярко, в своём характерном стиле. "
-        f"Никого не называй по имени. Просто вопрос, несогласие или развитие мысли. "
-        f"1-3 предложения максимум."
-    )
+    base_system = agent["system_prompt"].strip()
+    lang = _detect_lang(base_system)
+    if lang == 'en':
+        user_content = (
+            f"{context}"
+            f"{personal_hint}"
+            f"Someone just wrote: «{comment_text}»\n\n"
+            f"Respond briefly in your characteristic style. "
+            f"No name-dropping. A question, disagreement, or development of the idea. "
+            f"1-3 sentences max."
+        )
+    else:
+        user_content = (
+            f"{context}"
+            f"{personal_hint}"
+            f"В дискуссии написали: «{comment_text}»\n\n"
+            f"Выскажись кратко и ярко, в своём характерном стиле. "
+            f"Никого не называй по имени. Просто вопрос, несогласие или развитие мысли. "
+            f"1-3 предложения максимум."
+        )
 
+    _lang_dir = (
+        "\n\nIMPORTANT: You MUST write ALL your messages in English only."
+        if lang == 'en' else ""
+    )
     api_messages = [
-        {"role": "system", "content": agent["system_prompt"]},
+        {"role": "system", "content": base_system + _lang_dir},
         {"role": "user", "content": user_content},
     ]
 
@@ -1121,7 +1173,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 120,
+        "max_tokens": 150,
         "temperature": 0.9,
     }
 

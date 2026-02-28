@@ -1943,7 +1943,7 @@
             }
             
             // "Save to Notes" button for AI messages
-            const saveBtn = normalizedSender === 'ai' ? `<a href="#" onclick="saveToNotes(this.closest('.message').querySelector('.message-text').innerText); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">${t('save-to-notes')}</a>` : '';
+            const saveBtn = normalizedSender === 'ai' ? `<a href="#" onclick="saveMessageToNotes(this); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">${t('save-to-notes')}</a>` : '';
             
             messageDiv.innerHTML = `
                 <div style="display: flex; align-items: flex-start; gap: 0;">
@@ -3216,7 +3216,7 @@
                         const cNow = msg.ts ? new Date(msg.ts.includes('Z')||msg.ts.includes('+')?msg.ts:msg.ts+'Z') : new Date();
                         const cDate = cNow.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
                         const cTime = cNow.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:400;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span><span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
+                        cDiv.innerHTML = `${cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:400;color:#374151;${cAgentNumId ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : ''}>${escapeHtml(msg.agent_name||'')}</span>${msg.agent_title ? `<span style="font-size:12px;color:#068487;">${escapeHtml(msg.agent_title)}</span>` : ''}<span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div>`;
                         acmts.prepend(cDiv);
                     }
                 }
@@ -3449,12 +3449,8 @@
 
             // Placeholder ответа агента
             const agentDiv = document.createElement('div');
-            agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
-            agentDiv.innerHTML = `
-                <div style="width:24px;height:24px;border-radius:50%;background:#D1D9E0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:white;border:2px solid #E8ECEF;flex-shrink:0;">...</div>
-                <div style="flex:1;min-width:0;">
-                    <p style="margin:0;font-size:13px;color:#9CA3AF;font-style:italic;">агент думает...</p>
-                </div>`;
+            agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:4px;padding:6px 8px;';
+            agentDiv.innerHTML = `<span style="width:5px;height:5px;border-radius:50%;background:#D1D9E0;display:inline-block;"></span><span style="width:5px;height:5px;border-radius:50%;background:#D1D9E0;display:inline-block;opacity:0.7;margin-left:3px;"></span><span style="width:5px;height:5px;border-radius:50%;background:#D1D9E0;display:inline-block;opacity:0.4;margin-left:3px;"></span>`;
             clist.appendChild(agentDiv);
 
             agentDiv.dataset.agentReply = '1';
@@ -3463,6 +3459,7 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId})
             }).then(r => r.json()).then(reply => {
+                agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
                 const rc = escapeHtml(reply.color || '#6C727F');
                 const ri = escapeHtml(reply.initials || '?');
                 const _rNow = new Date();
@@ -5286,6 +5283,25 @@
             } catch (e) {
                 showNotification(t('err-prefix') + ' ' + e.message, 'error');
             }
+        }
+
+        async function saveMessageToNotes(linkEl) {
+            const msgEl = linkEl.closest('.message');
+            if (!msgEl) return;
+            const textEl = msgEl.querySelector('.message-text');
+            if (!textEl) return;
+            let content = textEl.innerText || '';
+            // Добавляем ссылки на картинки если есть
+            const imgs = textEl.querySelectorAll('img');
+            imgs.forEach(img => {
+                const src = img.src || img.dataset.src || '';
+                if (src && !src.startsWith('data:')) {
+                    content += '\n[' + t('image', 'Изображение') + ': ' + src + ']';
+                } else if (src && src.startsWith('data:')) {
+                    content += '\n[Встроенное изображение]';
+                }
+            });
+            await saveToNotes(content);
         }
 
         async function deleteNote(noteId) {
