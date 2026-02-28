@@ -3397,6 +3397,12 @@ class AnchorEngine:
             ).order_by(AgentActivityLog.created_at.desc()).limit(3).all()
             prev_posts_texts = [p.content for p in prev_posts_logs if p.content]
 
+            # Кто пишет — только роль/должность (НЕ интересы, чтобы не уводить тему)
+            author_context = []
+            if profile:
+                if profile.position: author_context.append(f"Должность/роль: {profile.position}")
+                if profile.about: author_context.append(f"О себе: {profile.about[:120]}")
+
             # DDG: свежий контекст из интернета по темам кампании
             # Делаем 2-3 разных запроса для более глубокого контента
             fresh_data = []
@@ -3454,6 +3460,9 @@ class AnchorEngine:
             )
 
             user_prompt_parts = [f"Автор: {user_name}"]
+            if author_context:
+                user_prompt_parts.append("\nКОНТЕКСТ АВТОРА (используй для голоса, не для темы):")
+                user_prompt_parts.extend(author_context)
             if prev_posts_texts:
                 user_prompt_parts.append("\nПРЕДЫДУЩИЕ ПОСТЫ ЭТОЙ КАМПАНИИ (НЕ ПОВТОРЯЙ):")
                 for _i, _pt in enumerate(prev_posts_texts, 1):
