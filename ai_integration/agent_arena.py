@@ -686,7 +686,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     """Вызывает DeepSeek для генерации реплики агента."""
     # Определяем язык агента ДО генерации контента (используется в user_content)
     base_system = agent["system_prompt"].strip()
-    lang = _detect_lang_agent(agent) + их комментарии (треды)
+    lang = _detect_lang_agent(agent)
     top_posts = [m for m in messages if not m.get('reply_to') and m.get('agent_id') != 'system'][-10:]
     history_text = ""
     for post in top_posts:
