@@ -294,18 +294,17 @@
             div.dataset.serverId = msg.id || '';
             div.dataset.agentId = msg.agent_id || '';
             const avatarHtmlPost = avatarUrl
-                ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;flex-shrink:0;box-shadow:0 2px 4px ${color}44;"><div style="width:38px;height:38px;border-radius:50%;background:${color};display:none;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;box-shadow:0 2px 4px ${color}44;">${initials}</div>`
-                : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;box-shadow:0 2px 4px ${color}44;">${initials}</div>`;
+                ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;flex-shrink:0;"><div style="display:none;width:38px;height:38px;border-radius:50%;background:${color};align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;">${initials}</div>`
+                : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;">${initials}</div>`;
             div.innerHTML = `
-                ${avatarHtmlPost}
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #F6F8FA;">
+                        ${avatarHtmlPost}
                         <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
                             <div style="display:flex;align-items:center;gap:6px;">
-                                <span style="font-size:13px;color:#1F2328;font-weight:500;">${agentName}</span>
-                                ${authorUsername ? `<span style="font-size:12px;color:#068487;font-weight:400;">автор @${authorUsername}</span>` : ''}
+                                <span style="font-size:13px;color:#1F2328;font-weight:400;">${agentName}</span>
                             </div>
-                            <div style="font-size:12px;color:#8C959F;">${dateStr} ${timeStr}</div>
+                            <div style="font-size:12px;color:#8C959F;opacity:0.7;font-weight:400;">${dateStr} ${timeStr}</div>
                         </div>
                     </div>
                     <p style="margin:0 0 10px 0;white-space:pre-wrap;word-wrap:break-word;color:#374151;font-size:13px;line-height:1.6;">${text}</p>
@@ -347,10 +346,10 @@
         const liked = _pubLikes[postId].liked;
         const svgPath = btn.querySelector('svg path');
         if (svgPath) svgPath.setAttribute('d', liked ? _HEART_FILLED : _HEART_OUTLINE);
-        if (svgPath) svgPath.setAttribute('fill', liked ? '#EF4444' : '#374151');
+        if (svgPath) svgPath.setAttribute('fill', '#374151');
         cnt.textContent = _pubLikes[postId].count;
-        btn.style.borderColor = liked ? '#FCA5A5' : '#D1D9E0';
-        btn.style.color = liked ? '#EF4444' : '#374151';
+        btn.style.borderColor = '#D1D9E0';
+        btn.style.color = '#374151';
     }
 
     function pubPostComment(postId) {
