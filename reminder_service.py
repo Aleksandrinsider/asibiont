@@ -305,12 +305,6 @@ class ReminderService:
         # APScheduler job больше НЕ создаётся — AnchorEngine сканирует каждые 5 мин
         # и создаёт CRITICAL якорь task_reminder когда reminder_time наступает
     
-    def schedule_followup_reminder(self, task_id: int, followup_time: datetime, user_id: int, task_title: str):
-        """Followup теперь обрабатывается AnchorEngine (task_overdue якорь с cooldown 2ч).
-        Метод сохранён для совместимости."""
-        logger = logging.getLogger(__name__)
-        logger.info(f"[REMINDER] Followup for task {task_id} — handled by AnchorEngine (no APScheduler job)")
-
     def schedule_result_check(self, task_id: int, result_check_time: datetime, user_id: int, task_title: str):
         """Проверка результата теперь через AnchorEngine (task_result_check якорь).
         Метод сохранён для совместимости."""
@@ -599,32 +593,6 @@ class ReminderService:
                 logger.info(f"[DAILY REPORT] To user {user_id}: {report_text}")
         except Exception as e:
             logging.error(f"Failed to send daily report to user {user_id}: {e}")    
-    async def send_delegation_progress_update(self, task_id: int, update_type: str = "status"):
-        """Send simple progress update about delegated task to delegator"""
-        db = Session()
-        try:
-            task = db.query(Task).filter_by(id=task_id).first()
-            if not task or not task.delegated_by or task.delegation_status != 'accepted':
-                return
-            
-            delegator = db.query(User).filter_by(id=task.delegated_by).first()
-            recipient = db.query(User).filter_by(id=task.user_id).first()
-            
-            if not delegator or not recipient:
-                return
-            
-            # Простое уведомление без AI-генерации
-            if update_type == "completed":
-                message = f"Задача '{task.title}' выполнена @{recipient.username}"
-            else:
-                message = f"Напоминание: задача '{task.title}' для @{recipient.username}, дедлайн: {task.reminder_time.strftime('%d.%m %H:%M') if task.reminder_time else 'не указан'}"
-            
-            if self.bot:
-                await self.bot.send_message(delegator.telegram_id, message)
-        except Exception as e:
-            logging.error(f"Failed to send delegation progress update: {e}")
-        finally:
-            db.close()
     def schedule_proactive_checks(self):
         """ОТКЛЮЧЕНО — проактивные сообщения переданы AnchorEngine.
         
@@ -865,12 +833,6 @@ class ReminderService:
             await self._reschedule_proactive_check(user_id, task_count=total_active)
         finally:
             db.close()
-
-    def schedule_task_checkpoints(self, user_id: int):
-        """Чекпоинты теперь обрабатываются AnchorEngine (task_overdue + task_deadline_soon якоря).
-        Метод сохранён для совместимости."""
-        logger = logging.getLogger(__name__)
-        logger.info(f"[REMINDER] Task checkpoints for user {user_id} — handled by AnchorEngine (no APScheduler job)")
 
     async def _reschedule_proactive_check(self, user_id: int, task_count: int = 0):
         """Проактивные проверки теперь через AnchorEngine (dialog_followup, morning_plan, etc.).

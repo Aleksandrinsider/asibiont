@@ -85,11 +85,6 @@ def _memory_set(cache_dict, key, value):
     cache_dict[key] = value
 
 
-def refresh_weather_cache_async(city, cache_ttl_minutes):
-    """Refresh weather cache asynchronously"""
-    background_executor.submit(_refresh_weather_cache, city, cache_ttl_minutes)
-
-
 def _refresh_weather_cache(city, cache_ttl_minutes):
     """Internal function to refresh weather cache"""
     try:
@@ -101,11 +96,6 @@ def _refresh_weather_cache(city, cache_ttl_minutes):
             logger.info(f"[WEATHER CACHE] Refreshed cache for {city}")
     except Exception as e:
         logger.error(f"[WEATHER CACHE] Failed to refresh cache for {city}: {e}")
-
-
-def refresh_news_cache_async(city, cache_ttl_minutes):
-    """Refresh news cache asynchronously"""
-    background_executor.submit(_refresh_news_cache, city, cache_ttl_minutes)
 
 
 def _refresh_news_cache(city, cache_ttl_minutes):
@@ -122,11 +112,6 @@ def _refresh_news_cache(city, cache_ttl_minutes):
             logger.info(f"[NEWS CACHE] Refreshed cache for {cache_key}")
     except Exception as e:
         logger.error(f"[NEWS CACHE] Failed to refresh cache for {city}: {e}")
-
-
-def refresh_finance_cache_async(symbol, asset_type, cache_ttl_minutes):
-    """Refresh finance cache asynchronously"""
-    background_executor.submit(_refresh_finance_cache, symbol, asset_type, cache_ttl_minutes)
 
 
 def _refresh_finance_cache(symbol, asset_type, cache_ttl_minutes):
@@ -451,7 +436,7 @@ def get_weather_info(city, cache_ttl_minutes=30):
             if redis_client:
                 ttl_left = redis_client.ttl(cache_key)
                 if ttl_left > 0 and ttl_left < ttl_seconds / 2:  # ttl_left > 0 проверяет что ключ существует
-                    refresh_weather_cache_async(city, cache_ttl_minutes)
+                    pass  # background refresh removed (use api_client.get_weather() instead)
         except Exception as e:
             logger.warning(f"[WEATHER CACHE] Failed to check TTL for {cache_key}: {e}")
         return cached_data
@@ -459,7 +444,6 @@ def get_weather_info(city, cache_ttl_minutes=30):
     cached_data = _memory_get(weather_cache, cache_key)
     if cached_data:
         logger.info(f"[WEATHER CACHE] Using memory cached weather for {city}")
-        refresh_weather_cache_async(city, cache_ttl_minutes)
         return cached_data
     # Нет данных в кэше - загружаем синхронно (только при первом запросе, deprecated path)
     logger.info(f"[WEATHER] No cache for {city}, loading synchronously (deprecated)")
@@ -523,7 +507,7 @@ def get_news_info(city=None, cache_ttl_minutes=120):
             if redis_client:
                 ttl_left = redis_client.ttl(cache_key)
                 if ttl_left > 0 and ttl_left < ttl_seconds / 2:  # ttl_left > 0 проверяет что ключ существует
-                    refresh_news_cache_async(city, cache_ttl_minutes)
+                    pass  # background refresh removed (use api_client.get_news() instead)
         except Exception as e:
             logger.warning(f"[NEWS CACHE] Failed to check TTL for {cache_key}: {e}")
         return cached_data
@@ -531,7 +515,6 @@ def get_news_info(city=None, cache_ttl_minutes=120):
     cached_data = _memory_get(news_cache, cache_key)
     if cached_data:
         logger.info(f"[NEWS CACHE] Using memory cached news for {cache_key}")
-        refresh_news_cache_async(city, cache_ttl_minutes)
         return cached_data
     # Нет данных в кэше - загружаем синхронно (только при первом запросе, deprecated path)
     logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously (deprecated)")
@@ -595,16 +578,6 @@ def _load_news_sync(city=None):
     except Exception as e:
         logger.error(f"[NEWS] Error fetching news: {e}")
         return None
-
-
-def get_finance_info(symbol, asset_type='stock', cache_ttl_minutes=15):
-    """Get finance information with caching.
-    
-    DEPRECATED: Alpha Vantage removed. Use get_stock_info() handler (DuckDuckGo + AI).
-    Returns None — kept for backward compatibility.
-    """
-    logger.warning(f"[FINANCE] get_finance_info() is deprecated. Use get_stock_info() handler instead.")
-    return None
 
 
 def _load_finance_sync(symbol, asset_type='stock'):

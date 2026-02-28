@@ -177,15 +177,6 @@ def _store_memory_sync(user_id, text, metadata=None):
         return False
 
 
-async def store_memory(user_id, text, metadata=None):
-    """Async-обёртка: сохраняет текст в векторную память без блокировки event loop."""
-    try:
-        return await asyncio.to_thread(_store_memory_sync, user_id, text, metadata)
-    except Exception as e:
-        logger.warning(f"[VECTOR] Async store failed: {e}")
-        return False
-
-
 def _search_memory_sync(user_id, query, top_k=5):
     """Синхронная внутренняя версия — НЕ вызывать из async кода напрямую."""
     index = _get_pinecone()
@@ -230,37 +221,30 @@ async def search_memory(user_id, query, top_k=5):
         return []
 
 
-def build_memory_context_sync(user_id, current_message, max_chars=800):
-    """Синхронная версия — для вызова через to_thread."""
+def _build_memory_context_sync(user_id, current_message, max_chars=800):
+    """Синхронный поиск памяти и формирование текстового контекста."""
     memories = _search_memory_sync(user_id, current_message, top_k=5)
-    
     if not memories:
         return ""
-    
-    # Фильтруем по score (только релевантные)
-    relevant = [m for m in memories if m['score'] > 0.3]
-    if not relevant:
+    parts = []
+    total = 0
+    for m in memories:
+        txt = m.get("text", "")
+        if txt and m.get("score", 0) > 0.4:
+            entry = f"— {txt}"
+            if total + len(entry) > max_chars:
+                break
+            parts.append(entry)
+            total += len(entry)
+    if not parts:
         return ""
-    
-    lines = []
-    total_len = 0
-    for m in relevant:
-        line = f"- {m['text']}"
-        if total_len + len(line) > max_chars:
-            break
-        lines.append(line)
-        total_len += len(line)
-    
-    if not lines:
-        return ""
-    
-    return "\n\n[СЕМАНТИЧЕСКАЯ ПАМЯТЬ — что я помню о тебе]\n" + "\n".join(lines)
+    return "Из памяти:\n" + "\n".join(parts)
 
 
 async def build_memory_context(user_id, current_message, max_chars=800):
     """Async-обёртка: строит контекст памяти без блокировки event loop."""
     try:
-        return await asyncio.to_thread(build_memory_context_sync, user_id, current_message, max_chars)
+        return await asyncio.to_thread(_build_memory_context_sync, user_id, current_message, max_chars)
     except Exception as e:
         logger.warning(f"[VECTOR] Async memory context failed: {e}")
         return ""
