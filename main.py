@@ -5918,6 +5918,46 @@ async def translate_post_handler(request):
             db_session.close()
 
 
+async def translate_text_handler(request):
+    """Universal text translation endpoint — accepts plain text, no DB lookup needed."""
+    try:
+        data = await request.json()
+        text = (data.get('text') or '').strip()
+        target_lang = data.get('lang', 'ru')
+        if not text or len(text) < 2:
+            return web.json_response({'error': 'Nothing to translate'}, status=400)
+        lang_names = {
+            'ru': 'Russian', 'en': 'English', 'es': 'Spanish', 'fr': 'French',
+            'de': 'German', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
+            'pt': 'Portuguese', 'it': 'Italian', 'ar': 'Arabic', 'hi': 'Hindi',
+            'tr': 'Turkish', 'pl': 'Polish', 'uk': 'Ukrainian',
+        }
+        lang_name = lang_names.get(target_lang, target_lang)
+        async with aiohttp.ClientSession() as session:
+            resp = await session.post(
+                'https://api.deepseek.com/chat/completions',
+                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                json={
+                    'model': DEEPSEEK_MODEL,
+                    'messages': [
+                        {'role': 'system', 'content': f'Translate the following text to {lang_name}. Return ONLY the translated text, nothing else. Preserve formatting and line breaks.'},
+                        {'role': 'user', 'content': text},
+                    ],
+                    'max_tokens': 1000,
+                    'temperature': 0.3,
+                },
+                timeout=aiohttp.ClientTimeout(total=30),
+            )
+            result = await resp.json()
+        translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        if not translated:
+            return web.json_response({'error': 'Translation failed'}, status=500)
+        return web.json_response({'success': True, 'translated': translated})
+    except Exception as e:
+        logger.error(f'translate_text_handler error: {e}')
+        return web.json_response({'error': 'Translation error'}, status=500)
+
+
 async def translate_comment_handler(request):
     """Translate a comment to the specified language using DeepSeek"""
     db_session = None
@@ -10385,6 +10425,7 @@ app.router.add_put('/api/comments/{comment_id}', edit_comment_handler)
 app.router.add_delete('/api/comments/{comment_id}', delete_comment_handler)
 app.router.add_post('/api/posts/{post_id}/like', toggle_like_handler)
 app.router.add_post('/api/posts/{post_id}/translate', translate_post_handler)
+app.router.add_post('/api/translate', translate_text_handler)
 app.router.add_post('/api/comments/{comment_id}/translate', translate_comment_handler)
 app.router.add_post('/api/notes/{note_id}/translate', translate_note_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)

@@ -3265,7 +3265,7 @@
                                 <div style="font-size:12px;color:#8C959F;opacity:0.7;font-weight:400;">${dateStr} ${timeStr}</div>
                             </div>
                         </div>
-                        <p style="margin:0 0 8px 0;white-space:pre-wrap;word-wrap:break-word;color:#374151;font-size:13px;line-height:1.6;font-weight:400;">${text}</p>
+                        <p id="${postId}-text" style="margin:0 0 8px 0;white-space:pre-wrap;word-wrap:break-word;color:#374151;font-size:13px;line-height:1.6;font-weight:400;">${text}</p>
                         <div style="border-top:1px solid #F6F8FA;padding-top:8px;margin-top:8px;">
                             <div id="acmts-${postId}" style="margin-bottom:8px;"></div>
                             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;row-gap:4px;">
@@ -3284,6 +3284,12 @@
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="${_HEART_OUTLINE}"></path></svg>
                                     <span id="${postId}-lcnt">0</span>
                                 </button>
+                                <button id="${postId}-trbtn" onclick="arenaTranslate('${postId}', this)"
+                                    title="Перевести"
+                                    style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
+                                    onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
+                                    onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'"
+                                    >A<span style="font-size:11px;">a</span></button>
                             </div>
                         </div>
                     </div>`;
@@ -3313,6 +3319,53 @@
             cnt.textContent = _arenaLikes[postId].count;
             btn.style.borderColor = '#D1D9E0';
             btn.style.color = '#374151';
+        }
+
+        const _arenaTranslateCache = {};
+        async function arenaTranslate(postId, btn) {
+            const el = document.getElementById(postId + '-text');
+            if (!el) return;
+            const cache = _arenaTranslateCache[postId] || {};
+            // Тоггл назад к оригиналу
+            if (cache.showing) {
+                el.textContent = cache.original;
+                _arenaTranslateCache[postId].showing = false;
+                btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+                return;
+            }
+            // Показать кэш без запроса
+            if (cache.translated) {
+                el.textContent = cache.translated;
+                _arenaTranslateCache[postId].showing = true;
+                btn.innerHTML = 'a<span style="font-size:11px;">A</span>';
+                return;
+            }
+            const original = el.textContent;
+            const hasRu = /[а-яА-ЯёЁ]/.test(original);
+            const targetLang = hasRu ? 'en' : 'ru';
+            _arenaTranslateCache[postId] = { original, translated: null, showing: false };
+            btn.innerHTML = '…';
+            btn.disabled = true;
+            try {
+                const resp = await fetch('/api/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: original, lang: targetLang })
+                });
+                const data = await resp.json();
+                if (data.translated) {
+                    _arenaTranslateCache[postId].translated = data.translated;
+                    _arenaTranslateCache[postId].showing = true;
+                    el.textContent = data.translated;
+                    btn.innerHTML = 'a<span style="font-size:11px;">A</span>';
+                } else {
+                    btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+                }
+            } catch(e) {
+                btn.innerHTML = 'A<span style="font-size:11px;">a</span>';
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         function arenaPostComment(postId) {
