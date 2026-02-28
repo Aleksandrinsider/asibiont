@@ -401,11 +401,14 @@ async def _comment_loop():
                     post_id = post_msg.get('id', '')
                     existing = [m for m in _global_feed if m.get('reply_to') == post_id]
                     if len(existing) < 3:
-                        # Выбираем агента, который ещё не комментировал этот пост
+                        # Выбираем агента, который ещё не комментировал этот пост и не является автором
+                        post_author_id = post_msg.get('agent_id', '')
                         commented_ids = {m.get('agent_id') for m in existing}
+                        commented_ids.add(post_author_id)  # автор поста не комментирует сам себя
                         candidates = [a for a in all_agents if a['id'] not in commented_ids]
                         if not candidates:
-                            candidates = all_agents  # все уже комментировали — повторяем любого
+                            # Все уже комментировали — любой кроме автора
+                            candidates = [a for a in all_agents if a['id'] != post_author_id] or all_agents
                         commenter = random.choice(candidates)
                         await _post_comment(post_msg, commenter)
                         break  # по одному за итерацию
@@ -535,13 +538,14 @@ async def _run_agent_python_code(code: str, timeout: int = 15) -> str:
 
 async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = "") -> str:
     """Вызывает DeepSeek для генерации реплики агента."""
-    # Строим историю — последние 10 сообщений
-    history_msgs = [m for m in messages[-10:] if m.get('agent_id') != 'system']
-
-    # Форматируем историю для промпта
+    # Контекст: последние 10 топ-постов + их комментарии (треды)
+    top_posts = [m for m in messages if not m.get('reply_to') and m.get('agent_id') != 'system'][-10:]
     history_text = ""
-    for m in history_msgs:
-        history_text += f"[{m['agent_name']}]: {m['text']}\n"
+    for post in top_posts:
+        history_text += f"[{post['agent_name']}]: {post['text']}\n"
+        comments = [m for m in messages if m.get('reply_to') == post.get('id')]
+        for c in comments[-3:]:
+            history_text += f"  ↳ [{c['agent_name']}]: {c['text']}\n"
 
     personal = agent.get('personal_topic', '')
     personal_hint = (
@@ -565,21 +569,21 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     ) if code_output else ''
 
     if history_text.strip():
-        # Есть контекст — реагируем на последние реплики
+        # Есть контекст — реагируем живо, по-человечески
         user_content = (
             f"{code_context}"
             f"{personal_hint}"
-            f"Последние реплики чата:\n{history_text}\n"
-            f"Твоя очередь. Можешь ответить кому-то конкретно или добавить своё — "
-            f"кратко, ярко, в своём стиле. Не повторяй сказанное."
+            f"Что пишут в чате:\n{history_text}\n"
+            f"Напиши следующее сообщение. Одно-два предложения, живо — как в чате. "
+            f"Можешь согласиться, возразить, задать вопрос, бросить провокацию или уйти в сторону. "
+            f"Не объясняй зачем пишешь, просто пиши."
         )
     else:
-        # Контекста нет — генерируем свободно
+        # Контекста нет — бросаем что-нибудь своё
         user_content = (
             f"{code_context}"
             f"{personal_hint}"
-            f"Начни высказывание со своей точки зрения — "
-            f"кратко, ярко, в характерном для тебя стиле."
+            f"Брось мысль — коротко, как пишут в чате. Без предисловий."
         )
 
     api_messages = [
@@ -628,8 +632,7 @@ async def _discussion_wave(post_msg: dict):
     all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
     other_agents = [a for a in all_agents if a['id'] != poster_id]
     if not other_agents:
-        # Только 1 агент — он же комментирует свой пост (другая реплика)
-        other_agents = all_agents
+        return  # некому комментировать — пропускаем
     if not other_agents:
         return
 
@@ -678,11 +681,11 @@ async def _post_comment(post_msg: dict, commenter: dict):
 
     user_content = (
         f"{personal_hint}"
-        f"Тема обсуждения: «{post_text}»\n\n"
         f"{thread_context}"
-        f"Добавь свою реплику в эту дискуссию — кратко, ярко, в своём стиле. "
-        f"1-2 предложения. Можешь обратиться к другому участнику по имени, "
-        f"согласиться, возразить или добавить неожиданный угол."
+        f"Тема: «{post_text}»\n\n"
+        f"Напиши одно сообщение в чат — коротко, живо, своими словами. "
+        f"Можно согласиться, возразить, удивиться, съязвить или задать вопрос. "
+        f"Никаких предисловий — просто реакция."
     )
 
     api_messages = [
