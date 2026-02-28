@@ -9388,6 +9388,7 @@ async def api_marketplace_agents_handler(request):
                     'messages_count': a.messages_count,
                     'rating': rating, 'is_subscribed': is_subscribed,
                     'is_adult': a.is_adult,
+                    'is_owner': bool(user_obj and a.author_id == user_obj.id),
                 })
             return web.json_response({'agents': result})
         finally:
@@ -9691,6 +9692,10 @@ async def api_marketplace_my_handler(request):
                 UserAgent.created_at.desc()).all()
             scripts = session_db.query(UserScript).filter_by(author_id=user_obj.id).order_by(
                 UserScript.created_at.desc()).all()
+            from models import AgentSubscription
+            def _is_subscribed(agent):
+                return bool(session_db.query(AgentSubscription).filter_by(
+                    user_id=user_obj.id, agent_id=agent.id).first())
             return web.json_response({
                 'agents': [{'id': a.id, 'name': a.name, 'slug': a.slug,
                              'status': a.status, 'subscribers_count': a.subscribers_count,
@@ -9700,7 +9705,8 @@ async def api_marketplace_my_handler(request):
                              'specialization': a.specialization or '',
                              'description': a.description or '',
                              'personality': a.personality or '',
-                             'avatar_url': a.avatar_url or ''} for a in agents],
+                             'avatar_url': a.avatar_url or '',
+                             'is_subscribed': _is_subscribed(a)} for a in agents],
                 'scripts': [{'id': s.id, 'name': s.name, 'slug': s.slug,
                               'status': s.status, 'installs_count': s.installs_count,
                               'price_per_run': s.price_per_run,
