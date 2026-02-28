@@ -828,10 +828,13 @@
                             <div style="display: flex; gap: 6px;">
                                 <input type="text" id="contact-name" placeholder="Имя" data-i18n-ph="contact-name-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-company').focus()" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                                 <input type="text" id="contact-company" placeholder="Компания" data-i18n-ph="contact-company-ph" onkeypress="if(event.key==='Enter')addManualContact()" style="flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
+                                <button onclick="addManualContact()" style="flex-shrink: 0; width: 36px; height: 36px; padding: 0; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 18px; font-weight: 400; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Добавить контакт" data-i18n-title="add-contact">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+                                </button>
                             </div>
-                            <button onclick="addManualContact()" style="width: 100%; padding: 8px 12px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 400; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Добавить контакт" data-i18n-title="add-contact">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
-                                <span data-i18n="add-contact-btn">Добавить</span>
+                            <button onclick="clearEmailContacts()" style="width: 100%; padding: 8px 12px; background: #FFF5F5; color: #B91C1C; border: 1px solid #FCA5A5; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 400; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#FEE2E2'; this.style.borderColor='#B91C1C';" onmouseout="this.style.background='#FFF5F5'; this.style.borderColor='#FCA5A5';" title="Удалить все контакты" data-i18n-title="delete-all-email-contacts">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="#B91C1C"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+                                <span data-i18n="delete-all-email-contacts">Удалить все контакты</span>
                             </button>
                         </div>
                         <!-- Список email-контактов -->
@@ -9288,6 +9291,31 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 }
             }
         }
+
+        async function clearEmailContacts() {
+            if (confirm(t('confirm-delete-all-email-contacts') || 'Удалить все email-контакты?')) {
+                try {
+                    const response = await fetch('/clear_email_contacts', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include'
+                    });
+                    if (!await checkAuth(response)) return;
+                    if (response.ok) {
+                        showNotification(t('ok-email-contacts-clear') || 'Email-контакты удалены', 'success');
+                        if (typeof loadContacts === 'function') loadContacts();
+                    } else {
+                        const error = await response.json();
+                        showNotification(t('err-prefix') + ' ' + (error.error || 'Ошибка удаления email-контактов'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error clearing email contacts:', error);
+                    showNotification(t('err-clear-email-contacts') || 'Ошибка удаления email-контактов', 'error');
+                }
+            }
+        }
     </script>
 
     <script>
@@ -10094,7 +10122,10 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'confirm-delete-task':'Вы уверены, что хотите удалить задачу',
       'confirm-cancel-deleg':'Отменить делегирование задачи для',
       'confirm-block':'Вы уверены, что хотите заблокировать',
-      'confirm-delete-all-tasks':'Вы уверены, что хотите удалить все задачи? Это действие нельзя отменить.',
+    'confirm-delete-all-tasks':'Вы уверены, что хотите удалить все задачи? Это действие нельзя отменить.',
+    'confirm-delete-all-email-contacts':'Вы уверены, что хотите удалить все email-контакты? Это действие нельзя отменить.',
+    'ok-email-contacts-clear':'Email-контакты удалены',
+    'err-clear-email-contacts':'Ошибка удаления email-контактов',
       'confirm-self-heal':'Запустить тест системы самоисправления?',
       'err-login':'Ошибка входа','err-card':'Введите корректный номер карты',
       'err-min-withdraw':'Минимальная сумма вывода: 100 токенов','err-insufficient':'Недостаточно средств для вывода',
@@ -10304,6 +10335,10 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'confirm-cancel-deleg':'Cancel task delegation for',
       'confirm-block':'Are you sure you want to block',
       'confirm-delete-all-tasks':'Are you sure you want to delete all tasks? This cannot be undone.',
+      'confirm-delete-all-email-contacts':'Are you sure you want to delete all email contacts? This cannot be undone.',
+      'ok-email-contacts-clear':'Email contacts deleted',
+      'err-clear-email-contacts':'Error deleting email contacts',
+      'delete-all-email-contacts':'Delete all contacts',
       'confirm-self-heal':'Run self-healing system test?',
       'err-login':'Login error','err-card':'Enter a valid card number',
       'err-min-withdraw':'Minimum withdrawal: 100 tokens','err-insufficient':'Insufficient funds',

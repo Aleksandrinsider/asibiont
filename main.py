@@ -2157,6 +2157,29 @@ async def clear_user_tasks_handler(request):
         session_db.close()
 
 
+async def clear_email_contacts_handler(request):
+    """POST /clear_email_contacts — delete all email contacts for current user."""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        deleted = session_db.query(EmailContact).filter_by(user_id=user.id).delete(synchronize_session='fetch')
+        session_db.commit()
+        logger.info(f"User {user_id} cleared {deleted} email contacts")
+        return web.json_response({'ok': True, 'deleted': deleted})
+    except Exception as e:
+        session_db.rollback()
+        logger.error(f"Error clearing email contacts: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+    finally:
+        session_db.close()
+
+
 async def clear_single_task_handler(request):
     logger.info("clear_single_task_handler called")
     session = await get_session(request)
@@ -9092,6 +9115,7 @@ app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
+app.router.add_post('/clear_email_contacts', clear_email_contacts_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/complete_task', complete_task_handler)
 app.router.add_post('/restore_task', restore_task_handler)
