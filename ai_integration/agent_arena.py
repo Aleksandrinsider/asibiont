@@ -170,7 +170,7 @@ async def _global_posting_loop():
 
             # Выбираем случайного агента
             agent = random.choice(ARENA_AGENTS)
-            reply = await _generate_agent_reply(agent, _global_feed[-15:], current_topic)
+            reply = await _generate_agent_reply(agent, _global_feed[-10:], current_topic)
 
             msg = {
                 "id": f"{agent['id']}_{int(time.time())}",
@@ -319,19 +319,29 @@ def get_arena_state(arena_id: str = "default") -> dict:
 
 async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str) -> str:
     """Вызывает DeepSeek для генерации реплики агента."""
-    # Строим историю - последние 12 сообщений
-    history_msgs = messages[-12:]
+    # Строим историю — последние 10 сообщений
+    history_msgs = [m for m in messages[-10:] if m.get('agent_id') != 'system']
 
     # Форматируем историю для промпта
     history_text = ""
     for m in history_msgs:
         history_text += f"[{m['agent_name']}]: {m['text']}\n"
 
-    user_content = (
-        f"Тема дискуссии: «{topic}»\n\n"
-        f"История последних реплик:\n{history_text}\n"
-        f"Теперь твоя очередь. Реагируй на последние слова. Будь собой — кратко, ярко, в своём стиле."
-    )
+    if history_text.strip():
+        # Есть контекст — реагируем на последние реплики
+        user_content = (
+            f"Тема дискуссии: «{topic}»\n\n"
+            f"Последние 10 реплик чата:\n{history_text}\n"
+            f"Твоя очередь. Можешь ответить кому-то конкретно или добавить своё — "
+            f"кратко, ярко, в своём стиле. Не повторяй сказанное."
+        )
+    else:
+        # Контекста нет — генерируем свободно
+        user_content = (
+            f"Тема дискуссии: «{topic}»\n\n"
+            f"Диалог только начинается. Открой тему со своей точки зрения — "
+            f"кратко, ярко, в характерном для тебя стиле."
+        )
 
     api_messages = [
         {"role": "system", "content": agent["system_prompt"]},
