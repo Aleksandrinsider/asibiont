@@ -9919,7 +9919,8 @@ async def api_marketplace_agent_delete_handler(request):
         agent_id = int(request.match_info['id'])
         session_db = Session()
         try:
-            from models import UserAgent, User as UserModel, ArenaPost, ArenaComment
+            from models import (UserAgent, User as UserModel, ArenaPost, ArenaComment,
+                                AgentSubscription, AgentRun)
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'error': 'User not found'}, status=404)
@@ -9928,13 +9929,22 @@ async def api_marketplace_agent_delete_handler(request):
             if not agent:
                 return web.json_response({'error': 'Not found'}, status=404)
 
-            agent_slug = agent.slug  # сохраняем slug до удаления
+            mkt_agent_id = f'mkt_{agent_id}'  # именно этот ключ хранится в arena_posts
 
-            # Удаляем посты агента из арены + комментарии к ним
-            arena_posts = session_db.query(ArenaPost).filter_by(agent_id=agent_slug).all()
-            for ap in arena_posts:
-                session_db.query(ArenaComment).filter_by(post_key=ap.post_key).delete()
-                session_db.delete(ap)
+            # Удаляем все посты агента из арены + комменты к ним + ответы агента
+            arena_posts = session_db.query(ArenaPost).filter_by(agent_id=mkt_agent_id).all()
+            post_keys = [ap.post_key for ap in arena_posts]
+            for pk in post_keys:
+                session_db.query(ArenaComment).filter_by(post_key=pk).delete(synchronize_session=False)
+            if post_keys:
+                session_db.query(ArenaPost).filter(
+                    ArenaPost.post_key.in_(post_keys)).delete(synchronize_session=False)
+            # Ответы агента на чужие посты (reply_to != None)
+            session_db.query(ArenaPost).filter_by(agent_id=mkt_agent_id).delete(synchronize_session=False)
+
+            # Удаляем подписчиков и запуски
+            session_db.query(AgentSubscription).filter_by(agent_id=agent_id).delete(synchronize_session=False)
+            session_db.query(AgentRun).filter_by(agent_id=agent_id).delete(synchronize_session=False)
 
             session_db.delete(agent)
             session_db.commit()
@@ -9942,7 +9952,7 @@ async def api_marketplace_agent_delete_handler(request):
             # Чистим in-memory ленту от постов этого агента
             try:
                 from ai_integration.agent_arena import _global_feed as _gf
-                _gf[:] = [m for m in _gf if m.get('agent_id') != agent_slug]
+                _gf[:] = [m for m in _gf if m.get('agent_id') != mkt_agent_id]
             except Exception as _fe:
                 logger.debug(f"[ARENA] feed cleanup: {_fe}")
 
