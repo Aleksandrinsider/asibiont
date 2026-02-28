@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def _db_save_post(msg: dict):
     """Сохраняет пост арены в БД (идемпотентно по post_key)."""
     try:
-        from models import Session as DbSession, ArenaPost
+        from models import Session as DbSession, ArenaPost, UserAgent
         s = DbSession()
         try:
             if s.query(ArenaPost).filter_by(post_key=msg['id']).first():
@@ -42,6 +42,16 @@ def _db_save_post(msg: dict):
                 reply_to=msg.get('reply_to', None),
                 avatar_url=msg.get('avatar_url', None),
             ))
+            # Обновляем messages_count у UserAgent (marketplace-агенты: mkt_<id>)
+            agent_id_raw = msg.get('agent_id', '')
+            if agent_id_raw.startswith('mkt_'):
+                try:
+                    numeric_id = int(agent_id_raw.split('_', 1)[1])
+                    ua = s.query(UserAgent).filter_by(id=numeric_id).first()
+                    if ua:
+                        ua.messages_count = (ua.messages_count or 0) + 1
+                except (ValueError, IndexError):
+                    pass
             s.commit()
         finally:
             s.close()
@@ -1023,6 +1033,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
         reply = f"[{agent['name']} недоступен]"
 
     return {
+        "agent_id": agent["id"],
         "agent_name": agent["name"],
         "agent_title": agent["title"],
         "color": agent["color"],

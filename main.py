@@ -9817,7 +9817,7 @@ async def api_arena_comment_handler(request):
         # Сохраняем комментарий в БД
         if post_key:
             try:
-                from models import ArenaComment
+                from models import ArenaComment, UserAgent
                 import datetime as _dt
                 db_s = Session()
                 try:
@@ -9831,6 +9831,16 @@ async def api_arena_comment_handler(request):
                         agent_text=reply.get('text', ''),
                         ts=_dt.datetime.utcnow().isoformat(),
                     ))
+                    # Обновляем messages_count у UserAgent
+                    reply_agent_id = reply.get('agent_id', '') or agent_id
+                    if reply_agent_id and reply_agent_id.startswith('mkt_'):
+                        try:
+                            numeric_id = int(reply_agent_id.split('_', 1)[1])
+                            ua = db_s.query(UserAgent).filter_by(id=numeric_id).first()
+                            if ua:
+                                ua.messages_count = (ua.messages_count or 0) + 1
+                        except (ValueError, IndexError):
+                            pass
                     db_s.commit()
                 finally:
                     db_s.close()
