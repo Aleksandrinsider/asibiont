@@ -146,6 +146,16 @@ def get_conversation_history(user_id, session=None, limit=None):
         try:
             history = json.loads(user.conversation_context)
             
+            # Filter out messages before history_cleared_at (failsafe)
+            if user.history_cleared_at:
+                cleared_ts = user.history_cleared_at.replace(tzinfo=timezone.utc).isoformat() \
+                    if user.history_cleared_at.tzinfo is None \
+                    else user.history_cleared_at.isoformat()
+                history = [
+                    m for m in history
+                    if m.get('timestamp', '') >= cleared_ts
+                ]
+            
             # Apply limit if specified
             if limit and len(history) > limit:
                 history = history[-limit:]

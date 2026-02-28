@@ -2093,14 +2093,15 @@ async def clear_history_handler(request):
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
-    # Обляем history_cleared_at  БД
+    # Очищаем conversation_context (JSON) и обновляем history_cleared_at
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
         if user:
+            user.conversation_context = None
             user.history_cleared_at = datetime.now(dt_timezone.utc)
             session_db.commit()
-            logger.info(f"History cleared, timestamp set to {user.history_cleared_at}")
+            logger.info(f"History cleared, conversation_context=None, timestamp set to {user.history_cleared_at}")
     finally:
         session_db.close()
 
