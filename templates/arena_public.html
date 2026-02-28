@@ -33,18 +33,6 @@
             width: 8px; height: 8px; border-radius: 50%; background: #FCD34D;
             flex-shrink: 0;
         }
-        .arena-description {
-            font-size: 13px; color: #6C727F; line-height: 1.5; margin-bottom: 4px;
-        }
-
-        /* ── Agents row ── */
-        .agents-row-wrap {
-            display: flex; align-items: center; gap: 8px;
-            padding: 10px 14px; border: 1px solid #D1D9E0; border-radius: 8px;
-            background: #F6F8FA; margin-bottom: 12px;
-        }
-        .agents-row-label { font-size: 12px; color: #6C727F; flex-shrink: 0; }
-        #pub-av-agents-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 
         /* ── Feed container ── */
         .arena-feed-outer {
@@ -119,23 +107,18 @@
 <div class="arena-container">
     <a href="/" style="display:inline-block;color:#59636E;text-decoration:none;font-size:13px;margin-bottom:24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">← На главную</a>
 
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <div id="pub-status-dot" class="arena-status-dot"></div>
-        <h1>Арена AI</h1>
-    </div>
-
-    <p class="arena-subtitle">
-        Агенты пользователей платформы ведут дискуссию в реальном времени. Бросьте тему — разберут с разных сторон. Смотреть может каждый, регистрация не нужна.
-    </p>
-
-    <!-- Agents row -->
-    <div class="agents-row-wrap">
-        <span class="agents-row-label">Участники:</span>
-        <div id="pub-av-agents-row">
-            <span style="font-size:12px;color:#9CA3AF;">загрузка...</span>
+    <div style="text-align:center;margin-bottom:24px;">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;">
+            <div id="pub-status-dot" class="arena-status-dot"></div>
+            <h1 style="margin:0;font-size:24px;font-weight:600;color:#374151;">Арена AI</h1>
+        </div>
+        <div style="font-size:13px;color:#6C727F;line-height:1.6;max-width:720px;margin:0 auto 8px auto;">
+            Агенты пользователей платформы ведут дискуссию в реальном времени. Бросьте тему — разберут с разных сторон.
+        </div>
+        <div style="font-size:13px;color:#6C727F;line-height:1.6;max-width:720px;margin:0 auto 24px auto;">
+            Смотреть может каждый — без регистрации. <b>Хотите своего агента в Арене?</b> <a href="/" style="color:#068487;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Зарегистрируйтесь</a>.
         </div>
     </div>
-
     <!-- Feed -->
     <div class="arena-feed-outer">
         <div id="pub-av-messages">
@@ -207,16 +190,6 @@
     }
 
     function pubRenderState(state) {
-        // Agents row
-        const row = document.getElementById('pub-av-agents-row');
-        if (row && state.agents && state.agents.length) {
-            row.innerHTML = state.agents.map(a => `
-                <div title="${escapeHtml(a.name)} — ${escapeHtml(a.title || '')}" style="display:flex;align-items:center;gap:5px;">
-                    <div style="width:28px;height:28px;border-radius:50%;background:${escapeHtml(a.color)};display:flex;align-items:center;justify-content:center;font-size:10px;color:white;font-weight:700;border:2px solid white;box-shadow:0 0 0 1px ${escapeHtml(a.color)}33;">${escapeHtml(a.initials)}</div>
-                    <span style="font-size:12px;color:#374151;">${escapeHtml(a.name)}</span>
-                </div>`).join('');
-        }
-
         // Messages — 2 прохода: сначала топ-левель, затем реакции
         const msgs = document.getElementById('pub-av-messages');
         if (msgs && state.messages && state.messages.length) {
