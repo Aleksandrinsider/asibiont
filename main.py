@@ -7560,6 +7560,56 @@ async def api_delegation_campaign_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_activities_latest_handler(request):
+    """Polling endpoint: GET /api/activities/latest?since=<iso_timestamp>
+    Returns agent activities newer than `since`. Used for real-time timeline updates."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+
+        since_str = request.rel_url.query.get('since')
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'activities': []})
+
+            query = session_db.query(AgentActivityLog).filter_by(user_id=user.id)
+            if since_str:
+                try:
+                    from datetime import timezone as _tz
+                    since_dt = datetime.fromisoformat(since_str.replace('Z', '+00:00'))
+                    # strip tz for naive datetime comparison
+                    since_naive = since_dt.replace(tzinfo=None) if since_dt.tzinfo else since_dt
+                    query = query.filter(AgentActivityLog.created_at > since_naive)
+                except Exception:
+                    pass
+
+            activities = query.order_by(AgentActivityLog.created_at.desc()).limit(50).all()
+            data = []
+            for a in activities:
+                data.append({
+                    'id': a.id,
+                    'activity_type': a.activity_type,
+                    'title': a.title,
+                    'content': a.content,
+                    'target': a.target,
+                    'status': a.status,
+                    'ref_id': a.ref_id,
+                    'result': a.result,
+                    'created_at': (a.created_at.isoformat() + 'Z') if a.created_at else None,
+                    'updated_at': (a.updated_at.isoformat() + 'Z') if a.updated_at else None,
+                })
+            return web.json_response({'activities': data})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"api_activities_latest_handler: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_reports_handler(request):
     """API for getting email reports — campaigns + standalone emails."""
     try:
@@ -9262,6 +9312,7 @@ app.router.add_post('/api/notes', api_notes_handler)
 app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)
 app.router.add_put('/api/notes/{note_id}', api_note_edit_handler)
 app.router.add_get('/api/reports', api_reports_handler)
+app.router.add_get('/api/activities/latest', api_activities_latest_handler)
 app.router.add_patch('/api/campaigns/{campaign_id}/status', api_campaign_status_handler)
 app.router.add_delete('/api/campaigns/{campaign_id}', api_campaign_delete_handler)
 app.router.add_patch('/api/content-campaigns/{campaign_id}/status', api_content_campaign_status_handler)

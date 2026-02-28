@@ -645,6 +645,22 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     task_id = task.id
     logger.info(f"[ADD_TASK] Task '{title}' created successfully with ID {task_id}, reminder_time: {task.reminder_time}")
 
+    # === Лог активности ===
+    try:
+        from models import AgentActivityLog as _AAL_at
+        _at_log = _AAL_at(
+            user_id=user.id,
+            activity_type='task_added',
+            title=f'Задача создана: {title}',
+            content=description[:200] if description else None,
+            status='completed',
+            ref_id=task_id,
+        )
+        session.add(_at_log)
+        session.commit()
+    except Exception as _e:
+        logger.warning(f"[ADD_TASK] Activity log failed: {_e}")
+
     # Automation: Real-time триггер для задач (доступно всем, оплата токенами)
     try:
         from ai_integration.premium_simple import trigger_premium_automation_realtime
@@ -906,6 +922,22 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         try:
             session.commit()
             logger.info(f"[COMPLETE_TASK] Task {task.id} status set to 'completed', committed to database")
+
+            # === Лог активности ===
+            try:
+                from models import AgentActivityLog as _AAL_ct
+                _ct_log = _AAL_ct(
+                    user_id=user.id,
+                    activity_type='task_completed',
+                    title=f'Задача выполнена: {task.title}',
+                    content=completion_note[:200] if completion_note else None,
+                    status='completed',
+                    ref_id=task.id,
+                )
+                session.add(_ct_log)
+                session.commit()
+            except Exception as _e:
+                logger.warning(f"[COMPLETE_TASK] Activity log failed: {_e}")
             
             # Уведомляем пользователей о завершении задачи партнёром
             try:
@@ -3471,7 +3503,23 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
                 logger.info(f"[CREATE_GOAL] Synced profile.goals: {profile.goals}")
         except Exception as e:
             logger.warning(f"[CREATE_GOAL] Failed to sync profile.goals: {e}")
-        
+
+        # === Лог активности ===
+        try:
+            from models import AgentActivityLog as _AAL_cg
+            _cg_log = _AAL_cg(
+                user_id=user.id,
+                activity_type='goal_created',
+                title=f'Проект создан: {goal.title}',
+                content=(description[:200] if description else None),
+                status='completed',
+                ref_id=goal.id,
+            )
+            session.add(_cg_log)
+            session.commit()
+        except Exception as _e:
+            logger.warning(f"[CREATE_GOAL] Activity log failed: {_e}")
+
         result = f"🎯 Цель создана: **{goal.title}**"
         if goal.metric_target and goal.metric_unit:
             result += f"\n📊 Метрика: 0/{int(goal.metric_target)} {goal.metric_unit}"
@@ -3600,7 +3648,24 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
             return f"Укажи что обновить: progress (0-100), status (active/completed/paused/cancelled), или notes."
         
         session.commit()
-        
+
+        # === Лог активности ===
+        try:
+            from models import AgentActivityLog as _AAL_ugp
+            _ugp_type = 'goal_completed' if matched.status == 'completed' else 'goal_updated'
+            _ugp_log = _AAL_ugp(
+                user_id=user.id,
+                activity_type=_ugp_type,
+                title=f'Проект обновлён: {matched.title}',
+                content=', '.join(changes[:3]),
+                status='completed',
+                ref_id=matched.id,
+            )
+            session.add(_ugp_log)
+            session.commit()
+        except Exception as _e:
+            logger.warning(f"[UPDATE_GOAL] Activity log failed: {_e}")
+
         result = f"🎯 **{matched.title}** обновлена:\n"
         result += ", ".join(changes)
         if matched.metric_target and matched.metric_unit:
@@ -3751,6 +3816,17 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             except Exception:
                 pass
             session.commit()
+            # === Лог активности ===
+            try:
+                from models import AgentActivityLog as _AAL_dga
+                session.add(_AAL_dga(
+                    user_id=user.id, activity_type='goal_deleted',
+                    title=f'Удалены все проекты ({count} шт.)',
+                    status='completed',
+                ))
+                session.commit()
+            except Exception as _e:
+                logger.warning(f"[DELETE_GOAL] Activity log failed: {_e}")
             return f"Удалено целей: {count}. Чистый лист — можно ставить новые! ⚠️ ВНИМАНИЕ: все упоминания целей в текущем контексте и профиле УСТАРЕЛИ. НЕ ссылайся на них, НЕ цитируй, НЕ предлагай вернуть. Целей НОЛЬ."
         
         # Поиск конкретной цели
@@ -3800,6 +3876,17 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             pass
         
         session.commit()
+        # === Лог активности ===
+        try:
+            from models import AgentActivityLog as _AAL_dg
+            session.add(_AAL_dg(
+                user_id=user.id, activity_type='goal_deleted',
+                title=f'Проект удалён: {title}',
+                status='completed',
+            ))
+            session.commit()
+        except Exception as _e:
+            logger.warning(f"[DELETE_GOAL] Activity log failed: {_e}")
         return f"Цель \"{title}\" удалена. ⚠️ Если эта цель упоминается в контексте или профиле — ИГНОРИРУЙ, она удалена."
     
     except Exception as e:
@@ -5623,6 +5710,23 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         profile.updated_at = datetime.utcnow()
 
         session.commit()
+
+        # === Лог активности ===
+        try:
+            from models import AgentActivityLog as _AAL_up
+            _up_changes = (added + updates)
+            if _up_changes:
+                _up_log = _AAL_up(
+                    user_id=user.id,
+                    activity_type='profile_updated',
+                    title='Профиль обновлён',
+                    content=', '.join(_up_changes[:5])[:200],
+                    status='completed',
+                )
+                session.add(_up_log)
+                session.commit()
+        except Exception as _e:
+            logger.warning(f"[UPDATE_PROFILE] Activity log failed: {_e}")
 
         # Schedule background normalization for cross-language matching
         if added or updates:

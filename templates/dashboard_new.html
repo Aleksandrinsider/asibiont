@@ -138,6 +138,10 @@
             0%, 60%, 100% { opacity: 0; }
             30% { opacity: 1; }
         }
+        @keyframes tlFadeIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
 
         /* Mobile header - only logo */
         .mobile-header {
@@ -2263,6 +2267,7 @@
             if (indicator) indicator.style.display = 'none';
             
             // Всегда перезагружаем ленту при переключении для получения актуального состояния лайков
+            stopActivityPolling();
             loadFeed();
         }
 
@@ -2330,9 +2335,91 @@
             if (contactsLinkR) contactsLinkR.style.opacity = '0.5';
 
             loadReports();
+            startActivityPolling();
         }
 
 var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-block']);
+
+        // ====== Activity Timeline & Polling ======
+        let _activityPollTimer = null;
+        window._activityPollSince = null;
+
+        const _tlIconMap = {
+            'task_added': '📋', 'task_completed': '✅', 'goal_created': '🎯',
+            'goal_updated': '📊', 'goal_completed': '🏆', 'goal_deleted': '🗑️',
+            'profile_updated': '👤', 'email': '📧', 'delegation': '🤝',
+            'post_newsfeed': '📰', 'post_telegram': '📢', 'post_discord': '💬',
+            'content_campaign': '📅', 'delegation_campaign': '👥',
+            'background_research': '🔍', 'background_research_ready': '💡',
+        };
+
+        function _tlTimeAgo(iso) {
+            if (!iso) return '';
+            const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+            if (diff < 60) return 'только что';
+            if (diff < 3600) return Math.floor(diff/60) + ' мин назад';
+            if (diff < 86400) return Math.floor(diff/3600) + ' ч назад';
+            return Math.floor(diff/86400) + ' дн назад';
+        }
+
+        function createTimelineItem(a, isNew) {
+            const el = document.createElement('div');
+            el.setAttribute('data-act-id', a.id || '');
+            el.style.cssText = 'display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F3F4F6;align-items:flex-start;' + (isNew ? 'animation:tlFadeIn 0.5s ease;' : '');
+            const icon = _tlIconMap[a.activity_type] || '⚡';
+            const time = _tlTimeAgo(a.created_at);
+            el.innerHTML = `
+                <span style="font-size:15px;flex-shrink:0;margin-top:1px;">${icon}</span>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;color:#1F2328;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.title||''}</div>
+                    ${a.content ? `<div style="font-size:11px;color:#6C727F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content}</div>` : ''}
+                </div>
+                <span style="font-size:11px;color:#9CA3AF;flex-shrink:0;margin-top:2px;white-space:nowrap;">${time}</span>
+            `;
+            return el;
+        }
+
+        function renderTimeline(activities) {
+            const tl = document.getElementById('activity-timeline-feed');
+            if (!tl) return;
+            tl.innerHTML = '';
+            const sorted = [...activities].sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
+            const latest = sorted[0] && sorted[0].created_at;
+            if (latest && (!window._activityPollSince || latest > window._activityPollSince)) {
+                window._activityPollSince = latest;
+            }
+            sorted.slice(0, 30).forEach(a => tl.appendChild(createTimelineItem(a, false)));
+            if (!sorted.length) tl.innerHTML = '<div style="text-align:center;color:#9CA3AF;font-size:13px;padding:16px 0;">Активность пока пуста</div>';
+        }
+
+        function startActivityPolling() {
+            stopActivityPolling();
+            _activityPollTimer = setInterval(async () => {
+                try {
+                    const since = window._activityPollSince || '';
+                    const resp = await fetch('/api/activities/latest?since=' + encodeURIComponent(since), { credentials: 'include' });
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    const newActs = (data.activities || []).filter(a => a.created_at > since);
+                    if (!newActs.length) return;
+                    const latestNew = newActs.reduce((m, a) => (a.created_at||'') > m ? (a.created_at||'') : m, window._activityPollSince || '');
+                    window._activityPollSince = latestNew;
+                    const tl = document.getElementById('activity-timeline-feed');
+                    if (tl) {
+                        newActs.sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1)
+                               .forEach(a => { tl.insertBefore(createTimelineItem(a, true), tl.firstChild); });
+                    }
+                    const dot = document.getElementById('activity-live-dot');
+                    if (dot) { dot.style.background='#22c55e'; setTimeout(()=>{ dot.style.background='#068487'; }, 1800); }
+                    const cnt = document.getElementById('activity-new-cnt');
+                    if (cnt) { const n = parseInt(cnt.textContent||'0') + newActs.length; cnt.textContent = '+' + n; cnt.style.display='inline'; setTimeout(()=>{ cnt.textContent=''; cnt.style.display='none'; }, 4000); }
+                } catch(e) { /* non-critical */ }
+            }, 10000);
+        }
+
+        function stopActivityPolling() {
+            if (_activityPollTimer) { clearInterval(_activityPollTimer); _activityPollTimer = null; }
+        }
 
         async function loadReports() {
             try {
@@ -2344,9 +2431,27 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
                 if (!list) return;
                 list.innerHTML = '';
 
-                const campaigns = data.campaigns || [];
+                // ===== LIVE TIMELINE =====
+                const tlWrap = document.createElement('div');
+                tlWrap.style.cssText = 'margin-bottom:16px;';
+                tlWrap.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span style="font-size:13px;font-weight:600;color:#1F2328;">Таймлайн агента</span>
+                        <span id="activity-live-dot" style="width:8px;height:8px;border-radius:50%;background:#068487;display:inline-block;transition:background 0.4s;"></span>
+                        <span style="font-size:11px;color:#9CA3AF;">live</span>
+                        <span id="activity-new-cnt" style="display:none;font-size:11px;background:#068487;color:#fff;border-radius:10px;padding:1px 7px;"></span>
+                    </div>
+                    <div id="activity-timeline-feed" style="max-height:280px;overflow-y:auto;"></div>
+                `;
+                list.appendChild(tlWrap);
+
+                // separator
+                const sep = document.createElement('div');
+                sep.style.cssText = 'border-top:2px solid #E5E7EB;margin:12px 0 16px;';
+                list.appendChild(sep);
                 const emails = data.emails || [];
                 const agentActivities = data.agent_activities || [];
+                renderTimeline(agentActivities);
                 const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0;
                 if (emptyEl) emptyEl.style.display = hasListItems ? 'none' : '';
 
@@ -10055,6 +10160,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'camp-pause-tip':'Поставить на паузу','camp-resume-tip':'Возобновить','camp-wait-tip':'Дневной лимит исчерпан, продолжит завтра',
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
       'act-email':'Отчёт по Email-рассылке','act-delegation':'Делегирование','act-post-feed':'Посты в ленту новостей','act-post-tg':'Посты в Telegram-канал','act-post-discord':'Посты в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Кампания делегирования','act-other':'Прочая активность','act-bg-research':'Фоновое исследование','act-bg-research-ready':'Исследование завершено','agent-activity-title':'Активность агента',
+      'act-task-added':'Задачи созданы','act-task-completed':'Задачи выполнены','act-goal-created':'Проекты созданы','act-goal-updated':'Проекты обновлены','act-goal-completed':'Проекты завершены','act-goal-deleted':'Проекты удалены','act-profile-updated':'Профиль обновлён',
       'cc-title':'Контент-кампания','cc-goal':'Цель:','cc-topics':'Темы:','cc-freq':'Частота:','cc-last':'Посл. пост:','cc-posts':'п.','cc-freq-daily':'Ежедн.','cc-freq-weekly':'Еженед.','cc-del-confirm':'Удалить контент-кампанию?','plat-feed':'Лента',
       'dc-title':'Кампания делегирования','dc-audience':'Аудитория:','dc-sent':'Отпр.','dc-accepted':'Прин.','dc-del-confirm':'Удалить кампанию делегирования?',
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
@@ -10267,6 +10373,7 @@ var _reportsExpandedSet = new Set(['personal-activity-block', 'social-activity-b
       'camp-pause-tip':'Pause campaign','camp-resume-tip':'Resume campaign','camp-wait-tip':'Daily limit reached, will continue tomorrow',
       'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
       'act-email':'Email Report','act-delegation':'Delegation','act-post-feed':'Feed posts','act-post-tg':'Telegram channel posts','act-post-discord':'Discord posts','act-content-campaign':'Content campaign','act-deleg-campaign':'Delegation campaign','act-other':'Other activity','act-bg-research':'Background research','act-bg-research-ready':'Research complete','agent-activity-title':'Agent activity',
+      'act-task-added':'Tasks created','act-task-completed':'Tasks completed','act-goal-created':'Projects created','act-goal-updated':'Projects updated','act-goal-completed':'Projects completed','act-goal-deleted':'Projects deleted','act-profile-updated':'Profile updated',
       'cc-title':'Content campaign','cc-goal':'Goal:','cc-topics':'Topics:','cc-freq':'Frequency:','cc-last':'Last post:','cc-posts':'p.','cc-freq-daily':'Daily','cc-freq-weekly':'Weekly','cc-del-confirm':'Delete content campaign?','plat-feed':'Feed',
       'dc-title':'Delegation campaign','dc-audience':'Audience:','dc-sent':'Sent','dc-accepted':'Accepted','dc-del-confirm':'Delete delegation campaign?',
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',
