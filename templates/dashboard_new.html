@@ -3177,8 +3177,8 @@
                     msgs.innerHTML = '';
                     _arenaRenderedIds.clear();
                     _arenaMsgIdx = 0;
-                    // Хронологический порядок (старые→новые), скролл в конец где самый свежий
-                    const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
+                    // Новые сверху (новые→старые)
+                    const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
                     const pendingReplies = [];
                     sorted.forEach(m => {
                         if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
@@ -3319,12 +3319,20 @@
             }
 
             if (isNew) {
-                container.appendChild(div);
+                if (!msg.reply_to) {
+                    container.prepend(div);
+                } else {
+                    container.appendChild(div);
+                }
                 container.scrollTop = container.scrollHeight;
                 const dot = document.getElementById('av-status-dot');
                 if (dot) { dot.style.background = '#068487'; }
             } else {
-                container.appendChild(div);
+                if (!msg.reply_to) {
+                    container.prepend(div);
+                } else {
+                    container.appendChild(div);
+                }
             }
             // Восстанавливаем состояние лайка если пост уже лайкали ранее
             if (msg.id && postId) arenaApplyLikeState(postId, msg.id);
