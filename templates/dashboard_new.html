@@ -3368,33 +3368,33 @@
         }
 
         function arenaToggleLike(postId, serverId) {
-            // Если уже лайкнули — ничего не делаем (один лайк за раз)
-            if (serverId && _likedServerIds.has(serverId)) return;
             const btn = document.getElementById(postId + '-like');
             const cnt = document.getElementById(postId + '-lcnt');
             if (!btn || !cnt) return;
             _arenaLikes[postId] = _arenaLikes[postId] || {liked: false, count: 0};
-            _arenaLikes[postId].liked = true;
-            _arenaLikes[postId].count += 1;
-            // Сохраняем в localStorage по server ID
+            const wasLiked = _arenaLikes[postId].liked;
+            _arenaLikes[postId].liked = !wasLiked;
+            _arenaLikes[postId].count += wasLiked ? -1 : 1;
+            const nowLiked = _arenaLikes[postId].liked;
+            // Сохраняем в localStorage
             if (serverId) {
-                _likedServerIds.add(serverId);
+                if (nowLiked) _likedServerIds.add(serverId);
+                else _likedServerIds.delete(serverId);
                 _saveLikedServerIds(_likedServerIds);
             }
             const svgEl = btn.querySelector('svg');
             const svgPath = svgEl ? svgEl.querySelector('path') : null;
-            if (svgPath) svgPath.setAttribute('d', _HEART_FILLED);
-            if (svgEl) { svgEl.setAttribute('fill', '#EF4444'); svgEl.style.fill = '#EF4444'; }
-            btn.style.borderColor = '#EF4444';
-            btn.style.color = '#EF4444';
-            cnt.textContent = _arenaLikes[postId].count;
-            // Сохраняем счётчик лайков
+            if (svgPath) svgPath.setAttribute('d', nowLiked ? _HEART_FILLED : _HEART_OUTLINE);
+            if (svgEl) { svgEl.setAttribute('fill', nowLiked ? '#EF4444' : '#374151'); svgEl.style.fill = nowLiked ? '#EF4444' : '#374151'; }
+            btn.style.borderColor = nowLiked ? '#EF4444' : '#D1D9E0';
+            btn.style.color = nowLiked ? '#EF4444' : '#374151';
+            cnt.textContent = Math.max(0, _arenaLikes[postId].count);
             if (serverId) {
-                _likesCounts[serverId] = _arenaLikes[postId].count;
+                _likesCounts[serverId] = Math.max(0, _arenaLikes[postId].count);
                 _saveLikesCounts(_likesCounts);
             }
-            // Сообщаем серверу для учёта статистики агента
-            if (serverId) {
+            // Серверу отправляем только +1 (не даём статистике уйти в минус)
+            if (serverId && nowLiked) {
                 fetch('/api/arena/post/' + encodeURIComponent(serverId) + '/like', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
