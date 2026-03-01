@@ -656,6 +656,9 @@
             <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 37px; width: auto;">
         </a>
         <div style="position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px;">
+            <button onclick="switchToMarketplace()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Маркетплейс" data-i18n-title="marketplace">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5Zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5Zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5Zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5Z"/></svg>
+            </button>
             <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
                 <span>{{ token_balance or 0 }}</span>
             </button>
@@ -697,6 +700,14 @@
                         <path d="M1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25v-8.5C0 1.784.784 1 1.75 1ZM1.5 2.75v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25Z"/>
                     </svg>
                     <span data-i18n="header-messages">Сообщения</span>
+                </button>
+
+                <!-- Маркетплейс -->
+                <button onclick="switchToMarketplace()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Маркетплейс" data-i18n-title="marketplace">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5Zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5Zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5Zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5Z"/>
+                    </svg>
+                    <span data-i18n="marketplace">Маркетплейс</span>
                 </button>
 
                 <!-- Модальное окно поиска вынесено за пределы хедера -->
@@ -1032,16 +1043,12 @@
                                 <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer; opacity: 0.5;" data-i18n="chat-ai">Чат с AI</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
-                                    <span data-i18n="news-feed">Лента новостей</span>
+                                    <span data-i18n="news-feed">Блог</span>
                                 </span>
                                 {% if logged_in %}
                                 <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 <span id="notes-link" onclick="event.stopPropagation(); switchToNotes()" style="cursor: pointer; opacity: 0.5;">
                                     <span data-i18n="notes">Заметки</span>
-                                </span>
-                                <span style="margin: 0 4px; opacity: 0.5;">|</span>
-                                <span id="marketplace-link" onclick="event.stopPropagation(); switchToMarketplace()" style="cursor: pointer; opacity: 0.5;">
-                                    <span data-i18n="marketplace">Маркетплейс</span>
                                 </span>
                                 <span style="margin: 0 4px; opacity: 0.5;">|</span>
                                 <span id="arena-link" onclick="event.stopPropagation(); switchToArena()" style="cursor: pointer; opacity: 0.5;">
@@ -2659,6 +2666,8 @@
             mpView.classList.add('active');
             mpView.style.zIndex = '1';
             currentView = 'marketplace';
+            // На мобилке переключаем на центральную колонку
+            if (window.innerWidth <= 1024) switchMobileColumn('center');
 
             // Stop arena SSE if switching away from arena
             if (_arenaSSE) { _arenaSSE.close(); _arenaSSE = null; }
@@ -11819,7 +11828,7 @@
   var D = {
     ru: {
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
-      'chat-ai':'Чат с AI','news-feed':'Лента новостей','marketplace':'Маркетплейс','arena':'Арена AI',
+      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'Маркетплейс','arena':'Арена AI',
       'msg-placeholder':'Сообщение...',
       'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
@@ -12037,7 +12046,7 @@
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
-      'chat-ai':'Chat with AI','news-feed':'News Feed','marketplace':'Marketplace','arena':'Arena AI',
+      'chat-ai':'Chat with AI','news-feed':'Blog','marketplace':'Marketplace','arena':'Arena AI',
       'msg-placeholder':'Message...',
       'opt-messages':'Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',
