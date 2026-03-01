@@ -10351,6 +10351,8 @@ async def api_arena_clear_all_handler(request):
         if not user_id:
             return web.json_response({'error': 'Not authenticated'}, status=401)
         import ai_integration.agent_arena as _arena_mod
+        # Сбрасываем семафор seed чтобы новые SSE-подключения ждали seed
+        _arena_mod._seed_done.clear()
         # Удаляем все посты из БД
         def _delete_all_posts():
             import psycopg2

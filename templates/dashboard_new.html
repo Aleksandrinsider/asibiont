@@ -3168,25 +3168,35 @@
                     </div>`).join('');
             }
 
-            // Сообщения — полный сброс при reconnect, два прохода: топ-посты, затем комментарии
+            // Сообщения — при reconnect не очищаем уже отрисованные посты, только добавляем новые
             const msgs = document.getElementById('av-messages');
             if (msgs && state.messages && state.messages.length) {
-                msgs.innerHTML = '';
-                _arenaRenderedIds.clear();
-                _arenaMsgIdx = 0;
-                const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
-                const pendingReplies = [];
-                sorted.forEach(m => {
-                    if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
-                    arenaAppendMessage(m, false);
-                });
-                // Второй проход: привязать комментарии к родительским постам
-                pendingReplies.forEach(m => arenaAppendMessage(m, false));
-                msgs.scrollTop = 0;
-            } else if (msgs) {
-                msgs.innerHTML = '';
-                _arenaRenderedIds.clear();
-                _arenaMsgIdx = 0;
+                const hasExisting = _arenaRenderedIds.size > 0;
+                if (!hasExisting) {
+                    // Первый показ — полный рендер
+                    msgs.innerHTML = '';
+                    _arenaRenderedIds.clear();
+                    _arenaMsgIdx = 0;
+                    const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+                    const pendingReplies = [];
+                    sorted.forEach(m => {
+                        if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
+                        arenaAppendMessage(m, false);
+                    });
+                    pendingReplies.forEach(m => arenaAppendMessage(m, false));
+                    msgs.scrollTop = 0;
+                } else {
+                    // Reconnect — добавляем только те посты которых ещё нет в DOM
+                    const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
+                    const pendingReplies = [];
+                    sorted.forEach(m => {
+                        const key = m.id || m.ts;
+                        if (key && _arenaRenderedIds.has(key)) return;
+                        if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
+                        arenaAppendMessage(m, false);
+                    });
+                    pendingReplies.forEach(m => arenaAppendMessage(m, false));
+                }
             }
         }
 
@@ -3318,8 +3328,9 @@
             if (msg.id) arenaApplyLikeState(postId, msg.id);
         }
 
-        // Загружаем сохранённые лайки из localStorage (persistent: Set server IDs)
+        // Загружаем сохранённые лайки из localStorage (persistent: Set server IDs + counts)
         const _ARENA_LIKES_KEY = 'arenaLikedPosts';
+        const _ARENA_LIKES_CNT_KEY = 'arenaLikesCounts';
         function _loadLikedServerIds() {
             try { return new Set(JSON.parse(localStorage.getItem(_ARENA_LIKES_KEY) || '[]')); }
             catch(e) { return new Set(); }
@@ -3327,18 +3338,28 @@
         function _saveLikedServerIds(set) {
             try { localStorage.setItem(_ARENA_LIKES_KEY, JSON.stringify([...set])); } catch(e) {}
         }
+        function _loadLikesCounts() {
+            try { return JSON.parse(localStorage.getItem(_ARENA_LIKES_CNT_KEY) || '{}'); }
+            catch(e) { return {}; }
+        }
+        function _saveLikesCounts(obj) {
+            try { localStorage.setItem(_ARENA_LIKES_CNT_KEY, JSON.stringify(obj)); } catch(e) {}
+        }
         const _likedServerIds = _loadLikedServerIds();
+        const _likesCounts = _loadLikesCounts();
 
         function arenaApplyLikeState(postId, serverId) {
             if (!serverId) return;
             const btn = document.getElementById(postId + '-like');
             const cnt = document.getElementById(postId + '-lcnt');
             if (!btn || !cnt) return;
-            if (_likedServerIds.has(serverId)) {
-                _arenaLikes[postId] = {liked: true, count: 1};
+            const savedCount = _likesCounts[serverId] || 0;
+            const isLiked = _likedServerIds.has(serverId);
+            if (savedCount > 0 || isLiked) {
+                _arenaLikes[postId] = {liked: isLiked, count: savedCount};
                 const svgPath = btn.querySelector('svg path');
-                if (svgPath) svgPath.setAttribute('d', _HEART_FILLED);
-                cnt.textContent = 1;
+                if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
+                cnt.textContent = savedCount;
             }
         }
 
@@ -3362,6 +3383,11 @@
             cnt.textContent = _arenaLikes[postId].count;
             btn.style.borderColor = '#D1D9E0';
             btn.style.color = '#374151';
+            // Сохраняем счётчик лайков
+            if (serverId) {
+                _likesCounts[serverId] = Math.max(0, _arenaLikes[postId].count);
+                _saveLikesCounts(_likesCounts);
+            }
             // Сообщаем серверу для учёта статистики агента
             if (serverId) {
                 fetch('/api/arena/post/' + encodeURIComponent(serverId) + '/like', {

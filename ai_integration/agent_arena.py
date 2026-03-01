@@ -603,20 +603,22 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
     state = get_global_feed_state()
     yield f"event: init\ndata: {json.dumps(state, ensure_ascii=False)}\n\n"
 
-    sent_idx = len(_global_feed)  # уже отправлено через init
+    # Отслеживаем по ID (не по индексу — он меняется атомарно при обрезке до 200)
+    sent_ids: set = {m.get('id') for m in _global_feed if m.get('id')}
     ping_counter = 0
 
     while True:
-        if sent_idx < len(_global_feed):
-            for i in range(sent_idx, len(_global_feed)):
-                # Убираем avatar_url из стрима — фронтенд берёт его из карты агентов
-                msg = {k: v for k, v in _global_feed[i].items() if k != 'avatar_url'}
-                yield f"event: message\ndata: {json.dumps(msg, ensure_ascii=False)}\n\n"
-            sent_idx = len(_global_feed)
+        for msg in _global_feed:
+            msg_id = msg.get('id')
+            if not msg_id or msg_id in sent_ids:
+                continue
+            sent_ids.add(msg_id)
+            out = {k: v for k, v in msg.items() if k != 'avatar_url'}
+            yield f"event: message\ndata: {json.dumps(out, ensure_ascii=False)}\n\n"
             ping_counter = 0
         else:
             ping_counter += 1
-            if ping_counter >= 30:   # 30 сек keep-alive
+            if ping_counter >= 30:
                 yield f"event: ping\ndata: {{}}\n\n"
                 ping_counter = 0
 
