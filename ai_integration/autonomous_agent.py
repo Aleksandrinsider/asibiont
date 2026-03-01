@@ -1379,6 +1379,9 @@ class HybridAutonomousAgent:
             _cur_agent = self._active_agent_data.get(user_id)
             if not _cur_agent or not _cur_agent.get('python_code', '').strip():
                 tools_to_exclude.add('run_agent_action')
+            else:
+                # Агент со скриптом: скрываем run_user_script чтобы не конкурировал
+                tools_to_exclude.add('run_user_script')
 
             # Enforce agent tools_allowed: если агент задал whitelist — прячем остальные
             if _agent_tools_allowed:

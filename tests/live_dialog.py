@@ -173,6 +173,8 @@ async def ai_user_reply(history: list[dict], scenario_hint: str) -> str:
             return data["choices"][0]["message"]["content"].strip()
 
 
+import time
+
 # ── цвета вывода (ANSI, работают в PowerShell) ─────────────────────────────────
 class C:
     CYAN   = "\033[96m"
@@ -183,16 +185,21 @@ class C:
     RESET  = "\033[0m"
 
 
-def print_turn(turn: int, role: str, text: str):
+def print_turn(turn: int, role: str, text: str, elapsed: float = 0.0, tools: list = None):
     if role == "user":
         prefix = f"{C.CYAN}{C.BOLD}[Пользователь #{turn}]{C.RESET} "
         color = C.CYAN
     else:
-        prefix = f"{C.GREEN}{C.BOLD}[Бот #{turn}]{C.RESET} "
+        timing = f" {C.GRAY}({elapsed:.1f}s){C.RESET}" if elapsed else ""
+        prefix = f"{C.GREEN}{C.BOLD}[Бот #{turn}]{timing}{C.RESET} "
         color = C.GREEN
 
     wrapped = textwrap.fill(text, width=90, subsequent_indent="    ")
     print(f"\n{prefix}{color}{wrapped}{C.RESET}")
+
+    if tools:
+        tools_str = ", ".join(tools)
+        print(f"  {C.YELLOW}↳ tools called: {tools_str}{C.RESET}")
 
 
 # ── основной диалог ────────────────────────────────────────────────────────────
@@ -226,7 +233,18 @@ async def run_dialog(turns: int = 6, scenario: str = "action"):
 
     agent = ag_mod.get_autonomous_agent()
 
-    # Очищаем историю предыдущего диалога
+    # ── перехватываем execute_actions для трекинга tool calls ─────────────────
+    _called_tools: list[str] = []
+    _orig_execute = ag_mod.HybridAutonomousAgent.execute_actions
+
+    async def _track_execute(self_inner, actions, user_id_inner, **kw):
+        # actions — список dict с ключом 'tool' или list tool_call объектов
+        for a in (actions or []):
+            name = a.get("tool") or a.get("function", {}).get("name") or str(a)
+            _called_tools.append(name)
+        return await _orig_execute(self_inner, actions, user_id_inner, **kw)
+
+    ag_mod.HybridAutonomousAgent.execute_actions = _track_execute
     try:
         from ai_integration.conversation_history import clear_conversation_history
         clear_conversation_history(TEST_UID)
@@ -247,13 +265,17 @@ async def run_dialog(turns: int = 6, scenario: str = "action"):
     for turn in range(1, turns + 1):
         print_turn(turn, "user", user_msg)
 
-        # Получаем ответ бота
+        # Получаем ответ бота с замером времени
+        _called_tools.clear()
+        t0 = time.perf_counter()
         bot_response = await agent.process_request(
             user_message=user_msg,
             user_id=TEST_UID,
-            subscription_tier="ULTRA",
+            subscription_tier="PREMIUM",
         )
-        print_turn(turn, "bot", bot_response or "(пустой ответ)")
+        elapsed = time.perf_counter() - t0
+        print_turn(turn, "bot", bot_response or "(пустой ответ)",
+                   elapsed=elapsed, tools=list(_called_tools))
 
         # Проверяем завершение
         if "спасибо, всё понял" in (user_msg + bot_response).lower():
@@ -269,6 +291,9 @@ async def run_dialog(turns: int = 6, scenario: str = "action"):
         ai_user_history.append({"role": "assistant", "content": user_msg})
 
     print(f"\n{C.BOLD}{C.YELLOW}=== ДИАЛОГ ЗАВЕРШЁН ==={C.RESET}\n")
+
+    # Восстанавливаем оригинальный execute_actions
+    ag_mod.HybridAutonomousAgent.execute_actions = _orig_execute
 
     # Чистим
     if with_script:
