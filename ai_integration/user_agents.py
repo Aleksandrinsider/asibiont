@@ -26,11 +26,14 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
             return None
         tools = json.loads(agent.tools_allowed or '[]')
         kb_raw = json.loads(agent.knowledge_base or '[]')
-        # Берём первые 3 фрагмента базы знаний в контекст (простой вариант)
+        # Берём до 8 фрагментов базы знаний в контекст (text + url)
         kb_snippets = []
-        for item in kb_raw[:3]:
+        for item in kb_raw[:8]:
             if item.get('type') == 'text' and item.get('content'):
                 kb_snippets.append(item['content'][:800])
+            elif item.get('type') == 'url' and item.get('url'):
+                title = item.get('name') or item.get('url')
+                kb_snippets.append(f"[Ссылка] {title}: {item['url']}")
         return {
             'id': agent.id,
             'name': agent.name,
@@ -75,7 +78,15 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 
     overlay += "\n═══════════════════════════════════════════════════════\n"
 
-    return overlay + "\n" + base_system_prompt
+    combined = overlay + "\n" + base_system_prompt
+
+    # Краткое напоминание в КОНЦЕ промпта — чтобы AI не «забыл» личность после длинного контекста
+    reminder = (
+        f"\n\n[🎭 НАПОМИНАНИЕ: ты сейчас агент «{name}». "
+        f"Строго придерживайся описанной выше личности в КАЖДОМ ответе. "
+        f"Нарушение характера = провал роли.]"
+    )
+    return combined + reminder
 
 
 def get_user_active_agent(user_id: int, session=None) -> Optional[int]:
@@ -179,7 +190,9 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
                            platform_earnings=0, is_trial=True)
             session.add(run)
             session.commit()
-            return {'success': True, 'is_trial': True, 'error': ''}
+            trials_left = max(0, agent.trial_messages - sub.trial_messages_used)
+            return {'success': True, 'is_trial': True, 'trials_left': trials_left,
+                    'agent_name': agent.name, 'error': ''}
 
         # Платное сообщение
         cost = agent.price_per_message

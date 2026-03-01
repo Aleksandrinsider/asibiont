@@ -1157,6 +1157,7 @@ class HybridAutonomousAgent:
             base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
 
             # Инжектируем личность кастомного агента (если активен)
+            _agent_tools_allowed: set = set()   # пустое = без ограничений
             try:
                 from .user_agents import get_user_active_agent, load_agent_personality, build_agent_system_prompt
                 _active_agent_id = get_user_active_agent(user_id)
@@ -1164,7 +1165,14 @@ class HybridAutonomousAgent:
                     _agent_data = load_agent_personality(_active_agent_id)
                     if _agent_data:
                         base_prompt = build_agent_system_prompt(_agent_data, base_prompt)
-                        logger.info(f"[AGENT] process_request: injected personality '{_agent_data['name']}' (id={_active_agent_id})")
+                        # Сохраняем разрешённые инструменты для enforce-а ниже
+                        _allowed = _agent_data.get('tools_allowed') or []
+                        if _allowed:
+                            _agent_tools_allowed = set(_allowed)
+                        logger.info(
+                            f"[AGENT] process_request: injected personality '{_agent_data['name']}' "
+                            f"(id={_active_agent_id}, tools={_allowed or 'all'})"
+                        )
                     else:
                         # Агент удалён/деактивирован — сбрасываем
                         from .user_agents import set_user_active_agent as _saa
@@ -1195,6 +1203,14 @@ class HybridAutonomousAgent:
 
             # Smart tool filtering — reduce tokens sent to API
             tools_to_exclude = self._select_tools_for_message(user_message)
+
+            # Enforce agent tools_allowed: если агент задал whitelist — прячем остальные
+            if _agent_tools_allowed:
+                from .tools import get_available_tools as _gat
+                _all_tool_names = {t['function']['name'] for t in _gat()}
+                _forbidden = _all_tool_names - _agent_tools_allowed
+                tools_to_exclude = tools_to_exclude | _forbidden
+                logger.info(f"[AGENT] tools_allowed enforced: showing {len(_agent_tools_allowed)} tools, hiding {len(_forbidden)}")
 
             # Прогресс — живые фразы
             if _cb:
@@ -1410,6 +1426,15 @@ class HybridAutonomousAgent:
                     from .user_agents import set_user_active_agent
                     set_user_active_agent(user_id, None)
                     final = f"⚠️ {bill_result['error']}\n\nВозвращаюсь в стандартный режим ASI Biont."
+                elif bill_result.get('is_trial'):
+                    # Показываем счётчик пробных сообщений
+                    trials_left = bill_result.get('trials_left', 0)
+                    agent_nm = bill_result.get('agent_name', 'агент')
+                    if trials_left > 0:
+                        trial_note = f"\n\n_💬 Пробный период: осталось {trials_left} бесплатных сообщений с агентом «{agent_nm}»._"
+                    else:
+                        trial_note = f"\n\n_💬 Пробные сообщения закончились. Следующие сообщения будут платными._"
+                    final = final + trial_note
         except Exception as _be:
             logger.warning(f"[BILLING] agent billing error: {_be}")
 
