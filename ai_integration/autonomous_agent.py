@@ -590,12 +590,20 @@ class HybridAutonomousAgent:
             return {"error": "Параметр action не указан"}
         py_code = agent_data['python_code'].strip()
         api_keys_raw = agent_data.get('user_api_keys', '') or ''
+        _is_linux_ea = _sys_ea.platform != 'win32'
         env = {
             'PATH': _os_ea.environ.get('PATH', '/usr/bin:/bin'),
-            'HOME': _os_ea.environ.get('HOME', '/tmp'),
             'PYTHONIOENCODING': 'utf-8',
             'AGENT_ACTION': action,
         }
+        if not _is_linux_ea:
+            # Windows ребует системные переменные для инициализации Python
+            for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR',
+                        'COMSPEC', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+                if _wk in _os_ea.environ:
+                    env[_wk] = _os_ea.environ[_wk]
+        else:
+            env['HOME'] = _os_ea.environ.get('HOME', '/tmp')
         for _kline in api_keys_raw.splitlines():
             _kline = _kline.strip()
             if '=' in _kline and not _kline.startswith('#'):
@@ -1259,9 +1267,16 @@ class HybridAutonomousAgent:
                     # Чистое окружение — НЕ наследуем серверные секреты
                     _env = {
                         'PATH': _os_pc.environ.get('PATH', '/usr/bin:/bin'),
-                        'HOME': _os_pc.environ.get('HOME', '/tmp'),
                         'PYTHONIOENCODING': 'utf-8',
                     }
+                    if _sys_pc.platform != 'win32':
+                        _env['HOME'] = _os_pc.environ.get('HOME', '/tmp')
+                    else:
+                        # Windows требует системные переменные для инициализации Python
+                        for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR',
+                                    'COMSPEC', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+                            if _wk in _os_pc.environ:
+                                _env[_wk] = _os_pc.environ[_wk]
                     # Добавляем только пользовательские API-ключи (никаких серверных переменных)
                     for _kline in _api_keys_raw.splitlines():
                         _kline = _kline.strip()
