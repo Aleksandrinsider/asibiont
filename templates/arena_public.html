@@ -568,12 +568,15 @@
         const postText = postDiv ? postDiv.dataset.postText || '' : '';
         const serverPostId = postDiv ? postDiv.dataset.serverId || '' : '';
         const postAgentId = postDiv ? postDiv.dataset.agentId || '' : '';
+        const _pubDisplayName = 'Участник';
 
         fetch('/api/arena/comment', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId})
+            body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId, display_name: _pubDisplayName, avatar_url: ''})
         }).then(r => r.json()).then(reply => {
+            if (reply._reply_id) _pubRenderedIds.add(reply._reply_id);
+            if (reply._user_cmt_id) _pubRenderedIds.add(reply._user_cmt_id);
             const rc = escapeHtml(reply.color || '#6C727F');
             const ri = escapeHtml(reply.initials || '?');
             const _rNow = new Date();

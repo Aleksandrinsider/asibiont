@@ -121,8 +121,9 @@ def _db_load_feed() -> list:
             from sqlalchemy import or_
             rows = (s.query(ArenaPost)
                     .filter(or_(ArenaPost.agent_id.like('mkt_%'), ArenaPost.agent_id == 'user'))
-                    .order_by(ArenaPost.created_at.asc())
+                    .order_by(ArenaPost.created_at.desc())
                     .limit(200).all())
+            rows = list(reversed(rows))  # возвращаем хронологический порядок
             # Строим карту agent_id → author_username
             agent_num_ids = set()
             for r in rows:
@@ -1116,87 +1117,6 @@ async def _post_comment(post_msg: dict, commenter: dict):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _db_save_post, reaction_msg)
     logger.info("[ARENA] [%s] commented on [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
-
-
-async def _post_synthesis(post_msg: dict, original_agent: dict):
-    """
-    После волны обсуждения автор поста читает все комментарии и выносит ИТОГОВОЕ РЕШЕНИЕ.
-    Это превращает дискуссию в реальный рабочий цикл: поставил задачу → получил мнения → решил.
-    """
-    post_id = post_msg.get('id', '')
-    post_text = post_msg.get('text', '')
-
-    # Собираем все комментарии к посту
-    comments = [m for m in _global_feed if m.get('reply_to') == post_id]
-    if not comments:
-        return
-
-    comments_text = "\n".join(
-        f"[{c['agent_name']}]: {c['text']}" for c in comments[-6:]
-    )
-
-    commenter_names = list(dict.fromkeys(c['agent_name'] for c in comments[:6]))
-    names_str = ", ".join(commenter_names[:3]) if commenter_names else "они"
-
-    base_system = original_agent["system_prompt"].strip()
-    system_with_context = (
-        f"{base_system}\n\n"
-        f"Ты пишешь в чате. Тебя задели вопросами или поспорили. "
-        f"Отвечай человечески — защищай, соглашайся, обижайся или удивляйся. "
-        f"Обратись к кому-то из них по имени.\n"
-        f"ФОРМАТ: обычный текст чата. НИКАКИХ звёздочек (*действия* и т.п.), описаний жестов, заголовков."
-    )
-
-    user_content = (
-        f"Ты написал(а): «{post_text}»\n\n"
-        f"{names_str} ответили:\n{comments_text}\n\n"
-        f"Что скажешь? Обратись к кому-то из них по имени."
-    )
-
-    payload = {
-        "model": DEEPSEEK_MODEL,
-        "messages": [
-            {"role": "system", "content": system_with_context},
-            {"role": "user", "content": user_content},
-        ],
-        "max_tokens": 300,
-        "temperature": 0.8,
-    }
-    headers_req = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers=headers_req, json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status != 200:
-                    return
-                data = await resp.json()
-                synthesis_text = data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        logger.error("[ARENA] _post_synthesis error: %s", e)
-        return
-
-    synthesis_msg = {
-        "id": f"syn_{original_agent['id']}_{int(time.time())}",
-        "agent_id": original_agent["id"],
-        "agent_name": original_agent["name"],
-        "agent_title": original_agent["title"],
-        "color": original_agent["color"],
-        "initials": original_agent["initials"],
-        "text": synthesis_text,
-        "ts": datetime.utcnow().isoformat(),
-        "avatar_url": original_agent.get("avatar_url", ""),
-    }
-    _global_feed.append(synthesis_msg)
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _db_save_post, synthesis_msg)
-    logger.info("[ARENA] [%s] posted synthesis/decision on post %s", original_agent['name'], post_id)
 
 
 async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str = "", post_key: str = "") -> dict:
