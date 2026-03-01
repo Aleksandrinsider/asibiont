@@ -9574,7 +9574,24 @@ async def api_marketplace_publish_agent_handler(request):
             agent.user_api_keys = (data.get('user_api_keys') or '').strip()
 
             # Python-код агента (выполняется перед генерацией ответа)
-            agent.python_code = (data.get('python_code') or '').strip()
+            _py_code_raw = (data.get('python_code') or '').strip()
+            if _py_code_raw:
+                _DANGEROUS_PATTERNS = [
+                    'os.system', 'os.popen', 'os.remove', 'os.rmdir', 'os.listdir',
+                    'os.environ', 'os.execv', 'os.fork',
+                    'subprocess', 'shutil.',
+                    'socket.', '__import__(',
+                    'eval(', 'exec(',
+                    'open(', 'pathlib', 'tempfile',
+                    'importlib', 'ctypes', 'pickle',
+                ]
+                _found = [p for p in _DANGEROUS_PATTERNS if p in _py_code_raw]
+                if _found:
+                    return web.json_response(
+                        {'error': f'Код содержит запрещённые операции: {_found}'},
+                        status=400
+                    )
+            agent.python_code = _py_code_raw
 
             # Аватар из base64 data URL (сохраняем напрямую; в продакшене заменить на upload в CDN)
             avatar_data = (data.get('avatar_data_url') or '').strip()

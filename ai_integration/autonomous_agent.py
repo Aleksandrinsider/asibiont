@@ -1188,7 +1188,13 @@ class HybridAutonomousAgent:
                     import asyncio as _aio_pc
                     _py_code = _agent_data['python_code'].strip()
                     _api_keys_raw = _agent_data.get('user_api_keys', '') or ''
-                    _env = dict(_os_pc.environ)
+                    # Чистое окружение — НЕ наследуем серверные секреты
+                    _env = {
+                        'PATH': _os_pc.environ.get('PATH', '/usr/bin:/bin'),
+                        'HOME': _os_pc.environ.get('HOME', '/tmp'),
+                        'PYTHONIOENCODING': 'utf-8',
+                    }
+                    # Добавляем только пользовательские API-ключи (никаких серверных переменных)
                     for _kline in _api_keys_raw.splitlines():
                         _kline = _kline.strip()
                         if '=' in _kline and not _kline.startswith('#'):
