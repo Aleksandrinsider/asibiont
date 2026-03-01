@@ -9840,6 +9840,7 @@ async def api_arena_comment_handler(request):
                 _af.append(reply_msg)
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(None, _dsp, reply_msg)
+                reply['_reply_id'] = reply_msg['id']  # чтобы JS мог пометить как rendered
             except Exception as _pe:
                 logger.warning(f"[ARENA] reply persistence error: {_pe}")
 

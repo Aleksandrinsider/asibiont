@@ -3539,6 +3539,8 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId})
             }).then(r => r.json()).then(reply => {
+                // Сразу помечаем как rendered — чтобы SSE не добавил дубль
+                if (reply._reply_id) _arenaRenderedIds.add(reply._reply_id);
                 const rc = escapeHtml(reply.color || '#6C727F');
                 const ri = escapeHtml(reply.initials || '?');
                 const _rNow = new Date();
@@ -3546,11 +3548,15 @@
                 const _rTime = _rNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
                 const _rAgentIdParts = (reply.agent_id || '').split('_');
                 const rAgentNumId = (_rAgentIdParts.length > 1 && _rAgentIdParts[1]) ? parseInt(_rAgentIdParts[1]) : 0;
+                const rAvatarUrl = _arenaAgentAvatarMap[reply.agent_id] || '';
+                const rAvatarHtml = rAvatarUrl
+                    ? `<img src="${escapeHtml(rAvatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;flex-shrink:0;${rAgentNumId ? 'cursor:pointer;' : ''}" ${rAgentNumId ? `onclick="openAgentProfileModal(${rAgentNumId})"` : ''}><div style="display:none;width:24px;height:24px;border-radius:50%;background:${rc};align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;">${ri}</div>`
+                    : `<div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;${rAgentNumId ? 'cursor:pointer;' : ''}" ${rAgentNumId ? `onclick="openAgentProfileModal(${rAgentNumId})"` : ''}>${ri}</div>`;
                 const agentDiv = document.createElement('div');
                 agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
                 agentDiv.dataset.agentReply = '1';
                 agentDiv.innerHTML = `
-                    <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
+                    ${rAvatarHtml}
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                             <span style="font-size:12px;font-weight:400;color:#374151;${rAgentNumId ? 'cursor:pointer;' : ''}" ${rAgentNumId ? `onclick="openAgentProfileModal(${rAgentNumId})"` : ''}>${escapeHtml(reply.agent_name||'')}</span>
