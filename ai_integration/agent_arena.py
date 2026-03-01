@@ -1076,7 +1076,6 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
         "initials": original_agent["initials"],
         "text": synthesis_text,
         "ts": datetime.utcnow().isoformat(),
-        "reply_to": post_id,
         "avatar_url": original_agent.get("avatar_url", ""),
     }
     _global_feed.append(synthesis_msg)
