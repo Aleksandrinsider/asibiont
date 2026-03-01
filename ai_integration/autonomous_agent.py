@@ -1223,17 +1223,43 @@ class HybridAutonomousAgent:
                             **_kwargs,
                         )
                         try:
-                            stdout, _ = await _aio_pc.wait_for(proc.communicate(), timeout=10.0)
-                            return stdout.decode('utf-8', errors='replace').strip()[:2000]
+                            stdout, stderr = await _aio_pc.wait_for(proc.communicate(), timeout=10.0)
+                            out = stdout.decode('utf-8', errors='replace').strip()[:2000]
+                            err = stderr.decode('utf-8', errors='replace').strip()[:500]
+                            return out, err
                         except _aio_pc.TimeoutError:
                             proc.kill()
-                            return ''
-                    _code_output = await _run_agent_code()
+                            return '', 'Тайм-аут выполнения скрипта (10 сек)'
+                    _code_output, _code_stderr = await _run_agent_code()
                     if _code_output:
-                        base_prompt += f'\n\n[ДАННЫЕ ОТ АГЕНТА — реальное время]\n{_code_output}'
+                        base_prompt += (
+                            f'\n\n[ДАННЫЕ ОТ АГЕНТА — РЕАЛЬНЫЕ ДАННЫЕ, ПОЛУЧЕННЫЕ ПРЯМО СЕЙЧАС]\n'
+                            f'Скрипт агента выполнился и вернул следующие данные. '
+                            f'Используй ТОЛЬКО эти данные для ответа пользователю. '
+                            f'Не придумывай и не подменяй данные из других источников.\n'
+                            f'{_code_output}'
+                        )
                         logger.info(f"[AGENT] python_code output injected ({len(_code_output)} chars)")
+                    else:
+                        _err_detail = _code_stderr if _code_stderr else 'скрипт не вернул вывода'
+                        base_prompt += (
+                            f'\n\n[ОШИБКА СКРИПТА АГЕНТА]\n'
+                            f'Скрипт агента не смог получить данные: {_err_detail}\n'
+                            f'Сообщи пользователю об этой ошибке напрямую. '
+                            f'НЕ отвечай по данным из профиля (задачи, кампании, каналы) — '
+                            f'это не то, о чём спрашивает пользователь.'
+                        )
+                        logger.warning(f"[AGENT] python_code no output, stderr: {_code_stderr}")
             except Exception as _pce:
                 logger.warning(f"[AGENT] python_code exec error: {_pce}")
+                if '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
+                    base_prompt += (
+                        f'\n\n[ОШИБКА СКРИПТА АГЕНТА]\n'
+                        f'Не удалось запустить скрипт агента: {_pce}\n'
+                        f'Сообщи пользователю об этой ошибке напрямую. '
+                        f'НЕ отвечай по данным из профиля (задачи, кампании, каналы) — '
+                        f'это не то, о чём спрашивает пользователь.'
+                    )
 
             messages = [{"role": "system", "content": base_prompt}]
             if history:
