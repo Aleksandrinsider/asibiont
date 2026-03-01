@@ -9491,14 +9491,30 @@ async def api_agent_generate_code_handler(request):
 Задача агента: {description}{keys_hint}
 
 СТРОГИЕ требования к коду:
-- Только стандартная библиотека Python (os, imaplib, smtplib, json, datetime, re, math, random, collections, itertools, time, hashlib, base64, urllib.request, urllib.parse)
+- Только стандартная библиотека Python (os, imaplib, smtplib, json, datetime, re, math, random, collections, itertools, time, hashlib, base64, urllib.request, urllib.parse, email, email.header)
 - НЕ используй: requests, httpx, aiohttp, subprocess, shutil, ctypes, pickle, eval, exec, open(), pathlib, glob, tempfile
 - Для HTTP-запросов используй ТОЛЬКО urllib.request (не requests!)
 - Ключи читать через os.environ.get('KEY_NAME', '')
-- Вывод должен быть кратким и информативным (до 500 символов)
+- Вывод должен быть кратким и информативным (до 2000 символов)
 - Обернуть в try/except, при ошибке напечатать сообщение об ошибке через print()
 - Никаких интерактивных вводов, без бесконечных циклов
 - Только код, без пояснений, без markdown-блоков```
+
+ПРАВИЛА ДЛЯ IMAP (Gmail и другие почты):
+- Для получения ПОСЛЕДНИХ писем: mail.search возвращает список id от старого к новому, поэтому ВСЕГДА используй reversed(email_ids[-N:]) чтобы взять N самых новых
+- НИКОГДА не используй email_ids[:N] — это возвращает самые старые письма
+- Для поиска писем за период используй SINCE (не UNSEEN) — UNSEEN даёт только непрочитанные, пропуская прочитанные новые
+- Тему письма декодируй через: from email.header import decode_header; raw,enc=decode_header(msg["Subject"])[0]; subject=raw.decode(enc or "utf-8") if isinstance(raw,bytes) else raw
+
+ПРИМЕР правильного получения 5 последних писем Gmail:
+```
+mail.select("inbox")
+week_ago = (datetime.datetime.now()-datetime.timedelta(days=7)).strftime("%d-%b-%Y")
+_, data = mail.search(None, f"SINCE {{week_ago}}")
+email_ids = data[0].split()
+for eid in reversed(email_ids[-5:]):  # последние 5, от нового к старому
+    ...
+```
 
 Выведи ТОЛЬКО чистый Python-код, никаких комментариев до или после кода."""
 
