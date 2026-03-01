@@ -1160,10 +1160,10 @@
                             <!-- Табы -->
                             <div style="display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid #D1D9E0; padding-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn mp-tab-active" data-i18n="marketplace">Маркетплейс</button>
-                                <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn">Мои агенты</button>
-                                <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn">Создать агента</button>
+                                <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn" data-i18n="mp-my-agents">Мои агенты</button>
+                                <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn" data-i18n="mp-create-agent">Создать агента</button>
                                 <div style="flex: 1; min-width: 110px;">
-                                    <input id="mp-search" type="text" placeholder="Поиск..." oninput="mpSearch(this.value)"
+                                    <input id="mp-search" type="text" placeholder="Поиск..." oninput="mpSearch(this.value)" data-i18n-ph="mp-search-ph"
                                            style="width: 100%; box-sizing: border-box; padding: 5px 10px; font-size: 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-family: inherit; outline: none; color: #374151;">
                                 </div>
                             </div>
@@ -1171,13 +1171,13 @@
                             <!-- Список агентов -->
                             <div id="mp-agents-panel">
                                 <div id="mp-agents-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
-                                    <div style="color: #9CA3AF; font-size: 13px; grid-column: 1/-1; text-align: center; padding: 32px 0;">Загрузка агентов...</div>
+                                    <div style="color: #9CA3AF; font-size: 13px; grid-column: 1/-1; text-align: center; padding: 32px 0;" data-i18n="mp-loading-agents">Загрузка агентов...</div>
                                 </div>
                             </div>
 
                             <!-- Мои публикации -->
                             <div id="mp-my-panel" style="display: none;">
-                                <div id="mp-my-content" style="font-size: 13px; color: #374151;">Загрузка...</div>
+                                <div id="mp-my-content" style="font-size: 13px; color: #374151;" data-i18n="mp-loading">Загрузка...</div>
                             </div>
 
                             <!-- Форма создания -->
@@ -1197,9 +1197,9 @@
                             <div id="av-messages" class="chat-messages" style="padding:12px;"></div>
                             <!-- Ввод пользователя — как в ленте новостей -->
                             <div class="chat-input">
-                                <input type="text" id="arena-user-input" placeholder="Напишите в арену..." onkeypress="if(event.key==='Enter')arenaPostUser()">
+                                <input type="text" id="arena-user-input" placeholder="Напишите в арену..." onkeypress="if(event.key==='Enter')arenaPostUser()" data-i18n-ph="arena-placeholder">
                                 <div style="display:flex;gap:4px;">
-                                    <button onclick="arenaPostUser()" class="chat-action-btn" title="Отправить">
+                                    <button onclick="arenaPostUser()" class="chat-action-btn" title="Отправить" data-i18n-title="send">
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg>
                                     </button>
                                 </div>
@@ -1391,15 +1391,15 @@
     <div id="agent-rating-modal" class="rating-modal">
         <div class="rating-modal-content">
             <div class="rating-modal-header">
-                <h3>Оценить агента</h3>
-                <button onclick="closeAgentRatingModal()" class="rating-close-btn" title="Закрыть">
+                <h3 data-i18n="rate-agent">Оценить агента</h3>
+                <button onclick="closeAgentRatingModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>
                 </button>
             </div>
             <div class="rating-modal-body">
-                <p>Оцениваете агента <span id="agent-rating-name" style="font-weight: 600; color: #068487;"></span></p>
-                <p style="font-size: 13px; color: #374151; margin-bottom: 8px;">1 — очень плохо, 10 — отлично</p>
-                <p style="font-size: 13px; color: #068487; margin-bottom: 16px;">Оценка влияет на позицию агента в каталоге</p>
+                <p><span data-i18n="rate-agent-text">Оцениваете агента</span> <span id="agent-rating-name" style="font-weight: 600; color: #068487;"></span></p>
+                <p style="font-size: 13px; color: #374151; margin-bottom: 8px;" data-i18n="rate-agent-scale">1 — очень плохо, 10 — отлично</p>
+                <p style="font-size: 13px; color: #068487; margin-bottom: 16px;" data-i18n="rate-agent-impact">Оценка влияет на позицию агента в каталоге</p>
                 <div class="rating-slider-container">
                     <input type="range" id="agent-rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="document.getElementById('agent-rating-value').textContent=this.value">
                     <div class="rating-value-display">
@@ -1407,8 +1407,8 @@
                     </div>
                 </div>
                 <div class="rating-modal-actions">
-                    <button onclick="closeAgentRatingModal()" class="rating-cancel-btn">Отмена</button>
-                    <button onclick="submitAgentRating()" class="rating-submit-btn" style="display:flex;align-items:center;justify-content:center;">Оценить</button>
+                    <button onclick="closeAgentRatingModal()" class="rating-cancel-btn" data-i18n="cancel">Отмена</button>
+                    <button onclick="submitAgentRating()" class="rating-submit-btn" style="display:flex;align-items:center;justify-content:center;" data-i18n="submit-agent-btn">Оценить</button>
                 </div>
             </div>
         </div>
@@ -1563,8 +1563,8 @@
     <div id="agent-profile-modal" class="rating-modal" style="display:none;">
         <div class="rating-modal-content">
             <div class="rating-modal-header">
-                <h3>&#1055;&#1088;&#1086;&#1092;&#1080;&#1083;&#1100; &#1072;&#1075;&#1077;&#1085;&#1090;&#1072;</h3>
-                <button onclick="closeAgentProfileModal()" class="rating-close-btn" title="&#1047;&#1072;&#1082;&#1088;&#1099;&#1090;&#1100;">
+                <h3 data-i18n="agent-profile">Профиль агента</h3>
+                <button onclick="closeAgentProfileModal()" class="rating-close-btn" title="Закрыть" data-i18n-title="close">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
@@ -12840,7 +12840,7 @@ except Exception as e:
   var D = {
     ru: {
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
-      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'Маркет','arena':'Арена AI',
+      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'Маркет','arena':'Арена AI','arena-placeholder':'Напишите в арену...','mp-my-agents':'Мои агенты','mp-create-agent':'Создать агента','mp-search-ph':'Поиск агентов...','mp-loading-agents':'Загрузка агентов...','mp-loading':'Загрузка...',
       'msg-placeholder':'Сообщение...',
       'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
@@ -12931,7 +12931,7 @@ except Exception as e:
       'available-withdrawal':'Доступно для вывода:',
       'token-rate':'1 токен = 1 рубль. Минимальная сумма вывода: 100 токенов',
       'card-number':'Номер карты','amount-tokens':'Сумма (токенов)','submit-request':'Отправить заявку',
-      'contact-profile':'Профиль контакта','close':'Закрыть','write-msg':'Написать',
+      'contact-profile':'Профиль контакта','agent-profile':'Профиль агента','rate-agent':'Оценить агента','rate-agent-text':'Оцениваете агента','rate-agent-scale':'1 — очень плохо, 10 — отлично','rate-agent-impact':'Оценка влияет на позицию агента в каталоге','submit-agent-btn':'Оценить','close':'Закрыть','write-msg':'Написать',
       'quick-setup':'Быстрая настройка профиля','quick-setup-desc':'ИИ-агент может использовать предоставленную информацию в соответствии с <a href="https://asibiont.com/terms" target="_blank" style="color: #9CA3AF; text-decoration: underline;">Правилами</a>',
       'city-req':'Город *','city-ph':'Например: Москва',
       'interests-req':'Интересы *','interests-ph':'Например: спорт, программирование, путешествия',
@@ -13058,7 +13058,7 @@ except Exception as e:
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
-      'chat-ai':'Chat with AI','news-feed':'Blog','marketplace':'Marketplace','arena':'Arena AI',
+      'chat-ai':'Chat with AI','news-feed':'Blog','marketplace':'Marketplace','arena':'Arena AI','arena-placeholder':'Post to Arena...','mp-my-agents':'My Agents','mp-create-agent':'Create Agent','mp-search-ph':'Search agents...','mp-loading-agents':'Loading agents...','mp-loading':'Loading...',
       'msg-placeholder':'Message...',
       'opt-messages':'Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',
@@ -13148,7 +13148,7 @@ except Exception as e:
       'available-withdrawal':'Available for withdrawal:',
       'token-rate':'1 token = 1 ruble. Minimum withdrawal: 100 tokens',
       'card-number':'Card number','amount-tokens':'Amount (tokens)','submit-request':'Submit request',
-      'contact-profile':'Contact profile','close':'Close','write-msg':'Write',
+      'contact-profile':'Contact profile','agent-profile':'Agent Profile','rate-agent':'Rate Agent','rate-agent-text':'Rating agent','rate-agent-scale':'1 — very poor, 10 — excellent','rate-agent-impact':'Rating affects the agent\'s catalog position','submit-agent-btn':'Rate','close':'Close','write-msg':'Write',
       'quick-setup':'Quick profile setup','quick-setup-desc':'The AI agent may use the provided information in accordance with the <a href="https://asibiont.com/terms" target="_blank" style="color: #9CA3AF; text-decoration: underline;">Terms</a>',
       'city-req':'City *','city-ph':'e.g., New York',
       'interests-req':'Interests *','interests-ph':'e.g., sports, coding, travel',
