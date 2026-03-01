@@ -1454,7 +1454,7 @@ class HybridAutonomousAgent:
             })
             final_resp = await self.call_ai(
                 messages, use_tools=False, temperature=0.7, max_tokens=500)
-            final_text = final_resp['choices'][0]['message'].get('content', '')
+            final_text = final_resp['choices'][0]['message'].get('content') or ''
             return self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)
 
@@ -1491,10 +1491,10 @@ class HybridAutonomousAgent:
         from .cognitive import CognitiveEngine
         from i18n import get_user_lang
 
-        final = clean_technical_details(content).strip()
+        final = clean_technical_details(content or '').strip()
         if not final:
             _lang = get_user_lang(user_id)
-            final = content.strip() or ("Done!" if _lang == 'en' else "Готово!")
+            final = (content or '').strip() or ("Done!" if _lang == 'en' else "Готово!")
 
         # Биллинг кастомного агента
         try:

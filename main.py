@@ -9491,30 +9491,91 @@ async def api_agent_generate_code_handler(request):
 Задача агента: {description}{keys_hint}
 
 СТРОГИЕ требования к коду:
-- Только стандартная библиотека Python (os, imaplib, smtplib, json, datetime, re, math, random, collections, itertools, time, hashlib, base64, urllib.request, urllib.parse, email, email.header)
+- Только стандартная библиотека Python (os, imaplib, smtplib, json, datetime, re, math, random, collections, itertools, time, hashlib, base64, urllib.request, urllib.parse, email, email.header, email.message)
 - НЕ используй: requests, httpx, aiohttp, subprocess, shutil, ctypes, pickle, eval, exec, open(), pathlib, glob, tempfile
 - Для HTTP-запросов используй ТОЛЬКО urllib.request (не requests!)
 - Ключи читать через os.environ.get('KEY_NAME', '')
 - Вывод должен быть кратким и информативным (до 2000 символов)
 - Обернуть в try/except, при ошибке напечатать сообщение об ошибке через print()
 - Никаких интерактивных вводов, без бесконечных циклов
-- Только код, без пояснений, без markdown-блоков```
+- Только код, без пояснений, без markdown-блоков
 
-ПРАВИЛА ДЛЯ IMAP (Gmail и другие почты):
-- Для получения ПОСЛЕДНИХ писем: mail.search возвращает список id от старого к новому, поэтому ВСЕГДА используй reversed(email_ids[-N:]) чтобы взять N самых новых
-- НИКОГДА не используй email_ids[:N] — это возвращает самые старые письма
-- Для поиска писем за период используй SINCE (не UNSEEN) — UNSEEN даёт только непрочитанные, пропуская прочитанные новые
-- Тему письма декодируй через: from email.header import decode_header; raw,enc=decode_header(msg["Subject"])[0]; subject=raw.decode(enc or "utf-8") if isinstance(raw,bytes) else raw
+ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ДЛЯ IMAP (работают с Gmail и любой почтой):
 
-ПРИМЕР правильного получения 5 последних писем Gmail:
-```
-mail.select("inbox")
-week_ago = (datetime.datetime.now()-datetime.timedelta(days=7)).strftime("%d-%b-%Y")
-_, data = mail.search(None, f"SINCE {{week_ago}}")
-email_ids = data[0].split()
-for eid in reversed(email_ids[-5:]):  # последние 5, от нового к старому
-    ...
-```
+1. ПОСЛЕДНИЕ письма: mail.search возвращает id от старого к новому.
+   ВСЕГДА используй: for eid in reversed(email_ids[-N:])
+   НИКОГДА: email_ids[:N]  — это самые СТАРЫЕ письма!
+
+2. Поиск SINCE (не UNSEEN): UNSEEN пропускает все прочитанные письма.
+
+3. Subject МОЖЕТ быть None — всегда защищай:
+   subj_raw = msg.get("Subject") or ""
+   parts = decode_header(subj_raw)
+   subject = "".join(
+       p.decode(enc or "utf-8", errors="replace") if isinstance(p, bytes) else (p or "")
+       for p, enc in parts
+   )
+
+4. Тело письма: большинство писем multipart — get_payload(decode=True) вернёт None!
+   ПРАВИЛЬНЫЙ способ извлечения тела:
+   body = ""
+   if msg.is_multipart():
+       for part in msg.walk():
+           if part.get_content_type() == "text/plain" and not part.get("Content-Disposition"):
+               raw = part.get_payload(decode=True) or b""
+               body = raw.decode(part.get_content_charset() or "utf-8", errors="replace")[:300]
+               break
+   else:
+       raw = msg.get_payload(decode=True) or b""
+       body = raw.decode(msg.get_content_charset() or "utf-8", errors="replace")[:300]
+
+5. Каждое письмо в отдельном try/except чтобы одна ошибка не ломала весь вывод.
+
+ПОЛНЫЙ ПРИМЕР правильного Gmail-агента:
+import imaplib, os, datetime
+from email import message_from_bytes
+from email.header import decode_header
+
+GMAIL_USER = os.environ.get("GMAIL_USER", "")
+GMAIL_PASS = os.environ.get("GMAIL_PASS", "")
+try:
+    mail = imaplib.IMAP4_SSL("imap.gmail.com")
+    mail.login(GMAIL_USER, GMAIL_PASS)
+    mail.select("inbox")
+    week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%d-%b-%Y")
+    _, data = mail.search(None, f"SINCE {{week_ago}}")
+    email_ids = data[0].split()
+    if not email_ids:
+        print("Новых писем нет.")
+    else:
+        for eid in reversed(email_ids[-5:]):
+            try:
+                _, msg_data = mail.fetch(eid, "(RFC822)")
+                msg = message_from_bytes(msg_data[0][1])
+                subj_raw = msg.get("Subject") or ""
+                parts = decode_header(subj_raw)
+                subject = "".join(
+                    p.decode(enc or "utf-8", errors="replace") if isinstance(p, bytes) else (p or "")
+                    for p, enc in parts
+                )
+                from_addr = msg.get("From", "")
+                date_str = msg.get("Date", "")
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == "text/plain" and not part.get("Content-Disposition"):
+                            raw = part.get_payload(decode=True) or b""
+                            body = raw.decode(part.get_content_charset() or "utf-8", errors="replace")[:200]
+                            break
+                else:
+                    raw = msg.get_payload(decode=True) or b""
+                    body = raw.decode(msg.get_content_charset() or "utf-8", errors="replace")[:200]
+                print(f"От: {{from_addr}}\\nТема: {{subject}}\\nДата: {{date_str}}\\nТело: {{body[:200]}}\\n---")
+            except Exception as e:
+                print(f"Ошибка письма: {{e}}")
+    mail.logout()
+except Exception as e:
+    print(f"Ошибка подключения: {{e}}")
 
 Выведи ТОЛЬКО чистый Python-код, никаких комментариев до или после кода."""
 
@@ -9526,7 +9587,7 @@ for eid in reversed(email_ids[-5:]):  # последние 5, от нового 
                 'https://api.deepseek.com/chat/completions',
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
                 json={'model': DEEPSEEK_MODEL, 'messages': [{'role': 'user', 'content': prompt}],
-                      'max_tokens': 800, 'temperature': 0.2},
+                      'max_tokens': 1400, 'temperature': 0.1},
                 timeout=_aio_h.ClientTimeout(total=20)
             ) as resp:
                 result = await resp.json()

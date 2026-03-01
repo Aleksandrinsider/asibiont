@@ -2847,6 +2847,476 @@
             } catch(e) { mpShowStatus('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), '#FEF2F2', '#DC2626'); }
         }
 
+        const _MPA_SVC = {
+            gmail: {
+                name: 'Gmail',
+                fields: [
+                    {k:'GMAIL_USER', label:'Email Gmail', ph:'you@gmail.com', t:'email'},
+                    {k:'GMAIL_PASS', label:'Пароль приложения', ph:'xxxx xxxx xxxx xxxx', t:'password'}
+                ],
+                hint: '⚠️ Нужен пароль приложения, не обычный. Google Аккаунт → Безопасность → Пароли приложений',
+                code: `import imaplib, os, datetime
+from email import message_from_bytes
+from email.header import decode_header
+USER = os.environ.get('GMAIL_USER', '')
+PASS = os.environ.get('GMAIL_PASS', '')
+try:
+    mail = imaplib.IMAP4_SSL('imap.gmail.com')
+    mail.login(USER, PASS)
+    mail.select('inbox')
+    since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
+    _, data = mail.search(None, 'SINCE ' + since)
+    ids = data[0].split()
+    if not ids:
+        print('Новых писем за неделю нет.')
+    else:
+        print('Писем за неделю: ' + str(len(ids)))
+        for eid in reversed(ids[-5:]):
+            try:
+                _, md = mail.fetch(eid, '(RFC822)')
+                msg = message_from_bytes(md[0][1])
+                subj_raw = msg.get('Subject') or ''
+                pts = decode_header(subj_raw)
+                subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
+                frm = msg.get('From', '')
+                date = msg.get('Date', '')
+                body = ''
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
+                            raw = part.get_payload(decode=True) or b''
+                            body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
+                            break
+                else:
+                    raw = msg.get_payload(decode=True) or b''
+                    body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
+                print('От: ' + frm)
+                print('Тема: ' + subject)
+                print('Дата: ' + date)
+                print(body)
+                print('---')
+            except Exception as ex:
+                print('Ошибка письма: ' + str(ex))
+    mail.logout()
+except Exception as e:
+    print('Ошибка: ' + str(e))`
+            },
+            yandex: {
+                name: 'Яндекс.Почта',
+                fields: [
+                    {k:'YANDEX_USER', label:'Email Яндекса', ph:'you@yandex.ru', t:'email'},
+                    {k:'YANDEX_PASS', label:'Пароль приложения', ph:'пароль', t:'password'}
+                ],
+                hint: '⚠️ Яндекс.Почта → Настройки → Клиенты → Включить IMAP, создать пароль приложения',
+                code: `import imaplib, os, datetime
+from email import message_from_bytes
+from email.header import decode_header
+USER = os.environ.get('YANDEX_USER', '')
+PASS = os.environ.get('YANDEX_PASS', '')
+try:
+    mail = imaplib.IMAP4_SSL('imap.yandex.ru')
+    mail.login(USER, PASS)
+    mail.select('inbox')
+    since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
+    _, data = mail.search(None, 'SINCE ' + since)
+    ids = data[0].split()
+    if not ids:
+        print('Новых писем за неделю нет.')
+    else:
+        print('Писем за неделю: ' + str(len(ids)))
+        for eid in reversed(ids[-5:]):
+            try:
+                _, md = mail.fetch(eid, '(RFC822)')
+                msg = message_from_bytes(md[0][1])
+                subj_raw = msg.get('Subject') or ''
+                pts = decode_header(subj_raw)
+                subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
+                frm = msg.get('From', '')
+                date = msg.get('Date', '')
+                body = ''
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
+                            raw = part.get_payload(decode=True) or b''
+                            body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
+                            break
+                else:
+                    raw = msg.get_payload(decode=True) or b''
+                    body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
+                print('От: ' + frm)
+                print('Тема: ' + subject)
+                print('Дата: ' + date)
+                print(body)
+                print('---')
+            except Exception as ex:
+                print('Ошибка письма: ' + str(ex))
+    mail.logout()
+except Exception as e:
+    print('Ошибка: ' + str(e))`
+            },
+            mailru: {
+                name: 'Mail.ru',
+                fields: [
+                    {k:'MAILRU_USER', label:'Email Mail.ru', ph:'you@mail.ru', t:'email'},
+                    {k:'MAILRU_PASS', label:'Пароль для внешних приложений', ph:'пароль', t:'password'}
+                ],
+                hint: '⚠️ Mail.ru: Почта → Настройки → Пароль для внешних приложений + включить IMAP',
+                code: `import imaplib, os, datetime
+from email import message_from_bytes
+from email.header import decode_header
+USER = os.environ.get('MAILRU_USER', '')
+PASS = os.environ.get('MAILRU_PASS', '')
+try:
+    mail = imaplib.IMAP4_SSL('imap.mail.ru')
+    mail.login(USER, PASS)
+    mail.select('inbox')
+    since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
+    _, data = mail.search(None, 'SINCE ' + since)
+    ids = data[0].split()
+    if not ids:
+        print('Новых писем за неделю нет.')
+    else:
+        print('Писем за неделю: ' + str(len(ids)))
+        for eid in reversed(ids[-5:]):
+            try:
+                _, md = mail.fetch(eid, '(RFC822)')
+                msg = message_from_bytes(md[0][1])
+                subj_raw = msg.get('Subject') or ''
+                pts = decode_header(subj_raw)
+                subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
+                frm = msg.get('From', '')
+                date = msg.get('Date', '')
+                body = ''
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
+                            raw = part.get_payload(decode=True) or b''
+                            body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
+                            break
+                else:
+                    raw = msg.get_payload(decode=True) or b''
+                    body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
+                print('От: ' + frm)
+                print('Тема: ' + subject)
+                print('Дата: ' + date)
+                print(body)
+                print('---')
+            except Exception as ex:
+                print('Ошибка письма: ' + str(ex))
+    mail.logout()
+except Exception as e:
+    print('Ошибка: ' + str(e))`
+            },
+            openweather: {
+                name: 'Погода',
+                fields: [
+                    {k:'WEATHER_API_KEY', label:'API ключ OpenWeatherMap', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'WEATHER_CITY', label:'Город (по умолчанию Moscow)', ph:'Moscow', t:'text', opt:true}
+                ],
+                hint: 'Бесплатный ключ: openweathermap.org → Sign Up → API keys',
+                code: `import urllib.request, json, os
+KEY = os.environ.get('WEATHER_API_KEY', '')
+CITY = os.environ.get('WEATHER_CITY', 'Moscow')
+try:
+    url = 'https://api.openweathermap.org/data/2.5/weather?q=' + CITY + '&appid=' + KEY + '&units=metric&lang=ru'
+    with urllib.request.urlopen(url, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    desc = d['weather'][0]['description']
+    temp = round(d['main']['temp'], 1)
+    feels = round(d['main']['feels_like'], 1)
+    humidity = d['main']['humidity']
+    wind = round(d['wind']['speed'], 1)
+    print('Погода в ' + CITY + ': ' + desc)
+    print('Температура: ' + str(temp) + 'C (ощущается как ' + str(feels) + 'C)')
+    print('Влажность: ' + str(humidity) + '%, ветер: ' + str(wind) + ' м/с')
+except Exception as e:
+    print('Ошибка погоды: ' + str(e))`
+            },
+            rss: {
+                name: 'RSS-лента',
+                fields: [
+                    {k:'RSS_URL', label:'URL RSS-ленты', ph:'https://lenta.ru/rss/news', t:'url'}
+                ],
+                hint: 'Примеры: lenta.ru/rss/news, habr.com/ru/rss/articles, vc.ru/rss',
+                code: `import urllib.request, re, html, os
+URL = os.environ.get('RSS_URL', '')
+try:
+    if not URL:
+        print('RSS_URL не задан')
+    else:
+        req = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            content = r.read().decode('utf-8', errors='replace')
+        items = re.findall(r'<item[^>]*>(.*?)</item>', content, re.DOTALL)[:5]
+        if not items:
+            print('Нет новостей')
+        else:
+            print('Последние новости:')
+            for item in items:
+                tm = re.search(r'<title[^>]*><!\[CDATA\[(.*?)\]\]>|<title[^>]*>(.*?)</title>', item, re.DOTALL)
+                lm = re.search(r'<link>(.*?)</link>', item, re.DOTALL)
+                t = html.unescape(((tm.group(1) or '') + (tm.group(2) or '')).strip()) if tm else '(нет)'
+                l = lm.group(1).strip() if lm else ''
+                print('- ' + t)
+                if l: print('  ' + l)
+except Exception as e:
+    print('Ошибка RSS: ' + str(e))`
+            },
+            telegram_bot: {
+                name: 'Telegram Bot',
+                fields: [
+                    {k:'TG_BOT_TOKEN', label:'Токен бота (от @BotFather)', ph:'1234567890:AABBCCddEEff...', t:'text'}
+                ],
+                hint: 'Создайте бота через @BotFather в Telegram и скопируйте токен',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('TG_BOT_TOKEN', '')
+try:
+    url = 'https://api.telegram.org/bot' + TOKEN + '/getUpdates?limit=10'
+    with urllib.request.urlopen(url, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    updates = d.get('result', [])
+    if not updates:
+        print('Новых сообщений боту нет')
+    else:
+        print('Последние сообщения боту (' + str(len(updates)) + '):')
+        for u in reversed(updates[-5:]):
+            msg = u.get('message', {})
+            frm = msg.get('from', {})
+            name = (frm.get('first_name', '') + ' ' + frm.get('last_name', '')).strip()
+            uname = frm.get('username', '')
+            text = msg.get('text', '(медиа/файл)')
+            if uname: name = name + ' (@' + uname + ')'
+            print('- ' + name + ': ' + text[:100])
+except Exception as e:
+    print('Ошибка Telegram: ' + str(e))`
+            },
+            vk: {
+                name: 'ВКонтакте',
+                fields: [
+                    {k:'VK_TOKEN', label:'Токен доступа VK (access_token)', ph:'vk1.a.xxxxx...', t:'text'},
+                    {k:'VK_OWNER_ID', label:'ID страницы/группы (для группы — отрицательный)', ph:'-123456789', t:'text'}
+                ],
+                hint: 'Токен: vk.com/dev → Мои приложения → Standalone → Получить токен (rights: wall, groups)',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('VK_TOKEN', '')
+OWNER_ID = os.environ.get('VK_OWNER_ID', '')
+try:
+    url = 'https://api.vk.com/method/wall.get?owner_id=' + OWNER_ID + '&count=5&access_token=' + TOKEN + '&v=5.131'
+    with urllib.request.urlopen(url, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    if 'error' in d:
+        print('Ошибка VK: ' + d['error'].get('error_msg', str(d['error'])))
+    else:
+        items = d.get('response', {}).get('items', [])
+        print('Последние посты (' + str(len(items)) + '):')
+        for post in items:
+            text = (post.get('text') or '(нет текста)')[:200]
+            likes = post.get('likes', {}).get('count', 0)
+            views = post.get('views', {}).get('count', 0)
+            print('---')
+            print(text)
+            print('Лайков: ' + str(likes) + '  Просмотров: ' + str(views))
+except Exception as e:
+    print('Ошибка VK: ' + str(e))`
+            },
+            wildberries: {
+                name: 'Wildberries',
+                fields: [
+                    {k:'WB_API_KEY', label:'API ключ Wildberries (раздел Статистика)', ph:'eyJhbGciOiJIUzI1NiIsInR5...', t:'text'}
+                ],
+                hint: 'Ключ: личный кабинет WB → Профиль → Настройки → Доступ к API → Статистика',
+                code: `import urllib.request, json, os
+from datetime import datetime, timedelta
+API_KEY = os.environ.get('WB_API_KEY', '')
+try:
+    date_from = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00')
+    url = 'https://statistics-api.wildberries.ru/api/v1/supplier/sales?dateFrom=' + date_from + '&flag=0'
+    req = urllib.request.Request(url, headers={'Authorization': API_KEY})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        sales = json.loads(r.read().decode())
+    real = [s for s in sales if str(s.get('saleID', '')).startswith('S')]
+    total = sum(s.get('totalPrice', 0) for s in real)
+    cnt = len(real)
+    print('Продажи за последние 7 дней:')
+    print('Заказов: ' + str(cnt))
+    print('Сумма: ' + str(round(total, 0)) + ' руб.')
+    if cnt:
+        top = {}
+        for s in real:
+            nm = str(s.get('nmId', ''))
+            if nm: top[nm] = top.get(nm, 0) + 1
+        best = sorted(top.items(), key=lambda x: x[1], reverse=True)[:3]
+        print('Топ артикулы: ' + ', '.join(nm + '(' + str(c) + ' шт)' for nm, c in best))
+except Exception as e:
+    print('Ошибка WB: ' + str(e))`
+            },
+            google_sheets: {
+                name: 'Google Sheets',
+                fields: [
+                    {k:'GSHEETS_ID', label:'ID таблицы (из URL между /d/ и /edit)', ph:'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms', t:'text'},
+                    {k:'GSHEETS_SHEET', label:'Название листа', ph:'Sheet1', t:'text', opt:true}
+                ],
+                hint: 'Таблица должна быть открыта для просмотра: Файл → Поделиться → Все с ссылкой → Читатель',
+                code: `import urllib.request, csv, io, os
+SHEET_ID = os.environ.get('GSHEETS_ID', '')
+SHEET_NAME = os.environ.get('GSHEETS_SHEET', 'Sheet1')
+try:
+    if not SHEET_ID:
+        print('GSHEETS_ID не задан')
+    else:
+        url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + SHEET_NAME
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            content = r.read().decode('utf-8', errors='replace')
+        rows = list(csv.reader(io.StringIO(content)))
+        if not rows:
+            print('Таблица пуста')
+        else:
+            print('Таблица: ' + str(len(rows)) + ' строк, ' + str(len(rows[0])) + ' столбцов')
+            print('Заголовки: ' + ' | '.join(rows[0][:8]))
+            print('---')
+            for row in rows[1:8]:
+                print(' | '.join((v or '')[:25] for v in row[:8]))
+except Exception as e:
+    print('Ошибка Google Sheets: ' + str(e))`
+            },
+            github: {
+                name: 'GitHub Issues/PR',
+                fields: [
+                    {k:'GITHUB_TOKEN', label:'Personal Access Token', ph:'ghp_xxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'GITHUB_REPO', label:'Репозиторий (owner/repo)', ph:'username/my-project', t:'text'}
+                ],
+                hint: 'Токен: github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('GITHUB_TOKEN', '')
+REPO = os.environ.get('GITHUB_REPO', '')
+try:
+    headers = {'Authorization': 'Bearer ' + TOKEN, 'Accept': 'application/vnd.github+json', 'User-Agent': 'AgentBot/1.0'}
+    def gh_get(path):
+        req = urllib.request.Request('https://api.github.com' + path, headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as r:
+            return json.loads(r.read().decode())
+    issues = gh_get('/repos/' + REPO + '/issues?state=open&per_page=5')
+    prs = gh_get('/repos/' + REPO + '/pulls?state=open&per_page=5')
+    print('Репозиторий: ' + REPO)
+    print('Открытых issues: ' + str(len(issues)))
+    for i in issues[:3]:
+        print('  #' + str(i['number']) + ' ' + (i.get('title') or '')[:70])
+    print('Открытых PR: ' + str(len(prs)))
+    for p in prs[:3]:
+        print('  #' + str(p['number']) + ' ' + (p.get('title') or '')[:70])
+except Exception as e:
+    print('Ошибка GitHub: ' + str(e))`
+            },
+            hh: {
+                name: 'hh.ru (вакансии)',
+                fields: [
+                    {k:'HH_QUERY', label:'Поисковый запрос вакансий', ph:'Python разработчик', t:'text'},
+                    {k:'HH_AREA', label:'ID региона (1=Москва, 2=СПб, 0=везде)', ph:'1', t:'text', opt:true}
+                ],
+                hint: 'Публичное API hh.ru — токен не нужен. Обновляется в реальном времени.',
+                code: `import urllib.request, urllib.parse, json, os
+QUERY = os.environ.get('HH_QUERY', 'Python')
+AREA = os.environ.get('HH_AREA', '1')
+try:
+    params = urllib.parse.urlencode({'text': QUERY, 'per_page': 5, 'sort_by': 'publication_time', 'area': AREA})
+    url = 'https://api.hh.ru/vacancies?' + params
+    req = urllib.request.Request(url, headers={'User-Agent': 'AgentBot/1.0 (agent@bot.ru)'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    items = d.get('items', [])
+    found = d.get('found', 0)
+    print('Вакансии «' + QUERY + '»: найдено ' + str(found))
+    for v in items:
+        title = v.get('name', '')
+        company = v.get('employer', {}).get('name', '?')
+        area = v.get('area', {}).get('name', '')
+        sal = v.get('salary') or {}
+        if sal:
+            s = (str(sal.get('from') or '') + ('–' + str(sal['to']) if sal.get('to') else '') + ' ' + (sal.get('currency') or '')).strip()
+        else:
+            s = 'зп не указана'
+        print('• ' + title + ' — ' + company + ' (' + area + '), ' + s)
+except Exception as e:
+    print('Ошибка hh.ru: ' + str(e))`
+            },
+            http_api: {
+                name: 'HTTP API (любой REST)',
+                fields: [
+                    {k:'API_URL', label:'URL запроса', ph:'https://api.example.com/data', t:'url'},
+                    {k:'API_KEY', label:'Авторизация (Bearer/key)', ph:'Bearer eyJ... или просто ключ', t:'text', opt:true}
+                ],
+                hint: 'Подходит для любого публичного или приватного REST API, возвращающего JSON',
+                code: `import urllib.request, json, os
+URL = os.environ.get('API_URL', '')
+AUTH = os.environ.get('API_KEY', '')
+try:
+    if not URL:
+        print('API_URL не задан')
+    else:
+        headers = {'User-Agent': 'AgentBot/1.0', 'Accept': 'application/json'}
+        if AUTH:
+            if AUTH.lower().startswith(('bearer ', 'basic ', 'token ')):
+                headers['Authorization'] = AUTH
+            else:
+                headers['Authorization'] = 'Bearer ' + AUTH
+        req = urllib.request.Request(URL, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            raw = r.read().decode('utf-8', errors='replace')
+        try:
+            d = json.loads(raw)
+            print(json.dumps(d, ensure_ascii=False, indent=2)[:2000])
+        except Exception:
+            print(raw[:2000])
+except Exception as e:
+    print('Ошибка API: ' + str(e))`
+            }
+        };
+
+        function mpApplyTemplate(svc) {
+            const fieldsEl = document.getElementById('mpa-svc-fields');
+            const hintEl = document.getElementById('mpa-svc-hint');
+            if (!svc || !_MPA_SVC[svc]) {
+                if (fieldsEl) fieldsEl.style.display = 'none';
+                if (hintEl) { hintEl.style.display = 'none'; hintEl.textContent = ''; }
+                return;
+            }
+            const tmpl = _MPA_SVC[svc];
+            if (fieldsEl) {
+                let h = '<div style="display:flex;flex-direction:column;gap:7px;">';
+                for (const f of tmpl.fields) {
+                    h += `<div><div style="font-size:11px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
+                }
+                h += `<button type="button" onclick="mpApplyTemplateConfirm('${svc}')" class="mp-action-btn" style="background:#EFF6FF;border-color:#3B82F6;color:#2563EB;" onmouseover="this.style.background='#DBEAFE';" onmouseout="this.style.background='#EFF6FF';">✓ Применить шаблон «${tmpl.name}»</button>`;
+                h += '</div>';
+                fieldsEl.innerHTML = h;
+                fieldsEl.style.display = 'block';
+            }
+            if (hintEl && tmpl.hint) { hintEl.textContent = tmpl.hint; hintEl.style.display = 'block'; }
+        }
+
+        function mpApplyTemplateConfirm(svc) {
+            const tmpl = _MPA_SVC[svc];
+            if (!tmpl) return;
+            const keyLines = [];
+            for (const f of tmpl.fields) {
+                const el = document.getElementById('mpa-svc-' + f.k);
+                const val = el ? el.value.trim() : '';
+                if (val || f.opt) keyLines.push(f.k + '=' + val);
+            }
+            const apiEl = document.getElementById('mpa-apikeys');
+            if (apiEl) apiEl.value = keyLines.join('\n');
+            const codeEl = document.getElementById('mpa-pycode');
+            if (codeEl) {
+                codeEl.value = tmpl.code;
+                codeEl.style.height = 'auto';
+                codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
+            }
+            const det = document.getElementById('mpa-advanced-details');
+            if (det) det.open = true;
+            mpShowStatus('Шаблон «' + tmpl.name + '» применён — нажмите «Запустить и проверить» для теста', '#ECFDF5', '#059669');
+        }
+
         async function mpGenerateAgentCode() {
             const desc = (document.getElementById('mpa-code-desc') || {}).value?.trim();
             if (!desc) { mpShowStatus('Опишите что должен делать агент с данными', '#FEF2F2', '#DC2626'); return; }
@@ -2964,6 +3434,10 @@
                 const preview = document.getElementById('mpa-avatar-preview');
                 if (preview) preview.innerHTML = `<img src="${escapeHtml(agent.avatar_url)}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">`;
             }
+
+            // Открываем продвинутые настройки если у агента есть код
+            const det = document.getElementById('mpa-advanced-details');
+            if (det && agent.python_code) det.open = true;
 
             // Меняем кнопку и заголовок формы
             const titleEl = document.querySelector('#mp-create-form [style*="font-weight:600"]');
@@ -3106,31 +3580,58 @@
                     <textarea id="mpa-desc" placeholder="Короткое описание для карточки (2-3 предложения)" rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
                     <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
 
-                    <!-- API ключи -->
+                    <!-- Быстрая настройка: выбор сервиса -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#374151;margin-bottom:4px;">API ключи (необязательно)</div>
-                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Если агент использует внешние сервисы — укажите ключи. Формат: <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=значение</code>, каждый с новой строки. Ключи видны только вам.</div>
-                        <textarea id="mpa-apikeys" placeholder="OPENAI_API_KEY=sk-...&#10;WEATHER_KEY=abc123&#10;NEWSAPI_KEY=xyz789" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:4px;">⚡ Подключить сервис</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Выберите сервис, введите данные — агент начнёт получать реальные данные перед каждым ответом.</div>
+                        <select id="mpa-svc-select" onchange="mpApplyTemplate(this.value)" style="width:100%;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
+                            <option value="">— выбрать сервис —</option>
+                            <option value="gmail">📧 Gmail</option>
+                            <option value="yandex">📧 Яндекс.Почта</option>
+                            <option value="mailru">📧 Mail.ru</option>
+                            <option value="openweather">🌤 Погода (OpenWeatherMap)</option>
+                            <option value="rss">📰 RSS-лента новостей</option>
+                            <option value="telegram_bot">🤖 Telegram Bot (входящие)</option>
+                            <option value="vk">💙 ВКонтакте (посты/стена)</option>
+                            <option value="wildberries">🟣 Wildberries (продажи)</option>
+                            <option value="google_sheets">📊 Google Sheets (публичная таблица)</option>
+                            <option value="github">🐙 GitHub (issues/PR)</option>
+                            <option value="hh">💼 hh.ru (вакансии)</option>
+                            <option value="http_api">🔌 HTTP API (любой REST)</option>
+                        </select>
+                        <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>
+                        <div id="mpa-svc-hint" style="font-size:11px;color:#F59E0B;margin-top:5px;display:none;"></div>
                     </div>
 
-                    <!-- Python-код агента: генерация -->
+                    <!-- Переменные окружения -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                            <div>
+                        <div style="font-size:13px;color:#374151;margin-bottom:4px;">Переменные окружения</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Заполняются автоматически при выборе сервиса. Можно добавить свои: <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=значение</code></div>
+                        <textarea id="mpa-apikeys" placeholder="Заполнятся автоматически после выбора сервиса выше" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                    </div>
+
+                    <!-- Продвинутые настройки: код -->
+                    <details id="mpa-advanced-details" style="background:white;border:1px solid #D1D9E0;border-radius:8px;overflow:hidden;" ontoggle="const a=this.querySelector('.mpa-adv-arrow');if(a)a.style.transform=this.open?'rotate(0deg)':'rotate(-90deg)';">
+                        <summary style="padding:10px 12px;cursor:pointer;font-size:13px;color:#6B7280;font-weight:500;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
+                            <svg class="mpa-adv-arrow" width="12" height="12" viewBox="0 0 12 12" style="transform:rotate(-90deg);transition:transform 0.2s;flex-shrink:0;"><path d="M2 4l4 4 4-4" stroke="#9CA3AF" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Продвинутые настройки (Python-код)
+                        </summary>
+                        <div style="padding:0 12px 12px 12px;border-top:1px solid #F3F4F6;">
+                            <div style="padding-top:10px;margin-bottom:6px;">
                                 <div style="font-size:13px;color:#374151;font-weight:500;">Реальные данные перед ответом</div>
-                                <div style="font-size:11px;color:#9CA3AF;margin-top:1px;">Опишите словами что агент должен получить — сгенерируем код автоматически</div>
+                                <div style="font-size:11px;color:#9CA3AF;margin-top:1px;">Опишите что агент должен получить — сгенерируем код. Или отредактируйте заполненный шаблоном код выше.</div>
+                            </div>
+                            <textarea id="mpa-code-desc" placeholder="Например: получай курс биткоина с CoinGecko" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#F9FAFB;"></textarea>
+                            <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сгенерировать код</button>
+                            <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
+                            <div style="margin-top:8px;">
+                                <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;">Код агента (заполняется шаблоном или генерацией):</div>
+                                <textarea id="mpa-pycode" placeholder="# Код появится здесь после выбора сервиса или генерации" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:11px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                                <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;background:#F0FDF4;border-color:#16A34A;color:#15803D;" onmouseover="this.style.background='#DCFCE7';" onmouseout="this.style.background='#F0FDF4';">Запустить и проверить код</button>
+                                <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
                             </div>
                         </div>
-                        <textarea id="mpa-code-desc" placeholder="Например: получай мои события Google Календаря на сегодня" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#F9FAFB;"></textarea>
-                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сгенерировать код</button>
-                        <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
-                        <div style="margin-top:8px;">
-                            <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;">Сгенерированный / свой код (можно отредактировать):</div>
-                            <textarea id="mpa-pycode" placeholder="# Python-код будет здесь после генерации" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:11px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
-                            <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;background:#F0FDF4;border-color:#16A34A;color:#15803D;" onmouseover="this.style.background='#DCFCE7';" onmouseout="this.style.background='#F0FDF4';">Запустить и проверить код</button>
-                            <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
-                        </div>
-                    </div>
+                    </details>
 
                     <!-- Цена — визуально понятно -->
                     <div id="mpa-price-block" style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
