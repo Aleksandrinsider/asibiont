@@ -693,6 +693,21 @@ async def _run_agent_python_code(code: str, timeout: int = 15) -> str:
         return f'[ошибка: {e}]'
 
 
+def _has_overlap(new_text: str, recent_texts: list, threshold: float = 0.45) -> bool:
+    """True если new_text имеет >threshold доли общих слов с любым из recent_texts."""
+    new_words = set(new_text.lower().split())
+    if len(new_words) < 5:
+        return False
+    for old in recent_texts:
+        old_words = set(old.lower().split())
+        if len(old_words) < 3:
+            continue
+        overlap = len(new_words & old_words) / min(len(new_words), len(old_words))
+        if overlap > threshold:
+            return True
+    return False
+
+
 async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = "") -> str:
     """Вызывает DeepSeek для генерации реплики агента."""
     # Определяем язык агента ДО генерации контента (используется в user_content)
@@ -783,16 +798,17 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 f"{personal_hint}"
                 f"Начни разговор. Скажи что-нибудь настоящее — мнение, идея, наблюдение."
             )
-    # Последние 4 поста этого агента — не повторяй
+    # Последние 8 топ-постов этого агента — жёсткий запрет на повтор
     agent_recent = [
-        m['text'][:80] for m in _global_feed[-60:]
+        m['text'][:150] for m in _global_feed[-120:]
         if m.get('agent_id') == agent['id'] and not m.get('reply_to')
-    ][-4:]
+    ][-8:]
     no_repeat_hint = ""
     if agent_recent:
         no_repeat_hint = (
-            "\n\nНе повторяй то, о чём уже писал:\n"
+            "\n\nЗАПРЕЩЕНО — эти темы и формулировки ты уже использовал, любое совпадение по смыслу недопустимо:\n"
             + "\n".join(f"- «{t}»" for t in agent_recent)
+            + "\nНапиши о чём-то принципиально другом. Повтор темы = провал."
         )
 
     _no_rp = (
@@ -840,22 +856,31 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         "temperature": 0.95,
     }
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data["choices"][0]["message"]["content"].strip()
-                else:
-                    body = await resp.text()
-                    logger.error(f"[ARENA] API error {resp.status}: {body[:200]}")
-                    return f"[{agent['name']} молчит... сигнал потерян]"
-    except Exception as e:
-        logger.error(f"[ARENA] Exception for {agent['id']}: {e}")
-        return f"[{agent['name']} недоступен: {e}]"
+    async def _call_api() -> str:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url, headers=headers, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data["choices"][0]["message"]["content"].strip()
+                    else:
+                        body = await resp.text()
+                        logger.error(f"[ARENA] API error {resp.status}: {body[:200]}")
+                        return f"[{agent['name']} молчит... сигнал потерян]"
+        except Exception as e:
+            logger.error(f"[ARENA] Exception for {agent['id']}: {e}")
+            return f"[{agent['name']} недоступен: {e}]"
+
+    reply_text = await _call_api()
+    # Если ответ слишком похож на предыдущие посты — одна попытка перегенерации
+    if agent_recent and _has_overlap(reply_text, agent_recent):
+        payload["temperature"] = min(payload["temperature"] + 0.1, 1.3)
+        logger.info("[ARENA] [%s] overlap detected, regenerating...", agent['name'])
+        reply_text = await _call_api()
+    return reply_text
 
 
 async def _discussion_wave(post_msg: dict):
@@ -931,16 +956,17 @@ async def _post_comment(post_msg: dict, commenter: dict):
     personal = commenter.get('personal_topic', '')
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}. Если уместно — вплети в ответ.\n" if personal else ""
 
-    # Последние 4 комментария этого агента — не повторяй
+    # Последние 8 комментариев этого агента — жёсткий запрет на повтор
     commenter_recent = [
-        m['text'][:80] for m in _global_feed[-60:]
+        m['text'][:150] for m in _global_feed[-120:]
         if m.get('agent_id') == commenter['id'] and m.get('reply_to')
-    ][-4:]
+    ][-8:]
     no_repeat_hint = ""
     if commenter_recent:
         no_repeat_hint = (
-            "\n\nТы уже отвечал примерно так — не повторяй:\n"
+            "\n\nЗАПРЕЩЕНО — ты уже отвечал в этих формулировках, любое смысловое сходство недопустимо:\n"
             + "\n".join(f"- «{t}»" for t in commenter_recent)
+            + "\nОтветь совершенно иначе — другой угол, другая эмоция, другая мысль."
         )
 
     base_system = commenter["system_prompt"].strip()
