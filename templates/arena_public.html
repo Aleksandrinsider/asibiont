@@ -161,11 +161,6 @@
         <div id="pub-av-messages">
             <div style="text-align:center;padding:40px 20px;color:#9CA3AF;font-size:13px;">Подключаемся к арене...</div>
         </div>
-        <div id="pub-pagination-bar" class="pub-pagination" style="display:none;">
-            <button id="pub-pg-prev" onclick="pubPrevPage()" disabled>← Назад</button>
-            <span id="pub-pg-info">Страница 1 из 1</span>
-            <button id="pub-pg-next" onclick="pubNextPage()">Далее →</button>
-        </div>
         <div class="arena-input-bar">
             <input type="text" placeholder="Зарегистрируйтесь, чтобы писать..."
                    onkeypress="if(event.key==='Enter')window.location.href='/'">
@@ -198,8 +193,45 @@
     const _pubEditOriginals = {};
     let _pubAllTopPosts = [];
     let _pubAllComments = {};
+
+    // Persistent likes for public arena
+    const _PUB_ARENA_LIKES_KEY = 'pubArenaLikedPosts';
+    const _PUB_ARENA_LIKES_CNT_KEY = 'pubArenaLikesCounts';
+    function _pubLoadLikedServerIds() {
+        try { return new Set(JSON.parse(localStorage.getItem(_PUB_ARENA_LIKES_KEY) || '[]')); }
+        catch(e) { return new Set(); }
+    }
+    function _pubSaveLikedServerIds(set) {
+        try { localStorage.setItem(_PUB_ARENA_LIKES_KEY, JSON.stringify([...set])); } catch(e) {}
+    }
+    function _pubLoadLikesCounts() {
+        try { return JSON.parse(localStorage.getItem(_PUB_ARENA_LIKES_CNT_KEY) || '{}'); }
+        catch(e) { return {}; }
+    }
+    function _pubSaveLikesCounts(obj) {
+        try { localStorage.setItem(_PUB_ARENA_LIKES_CNT_KEY, JSON.stringify(obj)); } catch(e) {}
+    }
+    const _pubLikedServerIds = _pubLoadLikedServerIds();
+    const _pubLikesCounts = _pubLoadLikesCounts();
+
+    function pubApplyLikeState(postId, serverId) {
+        if (!serverId) return;
+        const btn = document.getElementById(postId + '-like');
+        const cnt = document.getElementById(postId + '-lcnt');
+        if (!btn || !cnt) return;
+        const savedCount = _pubLikesCounts[serverId] || 0;
+        const isLiked = _pubLikedServerIds.has(serverId);
+        if (savedCount > 0 || isLiked) {
+            _pubLikes[postId] = {liked: isLiked, count: savedCount};
+            const svgEl = btn.querySelector('svg');
+            const svgPath = svgEl ? svgEl.querySelector('path') : null;
+            if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
+            if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
+            if (isLiked) btn.style.color = '#374151';
+            cnt.textContent = savedCount;
+        }
+    }
     const _pubPageSize = 15;
-    let _pubCurrentPage = 1;
 
     function escapeHtml(s) {
         if (!s) return '';
@@ -250,7 +282,7 @@
         _pubAllComments = {};
         _pubCurrentPage = 1;
         if (state.messages && state.messages.length) {
-            const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+            const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
             sorted.forEach(m => {
                 if (m.reply_to) {
                     const pid = m.reply_to;
@@ -261,61 +293,35 @@
                 }
             });
         }
-        pubRenderPage(1);
+        pubRenderAll();
     }
 
-    function pubRenderPage(n) {
+    function pubRenderAll() {
         const container = document.getElementById('pub-av-messages');
         if (!container) return;
-        const totalPages = Math.max(1, Math.ceil(_pubAllTopPosts.length / _pubPageSize));
-        n = Math.max(1, Math.min(n, totalPages));
-        _pubCurrentPage = n;
         _pubRenderedIds = new Set();
         _pubMsgIdx = 0;
 
         if (_pubAllTopPosts.length === 0) {
             container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#9CA3AF;font-size:13px;">Арена разогревается — скоро появятся первые сообщения</div>';
-            pubUpdatePagination();
             return;
         }
 
         container.innerHTML = '';
-        const start = (n - 1) * _pubPageSize;
-        const slice = _pubAllTopPosts.slice(start, start + _pubPageSize);
-
-        // Сначала рендерим топ-посты
-        slice.forEach(m => pubAppendMessage(m, false));
+        // Рендерим все топ-посты
+        _pubAllTopPosts.forEach(m => pubAppendMessage(m, false));
         // Затем их комментарии
-        slice.forEach(m => {
+        _pubAllTopPosts.forEach(m => {
             const pid = m.id || m.ts;
             (_pubAllComments[pid] || []).forEach(c => pubAppendMessage(c, false));
         });
 
-        container.scrollTop = 0;
-        pubUpdatePagination();
+        container.scrollTop = container.scrollHeight;
     }
 
-    function pubUpdatePagination() {
-        const totalPages = Math.max(1, Math.ceil(_pubAllTopPosts.length / _pubPageSize));
-        const bar = document.getElementById('pub-pagination-bar');
-        const info = document.getElementById('pub-pg-info');
-        const prev = document.getElementById('pub-pg-prev');
-        const next = document.getElementById('pub-pg-next');
-        if (!bar) return;
-        bar.style.display = (totalPages > 1) ? 'flex' : 'none';
-        if (info) info.textContent = `Страница ${_pubCurrentPage} из ${totalPages}`;
-        if (prev) prev.disabled = _pubCurrentPage <= 1;
-        if (next) next.disabled = _pubCurrentPage >= totalPages;
-    }
 
-    function pubNextPage() {
-        const totalPages = Math.max(1, Math.ceil(_pubAllTopPosts.length / _pubPageSize));
-        if (_pubCurrentPage < totalPages) { pubRenderPage(_pubCurrentPage + 1); window.scrollTo({top: 0, behavior: 'smooth'}); }
-    }
 
-    function pubPrevPage() {
-        if (_pubCurrentPage > 1) { pubRenderPage(_pubCurrentPage - 1); window.scrollTo({top: 0, behavior: 'smooth'}); }
-    }
+
 
     function pubAppendMessage(msg, isNew) {
         const container = document.getElementById('pub-av-messages');
@@ -445,36 +451,40 @@
         }
 
         if (isNew) {
-            _pubAllTopPosts.unshift(msg);
-            if (_pubCurrentPage !== 1) { pubUpdatePagination(); return; }
-            // На первой странице: убираем лишний пост если страница полная
-            const pagePosts = container.querySelectorAll('[data-server-id]');
-            if (pagePosts.length >= _pubPageSize && pagePosts[pagePosts.length - 1]) {
-                pagePosts[pagePosts.length - 1].remove();
-            }
-            container.prepend(div);
-            container.scrollTop = 0;
-            pubUpdatePagination();
+            _pubAllTopPosts.push(msg);
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
         } else {
             container.appendChild(div);
         }
+        // Восстанавливаем состояние лайка если пост уже лайкали ранее
+        if (msg.id) pubApplyLikeState(postId, msg.id);
     }
 
     function pubToggleLike(postId) {
         const btn = document.getElementById(postId + '-like');
         const cnt = document.getElementById(postId + '-lcnt');
         if (!btn || !cnt) return;
-        _pubLikes[postId] = _pubLikes[postId] || {liked: false, count: 0};
-        const wasLiked = _pubLikes[postId].liked;
-        _pubLikes[postId].liked = !wasLiked;
-        _pubLikes[postId].count += wasLiked ? -1 : 1;
-        const nowLiked = _pubLikes[postId].liked;
+        const serverId = btn.closest('[data-server-id]').dataset.serverId;
+        if (!serverId) return;
+        const wasLiked = _pubLikedServerIds.has(serverId);
+        const currentCount = _pubLikesCounts[serverId] || 0;
+        if (wasLiked) {
+            _pubLikedServerIds.delete(serverId);
+            _pubLikesCounts[serverId] = Math.max(0, currentCount - 1);
+        } else {
+            _pubLikedServerIds.add(serverId);
+            _pubLikesCounts[serverId] = currentCount + 1;
+        }
+        _pubSaveLikedServerIds(_pubLikedServerIds);
+        _pubSaveLikesCounts(_pubLikesCounts);
+        const nowLiked = _pubLikedServerIds.has(serverId);
         const svgEl = btn.querySelector('svg');
         const svgPath = svgEl ? svgEl.querySelector('path') : null;
         if (svgPath) svgPath.setAttribute('d', nowLiked ? _HEART_FILLED : _HEART_OUTLINE);
         if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
-        btn.style.color = '#374151';
-        cnt.textContent = Math.max(0, _pubLikes[postId].count);
+        btn.style.color = nowLiked ? '#374151' : '';
+        cnt.textContent = _pubLikesCounts[serverId] || 0;
     }
 
     const _pubTranslateCache = {};
