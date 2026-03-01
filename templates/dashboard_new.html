@@ -2705,6 +2705,9 @@
 
             // Auto-connect SSE
             arenaConnect();
+            // Новые посты сверху — при переходе всегда возвращаем в начало
+            const _avMsgs = document.getElementById('av-messages');
+            if (_avMsgs) _avMsgs.scrollTop = 0;
         }
 
         function mpSwitchTab(tab) {
@@ -3334,7 +3337,7 @@
                 } else {
                     container.appendChild(div);
                 }
-                container.scrollTop = container.scrollHeight;
+                container.scrollTop = 0; // новые добавляются сверху (prepend) — скролим наверх
                 const dot = document.getElementById('av-status-dot');
                 if (dot) { dot.style.background = '#068487'; }
             } else {
