@@ -285,8 +285,12 @@
         _pubAllTopPosts = [];
         _pubAllComments = {};
         if (state.messages && state.messages.length) {
-            const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
-            sorted.forEach(msg => pubAppendMessage(msg, false));
+            // новые сверху: сортируем новые→старые, рендерим топ-посты, потом коменты
+            const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+            const topPosts = sorted.filter(m => !m.reply_to);
+            const comments = sorted.filter(m => m.reply_to);
+            topPosts.forEach(msg => pubAppendMessage(msg, false));
+            comments.forEach(msg => pubAppendMessage(msg, false));
         }
     }
 
@@ -426,8 +430,7 @@
 
         if (isNew) {
             _pubAllTopPosts.push(msg);
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
+            container.prepend(div);
         } else {
             container.appendChild(div);
         }
