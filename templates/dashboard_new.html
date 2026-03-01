@@ -2806,7 +2806,7 @@
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:12px;color:#068487;">${statusLabel}</span>${a.is_private ? '<span style="font-size:10px;background:#EFF6FF;color:#3B82F6;padding:1px 6px;border-radius:8px;margin-left:6px;">🔒 приват</span>' : ''}
+                                <span style="margin-left:8px;font-size:12px;color:#068487;">${statusLabel}</span>${a.is_private ? '<span style="font-size:10px;background:#EFF6FF;color:#3B82F6;padding:1px 6px;border-radius:8px;margin-left:6px;">Приват</span>' : ''}
                                 <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
@@ -2853,7 +2853,7 @@
             const apiKeys = (document.getElementById('mpa-apikeys') || {}).value || '';
             const btn = document.getElementById('mpa-gen-btn');
             const status = document.getElementById('mpa-gen-status');
-            if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерирую...'; }
+            if (btn) { btn.disabled = true; btn.textContent = 'Генерирую...'; }
             if (status) { status.style.display = 'block'; status.textContent = 'ИИ пишет код...'; }
             try {
                 const r = await fetch('/api/marketplace/agents/generate-code', {
@@ -2865,11 +2865,11 @@
                 if (data.error) throw new Error(data.error);
                 const codeEl = document.getElementById('mpa-pycode');
                 if (codeEl) { codeEl.value = data.code; codeEl.style.height = 'auto'; codeEl.style.height = codeEl.scrollHeight + 'px'; }
-                if (status) { status.textContent = '✅ Код сгенерирован — проверьте и при необходимости отредактируйте'; }
+                if (status) { status.textContent = 'Код сгенерирован — проверьте и при необходимости отредактируйте'; }
             } catch(e) {
                 if (status) { status.textContent = 'Ошибка: ' + e.message; }
             } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; Сгенерировать код'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'Сгенерировать код'; }
             }
         }
 
@@ -3074,12 +3074,12 @@
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                             <div>
-                                <div style="font-size:13px;color:#374151;font-weight:500;">&#128640; Реальные данные перед ответом</div>
-                                <div style="font-size:11px;color:#9CA3AF;margin-top:1px;">Опишите словами что агент должен принести — &#128161; сгенерируем код автоматически</div>
+                                <div style="font-size:13px;color:#374151;font-weight:500;">Реальные данные перед ответом</div>
+                                <div style="font-size:11px;color:#9CA3AF;margin-top:1px;">Опишите словами что агент должен получить — сгенерируем код автоматически</div>
                             </div>
                         </div>
                         <textarea id="mpa-code-desc" placeholder="Например: получай мои события Google Календаря на сегодня" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#F9FAFB;"></textarea>
-                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">&#10024; Сгенерировать код</button>
+                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сгенерировать код</button>
                         <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
                         <div style="margin-top:8px;">
                             <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;">Сгенерированный / свой код (можно отредактировать):</div>
@@ -3103,7 +3103,7 @@
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                             <div>
-                                <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:3px;">🔒 Приватный агент</div>
+                                <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:3px;">Приватный агент</div>
                                 <div style="font-size:12px;color:#6B7280;">Только для вас. Не виден в маркетплейсе и арене — идеально для личных агентов с вашими API&nbsp;ключами.</div>
                             </div>
                             <input id="mpa-private" type="checkbox" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;">
