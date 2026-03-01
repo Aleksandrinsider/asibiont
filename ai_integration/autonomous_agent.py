@@ -74,7 +74,7 @@ class HybridAutonomousAgent:
         self.tool_discovery = tool_discovery
         self._initialize_tools()
         self.active_sessions = 0
-        self._active_agent_data = None  # Текущий активный агент (для run_agent_action)
+        self._active_agent_data: dict = {}  # per-user: {user_id: agent_data} — защита от race condition
 
         # === Адаптивные фичи (из 73dc138) ===
         self.context_memory = []          # Краткосрочная память контекста
@@ -579,7 +579,7 @@ class HybridAutonomousAgent:
     async def _run_external_action(self, params: dict, user_id: int) -> dict:
         """Re-runs agent python_code with AGENT_ACTION env vars to perform write operations."""
         import os as _os_ea, sys as _sys_ea, asyncio as _aio_ea
-        agent_data = self._active_agent_data
+        agent_data = self._active_agent_data.get(user_id)
         if not agent_data or not agent_data.get('python_code', '').strip():
             return {"error": "Агент не имеет подключённого скрипта"}
         action = str(params.get('action', '')).strip()
@@ -1220,20 +1220,23 @@ class HybridAutonomousAgent:
             base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
 
             # Инжектируем личность кастомного агента (если активен)
-            self._active_agent_data = None      # сбрасываем перед каждым запросом
-            _agent_tools_allowed: set = set()   # пустое = без ограничений
+            self._active_agent_data.pop(user_id, None)  # сбрасываем перед каждым запросом
+            _agent_tools_allowed: set = set()              # пустое = без ограничений
             try:
                 from .user_agents import get_user_active_agent, load_agent_personality, build_agent_system_prompt
                 _active_agent_id = get_user_active_agent(user_id)
                 if _active_agent_id:
                     _agent_data = load_agent_personality(_active_agent_id)
                     if _agent_data:
-                        self._active_agent_data = _agent_data  # для run_agent_action
+                        self._active_agent_data[user_id] = _agent_data  # per-user, без race condition
                         base_prompt = build_agent_system_prompt(_agent_data, base_prompt)
                         # Сохраняем разрешённые инструменты для enforce-а ниже
                         _allowed = _agent_data.get('tools_allowed') or []
                         if _allowed:
                             _agent_tools_allowed = set(_allowed)
+                            # Если у агента есть скрипт — run_agent_action всегда доступен
+                            if _agent_data.get('python_code', '').strip():
+                                _agent_tools_allowed.add('run_agent_action')
                         logger.info(
                             f"[AGENT] process_request: injected personality '{_agent_data['name']}' "
                             f"(id={_active_agent_id}, tools={_allowed or 'all'})"
@@ -1357,6 +1360,10 @@ class HybridAutonomousAgent:
 
             # Smart tool filtering — reduce tokens sent to API
             tools_to_exclude = self._select_tools_for_message(user_message)
+            # run_agent_action доступен только когда активен агент со скриптом
+            _cur_agent = self._active_agent_data.get(user_id)
+            if not _cur_agent or not _cur_agent.get('python_code', '').strip():
+                tools_to_exclude.add('run_agent_action')
 
             # Enforce agent tools_allowed: если агент задал whitelist — прячем остальные
             if _agent_tools_allowed:
