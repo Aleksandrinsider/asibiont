@@ -1426,15 +1426,6 @@ class HybridAutonomousAgent:
                     from .user_agents import set_user_active_agent
                     set_user_active_agent(user_id, None)
                     final = f"⚠️ {bill_result['error']}\n\nВозвращаюсь в стандартный режим ASI Biont."
-                elif bill_result.get('is_trial'):
-                    # Показываем счётчик пробных сообщений
-                    trials_left = bill_result.get('trials_left', 0)
-                    agent_nm = bill_result.get('agent_name', 'агент')
-                    if trials_left > 0:
-                        trial_note = f"\n\n_💬 Пробный период: осталось {trials_left} бесплатных сообщений с агентом «{agent_nm}»._"
-                    else:
-                        trial_note = f"\n\n_💬 Пробные сообщения закончились. Следующие сообщения будут платными._"
-                    final = final + trial_note
         except Exception as _be:
             logger.warning(f"[BILLING] agent billing error: {_be}")
 

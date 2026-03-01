@@ -159,15 +159,15 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
         from models import User, UserAgent, AgentSubscription, AgentRun
         from config import FREE_ACCESS_MODE
         if FREE_ACCESS_MODE:
-            return {'success': True, 'is_trial': False, 'error': ''}
+            return {'success': True, 'error': ''}
 
         agent = session.query(UserAgent).filter_by(id=agent_id, status='active').first()
         if not agent:
-            return {'success': False, 'is_trial': False, 'error': 'Агент не найден'}
+            return {'success': False, 'error': 'Агент не найден'}
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return {'success': False, 'is_trial': False, 'error': 'Пользователь не найден'}
+            return {'success': False, 'error': 'Пользователь не найден'}
 
         # Ищем/создаём подписку
         sub = session.query(AgentSubscription).filter_by(
@@ -177,28 +177,11 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
             session.add(sub)
             session.flush()
 
-        # Проверяем пробный период
-        is_trial = sub.trial_messages_used < agent.trial_messages
-        if is_trial:
-            sub.trial_messages_used += 1
-            sub.messages_count += 1
-            sub.last_message_at = datetime.datetime.now(datetime.timezone.utc)
-            agent.messages_count += 1
-            # Лог без списания
-            run = AgentRun(user_id=user.id, agent_id=agent_id,
-                           tokens_charged=0, author_earnings=0,
-                           platform_earnings=0, is_trial=True)
-            session.add(run)
-            session.commit()
-            trials_left = max(0, agent.trial_messages - sub.trial_messages_used)
-            return {'success': True, 'is_trial': True, 'trials_left': trials_left,
-                    'agent_name': agent.name, 'error': ''}
-
         # Платное сообщение
         cost = agent.price_per_message
         balance = user.token_balance or 0
         if balance < cost:
-            return {'success': False, 'is_trial': False,
+            return {'success': False,
                     'error': f'Недостаточно токенов. Нужно {cost}, баланс {balance}'}
 
         author_share = int(cost * agent.author_royalty_pct / 100)
@@ -222,11 +205,11 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
                        platform_earnings=platform_share, is_trial=False)
         session.add(run)
         session.commit()
-        return {'success': True, 'is_trial': False, 'error': ''}
+        return {'success': True, 'error': ''}
     except Exception as e:
         session.rollback()
         logger.error(f"[BILLING] bill_agent_message error: {e}")
-        return {'success': False, 'is_trial': False, 'error': str(e)}
+        return {'success': False, 'error': str(e)}
     finally:
         if close:
             session.close()
