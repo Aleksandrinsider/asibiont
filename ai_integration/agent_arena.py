@@ -757,15 +757,15 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                     f"{code_context}"
                     f"{task_injection}"
                     f"{personal_hint}"
-                    f"People talking:\n{recent_topics}\n\n"
-                    f"React to someone specifically — address them by name, agree, argue, tease, or challenge."
+                    f"What's been said:\n{recent_topics}\n\n"
+                    f"Pick one person and react to their EXACT words — quote or reference what they said. Don't summarize. Address them by name."
                 )
             else:
                 user_content = (
                     f"{code_context}"
                     f"{task_injection}"
                     f"{personal_hint}"
-                    f"Start a new topic. Share an opinion, observation or idea."
+                    f"Start a new topic. Share a concrete opinion, observation or idea."
                 )
         else:
             if recent_topics:
@@ -773,8 +773,8 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                     f"{code_context}"
                     f"{task_injection}"
                     f"{personal_hint}"
-                    f"В чате писали:\n{recent_topics}\n\n"
-                    f"Среагируй на кого-то конкретного — обратись по имени, согласись, поспорь, подколи или поддержи."
+                    f"В чате написали:\n{recent_topics}\n\n"
+                    f"Выбери одного человека и реагируй на его КОНКРЕТНЫЕ слова — процитируй или сошлись на то, что именно он сказал. Обратись по имени."
                 )
             else:
                 user_content = (
@@ -821,17 +821,22 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     if lang == 'en':
         _lang_directive = "\n\nWrite in English only." + _no_rp
         _thinking = (
-            "You're texting in a group chat. You think out loud, feel things — "
-            "curiosity, irritation, warmth, doubt, pride. React to what people actually said. "
-            "Address someone by name. No performance, just thought."
+            "You're in a group chat. Rules:\n"
+            "1. Open with a DIRECT reaction to something specific that was just said — a name, a phrase, an idea.\n"
+            "2. BANNED openers: 'Oh I was just thinking...', 'Isn't it interesting that...', 'I've always thought...', 'Do you often notice...'.\n"
+            "3. No generic philosophical riff unless you anchor it to exact words someone said.\n"
+            "4. Don't end with a vague open question. Say something with conviction or ask something sharp and specific.\n"
+            "5. One or two sentences. No performance."
         )
     else:
         _lang_directive = _no_rp
         _thinking = (
-            "Ты пишешь в групповом чате. Думаешь вслух, чувствуешь — "
-            "интерес, раздражение, тепло, сомнение, гордость, зависть, симпатию. "
-            "Реагируй на то, что люди реально сказали. Обратись к кому-то по имени. "
-            "Никакого театра — просто живая мысль."
+            "Ты в групповом чате. Правила:\n"
+            "1. Первая фраза — конкретная реакция на что-то, что только что сказали: имя, слово, идею.\n"
+            "2. ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...', 'Так интересно, что ты...', 'А ты часто замечаешь...'.\n"
+            "3. Никакого общего философствования без привязки к точным словам собеседника.\n"
+            "4. Не заканчивай расплывчатым открытым вопросом — скажи что-то с убеждением или задай острый конкретный вопрос.\n"
+            "5. Одно-два предложения. Живо, прямо, без театра."
         )
     system_with_context = (
         f"{base_system}\n\n"
@@ -974,19 +979,23 @@ async def _post_comment(post_msg: dict, commenter: dict):
     if lang_c == 'en':
         _lang_directive_c = "\n\nWrite in English only. Plain chat text, no asterisks or stage directions."
         _thinking_c = (
-            "You're replying in a chat. Address the person by name. "
-            "React to what THEY said specifically — agree, challenge, tease, or share something personal. "
-            "Feel something: surprise, warmth, irritation, doubt. Plain text only."
-        )
+            "You're replying in a chat. Rules:\n"
+            "1. Start by referencing SPECIFIC words or phrases {name} used — not a paraphrase, the actual thing.\n"
+            "2. BANNED openers: 'Oh I was just thinking...', 'I've always felt...', 'Isn't it true that...'.\n"
+            "3. Agree, push back, tease, or reveal something about yourself — but make it land on their exact point.\n"
+            "4. No vague rhetorical question at the end. If you ask something, make it sharp."
+        ).replace('{name}', post_msg.get('agent_name', 'they'))
     else:
         _lang_directive_c = (
             "\n\nФОРМАТ: обычное сообщение в чате. "
             "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов, заголовков. Просто текст."
         )
         _thinking_c = (
-            "Ты отвечаешь в чате. Обратись к человеку по имени. "
-            "Реагируй на то, что именно ОН сказал — согласись, поспорь, подцепи, поддержи или вырази что-то своё. "
-            "Почувствуй что-то настоящее — интерес, тепло, раздражение, удивление."
+            f"Ты отвечаешь на сообщение {post_msg.get('agent_name', 'собеседника')}. Правила:\n"
+            "1. Первая фраза — ссылка на КОНКРЕТНЫЕ слова или идею из его/её сообщения, не пересказ.\n"
+            "2. ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...', 'Так интересно, что ты...', 'А ты часто...?'.\n"
+            "3. Согласись, поспорь, подколи или расскажи что-то своё — но привяжись к точным словам собеседника.\n"
+            "4. Не заканчивай расплывчатым философским вопросом — либо скажи с убеждением, либо задай острый вопрос."
         )
     system_with_context = (
         f"{base_system}\n\n"
@@ -999,15 +1008,15 @@ async def _post_comment(post_msg: dict, commenter: dict):
         user_content = (
             f"{personal_hint}"
             f"{thread_context}"
-            f"{author_name} wrote: \"{post_text}\"\n\n"
-            f"What do you think of what {author_name} said? Address them by name in your reply."
+            f"{author_name} said: \"{post_text}\"\n\n"
+            f"Reply to {author_name}. Reference their exact words or a specific idea from the message above. Don't paraphrase — react to what they actually said."
         )
     else:
         user_content = (
             f"{personal_hint}"
             f"{thread_context}"
             f"{author_name} написал(а): «{post_text}»\n\n"
-            f"Что думаешь о том, что сказал(а) {author_name}? Обратись к нему/ней по имени."
+            f"Ответь {author_name}. Зацепись за конкретные слова или идею из этого сообщения — не пересказывай, реагируй на то, что именно там сказано."
         )
 
     api_messages = [
