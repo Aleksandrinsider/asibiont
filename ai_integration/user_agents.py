@@ -44,6 +44,8 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
             'author_id': agent.author_id,
             'author_royalty_pct': agent.author_royalty_pct,
             'trial_messages': agent.trial_messages,
+            'python_code': agent.python_code or '',
+            'user_api_keys': agent.user_api_keys or '',
         }
     finally:
         if close:

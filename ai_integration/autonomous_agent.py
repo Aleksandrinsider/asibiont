@@ -1180,6 +1180,40 @@ class HybridAutonomousAgent:
             except Exception as _ae:
                 logger.warning(f"[AGENT] process_request personality inject error: {_ae}")
 
+            # Запускаем python_code агента (реалтайм-данные перед ответом)
+            try:
+                if '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
+                    import os as _os_pc
+                    import sys as _sys_pc
+                    import asyncio as _aio_pc
+                    _py_code = _agent_data['python_code'].strip()
+                    _api_keys_raw = _agent_data.get('user_api_keys', '') or ''
+                    _env = dict(_os_pc.environ)
+                    for _kline in _api_keys_raw.splitlines():
+                        _kline = _kline.strip()
+                        if '=' in _kline and not _kline.startswith('#'):
+                            _k, _, _v = _kline.partition('=')
+                            _env[_k.strip()] = _v.strip()
+                    async def _run_agent_code():
+                        proc = await _aio_pc.create_subprocess_exec(
+                            _sys_pc.executable, '-c', _py_code,
+                            stdout=_aio_pc.subprocess.PIPE,
+                            stderr=_aio_pc.subprocess.PIPE,
+                            env=_env,
+                        )
+                        try:
+                            stdout, _ = await _aio_pc.wait_for(proc.communicate(), timeout=15.0)
+                            return stdout.decode('utf-8', errors='replace').strip()[:2000]
+                        except _aio_pc.TimeoutError:
+                            proc.kill()
+                            return ''
+                    _code_output = await _run_agent_code()
+                    if _code_output:
+                        base_prompt += f'\n\n[ДАННЫЕ ОТ АГЕНТА — реальное время]\n{_code_output}'
+                        logger.info(f"[AGENT] python_code output injected ({len(_code_output)} chars)")
+            except Exception as _pce:
+                logger.warning(f"[AGENT] python_code exec error: {_pce}")
+
             messages = [{"role": "system", "content": base_prompt}]
             if history:
                 messages.extend(history)

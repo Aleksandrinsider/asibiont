@@ -9415,7 +9415,10 @@ async def api_marketplace_agents_handler(request):
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             category = request.rel_url.query.get('category')
             search = request.rel_url.query.get('search', '').strip()
-            q = session_db.query(UserAgent).filter_by(status='active')
+            q = session_db.query(UserAgent).filter(
+                UserAgent.status == 'active',
+                UserAgent.is_private.isnot(True)
+            )
             if category:
                 q = q.filter(UserAgent.specialization == category)
             if search:
@@ -9501,6 +9504,7 @@ async def api_marketplace_publish_agent_handler(request):
             agent.price_per_message = max(1, int(data.get('price_per_message') or 5))
             agent.trial_messages = max(0, int(data.get('trial_messages') or 3))
             agent.is_adult = bool(data.get('is_adult', False))
+            agent.is_private = bool(data.get('is_private', False))
             agent.status = 'active'  # Авто-одобрение: агент сразу активен
 
             # Пользовательские API ключи
@@ -9622,6 +9626,9 @@ async def api_marketplace_my_handler(request):
                              'description': a.description or '',
                              'personality': a.personality or '',
                              'avatar_url': a.avatar_url or '',
+                             'is_private': bool(a.is_private),
+                             'user_api_keys': (a.user_api_keys or '') if a.author_id == user_obj.id else '',
+                             'python_code': (a.python_code or '') if a.author_id == user_obj.id else '',
                              'is_subscribed': _is_subscribed(a)} for a in agents],
                 'scripts': [],
             })

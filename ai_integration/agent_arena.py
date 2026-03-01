@@ -187,7 +187,8 @@ def _load_marketplace_agents() -> list:
         try:
             rows = (s.query(UserAgent, UserModel)
                     .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
-                    .filter(UserAgent.status == 'active')
+                    .filter(UserAgent.status == 'active',
+                            UserAgent.is_private.isnot(True))
                     .limit(30).all())
             _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
                        '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']

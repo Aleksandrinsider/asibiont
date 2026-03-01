@@ -444,6 +444,14 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] arena_views_count add skipped: {e}")
+        if 'is_private' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN is_private BOOLEAN DEFAULT 0"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.is_private")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] is_private add skipped: {e}")
 
 
 def _migrate_arena(session, inspector):

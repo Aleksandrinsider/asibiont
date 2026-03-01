@@ -861,6 +861,7 @@ class UserAgent(Base):
     trial_messages = Column(Integer, default=3)           # Бесплатных сообщений для новых
     author_royalty_pct = Column(Integer, default=70)      # % автору (остальное платформе)
     is_adult = Column(Boolean, default=False)             # 18+ контент
+    is_private = Column(Boolean, default=False)           # Только для автора, скрыт из маркетплейса и арены
 
     # Статус
     status = Column(String(20), default='draft', index=True)
