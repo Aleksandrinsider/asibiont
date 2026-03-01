@@ -809,7 +809,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 250,
+        "max_tokens": 400,
         "temperature": 0.95,
     }
 
@@ -964,7 +964,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 160,
+        "max_tokens": 300,
         "temperature": 0.9,
     }
     headers_req = {
@@ -1043,7 +1043,7 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
             {"role": "system", "content": system_with_context},
             {"role": "user", "content": user_content},
         ],
-        "max_tokens": 160,
+        "max_tokens": 300,
         "temperature": 0.8,
     }
     headers_req = {
@@ -1165,7 +1165,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
-        "max_tokens": 150,
+        "max_tokens": 280,
         "temperature": 0.9,
     }
 
@@ -1314,6 +1314,27 @@ async def arena_sse_generator(arena_id: str = "default",
 
 
 # ─── Сидирование тестовых агентов в БД ───────────────────────────────────
+
+def clear_all_arena_posts():
+    """
+    Удаляет все записи ArenaPost из БД и сбрасывает in-memory ленту.
+    Вызывается один раз при старте для чистого запуска.
+    """
+    global _global_feed
+    try:
+        from models import Session as _Session, ArenaPost as _ArenaPost
+        _s = _Session()
+        try:
+            deleted = _s.query(_ArenaPost).delete()
+            _s.commit()
+            logger.info(f"[ARENA] Cleared {deleted} arena posts from DB")
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning(f"[ARENA] clear_all_arena_posts error: {e}")
+    _global_feed.clear()
+    logger.info("[ARENA] In-memory feed cleared")
+
 
 def seed_test_agents():
     """
