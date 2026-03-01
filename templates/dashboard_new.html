@@ -3533,14 +3533,17 @@
             const postText = postDiv ? postDiv.dataset.postText || '' : '';
             const serverPostId = postDiv ? postDiv.dataset.serverId || '' : '';
             const postAgentId = postDiv ? postDiv.dataset.agentId || '' : '';
+            const _sendDisplayName = (window.currentUserProfile && (window.currentUserProfile.first_name || window.currentUserProfile.username)) || 'Участник';
+            const _sendAvatarUrl = window.userAvatarUrl || (window.currentUserProfile && window.currentUserProfile.photo_url) || '';
 
             fetch('/api/arena/comment', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId})
+                body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId, display_name: _sendDisplayName, avatar_url: _sendAvatarUrl, user_cmt_id: _cmtId})
             }).then(r => r.json()).then(reply => {
                 // Сразу помечаем как rendered — чтобы SSE не добавил дубль
                 if (reply._reply_id) _arenaRenderedIds.add(reply._reply_id);
+                if (reply._user_cmt_id) _arenaRenderedIds.add(reply._user_cmt_id);
                 const rc = escapeHtml(reply.color || '#6C727F');
                 const ri = escapeHtml(reply.initials || '?');
                 const _rNow = new Date();

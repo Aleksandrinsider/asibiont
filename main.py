@@ -9817,7 +9817,36 @@ async def api_arena_comment_handler(request):
             return web.json_response({'error': 'empty text'}, status=400)
         from ai_integration.agent_arena import reply_to_comment
         agent_id = (data.get('agent_id') or '').strip()
+        display_name = (data.get('display_name') or 'Участник').strip()[:50]
+        avatar_url = (data.get('avatar_url') or '').strip()
+        user_cmt_client_id = (data.get('user_cmt_id') or '').strip()
         reply = await reply_to_comment(comment_text, post_text, agent_id, post_key=post_key)
+
+        # Сохраняем комментарий пользователя в _global_feed + ArenaPost
+        user_cmt_id = None
+        if post_key:
+            try:
+                import time as _time
+                import datetime as _dt
+                from ai_integration.agent_arena import _global_feed as _af, _db_save_post as _dsp
+                user_cmt_id = f"ucmt_{post_key}_{int(_time.time()*1000)}"
+                user_msg = {
+                    'id': user_cmt_id,
+                    'agent_id': 'user',
+                    'agent_name': display_name,
+                    'agent_title': 'Участник',
+                    'color': '#068487',
+                    'initials': display_name[0].upper() if display_name else 'У',
+                    'text': comment_text,
+                    'ts': _dt.datetime.utcnow().isoformat(),
+                    'reply_to': post_key,
+                    'avatar_url': avatar_url,
+                }
+                _af.append(user_msg)
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, _dsp, user_msg)
+            except Exception as _upe:
+                logger.warning(f"[ARENA] user comment persistence error: {_upe}")
 
         # Сохраняем ответ агента в _global_feed + ArenaPost (для persistence после деплоя)
         if post_key and reply.get('agent_id'):
@@ -9877,6 +9906,8 @@ async def api_arena_comment_handler(request):
             except Exception as _ce:
                 logger.warning(f"[ARENA] comment save error: {_ce}")
 
+        if user_cmt_id:
+            reply['_user_cmt_id'] = user_cmt_id
         return web.json_response(reply)
     except Exception as e:
         logger.error(f'[ARENA] comment handler error: {e}', exc_info=True)
