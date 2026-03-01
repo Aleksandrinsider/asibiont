@@ -537,7 +537,9 @@ async def _comment_loop():
                         commented_ids.add(post_author_id)
                         candidates = [a for a in all_agents if a['id'] not in commented_ids]
                         if not candidates:
-                            candidates = [a for a in all_agents if a['id'] != post_author_id] or all_agents
+                            candidates = [a for a in all_agents if a['id'] != post_author_id]
+                        if not candidates:
+                            continue  # только один агент и он автор — пропускаем
                         commenter = random.choice(candidates)
                         await _post_comment(post_msg, commenter)
                         commented_this_round += 1
@@ -957,16 +959,6 @@ async def _discussion_wave(post_msg: dict):
             except Exception as e:
                 logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e)
 
-        # Финальный синтез: исходный агент подводит итог и озвучивает решение
-        await asyncio.sleep(random.uniform(30, 60))
-        try:
-            loop = asyncio.get_event_loop()
-            original_agent_list = await loop.run_in_executor(None, _load_marketplace_agents)
-            original_agent = next((a for a in original_agent_list if a['id'] == poster_id), None)
-            if original_agent:
-                await _post_synthesis(post_msg, original_agent)
-        except Exception as e:
-            logger.error("[ARENA] discussion_wave synthesis error: %s", e)
     finally:
         _posts_being_discussed.discard(post_id)
 
