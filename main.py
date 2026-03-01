@@ -9609,9 +9609,18 @@ async def api_marketplace_publish_agent_handler(request):
                     agent.avatar_url = avatar_data
 
             session_db.commit()
+            session_db.refresh(agent)  # читаем актуальные данные из БД
+            is_private_actual = bool(agent.is_private)
+            is_private_requested = bool(data.get('is_private', False))
+            privacy_warning = None
+            if is_private_requested and not is_private_actual:
+                privacy_warning = 'Не удалось сохранить приватность агента — пересохраните его ещё раз.'
+                logger.error(f"[MARKETPLACE] is_private MISMATCH: agent {agent.id} requested private but saved as public!")
             return web.json_response({'success': True, 'id': agent.id, 'slug': agent.slug,
                                       'status': 'active',
-                                      'message': 'Агент опубликован и активен.'})
+                                      'is_private': is_private_actual,
+                                      'message': 'Агент опубликован и активен.',
+                                      'warning': privacy_warning})
         finally:
             session_db.close()
     except Exception as e:

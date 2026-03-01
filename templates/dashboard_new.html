@@ -3191,9 +3191,13 @@
                 const res = await r.json();
                 if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
                 _mpEditAgentId = null;
-                mpShowStatus(res.message || 'Отправлено на модерацию', '#ECFDF5', '#059669');
+                if (res.warning) {
+                    mpShowStatus('Сохранено, но: ' + res.warning, '#FFFBEB', '#D97706');
+                } else {
+                    mpShowStatus(res.message || 'Отправлено на модерацию', '#ECFDF5', '#059669');
+                }
                 document.getElementById('mp-create-form').innerHTML = '';
-                setTimeout(() => mpSwitchTab('my'), 1500);
+                setTimeout(() => mpSwitchTab('my'), 2000);
             } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
         }
 
