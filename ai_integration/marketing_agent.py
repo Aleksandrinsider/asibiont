@@ -192,8 +192,8 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         # Настройки по depth
         depth_config = {
             'basic': {'num_results': 3, 'max_tokens': 300, 'cache_ttl': 1800},
-            'full': {'num_results': 10, 'max_tokens': 600, 'cache_ttl': 3600},
-            'deep': {'num_results': 15, 'max_tokens': 1000, 'cache_ttl': 7200},
+            'full': {'num_results': 5, 'max_tokens': 600, 'cache_ttl': 3600},
+            'deep': {'num_results': 10, 'max_tokens': 1000, 'cache_ttl': 7200},
         }
         config = depth_config.get(depth, depth_config['full'])
         
@@ -220,13 +220,24 @@ async def research_topic(query, depth="full", user_id=None, session=None):
 - Извлекай КОНКРЕТНЫЕ данные, цифры, названия, даты из источников. Не пиши общие фразы вроде "растущий рынок" — пиши "рынок $X в 2024, рост Y%".
 - В "sources" указывай РЕАЛЬНЫЕ URL-адреса из предоставленных данных."""
 
-        result = await api.search_and_analyze(
-            query=query,
-            num_results=config['num_results'],
-            analysis_prompt=prompt,
-            max_tokens=config['max_tokens'],
-            cache_ttl=config['cache_ttl']
-        )
+        try:
+            result = await asyncio.wait_for(
+                api.search_and_analyze(
+                    query=query,
+                    num_results=config['num_results'],
+                    analysis_prompt=prompt,
+                    max_tokens=config['max_tokens'],
+                    cache_ttl=config['cache_ttl']
+                ),
+                timeout=40.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"[RESEARCH] search_and_analyze timeout (40s) for '{query}'")
+            return {
+                'success': False,
+                'error': 'timeout',
+                'message': f'Исследование по теме «{query}» занимает слишком долго. Попробуй использовать quick_topic_search для быстрого ответа.',
+            }
         
         analysis = result.get('analysis')
         
@@ -256,7 +267,12 @@ async def research_topic(query, depth="full", user_id=None, session=None):
                 parts.append(f"Рекомендации: {steps_text}")
             
             summary = ". ".join(parts)
-            
+
+            # Убираем прямые URL из текста (DuckDuckGo иногда даёт нерелевантные ссылки)
+            import re as _re
+            summary = _re.sub(r'https?://[^\s,;]+', '', summary).strip()
+            summary = _re.sub(r'\s{2,}', ' ', summary)
+
             result['message'] = summary
         
         # Сохраняем в LTM

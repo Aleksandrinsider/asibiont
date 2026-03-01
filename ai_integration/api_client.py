@@ -476,7 +476,14 @@ class ExternalAPIClient:
                     } for r in raw]
 
             loop = _aio.get_event_loop()
-            results = await loop.run_in_executor(None, _sync_search)
+            try:
+                results = await _aio.wait_for(
+                    loop.run_in_executor(None, _sync_search),
+                    timeout=20.0
+                )
+            except _aio.TimeoutError:
+                logger.warning(f"[DDG] Search timeout (20s) for: {query[:50]}")
+                return None
 
             self._track_call('ddg')
             await self.cache.set('ddg', cache_params, results, cache_ttl)

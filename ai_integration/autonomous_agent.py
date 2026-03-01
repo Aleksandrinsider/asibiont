@@ -1156,6 +1156,22 @@ class HybridAutonomousAgent:
             # ═══ TOKEN BUDGET — обрезаем если превышен лимит ═══
             base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
 
+            # Инжектируем личность кастомного агента (если активен)
+            try:
+                from .user_agents import get_user_active_agent, load_agent_personality, build_agent_system_prompt
+                _active_agent_id = get_user_active_agent(user_id)
+                if _active_agent_id:
+                    _agent_data = load_agent_personality(_active_agent_id)
+                    if _agent_data:
+                        base_prompt = build_agent_system_prompt(_agent_data, base_prompt)
+                        logger.info(f"[AGENT] process_request: injected personality '{_agent_data['name']}' (id={_active_agent_id})")
+                    else:
+                        # Агент удалён/деактивирован — сбрасываем
+                        from .user_agents import set_user_active_agent as _saa
+                        _saa(user_id, None)
+            except Exception as _ae:
+                logger.warning(f"[AGENT] process_request personality inject error: {_ae}")
+
             messages = [{"role": "system", "content": base_prompt}]
             if history:
                 messages.extend(history)
