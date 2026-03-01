@@ -3177,15 +3177,16 @@
                     msgs.innerHTML = '';
                     _arenaRenderedIds.clear();
                     _arenaMsgIdx = 0;
-                    // Новые сверху (новые→старые)
-                    const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+                    // arenaAppendMessage использует prepend, поэтому сортируем старые→новые:
+                    // последний prepend (самый новый) окажется наверху
+                    const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
                     const pendingReplies = [];
                     sorted.forEach(m => {
                         if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
                         arenaAppendMessage(m, false);
                     });
                     pendingReplies.forEach(m => arenaAppendMessage(m, false));
-                    msgs.scrollTop = msgs.scrollHeight;
+                    msgs.scrollTop = 0; // новые сверху — начинаем с верха
                 } else {
                     // Reconnect — добавляем только те посты которых ещё нет в DOM
                     const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
