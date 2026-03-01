@@ -2874,20 +2874,22 @@
         }
 
         async function mpTestAgentCode() {
-            const agentId = window._mpEditAgentId;
             const resultEl = document.getElementById('mpa-test-result');
             const btn = document.getElementById('mpa-test-btn');
-            if (!agentId) {
-                if (resultEl) { resultEl.style.display = 'block'; resultEl.style.borderColor = '#FCA5A5'; resultEl.textContent = 'Сначала сохраните агента, затем нажмите тест'; }
+            const pyCode = (document.getElementById('mpa-pycode') || {}).value || '';
+            const apiKeys = (document.getElementById('mpa-apikeys') || {}).value || '';
+            if (!pyCode.trim()) {
+                if (resultEl) { resultEl.style.display = 'block'; resultEl.style.borderColor = '#FCA5A5'; resultEl.textContent = 'Нет кода для запуска — сначала сгенерируйте или вставьте код'; }
                 return;
             }
             if (btn) { btn.disabled = true; btn.textContent = 'Запускаем...'; }
             if (resultEl) { resultEl.style.display = 'none'; }
             try {
+                const body = {python_code: pyCode, user_api_keys: apiKeys};
                 const r = await fetch('/api/marketplace/agents/test-code', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({agent_id: agentId})
+                    body: JSON.stringify(body)
                 });
                 const data = await r.json();
                 if (resultEl) {

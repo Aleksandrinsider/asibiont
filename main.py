@@ -9509,7 +9509,7 @@ async def api_agent_generate_code_handler(request):
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
                 json={'model': DEEPSEEK_MODEL, 'messages': [{'role': 'user', 'content': prompt}],
                       'max_tokens': 800, 'temperature': 0.2},
-                timeout=_aio_h.ClientTimeout(total=30)
+                timeout=_aio_h.ClientTimeout(total=20)
             ) as resp:
                 result = await resp.json()
         code = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
@@ -9629,30 +9629,40 @@ async def api_marketplace_publish_agent_handler(request):
 
 
 async def api_agent_test_code_handler(request):
-    """POST /api/marketplace/agents/test-code — тестирует python_code агента и возвращает сырой вывод"""
+    """POST /api/marketplace/agents/test-code — тестирует python_code агента и возвращает сырой вывод.
+    Принимает либо agent_id (для сохранённых агентов), либо python_code + user_api_keys напрямую."""
     try:
         session_web = await get_session(request)
         user_id = session_web.get('user_id') if session_web else None
         if not user_id:
             return web.json_response({'error': 'Not authenticated'}, status=401)
         data = await request.json()
-        agent_id = data.get('agent_id')
-        session_db = Session()
-        try:
-            from models import UserAgent, User as UserModel
-            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
-            if not user_obj:
-                return web.json_response({'error': 'User not found'}, status=404)
-            agent = session_db.query(UserAgent).filter_by(
-                id=agent_id, author_id=user_obj.id).first()
-            if not agent:
-                return web.json_response({'error': 'Agent not found'}, status=404)
-            py_code = (agent.python_code or '').strip()
+
+        # Режим 1: код и ключи переданы напрямую (новый агент не сохранён)
+        if 'python_code' in data:
+            py_code = (data.get('python_code') or '').strip()
+            api_keys_raw = (data.get('user_api_keys') or '').strip()
             if not py_code:
-                return web.json_response({'error': 'Нет python_code у агента', 'code': ''})
-            api_keys_raw = agent.user_api_keys or ''
-        finally:
-            session_db.close()
+                return web.json_response({'error': 'Нет кода для запуска'})
+        else:
+            # Режим 2: загружаем код из сохранённого агента по agent_id
+            agent_id = data.get('agent_id')
+            session_db = Session()
+            try:
+                from models import UserAgent, User as UserModel
+                user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+                if not user_obj:
+                    return web.json_response({'error': 'User not found'}, status=404)
+                agent = session_db.query(UserAgent).filter_by(
+                    id=agent_id, author_id=user_obj.id).first()
+                if not agent:
+                    return web.json_response({'error': 'Agent not found'}, status=404)
+                py_code = (agent.python_code or '').strip()
+                if not py_code:
+                    return web.json_response({'error': 'Нет python_code у агента', 'code': ''})
+                api_keys_raw = agent.user_api_keys or ''
+            finally:
+                session_db.close()
 
         # Строим env как в autonomous_agent
         import os as _os_t, sys as _sys_t, asyncio as _aio_t
