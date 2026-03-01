@@ -201,6 +201,24 @@ Do NOT take tasks/goals/posts from memory or history — they may have been dele
               "You MUST use tools (research_topic, find_relevant_contacts_for_task, get_news_trends) "
               "to deliver a CONCRETE result. Don't offer help — DO the work.",
     },
+    'pro_research_first': {
+        'ru': (
+            "ШАГ 1 (ОБЯЗАТЕЛЬНО): вызови хотя бы один инструмент — "
+            "research_topic, get_news_trends или find_relevant_contacts_for_task — "
+            "чтобы получить СВЕЖИЕ данные по теме пользователя. "
+            "Выбери инструмент исходя из типа задачи.\n"
+            "ШАГ 2: напиши сообщение ТОЛЬКО на основе реальных находок. "
+            "Не придумывай примеры и цифры из головы.\n\n"
+        ),
+        'en': (
+            "STEP 1 (REQUIRED): call at least one tool — "
+            "research_topic, get_news_trends, or find_relevant_contacts_for_task — "
+            "to get FRESH data relevant to the user's topic. "
+            "Choose the tool based on what the task needs.\n"
+            "STEP 2: write the message based ONLY on real findings from tools. "
+            "Do not invent examples or numbers.\n\n"
+        ),
+    },
     'anti_repeat_intro': {
         'ru': "\n\nЗАПРЕЩЕНО повторять эти фразы (твои последние ответы):\n",
         'en': "\n\nDo NOT repeat these phrases (your recent responses):\n",
@@ -1298,18 +1316,29 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         from .autonomous_agent import get_autonomous_agent
         agent = get_autonomous_agent()
 
-        instruction = _t('pro_instruction', lang)
+        # Типы, которые требуют сначала вызова инструментов — 3 итерации
+        _RESEARCH_TYPES = {'analysis', 'plan', 'discussion', 'tasks', 'task_help',
+                           'goal_milestone', 'goal_stagnation', 'goal_deadline',
+                           'task_cleanup', 'delegation_suggest'}
+        # Типы, где просто диалог/вопрос — 2 итерации достаточно
+        _DIALOG_TYPES = {'question', 'weather', 'deadline_alert', 'delegation_status', 'contact'}
 
-        # Для task_help используем режим task_assist с увеличенными лимитами
         if selected_type == 'task_help':
             mode = 'task_assist'
             max_tokens = 1500
             max_iterations = 3
             instruction = _t('pro_task_help', lang)
+        elif selected_type in _RESEARCH_TYPES:
+            mode = 'proactive'
+            max_tokens = 1400
+            max_iterations = 3
+            # Сначала — обязательный поиск данных, потом — правила формата
+            instruction = _t('pro_research_first', lang) + _t('pro_instruction', lang)
         else:
             mode = 'proactive'
             max_tokens = 1200
             max_iterations = 2
+            instruction = _t('pro_instruction', lang)
 
         result = await agent.generate_system_message(
             user_id=user_id,
