@@ -2844,7 +2844,7 @@
                 const data = await r.json();
                 if (data.success) { mpLoadMy(); mpShowStatus('Статус агента обновлён', '#ECFDF5', '#059669'); }
                 else mpShowStatus(data.error || 'Ошибка', '#FEF2F2', '#DC2626');
-            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+            } catch(e) { mpShowStatus('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), '#FEF2F2', '#DC2626'); }
         }
 
         async function mpGenerateAgentCode() {
@@ -2867,7 +2867,7 @@
                 if (codeEl) { codeEl.value = data.code; codeEl.style.height = 'auto'; codeEl.style.height = codeEl.scrollHeight + 'px'; }
                 if (status) { status.textContent = 'Код сгенерирован — проверьте и при необходимости отредактируйте'; }
             } catch(e) {
-                if (status) { status.textContent = 'Ошибка: ' + e.message; }
+                if (status) { status.textContent = 'Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'); }
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'Сгенерировать код'; }
             }
@@ -2906,7 +2906,7 @@
                     }
                 }
             } catch(e) {
-                if (resultEl) { resultEl.style.display = 'block'; resultEl.style.borderColor = '#FCA5A5'; resultEl.textContent = 'Ошибка запроса: ' + e.message; }
+                if (resultEl) { resultEl.style.display = 'block'; resultEl.style.borderColor = '#FCA5A5'; resultEl.textContent = 'Ошибка запроса: ' + (e?.message || String(e) || 'Неизвестная ошибка'); }
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'Запустить и проверить код'; }
             }
@@ -2919,7 +2919,7 @@
                 const data = await r.json();
                 if (data.success) { mpLoadMy(); mpShowStatus('Агент удалён', '#F3F4F6', '#374151'); }
                 else mpShowStatus(data.error || 'Ошибка', '#FEF2F2', '#DC2626');
-            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+            } catch(e) { mpShowStatus('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), '#FEF2F2', '#DC2626'); }
         }
 
         async function mpEditAgent(id) {
@@ -3174,33 +3174,38 @@
             const previewImg = document.querySelector('#mpa-avatar-preview img');
             if (previewImg) avatarDataUrl = previewImg.src || '';
 
+            const _v = id => document.getElementById(id)?.value ?? '';
+            const _c = id => !!(document.getElementById(id)?.checked);
+
             const data = {
-                name: (document.getElementById('mpa-name') || {}).value.trim(),
-                slug: (document.getElementById('mpa-slug') || {}).value.trim(),
-                specialization: (document.getElementById('mpa-spec') || {}).value.trim(),
-                description: (document.getElementById('mpa-desc') || {}).value.trim(),
-                personality: (document.getElementById('mpa-personality') || {}).value.trim(),
-                price_per_message: parseInt((document.getElementById('mpa-price') || {}).value) || 10,
+                name: _v('mpa-name').trim(),
+                slug: _v('mpa-slug').trim(),
+                specialization: _v('mpa-spec').trim(),
+                description: _v('mpa-desc').trim(),
+                personality: _v('mpa-personality').trim(),
+                price_per_message: parseInt(_v('mpa-price')) || 10,
                 avatar_data_url: avatarDataUrl,
-                user_api_keys: (document.getElementById('mpa-apikeys') || {}).value || '',
-                is_private: !!(document.getElementById('mpa-private') || {}).checked,
-                python_code: (document.getElementById('mpa-pycode') || {}).value || '',
+                user_api_keys: _v('mpa-apikeys'),
+                is_private: _c('mpa-private'),
+                python_code: _v('mpa-pycode'),
             };
             if (_mpEditAgentId) data.id = _mpEditAgentId;
-            if (!data.name || !data.personality) { mpShowStatus('Заполните имя и личность агента', '#FEF2F2', '#DC2626'); return; }
+            if (!data.name) { mpShowStatus('Заполните имя агента', '#FEF2F2', '#DC2626'); return; }
+            if (!data.personality) { mpShowStatus('Заполните личность агента', '#FEF2F2', '#DC2626'); return; }
             try {
-                const r = await fetch('/api/marketplace/agents', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+                const r = await fetch('/api/marketplace/agents', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+                if (!r.ok && r.status !== 400) throw new Error('HTTP ' + r.status);
                 const res = await r.json();
                 if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
                 _mpEditAgentId = null;
                 if (res.warning) {
                     mpShowStatus('Сохранено, но: ' + res.warning, '#FFFBEB', '#D97706');
                 } else {
-                    mpShowStatus(res.message || 'Отправлено на модерацию', '#ECFDF5', '#059669');
+                    mpShowStatus(res.message || 'Агент сохранён', '#ECFDF5', '#059669');
                 }
                 document.getElementById('mp-create-form').innerHTML = '';
                 setTimeout(() => mpSwitchTab('my'), 2000);
-            } catch(e) { mpShowStatus('Ошибка: ' + e.message, '#FEF2F2', '#DC2626'); }
+            } catch(e) { mpShowStatus('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), '#FEF2F2', '#DC2626'); }
         }
 
         // ====== ARENA FUNCTIONS ======
@@ -3218,7 +3223,7 @@
                     _arenaRenderedIds.clear();
                     showNotification('Системные сообщения удалены', 'success');
                 } else showNotification(d.error || 'Ошибка', 'error');
-            } catch(e) { showNotification('Ошибка: ' + e.message, 'error'); }
+            } catch(e) { showNotification('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), 'error'); }
         }
 
         async function arenaForcePost() {
@@ -3227,7 +3232,7 @@
                 const d = await r.json();
                 if (d.success) showNotification(`${d.agent}: ${d.preview}...`, 'success');
                 else showNotification(d.error || 'Ошибка', 'error');
-            } catch(e) { showNotification('Ошибка: ' + e.message, 'error'); }
+            } catch(e) { showNotification('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), 'error'); }
         }
 
         function arenaConnect(forceReconnect) {
