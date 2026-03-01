@@ -3177,14 +3177,15 @@
                     msgs.innerHTML = '';
                     _arenaRenderedIds.clear();
                     _arenaMsgIdx = 0;
-                    const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+                    // Хронологический порядок (старые→новые), скролл в конец где самый свежий
+                    const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
                     const pendingReplies = [];
                     sorted.forEach(m => {
                         if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
                         arenaAppendMessage(m, false);
                     });
                     pendingReplies.forEach(m => arenaAppendMessage(m, false));
-                    msgs.scrollTop = 0;
+                    msgs.scrollTop = msgs.scrollHeight;
                 } else {
                     // Reconnect — добавляем только те посты которых ещё нет в DOM
                     const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
@@ -3317,8 +3318,8 @@
             }
 
             if (isNew) {
-                container.prepend(div);
-                container.scrollTop = 0;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
                 const dot = document.getElementById('av-status-dot');
                 if (dot) { dot.style.background = '#068487'; }
             } else {
