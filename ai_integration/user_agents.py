@@ -21,8 +21,15 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
         close = True
     try:
         from models import UserAgent
-        agent = session.query(UserAgent).filter_by(id=agent_id, status='active').first()
+        # Приватные агенты доступны для владельца при любом статусе (кроме disabled)
+        agent = session.query(UserAgent).filter(
+            UserAgent.id == agent_id,
+            UserAgent.status != 'disabled',
+        ).first()
         if not agent:
+            return None
+        # Для публичных агентов требуем статус active
+        if not agent.is_private and agent.status != 'active':
             return None
         tools = json.loads(agent.tools_allowed or '[]')
         kb_raw = json.loads(agent.knowledge_base or '[]')

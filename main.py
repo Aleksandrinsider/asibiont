@@ -10291,9 +10291,14 @@ async def api_marketplace_agent_activate_handler(request):
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'error': 'User not found'}, status=404)
-            agent = session_db.query(UserAgent).filter_by(id=agent_id, status='active').first()
+            # Для собственных приватных агентов пропускаем проверку status='active'
+            agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
             if not agent:
-                return web.json_response({'error': 'Agent not found or not active'}, status=404)
+                return web.json_response({'error': 'Agent not found'}, status=404)
+            if not agent.is_private or agent.author_id != user_obj.id:
+                # Для чужих/публичных агентов требуем status='active'
+                if agent.status != 'active':
+                    return web.json_response({'error': 'Agent not found or not active'}, status=404)
             existing = session_db.query(AgentSubscription).filter_by(
                 user_id=user_obj.id, agent_id=agent_id).first()
             if existing:
@@ -10302,6 +10307,12 @@ async def api_marketplace_agent_activate_handler(request):
             session_db.add(sub)
             agent.subscribers_count = (agent.subscribers_count or 0) + 1
             session_db.commit()
+            # Если это собственный агент пользователя — сразу переключаем в Telegram
+            _switched = False
+            if agent.author_id == user_obj.id:
+                from ai_integration.user_agents import set_user_active_agent as _sua
+                _sua(user_id, agent.id)
+                _switched = True
             # Захватываем атрибуты до закрытия сессии
             _aid = agent.id
             _aname = agent.name or 'Агент'
@@ -10317,7 +10328,7 @@ async def api_marketplace_agent_activate_handler(request):
             asyncio.ensure_future(_arena_intro_for_agent(
                 _aid, _aname, _aspec, _apers, _adesc, _author_uname))
             return web.json_response({'success': True, 'trial_messages': _trial,
-                                      'price_per_message': _price})
+                                      'price_per_message': _price, 'switched': _switched})
         finally:
             session_db.close()
     except Exception as e:
@@ -10347,11 +10358,49 @@ async def api_marketplace_agent_deactivate_handler(request):
                 if agent and (agent.subscribers_count or 0) > 0:
                     agent.subscribers_count = agent.subscribers_count - 1
                 session_db.commit()
+            # Сбрасываем активного агента если это был текущий
+            from ai_integration.user_agents import get_user_active_agent as _gua, set_user_active_agent as _sua
+            if _gua(user_id) == agent_id:
+                _sua(user_id, None)
             return web.json_response({'success': True})
         finally:
             session_db.close()
     except Exception as e:
         logger.error(f"[MARKETPLACE] agent deactivate error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_marketplace_agent_use_handler(request):
+    """Переключить активного агента в Telegram без повторной подписки"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        agent_id = int(request.match_info['id'])
+        session_db = Session()
+        try:
+            from models import UserAgent, User as UserModel, AgentSubscription
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
+            if not agent:
+                return web.json_response({'error': 'Agent not found'}, status=404)
+            # Разрешаем владельцу или подписчику
+            is_owner = (agent.author_id == user_obj.id)
+            if not is_owner:
+                sub = session_db.query(AgentSubscription).filter_by(
+                    user_id=user_obj.id, agent_id=agent_id).first()
+                if not sub:
+                    return web.json_response({'error': 'Subscribe first'}, status=403)
+            from ai_integration.user_agents import set_user_active_agent as _sua
+            _sua(user_id, agent_id)
+            return web.json_response({'success': True, 'name': agent.name})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] agent use error: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -10441,6 +10490,7 @@ app.router.add_delete('/api/marketplace/agents/{id}', api_marketplace_agent_dele
 app.router.add_post('/api/marketplace/agents/{id}/chat', api_agent_chat_handler)
 app.router.add_post('/api/marketplace/agents/{id}/activate', api_marketplace_agent_activate_handler)
 app.router.add_delete('/api/marketplace/agents/{id}/activate', api_marketplace_agent_deactivate_handler)
+app.router.add_post('/api/marketplace/agents/{id}/use', api_marketplace_agent_use_handler)
 app.router.add_post('/api/marketplace/agents/{id}/rate', api_agent_rate_handler)
 # Arena — глобальная лента (не требует авторизации)
 app.router.add_get('/api/arena', api_arena_state_handler)
