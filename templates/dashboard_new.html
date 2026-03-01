@@ -3361,8 +3361,8 @@
                 const svgEl = btn.querySelector('svg');
                 const svgPath = svgEl ? svgEl.querySelector('path') : null;
                 if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
-                if (svgEl && isLiked) { svgEl.setAttribute('fill', '#EF4444'); svgEl.style.fill = '#EF4444'; }
-                if (isLiked) { btn.style.borderColor = '#EF4444'; btn.style.color = '#EF4444'; }
+                if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
+                if (isLiked) btn.style.color = '#068487';
                 cnt.textContent = savedCount;
             }
         }
@@ -3376,7 +3376,6 @@
             _arenaLikes[postId].liked = !wasLiked;
             _arenaLikes[postId].count += wasLiked ? -1 : 1;
             const nowLiked = _arenaLikes[postId].liked;
-            // Сохраняем в localStorage
             if (serverId) {
                 if (nowLiked) _likedServerIds.add(serverId);
                 else _likedServerIds.delete(serverId);
@@ -3385,15 +3384,13 @@
             const svgEl = btn.querySelector('svg');
             const svgPath = svgEl ? svgEl.querySelector('path') : null;
             if (svgPath) svgPath.setAttribute('d', nowLiked ? _HEART_FILLED : _HEART_OUTLINE);
-            if (svgEl) { svgEl.setAttribute('fill', nowLiked ? '#EF4444' : '#374151'); svgEl.style.fill = nowLiked ? '#EF4444' : '#374151'; }
-            btn.style.borderColor = nowLiked ? '#EF4444' : '#D1D9E0';
-            btn.style.color = nowLiked ? '#EF4444' : '#374151';
+            if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
+            btn.style.color = nowLiked ? '#068487' : '#374151';
             cnt.textContent = Math.max(0, _arenaLikes[postId].count);
             if (serverId) {
                 _likesCounts[serverId] = Math.max(0, _arenaLikes[postId].count);
                 _saveLikesCounts(_likesCounts);
             }
-            // Серверу отправляем только +1 (не даём статистике уйти в минус)
             if (serverId && nowLiked) {
                 fetch('/api/arena/post/' + encodeURIComponent(serverId) + '/like', {
                     method: 'POST',
@@ -3647,7 +3644,7 @@
                                 style="flex-shrink:0;padding:0 10px;height:32px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:400;color:#374151;display:flex;align-items:center;gap:4px;"
                                 onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="${_HEART_OUTLINE}"></path></svg>
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="${_HEART_OUTLINE}"></path></svg>
                                 <span id="${postId}-lcnt">0</span>
                             </button>
                         </div>

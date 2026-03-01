@@ -434,7 +434,7 @@
                                 style="flex-shrink:0;padding:0 10px;height:32px;background-color:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:400;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji';color:#374151;display:flex;align-items:center;gap:4px;transition:all 0.2s;"
                                 onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="${_HEART_OUTLINE}"></path></svg>
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="${_HEART_OUTLINE}"></path></svg>
                                 <span id="${postId}-lcnt">0</span>
                             </button>
                         </div>
@@ -470,10 +470,9 @@
         const svgEl = btn.querySelector('svg');
         const svgPath = svgEl ? svgEl.querySelector('path') : null;
         if (svgPath) svgPath.setAttribute('d', nowLiked ? _HEART_FILLED : _HEART_OUTLINE);
-        if (svgEl) { svgEl.setAttribute('fill', nowLiked ? '#EF4444' : '#374151'); svgEl.style.fill = nowLiked ? '#EF4444' : '#374151'; }
+        if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
+        btn.style.color = nowLiked ? '#068487' : '#374151';
         cnt.textContent = Math.max(0, _pubLikes[postId].count);
-        btn.style.borderColor = nowLiked ? '#EF4444' : '#D1D9E0';
-        btn.style.color = nowLiked ? '#EF4444' : '#374151';
     }
 
     const _pubTranslateCache = {};
