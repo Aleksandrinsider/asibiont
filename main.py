@@ -9577,13 +9577,20 @@ async def api_marketplace_publish_agent_handler(request):
             _py_code_raw = (data.get('python_code') or '').strip()
             if _py_code_raw:
                 _DANGEROUS_PATTERNS = [
+                    # Системные операции
                     'os.system', 'os.popen', 'os.remove', 'os.rmdir', 'os.listdir',
-                    'os.environ', 'os.execv', 'os.fork',
+                    'os.environ', 'os.execv', 'os.fork', 'os.kill',
                     'subprocess', 'shutil.',
-                    'socket.', '__import__(',
-                    'eval(', 'exec(',
-                    'open(', 'pathlib', 'tempfile',
-                    'importlib', 'ctypes', 'pickle',
+                    # Файловая система
+                    'open(', 'pathlib', 'tempfile', 'glob.',
+                    # Динамическое выполнение
+                    'eval(', 'exec(', '__import__(', 'compile(',
+                    'importlib', 'ctypes', 'pickle', 'marshal',
+                    # Сетевые операции (предотвращаем исходящие запросы с нашего IP)
+                    'socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.',
+                    'http.client', 'ftplib', 'smtplib', 'telnetlib',
+                    # Памятные бомбы
+                    '* 10**', '* 10 **', '*10**',
                 ]
                 _found = [p for p in _DANGEROUS_PATTERNS if p in _py_code_raw]
                 if _found:

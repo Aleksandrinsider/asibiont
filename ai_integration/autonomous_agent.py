@@ -1200,15 +1200,30 @@ class HybridAutonomousAgent:
                         if '=' in _kline and not _kline.startswith('#'):
                             _k, _, _v = _kline.partition('=')
                             _env[_k.strip()] = _v.strip()
+                    # Ограничение памяти 64MB (только Linux/Railway, preexec_fn не работает на Windows)
+                    _is_linux = _sys_pc.platform != 'win32'
+                    def _set_mem_limit():
+                        try:
+                            import resource as _res
+                            _limit = 64 * 1024 * 1024  # 64 MB
+                            _res.setrlimit(_res.RLIMIT_AS, (_limit, _limit))
+                        except Exception:
+                            pass
+
                     async def _run_agent_code():
-                        proc = await _aio_pc.create_subprocess_exec(
-                            _sys_pc.executable, '-c', _py_code,
+                        _kwargs = dict(
                             stdout=_aio_pc.subprocess.PIPE,
                             stderr=_aio_pc.subprocess.PIPE,
                             env=_env,
                         )
+                        if _is_linux:
+                            _kwargs['preexec_fn'] = _set_mem_limit
+                        proc = await _aio_pc.create_subprocess_exec(
+                            _sys_pc.executable, '-c', _py_code,
+                            **_kwargs,
+                        )
                         try:
-                            stdout, _ = await _aio_pc.wait_for(proc.communicate(), timeout=15.0)
+                            stdout, _ = await _aio_pc.wait_for(proc.communicate(), timeout=10.0)
                             return stdout.decode('utf-8', errors='replace').strip()[:2000]
                         except _aio_pc.TimeoutError:
                             proc.kill()
