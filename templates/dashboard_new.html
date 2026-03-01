@@ -2873,6 +2873,43 @@
             }
         }
 
+        async function mpTestAgentCode() {
+            const agentId = window._mpEditAgentId;
+            const resultEl = document.getElementById('mpa-test-result');
+            const btn = document.getElementById('mpa-test-btn');
+            if (!agentId) {
+                if (resultEl) { resultEl.style.display = 'block'; resultEl.style.borderColor = '#FCA5A5'; resultEl.textContent = 'Сначала сохраните агента, затем нажмите тест'; }
+                return;
+            }
+            if (btn) { btn.disabled = true; btn.textContent = 'Запускаем...'; }
+            if (resultEl) { resultEl.style.display = 'none'; }
+            try {
+                const r = await fetch('/api/marketplace/agents/test-code', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({agent_id: agentId})
+                });
+                const data = await r.json();
+                if (resultEl) {
+                    resultEl.style.display = 'block';
+                    if (data.error && !data.stdout) {
+                        resultEl.style.borderColor = '#FCA5A5';
+                        resultEl.textContent = 'ОШИБКА: ' + data.error;
+                    } else {
+                        const envInfo = data.env_keys && data.env_keys.length ? '\n[Ключи переданы: ' + data.env_keys.join(', ') + ']' : '\n[Ключи API: не переданы]';
+                        const stdoutPart = data.stdout ? 'ВЫВОД:\n' + data.stdout : 'ВЫВОД: (пусто)';
+                        const stderrPart = data.stderr ? '\n\nОШИБКИ:\n' + data.stderr : '';
+                        resultEl.style.borderColor = data.stderr ? '#FCA5A5' : '#86EFAC';
+                        resultEl.textContent = stdoutPart + stderrPart + envInfo;
+                    }
+                }
+            } catch(e) {
+                if (resultEl) { resultEl.style.display = 'block'; resultEl.style.borderColor = '#FCA5A5'; resultEl.textContent = 'Ошибка запроса: ' + e.message; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Запустить и проверить код'; }
+            }
+        }
+
         async function mpAgentDelete(id) {
             if (!confirm('Удалить агента? Это действие нельзя отменить.')) return;
             try {
@@ -3084,6 +3121,8 @@
                         <div style="margin-top:8px;">
                             <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;">Сгенерированный / свой код (можно отредактировать):</div>
                             <textarea id="mpa-pycode" placeholder="# Python-код будет здесь после генерации" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:11px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                            <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;background:#F0FDF4;border-color:#16A34A;color:#15803D;" onmouseover="this.style.background='#DCFCE7';" onmouseout="this.style.background='#F0FDF4';">Запустить и проверить код</button>
+                            <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
                         </div>
                     </div>
 

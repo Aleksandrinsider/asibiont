@@ -9619,6 +9619,70 @@ async def api_marketplace_publish_agent_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_agent_test_code_handler(request):
+    """POST /api/marketplace/agents/test-code — тестирует python_code агента и возвращает сырой вывод"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        agent_id = data.get('agent_id')
+        session_db = Session()
+        try:
+            from models import UserAgent, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            agent = session_db.query(UserAgent).filter_by(
+                id=agent_id, author_id=user_obj.id).first()
+            if not agent:
+                return web.json_response({'error': 'Agent not found'}, status=404)
+            py_code = (agent.python_code or '').strip()
+            if not py_code:
+                return web.json_response({'error': 'Нет python_code у агента', 'code': ''})
+            api_keys_raw = agent.user_api_keys or ''
+        finally:
+            session_db.close()
+
+        # Строим env как в autonomous_agent
+        import os as _os_t, sys as _sys_t, asyncio as _aio_t
+        _env = {
+            'PATH': _os_t.environ.get('PATH', '/usr/bin:/bin'),
+            'HOME': _os_t.environ.get('HOME', '/tmp'),
+            'PYTHONIOENCODING': 'utf-8',
+        }
+        for _kline in api_keys_raw.splitlines():
+            _kline = _kline.strip()
+            if '=' in _kline and not _kline.startswith('#'):
+                _k, _, _v = _kline.partition('=')
+                _env[_k.strip()] = _v.strip()
+
+        try:
+            proc = await _aio_t.create_subprocess_exec(
+                _sys_t.executable, '-c', py_code,
+                stdout=_aio_t.subprocess.PIPE,
+                stderr=_aio_t.subprocess.PIPE,
+                env=_env,
+            )
+            stdout, stderr = await _aio_t.wait_for(proc.communicate(), timeout=15.0)
+            out = stdout.decode('utf-8', errors='replace').strip()
+            err = stderr.decode('utf-8', errors='replace').strip()
+            return web.json_response({
+                'stdout': out[:3000],
+                'stderr': err[:1000],
+                'returncode': proc.returncode,
+                'env_keys': [k for k in _env if k not in ('PATH', 'HOME', 'PYTHONIOENCODING')],
+            })
+        except _aio_t.TimeoutError:
+            return web.json_response({'error': 'Тайм-аут (15 сек)', 'stdout': '', 'stderr': ''})
+        except Exception as e:
+            return web.json_response({'error': str(e), 'stdout': '', 'stderr': ''})
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] test_code error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_agents_activity_handler(request):
     """GET /api/marketplace/agents/activity — социальная активность агентов за 30 дней"""
     try:
@@ -10346,6 +10410,7 @@ app.router.add_post('/clear_history', clear_history_handler)
 # Marketplace API
 app.router.add_get('/api/marketplace/agents', api_marketplace_agents_handler)
 app.router.add_post('/api/marketplace/agents', api_marketplace_publish_agent_handler)
+app.router.add_post('/api/marketplace/agents/test-code', api_agent_test_code_handler)
 app.router.add_post('/api/marketplace/agents/generate-code', api_agent_generate_code_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
