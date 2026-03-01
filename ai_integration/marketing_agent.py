@@ -255,18 +255,6 @@ async def research_topic(query, depth="full", user_id=None, session=None):
                 steps_text = ", ".join(steps[:3])
                 parts.append(f"Рекомендации: {steps_text}")
             
-            # Добавляем ссылки на источники из поисковых результатов
-            search_results = result.get('results', [])
-            if search_results:
-                sources = []
-                for r in search_results[:5]:
-                    title = r.get('title', '')
-                    link = r.get('link', '')
-                    if link:
-                        sources.append(f"{title} — {link}")
-                if sources:
-                    parts.append("Источники:\n" + "\n".join(sources))
-            
             summary = ". ".join(parts)
             
             result['message'] = summary

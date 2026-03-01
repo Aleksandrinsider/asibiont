@@ -1091,24 +1091,8 @@ class ExternalAPIClient:
                 steps_text = ", ".join(steps[:3])
                 parts.append(f"Рекомендации: {steps_text}")
             
-            # Добавляем ссылки на источники из поисковых результатов
-            if results:
-                sources = []
-                for r in results[:5]:
-                    title = r.get('title', '')
-                    link = r.get('link', '')
-                    if link:
-                        sources.append(f"{title}: {link}")
-                if sources:
-                    parts.append("Источники: " + ", ".join(sources))
-            
             return f"Анализ по теме '{query}': " + ". ".join(parts)
         elif isinstance(analysis, str):
-            # Добавляем ссылки к текстовому анализу
-            if results:
-                sources = [f"{r.get('title', '')}: {r.get('link', '')}" for r in results[:5] if r.get('link')]
-                if sources:
-                    analysis += ". Источники: " + ", ".join(sources)
             return f"Анализ по теме '{query}': {analysis}"
         else:
             return self._format_search_results(query, results[:5])
