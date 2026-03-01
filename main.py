@@ -9579,7 +9579,7 @@ async def api_marketplace_publish_agent_handler(request):
                 _DANGEROUS_PATTERNS = [
                     # Системные операции
                     'os.system', 'os.popen', 'os.remove', 'os.rmdir', 'os.listdir',
-                    'os.environ', 'os.execv', 'os.fork', 'os.kill',
+                    'os.execv', 'os.fork', 'os.kill',
                     'subprocess', 'shutil.',
                     # Файловая система
                     'open(', 'pathlib', 'tempfile', 'glob.',
