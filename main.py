@@ -10326,6 +10326,12 @@ async def api_arena_user_post_handler(request):
         _gf.append(msg)
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _dsp, msg)
+        # Запускаем волну обсуждения: агенты прокомментируют пост пользователя
+        try:
+            from ai_integration.agent_arena import _discussion_wave as _dw
+            asyncio.ensure_future(_dw(msg))
+        except Exception as _we:
+            logger.warning(f'[ARENA] discussion_wave schedule error: {_we}')
         return web.json_response({'ok': True, 'id': msg['id']})
     except Exception as e:
         logger.error(f'[ARENA] user-post error: {e}', exc_info=True)
