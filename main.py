@@ -9460,6 +9460,69 @@ async def api_marketplace_agents_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_agent_generate_code_handler(request):
+    """POST /api/marketplace/agents/generate-code — генерация python_code агента через DeepSeek"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        description = (data.get('description') or '').strip()
+        api_keys_raw = (data.get('api_keys') or '').strip()
+        if not description:
+            return web.json_response({'error': 'description required'}, status=400)
+
+        # Строим контекст доступных ключей (только имена, не значения)
+        key_names = []
+        for line in api_keys_raw.splitlines():
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                kname = line.split('=', 1)[0].strip()
+                if kname:
+                    key_names.append(kname)
+
+        keys_hint = ''
+        if key_names:
+            keys_hint = f'\nДоступные переменные окружения (os.environ): {", ".join(key_names)}'
+
+        prompt = f"""Напиши Python-скрипт для AI-агента. Скрипт выполняется перед каждым ответом агента и должен напечатать (print) актуальные данные в stdout — они попадут в контекст ИИ.
+
+Задача агента: {description}{keys_hint}
+
+Требования к коду:
+- Только стандартная библиотека + requests (если нужны HTTP-запросы)
+- Ключи читать через os.environ['KEY_NAME']
+- Вывод должен быть кратким и информативным (до 500 символов)
+- Обернуть в try/except, при ошибке напечатать пустую строку или короткое сообщение
+- Никаких интерактивных вводов, без бесконечных циклов
+- Только код, без пояснений, без markdown-блоков```
+
+Выведи ТОЛЬКО чистый Python-код без каких-либо обёрток."""
+
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        import aiohttp as _aio_h
+        import json as _json_g
+        async with _aio_h.ClientSession() as _sess:
+            async with _sess.post(
+                'https://api.deepseek.com/chat/completions',
+                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                json={'model': DEEPSEEK_MODEL, 'messages': [{'role': 'user', 'content': prompt}],
+                      'max_tokens': 800, 'temperature': 0.2},
+                timeout=_aio_h.ClientTimeout(total=30)
+            ) as resp:
+                result = await resp.json()
+        code = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        # Убираем markdown-блоки если DeepSeek их добавил
+        import re as _re_gc
+        code = _re_gc.sub(r'^```python\s*', '', code, flags=_re_gc.MULTILINE)
+        code = _re_gc.sub(r'^```\s*', '', code, flags=_re_gc.MULTILINE).strip()
+        return web.json_response({'code': code})
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] generate-code error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_marketplace_publish_agent_handler(request):
     """POST /api/marketplace/agents — создать/обновить агента"""
     try:
@@ -10258,6 +10321,7 @@ app.router.add_post('/clear_history', clear_history_handler)
 # Marketplace API
 app.router.add_get('/api/marketplace/agents', api_marketplace_agents_handler)
 app.router.add_post('/api/marketplace/agents', api_marketplace_publish_agent_handler)
+app.router.add_post('/api/marketplace/agents/generate-code', api_agent_generate_code_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
 app.router.add_get('/api/marketplace/agents/{id}', api_marketplace_agent_get_handler)
