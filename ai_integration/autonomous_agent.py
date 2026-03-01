@@ -1215,7 +1215,9 @@ class HybridAutonomousAgent:
                 # AI вызвал tools → добавляем assistant message в цепочку
                 messages.append(msg)
 
-                tools_executed_this_iter = 0
+                # ── Pass 1: валидация (последовательно — dedup/limits — shared state) ──
+                _ready_calls = []   # (tc_item, name, args, reason)
+                _counted = 0
                 for tc_item in tool_calls:
                     func = tc_item.get('function', {})
                     name = func.get('name', '')
@@ -1223,100 +1225,91 @@ class HybridAutonomousAgent:
                         args = json.loads(func.get('arguments', '{}'))
                     except Exception:
                         args = {}
-                    # Defensive: если AI прислал не dict (строку, список и т.д.) — сбрасываем
                     if not isinstance(args, dict):
-                        logger.warning(f"[EXEC] {name}: arguments parsed to {type(args).__name__}, not dict — reset")
+                        logger.warning(f"[EXEC] {name}: arguments is {type(args).__name__}, reset")
                         args = {}
 
-                    # Per-iteration tool cap — не больше MAX_TOOLS_PER_ITERATION за итерацию
-                    if tools_executed_this_iter >= MAX_TOOLS_PER_ITERATION:
-                        logger.warning(f"[SPEED] Skipping {name} — iteration tool cap ({MAX_TOOLS_PER_ITERATION}) reached")
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc_item['id'],
-                            "content": json.dumps({"status": f"skipped: max {MAX_TOOLS_PER_ITERATION} tools per iteration for speed"}, ensure_ascii=False)
-                        })
+                    # Per-iteration cap
+                    if _counted >= MAX_TOOLS_PER_ITERATION:
+                        logger.warning(f"[SPEED] Skipping {name} — cap ({MAX_TOOLS_PER_ITERATION}) reached")
+                        messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                            "content": json.dumps({"status": f"skipped: max {MAX_TOOLS_PER_ITERATION} per iter"}, ensure_ascii=False)})
                         continue
 
-                    # Dedup: предотвращаем повторные вызовы того же tool с теми же параметрами
+                    # Dedup
                     dedup_key = f"{name}:{json.dumps(args, sort_keys=True)}"
                     if dedup_key in seen_tools:
                         logger.warning(f"[DEDUP] Skipping duplicate {name}")
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc_item['id'],
-                            "content": '{"status": "skipped: duplicate call"}'
-                        })
+                        messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                            "content": '{"status": "skipped: duplicate call"}'})
                         continue
                     seen_tools.add(dedup_key)
 
-                    # Критичные инструменты — строго 1 вызов за ответ
+                    # Once-only
                     if name in once_only_tools:
                         if name in used_once_only:
-                            logger.warning(f"[ONCE_ONLY] Skipping second {name} call")
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc_item['id'],
-                                "content": json.dumps({"status": f"skipped: {name} already called once this turn"}, ensure_ascii=False)
-                            })
+                            logger.warning(f"[ONCE_ONLY] Skipping second {name}")
+                            messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                                "content": json.dumps({"status": f"skipped: {name} already called"}, ensure_ascii=False)})
                             continue
                         used_once_only.add(name)
 
-                    # Инструменты с лимитом >1 (add_task — до 3 за ход)
+                    # Multi-limit
                     if name in multi_limit_tools:
                         multi_limit_counts[name] = multi_limit_counts.get(name, 0) + 1
                         if multi_limit_counts[name] > multi_limit_tools[name]:
-                            logger.warning(f"[MULTI_LIMIT] Skipping {name} call #{multi_limit_counts[name]} (limit: {multi_limit_tools[name]})")
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc_item['id'],
-                                "content": json.dumps({"status": f"skipped: {name} limit reached ({multi_limit_tools[name]} per turn)"}, ensure_ascii=False)
-                            })
+                            logger.warning(f"[MULTI_LIMIT] Skipping {name} #{multi_limit_counts[name]}")
+                            messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                                "content": json.dumps({"status": f"skipped: {name} limit"}, ensure_ascii=False)})
                             continue
 
-                    # ГИБРИДНЫЙ ПОДХОД: никаких keyword guards.
-                    # AI сам решает какие инструменты вызывать.
-                    # Промпт содержит чёткие инструкции когда создавать/завершать/удалять.
+                    _counted += 1
+                    _ready_calls.append((tc_item, name, args, f"AI iter {iteration+1}: {name}"))
 
-                    # Execute single tool — с прогрессом в Telegram
+                # ── Pass 2: выполняем все валидные tools ПАРАЛЛЕЛЬНО ────────────
+                # Каждый вызов получает отдельную DB-сессию (session=None → auto)
+                async def _exec_one(_tc, _name, _args, _reason):
                     if _cb:
-                        status = self._tool_progress_text(name, iteration + 1, lang=user_lang)
                         try:
-                            await _cb(status)
+                            await _cb(self._tool_progress_text(_name, iteration + 1, lang=user_lang))
                         except Exception:
                             pass
-
-                    action = [{"tool": name, "params": args,
-                               "reason": f"AI iter {iteration+1}: {name}"}]
-                    tools_executed_this_iter += 1
                     try:
-                        results = await self.execute_actions(
-                            action, user_id, session=session,
-                            user_message=user_message,
-                            progress_callback=progress_callback,
-                            web_context=web_context)
-
-                        r = results[0] if results else {"success": False,
-                                                         "error": "no result"}
-                        all_execution_results.append(r)
-
-                        # Добавляем tool result в messages (со сжатием)
-                        if r.get('success'):
-                            rc = json.dumps(r['result'], ensure_ascii=False,
-                                            default=str)
-                            rc = CognitiveEngine.compress_tool_result(rc)
+                        _results = await self.execute_actions(
+                            [{"tool": _name, "params": _args, "reason": _reason}],
+                            user_id, session=None,
+                            user_message=user_message, web_context=web_context)
+                        _r = _results[0] if _results else {"success": False, "error": "no result"}
+                        if _r.get('success'):
+                            _rc = json.dumps(_r['result'], ensure_ascii=False, default=str)
+                            _rc = CognitiveEngine.compress_tool_result(_rc)
                         else:
-                            rc = json.dumps({"error": str(r.get('error', ''))},
-                                            ensure_ascii=False)
-                    except Exception as _tool_err:
-                        logger.error(f"[EXEC] {name} crashed outside execute_actions: {_tool_err}\n{traceback.format_exc()}")
-                        rc = json.dumps({"error": str(_tool_err)}, ensure_ascii=False)
+                            _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
+                    except Exception as _err:
+                        logger.error(f"[EXEC] {_name} parallel crashed: {_err}\n{traceback.format_exc()}")
+                        _r = {"success": False, "error": str(_err)}
+                        _rc = json.dumps({"error": str(_err)}, ensure_ascii=False)
+                    return _r, {"role": "tool", "tool_call_id": _tc['id'], "content": _rc}
 
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc_item['id'],
-                        "content": rc
-                    })
+                if _ready_calls:
+                    if len(_ready_calls) == 1:
+                        # Один инструмент — без gather (нет смысла)
+                        _out = [await _exec_one(*_ready_calls[0])]
+                    else:
+                        # Несколько — параллельно (research_topic × 2 → в 2× быстрее)
+                        logger.info(f"[PARALLEL] Executing {len(_ready_calls)} tools in parallel: "
+                                    f"{[c[1] for c in _ready_calls]}")
+                        _out = await asyncio.gather(
+                            *[_exec_one(*c) for c in _ready_calls],
+                            return_exceptions=True
+                        )
+                    for _item in _out:
+                        if isinstance(_item, Exception):
+                            logger.error(f"[PARALLEL] Gather error: {_item}")
+                        else:
+                            _r, _tool_msg = _item
+                            all_execution_results.append(_r)
+                            messages.append(_tool_msg)
 
                 # Продолжаем цикл — AI увидит результаты и решит
                 # ответить текстом или вызвать ещё tools
@@ -1752,6 +1745,8 @@ class HybridAutonomousAgent:
                 # AI вызвал tools
                 messages.append(msg)
 
+                # ── Pass 1: валидация (последовательно) ─────────────────────────
+                _sys_ready = []  # (tc_item, name, args, reason)
                 for tc_item in tool_calls:
                     func = tc_item.get('function', {})
                     name = func.get('name', '')
@@ -1759,54 +1754,59 @@ class HybridAutonomousAgent:
                         args = json.loads(func.get('arguments', '{}'))
                     except Exception:
                         args = {}
-                    # Defensive: если AI прислал не dict — сбрасываем
                     if not isinstance(args, dict):
-                        logger.warning(f"[AGENT:SYSTEM] {name}: arguments parsed to {type(args).__name__}, not dict — reset")
+                        logger.warning(f"[AGENT:SYSTEM] {name}: arguments is {type(args).__name__}, reset")
                         args = {}
 
                     # Dedup
                     dedup_key = f"{name}:{json.dumps(args, sort_keys=True)}"
                     if dedup_key in seen_tools:
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc_item['id'],
-                            "content": '{"status": "skipped: duplicate"}'
-                        })
+                        messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                            "content": '{"status": "skipped: duplicate"}'})
                         continue
                     seen_tools.add(dedup_key)
 
-                    # Блокируем запрещённые инструменты
+                    # Blocked
                     if name in exclude_tools:
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc_item['id'],
-                            "content": f'{{"status": "blocked: {name} not available in {mode} mode"}}'
-                        })
+                        messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                            "content": f'{{"status": "blocked: {name} not in {mode}"}}'})
                         continue
 
-                    # Execute
+                    _sys_ready.append((tc_item, name, args, f"system:{mode} iter {iteration+1}"))
+
+                # ── Pass 2: выполняем ПАРАЛЛЕЛЬНО ────────────────────────────────
+                async def _sys_exec_one(_tc, _name, _args, _reason):
                     try:
-                        action = [{"tool": name, "params": args,
-                                   "reason": f"system:{mode} iter {iteration+1}"}]
-                        results = await self.execute_actions(
-                            action, user_id, session=None, user_message=instruction)
-
-                        r = results[0] if results else {"success": False, "error": "no result"}
-                        all_execution_results.append(r)
-
-                        if r.get('success'):
-                            rc = json.dumps(r['result'], ensure_ascii=False, default=str)[:1500]
+                        _results = await self.execute_actions(
+                            [{"tool": _name, "params": _args, "reason": _reason}],
+                            user_id, session=None, user_message=instruction)
+                        _r = _results[0] if _results else {"success": False, "error": "no result"}
+                        if _r.get('success'):
+                            _rc = json.dumps(_r['result'], ensure_ascii=False, default=str)[:1500]
                         else:
-                            rc = json.dumps({"error": str(r.get('error', ''))}, ensure_ascii=False)
-                    except Exception as _tool_err:
-                        logger.error(f"[AGENT:SYSTEM] Tool {name} failed in {mode}: {_tool_err}\n{traceback.format_exc()}")
-                        rc = json.dumps({"error": str(_tool_err)}, ensure_ascii=False)
+                            _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
+                    except Exception as _err:
+                        logger.error(f"[AGENT:SYSTEM] {_name} parallel failed: {_err}\n{traceback.format_exc()}")
+                        _r = {"success": False, "error": str(_err)}
+                        _rc = json.dumps({"error": str(_err)}, ensure_ascii=False)
+                    return _r, {"role": "tool", "tool_call_id": _tc['id'], "content": _rc}
 
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc_item['id'],
-                        "content": rc
-                    })
+                if _sys_ready:
+                    if len(_sys_ready) == 1:
+                        _sys_out = [await _sys_exec_one(*_sys_ready[0])]
+                    else:
+                        logger.info(f"[PARALLEL:SYSTEM] {len(_sys_ready)} tools: {[c[1] for c in _sys_ready]}")
+                        _sys_out = await asyncio.gather(
+                            *[_sys_exec_one(*c) for c in _sys_ready],
+                            return_exceptions=True
+                        )
+                    for _item in _sys_out:
+                        if isinstance(_item, Exception):
+                            logger.error(f"[PARALLEL:SYSTEM] Gather error: {_item}")
+                        else:
+                            _r, _tool_msg = _item
+                            all_execution_results.append(_r)
+                            messages.append(_tool_msg)
 
             # Финальный вызов без tools после исчерпания итераций
             final_resp = await self.call_ai(
