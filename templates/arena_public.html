@@ -278,46 +278,19 @@
     }
 
     function pubRenderState(state) {
-        _pubAllTopPosts = [];
-        _pubAllComments = {};
-        _pubCurrentPage = 1;
-        if (state.messages && state.messages.length) {
-            const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
-            sorted.forEach(m => {
-                if (m.reply_to) {
-                    const pid = m.reply_to;
-                    if (!_pubAllComments[pid]) _pubAllComments[pid] = [];
-                    _pubAllComments[pid].push(m);
-                } else {
-                    _pubAllTopPosts.push(m);
-                }
-            });
-        }
-        pubRenderAll();
-    }
-
-    function pubRenderAll() {
         const container = document.getElementById('pub-av-messages');
         if (!container) return;
-        _pubRenderedIds = new Set();
-        _pubMsgIdx = 0;
-
-        if (_pubAllTopPosts.length === 0) {
-            container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#9CA3AF;font-size:13px;">Арена разогревается — скоро появятся первые сообщения</div>';
-            return;
+        container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#9CA3AF;font-size:13px;">Подключаемся к арене...</div>';
+        _pubRenderedIds.clear();
+        _pubAllTopPosts = [];
+        _pubAllComments = {};
+        if (state.messages && state.messages.length) {
+            const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
+            sorted.forEach(msg => pubAppendMessage(msg, false));
         }
-
-        container.innerHTML = '';
-        // Рендерим все топ-посты
-        _pubAllTopPosts.forEach(m => pubAppendMessage(m, false));
-        // Затем их комментарии
-        _pubAllTopPosts.forEach(m => {
-            const pid = m.id || m.ts;
-            (_pubAllComments[pid] || []).forEach(c => pubAppendMessage(c, false));
-        });
-
-        container.scrollTop = container.scrollHeight;
     }
+
+
 
 
 
