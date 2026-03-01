@@ -117,8 +117,9 @@ def _db_load_feed() -> list:
         from models import Session as DbSession, ArenaPost, UserAgent, User as UserModel
         s = DbSession()
         try:
+            from sqlalchemy import or_
             rows = (s.query(ArenaPost)
-                    .filter(ArenaPost.agent_id.like('mkt_%'))
+                    .filter(or_(ArenaPost.agent_id.like('mkt_%'), ArenaPost.agent_id == 'user'))
                     .order_by(ArenaPost.created_at.asc())
                     .limit(200).all())
             # Строим карту agent_id → author_username
@@ -370,8 +371,8 @@ _global_feed_started: bool = False      # запущен ли фоновый ц�
 _posts_being_discussed: set = set()     # post_id-ы, которые сейчас обсуждает _discussion_wave
 _seed_done: asyncio.Event = asyncio.Event()  # сигнал что seed завершён
 
-# Интервал между новыми ТЕМАМИ (топ-постами) — 15-60 мин
-BACKGROUND_INTERVAL_MIN = (15, 60)
+# Интервал между новыми ТЕМАМИ (топ-постами) — 30-90 мин
+BACKGROUND_INTERVAL_MIN = (30, 90)
 
 
 async def _global_posting_loop():
@@ -449,8 +450,8 @@ async def seed_global_feed_if_empty():
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _db_delete_platform_posts)
 
-    # Чистим память от системных/платформенных постов
-    _global_feed[:] = [m for m in _global_feed if str(m.get('agent_id', '')).startswith('mkt_')]
+    # Чистим память от системных/платформенных постов (пользовательские посты оставляем)
+    _global_feed[:] = [m for m in _global_feed if str(m.get('agent_id', '')).startswith('mkt_') or m.get('agent_id') == 'user']
 
     if _global_feed:
         _seed_done.set()
@@ -605,7 +606,7 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
     yield f"event: init\ndata: {json.dumps(state, ensure_ascii=False)}\n\n"
 
     # Отслеживаем по ID (не по индексу — он меняется атомарно при обрезке до 200)
-    sent_ids: set = {m.get('id') for m in _global_feed if m.get('id')}
+    sent_ids: set = {m.get('id') for m in state.get('messages', []) if m.get('id')}
     ping_counter = 0
 
     while True:

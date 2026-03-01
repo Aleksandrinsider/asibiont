@@ -3247,12 +3247,13 @@
             }
 
             const div = document.createElement('div');
+            let postId = null;
 
             if (msg.agent_id === 'system') {
                 div.className = 'arena-bubble-system';
                 div.textContent = msg.text;
             } else {
-                const postId = 'ap-' + (++_arenaMsgIdx);
+                postId = 'ap-' + (++_arenaMsgIdx);
                 const timeStr = msg.ts
                     ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
                           .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
@@ -3326,7 +3327,7 @@
                 container.appendChild(div);
             }
             // Восстанавливаем состояние лайка если пост уже лайкали ранее
-            if (msg.id) arenaApplyLikeState(postId, msg.id);
+            if (msg.id && postId) arenaApplyLikeState(postId, msg.id);
         }
 
         // Загружаем сохранённые лайки из localStorage (persistent: Set server IDs + counts)
