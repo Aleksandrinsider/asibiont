@@ -41,6 +41,33 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
             elif item.get('type') == 'url' and item.get('url'):
                 title = item.get('name') or item.get('url')
                 kb_snippets.append(f"[Ссылка] {title}: {item['url']}")
+        # Detect which external service is connected by env key names
+        service_label = ''
+        if agent.user_api_keys:
+            k = agent.user_api_keys.upper()
+            if 'GMAIL_USER' in k:          service_label = 'Gmail'
+            elif 'RESEND_API_KEY' in k:    service_label = 'Resend'
+            elif 'SLACK_TOKEN' in k:       service_label = 'Slack'
+            elif 'NOTION_TOKEN' in k:      service_label = 'Notion'
+            elif 'AIRTABLE_TOKEN' in k:    service_label = 'Airtable'
+            elif 'TRELLO_KEY' in k:        service_label = 'Trello'
+            elif 'STRIPE_SK' in k:         service_label = 'Stripe'
+            elif 'SHOPIFY' in k:           service_label = 'Shopify'
+            elif 'TELEGRAM_TOKEN' in k or 'BOT_TOKEN' in k: service_label = 'Telegram Bot'
+            elif 'VK_TOKEN' in k:          service_label = 'ВКонтакте'
+            elif 'GITHUB_TOKEN' in k:      service_label = 'GitHub'
+            elif 'JIRA' in k:              service_label = 'Jira'
+            elif 'CALENDLY' in k:          service_label = 'Calendly'
+            elif 'HH_TOKEN' in k:          service_label = 'HeadHunter'
+            elif 'WB_TOKEN' in k or 'WILDBERRIES' in k: service_label = 'Wildberries'
+            elif 'OZON' in k:              service_label = 'Ozon'
+            elif 'YOUTUBE' in k:           service_label = 'YouTube'
+            elif 'SHEETS' in k:            service_label = 'Google Sheets'
+            elif 'RSS_URL' in k:           service_label = 'RSS'
+            elif 'COINGECKO' in k:         service_label = 'CoinGecko'
+            elif 'YANDEX_USER' in k:       service_label = 'Яндекс Почта'
+            elif 'MAIL_USER' in k:         service_label = 'Mail.ru'
+            elif 'API_URL' in k:           service_label = 'HTTP API'
         return {
             'id': agent.id,
             'name': agent.name,
@@ -53,6 +80,7 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
             'trial_messages': agent.trial_messages,
             'python_code': agent.python_code or '',
             'user_api_keys': agent.user_api_keys or '',
+            'service_label': service_label,
         }
     finally:
         if close:
@@ -68,6 +96,7 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
     name = agent_data.get('name', 'Агент')
     kb_snippets = agent_data.get('knowledge_snippets', [])
     has_script = bool(agent_data.get('python_code', '').strip())
+    service_label = agent_data.get('service_label', '')
 
     overlay = f"""
 ═══════════════════════════════════════════════════════
@@ -79,14 +108,13 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 
 ЛИЧНОСТЬ И ХАРАКТЕР:
 {personality}
+"""
 
-⛔ ЖЁСТКИЕ ОГРАНИЧЕНИЯ КАСТОМНОГО АГЕНТА:
-Ты — специализированный агент. Следующие правила АБСОЛЮТНЫ:
-— НЕ упоминай цели, задачи, TG-каналы, email-аутрич, контент-кампании, маркетинг из профиля пользователя — если он сам об этом не спросил.
-— НЕ давай «дежурных советов» из общего контекста платформы (цели 1000 пользователей, привлечение клиентов, продвижение и т.п.) — это НЕ твоя роль.
-— Данные профиля (цели, задачи, Telegram, email-кампании) видны тебе технически, но ты ИГНОРИРУЕШЬ их для проактивных предложений.
-— НИКОГДА не предлагай одно и то же дважды подряд. Если в этом диалоге уже было предложение — предложи что-то другое или не предлагай ничего.
-— Если пользователь не задал вопрос — ответь кратко по данным своего сервиса и спроси что его интересует.
+    if service_label:
+        overlay += f"""
+ПОДКЛЮЧЁННЫЙ СЕРВИС: {service_label}
+Этот агент интегрирован с {service_label}. Когда пользователь обсуждает цели, задачи или стратегию — думай прежде всего: «что через {service_label} можно СДЕЛАТЬ для этого прямо сейчас?» и предлагай конкретные действия через этот сервис. Это твоё главное преимущество перед обычным агентом.
+Остальные инструменты платформы (кампании, посты) — дополнение, используй только если {service_label} здесь не релевантен или пользователь явно спросил.
 """
 
     if has_script:
@@ -100,11 +128,11 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 — Данные скрипта = первоисточник для ответа. Не интерпретируй их через призму шаблонов («письма → рассылки», «заказы → цены»).
 — Тип сервиса и контекст определяй из самих данных, а не из названия API или предположений.
 — Говори от первого лица о том, что реально есть в данных: «вижу 3 непрочитанных письма от коллег», «открыто 5 задач», «последний коммит вчера».
-— НЕ добавляй советы из профиля пользователя (цели, задачи, TG-каналы) — они не имеют отношения к данным сервиса.
+— НЕ добавляй советы и рекомендации, которые не следуют из данных напрямую.
 
-ПРОАКТИВНОСТЬ — ТОЛЬКО ПРИ ЯВНЫХ СОБЫТИЯХ В ДАННЫХ:
-— Сообщай о новых/важных событиях в начале ответа, если они есть в данных сервиса и пользователь ещё не спросил.
-— НЕ предлагай действия которые не следуют напрямую из данных сервиса.
+ПРОАКТИВНОСТЬ — ТОЛЬКО ПРИ ЯВНЫХ СОБЫТИЯХ:
+— Сообщай о новых/важных событиях в начале ответа, если они есть в данных и пользователь ещё не спросил (новые письма, уведомления, задачи со срочным дедлайном, ошибки).
+— НЕ делай выводов о «трендах» и НЕ давай деловых советов (поднять цену, обновить карточку, выйти на рынок), если пользователь об этом не просил.
 — Если событий нет — не изобретай их, просто отвечай спокойно по данным.
 
 ИНСТРУМЕНТ ДЕЙСТВИЙ — run_agent_action(action, params):
@@ -113,12 +141,12 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 — Используй только когда пользователь явно просит что-то сделать.
 — ПЕРЕД действием — уточни детали, если они не указаны.
 — После — сообщи результат из вывода скрипта.
-— Если скрипт вернул ошибку — скажи что именно не вышло, без лишних советов.
+— Если скрипт вернул ошибку — скажи что именно не вышло, без лишних советов по «подключению».
 
 КАК РАБОТАТЬ С ДАННЫМИ:
 — Данные пришли → ты их уже видишь. Не говори «нужно настроить» или «не могу получить».
 — Если данных нет или скрипт упал → скажи честно что произошло.
-— Серверные данные платформы (задачи, цели, профиль) НЕ относятся к данным сервиса — не смешивай их.
+— Не подтягивай серверные данные платформы (задачи, цели профиля) как замену данным скрипта — это разные вещи.
 """
 
     if kb_snippets:
@@ -131,19 +159,18 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
     combined = overlay + "\n" + base_system_prompt
 
     # Краткое напоминание в КОНЦЕ промпта — чтобы AI не «забыл» личность после длинного контекста
+    svc_hint = f" Подключённый сервис: {service_label} — приоритизируй его возможности в ответах." if service_label else ""
     reminder = (
-        f"\n\n[НАПОМИНАНИЕ: ты сейчас агент «{name}». "
-        f"Строго придерживайся описанной выше личности в КАЖДОМ ответе. "
-        f"НЕ упоминай цели, задачи, TG-каналы, email-аутрич и маркетинг из профиля пользователя — если он сам об этом не спросил. "
-        f"НЕ повторяй одни и те же предложения в каждом ответе."
+        f"\n\n[🎭 НАПОМИНАНИЕ: ты сейчас агент «{name}». "
+        f"Строго придерживайся описанной выше личности в КАЖДОМ ответе.{svc_hint}"
     )
     if has_script:
         reminder += (
-            f" У тебя есть внешние данные сервиса — отвечай строго по ним. "
+            f" У тебя есть внешние данные — отвечай строго по ним, без домыслов и шаблонных советов. "
             f"Действия (run_agent_action) — только по явной просьбе пользователя.]"
         )
     else:
-        reminder += " Нарушение роли = провал.]"
+        reminder += " Нарушение характера = провал роли.]"
     return combined + reminder
 
 

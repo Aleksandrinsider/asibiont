@@ -3732,6 +3732,55 @@ try:
         print('• ' + start + ' UTC — ' + name[:50] + (' | ' + str(loc)[:40] if loc else ''))
 except Exception as e:
     print('Ошибка Calendly: ' + str(e))`
+            },
+            resend: {
+                name: 'Resend (Email-рассылка)',
+                fields: [
+                    {k:'RESEND_API_KEY', label:'API Key', ph:'re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'RESEND_FROM', label:'Email отправителя (верифицирован в Resend)', ph:'hello@yourdomain.com', t:'email'}
+                ],
+                hint: 'resend.com → API Keys → Create API Key. Email отправителя должен быть верифицирован: Domains → Add Domain',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('RESEND_API_KEY', '')
+FROM_EMAIL = os.environ.get('RESEND_FROM', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+def resend_req(path, data=None, method='GET'):
+    url = 'https://api.resend.com' + path
+    body = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=body, method=method)
+    req.add_header('Authorization', 'Bearer ' + API_KEY)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+try:
+    if ACTION == 'send_email':
+        to = os.environ.get('AGENT_PARAM_TO', '')
+        subject = os.environ.get('AGENT_PARAM_SUBJECT', '(без темы)')
+        body = os.environ.get('AGENT_PARAM_BODY', '')
+        if not to:
+            print('Ошибка: не указан получатель (AGENT_PARAM_TO)')
+        else:
+            result = resend_req('/emails', data={'from': FROM_EMAIL, 'to': [to], 'subject': subject, 'text': body}, method='POST')
+            if result.get('id'):
+                print('OK: письмо отправлено на ' + to + ' (id: ' + result['id'] + ')')
+            else:
+                print('Ошибка отправки: ' + json.dumps(result))
+    else:
+        # Показать последние письма (Resend Emails API)
+        result = resend_req('/emails?limit=10')
+        emails = result.get('data', [])
+        if not emails:
+            print('Resend: писем не найдено')
+        else:
+            print('Последние ' + str(len(emails)) + ' писем:')
+            for e in emails:
+                frm = e.get('from', '')
+                to_list = ', '.join(e.get('to', []))[:60]
+                subject = e.get('subject', '(без темы)')[:60]
+                status = e.get('last_event', e.get('created_at', ''))[:10]
+                print('→ ' + to_list + ' | ' + subject + ' | ' + status)
+except Exception as e:
+    print('Ошибка Resend: ' + str(e))`
             }
         };
 
@@ -4062,6 +4111,7 @@ except Exception as e:
                             <option value="gmail">Gmail</option>
                             <option value="yandex">Яндекс.Почта</option>
                             <option value="mailru">Mail.ru</option>
+                            <option value="resend">Resend (Email-рассылка)</option>
                             <option value="openweather">Погода</option>
                             <option value="rss">RSS-лента новостей</option>
                             <option value="telegram_bot">Telegram Bot</option>
