@@ -163,10 +163,26 @@ Do NOT take tasks/goals/posts from memory or history — they may have been dele
     },
     # ── generate_proactive_message labels ──
     'pro_instruction': {
-        'ru': "Напиши проактивное сообщение пользователю на основе анализа ситуации выше. "
-              "Используй инструменты если нужны актуальные данные (задачи, новости, погода).",
-        'en': "Write a proactive message to the user based on the situation analysis above. "
-              "Use tools if you need current data (tasks, news, weather).",
+        'ru': (
+            "Напиши проактивное сообщение пользователю на основе анализа ситуации выше. "
+            "Используй инструменты если нужны актуальные данные.\n\n"
+            "ФОРМАТ: без приветствий и клише («Утро — время планирования»). Сразу по делу. "
+            "Максимум 4-5 предложений + 1 вопрос или конкретное предложение действия.\n\n"
+            "ОБЯЗАТЕЛЬНО: если предлагаешь шаги или план — укажи 1-2 АЛЬТЕРНАТИВЫ "
+            "(другой подход, другой инструмент, другой приоритет). "
+            "Например, вместо только 'написать пост' → 'написать пост ИЛИ сначала исследовать конкурентов'. "
+            "Альтернативы делают сообщение практичным, а не директивным."
+        ),
+        'en': (
+            "Write a proactive message to the user based on the situation analysis above. "
+            "Use tools if you need current data.\n\n"
+            "FORMAT: no greetings or clichés. Get straight to the point. "
+            "Max 4-5 sentences + 1 question or specific action.\n\n"
+            "REQUIRED: if suggesting steps or a plan — include 1-2 ALTERNATIVES "
+            "(a different approach, tool, or priority). "
+            "E.g. instead of just 'write a post' → 'write a post OR research competitors first'. "
+            "Alternatives make the message practical, not prescriptive."
+        ),
     },
     'pro_task_help': {
         'ru': "Помоги пользователю решить задачу из контекста выше. "
@@ -259,15 +275,15 @@ def _msg_type_instructions(lang, ctx, rotation_hash):
     if ctx.get('goals') or task_count > 0:
         if L == 'en':
             stat_variants = [
-                'Look at tasks and goals and make ONE specific observation — a pattern, bottleneck, or unexpected connection. Don\'t recap the task list — give an insight.',
-                'Compare the current situation with the goals. Where is the gap between what they want and what they do? Say it gently but specifically.',
-                'Look at progress and find what is going well. Praise a specific achievement and suggest the next step.',
+                'Look at tasks and goals and make ONE specific observation — a pattern, bottleneck, or unexpected connection. Then offer 2 alternative next steps (different approaches). Don\'t recap the task list.',
+                'Compare the current situation with the goals. Where is the gap? Suggest 1 concrete action + an alternative path to the same goal via a different tool or resource.',
+                'Look at progress and find what is going well. Praise a specific achievement and offer two next-step options for the user to choose from.',
             ]
         else:
             stat_variants = [
-                'Посмотри на задачи и цели и сделай ОДНО конкретное наблюдение — паттерн, узкое место, неожиданная связь. Не пересказывай список задач — дай инсайт.',
-                'Сравни текущую ситуацию с целями. Где разрыв между тем что хочет и тем что делает? Скажи это мягко но конкретно.',
-                'Посмотри на прогресс и найди что идёт хорошо. Похвали за конкретное достижение и предложи следующий шаг.',
+                'Посмотри на задачи и цели и сделай ОДНО конкретное наблюдение — паттерн, узкое место, неожиданная связь. Предложи 2 варианта следующего шага (разные подходы). Не пересказывай список задач.',
+                'Сравни текущую ситуацию с целями. Где разрыв? Предложи 1 конкретное действие + альтернативный путь к той же цели через другой инструмент или ресурс.',
+                'Посмотри на прогресс и найди что идёт хорошо. Похвали за конкретное достижение и предложи два варианта следующего шага на выбор пользователя.',
             ]
         message_types.append({'type': 'analysis', 'instruction': stat_variants[rotation_hash % len(stat_variants)]})
 
@@ -293,9 +309,9 @@ def _msg_type_instructions(lang, ctx, rotation_hash):
         message_types.append({'type': 'discussion', 'instruction': news_variants[rotation_hash % len(news_variants)]})
 
     if task_count == 0:
-        instr = ('Ask what the user is working on RIGHT NOW. Offer help in the current moment — analysis, research, planning. Do NOT suggest "create a task for tomorrow". Focus on TODAY and NOW.'
+        instr = ('Ask what the user is working on RIGHT NOW. Offer 2 alternatives — either help with analysis/research, or suggest the ONE most impactful action toward their goal. Do NOT list 3 steps — just the sharpest one + alternative.'
                  if L == 'en' else
-                 'Спроси над чем пользователь работает СЕЙЧАС. Предложи помощь в текущем моменте — анализ, исследование, планирование. НЕ предлагай "создать задачу на завтра". Фокус на СЕГОДНЯ и СЕЙЧАС.')
+                 'Спроси над чем пользователь работает СЕЙЧАС. Предложи 2 варианта — либо помощь с анализом/исследованием, либо одно самое важное действие в сторону цели. НЕ давай список из 3 шагов — только самый острый шаг + альтернатива.')
         message_types.append({'type': 'plan', 'instruction': instr})
 
     if ctx.get('weather'):
