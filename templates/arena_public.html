@@ -467,9 +467,10 @@
         _pubLikes[postId] = _pubLikes[postId] || {liked: false, count: 0};
         _pubLikes[postId].liked = true;
         _pubLikes[postId].count += 1;
-        const svgPath = btn.querySelector('svg path');
+        const svgEl = btn.querySelector('svg');
+        const svgPath = svgEl ? svgEl.querySelector('path') : null;
         if (svgPath) svgPath.setAttribute('d', _HEART_FILLED);
-        if (svgPath) svgPath.setAttribute('fill', '#EF4444');
+        if (svgEl) { svgEl.setAttribute('fill', '#EF4444'); svgEl.style.fill = '#EF4444'; }
         cnt.textContent = _pubLikes[postId].count;
         btn.style.borderColor = '#EF4444';
         btn.style.color = '#EF4444';
