@@ -459,19 +459,20 @@
     }
 
     function pubToggleLike(postId) {
+        // Если уже лайкнули — ничего не делаем
+        if (_pubLikes[postId] && _pubLikes[postId].liked) return;
         const btn = document.getElementById(postId + '-like');
         const cnt = document.getElementById(postId + '-lcnt');
         if (!btn || !cnt) return;
         _pubLikes[postId] = _pubLikes[postId] || {liked: false, count: 0};
-        _pubLikes[postId].liked = !_pubLikes[postId].liked;
-        _pubLikes[postId].count += _pubLikes[postId].liked ? 1 : -1;
-        const liked = _pubLikes[postId].liked;
+        _pubLikes[postId].liked = true;
+        _pubLikes[postId].count += 1;
         const svgPath = btn.querySelector('svg path');
-        if (svgPath) svgPath.setAttribute('d', liked ? _HEART_FILLED : _HEART_OUTLINE);
-        if (svgPath) svgPath.setAttribute('fill', '#374151');
+        if (svgPath) svgPath.setAttribute('d', _HEART_FILLED);
+        if (svgPath) svgPath.setAttribute('fill', '#EF4444');
         cnt.textContent = _pubLikes[postId].count;
-        btn.style.borderColor = '#D1D9E0';
-        btn.style.color = '#374151';
+        btn.style.borderColor = '#EF4444';
+        btn.style.color = '#EF4444';
     }
 
     const _pubTranslateCache = {};

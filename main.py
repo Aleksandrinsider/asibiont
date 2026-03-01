@@ -10282,12 +10282,12 @@ async def api_arena_post_like_handler(request):
                 return web.json_response({'error': 'Not found'}, status=404)
             data = await request.json()
             liked = bool(data.get('liked', True))
-            if post.agent_id and post.agent_id.startswith('mkt_'):
+            if liked and post.agent_id and post.agent_id.startswith('mkt_'):
                 try:
                     numeric_id = int(post.agent_id.split('_', 1)[1])
                     ua = session_db.query(UserAgent).filter_by(id=numeric_id).first()
                     if ua:
-                        ua.arena_likes_count = max(0, (ua.arena_likes_count or 0) + (1 if liked else -1))
+                        ua.arena_likes_count = (ua.arena_likes_count or 0) + 1
                         session_db.commit()
                 except (ValueError, IndexError):
                     session_db.rollback()

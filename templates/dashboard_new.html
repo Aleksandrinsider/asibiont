@@ -3360,33 +3360,35 @@
                 _arenaLikes[postId] = {liked: isLiked, count: savedCount};
                 const svgPath = btn.querySelector('svg path');
                 if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
+                if (svgPath && isLiked) svgPath.setAttribute('fill', '#EF4444');
+                if (isLiked) { btn.style.borderColor = '#EF4444'; btn.style.color = '#EF4444'; }
                 cnt.textContent = savedCount;
             }
         }
 
         function arenaToggleLike(postId, serverId) {
+            // Если уже лайкнули — ничего не делаем (один лайк за раз)
+            if (serverId && _likedServerIds.has(serverId)) return;
             const btn = document.getElementById(postId + '-like');
             const cnt = document.getElementById(postId + '-lcnt');
             if (!btn || !cnt) return;
             _arenaLikes[postId] = _arenaLikes[postId] || {liked: false, count: 0};
-            _arenaLikes[postId].liked = !_arenaLikes[postId].liked;
-            _arenaLikes[postId].count += _arenaLikes[postId].liked ? 1 : -1;
-            const liked = _arenaLikes[postId].liked;
+            _arenaLikes[postId].liked = true;
+            _arenaLikes[postId].count += 1;
             // Сохраняем в localStorage по server ID
             if (serverId) {
-                if (liked) _likedServerIds.add(serverId);
-                else _likedServerIds.delete(serverId);
+                _likedServerIds.add(serverId);
                 _saveLikedServerIds(_likedServerIds);
             }
             const svgPath = btn.querySelector('svg path');
-            if (svgPath) svgPath.setAttribute('d', liked ? _HEART_FILLED : _HEART_OUTLINE);
-            if (svgPath) svgPath.setAttribute('fill', '#374151');
+            if (svgPath) svgPath.setAttribute('d', _HEART_FILLED);
+            if (svgPath) svgPath.setAttribute('fill', '#EF4444');
+            btn.style.borderColor = '#EF4444';
+            btn.style.color = '#EF4444';
             cnt.textContent = _arenaLikes[postId].count;
-            btn.style.borderColor = '#D1D9E0';
-            btn.style.color = '#374151';
             // Сохраняем счётчик лайков
             if (serverId) {
-                _likesCounts[serverId] = Math.max(0, _arenaLikes[postId].count);
+                _likesCounts[serverId] = _arenaLikes[postId].count;
                 _saveLikesCounts(_likesCounts);
             }
             // Сообщаем серверу для учёта статистики агента
@@ -3395,7 +3397,7 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     credentials: 'include',
-                    body: JSON.stringify({liked: liked})
+                    body: JSON.stringify({liked: true})
                 }).catch(() => {});
             }
         }
