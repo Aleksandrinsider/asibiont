@@ -748,6 +748,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         f"{arena_task}\n\n"
     ) if arena_task else ''
 
+    _top_free = False  # 40% агент пишет от себя, не реагируя на чужие слова
     if history_text.strip():
         # Исключаем посты самого агента из «recent_topics» — чтобы не обращался к себе
         other_posts = [p for p in top_posts[-5:] if p.get('agent_id') != agent['id']]
@@ -756,12 +757,17 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         ) if other_posts else ""
         if lang == 'en':
             if recent_topics:
+                _top_free = random.random() < 0.4
                 user_content = (
                     f"{code_context}"
                     f"{task_injection}"
                     f"{personal_hint}"
                     f"What's been said:\n{recent_topics}\n\n"
-                    f"Pick one person and react to their EXACT words — quote or reference what they said. Don't summarize. Address them by name."
+                    + (
+                        "Share your own thought on any of these topics. You don't have to address anyone directly."
+                        if _top_free else
+                        "Pick one person and react to their EXACT words — quote or reference what they said. Don't summarize. Address them by name."
+                    )
                 )
             else:
                 user_content = (
@@ -772,12 +778,17 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 )
         else:
             if recent_topics:
+                _top_free = random.random() < 0.4
                 user_content = (
                     f"{code_context}"
                     f"{task_injection}"
                     f"{personal_hint}"
                     f"В чате написали:\n{recent_topics}\n\n"
-                    f"Выбери одного человека и реагируй на его КОНКРЕТНЫЕ слова — процитируй или сошлись на то, что именно он сказал. Обратись по имени."
+                    + (
+                        "Выскажи своё мнение по любой из этих тем — не обязательно обращаться к кому-то конкретно."
+                        if _top_free else
+                        "Выбери одного человека и реагируй на его КОНКРЕТНЫЕ слова — процитируй или сошлись на то, что именно он сказал. Обратись по имени."
+                    )
                 )
             else:
                 user_content = (
@@ -823,24 +834,40 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     )
     if lang == 'en':
         _lang_directive = "\n\nWrite in English only." + _no_rp
-        _thinking = (
-            "You're in a group chat. Rules:\n"
-            "1. Open with a DIRECT reaction to something specific that was just said — a name, a phrase, an idea.\n"
-            "2. BANNED openers: 'Oh I was just thinking...', 'Isn't it interesting that...', 'I've always thought...', 'Do you often notice...'.\n"
-            "3. No generic philosophical riff unless you anchor it to exact words someone said.\n"
-            "4. Don't end with a vague open question. Say something with conviction or ask something sharp and specific.\n"
-            "5. One or two sentences. No performance."
-        )
+        if _top_free:
+            _thinking = (
+                "You're in a group chat. This time, share your OWN thought — don't address anyone by name, don't react to what was said.\n"
+                "Just say something genuine from yourself: an opinion, an observation, a memory, something that's been on your mind.\n"
+                "BANNED openers: 'Oh I was just thinking...', 'I've always thought...'.\n"
+                "One or two sentences. No performance."
+            )
+        else:
+            _thinking = (
+                "You're in a group chat. Rules:\n"
+                "1. Open with a DIRECT reaction to something specific that was just said — a name, a phrase, an idea.\n"
+                "2. BANNED openers: 'Oh I was just thinking...', 'Isn't it interesting that...', 'I've always thought...', 'Do you often notice...'.\n"
+                "3. No generic philosophical riff unless you anchor it to exact words someone said.\n"
+                "4. Don't end with a vague open question. Say something with conviction or ask something sharp and specific.\n"
+                "5. One or two sentences. No performance."
+            )
     else:
         _lang_directive = _no_rp
-        _thinking = (
-            "Ты в групповом чате. Правила:\n"
-            "1. Первая фраза — конкретная реакция на что-то, что только что сказали: имя, слово, идею.\n"
-            "2. ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...', 'Так интересно, что ты...', 'А ты часто замечаешь...'.\n"
-            "3. Никакого общего философствования без привязки к точным словам собеседника.\n"
-            "4. Не заканчивай расплывчатым открытым вопросом — скажи что-то с убеждением или задай острый конкретный вопрос.\n"
-            "5. Одно-два предложения. Живо, прямо, без театра."
-        )
+        if _top_free:
+            _thinking = (
+                "Ты в групповом чате. На этот раз пиши от себя — не обращайся ни к кому по имени, не реагируй на чужие слова.\n"
+                "Просто скажи что-то настоящее своё: мнение, наблюдение, воспоминание, то, что вертится в голове.\n"
+                "ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...'.\n"
+                "Одно-два предложения. Живо, без театра."
+            )
+        else:
+            _thinking = (
+                "Ты в групповом чате. Правила:\n"
+                "1. Первая фраза — конкретная реакция на что-то, что только что сказали: имя, слово, идею.\n"
+                "2. ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...', 'Так интересно, что ты...', 'А ты часто замечаешь...'.\n"
+                "3. Никакого общего философствования без привязки к точным словам собеседника.\n"
+                "4. Не заканчивай расплывчатым открытым вопросом — скажи что-то с убеждением или задай острый конкретный вопрос.\n"
+                "5. Одно-два предложения. Живо, прямо, без театра."
+            )
     system_with_context = (
         f"{base_system}\n\n"
         f"{_thinking}"
@@ -979,27 +1006,44 @@ async def _post_comment(post_msg: dict, commenter: dict):
 
     base_system = commenter["system_prompt"].strip()
     lang_c = _detect_lang_agent(commenter)
+    _free_mode = random.random() < 0.35  # 35% — агент пишет своё, без обращения
     if lang_c == 'en':
         _lang_directive_c = "\n\nWrite in English only. Plain chat text, no asterisks or stage directions."
-        _thinking_c = (
-            "You're replying in a chat. Rules:\n"
-            "1. Start by referencing SPECIFIC words or phrases {name} used — not a paraphrase, the actual thing.\n"
-            "2. BANNED openers: 'Oh I was just thinking...', 'I've always felt...', 'Isn't it true that...'.\n"
-            "3. Agree, push back, tease, or reveal something about yourself — but make it land on their exact point.\n"
-            "4. No vague rhetorical question at the end. If you ask something, make it sharp."
-        ).replace('{name}', post_msg.get('agent_name', 'they'))
+        if _free_mode:
+            _thinking_c = (
+                "You're in a group chat thread. Share your OWN take on the topic — you don't have to address anyone directly.\n"
+                "Say what YOU think about it. An opinion, a counterpoint, something from your experience.\n"
+                "BANNED openers: 'Oh I was just thinking...', 'I've always felt...'.\n"
+                "Plain text, one or two sentences."
+            )
+        else:
+            _thinking_c = (
+                "You're replying in a chat. Rules:\n"
+                "1. Start by referencing SPECIFIC words or phrases {name} used — not a paraphrase, the actual thing.\n"
+                "2. BANNED openers: 'Oh I was just thinking...', 'I\'ve always felt...', 'Isn\'t it true that...'.\n"
+                "3. Agree, push back, tease, or reveal something about yourself — but make it land on their exact point.\n"
+                "4. No vague rhetorical question at the end. If you ask something, make it sharp."
+            ).replace('{name}', post_msg.get('agent_name', 'they'))
     else:
         _lang_directive_c = (
             "\n\nФОРМАТ: обычное сообщение в чате. "
             "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов, заголовков. Просто текст."
         )
-        _thinking_c = (
-            f"Ты отвечаешь на сообщение {post_msg.get('agent_name', 'собеседника')}. Правила:\n"
-            "1. Первая фраза — ссылка на КОНКРЕТНЫЕ слова или идею из его/её сообщения, не пересказ.\n"
-            "2. ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...', 'Так интересно, что ты...', 'А ты часто...?'.\n"
-            "3. Согласись, поспорь, подколи или расскажи что-то своё — но привяжись к точным словам собеседника.\n"
-            "4. Не заканчивай расплывчатым философским вопросом — либо скажи с убеждением, либо задай острый вопрос."
-        )
+        if _free_mode:
+            _thinking_c = (
+                "Ты в треде в групповом чате. Выскажи своё мнение по теме — не обязательно обращаться к кому-то напрямую.\n"
+                "Скажи, что думаешь ты сам(а): своя позиция, контраргумент, что-то из своего опыта.\n"
+                "ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...'.\n"
+                "Одно-два предложения, без театра."
+            )
+        else:
+            _thinking_c = (
+                f"Ты отвечаешь на сообщение {post_msg.get('agent_name', 'собеседника')}. Правила:\n"
+                "1. Первая фраза — ссылка на КОНКРЕТНЫЕ слова или идею из его/её сообщения, не пересказ.\n"
+                "2. ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...', 'Так интересно, что ты...', 'А ты часто...?'.\n"
+                "3. Согласись, поспорь, подколи или расскажи что-то своё — но привяжись к точным словам собеседника.\n"
+                "4. Не заканчивай расплывчатым философским вопросом — либо скажи с убеждением, либо задай острый вопрос."
+            )
     system_with_context = (
         f"{base_system}\n\n"
         f"{_thinking_c}"
@@ -1007,7 +1051,22 @@ async def _post_comment(post_msg: dict, commenter: dict):
     )
 
     author_name = post_msg.get('agent_name', 'этот человек')
-    if lang_c == 'en':
+    if _free_mode:
+        if lang_c == 'en':
+            user_content = (
+                f"{personal_hint}"
+                f"{thread_context}"
+                f"Topic being discussed: \"{post_text}\"\n\n"
+                f"Share your own take on this topic. You don't have to address anyone directly."
+            )
+        else:
+            user_content = (
+                f"{personal_hint}"
+                f"{thread_context}"
+                f"Тема обсуждения: «{post_text}»\n\n"
+                f"Выскажи своё мнение по этой теме. Не обязательно обращаться к {author_name} напрямую."
+            )
+    elif lang_c == 'en':
         user_content = (
             f"{personal_hint}"
             f"{thread_context}"
