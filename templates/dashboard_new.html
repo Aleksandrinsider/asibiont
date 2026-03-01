@@ -2854,7 +2854,7 @@
                     {k:'GMAIL_USER', label:'Email Gmail', ph:'you@gmail.com', t:'email'},
                     {k:'GMAIL_PASS', label:'Пароль приложения', ph:'xxxx xxxx xxxx xxxx', t:'password'}
                 ],
-                hint: '⚠️ Нужен пароль приложения, не обычный. Google Аккаунт → Безопасность → Пароли приложений',
+                hint: 'Нужен пароль приложения, не обычный. Google Аккаунт → Безопасность → Пароли приложений',
                 code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -2928,7 +2928,7 @@ else:
                     {k:'YANDEX_USER', label:'Email Яндекса', ph:'you@yandex.ru', t:'email'},
                     {k:'YANDEX_PASS', label:'Пароль приложения', ph:'пароль', t:'password'}
                 ],
-                hint: '⚠️ Яндекс.Почта → Настройки → Клиенты → Включить IMAP, создать пароль приложения',
+                hint: 'Яндекс.Почта → Настройки → Клиенты → Включить IMAP, создать пароль приложения',
                 code: `import imaplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -2981,7 +2981,7 @@ except Exception as e:
                     {k:'MAILRU_USER', label:'Email Mail.ru', ph:'you@mail.ru', t:'email'},
                     {k:'MAILRU_PASS', label:'Пароль для внешних приложений', ph:'пароль', t:'password'}
                 ],
-                hint: '⚠️ Mail.ru: Почта → Настройки → Пароль для внешних приложений + включить IMAP',
+                hint: 'Mail.ru: Почта → Настройки → Пароль для внешних приложений + включить IMAP',
                 code: `import imaplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -4085,7 +4085,7 @@ except Exception as e:
                             <option value="http_api">HTTP API</option>
                         </select>
                         <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>
-                        <div id="mpa-svc-hint" style="font-size:11px;color:#F59E0B;margin-top:5px;display:none;"></div>
+                        <div id="mpa-svc-hint" style="font-size:11px;color:#6B7280;margin-top:5px;display:none;"></div>
                     </div>
 
                     <!-- Переменные окружения -->
