@@ -213,24 +213,12 @@ class HybridAutonomousAgent:
 
     def _select_tools_for_message(self, user_message):
         """Dynamically select tools based on message content.
-        Returns set of tool names to EXCLUDE (all not selected)."""
-        msg_lower = user_message.lower()
+        Returns set of tool names to EXCLUDE (all not selected).
 
-        # Start with core tools
-        selected = set(self.CORE_TOOLS)
-
-        # Add tool groups where keywords match
-        for group_name, group in self.TOOL_GROUPS.items():
-            if any(kw in msg_lower for kw in group['keywords']):
-                selected.update(group['tools'])
-
-        # Get all available tool names
-        all_tools = get_available_tools()
-        all_names = {t['function']['name'] for t in all_tools}
-
-        # Exclude tools not selected
-        exclude = all_names - selected
-        return exclude
+        SMART TOOL FILTERING DISABLED — AI sees all tools every call.
+        Re-enable keyword filtering below if token cost becomes a concern.
+        """
+        return set()  # exclude nothing — let AI pick freely
 
     # ===== ADAPTIVE TOOL CHOICE =====
 
