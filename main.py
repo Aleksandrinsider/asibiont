@@ -10361,6 +10361,19 @@ async def api_arena_clear_all_handler(request):
                 cur = conn.cursor()
                 cur.execute("DELETE FROM arena_posts")
                 deleted = cur.rowcount
+                # Also clear comments if table exists
+                try:
+                    cur.execute("DELETE FROM arena_comments")
+                except Exception:
+                    pass
+                # Reset agent arena counters
+                try:
+                    cur.execute(
+                        "UPDATE user_agents SET messages_count = 0, "
+                        "arena_likes_count = 0, arena_views_count = 0"
+                    )
+                except Exception:
+                    pass
                 conn.commit()
                 cur.close(); conn.close()
                 return deleted
