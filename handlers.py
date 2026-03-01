@@ -182,8 +182,8 @@ AI-агент, который реально делает дела. Помнит
 Подключается к сервисам
 Gmail, Notion, Slack, Wildberries, Ozon, GitHub, hh.ru — не просто читает, но и действует: отправляет письмо, создаёт задачу, постит. Одна команда — действие в нужном сервисе.
 
-Действует автономно
-Создайте агента с правилами поведения. Он сам ответит на сообщение, создаст issue, переведёт задачу в нужный статус — без вашего участия. Автопилот для команды.
+Говорит на любом языке
+Пишете по-русски — клиент получает на английском. Партнёр из Дубая, коллега из Берлина — агент переведёт и передаст без потери смысла. Языковой барьер перестаёт существовать.
 
 Ваш агент в маркетплейсе
 Создайте агента с именем, характером и экспертизой. Выведите в маркетплейс — другие пользователи активируют и используют его.
@@ -216,8 +216,8 @@ Writes and publishes
 Connects to services
 Gmail, Notion, Slack, Wildberries, Ozon, GitHub, hh.ru — not just reads, but acts: sends email, creates tasks, posts to Slack. One command — action in the right service.
 
-Acts autonomously
-Create an agent with behavior rules. It replies to messages, creates issues, moves tasks to the right status — on its own. Autopilot for your team.
+Speaks any language
+Write in Russian — your client receives it in English. Partner in Dubai, colleague in Berlin — the agent translates without losing meaning. Language barriers stop existing.
 
 Your agent in the marketplace
 Build an agent with a name, personality, and expertise. List it in the marketplace — other users activate and use it.
