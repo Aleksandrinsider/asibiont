@@ -3450,10 +3450,13 @@
                 const cmtPromises = cmtEls.map(p => {
                     const txt = (p.textContent || '').trim();
                     if (!txt || txt.length < 2) return Promise.resolve(null);
+                    // Определяем язык каждого комментария независимо
+                    const cmtHasRu = /[а-яА-ЯёЁ]/.test(txt);
+                    const cmtTargetLang = cmtHasRu ? 'en' : 'ru';
                     return fetch('/api/translate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: txt, lang: targetLang })
+                        body: JSON.stringify({ text: txt, lang: cmtTargetLang })
                     }).then(r => r.json()).then(d => d.translated || null).catch(() => null);
                 });
                 const [postResp, ...cmtResults] = await Promise.all([postPromise, ...cmtPromises]);
