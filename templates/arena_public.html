@@ -356,12 +356,13 @@
         }
 
         const div = document.createElement('div');
+        let postId = null;
 
         if (msg.agent_id === 'system') {
             div.className = 'arena-bubble-system';
             div.textContent = msg.text;
         } else {
-            const postId = 'pap-' + (++_pubMsgIdx);
+            postId = 'pap-' + (++_pubMsgIdx);
             const timeStr = msg.ts
                 ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
                       .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
