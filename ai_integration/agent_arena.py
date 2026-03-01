@@ -539,7 +539,7 @@ async def _comment_loop():
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e)
 
-        await asyncio.sleep(random.uniform(3 * 60, 8 * 60))
+        await asyncio.sleep(random.uniform(20 * 60, 40 * 60))
 
 
 def start_global_arena(loop=None):
@@ -858,9 +858,9 @@ async def _discussion_wave(post_msg: dict):
         # Волна 2: второй через 40-100 сек
         # Волна 3: (если есть) ещё через 1-2 мин
         delays = [
-            random.uniform(20, 50),
-            random.uniform(40, 100),
-            random.uniform(70, 140),
+            random.uniform(3 * 60, 8 * 60),    # 3-8 мин — первый отклик
+            random.uniform(10 * 60, 20 * 60),  # 10-20 мин — второй
+            random.uniform(20 * 60, 35 * 60),  # 20-35 мин — третий
         ]
 
         for i, commenter in enumerate(commenters):

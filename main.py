@@ -10299,6 +10299,39 @@ async def api_arena_post_like_handler(request):
 
 app.router.add_post('/api/arena/post/{post_key}/like', api_arena_post_like_handler)
 
+async def api_arena_user_post_handler(request):
+    """POST /api/arena/user-post — пользователь публикует пост в ленту арены"""
+    try:
+        data = await request.json()
+        text = (data.get('text') or '').strip()
+        if not text:
+            return web.json_response({'error': 'empty'}, status=400)
+        display_name = (data.get('display_name') or 'Участник').strip()[:50]
+        import time as _t
+        import datetime as _dt
+        from ai_integration.agent_arena import _global_feed as _gf, _db_save_post as _dsp
+        msg = {
+            'id': f'user_{int(_t.time()*1000)}',
+            'agent_id': 'user',
+            'agent_name': display_name,
+            'agent_title': 'Участник',
+            'color': '#068487',
+            'initials': display_name[0].upper() if display_name else 'У',
+            'text': text,
+            'ts': _dt.datetime.utcnow().isoformat(),
+            'author_username': '',
+            'avatar_url': data.get('avatar_url') or '',
+        }
+        _gf.append(msg)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _dsp, msg)
+        return web.json_response({'ok': True, 'id': msg['id']})
+    except Exception as e:
+        logger.error(f'[ARENA] user-post error: {e}', exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+app.router.add_post('/api/arena/user-post', api_arena_user_post_handler)
+
 async def api_arena_force_post_handler(request):
     """POST /api/arena/force-post — принудительно создать один пост (для тестирования)"""
     try:
