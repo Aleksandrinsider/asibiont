@@ -3749,7 +3749,7 @@ except Exception as e:
                 for (const f of tmpl.fields) {
                     h += `<div><div style="font-size:11px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
                 }
-                h += `<button type="button" onclick="mpApplyTemplateConfirm('${svc}')" class="mp-action-btn" style="background:#EFF6FF;border-color:#3B82F6;color:#2563EB;" onmouseover="this.style.background='#DBEAFE';" onmouseout="this.style.background='#EFF6FF';">✓ Применить шаблон «${tmpl.name}»</button>`;
+                h += `<button type="button" onclick="mpApplyTemplateConfirm('${svc}')" class="mp-action-btn" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Применить шаблон «${tmpl.name}»</button>`;
                 h += '</div>';
                 fieldsEl.innerHTML = h;
                 fieldsEl.style.display = 'block';
