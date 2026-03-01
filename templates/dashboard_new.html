@@ -3270,6 +3270,323 @@ try:
             print(raw[:2000])
 except Exception as e:
     print('Ошибка API: ' + str(e))`
+            },
+            notion: {
+                name: 'Notion',
+                fields: [
+                    {k:'NOTION_TOKEN', label:'Integration Token (Internal)', ph:'secret_xxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'NOTION_DB_ID', label:'Database ID (32 символа из URL)', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Notion → Settings → Integrations → New Integration → copy token → открой базу → ··· → Add connections',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('NOTION_TOKEN', '')
+DB_ID = os.environ.get('NOTION_DB_ID', '')
+try:
+    data = json.dumps({'page_size': 10}).encode()
+    req = urllib.request.Request(
+        'https://api.notion.com/v1/databases/' + DB_ID + '/query',
+        data=data,
+        headers={'Authorization': 'Bearer ' + TOKEN, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json'},
+        method='POST'
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    results = d.get('results', [])
+    print('Notion: ' + str(len(results)) + ' записей')
+    for item in results[:8]:
+        props = item.get('properties', {})
+        title, status = '', ''
+        for k, v in props.items():
+            if v.get('type') == 'title':
+                texts = v.get('title', [])
+                if texts: title = texts[0].get('plain_text', '')
+            if v.get('type') in ('status', 'select') and not status:
+                sel = v.get('status') or v.get('select') or {}
+                status = sel.get('name', '')
+        line = '• ' + (title or '(без названия)')
+        if status: line += ' [' + status + ']'
+        print(line)
+except Exception as e:
+    print('Ошибка Notion: ' + str(e))`
+            },
+            airtable: {
+                name: 'Airtable',
+                fields: [
+                    {k:'AIRTABLE_TOKEN', label:'Personal Access Token', ph:'patXxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'AIRTABLE_BASE_ID', label:'Base ID (из URL: /appXXX/)', ph:'appXxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'AIRTABLE_TABLE', label:'Название таблицы', ph:'Tasks', t:'text'}
+                ],
+                hint: 'Token: airtable.com → Account → Developer Hub → Personal Access Tokens → Create. Base ID — из адресной строки.',
+                code: `import urllib.request, urllib.parse, json, os
+TOKEN = os.environ.get('AIRTABLE_TOKEN', '')
+BASE_ID = os.environ.get('AIRTABLE_BASE_ID', '')
+TABLE = os.environ.get('AIRTABLE_TABLE', '')
+try:
+    url = 'https://api.airtable.com/v0/' + BASE_ID + '/' + urllib.parse.quote(TABLE) + '?maxRecords=10'
+    req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + TOKEN})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    records = d.get('records', [])
+    print('Airtable «' + TABLE + '»: ' + str(len(records)) + ' записей')
+    for rec in records[:8]:
+        fields = rec.get('fields', {})
+        vals = list(fields.values())
+        name = str(vals[0])[:70] if vals else '(пусто)'
+        extra = ''
+        if len(vals) > 1: extra = ' | ' + str(vals[1])[:30]
+        print('• ' + name + extra)
+except Exception as e:
+    print('Ошибка Airtable: ' + str(e))`
+            },
+            slack: {
+                name: 'Slack',
+                fields: [
+                    {k:'SLACK_TOKEN', label:'Bot OAuth Token', ph:'xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx', t:'text'},
+                    {k:'SLACK_CHANNEL', label:'Channel ID (C... из settings)', ph:'C0XXXXXXXXX', t:'text'}
+                ],
+                hint: 'api.slack.com/apps → Create App → OAuth & Permissions → Bot Token Scopes: channels:history, channels:read → Install App',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('SLACK_TOKEN', '')
+CHANNEL = os.environ.get('SLACK_CHANNEL', '')
+try:
+    url = 'https://slack.com/api/conversations.history?channel=' + CHANNEL + '&limit=10'
+    req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + TOKEN})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    if not d.get('ok'):
+        print('Ошибка Slack: ' + d.get('error', 'unknown'))
+    else:
+        msgs = d.get('messages', [])
+        print('Последние сообщения в канале (' + str(len(msgs)) + '):')
+        for m in msgs[:8]:
+            user = m.get('username') or m.get('user', 'user')
+            text = (m.get('text') or '(медиа)')[:120]
+            print('- [' + user + '] ' + text)
+except Exception as e:
+    print('Ошибка Slack: ' + str(e))`
+            },
+            trello: {
+                name: 'Trello',
+                fields: [
+                    {k:'TRELLO_KEY', label:'API Key', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'TRELLO_TOKEN', label:'Token', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'TRELLO_BOARD', label:'Board ID (из URL: /b/XXXXX/)', ph:'aBcDeFgH', t:'text'}
+                ],
+                hint: 'Key+Token: trello.com/power-ups/admin → Create Power-Up → API Key. Board ID — 8 символов из URL.',
+                code: `import urllib.request, json, os
+KEY = os.environ.get('TRELLO_KEY', '')
+TOKEN = os.environ.get('TRELLO_TOKEN', '')
+BOARD = os.environ.get('TRELLO_BOARD', '')
+try:
+    def tr(path):
+        url = 'https://api.trello.com/1' + path + '?key=' + KEY + '&token=' + TOKEN
+        with urllib.request.urlopen(url, timeout=8) as r:
+            return json.loads(r.read().decode())
+    lists = tr('/boards/' + BOARD + '/lists')
+    cards = tr('/boards/' + BOARD + '/cards?fields=name,idList,due,closed')
+    open_cards = [c for c in cards if not c.get('closed')]
+    list_map = {l['id']: l['name'] for l in lists}
+    print('Trello: ' + str(len(open_cards)) + ' открытых карточек')
+    for lst in lists:
+        lst_cards = [c for c in open_cards if c.get('idList') == lst['id']]
+        if lst_cards:
+            print('--- ' + lst['name'] + ' (' + str(len(lst_cards)) + ') ---')
+            for c in lst_cards[:5]:
+                due = (' до ' + c['due'][:10]) if c.get('due') else ''
+                print('  • ' + c['name'][:60] + due)
+except Exception as e:
+    print('Ошибка Trello: ' + str(e))`
+            },
+            stripe: {
+                name: 'Stripe',
+                fields: [
+                    {k:'STRIPE_SK', label:'Secret Key (sk_live_... или sk_test_...)', ph:'sk_live_xxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'dashboard.stripe.com → Developers → API keys → Secret key. Используй sk_test_ для тестирования, sk_live_ для реальных данных.',
+                code: `import urllib.request, urllib.parse, json, os, base64
+from datetime import datetime
+SK = os.environ.get('STRIPE_SK', '')
+try:
+    def stripe_get(path, **params):
+        url = 'https://api.stripe.com/v1/' + path
+        if params: url += '?' + urllib.parse.urlencode(params)
+        req = urllib.request.Request(url)
+        creds = base64.b64encode((SK + ':').encode()).decode()
+        req.add_header('Authorization', 'Basic ' + creds)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode())
+    charges = stripe_get('charges', limit=10)
+    items = charges.get('data', [])
+    paid = [i for i in items if i.get('paid')]
+    total = sum(i.get('amount', 0) for i in paid)
+    currency = items[0].get('currency', 'usd').upper() if items else 'USD'
+    print('Stripe — последние 10 платежей:')
+    print('Получено: ' + str(round(total / 100, 2)) + ' ' + currency + ' (' + str(len(paid)) + '/' + str(len(items)) + ' оплачено)')
+    for i in items[:6]:
+        amt = round(i.get('amount', 0) / 100, 2)
+        cur = i.get('currency', '').upper()
+        desc = (i.get('description') or i.get('statement_descriptor') or '(без описания)')[:40]
+        flag = '✓' if i.get('paid') else '✗'
+        dt = datetime.fromtimestamp(i.get('created', 0)).strftime('%d.%m')
+        print(flag + ' ' + str(amt) + ' ' + cur + ' — ' + desc + ' — ' + dt)
+except Exception as e:
+    print('Ошибка Stripe: ' + str(e))`
+            },
+            shopify: {
+                name: 'Shopify',
+                fields: [
+                    {k:'SHOPIFY_SHOP', label:'Домен магазина', ph:'mystore.myshopify.com', t:'text'},
+                    {k:'SHOPIFY_TOKEN', label:'Admin API Access Token', ph:'shpat_xxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Shopify Admin → Settings → Apps → Develop apps → Create app → Admin API → Install. Token начинается на shpat_.',
+                code: `import urllib.request, json, os
+SHOP = os.environ.get('SHOPIFY_SHOP', '')
+TOKEN = os.environ.get('SHOPIFY_TOKEN', '')
+try:
+    def sh(path):
+        url = 'https://' + SHOP + '/admin/api/2024-01/' + path
+        req = urllib.request.Request(url, headers={'X-Shopify-Access-Token': TOKEN})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode())
+    orders = sh('orders.json?status=any&limit=10&fields=id,total_price,currency,financial_status,created_at,line_items')
+    items = orders.get('orders', [])
+    paid_rev = sum(float(o.get('total_price', 0)) for o in items if o.get('financial_status') == 'paid')
+    currency = items[0].get('currency', 'USD') if items else 'USD'
+    print('Shopify — последние ' + str(len(items)) + ' заказов:')
+    print('Выручка (paid): ' + str(round(paid_rev, 2)) + ' ' + currency)
+    for o in items[:6]:
+        price = o.get('total_price', '0')
+        status = o.get('financial_status', '')
+        dt = (o.get('created_at') or '')[:10]
+        products = ', '.join(li.get('title', '')[:25] for li in o.get('line_items', [])[:2])
+        print('• ' + dt + ' — ' + str(price) + ' ' + currency + ' (' + status + ') — ' + products)
+except Exception as e:
+    print('Ошибка Shopify: ' + str(e))`
+            },
+            youtube: {
+                name: 'YouTube',
+                fields: [
+                    {k:'YOUTUBE_API_KEY', label:'API key (YouTube Data API v3)', ph:'AIzaXXXXXXXXXXXXXXXXXXXXXXXX', t:'text'},
+                    {k:'YOUTUBE_CHANNEL_ID', label:'Channel ID (UCxxx... из URL)', ph:'UCxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'console.cloud.google.com → APIs → YouTube Data API v3 → Enable → Credentials → Create API key',
+                code: `import urllib.request, json, os
+KEY = os.environ.get('YOUTUBE_API_KEY', '')
+CHANNEL = os.environ.get('YOUTUBE_CHANNEL_ID', '')
+try:
+    def yt(path, **p):
+        params = '&'.join(k+'='+str(v) for k,v in p.items()) + '&key=' + KEY
+        url = 'https://www.googleapis.com/youtube/v3/' + path + '?' + params
+        with urllib.request.urlopen(url, timeout=10) as r:
+            return json.loads(r.read().decode())
+    ch = yt('channels', part='statistics,snippet', id=CHANNEL)
+    if ch.get('items'):
+        s = ch['items'][0]['statistics']
+        name = ch['items'][0]['snippet']['title']
+        print('Канал: ' + name)
+        print('Подписчиков: ' + str(s.get('subscriberCount', '?')))
+        print('Просмотров всего: ' + str(s.get('viewCount', '?')))
+        print('Видео: ' + str(s.get('videoCount', '?')))
+    search = yt('search', part='snippet', channelId=CHANNEL, order='date', maxResults=5, type='video')
+    print('Последние видео:')
+    for item in search.get('items', []):
+        title = item['snippet']['title']
+        date = item['snippet']['publishedAt'][:10]
+        print('• ' + date + ' — ' + title[:70])
+except Exception as e:
+    print('Ошибка YouTube: ' + str(e))`
+            },
+            coingecko: {
+                name: 'CoinGecko (крипто)',
+                fields: [
+                    {k:'CRYPTO_COINS', label:'Монеты через запятую (CoinGecko IDs)', ph:'bitcoin,ethereum,solana,toncoin', t:'text', opt:true}
+                ],
+                hint: 'Бесплатно и без ключа! ID монет — из URL на coingecko.com (например /en/coins/bitcoin)',
+                code: `import urllib.request, json, os
+COINS = os.environ.get('CRYPTO_COINS', 'bitcoin,ethereum,solana,toncoin')
+try:
+    url = 'https://api.coingecko.com/api/v3/simple/price?ids=' + COINS + '&vs_currencies=usd&include_24hr_change=true&include_market_cap=true'
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    print('Криптовалюты (CoinGecko):')
+    for coin_id, vals in d.items():
+        usd = vals.get('usd', 0)
+        chg = vals.get('usd_24h_change', 0) or 0
+        mcap = vals.get('usd_market_cap', 0)
+        arrow = '+' if chg >= 0 else ''
+        mcap_b = ('  mcap $' + str(round(mcap / 1e9, 1)) + 'B') if mcap > 1e9 else ''
+        print(coin_id.upper() + ': $' + str(round(usd, 4 if usd < 1 else 2)) + '  (' + arrow + str(round(chg, 2)) + '% 24h)' + mcap_b)
+except Exception as e:
+    print('Ошибка CoinGecko: ' + str(e))`
+            },
+            jira: {
+                name: 'Jira',
+                fields: [
+                    {k:'JIRA_URL', label:'URL вашей Jira (Atlassian Cloud)', ph:'https://yourteam.atlassian.net', t:'url'},
+                    {k:'JIRA_EMAIL', label:'Email аккаунта', ph:'you@company.com', t:'text'},
+                    {k:'JIRA_TOKEN', label:'API Token', ph:'ATATxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'JIRA_PROJECT', label:'Ключ проекта (например DEV, PROJ)', ph:'DEV', t:'text'}
+                ],
+                hint: 'Token: id.atlassian.com → Security → API tokens → Create. Project key — 2-5 символов из URL задач.',
+                code: `import urllib.request, urllib.parse, json, os, base64
+JIRA_URL = os.environ.get('JIRA_URL', '').rstrip('/')
+EMAIL = os.environ.get('JIRA_EMAIL', '')
+TOKEN = os.environ.get('JIRA_TOKEN', '')
+PROJECT = os.environ.get('JIRA_PROJECT', '')
+try:
+    creds = base64.b64encode((EMAIL + ':' + TOKEN).encode()).decode()
+    h = {'Authorization': 'Basic ' + creds, 'Accept': 'application/json'}
+    def jr(path):
+        req = urllib.request.Request(JIRA_URL + '/rest/api/3/' + path, headers=h)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode())
+    jql = urllib.parse.quote('project=' + PROJECT + ' AND statusCategory != Done ORDER BY updated DESC')
+    data = jr('search?jql=' + jql + '&maxResults=10&fields=summary,status,priority,assignee')
+    total = data.get('total', 0)
+    print('Jira «' + PROJECT + '»: ' + str(total) + ' открытых задач')
+    for i in data.get('issues', [])[:8]:
+        key = i.get('key', '')
+        f = i.get('fields', {})
+        summary = (f.get('summary') or '')[:55]
+        status = f.get('status', {}).get('name', '')
+        priority = f.get('priority', {}).get('name', '')
+        assignee = (f.get('assignee') or {}).get('displayName', 'Unassigned')
+        print(key + ' [' + status + '/' + priority + '] ' + summary + ' → ' + assignee)
+except Exception as e:
+    print('Ошибка Jira: ' + str(e))`
+            },
+            calendly: {
+                name: 'Calendly',
+                fields: [
+                    {k:'CALENDLY_TOKEN', label:'Personal Access Token', ph:'eyJhbGciOiJIUzI1NiJ9...', t:'text'}
+                ],
+                hint: 'calendly.com → Profile → Integrations → API & webhooks → Personal Access Tokens → Create',
+                code: `import urllib.request, json, os
+from datetime import datetime, timedelta
+TOKEN = os.environ.get('CALENDLY_TOKEN', '')
+try:
+    def cal(path):
+        url = 'https://api.calendly.com/' + path
+        req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + TOKEN})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode())
+    me = cal('users/me')
+    user_uri = me.get('resource', {}).get('uri', '')
+    now = datetime.utcnow()
+    min_t = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+    max_t = (now + timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    path = 'scheduled_events?user=' + user_uri + '&status=active&min_start_time=' + min_t + '&max_start_time=' + max_t + '&count=10'
+    evts = cal(path)
+    items = evts.get('collection', [])
+    print('Calendly: встречи на 7 дней (' + str(len(items)) + ')')
+    for e in items:
+        name = e.get('name', '')
+        start = (e.get('start_time') or '')[:16].replace('T', ' ')
+        loc = (e.get('location') or {}).get('join_url') or (e.get('location') or {}).get('location', '')
+        print('• ' + start + ' UTC — ' + name[:50] + (' | ' + str(loc)[:40] if loc else ''))
+except Exception as e:
+    print('Ошибка Calendly: ' + str(e))`
             }
         };
 
@@ -3597,6 +3914,17 @@ except Exception as e:
                             <option value="google_sheets">📊 Google Sheets (публичная таблица)</option>
                             <option value="github">🐙 GitHub (issues/PR)</option>
                             <option value="hh">💼 hh.ru (вакансии)</option>
+                            <option disabled style="color:#9CA3AF;font-size:11px;">── Международные ──</option>
+                            <option value="notion">📝 Notion (база знаний)</option>
+                            <option value="airtable">🗓 Airtable (таблицы)</option>
+                            <option value="slack">💬 Slack (сообщения)</option>
+                            <option value="trello">📌 Trello (доски)</option>
+                            <option value="stripe">💳 Stripe (платежи)</option>
+                            <option value="shopify">🛒 Shopify (заказы)</option>
+                            <option value="youtube">▶️ YouTube (канал)</option>
+                            <option value="coingecko">🦤 CoinGecko (крипто, без ключа)</option>
+                            <option value="jira">🕷 Jira (задачи/спринты)</option>
+                            <option value="calendly">📅 Calendly (встречи)</option>
                             <option value="http_api">🔌 HTTP API (любой REST)</option>
                         </select>
                         <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>
