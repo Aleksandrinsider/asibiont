@@ -2953,7 +2953,11 @@
             set('mpa-apikeys', agent.user_api_keys);
             set('mpa-pycode', agent.python_code);
             const privEl = document.getElementById('mpa-private');
-            if (privEl) privEl.checked = !!agent.is_private;
+            if (privEl) {
+                privEl.checked = !!agent.is_private;
+                const priceBlock = document.getElementById('mpa-price-block');
+                if (priceBlock) priceBlock.style.display = agent.is_private ? 'none' : 'block';
+            }
 
             // Аватар
             if (agent.avatar_url) {
@@ -3129,7 +3133,7 @@
                     </div>
 
                     <!-- Цена — визуально понятно -->
-                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                    <div id="mpa-price-block" style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="font-size:13px;color:#374151;margin-bottom:8px;">Монетизация</div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <div style="display:flex;align-items:center;gap:6px;">
@@ -3147,7 +3151,7 @@
                                 <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:3px;">Приватный агент</div>
                                 <div style="font-size:12px;color:#6B7280;">Только для вас. Не виден в маркетплейсе и арене — идеально для личных агентов с вашими API&nbsp;ключами.</div>
                             </div>
-                            <input id="mpa-private" type="checkbox" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;">
+                            <input id="mpa-private" type="checkbox" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;" onchange="document.getElementById('mpa-price-block').style.display=this.checked?'none':'block'">
                         </div>
                     </div>
 
