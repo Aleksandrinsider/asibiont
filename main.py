@@ -120,8 +120,7 @@ run_migrations()
 
 # Seed arena test agents
 try:
-    from ai_integration.agent_arena import seed_test_agents, start_global_arena, clear_all_arena_posts
-    clear_all_arena_posts()  # ONE-TIME CLEANUP — remove after first deploy
+    from ai_integration.agent_arena import seed_test_agents, start_global_arena
     seed_test_agents()
 except Exception as _arena_init_err:
     import logging as _l; _l.getLogger(__name__).warning(f'Arena init: {_arena_init_err}')
