@@ -168,6 +168,9 @@ class HybridAutonomousAgent:
         'update_profile', 'research_topic',
         'create_goal', 'delete_goal', 'list_goals', 'update_goal_progress',
         'find_relevant_contacts_for_task', 'set_contact_alert', 'generate_image',
+        # Campaign management always available — conversation can span multiple turns
+        'start_content_campaign', 'manage_content_campaign',
+        'start_email_campaign', 'start_delegation_campaign',
     }
 
     # Extended tool groups — activated by keywords in user message
@@ -184,7 +187,10 @@ class HybridAutonomousAgent:
                       'get_delegation_progress', 'start_delegation_campaign', 'manage_delegation_campaign'},
         },
         'content': {
-            'keywords': ['пост', 'post', 'публик', 'publish', 'контент', 'content', 'discord', 'telegram', 'канал', 'channel', 'стратег'],
+            'keywords': ['пост', 'post', 'публик', 'publish', 'контент', 'content',
+                         'discord', 'telegram', 'канал', 'channel', 'стратег',
+                         'кампани', 'компани', 'запуст', 'продвиж', 'начн', 'написа',
+                         'писать', 'ролик', 'аудитор', 'подписч', 'привлеч'],
             'tools': {'create_post', 'edit_post', 'delete_post', 'get_posts',
                       'publish_to_telegram', 'publish_to_discord',
                       'set_content_strategy', 'start_content_campaign', 'manage_content_campaign'},
