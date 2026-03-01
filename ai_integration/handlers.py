@@ -3722,6 +3722,13 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
             session.close()
 
 
+def _progress_bar(pct, width=10):
+    """Возвращает текстовый прогресс-бар, например: ██████░░░░ 60%"""
+    pct = max(0, min(100, int(pct or 0)))
+    filled = round(pct / 100 * width)
+    return "█" * filled + "░" * (width - filled)
+
+
 def list_goals(status_filter=None, user_id=None, session=None):
     """Показать цели пользователя
     
