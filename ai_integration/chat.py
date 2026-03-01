@@ -166,21 +166,30 @@ Do NOT take tasks/goals/posts from memory or history — they may have been dele
         'ru': (
             "Напиши проактивное сообщение пользователю на основе анализа ситуации выше. "
             "Используй инструменты если нужны актуальные данные.\n\n"
-            "ФОРМАТ: без приветствий и клише («Утро — время планирования»). Сразу по делу. "
-            "Максимум 4-5 предложений + 1 вопрос или конкретное предложение действия.\n\n"
+            "СТРОГО ЗАПРЕЩЕНО начинать с:\n"
+            "• приветствий: «Привет!», «Добрый день»\n"
+            "• клише о времени: «Утро [дня недели] — отличное/самое время для...», "
+            "«Сегодня <день> — значит пора...», «Хороший день чтобы...»\n"
+            "• любой оценки времени суток или дня недели в первом предложении\n\n"
+            "ПЕРВОЕ СЛОВО — существительное или глагол конкретного действия/факта. "
+            "Максимум 4-5 предложений + 1 вопрос или предложение.\n\n"
             "ОБЯЗАТЕЛЬНО: если предлагаешь шаги или план — укажи 1-2 АЛЬТЕРНАТИВЫ "
             "(другой подход, другой инструмент, другой приоритет). "
-            "Например, вместо только 'написать пост' → 'написать пост ИЛИ сначала исследовать конкурентов'. "
-            "Альтернативы делают сообщение практичным, а не директивным."
+            "Например, 'написать пост ИЛИ сначала изучить конкурентов'."
         ),
         'en': (
             "Write a proactive message to the user based on the situation analysis above. "
             "Use tools if you need current data.\n\n"
-            "FORMAT: no greetings or clichés. Get straight to the point. "
-            "Max 4-5 sentences + 1 question or specific action.\n\n"
+            "STRICTLY FORBIDDEN to start with:\n"
+            "• greetings: 'Hi!', 'Good morning'\n"
+            "• time clichés: 'Sunday morning is a great time to...', "
+            "'Today is a good day for...', 'This [weekday] is perfect for...'\n"
+            "• any evaluation of the time of day or weekday in the first sentence\n\n"
+            "FIRST WORD must be a noun or action verb. "
+            "Max 4-5 sentences + 1 question or specific suggestion.\n\n"
             "REQUIRED: if suggesting steps or a plan — include 1-2 ALTERNATIVES "
             "(a different approach, tool, or priority). "
-            "E.g. instead of just 'write a post' → 'write a post OR research competitors first'. "
+            "E.g. 'write a post OR research competitors first'. "
             "Alternatives make the message practical, not prescriptive."
         ),
     },
@@ -766,6 +775,10 @@ async def _build_proactive_context(user_id, lang='ru'):
         ctx['user_now'] = user_now
         ctx['current_time_str'] = f"{user_now.strftime('%H:%M')} ({user_tz.zone})"
         ctx['current_date_str'] = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+        _days_ru = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
+        _days_en = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        ctx['day_of_week_ru'] = _days_ru[user_now.weekday()]
+        ctx['day_of_week_en'] = _days_en[user_now.weekday()]
         
         # Память пользователя — фильтруем tool-логи
         user_memory = ""
@@ -1087,7 +1100,8 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
     has_profile = bool(profile_obj and (getattr(profile_obj, 'goals', None) or getattr(profile_obj, 'interests', None) or getattr(profile_obj, 'skills', None)))
     
     parts.append(f"\n{_t('sit_situation', lang)}")
-    parts.append(f"{_t('sit_time', lang)}: {time_of_day} ({ctx['user_now'].strftime('%H:%M')})")
+    _day_name = ctx.get('day_of_week_ru') if lang == 'ru' else ctx.get('day_of_week_en', '')
+    parts.append(f"{_t('sit_time', lang)}: {time_of_day} ({ctx['user_now'].strftime('%H:%M')}), {_day_name}, {ctx.get('current_date_str', '')}")
     parts.append(f"{_t('sit_tasks', lang)}: {task_count}")
     if overdue_count > 0:
         parts.append(f"{_t('sit_overdue', lang)}: {overdue_count}")
