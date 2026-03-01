@@ -4103,16 +4103,16 @@ except Exception as e:
                         </summary>
                         <div style="padding:0 12px 12px 12px;border-top:1px solid #F3F4F6;">
                             <div style="padding-top:10px;margin-bottom:6px;">
-                                <div style="font-size:13px;color:#374151;font-weight:500;">Реальные данные перед ответом</div>
-                                <div style="font-size:11px;color:#9CA3AF;margin-top:1px;">Опишите что агент должен получить — сгенерируем код. Или отредактируйте заполненный шаблоном код выше.</div>
+                                <div style="font-size:13px;color:#374151;font-weight:500;">Генерация Python-кода</div>
+                                <div style="font-size:11px;color:#6B7280;margin-top:1px;">Опишите задачу агента — сгенерируем код. Или вставьте свой.</div>
                             </div>
                             <textarea id="mpa-code-desc" placeholder="Например: получай курс биткоина с CoinGecko" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#F9FAFB;"></textarea>
                             <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сгенерировать код</button>
                             <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
                             <div style="margin-top:8px;">
-                                <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;">Код агента (заполняется шаблоном или генерацией):</div>
+                                <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Код агента:</div>
                                 <textarea id="mpa-pycode" placeholder="# Код появится здесь после выбора сервиса или генерации" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:11px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
-                                <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;background:#F0FDF4;border-color:#16A34A;color:#15803D;" onmouseover="this.style.background='#DCFCE7';" onmouseout="this.style.background='#F0FDF4';">Запустить и проверить код</button>
+                                <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Проверить код</button>
                                 <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
                             </div>
                         </div>
