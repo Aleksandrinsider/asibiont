@@ -4069,15 +4069,14 @@
                 agentSocDetails.style.cssText = `overflow: hidden; transition: max-height 0.3s ease; max-height: ${agentSocExpanded ? 'none' : '0px'};`;
                 agentSocDetails.innerHTML = `<div id="agent-soc-inner" style="padding: 8px 0 12px 0;"><div style="color:#9CA3AF;font-size:12px;">Загрузка...</div></div>`;
 
-                const _loadAgentSocActivity = () => {
+                    const _loadAgentSocActivity = () => {
                     const inner = agentSocDetails.querySelector('#agent-soc-inner');
-                    if (!inner || inner.dataset.loaded) return;
-                    inner.dataset.loaded = '1';
+                    if (!inner) return;
+                    inner.innerHTML = '<div style="color:#9CA3AF;font-size:12px;">Загрузка...</div>';
                     fetch('/api/marketplace/agents/activity')
                         .then(r => r.json())
                         .then(actData => {
                             const stats = actData.stats || {};
-                            const events = actData.events || [];
                             let html = '';
                             // Статистика
                             html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
@@ -4098,23 +4097,6 @@
                                     <div style="font-size:12px;color:#8C959F;margin-top:2px;">Комментариев</div>
                                 </div>
                             </div>`;
-                            // Список последних сообщений
-                            if (events.length) {
-                                html += '<div style="font-size:12px;color:#6B7280;font-weight:500;margin-bottom:6px;">Последние сообщения</div>';
-                                events.slice(0, 20).forEach(ev => {
-                                    const typeLabel = ev.type === 'comment' ? '💬' : '📝';
-                                    const timeStr = ev.ts ? new Date(ev.ts).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-                                    html += `<div style="padding:8px 0;border-bottom:1px solid #F3F4F6;">
-                                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-                                            <span style="font-size:12px;font-weight:500;color:#1F2328;">${typeLabel} ${ev.title||''}</span>
-                                            <span style="font-size:11px;color:#9CA3AF;">${timeStr}</span>
-                                        </div>
-                                        <div style="font-size:12px;color:#6B7280;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${(ev.content||'').replace(/</g,'&lt;')}</div>
-                                    </div>`;
-                                });
-                            } else {
-                                html += '<div style="font-size:12px;color:#9CA3AF;padding-top:4px;">Нет активности за 30 дней</div>';
-                            }
                             inner.innerHTML = html;
                         })
                         .catch(() => { inner.innerHTML = '<div style="font-size:12px;color:#9CA3AF;">Нет данных</div>'; });

@@ -9557,29 +9557,23 @@ async def api_agents_activity_handler(request):
                 arena_rows = session_db.query(ArenaPost).filter(
                     ArenaPost.agent_id.in_(agent_mkt_ids),
                     ArenaPost.created_at >= since
-                ).order_by(ArenaPost.created_at.desc()).limit(80).all()
+                ).order_by(ArenaPost.created_at.desc()).limit(500).all()
             posts_count = sum(1 for p in arena_rows if not p.reply_to)
             comments_count = sum(1 for p in arena_rows if p.reply_to)
-            events = [{
-                'id': p.id,
-                'type': 'comment' if p.reply_to else 'post_newsfeed',
-                'title': p.agent_name,
-                'content': (p.text or '')[:300],
-                'target': '',
-                'status': 'completed',
-                'ts': p.created_at.isoformat() if p.created_at else p.ts,
-            } for p in arena_rows]
-            # Лайки/просмотры берём из хранимых счётчиков только если у агента есть посты в периоде
+            # Считаем лайки/просмотры напрямую из хранимых счётчиков,
+            # но только для агентов у которых есть посты в периоде
             agents_with_posts = {p.agent_id for p in arena_rows}
+            likes_total = sum((a.arena_likes_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts)
+            views_total = sum((a.arena_views_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts)
             stats = {
                 'posts_feed': posts_count,
-                'likes': sum((a.arena_likes_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts),
-                'views': sum((a.arena_views_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts),
+                'likes': likes_total,
+                'views': views_total,
                 'comments': comments_count,
                 'total': len(arena_rows),
                 'agents_count': len(agents_data),
             }
-            return web.json_response({'agents': agents_data, 'events': events, 'stats': stats})
+            return web.json_response({'agents': agents_data, 'events': [], 'stats': stats})
         finally:
             session_db.close()
     except Exception as e:
