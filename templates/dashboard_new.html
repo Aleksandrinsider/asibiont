@@ -3190,23 +3190,33 @@ except Exception as e:
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('GITHUB_TOKEN', '')
 REPO = os.environ.get('GITHUB_REPO', '')
-try:
-    headers = {'Authorization': 'Bearer ' + TOKEN, 'Accept': 'application/vnd.github+json', 'User-Agent': 'AgentBot/1.0'}
-    def gh_get(path):
-        req = urllib.request.Request('https://api.github.com' + path, headers=headers)
-        with urllib.request.urlopen(req, timeout=8) as r:
-            return json.loads(r.read().decode())
-    issues = gh_get('/repos/' + REPO + '/issues?state=open&per_page=5')
-    prs = gh_get('/repos/' + REPO + '/pulls?state=open&per_page=5')
-    print('Репозиторий: ' + REPO)
-    print('Открытых issues: ' + str(len(issues)))
-    for i in issues[:3]:
-        print('  #' + str(i['number']) + ' ' + (i.get('title') or '')[:70])
-    print('Открытых PR: ' + str(len(prs)))
-    for p in prs[:3]:
-        print('  #' + str(p['number']) + ' ' + (p.get('title') or '')[:70])
-except Exception as e:
-    print('Ошибка GitHub: ' + str(e))`
+ACTION = os.environ.get('AGENT_ACTION', '')
+headers = {'Authorization': 'Bearer ' + TOKEN, 'Accept': 'application/vnd.github+json', 'User-Agent': 'AgentBot/1.0'}
+def gh_get(path):
+    req = urllib.request.Request('https://api.github.com' + path, headers=headers)
+    with urllib.request.urlopen(req, timeout=8) as r:
+        return json.loads(r.read().decode())
+if ACTION == 'create_issue':
+    title = os.environ.get('AGENT_PARAM_TITLE', 'New Issue')
+    body = os.environ.get('AGENT_PARAM_BODY', '')
+    data = json.dumps({'title': title, 'body': body}).encode()
+    req = urllib.request.Request('https://api.github.com/repos/' + REPO + '/issues', data=data, headers=headers, method='POST')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    print('OK: issue #' + str(d.get('number', '?')) + ' создан — ' + d.get('html_url', ''))
+else:
+    try:
+        issues = gh_get('/repos/' + REPO + '/issues?state=open&per_page=5')
+        prs = gh_get('/repos/' + REPO + '/pulls?state=open&per_page=5')
+        print('Репозиторий: ' + REPO)
+        print('Открытых issues: ' + str(len(issues)))
+        for i in issues[:3]:
+            print('  #' + str(i['number']) + ' ' + (i.get('title') or '')[:70])
+        print('Открытых PR: ' + str(len(prs)))
+        for p in prs[:3]:
+            print('  #' + str(p['number']) + ' ' + (p.get('title') or '')[:70])
+    except Exception as e:
+        print('Ошибка GitHub: ' + str(e))`
             },
             hh: {
                 name: 'hh.ru (вакансии)',
@@ -3348,22 +3358,32 @@ except Exception as e:
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('SLACK_TOKEN', '')
 CHANNEL = os.environ.get('SLACK_CHANNEL', '')
-try:
-    url = 'https://slack.com/api/conversations.history?channel=' + CHANNEL + '&limit=10'
-    req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + TOKEN})
+ACTION = os.environ.get('AGENT_ACTION', '')
+if ACTION == 'send_message':
+    msg = os.environ.get('AGENT_PARAM_MESSAGE', '')
+    ch = os.environ.get('AGENT_PARAM_CHANNEL', CHANNEL)
+    body = json.dumps({'channel': ch, 'text': msg}).encode()
+    req = urllib.request.Request('https://slack.com/api/chat.postMessage', data=body, headers={'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=10) as r:
         d = json.loads(r.read().decode())
-    if not d.get('ok'):
-        print('Ошибка Slack: ' + d.get('error', 'unknown'))
-    else:
-        msgs = d.get('messages', [])
-        print('Последние сообщения в канале (' + str(len(msgs)) + '):')
-        for m in msgs[:8]:
-            user = m.get('username') or m.get('user', 'user')
-            text = (m.get('text') or '(медиа)')[:120]
-            print('- [' + user + '] ' + text)
-except Exception as e:
-    print('Ошибка Slack: ' + str(e))`
+    print('OK: сообщение отправлено' if d.get('ok') else 'ERROR: ' + d.get('error', 'unknown'))
+else:
+    try:
+        url = 'https://slack.com/api/conversations.history?channel=' + CHANNEL + '&limit=10'
+        req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + TOKEN})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        if not d.get('ok'):
+            print('Ошибка Slack: ' + d.get('error', 'unknown'))
+        else:
+            msgs = d.get('messages', [])
+            print('Последние сообщения в канале (' + str(len(msgs)) + '):')
+            for m in msgs[:8]:
+                user = m.get('username') or m.get('user', 'user')
+                text = (m.get('text') or '(медиа)')[:120]
+                print('- [' + user + '] ' + text)
+    except Exception as e:
+        print('Ошибка Slack: ' + str(e))`
             },
             trello: {
                 name: 'Trello',
@@ -3373,29 +3393,40 @@ except Exception as e:
                     {k:'TRELLO_BOARD', label:'Board ID (из URL: /b/XXXXX/)', ph:'aBcDeFgH', t:'text'}
                 ],
                 hint: 'Key+Token: trello.com/power-ups/admin → Create Power-Up → API Key. Board ID — 8 символов из URL.',
-                code: `import urllib.request, json, os
+                code: `import urllib.request, urllib.parse, json, os
 KEY = os.environ.get('TRELLO_KEY', '')
 TOKEN = os.environ.get('TRELLO_TOKEN', '')
 BOARD = os.environ.get('TRELLO_BOARD', '')
-try:
-    def tr(path):
-        url = 'https://api.trello.com/1' + path + '?key=' + KEY + '&token=' + TOKEN
-        with urllib.request.urlopen(url, timeout=8) as r:
-            return json.loads(r.read().decode())
-    lists = tr('/boards/' + BOARD + '/lists')
-    cards = tr('/boards/' + BOARD + '/cards?fields=name,idList,due,closed')
-    open_cards = [c for c in cards if not c.get('closed')]
-    list_map = {l['id']: l['name'] for l in lists}
-    print('Trello: ' + str(len(open_cards)) + ' открытых карточек')
-    for lst in lists:
-        lst_cards = [c for c in open_cards if c.get('idList') == lst['id']]
-        if lst_cards:
-            print('--- ' + lst['name'] + ' (' + str(len(lst_cards)) + ') ---')
-            for c in lst_cards[:5]:
-                due = (' до ' + c['due'][:10]) if c.get('due') else ''
-                print('  • ' + c['name'][:60] + due)
-except Exception as e:
-    print('Ошибка Trello: ' + str(e))`
+ACTION = os.environ.get('AGENT_ACTION', '')
+def tr_get(path):
+    url = 'https://api.trello.com/1' + path + '?key=' + KEY + '&token=' + TOKEN
+    with urllib.request.urlopen(url, timeout=8) as r:
+        return json.loads(r.read().decode())
+if ACTION == 'create_card':
+    name = os.environ.get('AGENT_PARAM_NAME', 'Новая карточка')
+    list_name = os.environ.get('AGENT_PARAM_LIST', '')
+    lists = tr_get('/boards/' + BOARD + '/lists')
+    target = next((l['id'] for l in lists if list_name.lower() in l['name'].lower()), lists[0]['id'] if lists else '')
+    body = urllib.parse.urlencode({'name': name, 'idList': target, 'key': KEY, 'token': TOKEN}).encode()
+    req = urllib.request.Request('https://api.trello.com/1/cards', data=body, method='POST')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    print('OK: карточка «' + d.get('name', name) + '» создана в «' + (list_name or lists[0]['name']) + '»')
+else:
+    try:
+        lists = tr_get('/boards/' + BOARD + '/lists')
+        cards = tr_get('/boards/' + BOARD + '/cards?fields=name,idList,due,closed')
+        open_cards = [c for c in cards if not c.get('closed')]
+        print('Trello: ' + str(len(open_cards)) + ' открытых карточек')
+        for lst in lists:
+            lst_cards = [c for c in open_cards if c.get('idList') == lst['id']]
+            if lst_cards:
+                print('--- ' + lst['name'] + ' (' + str(len(lst_cards)) + ') ---')
+                for c in lst_cards[:5]:
+                    due = (' до ' + c['due'][:10]) if c.get('due') else ''
+                    print('  • ' + c['name'][:60] + due)
+    except Exception as e:
+        print('Ошибка Trello: ' + str(e))`
             },
             stripe: {
                 name: 'Stripe',
@@ -3534,27 +3565,38 @@ JIRA_URL = os.environ.get('JIRA_URL', '').rstrip('/')
 EMAIL = os.environ.get('JIRA_EMAIL', '')
 TOKEN = os.environ.get('JIRA_TOKEN', '')
 PROJECT = os.environ.get('JIRA_PROJECT', '')
-try:
-    creds = base64.b64encode((EMAIL + ':' + TOKEN).encode()).decode()
-    h = {'Authorization': 'Basic ' + creds, 'Accept': 'application/json'}
-    def jr(path):
-        req = urllib.request.Request(JIRA_URL + '/rest/api/3/' + path, headers=h)
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return json.loads(r.read().decode())
-    jql = urllib.parse.quote('project=' + PROJECT + ' AND statusCategory != Done ORDER BY updated DESC')
-    data = jr('search?jql=' + jql + '&maxResults=10&fields=summary,status,priority,assignee')
-    total = data.get('total', 0)
-    print('Jira «' + PROJECT + '»: ' + str(total) + ' открытых задач')
-    for i in data.get('issues', [])[:8]:
-        key = i.get('key', '')
-        f = i.get('fields', {})
-        summary = (f.get('summary') or '')[:55]
-        status = f.get('status', {}).get('name', '')
-        priority = f.get('priority', {}).get('name', '')
-        assignee = (f.get('assignee') or {}).get('displayName', 'Unassigned')
-        print(key + ' [' + status + '/' + priority + '] ' + summary + ' → ' + assignee)
-except Exception as e:
-    print('Ошибка Jira: ' + str(e))`
+ACTION = os.environ.get('AGENT_ACTION', '')
+creds = base64.b64encode((EMAIL + ':' + TOKEN).encode()).decode()
+h = {'Authorization': 'Basic ' + creds, 'Accept': 'application/json', 'Content-Type': 'application/json'}
+if ACTION == 'create_issue':
+    summary = os.environ.get('AGENT_PARAM_SUMMARY', 'New Issue')
+    desc = os.environ.get('AGENT_PARAM_DESCRIPTION', '')
+    priority = os.environ.get('AGENT_PARAM_PRIORITY', 'Medium')
+    body = json.dumps({'fields': {'project': {'key': PROJECT}, 'summary': summary, 'description': {'type': 'doc', 'version': 1, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': desc}]}]}, 'issuetype': {'name': 'Task'}, 'priority': {'name': priority}}}).encode()
+    req = urllib.request.Request(JIRA_URL + '/rest/api/3/issue', data=body, headers=h, method='POST')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    print('OK: задача ' + d.get('key', '?') + ' создана')
+else:
+    try:
+        def jr(path):
+            req = urllib.request.Request(JIRA_URL + '/rest/api/3/' + path, headers=h)
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return json.loads(r.read().decode())
+        jql = urllib.parse.quote('project=' + PROJECT + ' AND statusCategory != Done ORDER BY updated DESC')
+        data = jr('search?jql=' + jql + '&maxResults=10&fields=summary,status,priority,assignee')
+        total = data.get('total', 0)
+        print('Jira «' + PROJECT + '»: ' + str(total) + ' открытых задач')
+        for i in data.get('issues', [])[:8]:
+            key = i.get('key', '')
+            f = i.get('fields', {})
+            summary = (f.get('summary') or '')[:55]
+            status = f.get('status', {}).get('name', '')
+            priority = f.get('priority', {}).get('name', '')
+            assignee = (f.get('assignee') or {}).get('displayName', 'Unassigned')
+            print(key + ' [' + status + '/' + priority + '] ' + summary + ' → ' + assignee)
+    except Exception as e:
+        print('Ошибка Jira: ' + str(e))`
             },
             calendly: {
                 name: 'Calendly',

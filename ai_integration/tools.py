@@ -1746,4 +1746,25 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_agent_action",
+            "description": "⚡ ВЫПОЛНИТЬ ДЕЙСТВИЕ через внешний сервис (Slack, GitHub, Trello, Notion, Jira, Gmail и т.д.). Используй когда пользователь просит что-то сделать: отправить сообщение, создать задачу, добавить запись и т.д. Доступен только если агент имеет подключённый скрипт. ПЕРЕД вызовом ВСЕГДА уточни у пользователя детали.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Название действия (должно совпадать с тем, что обрабатывает скрипт агента). Примеры: send_message, create_issue, create_card, add_row, send_email, create_record"
+                    },
+                    "params": {
+                        "type": "object",
+                        "description": "Параметры действия. Передаются в скрипт через переменные окружения AGENT_PARAM_КЛЮЧ. Пример: {\"message\": \"...\", \"channel\": \"...\", \"title\": \"...\"}"
+                    }
+                },
+                "required": ["action"]
+            }
+        }
+    },
 ]

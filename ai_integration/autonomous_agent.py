@@ -74,6 +74,7 @@ class HybridAutonomousAgent:
         self.tool_discovery = tool_discovery
         self._initialize_tools()
         self.active_sessions = 0
+        self._active_agent_data = None  # Текущий активный агент (для run_agent_action)
 
         # === Адаптивные фичи (из 73dc138) ===
         self.context_memory = []          # Краткосрочная память контекста
@@ -575,6 +576,62 @@ class HybridAutonomousAgent:
 
     # ===== EXECUTE =====
 
+    async def _run_external_action(self, params: dict, user_id: int) -> dict:
+        """Re-runs agent python_code with AGENT_ACTION env vars to perform write operations."""
+        import os as _os_ea, sys as _sys_ea, asyncio as _aio_ea
+        agent_data = self._active_agent_data
+        if not agent_data or not agent_data.get('python_code', '').strip():
+            return {"error": "Агент не имеет подключённого скрипта"}
+        action = str(params.get('action', '')).strip()
+        action_params = params.get('params', {})
+        if not isinstance(action_params, dict):
+            action_params = {}
+        if not action:
+            return {"error": "Параметр action не указан"}
+        py_code = agent_data['python_code'].strip()
+        api_keys_raw = agent_data.get('user_api_keys', '') or ''
+        env = {
+            'PATH': _os_ea.environ.get('PATH', '/usr/bin:/bin'),
+            'HOME': _os_ea.environ.get('HOME', '/tmp'),
+            'PYTHONIOENCODING': 'utf-8',
+            'AGENT_ACTION': action,
+        }
+        for _kline in api_keys_raw.splitlines():
+            _kline = _kline.strip()
+            if '=' in _kline and not _kline.startswith('#'):
+                _k, _, _v = _kline.partition('=')
+                env[_k.strip()] = _v.strip()
+        for _k, _v in action_params.items():
+            env[f'AGENT_PARAM_{str(_k).upper()}'] = str(_v)
+        _is_linux = _sys_ea.platform != 'win32'
+        def _mem_limit():
+            try:
+                import resource as _res
+                _lim = 64 * 1024 * 1024
+                _res.setrlimit(_res.RLIMIT_AS, (_lim, _lim))
+            except Exception:
+                pass
+        try:
+            _kwargs = dict(stdout=_aio_ea.subprocess.PIPE, stderr=_aio_ea.subprocess.PIPE, env=env)
+            if _is_linux:
+                _kwargs['preexec_fn'] = _mem_limit
+            proc = await _aio_ea.create_subprocess_exec(_sys_ea.executable, '-c', py_code, **_kwargs)
+            try:
+                stdout, stderr = await _aio_ea.wait_for(proc.communicate(), timeout=15.0)
+                out = stdout.decode('utf-8', errors='replace').strip()[:2000]
+                err = stderr.decode('utf-8', errors='replace').strip()[:500]
+            except _aio_ea.TimeoutError:
+                proc.kill()
+                return {"status": "error", "error": "Timeout (15s) — скрипт выполнялся слишком долго"}
+            logger.info(f"[ACTION] {action} output={out[:100]} err={err[:100]}")
+            if out:
+                return {"status": "success", "output": out}
+            else:
+                return {"status": "error", "error": err or "Скрипт не вернул вывода"}
+        except Exception as _e:
+            logger.error(f"[ACTION] _run_external_action error: {_e}")
+            return {"error": str(_e)}
+
     async def execute_actions(self, actions, user_id, session=None,
                               user_message=None, progress_callback=None,
                               web_context: bool = False):
@@ -607,6 +664,12 @@ class HybridAutonomousAgent:
                     raw_params = {}
                 params = dict(raw_params)
                 reason = action.get('reason', '')
+
+                # Специальный обработчик: запуск скрипта агента с параметрами действия
+                if tool_name == 'run_agent_action':
+                    result = await self._run_external_action(raw_params, user_id)
+                    results.append({"tool": tool_name, "success": True, "result": result, "reason": reason})
+                    continue
 
                 handler_func = getattr(handlers, tool_name, None)
                 if not handler_func:
@@ -1157,6 +1220,7 @@ class HybridAutonomousAgent:
             base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
 
             # Инжектируем личность кастомного агента (если активен)
+            self._active_agent_data = None      # сбрасываем перед каждым запросом
             _agent_tools_allowed: set = set()   # пустое = без ограничений
             try:
                 from .user_agents import get_user_active_agent, load_agent_personality, build_agent_system_prompt
@@ -1164,6 +1228,7 @@ class HybridAutonomousAgent:
                 if _active_agent_id:
                     _agent_data = load_agent_personality(_active_agent_id)
                     if _agent_data:
+                        self._active_agent_data = _agent_data  # для run_agent_action
                         base_prompt = build_agent_system_prompt(_agent_data, base_prompt)
                         # Сохраняем разрешённые инструменты для enforce-а ниже
                         _allowed = _agent_data.get('tools_allowed') or []
@@ -1286,7 +1351,7 @@ class HybridAutonomousAgent:
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'delegate_task'}  # строго 1 раз
-            multi_limit_tools = {'add_task': 3, 'add_email_leads': 3, 'update_profile': 2, 'create_goal': 2}  # лимиты per turn
+            multi_limit_tools = {'add_task': 3, 'add_email_leads': 3, 'update_profile': 2, 'create_goal': 2, 'run_agent_action': 5}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
 
