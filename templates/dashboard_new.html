@@ -2855,51 +2855,72 @@
                     {k:'GMAIL_PASS', label:'Пароль приложения', ph:'xxxx xxxx xxxx xxxx', t:'password'}
                 ],
                 hint: '⚠️ Нужен пароль приложения, не обычный. Google Аккаунт → Безопасность → Пароли приложений',
-                code: `import imaplib, os, datetime
+                code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 USER = os.environ.get('GMAIL_USER', '')
 PASS = os.environ.get('GMAIL_PASS', '')
-try:
-    mail = imaplib.IMAP4_SSL('imap.gmail.com')
-    mail.login(USER, PASS)
-    mail.select('inbox')
-    since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-    _, data = mail.search(None, 'SINCE ' + since)
-    ids = data[0].split()
-    if not ids:
-        print('Новых писем за неделю нет.')
-    else:
-        print('Писем за неделю: ' + str(len(ids)))
-        for eid in reversed(ids[-5:]):
-            try:
-                _, md = mail.fetch(eid, '(RFC822)')
-                msg = message_from_bytes(md[0][1])
-                subj_raw = msg.get('Subject') or ''
-                pts = decode_header(subj_raw)
-                subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
-                frm = msg.get('From', '')
-                date = msg.get('Date', '')
-                body = ''
-                if msg.is_multipart():
-                    for part in msg.walk():
-                        if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
-                            raw = part.get_payload(decode=True) or b''
-                            body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
-                            break
-                else:
-                    raw = msg.get_payload(decode=True) or b''
-                    body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
-                print('От: ' + frm)
-                print('Тема: ' + subject)
-                print('Дата: ' + date)
-                print(body)
-                print('---')
-            except Exception as ex:
-                print('Ошибка письма: ' + str(ex))
-    mail.logout()
-except Exception as e:
-    print('Ошибка: ' + str(e))`
+ACTION = os.environ.get('AGENT_ACTION', '')
+if ACTION == 'send_email':
+    to = os.environ.get('AGENT_PARAM_TO', '')
+    subject = os.environ.get('AGENT_PARAM_SUBJECT', '(без темы)')
+    body = os.environ.get('AGENT_PARAM_BODY', '')
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = USER
+        msg['To'] = to
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        s = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        s.login(USER, PASS)
+        s.sendmail(USER, to, msg.as_string())
+        s.quit()
+        print('OK: письмо отправлено на ' + to)
+    except Exception as e:
+        print('Ошибка отправки: ' + str(e))
+else:
+    try:
+        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        mail.login(USER, PASS)
+        mail.select('inbox')
+        since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
+        _, data = mail.search(None, 'SINCE ' + since)
+        ids = data[0].split()
+        if not ids:
+            print('Новых писем за неделю нет.')
+        else:
+            print('Писем за неделю: ' + str(len(ids)))
+            for eid in reversed(ids[-5:]):
+                try:
+                    _, md = mail.fetch(eid, '(RFC822)')
+                    msg = message_from_bytes(md[0][1])
+                    subj_raw = msg.get('Subject') or ''
+                    pts = decode_header(subj_raw)
+                    subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
+                    frm = msg.get('From', '')
+                    date = msg.get('Date', '')
+                    body = ''
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
+                                raw = part.get_payload(decode=True) or b''
+                                body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
+                                break
+                    else:
+                        raw = msg.get_payload(decode=True) or b''
+                        body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
+                    print('От: ' + frm)
+                    print('Тема: ' + subject)
+                    print('Дата: ' + date)
+                    print(body)
+                    print('---')
+                except Exception as ex:
+                    print('Ошибка письма: ' + str(ex))
+        mail.logout()
+    except Exception as e:
+        print('Ошибка: ' + str(e))`
             },
             yandex: {
                 name: 'Яндекс.Почта',
@@ -3097,25 +3118,37 @@ except Exception as e:
                     {k:'VK_OWNER_ID', label:'ID страницы/группы (для группы — отрицательный)', ph:'-123456789', t:'text'}
                 ],
                 hint: 'Токен: vk.com/dev → Мои приложения → Standalone → Получить токен (rights: wall, groups)',
-                code: `import urllib.request, json, os
+                code: `import urllib.request, urllib.parse, json, os
 TOKEN = os.environ.get('VK_TOKEN', '')
 OWNER_ID = os.environ.get('VK_OWNER_ID', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
 try:
-    url = 'https://api.vk.com/method/wall.get?owner_id=' + OWNER_ID + '&count=5&access_token=' + TOKEN + '&v=5.131'
-    with urllib.request.urlopen(url, timeout=8) as r:
-        d = json.loads(r.read().decode())
-    if 'error' in d:
-        print('Ошибка VK: ' + d['error'].get('error_msg', str(d['error'])))
+    if ACTION == 'post_wall':
+        message = os.environ.get('AGENT_PARAM_MESSAGE', '')
+        url = 'https://api.vk.com/method/wall.post?owner_id=' + OWNER_ID + '&message=' + urllib.parse.quote(message) + '&access_token=' + TOKEN + '&v=5.131'
+        with urllib.request.urlopen(url, timeout=8) as r:
+            d = json.loads(r.read().decode())
+        if 'error' in d:
+            print('Ошибка VK: ' + d['error'].get('error_msg', str(d['error'])))
+        else:
+            post_id = d.get('response', {}).get('post_id', '?')
+            print('OK: пост #' + str(post_id) + ' опубликован на стене ' + OWNER_ID)
     else:
-        items = d.get('response', {}).get('items', [])
-        print('Последние посты (' + str(len(items)) + '):')
-        for post in items:
-            text = (post.get('text') or '(нет текста)')[:200]
-            likes = post.get('likes', {}).get('count', 0)
-            views = post.get('views', {}).get('count', 0)
-            print('---')
-            print(text)
-            print('Лайков: ' + str(likes) + '  Просмотров: ' + str(views))
+        url = 'https://api.vk.com/method/wall.get?owner_id=' + OWNER_ID + '&count=5&access_token=' + TOKEN + '&v=5.131'
+        with urllib.request.urlopen(url, timeout=8) as r:
+            d = json.loads(r.read().decode())
+        if 'error' in d:
+            print('Ошибка VK: ' + d['error'].get('error_msg', str(d['error'])))
+        else:
+            items = d.get('response', {}).get('items', [])
+            print('Последние посты (' + str(len(items)) + '):')
+            for post in items:
+                text = (post.get('text') or '(нет текста)')[:200]
+                likes = post.get('likes', {}).get('count', 0)
+                views = post.get('views', {}).get('count', 0)
+                print('---')
+                print(text)
+                print('Лайков: ' + str(likes) + '  Просмотров: ' + str(views))
 except Exception as e:
     print('Ошибка VK: ' + str(e))`
             },
@@ -3149,6 +3182,55 @@ try:
         print('Топ артикулы: ' + ', '.join(nm + '(' + str(c) + ' шт)' for nm, c in best))
 except Exception as e:
     print('Ошибка WB: ' + str(e))`
+            },
+            ozon: {
+                name: 'Ozon',
+                fields: [
+                    {k:'OZON_CLIENT_ID', label:'Client ID (личный кабинет Ozon Seller)', ph:'123456', t:'text'},
+                    {k:'OZON_API_KEY', label:'API Key', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Ozon Seller → Настройки → API-ключи → Добавить ключ. Требуется права: Analytics, Orders.',
+                code: `import urllib.request, json, os
+from datetime import datetime, timedelta
+CLIENT_ID = os.environ.get('OZON_CLIENT_ID', '')
+API_KEY = os.environ.get('OZON_API_KEY', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+h = {'Client-Id': CLIENT_ID, 'Api-Key': API_KEY, 'Content-Type': 'application/json'}
+try:
+    if ACTION == 'get_orders':
+        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00.000Z')
+        date_to = datetime.now().strftime('%Y-%m-%dT23:59:59.000Z')
+        body = json.dumps({'dir': 'DESC', 'filter': {'since': date_from, 'to': date_to, 'status': ''}, 'limit': 10, 'offset': 0}).encode()
+        req = urllib.request.Request('https://api-seller.ozon.ru/v3/posting/fbs/list', data=body, headers=h, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        orders = d.get('result', {}).get('postings', [])
+        print('Ozon отправления за 7 дней (' + str(len(orders)) + '):')
+        for o in orders[:8]:
+            oid = o.get('posting_number', '')
+            status = o.get('status', '')
+            items = ', '.join(p.get('name', '')[:30] for p in o.get('products', [])[:2])
+            print('• ' + oid + ' [' + status + '] ' + items)
+    else:
+        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        date_to = datetime.now().strftime('%Y-%m-%d')
+        body = json.dumps({'date_from': date_from, 'date_to': date_to, 'metrics': ['revenue', 'ordered_units', 'returns'], 'dimension': ['day'], 'limit': 7}).encode()
+        req = urllib.request.Request('https://api-seller.ozon.ru/v1/analytics/data', data=body, headers=h, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        rows = d.get('result', {}).get('data', [])
+        total_rev = sum((row.get('metrics') or [0])[0] for row in rows)
+        total_units = int(sum((row.get('metrics') or [0, 0])[1] for row in rows))
+        print('Ozon за 7 дней:')
+        print('Выручка: ' + str(round(total_rev, 0)) + ' руб.')
+        print('Заказано: ' + str(total_units) + ' ед.')
+        for row in rows[-3:]:
+            dim = ((row.get('dimensions') or [{}])[0]).get('id', '')
+            rev = round((row.get('metrics') or [0])[0], 0)
+            units = int((row.get('metrics') or [0, 0])[1])
+            print('  ' + str(dim) + ': ' + str(rev) + ' руб., ' + str(units) + ' ед.')
+except Exception as e:
+    print('Ошибка Ozon: ' + str(e))`
             },
             google_sheets: {
                 name: 'Google Sheets',
@@ -3291,31 +3373,41 @@ except Exception as e:
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('NOTION_TOKEN', '')
 DB_ID = os.environ.get('NOTION_DB_ID', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+h = {'Authorization': 'Bearer ' + TOKEN, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json'}
 try:
-    data = json.dumps({'page_size': 10}).encode()
-    req = urllib.request.Request(
-        'https://api.notion.com/v1/databases/' + DB_ID + '/query',
-        data=data,
-        headers={'Authorization': 'Bearer ' + TOKEN, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json'},
-        method='POST'
-    )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        d = json.loads(r.read().decode())
-    results = d.get('results', [])
-    print('Notion: ' + str(len(results)) + ' записей')
-    for item in results[:8]:
-        props = item.get('properties', {})
-        title, status = '', ''
-        for k, v in props.items():
-            if v.get('type') == 'title':
-                texts = v.get('title', [])
-                if texts: title = texts[0].get('plain_text', '')
-            if v.get('type') in ('status', 'select') and not status:
-                sel = v.get('status') or v.get('select') or {}
-                status = sel.get('name', '')
-        line = '• ' + (title or '(без названия)')
-        if status: line += ' [' + status + ']'
-        print(line)
+    if ACTION == 'add_page':
+        title = os.environ.get('AGENT_PARAM_TITLE', 'Новая запись')
+        content = os.environ.get('AGENT_PARAM_CONTENT', '')
+        children = [{'object': 'block', 'type': 'paragraph', 'paragraph': {'rich_text': [{'type': 'text', 'text': {'content': content}}]}}] if content else []
+        page_data = json.dumps({'parent': {'database_id': DB_ID}, 'properties': {'Name': {'title': [{'text': {'content': title}}]}}, 'children': children}).encode()
+        req = urllib.request.Request('https://api.notion.com/v1/pages', data=page_data, headers=h, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        print('OK: страница «' + title + '» создана — ' + d.get('url', ''))
+    else:
+        data = json.dumps({'page_size': 10}).encode()
+        req = urllib.request.Request(
+            'https://api.notion.com/v1/databases/' + DB_ID + '/query',
+            data=data, headers=h, method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        results = d.get('results', [])
+        print('Notion: ' + str(len(results)) + ' записей')
+        for item in results[:8]:
+            props = item.get('properties', {})
+            title, status = '', ''
+            for k, v in props.items():
+                if v.get('type') == 'title':
+                    texts = v.get('title', [])
+                    if texts: title = texts[0].get('plain_text', '')
+                if v.get('type') in ('status', 'select') and not status:
+                    sel = v.get('status') or v.get('select') or {}
+                    status = sel.get('name', '')
+            line = '• ' + (title or '(без названия)')
+            if status: line += ' [' + status + ']'
+            print(line)
 except Exception as e:
     print('Ошибка Notion: ' + str(e))`
             },
@@ -3437,29 +3529,40 @@ else:
                 code: `import urllib.request, urllib.parse, json, os, base64
 from datetime import datetime
 SK = os.environ.get('STRIPE_SK', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+def stripe_req(path, data=None, method='GET'):
+    url = 'https://api.stripe.com/v1/' + path
+    creds = base64.b64encode((SK + ':').encode()).decode()
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header('Authorization', 'Basic ' + creds)
+    if data: req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
 try:
-    def stripe_get(path, **params):
-        url = 'https://api.stripe.com/v1/' + path
-        if params: url += '?' + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url)
-        creds = base64.b64encode((SK + ':').encode()).decode()
-        req.add_header('Authorization', 'Basic ' + creds)
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return json.loads(r.read().decode())
-    charges = stripe_get('charges', limit=10)
-    items = charges.get('data', [])
-    paid = [i for i in items if i.get('paid')]
-    total = sum(i.get('amount', 0) for i in paid)
-    currency = items[0].get('currency', 'usd').upper() if items else 'USD'
-    print('Stripe — последние 10 платежей:')
-    print('Получено: ' + str(round(total / 100, 2)) + ' ' + currency + ' (' + str(len(paid)) + '/' + str(len(items)) + ' оплачено)')
-    for i in items[:6]:
-        amt = round(i.get('amount', 0) / 100, 2)
-        cur = i.get('currency', '').upper()
-        desc = (i.get('description') or i.get('statement_descriptor') or '(без описания)')[:40]
-        flag = '✓' if i.get('paid') else '✗'
-        dt = datetime.fromtimestamp(i.get('created', 0)).strftime('%d.%m')
-        print(flag + ' ' + str(amt) + ' ' + cur + ' — ' + desc + ' — ' + dt)
+    if ACTION == 'create_payment_link':
+        amount_rub = int(float(os.environ.get('AGENT_PARAM_AMOUNT', '1000')))
+        currency = os.environ.get('AGENT_PARAM_CURRENCY', 'rub').lower()
+        description = os.environ.get('AGENT_PARAM_DESCRIPTION', 'Payment')
+        price_data = urllib.parse.urlencode({'currency': currency, 'unit_amount': amount_rub * 100, 'product_data[name]': description}).encode()
+        price = stripe_req('prices', data=price_data, method='POST')
+        link_data = urllib.parse.urlencode({'line_items[0][price]': price['id'], 'line_items[0][quantity]': '1'}).encode()
+        link = stripe_req('payment_links', data=link_data, method='POST')
+        print('OK: ссылка на оплату ' + str(amount_rub) + ' ' + currency.upper() + ': ' + link.get('url', ''))
+    else:
+        charges = stripe_req('charges?limit=10')
+        items = charges.get('data', [])
+        paid = [i for i in items if i.get('paid')]
+        total = sum(i.get('amount', 0) for i in paid)
+        currency = items[0].get('currency', 'usd').upper() if items else 'USD'
+        print('Stripe — последние 10 платежей:')
+        print('Получено: ' + str(round(total / 100, 2)) + ' ' + currency + ' (' + str(len(paid)) + '/' + str(len(items)) + ' оплачено)')
+        for i in items[:6]:
+            amt = round(i.get('amount', 0) / 100, 2)
+            cur = i.get('currency', '').upper()
+            desc = (i.get('description') or i.get('statement_descriptor') or '(без описания)')[:40]
+            flag = '✓' if i.get('paid') else '✗'
+            dt = datetime.fromtimestamp(i.get('created', 0)).strftime('%d.%m')
+            print(flag + ' ' + str(amt) + ' ' + cur + ' — ' + desc + ' — ' + dt)
 except Exception as e:
     print('Ошибка Stripe: ' + str(e))`
             },
@@ -3953,6 +4056,7 @@ except Exception as e:
                             <option value="telegram_bot">🤖 Telegram Bot (входящие)</option>
                             <option value="vk">💙 ВКонтакте (посты/стена)</option>
                             <option value="wildberries">🟣 Wildberries (продажи)</option>
+                            <option value="ozon">🔵 Ozon (аналитика)</option>
                             <option value="google_sheets">📊 Google Sheets (публичная таблица)</option>
                             <option value="github">🐙 GitHub (issues/PR)</option>
                             <option value="hh">💼 hh.ru (вакансии)</option>
