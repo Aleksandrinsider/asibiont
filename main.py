@@ -9587,8 +9587,9 @@ async def api_marketplace_publish_agent_handler(request):
                     'eval(', 'exec(', '__import__(', 'compile(',
                     'importlib', 'ctypes', 'pickle', 'marshal',
                     # Сетевые операции (предотвращаем исходящие запросы с нашего IP)
+                    # smtplib и imaplib разрешены — нужны для работы с почтой
                     'socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.',
-                    'http.client', 'ftplib', 'smtplib', 'telnetlib',
+                    'http.client', 'ftplib', 'telnetlib',
                     # Памятные бомбы
                     '* 10**', '* 10 **', '*10**',
                 ]
