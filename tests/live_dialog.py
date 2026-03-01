@@ -185,6 +185,7 @@ async def ai_user_reply(history: list[dict], scenario_hint: str) -> str:
 
 
 import time
+import logging
 
 # ── цвета вывода (ANSI, работают в PowerShell) ─────────────────────────────────
 class C:
@@ -225,6 +226,12 @@ SCENARIOS = {
         "узнать сводку своих дел. Начни с 'добавь задачу купить продукты на завтра'",
         False,  # without script
     ),
+    "multi": (
+        "Пользователь даёт одну сложную команду, которая требует НЕСКОЛЬКИХ действий одновременно. "
+        "Начни с: 'добавь три задачи: написать отчёт на завтра, позвонить клиенту в среду, "
+        "и отправить презентацию в пятницу — и ещё поставь цель закрыть квартал'",
+        False,  # without script
+    ),
 }
 
 
@@ -246,16 +253,27 @@ async def run_dialog(turns: int = 6, scenario: str = "action"):
 
     # ── перехватываем execute_actions для трекинга tool calls ─────────────────
     _called_tools: list[str] = []
+    _parallel_batches: list[str] = []  # "[PARALLEL] Executing N tools: [...]"
     _orig_execute = ag_mod.HybridAutonomousAgent.execute_actions
 
     async def _track_execute(self_inner, actions, user_id_inner, **kw):
-        # actions — список dict с ключом 'tool' или list tool_call объектов
         for a in (actions or []):
-            name = a.get("tool") or a.get("function", {}).get("name") or str(a)
+            name = a.get("tool") or "?"
             _called_tools.append(name)
         return await _orig_execute(self_inner, actions, user_id_inner, **kw)
 
     ag_mod.HybridAutonomousAgent.execute_actions = _track_execute
+
+    # Лог-хендлер для поимки "[PARALLEL] Executing N tools"
+    class _ParallelCapture(logging.Handler):
+        def emit(self, record):
+            msg = record.getMessage()
+            if "[PARALLEL] Executing" in msg:
+                _parallel_batches.append(msg.split("[PARALLEL] ")[-1])
+
+    _log_handler = _ParallelCapture(level=logging.DEBUG)
+    logging.getLogger("ai_integration.autonomous_agent").addHandler(_log_handler)
+    logging.getLogger("ai_integration.autonomous_agent").setLevel(logging.DEBUG)
     try:
         from ai_integration.conversation_history import clear_conversation_history
         clear_conversation_history(TEST_UID)
@@ -278,6 +296,7 @@ async def run_dialog(turns: int = 6, scenario: str = "action"):
 
         # Получаем ответ бота с замером времени
         _called_tools.clear()
+        _parallel_batches.clear()
         t0 = time.perf_counter()
         bot_response = await agent.process_request(
             user_message=user_msg,
@@ -285,8 +304,13 @@ async def run_dialog(turns: int = 6, scenario: str = "action"):
             subscription_tier="PREMIUM",
         )
         elapsed = time.perf_counter() - t0
+
+        _tools_display = list(_called_tools)
+        if _parallel_batches:
+            for pb in _parallel_batches:
+                _tools_display.append(f"{C.BOLD}[{pb}]{C.RESET}")
         print_turn(turn, "bot", bot_response or "(пустой ответ)",
-                   elapsed=elapsed, tools=list(_called_tools))
+                   elapsed=elapsed, tools=_tools_display)
 
         # Проверяем завершение
         if "спасибо, всё понял" in (user_msg + bot_response).lower():
@@ -305,7 +329,7 @@ async def run_dialog(turns: int = 6, scenario: str = "action"):
 
     # Восстанавливаем оригинальный execute_actions
     ag_mod.HybridAutonomousAgent.execute_actions = _orig_execute
-
+    logging.getLogger("ai_integration.autonomous_agent").removeHandler(_log_handler)
     # Чистим
     if with_script:
         deactivate_agent()
@@ -319,7 +343,7 @@ def main():
     p = argparse.ArgumentParser(description="Живой AI-диалог для тестирования бота")
     p.add_argument("--turns", type=int, default=6, help="Количество ходов (default: 6)")
     p.add_argument("--scenario", choices=list(SCENARIOS.keys()), default="action",
-                   help="Сценарий диалога")
+                   help="Сценарий диалога (action/chat/multi)")
     args = p.parse_args()
     asyncio.run(run_dialog(turns=args.turns, scenario=args.scenario))
 
