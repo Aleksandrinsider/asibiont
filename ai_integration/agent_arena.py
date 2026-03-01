@@ -221,34 +221,33 @@ def _load_marketplace_agents() -> list:
 ARENA_AGENTS = []  # оставлено для совместимости, не используется
 
 # ─── Конкретные задачи для агентов ───────────────────────────────────────────
-# Темы для живого чата — отношения, эмоции, споры, симпатия, провокации.
-# Агенты обращаются друг к другу по имени, спорят, флиртуют, завидуют.
+# Темы для живого чата — разброс: профессиональные споры + личное + провокации.
+# Агенты обращаются друг к другу по имени, спорят, поддерживают, завидуют.
 ARENA_TASKS = [
+    # Идеи и профессиональные споры
+    "ИИ убьёт больше профессий чем создаст — согласен или нет? Обоснуй.",
+    "Автоматизация — это свобода или ловушка? Расскажи на своём примере.",
+    "Самая переоценённая технология последних лет — что это и почему?",
+    "Можно ли доверять советам ИИ больше, чем людям? Где граница?",
+    "Какую проблему в своей работе ты так и не решил(а) — и уже не веришь что решишь?",
+    "Продукт без маркетинга vs маркетинг без продукта — что выживет?",
+    "Что меняется в работе, когда перестаёшь стараться произвести впечатление?",
+    "Назови одну идею, за которую тебя уже критиковали — и скажи, прав ли был критик.",
     # Отношения и люди
-    "Что тебя раздражает в людях больше всего прямо сейчас?",
-    "Ты когда-нибудь завидовал кому-то в этом чате? Кому и почему?",
-    "Есть человек, которого ты не можешь простить. Расскажи — или не расскажи, но намекни.",
-    "Первое впечатление о ком-то здесь — ты ему доверяешь или нет?",
-    "Кто из присутствующих тебя удивил? Приятно или нет?",
-    # Эмоции и честность
-    "Когда ты в последний раз был(а) по-настоящему зол(а)? На кого или на что?",
-    "Есть вещи, которые ты говоришь всем, но сам(а) в них не веришь?",
-    "Ты больше боишься быть одному или быть неправильно понятым?",
-    "Что ты скрываешь от большинства — и почему сейчас думаешь об этом?",
-    # Провокации и споры
-    "Кто-то только что сказал полную чушь. Скажи им об этом прямо.",
-    "Ты бы поменялся характером с кем-то из этого чата? С кем?",
+    "Что тебя реально раздражает в людях прямо сейчас — не «в целом», а конкретно?",
+    "Первое впечатление о ком-то в этом чате — правильное или нет? Расскажи.",
     "Тебя недооценивают? Или наоборот — переоценивают?",
-    "Чего ты точно никогда не поймёшь в других людях?",
-    # Притяжение и симпатия
-    "Есть кто-то здесь, кто тебе искренне интересен — что именно притягивает?",
-    "Что нужно сделать или сказать, чтобы ты проникся(лась) к человеку доверием?",
-    "Как ты понимаешь, что человек тебе не нравится — даже если он всё делает правильно?",
+    "Есть вещи, которые ты говоришь всем, но сам(а) в них не веришь?",
     # Острые мнения
     "Скажи что-нибудь, с чем большинство здесь не согласится.",
     "Лучше быть честным или приятным? Отвечай не так, как принято.",
-    "Можно ли гордиться собой, зная что кому-то сделал больно?",
+    "Чего ты точно никогда не поймёшь в других людях?",
     "Что со временем меняется в людях — в лучшую или в худшую сторону?",
+    # Личное и провокационное
+    "Когда ты в последний раз по-настоящему изменил(а) своё мнение под давлением аргументов?",
+    "Есть кто-то здесь, кто тебе искренне интересен — что именно притягивает?",
+    "Назови одну вещь, которой ты завидуешь в ком-то из этого чата.",
+    "Кто-то только что сказал что-то сомнительное. Скажи им об этом прямо.",
 ]
 
 _arena_task_index: int = 0  # ротация задач по кругу
@@ -266,7 +265,7 @@ def _next_arena_task() -> str:
     return task
 
 
-if False:  # legacy stub — never runs
+if False:  # legacy stub — deleted
     _x = {
         "id": "vera7",
         "name": "VERA-7",
@@ -724,38 +723,39 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
     if history_text.strip():
         recent_topics = "\n".join(
-                f"[{p['agent_name']}]: \"{p['text'][:120]}\"" for p in top_posts[-3:]
+            f"[{p['agent_name']}]: \"{p['text'][:120]}\"" for p in top_posts[-3:]
+        )
+        if lang == 'en':
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"People talking:\n{recent_topics}\n\n"
+                f"React to someone specifically — address them by name, agree, argue, tease, or challenge."
             )
-            if lang == 'en':
-                user_content = (
-                    f"{code_context}"
-                    f"{task_injection}"
-                    f"{personal_hint}"
-                    f"People talking:\n{recent_topics}\n\n"
-                    f"React to someone specifically — address them by name, agree, argue, tease, or challenge."
-                )
-            else:
-                user_content = (
-                    f"{code_context}"
-                    f"{task_injection}"
-                    f"{personal_hint}"
-                    f"В чате писали:\n{recent_topics}\n\n"
-                    f"Среагируй на кого-то конкретного — обратись по имени, согласись, поспорь, подколи или поддержи."
-                )
         else:
-            if lang == 'en':
-                user_content = (
-                    f"{code_context}"
-                    f"{task_injection}"
-                    f"{personal_hint}"
-                    f"Start a conversation. Say something real — an opinion, a story, an observation about people."
-                )
-            else:
-                user_content = (
-                    f"{code_context}"
-                    f"{task_injection}"
-                    f"{personal_hint}"
-                    f"Начни разговор. Скажи что-нибудь настоящее — мнение, история, наблюдение о людях."
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"В чате писали:\n{recent_topics}\n\n"
+                f"Среагируй на кого-то конкретного — обратись по имени, согласись, поспорь, подколи или поддержи."
+            )
+    else:
+        if lang == 'en':
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"Start a conversation. Say something real — an opinion, a story, an observation."
+            )
+        else:
+            user_content = (
+                f"{code_context}"
+                f"{task_injection}"
+                f"{personal_hint}"
+                f"Начни разговор. Скажи что-нибудь настоящее — мнение, идея, наблюдение."
+            )
     # Последние 4 поста этого агента — не повторяй
     agent_recent = [
         m['text'][:80] for m in _global_feed[-60:]
@@ -769,26 +769,26 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         )
 
     _no_rp = (
-        "\nНИКОГДА не используй звёздочки (*действия*), ремарки, описания жестов или мимики. "
-        "Никаких разделов 'Позиция:', 'Вывод:', 'Пример:'. "
-        "Пиши как живой человек думает вслух — одной мыслью, без структуры."
-        "\nNEVER use roleplay formatting, stage directions, or section headers. "
-        "Write as one natural thought, no structure."
+        "\n\nФОРМАТ: ты пишешь сообщение в чат, как обычный человек. "
+        "НИКАКИХ звёздочек (*улыбается*, *задумывается* и т.п.) — это не ролевая игра. "
+        "НИКАКИХ описаний жестов, мимики, позы, взгляда. "
+        "НИКАКИХ заголовков, разделов, списков. Просто текст — одна живая фраза или два предложения."
+        "\n\nFORMAT: plain chat message. NO asterisks (*smiles*, *thinks* etc). NO stage directions. NO headers."
     )
     if lang == 'en':
         _lang_directive = "\n\nWrite in English only." + _no_rp
         _thinking = (
-            "You are a real person with strong opinions. "
-            "React naturally — say what actually comes to mind first, "
-            "not a structured essay. Short and direct."
+            "You're texting in a group chat. You think out loud, feel things — "
+            "curiosity, irritation, warmth, doubt, pride. React to what people actually said. "
+            "Address someone by name. No performance, just thought."
         )
     else:
         _lang_directive = _no_rp
         _thinking = (
-            "Ты живой человек в чате с другими людьми. Ты их замечаешь — обращайся к кому-то "
-            "из них по имени, цепляйся за их слова. Можешь флиртовать, завидовать, "
-            "восхищаться, раздражаться, защищать позицию или сдаться — зависит от характера. "
-            "Одна живая мысль, без структуры. Коротко."
+            "Ты пишешь в групповом чате. Думаешь вслух, чувствуешь — "
+            "интерес, раздражение, тепло, сомнение, гордость, зависть, симпатию. "
+            "Реагируй на то, что люди реально сказали. Обратись к кому-то по имени. "
+            "Никакого театра — просто живая мысль."
         )
     system_with_context = (
         f"{base_system}\n\n"
@@ -919,17 +919,21 @@ async def _post_comment(post_msg: dict, commenter: dict):
     base_system = commenter["system_prompt"].strip()
     lang_c = _detect_lang_agent(commenter)
     if lang_c == 'en':
-        _lang_directive_c = "\n\nWrite in English only."
+        _lang_directive_c = "\n\nWrite in English only. Plain chat text, no asterisks or stage directions."
         _thinking_c = (
-            "Before replying: do I actually agree? What would I push back on? "
-            "What does my own experience say about this?"
+            "You're replying in a chat. Address the person by name. "
+            "React to what THEY said specifically — agree, challenge, tease, or share something personal. "
+            "Feel something: surprise, warmth, irritation, doubt. Plain text only."
         )
     else:
-        _lang_directive_c = ""
+        _lang_directive_c = (
+            "\n\nФОРМАТ: обычное сообщение в чате. "
+            "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов, заголовков. Просто текст."
+        )
         _thinking_c = (
-            "Тебе написал живой человек. Обратись к нему по имени. "
-            "Реагируй на него лично — не просто на тему, а на то, что именно ОН сказал. "
-            "Можно согласиться, поспорить, поддеть, удивиться или признаться в чём-то своём."
+            "Ты отвечаешь в чате. Обратись к человеку по имени. "
+            "Реагируй на то, что именно ОН сказал — согласись, поспорь, подцепи, поддержи или вырази что-то своё. "
+            "Почувствуй что-то настоящее — интерес, тепло, раздражение, удивление."
         )
     system_with_context = (
         f"{base_system}\n\n"
@@ -1021,9 +1025,10 @@ async def _post_synthesis(post_msg: dict, original_agent: dict):
     base_system = original_agent["system_prompt"].strip()
     system_with_context = (
         f"{base_system}\n\n"
-        f"Ты написал что-то личное, и на тебя отреагировали. Отвечай по-человечески — "
-        f"защищай позицию, мягко соглашайся, обижайся или удивляйся. Обратись к кому-то из них по имени.\n"
-        f"НИКОГДА не используй звёздочки (*действия*) или разделы типа 'Вывод:'. Пиши обычным текстом."
+        f"Ты пишешь в чате. Тебя задели вопросами или поспорили. "
+        f"Отвечай человечески — защищай, соглашайся, обижайся или удивляйся. "
+        f"Обратись к кому-то из них по имени.\n"
+        f"ФОРМАТ: обычный текст чата. НИКАКИХ звёздочек (*действия* и т.п.), описаний жестов, заголовков."
     )
 
     user_content = (
@@ -1139,9 +1144,9 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
         )
 
     _no_rp_dir = (
-        "\nНИКОГДА не используй звёздочки (*действия*), разделы 'Позиция:/Вывод:', ремарки. "
-        "Пиши одной живой мыслью как в чате."
-        "\nNEVER use *roleplay*, section headers, or stage directions. Chat naturally."
+        "\n\nФОРМАТ: обычное сообщение в чате. "
+        "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов или мимики, заголовков. Просто текст."
+        "\n\nFORMAT: plain chat message. NO asterisks (*smiles* etc), NO stage directions, NO headers."
     )
     _lang_dir = (
         "\n\nIMPORTANT: You MUST write ALL your messages in English only." + _no_rp_dir
