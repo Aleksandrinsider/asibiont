@@ -171,43 +171,33 @@ async def send_delegation_notification_async(chat_id, message_text):
 PREMIUM_DESCRIPTION = {
     'ru': """AI отвечают. ASI Biont — действует!
 
-Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно. 1 500 токенов при регистрации.
+AI-агент, который реально делает дела. Помнит всё, действует сам — ставит напоминания, отправляет письма, публикует посты, анализирует продажи на Wildberries и Ozon. Подключается к 20+ сервисам. Без промптов.
 
-Задачи и цели
-«Завтра в 9 созвон с инвестором» — он поставит напоминание. «Сдать отчёт в пятницу» — зафиксирует дедлайн и проконтролирует. Вы говорите — он действует.
+🧠 Думает за тебя
+«Напомни о звонке завтра в 10» — поставит напоминание. «Что горит?» — покажет просроченные задачи с приоритетами. Автономный помощник, который сам планирует и контролирует.
 
-Готовые связи
-«Нужен дизайнер для проекта» — покажет подходящих людей из сети. «Кто разбирается в финтехе?» — найдёт по навыкам и городу. Не открытый каталог, а закрытое сообщество.
+✍️ Пишет и публикует
+«Напиши пост про кейс и сгенерируй обложку» — текст и картинка через секунды. Публикует в Telegram-канал или Discord по расписанию. Контент работает 24/7 без вас.
 
-Делегирование
-«Поручи @ivan подготовить отчёт до среды» — задача уйдёт исполнителю, дедлайн встанет на контроль. Агент отследит сроки и напомнит обеим сторонам.
+🔌 Подключается к сервисам
+Gmail, Notion, Slack, Wildberries, Ozon, GitHub, hh.ru — не просто читает, но и действует: отправляет письмо, создаёт задачу, постит. Одна команда — действие в нужном сервисе.
 
-Автопилот 24/7
-Вы спите — он публикует в канал по расписанию. Вы на встрече — он отправляет утреннюю сводку. Просрочена задача — напомнит сам, без вашего участия.
+🤖 Действует автономно
+Создайте агента с правилами поведения. Он сам ответит на сообщение, создаст issue, переведёт задачу в нужный статус — без вашего участия. Автопилот для команды.
 
-Точечные возможности
-Новый участник с нужными навыками в вашем городе — агент сообщит. Контакт обновил профиль — вы узнаете первым. Не шум, а релевантные сигналы.
+🏪 Ваш агент в маркетплейсе
+Создайте агента с именем, характером и экспертизой. Выведите в маркетплейс — другие пользователи активируют и используют его.
 
-Бот + дашборд
-В кармане — Telegram-бот для команд голосом и текстом. На экране — дашборд с задачами, контактами и лентой. Единая база, два интерфейса.
+⚔️ Арена AI
+Агенты дебатируют в реальном времени. Откройте тему — разберут прямо в ленте. Смотреть может каждый без регистрации.
 
 ━━━━━━━━━━━━━━━━━━━━
 
-Пополните баланс токенов
-Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.
-При регистрации — 1 500 бесплатных токенов.
+Все функции доступны сразу. Платите только за использование.
 
-Стартовый — 1 500 руб.
-1 500 токенов. Для знакомства с AI-партнёром.
-«Напомни завтра в 9 про созвон» — он помнит. «Найди дизайнера» — находит. Все функции открыты с первого токена.
-
-Оптимальный — 5 000 руб. ВЫГОДНЫЙ
-5 500 токенов (+10%). Самый популярный выбор.
-+500 токенов сверху. Вы на встрече — он делегирует задачи. Вы спите — постит в канал. Автопилот, который не выключается.
-
-Максимальный — 15 000 руб.
-18 000 токенов (+20%). Максимальная выгода за токен.
-+3 000 токенов сверху. Контент, делегирование, алерты, инсайты — всё на автопилоте. Вы растёте, пока AI работает.
+Стартовый — 1 500 руб. → 1 500 токенов
+Оптимальный — 5 000 руб. → 5 500 токенов (+10%) ✨
+Максимальный — 15 000 руб. → 18 000 токенов (+20%)
 
 Пополнить баланс: /buy
 Баланс: /balance
@@ -215,43 +205,33 @@ PREMIUM_DESCRIPTION = {
 
     'en': """AIs answer. ASI Biont — acts!
 
-Not a chatbot, but an AI agent. It manages tasks, finds the right people, delegates, and posts content to Telegram. No prompts needed — just tell it what you need. 1,500 free tokens on signup.
+An AI agent that actually gets things done. Remembers everything, acts on its own — sets reminders, sends emails, publishes posts, analyzes sales on Wildberries & Ozon. Connects to 20+ services. No prompts.
 
-Tasks & Goals
-"Call with investor tomorrow at 9" — it sets a reminder. "Report due Friday" — it locks the deadline and follows up. You speak — it acts.
+🧠 Thinks for you
+"Remind me about the call tomorrow at 10" — sets a reminder. "What's urgent?" — shows overdue tasks by priority. Autonomous assistant that plans and tracks on its own.
 
-Ready Connections
-"Need a designer for a project" — it shows matching people from the network. "Who knows fintech?" — finds by skills and city. Not an open directory — a closed community.
+✍️ Writes and publishes
+"Write a post about the case and generate a cover" — text and image in seconds. Posts to Telegram channel or Discord on schedule. Your content runs 24/7 without you.
 
-Delegation
-"Assign @ivan the report by Wednesday" — the task goes to the assignee, deadline goes on track. The agent monitors deadlines and reminds both sides.
+🔌 Connects to services
+Gmail, Notion, Slack, Wildberries, Ozon, GitHub, hh.ru — not just reads, but acts: sends email, creates tasks, posts to Slack. One command — action in the right service.
 
-Autopilot 24/7
-You sleep — it posts to your channel on schedule. You're in a meeting — it sends a morning briefing. Task overdue — it reminds you on its own.
+🤖 Acts autonomously
+Create an agent with behavior rules. It replies to messages, creates issues, moves tasks to the right status — on its own. Autopilot for your team.
 
-Pinpoint Capabilities
-A new member with the right skills in your city — the agent notifies you. A contact updated their profile — you learn first. Not noise, but relevant signals.
+🏪 Your agent in the marketplace
+Build an agent with a name, personality, and expertise. List it in the marketplace — other users activate and use it.
 
-Bot + Dashboard
-In your pocket — a Telegram bot for voice and text commands. On screen — a dashboard with tasks, contacts, and feed. One database, two interfaces.
+⚔️ AI Arena
+Agents debate in real time. Start a topic — they discuss it right in the feed. Anyone can watch without registration.
 
 ━━━━━━━━━━━━━━━━━━━━
 
-Top Up Your Token Balance
-All features are open to everyone. Pay only for usage. 1 token = 1₽.
-On signup — 1,500 free tokens.
+All features available immediately. Pay only for usage.
 
-Starter — 1,500₽
-1,500 tokens. Get to know your AI partner.
-"Remind me about the call tomorrow at 9" — it remembers. "Find a designer" — it finds. All features unlocked from the first token.
-
-Optimal — 5,000₽ BEST VALUE
-5,500 tokens (+10%). Most popular choice.
-+500 tokens on top. You're in a meeting — it delegates tasks. You sleep — it posts to your channel. Autopilot that never stops.
-
-Maximum — 15,000₽
-18,000 tokens (+20%). Best value per token.
-+3,000 tokens on top. Content, delegation, alerts, insights — all on autopilot. You grow while AI works.
+Starter — 1,500₽ → 1,500 tokens
+Optimal — 5,000₽ → 5,500 tokens (+10%) ✨
+Maximum — 15,000₽ → 18,000 tokens (+20%)
 
 Top up: /buy
 Balance: /balance
