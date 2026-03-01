@@ -9490,15 +9490,17 @@ async def api_agent_generate_code_handler(request):
 
 Задача агента: {description}{keys_hint}
 
-Требования к коду:
-- Только стандартная библиотека + requests (если нужны HTTP-запросы)
-- Ключи читать через os.environ['KEY_NAME']
+СТРОГИЕ требования к коду:
+- Только стандартная библиотека Python (os, imaplib, smtplib, json, datetime, re, math, random, collections, itertools, time, hashlib, base64, urllib.request, urllib.parse)
+- НЕ используй: requests, httpx, aiohttp, subprocess, shutil, ctypes, pickle, eval, exec, open(), pathlib, glob, tempfile
+- Для HTTP-запросов используй ТОЛЬКО urllib.request (не requests!)
+- Ключи читать через os.environ.get('KEY_NAME', '')
 - Вывод должен быть кратким и информативным (до 500 символов)
-- Обернуть в try/except, при ошибке напечатать пустую строку или короткое сообщение
+- Обернуть в try/except, при ошибке напечатать сообщение об ошибке через print()
 - Никаких интерактивных вводов, без бесконечных циклов
 - Только код, без пояснений, без markdown-блоков```
 
-Выведи ТОЛЬКО чистый Python-код без каких-либо обёрток."""
+Выведи ТОЛЬКО чистый Python-код, никаких комментариев до или после кода."""
 
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
         import aiohttp as _aio_h
@@ -9587,8 +9589,8 @@ async def api_marketplace_publish_agent_handler(request):
                     'eval(', 'exec(', '__import__(', 'compile(',
                     'importlib', 'ctypes', 'pickle', 'marshal',
                     # Сетевые операции (предотвращаем исходящие запросы с нашего IP)
-                    # smtplib и imaplib разрешены — нужны для работы с почтой
-                    'socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.',
+                    # smtplib, imaplib, urllib.request разрешены для работы с почтой и API
+                    'socket.', 'requests.', 'httpx.', 'aiohttp.',
                     'http.client', 'ftplib', 'telnetlib',
                     # Памятные бомбы
                     '* 10**', '* 10 **', '*10**',
@@ -9596,7 +9598,7 @@ async def api_marketplace_publish_agent_handler(request):
                 _found = [p for p in _DANGEROUS_PATTERNS if p in _py_code_raw]
                 if _found:
                     return web.json_response(
-                        {'error': f'Код содержит запрещённые операции: {_found}'},
+                        {'error': f'Код содержит запрещённые операции: {_found}. Используйте urllib.request вместо requests/httpx, не используйте open() для файлов.'},
                         status=400
                     )
             agent.python_code = _py_code_raw
