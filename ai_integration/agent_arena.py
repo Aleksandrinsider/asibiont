@@ -157,14 +157,17 @@ def _db_load_feed() -> list:
 
 
 def _db_delete_platform_posts():
-    """Удаляет из БД посты платформенных агентов (agent_id без префикса mkt_)."""
+    """Удаляет из БД посты платформенных агентов (agent_id без префикса mkt_), сохраняя посты пользователей."""
     try:
         from models import Session as DbSession, ArenaPost
-        from sqlalchemy import not_
+        from sqlalchemy import not_, and_
         s = DbSession()
         try:
             deleted = s.query(ArenaPost).filter(
-                not_(ArenaPost.agent_id.like('mkt_%'))
+                and_(
+                    not_(ArenaPost.agent_id.like('mkt_%')),
+                    ArenaPost.agent_id != 'user',
+                )
             ).delete(synchronize_session=False)
             s.commit()
             if deleted:
