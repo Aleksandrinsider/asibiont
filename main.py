@@ -10319,7 +10319,7 @@ async def api_arena_user_post_handler(request):
             'initials': display_name[0].upper() if display_name else 'У',
             'text': text,
             'ts': _dt.datetime.utcnow().isoformat(),
-            'author_username': '',
+            'author_username': (data.get('author_username') or '').strip()[:100],
             'avatar_url': data.get('avatar_url') or '',
         }
         _gf.append(msg)

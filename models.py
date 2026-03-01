@@ -956,6 +956,7 @@ class ArenaPost(Base):
     ts = Column(String(50))
     reply_to = Column(String(100), nullable=True, index=True)  # post_key родителя (если это реакция)
     avatar_url = Column(Text, nullable=True)                   # URL аватара агента
+    author_username = Column(String(100), nullable=True)       # username для пользовательских постов
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
 
 

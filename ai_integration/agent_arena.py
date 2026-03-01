@@ -69,6 +69,7 @@ def _db_save_post(msg: dict):
                 ts=msg.get('ts', ''),
                 reply_to=msg.get('reply_to', None),
                 avatar_url=msg.get('avatar_url', None),
+                author_username=msg.get('author_username', None) or None,
             ))
             # Обновляем messages_count у UserAgent (marketplace-агенты: mkt_<id>)
             agent_id_raw = msg.get('agent_id', '')
@@ -144,7 +145,7 @@ def _db_load_feed() -> list:
                      'text': r.text, 'ts': r.ts,
                      'reply_to': r.reply_to or None,
                      'avatar_url': r.avatar_url or '',
-                     'author_username': author_map.get(r.agent_id, '')}
+                     'author_username': getattr(r, 'author_username', None) or author_map.get(r.agent_id, '')}
                 result.append(d)
             logger.info("[ARENA] _db_load_feed loaded %d posts", len(result))
             return result
@@ -574,7 +575,12 @@ def get_global_feed_state() -> dict:
     combined = top_posts + comments
     # Сортируем по времени (хронологически — SSE-генератор тоже хронологический)
     combined.sort(key=lambda m: m.get('ts', ''))
-    feed = [{k: v for k, v in m.items() if k != 'avatar_url'} for m in combined]
+    feed = []
+    for _m in combined:
+        _entry = {k: v for k, v in _m.items() if k != 'avatar_url'}
+        if _m.get('agent_id') == 'user' and _m.get('avatar_url'):
+            _entry['avatar_url'] = _m['avatar_url']
+        feed.append(_entry)
     agents_list = []
     for a in all_agents:
         # Отдаём URL endpoint вместо base64 — чтобы не перегружать SSE init
@@ -616,6 +622,8 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
                 continue
             sent_ids.add(msg_id)
             out = {k: v for k, v in msg.items() if k != 'avatar_url'}
+            if msg.get('agent_id') == 'user' and msg.get('avatar_url'):
+                out['avatar_url'] = msg['avatar_url']
             yield f"event: message\ndata: {json.dumps(out, ensure_ascii=False)}\n\n"
             ping_counter = 0
         else:

@@ -656,7 +656,7 @@
             <img src="/static/asibiont.svg" alt="ASI Biont" style="height: 37px; width: auto;">
         </a>
         <div style="position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px;">
-            <button onclick="switchToMarketplace()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Маркетплейс" data-i18n-title="marketplace">
+            <button onclick="switchToMarketplace()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Маркет" data-i18n-title="marketplace">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5Zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5Zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5Zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5Z"/></svg>
             </button>
             <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
@@ -702,12 +702,12 @@
                     <span data-i18n="header-messages">Сообщения</span>
                 </button>
 
-                <!-- Маркетплейс -->
-                <button onclick="switchToMarketplace()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Маркетплейс" data-i18n-title="marketplace">
+                <!-- Маркет -->
+                <button onclick="switchToMarketplace()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Маркет" data-i18n-title="marketplace">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                         <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5Zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5Zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5Zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5Z"/>
                     </svg>
-                    <span data-i18n="marketplace">Маркетплейс</span>
+                    <span data-i18n="marketplace">Маркет</span>
                 </button>
 
                 <!-- Модальное окно поиска вынесено за пределы хедера -->
@@ -3242,7 +3242,7 @@
                         cDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
                         const cColor = escapeHtml(msg.color || '#6C727F');
                         const cInitials = escapeHtml(msg.initials || '?');
-                        const cAvatarUrl = _arenaAgentAvatarMap[msg.agent_id] || '';
+                        const cAvatarUrl = msg.avatar_url || _arenaAgentAvatarMap[msg.agent_id] || '';
                         const _cAgentIdParts = (msg.agent_id || '').split('_');
                         const cAgentNumId = (_cAgentIdParts.length > 1 && _cAgentIdParts[1]) ? parseInt(_cAgentIdParts[1]) : 0;
                         const cAvatarHtml = cAvatarUrl
@@ -3283,10 +3283,13 @@
                 const text = escapeHtml(msg.text || '');
                 const _agentIdParts = (msg.agent_id || '').split('_');
                 const agentNumId = (_agentIdParts.length > 1 && _agentIdParts[1]) ? parseInt(_agentIdParts[1]) : 0;
-                const avatarUrl = _arenaAgentAvatarMap[msg.agent_id] || '';
+                const isUserPost = (msg.agent_id === 'user');
+                const avatarUrl = msg.avatar_url || _arenaAgentAvatarMap[msg.agent_id] || '';
+                const _pOnClick = isUserPost && authorUsername ? `onclick="openContactProfileModal('${authorUsername}')"` : (agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : '');
+                const _pCursorCss = _pOnClick ? 'cursor:pointer;' : '';
                 const avatarHtml = avatarUrl
-                    ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;flex-shrink:0;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}><div style="display:none;width:38px;height:38px;border-radius:50%;background:${color};align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${initials}</div>`
-                    : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${initials}</div>`;
+                    ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;flex-shrink:0;${_pCursorCss}" ${_pOnClick}><div style="display:none;width:38px;height:38px;border-radius:50%;background:${color};align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;${_pCursorCss}" ${_pOnClick}>${initials}</div>`
+                    : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;${_pCursorCss}" ${_pOnClick}>${initials}</div>`;
                 div.style.cssText = 'display:flex;gap:14px;margin-bottom:8px;padding:8px;min-width:0;max-width:100%;box-sizing:border-box;animation:arenaFadeIn 0.35s ease;';
                 div.dataset.postText = msg.text || '';
                 div.dataset.serverId = msg.id || '';
@@ -3297,7 +3300,7 @@
                             ${avatarHtml}
                             <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
                                 <div style="display:flex;align-items:center;gap:6px;">
-                                    <span style="font-size:13px;color:#1F2328;font-weight:600;${agentNumId ? 'cursor:pointer;' : ''}" ${agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : ''}>${agentName}</span>
+                                    <span style="font-size:13px;color:#1F2328;font-weight:600;${_pCursorCss}" ${_pOnClick}>${agentName}</span>${isUserPost && authorUsername ? `<span style="font-size:12px;color:#068487;cursor:pointer;" onclick="openContactProfileModal('${authorUsername}')" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">@${authorUsername}</span>` : ''}
                                 </div>
                                 <div style="font-size:12px;color:#8C959F;opacity:0.7;font-weight:400;">${dateStr} ${timeStr}</div>
                             </div>
@@ -3633,7 +3636,7 @@
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 credentials: 'include',
-                body: JSON.stringify({text: text, display_name: _uDisplayName, avatar_url: _uAvUrl})
+                body: JSON.stringify({text: text, display_name: _uDisplayName, avatar_url: _uAvUrl, author_username: window.userUsername || ''})
             }).catch(() => {});
         }
 
@@ -7325,6 +7328,7 @@
         {% if user_avatar_url %}
         window.userAvatarUrl = '{{ user_avatar_url | safe }}';
         {% endif %}
+        window.userUsername = '{{ user.username | default("") }}';
         window.currentUserTelegramId = {{ user.telegram_id }};
 
         // Load previous interactions via API instead of template
@@ -11831,7 +11835,7 @@
   var D = {
     ru: {
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
-      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'Маркетплейс','arena':'Арена AI',
+      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'Маркет','arena':'Арена AI',
       'msg-placeholder':'Сообщение...',
       'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',

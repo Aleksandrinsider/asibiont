@@ -475,6 +475,14 @@ def _migrate_arena(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] avatar_url add skipped: {e}")
+        if 'author_username' not in cols:
+            try:
+                session.execute(text("ALTER TABLE arena_posts ADD COLUMN author_username VARCHAR(100)"))
+                session.commit()
+                logger.info("[MIGRATION] Added arena_posts.author_username")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] author_username add skipped: {e}")
 
 
 def run_migrations():
