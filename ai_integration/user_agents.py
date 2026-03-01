@@ -68,6 +68,9 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
             elif 'YANDEX_USER' in k:       service_label = 'Яндекс Почта'
             elif 'MAIL_USER' in k:         service_label = 'Mail.ru'
             elif 'API_URL' in k:           service_label = 'HTTP API'
+            elif 'BITRIX24_WEBHOOK' in k:   service_label = 'Битрикс24'
+            elif 'AMO_SUBDOMAIN' in k or 'AMO_ACCESS_TOKEN' in k: service_label = 'AmoCRM'
+            elif 'HUBSPOT_API_KEY' in k:    service_label = 'HubSpot'
         return {
             'id': agent.id,
             'name': agent.name,

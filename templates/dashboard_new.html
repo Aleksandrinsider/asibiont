@@ -3781,6 +3781,140 @@ try:
                 print('→ ' + to_list + ' | ' + subject + ' | ' + status)
 except Exception as e:
     print('Ошибка Resend: ' + str(e))`
+            },
+            bitrix24: {
+                name: 'Битрикс24 (CRM)',
+                fields: [
+                    {k:'BITRIX24_WEBHOOK', label:'Webhook URL (с токеном)', ph:'https://your.bitrix24.ru/rest/1/xxxxxxxxxxxxxxxx/', t:'text'}
+                ],
+                hint: 'Битрикс24 → Разработчикам → Входящий вебхук → Скопировать ссылку. Нужны права: CRM.',
+                code: `import urllib.request, json, os
+WEBHOOK = os.environ.get('BITRIX24_WEBHOOK', '').rstrip('/')
+ACTION = os.environ.get('AGENT_ACTION', '')
+def b24(method, data=None):
+    url = WEBHOOK + '/' + method + '.json'
+    body = json.dumps(data or {}).encode()
+    req = urllib.request.Request(url, data=body)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+try:
+    if ACTION == 'create_lead':
+        title = os.environ.get('AGENT_PARAM_TITLE', 'Новый лид')
+        name = os.environ.get('AGENT_PARAM_NAME', '')
+        phone = os.environ.get('AGENT_PARAM_PHONE', '')
+        fields = {'TITLE': title}
+        if name: fields['NAME'] = name
+        if phone: fields['PHONE'] = [{'VALUE': phone, 'VALUE_TYPE': 'WORK'}]
+        result = b24('crm.lead.add', {'fields': fields})
+        if result.get('result'):
+            print('OK: лид создан, ID=' + str(result['result']))
+        else:
+            print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+    else:
+        result = b24('crm.lead.list', {'order': {'DATE_CREATE': 'DESC'}, 'select': ['ID','TITLE','NAME','STATUS_ID','DATE_CREATE'], 'start': 0})
+        leads = result.get('result', [])
+        if not leads:
+            print('Битрикс24: лидов не найдено')
+        else:
+            print('Последние ' + str(len(leads)) + ' лидов:')
+            for l in leads[:10]:
+                print('ID=' + str(l.get('ID','')) + ' | ' + l.get('TITLE','') + ' | ' + l.get('STATUS_ID','') + ' | ' + l.get('DATE_CREATE','')[:10])
+except Exception as e:
+    print('Ошибка Битрикс24: ' + str(e))`
+            },
+            amocrm: {
+                name: 'AmoCRM',
+                fields: [
+                    {k:'AMO_SUBDOMAIN', label:'Субдомен (часть до .amocrm.ru)', ph:'mycompany', t:'text'},
+                    {k:'AMO_ACCESS_TOKEN', label:'Access Token (долгосрочный)', ph:'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...', t:'text'}
+                ],
+                hint: 'AmoCRM → Настройки → Интеграции → создать интеграцию → Ключи и токены → скопировать долгосрочный токен.',
+                code: `import urllib.request, json, os
+SUBDOMAIN = os.environ.get('AMO_SUBDOMAIN', '')
+TOKEN = os.environ.get('AMO_ACCESS_TOKEN', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+BASE = 'https://' + SUBDOMAIN + '.amocrm.ru/api/v4'
+def amo(path, data=None, method='GET'):
+    url = BASE + path
+    body = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=body, method=method)
+    req.add_header('Authorization', 'Bearer ' + TOKEN)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+try:
+    if ACTION == 'create_lead':
+        name = os.environ.get('AGENT_PARAM_NAME', 'Новая сделка')
+        price = os.environ.get('AGENT_PARAM_PRICE', '')
+        lead = {'name': name}
+        if price:
+            try: lead['price'] = int(price)
+            except: pass
+        result = amo('/leads', data=[lead], method='POST')
+        items = result.get('_embedded', {}).get('leads', [])
+        if items:
+            print('OK: сделка создана, ID=' + str(items[0]['id']))
+        else:
+            print('Ошибка: ' + json.dumps(result))
+    else:
+        result = amo('/leads?order[created_at]=desc&limit=10')
+        leads = result.get('_embedded', {}).get('leads', [])
+        if not leads:
+            print('AmoCRM: сделок не найдено')
+        else:
+            print('Последние ' + str(len(leads)) + ' сделок:')
+            for l in leads:
+                print('ID=' + str(l.get('id','')) + ' | ' + l.get('name','') + ' | ' + str(l.get('price',0)) + ' руб. | статус=' + str(l.get('status_id','')))
+except Exception as e:
+    print('Ошибка AmoCRM: ' + str(e))`
+            },
+            hubspot: {
+                name: 'HubSpot',
+                fields: [
+                    {k:'HUBSPOT_API_KEY', label:'Private App Token', ph:'pat-eu1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'HubSpot → Settings → Integrations → Private Apps → Create → All scopes: crm.objects.contacts + crm.objects.deals → Generate token.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('HUBSPOT_API_KEY', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+def hs(path, data=None, method='GET'):
+    url = 'https://api.hubapi.com' + path
+    body = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=body, method=method)
+    req.add_header('Authorization', 'Bearer ' + TOKEN)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+try:
+    if ACTION == 'create_contact':
+        email = os.environ.get('AGENT_PARAM_EMAIL', '')
+        firstname = os.environ.get('AGENT_PARAM_FIRSTNAME', '')
+        lastname = os.environ.get('AGENT_PARAM_LASTNAME', '')
+        if not email:
+            print('Ошибка: не указан email (AGENT_PARAM_EMAIL)')
+        else:
+            props = {'email': email}
+            if firstname: props['firstname'] = firstname
+            if lastname: props['lastname'] = lastname
+            result = hs('/crm/v3/objects/contacts', data={'properties': props}, method='POST')
+            if result.get('id'):
+                print('OK: контакт создан, ID=' + result['id'] + ', email=' + email)
+            else:
+                print('Ошибка: ' + json.dumps(result))
+    else:
+        result = hs('/crm/v3/objects/contacts?limit=10&properties=email,firstname,lastname,lifecyclestage')
+        contacts = result.get('results', [])
+        if not contacts:
+            print('HubSpot: контактов не найдено')
+        else:
+            print('Последние ' + str(len(contacts)) + ' контактов:')
+            for c in contacts:
+                p = c.get('properties', {})
+                name_str = (p.get('firstname','') + ' ' + p.get('lastname','')).strip()
+                print('ID=' + c['id'] + ' | ' + (name_str or '(без имени)') + ' | ' + p.get('email','') + ' | ' + p.get('lifecyclestage',''))
+except Exception as e:
+    print('Ошибка HubSpot: ' + str(e))`
             }
         };
 
@@ -4133,6 +4267,10 @@ except Exception as e:
                             <option value="jira">Jira</option>
                             <option value="calendly">Calendly</option>
                             <option value="http_api">HTTP API</option>
+                            <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">── CRM ──</option>
+                            <option value="bitrix24">Битрикс24 (CRM)</option>
+                            <option value="amocrm">AmoCRM</option>
+                            <option value="hubspot">HubSpot</option>
                         </select>
                         <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>
                         <div id="mpa-svc-hint" style="font-size:11px;color:#6B7280;margin-top:5px;display:none;"></div>
