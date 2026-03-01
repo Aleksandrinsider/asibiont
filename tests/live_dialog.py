@@ -40,7 +40,8 @@ engine = create_engine(f"sqlite:///{_db_path}", connect_args={"check_same_thread
 models.Base.metadata.create_all(engine)
 TestSession = sessionmaker(bind=engine)
 
-def make_session():
+def make_session(**_kwargs):
+    """Принимает любые kwargs (включая user_id) как реальная Session."""
     return TestSession()
 
 import ai_integration.autonomous_agent as ag_mod
@@ -70,9 +71,19 @@ with TestSession() as s:
 
 # ── агент со скриптом (для сценария action) ────────────────────────────────────
 AGENT_SCRIPT = textwrap.dedent("""
-    import os, json
+    import os, json, sys
 
     action = os.environ.get('AGENT_ACTION', '')
+
+    # Без действия — только сообщаем какие действия доступны
+    if not action:
+        print(json.dumps({
+            'status': 'ready',
+            'available_actions': ['send_message', 'create_task'],
+            'note': 'Вызови run_agent_action с нужным action и params для выполнения действия',
+        }, ensure_ascii=False))
+        sys.exit(0)
+
     params = {}
     for k, v in os.environ.items():
         if k.startswith('AGENT_PARAM_'):
