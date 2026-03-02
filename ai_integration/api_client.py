@@ -461,13 +461,13 @@ class ExternalAPIClient:
 
         try:
             try:
-                from ddgs import DDGS
-            except ImportError:
                 from duckduckgo_search import DDGS
+            except ImportError:
+                raise ImportError("duckduckgo-search package not installed")
             import asyncio as _aio
 
             def _sync_search():
-                with DDGS() as ddgs:
+                with DDGS(timeout=10) as ddgs:
                     raw = list(ddgs.text(query, region=region, max_results=num))
                     return [{
                         'title': r.get('title', ''),
@@ -637,14 +637,11 @@ class ExternalAPIClient:
             return cached
 
         try:
-            try:
-                from ddgs import DDGS
-            except ImportError:
-                from duckduckgo_search import DDGS
+            from duckduckgo_search import DDGS
             import asyncio as _aio_n
 
             def _sync_news():
-                with DDGS() as ddgs:
+                with DDGS(timeout=10) as ddgs:
                     raw = list(ddgs.news(topic, max_results=max_results))
                 return [
                     {
