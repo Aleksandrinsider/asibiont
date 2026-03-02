@@ -10263,6 +10263,9 @@ async def api_marketplace_agent_status_handler(request):
             if not agent:
                 return web.json_response({'error': 'Not found'}, status=404)
             agent.status = new_status
+            # "Отправить на арену" = агент становится публичным
+            if new_status == 'active' and agent.is_private:
+                agent.is_private = False
             session_db.commit()
             # Если агент активирован — сразу постим в арену (не ждём следующего цикла)
             if new_status == 'active':
