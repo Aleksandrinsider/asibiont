@@ -6760,7 +6760,7 @@ except Exception as e:
                                     <button onclick="deleteNote(${n.id})" class="delete-btn" title="${t('delete-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>
                                 </div>
                             </div>
-                            <p id="note-content-${n.id}" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${linkify(escapeHtml(n.content))}</p>
+                            <p id="note-content-${n.id}" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${renderNoteContent(n.content)}</p>
                         </div>`;
                     list.appendChild(card);
                 });
@@ -6851,18 +6851,36 @@ except Exception as e:
             if (!msgEl) return;
             const textEl = msgEl.querySelector('.message-text');
             if (!textEl) return;
-            let content = textEl.innerText || '';
-            // Добавляем ссылки на картинки если есть
-            const imgs = textEl.querySelectorAll('img');
-            imgs.forEach(img => {
+            // Собираем текст и заменяем img-теги на маркеры [IMAGE:URL]
+            // Клонируем, чтобы не ломать отображение
+            const clone = textEl.cloneNode(true);
+            clone.querySelectorAll('img').forEach(img => {
                 const src = img.src || img.dataset.src || '';
                 if (src && !src.startsWith('data:')) {
-                    content += '\n[' + t('image', 'Изображение') + ': ' + src + ']';
-                } else if (src && src.startsWith('data:')) {
-                    content += '\n[Встроенное изображение]';
+                    const marker = document.createTextNode('\n[IMAGE:' + src + ']\n');
+                    img.replaceWith(marker);
+                } else {
+                    img.remove();
                 }
             });
+            // Нормализуем пробелы: убираем тройные+ переносы строк
+            let content = (clone.innerText || clone.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
             await saveToNotes(content);
+        }
+
+        function renderNoteContent(raw) {
+            // Разбиваем по [IMAGE:URL], чётные части — текст, нечётные — URL картинки
+            const parts = raw.split(/\[IMAGE:(https?:\/\/[^\]]+)\]/g);
+            let html = '';
+            for (let i = 0; i < parts.length; i++) {
+                if (i % 2 === 0) {
+                    html += linkify(escapeHtml(parts[i]));
+                } else {
+                    const safeUrl = escapeHtml(parts[i]);
+                    html += '<br><img src="' + safeUrl + '" style="max-width:100%;border-radius:6px;margin:4px 0;display:block;" alt=""><br>';
+                }
+            }
+            return html;
         }
 
         async function deleteNote(noteId) {
