@@ -438,6 +438,15 @@ class ExternalAPIClient:
     # ========================================================================
     # DUCKDUCKGO (бесплатный поиск, без API ключа)
     # ========================================================================
+    # Глобальный семафор: не более 1 параллельного DDG-запроса (против rate limit)
+    _ddg_semaphore: asyncio.Semaphore = None  # инициализируется лениво
+    _ddg_last_request: float = 0.0  # timestamp последнего запроса
+    _DDG_MIN_INTERVAL: float = 2.5  # минимум секунд между запросами
+
+    def _get_ddg_semaphore(self) -> asyncio.Semaphore:
+        if self._ddg_semaphore is None:
+            APIClient._ddg_semaphore = asyncio.Semaphore(1)
+        return self._ddg_semaphore
 
     async def duckduckgo_search(
         self,
@@ -467,7 +476,7 @@ class ExternalAPIClient:
             import asyncio as _aio
 
             def _sync_search():
-                with DDGS(timeout=10) as ddgs:
+                with DDGS(timeout=15) as ddgs:
                     raw = list(ddgs.text(query, region=region, max_results=num))
                     return [{
                         'title': r.get('title', ''),
@@ -475,21 +484,50 @@ class ExternalAPIClient:
                         'link': r.get('href', ''),
                     } for r in raw]
 
-            loop = _aio.get_event_loop()
-            try:
-                results = await _aio.wait_for(
-                    loop.run_in_executor(None, _sync_search),
-                    timeout=20.0
-                )
-            except _aio.TimeoutError:
-                logger.warning(f"[DDG] Search timeout (20s) for: {query[:50]}")
-                return None
+            loop = _aio.get_running_loop()
+            sem = self._get_ddg_semaphore()
 
-            self._track_call('ddg')
-            await self.cache.set('ddg', cache_params, results, cache_ttl)
-            logger.info(f"[DDG] Found {len(results)} results for: {query[:50]}")
-            _clr_err('ddg')
-            return results
+            # Retry с экспоненциальным backoff при rate limit
+            max_retries = 3
+            base_delay = 3.0  # секунды
+            for attempt in range(max_retries):
+                async with sem:
+                    # Выдерживаем минимальный интервал между запросами
+                    now = time.time()
+                    elapsed = now - APIClient._ddg_last_request
+                    if elapsed < self._DDG_MIN_INTERVAL:
+                        await _aio.sleep(self._DDG_MIN_INTERVAL - elapsed)
+                    APIClient._ddg_last_request = time.time()
+
+                    try:
+                        results = await _aio.wait_for(
+                            loop.run_in_executor(None, _sync_search),
+                            timeout=25.0
+                        )
+                        self._track_call('ddg')
+                        await self.cache.set('ddg', cache_params, results, cache_ttl)
+                        logger.info(f"[DDG] Found {len(results)} results for: {query[:50]}")
+                        _clr_err('ddg')
+                        return results
+                    except _aio.TimeoutError:
+                        logger.warning(f"[DDG] Search timeout (25s) for: {query[:50]}")
+                        if attempt < max_retries - 1:
+                            await _aio.sleep(base_delay * (2 ** attempt))
+                            continue
+                        return None
+                    except Exception as e:
+                        err_str = str(e)
+                        # 202 Ratelimit или DuckDuckGoRatelimitException
+                        if '202' in err_str or 'atelimit' in err_str or 'Ratelimit' in err_str:
+                            wait = base_delay * (2 ** attempt) + 2.0
+                            logger.warning(f"[DDG] Rate limit on attempt {attempt+1}, waiting {wait:.1f}s: {query[:40]}")
+                            if attempt < max_retries - 1:
+                                await _aio.sleep(wait)
+                                continue
+                        _rec_err('ddg', f"Search failed: {e}")
+                        logger.warning(f"[DDG] Error: {e}")
+                        return None
+            return None
 
         except Exception as e:
             _rec_err('ddg', f"Search failed: {e}")
@@ -521,28 +559,32 @@ class ExternalAPIClient:
         cache_ttl: int = 1800
     ) -> List[dict]:
         """
-        Параллельный поиск через DuckDuckGo.
+        Последовательный поиск через DuckDuckGo с задержкой между запросами.
+        НАМЕРЕННО последовательный — parallel DDG вызывает rate limit 202.
+        Запросы, результаты которых уже в кэше, выполняются мгновенно.
         """
         region = f"{hl}-{gl}" if gl and hl else "ru-ru"
-        tasks = [
-            self.duckduckgo_search(q, num=num_per_query, region=region, cache_ttl=cache_ttl)
-            for q in queries
-        ]
+        seen_urls: set = set()
+        all_results: List[dict] = []
 
-        results_lists = await asyncio.gather(*tasks, return_exceptions=True)
+        for i, q in enumerate(queries):
+            # Небольшая пауза между запросами (кроме первого) если нет кэша
+            if i > 0:
+                cache_params = {'q': q, 'num': num_per_query, 'region': region, 'engine': 'ddg'}
+                cached = await self.cache.get('ddg', cache_params)
+                if cached is None:
+                    await asyncio.sleep(2.0)  # пауза только для некэшированных
 
-        seen_urls = set()
-        all_results = []
+            results = await self.duckduckgo_search(q, num=num_per_query, region=region, cache_ttl=cache_ttl)
 
-        for i, results in enumerate(results_lists):
-            if isinstance(results, Exception) or not results:
-                logger.warning(f"[WEB_MULTI] Query '{queries[i]}' returned no results")
+            if not results:
+                logger.warning(f"[WEB_MULTI] Query '{q}' returned no results")
                 continue
             for r in results:
                 url = r.get('link', '')
                 if url and url not in seen_urls:
                     seen_urls.add(url)
-                    r['query_source'] = queries[i]
+                    r['query_source'] = q
                     all_results.append(r)
 
         logger.info(f"[WEB_MULTI] {len(queries)} queries → {len(all_results)} unique results")
