@@ -2400,10 +2400,19 @@
         }
 
         async function rollbackCheckpoint(separatorEl) {
-            const interactionId = separatorEl && separatorEl.dataset.interactionId;
+            let interactionId = separatorEl && separatorEl.dataset.interactionId;
             if (!interactionId || interactionId === 'pending') {
-                showNotification('Контрольная точка ещё не синхронизирована, подождите секунду', 'error');
-                return;
+                showNotification('Контрольная точка ещё не синхронизирована, подождите секунду…', 'info');
+                // Ждём до 5 секунд пока pending сменится на реальный ID
+                for (let i = 0; i < 10; i++) {
+                    await new Promise(r => setTimeout(r, 500));
+                    interactionId = separatorEl && separatorEl.dataset.interactionId;
+                    if (interactionId && interactionId !== 'pending') break;
+                }
+                if (!interactionId || interactionId === 'pending') {
+                    showNotification('Не удалось синхронизировать контрольную точку. Попробуйте позже.', 'error');
+                    return;
+                }
             }
             if (!confirm('Удалить все сообщения начиная с этой точки? Действие нельзя отменить.')) return;
             try {
