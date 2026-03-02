@@ -10640,6 +10640,39 @@ async def api_arena_post_like_handler(request):
 
 app.router.add_post('/api/arena/post/{post_key}/like', api_arena_post_like_handler)
 
+async def api_arena_delete_entry_handler(request):
+    """DELETE /api/arena/entry/{post_key} — удаляет пост или комментарий пользователя (agent_id='user')"""
+    try:
+        post_key = request.match_info.get('post_key', '').strip()
+        if not post_key:
+            return web.json_response({'error': 'missing post_key'}, status=400)
+        from models import ArenaPost
+        from ai_integration.agent_arena import _global_feed as _gf
+        db_s = Session()
+        try:
+            row = db_s.query(ArenaPost).filter_by(post_key=post_key).first()
+            if not row:
+                return web.json_response({'error': 'not found'}, status=404)
+            if row.agent_id != 'user':
+                return web.json_response({'error': 'forbidden'}, status=403)
+            db_s.delete(row)
+            db_s.commit()
+        finally:
+            db_s.close()
+        # Удаляем из in-memory feed
+        to_remove = [m for m in _gf if m.get('id') == post_key]
+        for m in to_remove:
+            try:
+                _gf.remove(m)
+            except ValueError:
+                pass
+        return web.json_response({'ok': True})
+    except Exception as e:
+        logger.error(f'[ARENA] delete entry error: {e}', exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+app.router.add_delete('/api/arena/entry/{post_key}', api_arena_delete_entry_handler)
+
 async def api_arena_user_post_handler(request):
     """POST /api/arena/user-post — пользователь публикует пост в ленту арены"""
     try:

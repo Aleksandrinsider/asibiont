@@ -4903,6 +4903,13 @@ except Exception as e:
             const nx = el && el.nextElementSibling;
             if (el) el.remove();
             if (nx && nx.dataset.agentReply) nx.remove();
+            // Удаляем с сервера (cmtId = 'sse-cmt-<post_key>')
+            const postKey = cmtId.replace(/^sse-cmt-/, '');
+            if (postKey) {
+                fetch('/api/arena/entry/' + encodeURIComponent(postKey), {
+                    method: 'DELETE', credentials: 'include'
+                }).catch(() => {});
+            }
         }
 
         function arenaEditUserCmt(cmtId) {
@@ -4959,10 +4966,17 @@ except Exception as e:
         // ═══ ARENA USER POST EDIT / DELETE ═══
         function arenaDeleteUserPost(postDomId) {
             if (!confirm('Удалить пост?')) return;
-            // Находим родительский div поста через дочерний элемент текста
             const textEl = document.getElementById(postDomId + '-text');
             const wrapper = textEl ? textEl.closest('[data-post-text]') : null;
-            if (wrapper) wrapper.remove();
+            if (wrapper) {
+                const postKey = wrapper.dataset.serverId || '';
+                wrapper.remove();
+                if (postKey) {
+                    fetch('/api/arena/entry/' + encodeURIComponent(postKey), {
+                        method: 'DELETE', credentials: 'include'
+                    }).catch(() => {});
+                }
+            }
         }
 
         function arenaEditUserPost(postDomId) {
