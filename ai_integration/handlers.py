@@ -10239,13 +10239,13 @@ def _get_user_email_integrations(user, session) -> list:
                     })
             # Личный Resend API ключ
             rk = env.get('RESEND_API_KEY', '')
-            re_from = env.get('RESEND_FROM', env.get('SENDER_EMAIL', ''))
+            re_from = env.get('RESEND_FROM', env.get('SENDER_EMAIL', env.get('FROM_EMAIL', '')))
             if rk and rk not in seen_resend:
                 seen_resend.add(rk)
                 results.append({
                     'type': 'resend',
                     'label': 'Resend',
-                    'email_user': re_from or 'resend',
+                    'email_user': re_from,  # пустая строка если не задан — проверим позже
                     'resend_key': rk,
                     'agent_name': agent.name or 'Resend',
                     'agent_id': agent.id,
@@ -10344,6 +10344,14 @@ async def send_email(
         # Всегда использовать email из интеграции (не из параметров ИИ)
         sender_email = _chosen_integration['email_user']
 
+        # Для Resend: проверяем что from-адрес задан и валиден
+        if _chosen_integration.get('type') == 'resend' and '@' not in (sender_email or ''):
+            return (
+                "❌ Для Resend не задан адрес отправителя.\n"
+                "Добавь в настройках агента: RESEND_FROM=noreply@твой-домен.com\n"
+                "(домен должен быть верифицирован в Resend dashboard)"
+            )
+
         # Нормализация: удалить пробелы, lowercase
         to_clean = to.strip().lower()
 
@@ -10386,13 +10394,15 @@ async def send_email(
                 _from_label = _chosen_integration['label']
 
                 def _smtp_send_personal():
+                    import ssl as _ssl
                     msg = _MIMEMultipart()
                     msg['From'] = f"{sender_name} <{_smtp_user}>"
                     msg['To'] = to_clean
                     msg['Subject'] = subject
                     msg.attach(_MIMEText(body, 'plain', 'utf-8'))
                     # timeout=30 предотвращает бесконечное зависание SMTP-соединения
-                    with _smtplib.SMTP_SSL(_smtp_host, _smtp_port, timeout=30) as s:
+                    _ssl_ctx = _ssl.create_default_context()
+                    with _smtplib.SMTP_SSL(_smtp_host, _smtp_port, context=_ssl_ctx, timeout=30) as s:
                         s.login(_smtp_user, _smtp_pass)
                         s.sendmail(_smtp_user, to_clean, msg.as_string())
 
