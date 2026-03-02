@@ -1066,6 +1066,8 @@
                             <div id="chat-messages" class="chat-messages">
                         </div>
                         {% if logged_in %}
+                        <!-- Бар активных агентов -->
+                        <div id="active-agents-bar" style="display:none;padding:6px 12px 4px;border-top:1px solid #F0F2F5;background:#FAFBFC;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
                         <div class="chat-input">
                             <input type="text" id="message-input" placeholder="Сообщение..." data-i18n-ph="msg-placeholder">
                             <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
@@ -1937,6 +1939,8 @@
             // Prepare avatar HTML
             let avatarHtml = '';
             if (normalizedSender === 'ai') {
+                // Имя агента над сообщением
+                const _senderName = (window._activeAgentData && window._activeAgentData.name) || 'ASI Biont';
                 // Use active agent avatar if available, otherwise default
                 const _agentAvUrl = window._activeAgentData && window._activeAgentData.avatar_url;
                 const _agentAvName = window._activeAgentData && window._activeAgentData.name;
@@ -1965,6 +1969,7 @@
                 <div style="display: flex; align-items: flex-start; gap: 0;">
                     ${avatarHtml}
                     <div style="flex: 1; min-width: 0;">
+                        ${normalizedSender === 'ai' ? `<div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:3px;">${escapeHtml(_senderName)}</div>` : ''}
                         <div class="message-text">${processedText}</div>
                         <div class="message-time">${dateString} ${timeString} ${saveBtn}</div>
                     </div>
@@ -2028,6 +2033,35 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
+        function updateActiveAgentsBar() {
+            const bar = document.getElementById('active-agents-bar');
+            if (!bar) return;
+            const agents = window._activeAgentsData || [];
+            if (!agents.length) {
+                // Нет агентов — показываем ASI Biont
+                bar.style.display = 'flex';
+                bar.innerHTML = `
+                    <span style="font-size:11px;color:#9CA3AF;margin-right:4px;white-space:nowrap;">Отвечает:</span>
+                    <div style="display:flex;align-items:center;gap:5px;">
+                        <img src="/static/asibiont.svg" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1.5px solid #D1D9E0;">
+                        <div style="display:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">AI</div>
+                        <span style="font-size:12px;color:#374151;font-weight:500;">ASI Biont</span>
+                    </div>
+                `;
+                return;
+            }
+            bar.style.display = 'flex';
+            let html = `<span style="font-size:11px;color:#9CA3AF;margin-right:4px;white-space:nowrap;">Отвечают:</span>`;
+            for (const ag of agents) {
+                const init = ag.name ? ag.name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase() : 'AI';
+                const av = ag.avatar_url ? `<img src="${escapeHtml(ag.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1.5px solid #D1D9E0;"><div style="display:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">${init}</div>` :
+                    `<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">${init}</div>`;
+                const title = ag.job_title ? `${escapeHtml(ag.name)} \u2014 ${escapeHtml(ag.job_title)}` : escapeHtml(ag.name);
+                html += `<div style="display:flex;align-items:center;gap:4px;padding:2px 6px 2px 3px;background:#F6F8FA;border:1px solid #E8ECEF;border-radius:20px;" title="${title}">${av}<span style="font-size:11px;color:#374151;font-weight:500;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(ag.name)}</span></div>`;
+            }
+            bar.innerHTML = html;
+        }
+
         function hideTypingIndicator() {
             const typingDiv = document.getElementById('typing-indicator');
             if (typingDiv) {
@@ -11183,7 +11217,14 @@ except Exception as e:
                         : 'Агент активирован';
                     showNotification(msg, 'success');
                     // Обновляем аватар агента в чате
-                    if (data.agent) window._activeAgentData = data.agent;
+                    if (data.agent) {
+                        window._activeAgentData = data.agent;
+                        // Добавляем в список если ещё нет
+                        if (!window._activeAgentsData) window._activeAgentsData = [];
+                        const _exists = window._activeAgentsData.find(a => a.id === data.agent.id);
+                        if (!_exists) window._activeAgentsData.push(data.agent);
+                        updateActiveAgentsBar();
+                    }
                     if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = true;
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
@@ -11210,6 +11251,8 @@ except Exception as e:
                     showNotification('Агент деактивирован', 'success');
                     // Сбрасываем аватар агента в чате
                     if (window._activeAgentData && window._activeAgentData.id === agentId) window._activeAgentData = null;
+                    if (window._activeAgentsData) window._activeAgentsData = window._activeAgentsData.filter(a => a.id !== agentId);
+                    updateActiveAgentsBar();
                     if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = false;
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
@@ -12394,6 +12437,8 @@ except Exception as e:
                     };
                     // Sync active agent avatar data
                     window._activeAgentData = data.active_agent || null;
+                    window._activeAgentsData = data.active_agents || [];
+                    updateActiveAgentsBar();
                     
                     // Update timezone if changed
                     const oldTimezone = window.USER_TIMEZONE;

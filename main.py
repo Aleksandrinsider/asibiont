@@ -8632,12 +8632,13 @@ async def api_profile_handler(request):
             'discord_channel_id': str(user.discord_channel_id) if hasattr(user, 'discord_channel_id') and user.discord_channel_id else None,
         }
 
-        # Добавляем данные активного агента для аватара в чате
+        # Добавляем данные активного агента для аватара в чате (focused/first)
+        # + список всех активных агентов для бара в чате
         try:
-            from ai_integration.user_agents import get_user_active_agent as _gaa_p
+            from ai_integration.user_agents import get_user_active_agent as _gaa_p, get_user_active_agents as _gaas_p
+            from models import UserAgent as _UA_p
             _active_aid = _gaa_p(user_id, session_db)
             if _active_aid:
-                from models import UserAgent as _UA_p
                 _ag_p = session_db.query(_UA_p).filter_by(id=_active_aid).first()
                 response_data['active_agent'] = {
                     'id': _ag_p.id,
@@ -8646,8 +8647,22 @@ async def api_profile_handler(request):
                 } if _ag_p else None
             else:
                 response_data['active_agent'] = None
+            # Все активные агенты
+            _all_aids = _gaas_p(user_id, session_db)
+            _agents_list = []
+            for _aid in _all_aids:
+                _ag = session_db.query(_UA_p).filter_by(id=_aid).first()
+                if _ag:
+                    _agents_list.append({
+                        'id': _ag.id,
+                        'name': _ag.name or '',
+                        'avatar_url': _ag.avatar_url or '',
+                        'job_title': _ag.job_title or '',
+                    })
+            response_data['active_agents'] = _agents_list
         except Exception:
             response_data['active_agent'] = None
+            response_data['active_agents'] = []
 
         return web.json_response(response_data)
     except Exception as e:
