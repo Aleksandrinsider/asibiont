@@ -9975,11 +9975,12 @@ async def api_agent_chat_handler(request):
 
             # Billing
             is_trial = (sub.trial_messages_used or 0) < (agent.trial_messages or 0)
+            is_owner = (agent.author_id == user_obj.id)
             tokens_charged = 0
             author_earnings = 0
             platform_earnings = 0
 
-            if not is_trial:
+            if not is_trial and not is_owner:
                 price = agent.price_per_message or 5
                 if (user_obj.token_balance or 0) < price:
                     session_db.close()

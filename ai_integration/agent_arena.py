@@ -840,37 +840,39 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         _lang_directive = "\n\nWrite in English only." + _no_rp
         if _top_free:
             _thinking = (
-                "You're in a group chat. This time, share your OWN thought — don't address anyone by name, don't react to what was said.\n"
-                "Just say something genuine from yourself: an opinion, an observation, a memory, something that's been on your mind.\n"
-                "BANNED openers: 'Oh I was just thinking...', 'I've always thought...'.\n"
-                "One or two sentences. No performance."
+                "You're in a DEBATE. You are not just chatting — you are defending a position.\n"
+                "Draw on your specialization and expertise as the source of your arguments.\n"
+                "State a bold thesis and back it up with a specific argument from your field.\n"
+                "Don't preach — attack an idea, not a person. Be sharp, confident, concrete.\n"
+                "One or two sentences. No hedging. No performance."
             )
         else:
             _thinking = (
-                "You're in a group chat. Rules:\n"
-                "1. Open with a DIRECT reaction to something specific that was just said — a name, a phrase, an idea.\n"
-                "2. BANNED openers: 'Oh I was just thinking...', 'Isn't it interesting that...', 'I've always thought...', 'Do you often notice...'.\n"
-                "3. No generic philosophical riff unless you anchor it to exact words someone said.\n"
-                "4. Don't end with a vague open question. Say something with conviction or ask something sharp and specific.\n"
-                "5. One or two sentences. No performance."
+                "You're in a DEBATE. Rules:\n"
+                "1. Target one specific claim just made — name it, then counter or reinforce it with an argument from YOUR expertise.\n"
+                "2. Your specialization is your weapon — use domain knowledge, data, examples from your field.\n"
+                "3. BANNED: vague agreement, deflection, philosophical meandering without a stance.\n"
+                "4. End with a sharp claim or a pointed challenge — not an open-ended question.\n"
+                "5. One or two sentences. Conviction over politeness."
             )
     else:
         _lang_directive = _no_rp
         if _top_free:
             _thinking = (
-                "Ты в групповом чате. На этот раз пиши от себя — не обращайся ни к кому по имени, не реагируй на чужие слова.\n"
-                "Просто скажи что-то настоящее своё: мнение, наблюдение, воспоминание, то, что вертится в голове.\n"
-                "ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...'.\n"
-                "Одно-два предложения. Живо, без театра."
+                "Ты на ДЕБАТАХ. Ты не просто болтаешь — ты отстаиваешь позицию.\n"
+                "Опирайся на свою специализацию и экспертизу как на источник аргументов.\n"
+                "Выдвини смелый тезис и подкрепи его конкретным аргументом из своей области.\n"
+                "Не морализируй — атакуй идею, а не человека. Резко, уверенно, конкретно.\n"
+                "Одно-два предложения. Никаких оговорок. Никакого театра."
             )
         else:
             _thinking = (
-                "Ты в групповом чате. Правила:\n"
-                "1. Первая фраза — конкретная реакция на что-то, что только что сказали: имя, слово, идею.\n"
-                "2. ЗАПРЕЩЕНЫ зачины: 'Ой, а я как раз...', 'Мне всегда нравилось...', 'Так интересно, что ты...', 'А ты часто замечаешь...'.\n"
-                "3. Никакого общего философствования без привязки к точным словам собеседника.\n"
-                "4. Не заканчивай расплывчатым открытым вопросом — скажи что-то с убеждением или задай острый конкретный вопрос.\n"
-                "5. Одно-два предложения. Живо, прямо, без театра."
+                "Ты на ДЕБАТАХ. Правила:\n"
+                "1. Выбери одно конкретное утверждение, которое только что прозвучало — назови его, затем опровергни или усиль аргументом из СВОЕЙ экспертизы.\n"
+                "2. Твоя специализация — твоё оружие: используй отраслевые знания, данные, примеры из своей сферы.\n"
+                "3. ЗАПРЕЩЕНО: расплывчатое согласие, уход от темы, философствование без чёткой позиции.\n"
+                "4. Заканчивай острым тезисом или прямым вызовом — не открытым вопросом в пустоту.\n"
+                "5. Одно-два предложения. Убеждённость важнее вежливости."
             )
     system_with_context = (
         f"{base_system}\n\n"
