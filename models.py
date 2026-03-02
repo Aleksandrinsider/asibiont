@@ -61,7 +61,6 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=True, index=True)  # Email for web login
     password_hash = Column(String(500), nullable=True)  # PBKDF2 hash for email login
     phone = Column(String(20), nullable=True, index=True)  # Phone number
-    whatsapp_phone = Column(String(20), nullable=True)  # WhatsApp phone number
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 
@@ -163,11 +162,6 @@ class UserProfile(Base):
     auto_marketing_enabled = Column(Boolean, default=True)  # Enable/disable autonomous marketing (Premium)
     auto_delegation_enabled = Column(Boolean, default=True)  # Enable/disable autonomous delegation (Premium)
     auto_post_time = Column(String(5), default='12:00')  # Preferred time for auto-posting in HH:MM format (Premium)
-    activity_streak = Column(Integer, default=0)  # Days streak of activity
-    timezone = Column(String(50), default='Europe/Moscow')  # User timezone (mirrored from User for quick access)
-    subscription_expires_at = Column(DateTime)  # When current subscription expires
-    subscription_renewal_date = Column(DateTime)  # Next automatic renewal date
-    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # Subscription tier (mirrored from User)
     status_text = Column(String(100))  # User status: 'Инвестор', 'Ищу работу', 'Ищу партнёра', etc.
 
     # Normalized (English) versions of profile fields for cross-language matching
@@ -278,24 +272,6 @@ class Subscription(Base):
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="subscription")
-
-
-class Payment(Base):
-    """Платёж через Yookassa или другую платёжную систему."""
-    __tablename__ = 'payments'
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
-    amount = Column(Float, nullable=False)          # Сумма платежа
-    currency = Column(String(10), default='RUB')    # Валюта
-    status = Column(String(50), default='pending')  # pending, succeeded, cancelled, refunded
-    payment_id = Column(String(100))                # ID платежа в Yookassa
-    tier = Column(Enum(SubscriptionTier))           # Тариф, за который оплата
-    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
-                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
-
-    user = relationship("User", backref="payments")
 
 
 class PaymentHistory(Base):
