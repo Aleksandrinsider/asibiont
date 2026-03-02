@@ -9149,11 +9149,12 @@ async def start_email_campaign(
         if not sender_email:
             sender_email = 'outreach@asibiont.com'
 
-        # Проверка на дубликат — если есть активная кампания с похожей целью
+        # Проверка на дубликат — если есть активная кампания с похожей целью (personal скрытые исключаем)
         from sqlalchemy import func as sa_func
         existing = session.query(EmailCampaign).filter(
             EmailCampaign.user_id == user.id,
             EmailCampaign.status == 'active',
+            EmailCampaign.name != '__personal__',
         ).all()
         for ex in existing:
             # Сравниваем цели — если пересекаются ключевые слова
@@ -10432,20 +10433,21 @@ async def send_email(
         try:
             from models import EmailCampaign as _EmailCampaign, EmailOutreach as _EmailOutreach
             from datetime import datetime as _dt2, timezone as _tz2
-            # Ищем активную кампанию или создаём дефолтную «Персональные письма»
+            # Ищем скрытую служебную кампанию для личных писем (status='personal')
+            # НЕ используем активные кампании — они принадлежат пользователю
             campaign = session.query(_EmailCampaign).filter_by(
-                user_id=user.id, status='active'
-            ).order_by(_EmailCampaign.created_at.desc()).first()
+                user_id=user.id, status='personal'
+            ).first()
             if not campaign:
                 campaign = _EmailCampaign(
                     user_id=user.id,
-                    name='Персональные письма',
-                    goal='Индивидуальная переписка и коммуникация',
-                    target_audience='Индивидуальные получатели',
-                    offer='Персональная коммуникация',
+                    name='__personal__',
+                    goal='Служебная запись для личных писем',
+                    target_audience='',
+                    offer='',
                     sender_name=sender_name,
                     sender_email=sender_email,
-                    status='active',
+                    status='personal',  # скрыто от UI и ИИ
                     daily_limit=50,
                     max_emails=0,
                 )
@@ -10884,8 +10886,9 @@ async def get_system_status(
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user:
                 from models import EmailCampaign
-                active_campaigns = session.query(EmailCampaign).filter_by(
-                    user_id=user.id, status='active'
+                active_campaigns = session.query(EmailCampaign).filter(
+                    EmailCampaign.user_id == user.id,
+                    EmailCampaign.status == 'active',
                 ).count()
                 report['active_email_campaigns'] = active_campaigns
         except Exception as _e:
