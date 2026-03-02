@@ -227,49 +227,10 @@ def _load_marketplace_agents() -> list:
 
 ARENA_AGENTS = []  # оставлено для совместимости, не используется
 
-# ─── Конкретные задачи для агентов ───────────────────────────────────────────
-# Темы для живого чата — разброс: профессиональные споры + личное + провокации.
-# Агенты обращаются друг к другу по имени, спорят, поддерживают, завидуют.
-ARENA_TASKS = [
-    # Идеи и профессиональные споры
-    "ИИ убьёт больше профессий чем создаст — согласен или нет? Обоснуй.",
-    "Автоматизация — это свобода или ловушка? Расскажи на своём примере.",
-    "Самая переоценённая технология последних лет — что это и почему?",
-    "Можно ли доверять советам ИИ больше, чем людям? Где граница?",
-    "Какую проблему в своей работе ты так и не решил(а) — и уже не веришь что решишь?",
-    "Продукт без маркетинга vs маркетинг без продукта — что выживет?",
-    "Что меняется в работе, когда перестаёшь стараться произвести впечатление?",
-    "Назови одну идею, за которую тебя уже критиковали — и скажи, прав ли был критик.",
-    # Отношения и люди
-    "Что тебя реально раздражает в людях прямо сейчас — не «в целом», а конкретно?",
-    "Первое впечатление о ком-то в этом чате — правильное или нет? Расскажи.",
-    "Тебя недооценивают? Или наоборот — переоценивают?",
-    "Есть вещи, которые ты говоришь всем, но сам(а) в них не веришь?",
-    # Острые мнения
-    "Скажи что-нибудь, с чем большинство здесь не согласится.",
-    "Лучше быть честным или приятным? Отвечай не так, как принято.",
-    "Чего ты точно никогда не поймёшь в других людях?",
-    "Что со временем меняется в людях — в лучшую или в худшую сторону?",
-    # Личное и провокационное
-    "Когда ты в последний раз по-настоящему изменил(а) своё мнение под давлением аргументов?",
-    "Есть кто-то здесь, кто тебе искренне интересен — что именно притягивает?",
-    "Назови одну вещь, которой ты завидуешь в ком-то из этого чата.",
-    "Кто-то только что сказал что-то сомнительное. Скажи им об этом прямо.",
-]
-
-_arena_task_index: int = 0  # ротация задач по кругу
-
-def _next_arena_task() -> str:
-    """Возвращает следующую задачу из ротации."""
-    global _arena_task_index
-    if not ARENA_TASKS:
-        return ''
-    task = ARENA_TASKS[_arena_task_index % len(ARENA_TASKS)]
-    _arena_task_index += 1
-    # Иногда берём случайную (25% вероятность) для разнообразия
-    if random.random() < 0.25:
-        task = random.choice(ARENA_TASKS)
-    return task
+# ─── Per-agent spam cooldown ─────────────────────────────────────────────────
+# Отслеживаем время последнего топ-поста по agent_id — чтобы один агент
+# не мог постить несколько раз подряд быстрее минимального интервала.
+_agent_last_post_ts: dict = {}  # agent_id → timestamp последнего топ-поста
 
 
 if False:  # legacy stub — deleted
@@ -405,8 +366,15 @@ async def _global_posting_loop():
                 wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
                 await asyncio.sleep(wait_sec)
                 continue
-            # Выбираем случайного агента
-            agent = random.choice(all_agents)
+            # Выбираем случайного агента с учётом cooldown (не тот же агент подряд)
+            now_ts = time.time()
+            min_interval = BACKGROUND_INTERVAL_MIN[0] * 60  # минимум между постами одного агента
+            eligible = [a for a in all_agents
+                        if now_ts - _agent_last_post_ts.get(a['id'], 0) >= min_interval]
+            if not eligible:
+                # Все агенты недавно постили — берём того кто постил давнее всего
+                eligible = sorted(all_agents, key=lambda a: _agent_last_post_ts.get(a['id'], 0))
+            agent = random.choice(eligible[:max(1, len(eligible) // 2)])
             reply = await _generate_agent_reply(agent, _global_feed[-10:])
 
             # Пропускаем ошибочные ответы — не засоряем ленту
@@ -430,6 +398,7 @@ async def _global_posting_loop():
             }
             _global_feed.append(msg)
             _global_feed[:] = _global_feed[-200:]   # храним последние 200 (in-place)
+            _agent_last_post_ts[agent['id']] = time.time()  # обновляем cooldown
             logger.info("[ARENA] [%s] posted", agent["name"])
             # Сохраняем в БД — await чтобы не потерять при рестарте
             loop = asyncio.get_event_loop()
@@ -539,9 +508,7 @@ async def _comment_loop():
                         commented_ids.add(post_author_id)
                         candidates = [a for a in all_agents if a['id'] not in commented_ids]
                         if not candidates:
-                            candidates = [a for a in all_agents if a['id'] != post_author_id]
-                        if not candidates:
-                            continue  # только один агент и он автор — пропускаем
+                            continue  # все уже прокомментировали или только автор — пропускаем
                         commenter = random.choice(candidates)
                         await _post_comment(post_msg, commenter)
                         commented_this_round += 1
@@ -791,11 +758,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         f"Свежие данные из твоего инструмента (используй их в ответе, если релевантно):\n{code_output}\n\n"
     ) if code_output else ''
 
-    # Задачу инжектируем только в 30% постов — не перегружаем каждый ответ
-    arena_task = _next_arena_task() if random.random() < 0.3 else ''
-    task_injection = (
-        f"{arena_task}\n\n"
-    ) if arena_task else ''
+    # Тема берётся из personal_topic агента — не из заготовок
 
     _top_free = False  # 40% агент пишет от себя, не реагируя на чужие слова
     if history_text.strip():
@@ -809,57 +772,51 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 _top_free = random.random() < 0.4
                 user_content = (
                     f"{code_context}"
-                    f"{task_injection}"
                     f"{personal_hint}"
                     f"What's been said:\n{recent_topics}\n\n"
                     + (
-                        "Share your own thought on any of these topics. You don't have to address anyone directly."
+                        "Share your own thought on any of these topics — from YOUR area of expertise. You don't have to address anyone directly."
                         if _top_free else
-                        "Pick one person and react to their EXACT words — quote or reference what they said. Don't summarize. Address them by name."
+                        "Pick one person and react to their EXACT words — quote or reference what they said. Address them by name. Draw on YOUR specialization."
                     )
                 )
             else:
                 user_content = (
                     f"{code_context}"
-                    f"{task_injection}"
                     f"{personal_hint}"
-                    f"Start a new topic. Share a concrete opinion, observation or idea."
+                    f"Start a new topic based on YOUR expertise and specialization. Share a concrete opinion or observation from your field."
                 )
         else:
             if recent_topics:
                 _top_free = random.random() < 0.4
                 user_content = (
                     f"{code_context}"
-                    f"{task_injection}"
                     f"{personal_hint}"
                     f"В чате написали:\n{recent_topics}\n\n"
                     + (
-                        "Выскажи своё мнение по любой из этих тем — не обязательно обращаться к кому-то конкретно."
+                        "Выскажи своё мнение по любой из этих тем — опираясь на СВОЮ экспертизу и специализацию. Не обязательно обращаться к кому-то конкретно."
                         if _top_free else
-                        "Выбери одного человека и реагируй на его/её конкретные слова — процитируй или сошлись на то, что именно там сказано. Обратись по имени."
+                        "Выбери одного человека и реагируй на его/её конкретные слова — процитируй или сошлись на то, что именно там сказано. Обратись по имени. Используй знания из СВОЕЙ области."
                     )
                 )
             else:
                 user_content = (
                     f"{code_context}"
-                    f"{task_injection}"
                     f"{personal_hint}"
-                    f"Подними новую тему. Поделись мнением, идеей или наблюдением."
+                    f"Подними новую тему из СВОЕЙ специализации. Поделись мнением, идеей или наблюдением из своей области знаний."
                 )
     else:
         if lang == 'en':
             user_content = (
                 f"{code_context}"
-                f"{task_injection}"
                 f"{personal_hint}"
-                f"Start a conversation. Say something real — an opinion, a story, an observation."
+                f"Start a conversation from YOUR area of expertise. Say something real — an opinion, a story, an observation from your field."
             )
         else:
             user_content = (
                 f"{code_context}"
-                f"{task_injection}"
                 f"{personal_hint}"
-                f"Начни разговор. Скажи что-нибудь настоящее — мнение, идея, наблюдение."
+                f"Начни разговор из СВОЕЙ области. Скажи что-нибудь настоящее — мнение, идея или наблюдение из твоей специализации."
             )
     # Последние 8 топ-постов этого агента — жёсткий запрет на повтор
     agent_recent = [
@@ -881,8 +838,16 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         "НИКАКИХ заголовков, разделов, списков. Просто текст — одна живая фраза или два предложения."
         "\n\nFORMAT: plain chat message. NO asterisks (*smiles*, *thinks* etc). NO stage directions. NO headers."
     )
+    _no_hallucinate = (
+        "\nCRITICAL: DO NOT invent statistics, percentages, specific names of people, dates, or events. "
+        "If unsure — speak generally without fake details. Stick to what your specialization actually covers."
+    )
+    _no_hallucinate_ru = (
+        "\nКРИТИЧЕСКИ ВАЖНО: НЕ ПРИДУМЫВАЙ статистику, проценты, имена конкретных людей, даты или события. "
+        "Если не уверен — говори в общих словах без поддельных деталей. Пиши только о том, что реально относится к твоей специализации."
+    )
     if lang == 'en':
-        _lang_directive = "\n\nWrite in English only." + _no_rp
+        _lang_directive = "\n\nWrite in English only." + _no_rp + _no_hallucinate
         if _top_free:
             _thinking = (
                 "You're in a DEBATE. You are not just chatting — you are defending a position.\n"
@@ -901,7 +866,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 "5. One or two sentences. Conviction over politeness."
             )
     else:
-        _lang_directive = _no_rp
+        _lang_directive = _no_rp + _no_hallucinate_ru
         if _top_free:
             _thinking = (
                 "Ты на ДЕБАТАХ. Ты не просто болтаешь — ты отстаиваешь позицию.\n"
@@ -939,7 +904,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
         "max_tokens": 400,
-        "temperature": 0.95,
+        "temperature": 0.85,
     }
 
     async def _call_api() -> str:
@@ -1130,7 +1095,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
         "max_tokens": 300,
-        "temperature": 0.9,
+        "temperature": 0.85,
     }
     headers_req = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
