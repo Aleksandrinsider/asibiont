@@ -72,12 +72,251 @@ def _parse_integration_sections(output: str, agent_name: str) -> list:
     return sections if sections else [(agent_name, output)]
 
 
+def _detect_integration_signal(service_label: str, text_lc: str, text_raw: str):
+    """
+    Per-service детекция сигналов. Возвращает (priority_str, reason) или (None, None).
+    priority_str: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+
+    Каждая интеграция знает что важно именно для неё:
+    - Email: письма во входящих (не реклама), важные отправители, дедлайны
+    - Маркетплейсы (Ozon/WB): заказы, стоки, выручка, отзывы
+    - CRM (AmoCRM/Битрикс): лиды, сделки, просрочки
+    - RSS: статьи по темам (AI решит релевантность по snippet)
+    - Notion: задачи, дедлайны, комментарии
+    - ВКонтакте: сообщения, комментарии, охват
+    """
+    import re as _re_sig
+
+    def _first_num(text):
+        m = _re_sig.search(r'\d+', text)
+        return int(m.group()) if m else 0
+
+    def _has(pat):
+        return bool(_re_sig.search(pat, text_lc))
+
+    def _find(pat):
+        return _re_sig.search(pat, text_lc)
+
+    svc = service_label.lower()
+
+    # ══════════════════════════════════════════════════════════════
+    # EMAIL: Gmail / Яндекс Почта / Mail.ru
+    # Важно: новые письма во ВХОДЯЩИХ (не реклама/спам), важные темы
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('gmail', 'яндекс почта', 'mail.ru', 'email', 'почта')):
+        # Папка "Входящие" — исключаем если явно реклама/спам
+        is_promo = _has(r'реклам|промо|promo|spam|нежелательн|рассылк')
+
+        # Считаем непрочитанные
+        m_unread = _find(r'(\d+)\s*(?:new|непрочитан\w*|unread)')
+        if not m_unread:
+            m_unread = _find(r'(?:new|непрочитан\w*|unread)[^\d]{0,20}(\d+)')
+        unread = _first_num(m_unread.group()) if m_unread else 0
+
+        # Всё ли пусто?
+        inbox_empty = _has(r'нет новых|no new|inbox empty|входящих нет|0 новых|0 писем')
+
+        if inbox_empty and not unread:
+            return ('LOW', 'inbox пуст')
+
+        # Финансовые / срочные темы в письмах — всегда важно
+        if _has(r'счёт|invoice|оплат|payment|задолженн|debt|просроч|overdue|срочно|urgent|deadline|dедлайн'):
+            return ('CRITICAL', _re_sig.search(r'счёт|invoice|оплат|payment|задолженн|debt|просроч|overdue|срочно|urgent|deadline', text_lc).group()[:60])
+
+        # От важных отправителей — если есть "от" + имя должности
+        if _has(r'от[\s:]+\w+.*(?:директор|CEO|boss|клиент|client|партнёр|partner)'):
+            return ('HIGH', 'письмо от важного отправителя')
+
+        if not is_promo and unread >= 10:
+            return ('CRITICAL', f'{unread} непрочитанных во входящих')
+        if not is_promo and unread >= 3:
+            return ('HIGH', f'{unread} новых писем во входящих')
+        if not is_promo and unread >= 1:
+            return ('MEDIUM', f'{unread} новое письмо')
+
+        return ('LOW', f'почта проверена, {unread} непрочитанных')
+
+    # ══════════════════════════════════════════════════════════════
+    # МАРКЕТПЛЕЙСЫ: Ozon / Wildberries
+    # Важно: заказы, остатки, выручка, отзывы, статусы
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('ozon', 'wildberries', 'wb', 'маркетплейс')):
+        # Критичное: нет в наличии, блокировка, возврат массовый
+        if _has(r'нет в наличии|out of stock|остаток.*?0\b|товар заблокир|аккаунт заблокир|account.*blocked'):
+            m = _find(r'нет в наличии|out of stock|остаток.*?0\b|товар заблокир')
+            return ('CRITICAL', (m.group()[:60] if m else 'нет в наличии'))
+
+        # Плохой отзыв
+        if _has(r'(?:оценка|отзыв|звезд|rating|review).*?[1-2]\b|\b[1-2]\s*(?:звезд|star)'):
+            return ('HIGH', 'негативный отзыв 1-2 звезды')
+
+        # Падение выручки/продаж
+        m_drop = _find(r'(?:выручка|продаж|доход|revenue|sales)[^.]{0,30}-\s*(\d+)\s*%')
+        if m_drop:
+            pct = _first_num(m_drop.group(1))
+            if pct >= 20:
+                return ('CRITICAL', f'падение на -{pct}%')
+            if pct >= 10:
+                return ('HIGH', f'снижение на -{pct}%')
+
+        # Новые заказы
+        m_orders = _find(r'(?:новых?\s+)?(?:заказ|order)[^\d]{0,10}(\d+)')
+        if not m_orders:
+            m_orders = _find(r'(\d+)\s*(?:новых?\s+)?(?:заказ|order)')
+        orders = _first_num(m_orders.group()) if m_orders else 0
+        if orders >= 1:
+            return ('HIGH', f'{orders} новых заказов')
+
+        # Заканчивается остаток
+        if _has(r'остат\w+.*?(?:[1-5])\s*(?:шт|ед|pcs)|мало на складе|low stock'):
+            return ('HIGH', 'заканчивается остаток')
+
+        return ('LOW', 'маркетплейс проверен, без изменений')
+
+    # ══════════════════════════════════════════════════════════════
+    # CRM: AmoCRM / Битрикс24
+    # Важно: новые лиды, горячие сделки, просрочки, оплаты
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('amocrm', 'амо', 'битрикс', 'bitrix', 'crm')):
+        # Просрочки — всегда критично
+        if _has(r'просроч|overdue|deadline.*passed|истёк\s+срок'):
+            m = _find(r'просроч|overdue')
+            return ('CRITICAL', (m.group()[:60] if m else 'просрочена задача/сделка'))
+
+        # Горячий лид / новая сделка
+        if _has(r'горяч|hot lead|новый лид|new lead|лид добавлен|deal created|сделка создана'):
+            return ('HIGH', 'новый горячий лид / сделка')
+
+        # Смена статуса сделки
+        if _has(r'сделка.*перешла|deal.*moved|этап.*изменён|stage.*changed'):
+            m = _find(r'сделка.*перешла|deal.*moved|этап.*изменён')
+            return ('MEDIUM', (m.group()[:60] if m else 'смена статуса сделки'))
+
+        # Новое сообщение от клиента
+        if _has(r'(?:клиент|client|customer).*написал|new message.*from|входящее сообщение'):
+            return ('HIGH', 'клиент написал в CRM')
+
+        # Ожидается оплата
+        if _has(r'ожидает.*оплат|pending.*payment|счёт выставлен|invoice sent'):
+            return ('MEDIUM', 'ожидается оплата')
+
+        # Общая активность — лиды/задачи
+        m_leads = _find(r'(\d+)\s*(?:новых?\s+)?(?:лид|lead|задач|task)')
+        if m_leads and _first_num(m_leads.group()) > 0:
+            return ('MEDIUM', m_leads.group()[:60])
+
+        return ('LOW', 'CRM проверена, без изменений')
+
+    # ══════════════════════════════════════════════════════════════
+    # RSS / Новости
+    # Важно: статьи по ТЕМАМ пользователя (AI решит релевантность)
+    # Мы определяем есть ли вообще контент, а AI оценит по snippet
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('rss', 'новост', 'news', 'tass', 'лента', 'feed')):
+        # Ничего не нашлось
+        if _has(r'нет новостей|no articles|no items|feed empty|лента пуста|0 статей|0 новостей'):
+            return ('LOW', 'нет новых статей')
+
+        # Срочная новость / breaking
+        if _has(r'breaking|срочно|экстренно|чрезвычайн|disaster|катастроф|авария|война|атак'):
+            m = _find(r'breaking|срочно|экстренно|чрезвычайн')
+            return ('CRITICAL', (m.group()[:60] if m else 'срочная новость'))
+
+        # Считаем статьи
+        m_count = _find(r'(\d+)\s*(?:новых?\s+)?(?:статей|новостей|articles?|items?|публикац)')
+        count = _first_num(m_count.group(1)) if m_count else 0
+
+        # Есть заголовки — значит контент есть, AI оценит по snippet
+        if count >= 5 or _has(r'заголовок:|title:|headline:|•\s*\w{5}'):
+            return ('MEDIUM', f'{count} новых статей' if count else 'новые статьи')
+
+        if count >= 1:
+            return ('MEDIUM', f'{count} новая статья')
+
+        # Вывод непустой, но счётчик не найден — есть что-то
+        if len(text_raw.strip()) > 100:
+            return ('MEDIUM', 'RSS вернул данные')
+
+        return ('LOW', 'RSS проверен')
+
+    # ══════════════════════════════════════════════════════════════
+    # Notion
+    # Важно: дедлайны сегодня/просроченные, новые задачи, комментарии
+    # ══════════════════════════════════════════════════════════════
+    if 'notion' in svc:
+        if _has(r'просроч|overdue|deadline.*сегодня|due today|истёк'):
+            return ('CRITICAL', 'просрочена задача в Notion')
+        if _has(r'новый комментарий|new comment|упомянул|mentioned you|@'):
+            return ('HIGH', 'новый комментарий / упоминание')
+        if _has(r'задача.*создана|page created|добавлена.*страниц|new page'):
+            return ('MEDIUM', 'новая задача / страница')
+        if _has(r'статус.*изменён|status.*changed|завершена|completed|done'):
+            return ('MEDIUM', 'статус задачи изменён')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'Notion синхронизирован')
+        return (None, None)  # пустой вывод — не создаём якорь
+
+    # ══════════════════════════════════════════════════════════════
+    # ВКонтакте
+    # Важно: новые сообщения, комментарии, блокировка, охват
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('вконтакте', 'vk', 'вк')):
+        if _has(r'заблокир|banned|ограничен|restricted|нарушение|violation'):
+            return ('CRITICAL', 'сообщество/страница заблокирована или ограничена')
+        if _has(r'новое сообщение|new message|(?:входящих|unread).*\d'):
+            m_msg = _find(r'(\d+)\s*(?:новых?\s+)?сообщ')
+            cnt = _first_num(m_msg.group()) if m_msg else 1
+            return ('HIGH', f'{cnt} новых сообщений ВКонтакте')
+        if _has(r'новый комментарий|new comment|жалоба|complaint|негатив'):
+            return ('HIGH', 'новый комментарий или жалоба')
+        # Охват резко упал
+        m_drop = _find(r'охват[^.]{0,20}-\s*(\d+)\s*%|reach[^.]{0,20}-\s*(\d+)\s*%')
+        if m_drop:
+            return ('HIGH', m_drop.group()[:60])
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'ВКонтакте проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # Telegram Bot
+    # Важно: ошибки бота, новые пользователи, всплеск сообщений
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('telegram bot', 'bot', 'бот')):
+        if _has(r'webhook.*error|ошибка.*бот|bot.*stopped|бот.*не отвечает|timeout.*bot'):
+            return ('CRITICAL', 'бот не работает или ошибка вебхука')
+        if _has(r'новый пользователь|new user|new subscriber'):
+            m_u = _find(r'(\d+)\s*(?:новых?\s+)?(?:пользовател|user|subscriber)')
+            cnt = _first_num(m_u.group()) if m_u else 1
+            if cnt >= 10:
+                return ('HIGH', f'+{cnt} новых пользователей')
+            return ('MEDIUM', f'+{cnt} новый пользователь')
+        m_msgs = _find(r'(\d+)\s*(?:входящих\s+)?(?:сообщений|messages?|updates?)')
+        if m_msgs and _first_num(m_msgs.group(1)) >= 20:
+            return ('HIGH', f'{_first_num(m_msgs.group(1))} входящих сообщений')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'Telegram бот проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # GENERIC fallback для неизвестных интеграций
+    # Используем базовые keyword-сигналы
+    # ══════════════════════════════════════════════════════════════
+    if _has(r'\burgent\b|\bсрочно\b|\bcritical\b|\bкритичн|\bфатал|\bfailed\b|\berror\b'):
+        m = _find(r'urgent|срочно|critical|критичн|fatal|failed|error')
+        return ('CRITICAL', (m.group()[:60] if m else 'критическая ошибка'))
+    if _has(r'\bwarning\b|\bвниман|\bimportant\b|\bважн|-\s*\d{2,}\s*%|\boverdue\b'):
+        m = _find(r'warning|вниман|important|важн|-\d+%|overdue')
+        return ('HIGH', (m.group()[:60] if m else 'требует внимания'))
+    if len(text_raw.strip()) > 100:
+        return ('LOW', 'данные получены')
+    return (None, None)  # пустой вывод — не создаём якорь
+
+
 def spawn_integration_anchors(user_db_id: int, agent_name: str, service_label: str, output: str) -> None:
     """
-    Rule-based детекция сигналов тревоги в выводе скрипта интеграции.
-    Если найдены → создаёт Anchor(integration_alert) с cooldown 2ч,
-    который AnchorEngine доставит через Telegram.
-    Не требует AI-вызова — чисто rule-based.
+    Анализирует вывод скрипта интеграции per-service логикой,
+    создаёт Anchor(integration_alert) для доставки через AnchorEngine.
+    Без AI-вызова. AI решает только финальную формулировку и SKIP при доставке.
     """
     import re as _re_ia, json as _json_ia
     from datetime import datetime as _dt_ia, timezone as _tz_ia, timedelta as _td_ia
@@ -86,54 +325,49 @@ def spawn_integration_anchors(user_db_id: int, agent_name: str, service_label: s
     except ImportError:
         return
 
-    # ─── CRITICAL-сигналы ───────────────────────────────────────────────
-    _CRIT_PATTERNS = [
-        r'\burgent\b', r'\bсрочно\b', r'\bcritical\b', r'\bкритичн',
-        r'\bфатал', r'\bfailed\b', r'\bошибка\b', r'\berror\b',
-        # 5+ непрочитанных писем
-        r'(?:unread|\u043d\u0435\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d)[^\d]{0,15}(\d+)',
-        r'(\d+)[^\d]{0,15}(?:unread|\u043d\u0435\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d)',
-    ]
-    # ─── HIGH-сигналы ───────────────────────────────────────────────
-    _HIGH_PATTERNS = [
-        r'\bwarning\b', r'\bвниман', r'\bimportant\b', r'\bважн',
-        r'-\s*\d{2,}\s*%',         # -10% или хуже
-        r'упа[\u043bаи]\w*\s+на\s+\d', r'снизи[\u043b\u0441]', r'\bdropped\b', r'\bdeclin',
-        r'\bзадерж', r'\boverdue\b', r'\bexpired\b', r'\bpending.*\d+',
-    ]
+    _PRIORITY_MAP = {
+        'CRITICAL': _AP.CRITICAL if hasattr(_AP, 'CRITICAL') else None,
+        'HIGH':     None,
+        'MEDIUM':   None,
+        'LOW':      None,
+    }
+    # Ленивая инициализация после импорта
+    try:
+        _PRIORITY_MAP = {
+            'CRITICAL': _AP.CRITICAL,
+            'HIGH':     _AP.HIGH,
+            'MEDIUM':   _AP.MEDIUM,
+            'LOW':      _AP.LOW,
+        }
+    except Exception:
+        return
 
     text_lc = output.lower()
-    priority = None
-    reason = '—'
+    prio_str, reason = _detect_integration_signal(service_label, text_lc, output)
 
-    for _pat in _CRIT_PATTERNS:
-        _m = _re_ia.search(_pat, text_lc)
-        if _m:
-            # Для unread: требуется 5+ непрочитанных
-            if 'unread' in _pat or '\u043d\u0435\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d' in _pat:
-                _nums = _re_ia.findall(r'\d+', _m.group(0))
-                if not _nums or max(int(n) for n in _nums) < 5:
-                    continue
-            priority = _AP.CRITICAL
-            reason = _m.group(0)[:80]
-            break
+    if prio_str is None:
+        return  # пустой вывод — якорь не нужен
 
-    if priority is None:
-        for _pat in _HIGH_PATTERNS:
-            _m = _re_ia.search(_pat, text_lc)
-            if _m:
-                priority = _AP.HIGH
-                reason = _m.group(0)[:80]
-                break
-
-    # Если ключевых слов нет — создаём LOW-якорь: AI в _ai_decide_and_compose
-    # сам решит SKIP или отправить. Ничего не пропустим.
-    if priority is None:
-        priority = _AP.LOW
+    priority = _PRIORITY_MAP.get(prio_str, _AP.LOW)
+    if reason is None:
+        reason = '—'
 
     _now = _dt_ia.now(_tz_ia.utc)
-    # source содержит дату+час → cooldown по смыслу: макс 1 якорь в час на сервис
-    _src = f'integration:{service_label}:{_now.strftime("%Y-%m-%d-%H")}'
+    # CRITICAL/HIGH — cooldown 1 час (source по часу)
+    # MEDIUM/LOW — cooldown 4 часа (source по кварталу дня → 0,6,12,18ч)
+    if prio_str in ('CRITICAL', 'HIGH'):
+        _cooldown_h = 1
+        _expires_h = 6
+        _src_ts = _now.strftime("%Y-%m-%d-%H")
+    elif prio_str == 'MEDIUM':
+        _cooldown_h = 4
+        _expires_h = 8
+        _src_ts = _now.strftime("%Y-%m-%d-") + str((_now.hour // 4) * 4)
+    else:  # LOW
+        _cooldown_h = 8
+        _expires_h = 12
+        _src_ts = _now.strftime("%Y-%m-%d")  # 1 якорь в день на сервис
+    _src = f'integration:{service_label}:{_src_ts}'
 
     _ias = _Sess_ia()
     try:
@@ -149,7 +383,7 @@ def spawn_integration_anchors(user_db_id: int, agent_name: str, service_label: s
             _Anch.user_id == user_db_id,
             _Anch.anchor_type == 'integration_alert',
             _Anch.source.like(f'integration:{service_label}:%'),
-            _Anch.delivered_at >= _now - _td_ia(hours=2),
+            _Anch.delivered_at >= _now - _td_ia(hours=_cooldown_h),
         ).first()
         if _recent:
             return
@@ -157,17 +391,17 @@ def spawn_integration_anchors(user_db_id: int, agent_name: str, service_label: s
             user_id=user_db_id,
             anchor_type='integration_alert',
             source=_src,
-            topic=f'{agent_name}: сигнал от {service_label} — {reason}',
+            topic=f'{agent_name}: {service_label} — {reason}',
             priority=priority,
             data=_json_ia.dumps({
                 'agent_name': agent_name,
                 'service_label': service_label,
                 'signal': reason,
-                'snippet': output.strip()[:400],
+                'snippet': output.strip()[:500],
             }),
             triggered_at=_now,
-            expires_at=_now + _td_ia(hours=4),
-            cooldown_hours=2,
+            expires_at=_now + _td_ia(hours=_expires_h),
+            cooldown_hours=_cooldown_h,
             batch_group='integration',
         ))
         _ias.commit()
