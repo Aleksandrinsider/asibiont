@@ -1921,6 +1921,8 @@
                 const sep = document.createElement('div');
                 sep.className = 'chat-checkpoint';
                 sep.dataset.interactionId = interactionId != null ? String(interactionId) : 'pending';
+                // Store raw text for reliable matching (innerText can differ after linkify/escapeHtml)
+                if (interactionId == null) sep.dataset.pendingText = text.trim();
                 sep.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 0 2px;">
                     <div style="flex:1;border-top:1px dashed #D1D9E0;"></div>
                     <button onclick="rollbackCheckpoint(this.closest('.chat-checkpoint'))" style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:12px;color:#9198A1;font-family:inherit;white-space:nowrap;transition:color 0.15s;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#9198A1'">Восстановить контрольную точку</button>
@@ -2160,12 +2162,12 @@
                                 lastMessageCount = syncData.interactions.length;
                                 // Update pending checkpoint separators with real interaction IDs
                                 document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
-                                    const userMsgEl = sep.nextElementSibling;
-                                    if (!userMsgEl || !userMsgEl.classList.contains('user')) return;
-                                    const userText = (userMsgEl.querySelector('.message-text')?.innerText || '').trim();
+                                    const rawText = (sep.dataset.pendingText || '').trim();
                                     const userInteractions = syncData.interactions.filter(i => i.message_type === 'user');
-                                    const match = userInteractions.filter(i => (i.content || '').trim() === userText).pop();
-                                    if (match) sep.dataset.interactionId = String(match.id);
+                                    const match = rawText
+                                        ? userInteractions.filter(i => (i.content || '').trim() === rawText).pop()
+                                        : (() => { const userMsgEl = sep.nextElementSibling; if (!userMsgEl || !userMsgEl.classList.contains('user')) return null; const t2 = (userMsgEl.querySelector('.message-text')?.innerText || '').trim(); return userInteractions.filter(i => (i.content || '').trim() === t2).pop(); })();
+                                    if (match) { sep.dataset.interactionId = String(match.id); delete sep.dataset.pendingText; }
                                 });
                             }
                         }
@@ -2400,19 +2402,10 @@
         }
 
         async function rollbackCheckpoint(separatorEl) {
-            let interactionId = separatorEl && separatorEl.dataset.interactionId;
+            const interactionId = separatorEl && separatorEl.dataset.interactionId;
             if (!interactionId || interactionId === 'pending') {
-                showNotification('Контрольная точка ещё не синхронизирована, подождите секунду…', 'info');
-                // Ждём до 5 секунд пока pending сменится на реальный ID
-                for (let i = 0; i < 10; i++) {
-                    await new Promise(r => setTimeout(r, 500));
-                    interactionId = separatorEl && separatorEl.dataset.interactionId;
-                    if (interactionId && interactionId !== 'pending') break;
-                }
-                if (!interactionId || interactionId === 'pending') {
-                    showNotification('Не удалось синхронизировать контрольную точку. Попробуйте позже.', 'error');
-                    return;
-                }
+                showNotification('Контрольная точка ещё не синхронизирована, подождите секунду', 'error');
+                return;
             }
             if (!confirm('Удалить все сообщения начиная с этой точки? Действие нельзя отменить.')) return;
             try {
