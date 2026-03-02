@@ -42,6 +42,36 @@ from .self_learning import get_learner
 
 logger = logging.getLogger(__name__)
 
+# ── Хелпер: разбивает вывод скрипта по именованным секциям ──────────────────
+def _parse_integration_sections(output: str, agent_name: str) -> list:
+    """
+    Пытается обнаружить именованные блоки внутри вывода скрипта:
+      === Gmail ===, --- Ozon ---, ## RSS, [TASS] …
+    Возвращает список (section_name, content).
+    Если секций нет — возвращает [(agent_name, output)].
+    """
+    import re as _re_sec
+    _hdr = _re_sec.compile(
+        r'^(?:={2,}\s*(.+?)\s*={2,}|'
+        r'-{2,}\s*(.+?)\s*-{2,}|'
+        r'#{1,3}\s+(.+?)$|'
+        r'\[([A-Za-zА-Яа-яёЁ0-9\- ]{2,40})\]\s*$)',
+        _re_sec.MULTILINE,
+    )
+    matches = list(_hdr.finditer(output))
+    if len(matches) < 2:
+        return [(agent_name, output)]
+    sections = []
+    for i, m in enumerate(matches):
+        name = next(g for g in m.groups() if g is not None).strip()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(output)
+        content = output[start:end].strip()
+        if content or True:  # логируем даже пустые
+            sections.append((name, content or '—'))
+    return sections if sections else [(agent_name, output)]
+
+
 # === Concurrency controls для 1000+ пользователей ===
 # Максимум 20 одновременных вызовов DeepSeek (лимит API ~40 req/s → оставляем запас)
 _AI_SEMAPHORE: asyncio.Semaphore | None = None
@@ -632,6 +662,28 @@ class HybridAutonomousAgent:
                 proc.kill()
                 return {"status": "error", "error": "Timeout (15s) — скрипт выполнялся слишком долго"}
             logger.info(f"[ACTION] {action} output={out[:100]} err={err[:100]}")
+            # Лог в хронологию агента
+            try:
+                from models import AgentActivityLog as _AALA, Session as _SessA, User as _UserA
+                _al_sa = _SessA()
+                try:
+                    _al_ua = _al_sa.query(_UserA).filter_by(telegram_id=user_id).first()
+                    if _al_ua:
+                        _svc_a = agent_data.get('service_label') or agent_data.get('name', 'Агент')
+                        _aname_a = agent_data.get('name', 'Агент')
+                        _al_sa.add(_AALA(
+                            user_id=_al_ua.id,
+                            activity_type='run_agent_action',
+                            title=f'{_aname_a} · {action}',
+                            content=(out[:600] if out else (err or 'нет вывода')),
+                            target=_svc_a,
+                            status='completed' if out else 'failed',
+                        ))
+                        _al_sa.commit()
+                finally:
+                    _al_sa.close()
+            except Exception as _al_ae:
+                logger.warning(f"[ACTION] activity log error: {_al_ae}")
             if out:
                 return {"status": "success", "output": out}
             else:
@@ -1417,14 +1469,18 @@ class HybridAutonomousAgent:
                                 _al_u = _al_s.query(_UserAL).filter_by(telegram_id=user_id).first()
                                 if _al_u:
                                     _svc_lbl = _agent_data.get('service_label') or _agent_data.get('name', 'Агент')
-                                    _al_s.add(_AAL(
-                                        user_id=_al_u.id,
-                                        activity_type='integration',
-                                        title=f'{_agent_data.get("name","Агент")}: данные получены',
-                                        content=_code_output[:800],
-                                        target=_svc_lbl,
-                                        status='completed',
-                                    ))
+                                    _agent_display = _agent_data.get('name', 'Агент')
+                                    # Разбиваем вывод по секциям — каждая интеграция отдельной записью
+                                    _sections = _parse_integration_sections(_code_output, _svc_lbl)
+                                    for _sec_name, _sec_content in _sections:
+                                        _al_s.add(_AAL(
+                                            user_id=_al_u.id,
+                                            activity_type='integration',
+                                            title=f'{_agent_display} · {_sec_name}',
+                                            content=_sec_content[:800],
+                                            target=_svc_lbl,
+                                            status='completed',
+                                        ))
                                     _al_s.commit()
                             finally:
                                 _al_s.close()

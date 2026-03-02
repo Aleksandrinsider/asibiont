@@ -1402,11 +1402,88 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                                "Generic advice or channel posts only if integration is not applicable.")
             _agents_block = f"\n\n{_hdr}\n" + "\n".join(_agent_lines) + f"\n{_agent_note}"
 
+        # ── Запускаем python_code у каждого активного агента и инжектим данные ─
+        _integration_data_blocks = []
+        for _a_data in _active_agents_info:
+            _a_py = (_a_data.get('python_code') or '').strip()
+            if not _a_py:
+                continue
+            try:
+                import os as _os_pm, sys as _sys_pm, asyncio as _aio_pm
+                _env_pm = {
+                    'PATH': _os_pm.environ.get('PATH', '/usr/bin:/bin'),
+                    'PYTHONIOENCODING': 'utf-8',
+                }
+                if _sys_pm.platform != 'win32':
+                    _env_pm['HOME'] = _os_pm.environ.get('HOME', '/tmp')
+                else:
+                    for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR',
+                                'COMSPEC', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+                        if _wk in _os_pm.environ:
+                            _env_pm[_wk] = _os_pm.environ[_wk]
+                for _kl in (_a_data.get('user_api_keys') or '').splitlines():
+                    _kl = _kl.strip()
+                    if '=' in _kl and not _kl.startswith('#'):
+                        _k_, _, _v_ = _kl.partition('=')
+                        _env_pm[_k_.strip()] = _v_.strip()
+                _proc_pm = await _aio_pm.create_subprocess_exec(
+                    _sys_pm.executable, '-c', _a_py,
+                    stdout=_aio_pm.subprocess.PIPE,
+                    stderr=_aio_pm.subprocess.PIPE,
+                    env=_env_pm,
+                )
+                try:
+                    _out_pm, _err_pm = await _aio_pm.wait_for(_proc_pm.communicate(), timeout=10.0)
+                    _out_pm = _out_pm.decode('utf-8', errors='replace').strip()[:2000]
+                except _aio_pm.TimeoutError:
+                    _proc_pm.kill()
+                    _out_pm = ''
+                if _out_pm:
+                    _svc_pm = _a_data.get('service_label') or _a_data.get('name', 'Агент')
+                    _integration_data_blocks.append(
+                        f'[ДАННЫЕ ОТ АГЕНТА — {_svc_pm}]\n{_out_pm}'
+                    )
+                    # Логируем в хронологию
+                    try:
+                        from models import AgentActivityLog as _AALpm, Session as _Sess_pm, User as _User_pm
+                        _al_spm = _Sess_pm()
+                        try:
+                            _al_upm = _al_spm.query(_User_pm).filter_by(telegram_id=user_id).first()
+                            if _al_upm:
+                                from ai_integration.autonomous_agent import _parse_integration_sections as _pis
+                                _aname_pm = _a_data.get('name', 'Агент')
+                                for _sec_name_pm, _sec_content_pm in _pis(_out_pm, _svc_pm):
+                                    _al_spm.add(_AALpm(
+                                        user_id=_al_upm.id,
+                                        activity_type='integration',
+                                        title=f'{_aname_pm} · {_sec_name_pm} (проактивно)',
+                                        content=_sec_content_pm[:800],
+                                        target=_svc_pm,
+                                        status='completed',
+                                    ))
+                                _al_spm.commit()
+                        finally:
+                            _al_spm.close()
+                    except Exception as _al_pm_e:
+                        logger.warning(f'[PROACTIVE] activity log error: {_al_pm_e}')
+            except Exception as _pm_e:
+                logger.warning(f'[PROACTIVE] python_code run error for {_a_data.get("name")}: {_pm_e}')
+
+        _integration_extra = ''
+        if _integration_data_blocks:
+            _integration_extra = (
+                '\n\n[РЕАЛЬНЫЕ ДАННЫЕ ИНТЕГРАЦИЙ — ИСПОЛЬЗУЙ В ОТВЕТЕ]\n'
+                'Данные получены прямо сейчас. Используй их как основу проактивного сообщения.\n'
+                '───────────────\n' +
+                '\n───────────────\n'.join(_integration_data_blocks) +
+                '\n───────────────'
+            )
+
         result = await agent.generate_system_message(
             user_id=user_id,
             mode=mode,
             instruction=instruction,
-            extra_context=situation_prompt + anti_repeat + _agents_block,
+            extra_context=situation_prompt + anti_repeat + _agents_block + _integration_extra,
             max_tokens=max_tokens,
             max_iterations=max_iterations
         )
