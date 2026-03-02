@@ -9536,10 +9536,13 @@ async def api_agent_generate_code_handler(request):
 
 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ДЛЯ IMAP (работают с Gmail и любой почтой):
 
-0. ТОЛЬКО ДЛЯ GMAIL — фильтруй категории (промоакции, соцсети, обновления — спам). Используй X-GM-RAW:
-   ПРАВИЛЬНО: mail.search(None, '(X-GM-RAW "in:inbox -category:promotions -category:social -category:updates")')
-   Можно комбинировать: mail.search(None, f'(X-GM-RAW "in:inbox -category:promotions -category:social -category:updates") SINCE {{week_ago}}')
-   Для НЕ-Gmail почты (Yandex, Mail.ru и др.) — просто mail.search(None, f"SINCE {{week_ago}}"), X-GM-RAW не нужен.
+0. ЧИТАЙ ВСЕ ПАПКИ, А НЕ ТОЛЬКО INBOX. Агент должен видеть полную картину: входящие И отправленные.
+   — Gmail: используй папку "[Gmail]/All Mail" — она содержит ВСЁ (входящие + отправленные + архив).
+     Поиск в ней: mail.select('"[Gmail]/All Mail"', readonly=True)
+     Фильтруй спам через X-GM-RAW: mail.search(None, f'(X-GM-RAW "newer_than:7d -in:spam -in:trash") SINCE {{week_ago}}')
+   — Яндекс Почта: папка "INBOX" (входящие) + папка "Sent" (отправленные). Делай два прохода.
+   — Mail.ru: папка "INBOX" + папка "Sent". Делай два прохода.
+   — Общее правило: если папка недоступна — пропускай через try/except, не падай.
 
 1. ПОСЛЕДНИЕ письма: mail.search возвращает id от старого к новому.
    ВСЕГДА используй: for eid in reversed(email_ids[-N:])
@@ -9570,7 +9573,9 @@ async def api_agent_generate_code_handler(request):
 
 5. Каждое письмо в отдельном try/except чтобы одна ошибка не ломала весь вывод.
 
-ПОЛНЫЙ ПРИМЕР правильного Gmail-агента:
+6. Помечай направление письма: для отправленных добавляй пометку [SENT] или «Исходящее:».
+
+ПОЛНЫЙ ПРИМЕР правильного Gmail-агента (читает ВСЕ письма через All Mail):
 import imaplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -9580,10 +9585,10 @@ GMAIL_PASS = os.environ.get("GMAIL_PASS", "")
 try:
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_USER, GMAIL_PASS)
-    mail.select("INBOX")
     week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%d-%b-%Y")
-    # Только реальные входящие: без Промоакций, Соцсетей, Обновлений (X-GM-RAW — Gmail-расширение IMAP)
-    _, data = mail.search(None, f'(X-GM-RAW "in:inbox -category:promotions -category:social -category:updates") SINCE {{week_ago}}')
+    # [Gmail]/All Mail — ВСЕ письма (входящие + отправленные + архив), без спама и корзины
+    mail.select('"[Gmail]/All Mail"', readonly=True)
+    _, data = mail.search(None, f'(X-GM-RAW "newer_than:7d -in:spam -in:trash") SINCE {{week_ago}}')
     email_ids = data[0].split()
     if not email_ids:
         print("Новых писем нет.")
@@ -9598,7 +9603,9 @@ try:
                     p.decode(enc or "utf-8", errors="replace") if isinstance(p, bytes) else (p or "")
                     for p, enc in parts
                 )
+                direction = "[SENT]" if GMAIL_USER.lower() in (msg.get("From") or "").lower() else "[INBOX]"
                 from_addr = msg.get("From", "")
+                to_addr = msg.get("To", "")
                 date_str = msg.get("Date", "")
                 body = ""
                 if msg.is_multipart():
@@ -9610,7 +9617,7 @@ try:
                 else:
                     raw = msg.get_payload(decode=True) or b""
                     body = raw.decode(msg.get_content_charset() or "utf-8", errors="replace")[:200]
-                print(f"От: {{from_addr}}\\nТема: {{subject}}\\nДата: {{date_str}}\\nТело: {{body[:200]}}\\n---")
+                print(f"{{direction}} От: {{from_addr}} Кому: {{to_addr}}\\nТема: {{subject}}\\nДата: {{date_str}}\\nТело: {{body[:200]}}\\n---")
             except Exception as e:
                 print(f"Ошибка письма: {{e}}")
     mail.logout()
