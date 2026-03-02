@@ -139,6 +139,8 @@ BATCH_GROUPS = {
     # System
     'service_degraded': 'system',
     'payment_failed': 'system',
+    'agent_script_failed': 'system',    # Сбой скрипта/ключей у пользовательского агента
+    'weather_extreme': 'system',        # Экстремальная погода в городе пользователя
     # Background research
     'background_research_ready': 'insights',
 }
@@ -761,6 +763,12 @@ class AnchorEngine:
 
         # --- ДЕГРАДАЦИЯ СЕРВИСОВ (service_health) ---
         anchors.extend(self._scan_service_degraded(user, session, now_utc))
+
+        # --- СБОИ СКРИПТОВ АГЕНТОВ (сломанные ключи/интеграции) ---
+        anchors.extend(self._scan_agent_script_failures(user, session, now_utc))
+
+        # --- ЭКСТРЕМАЛЬНАЯ ПОГОДА ---
+        anchors.extend(await self._scan_weather_extreme(user, profile, now_utc))
 
         # --- НЕУДАЧНЫЕ ПЛАТЕЖИ ---
         anchors.extend(self._scan_payment_failed(user, session, now_utc))
@@ -4852,6 +4860,148 @@ class AnchorEngine:
             session.rollback()
         finally:
             session.close()
+
+
+    def _scan_agent_script_failures(self, user, session, now_utc) -> list:
+        """Создаёт HIGH-якорь если пользовательский агент дважды и более не смог
+        получить данные за последние 24 часа (expired key, IMAP error, etc.).
+
+        Данные берутся из AgentActivityLog, который закрашивает failures
+        прямо при выполнении python_code в autonomous_agent.py.
+        """
+        anchors = []
+        try:
+            from models import AgentActivityLog
+            since = now_utc - timedelta(hours=24)
+            # Группируем ошибки по target (название агента/сервиса)
+            fails = session.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type == 'integration',
+                AgentActivityLog.status == 'failed',
+                AgentActivityLog.created_at >= since,
+            ).all()
+            if not fails:
+                return anchors
+
+            # Группируем по сервису/агенту
+            by_target: dict = {}
+            for rec in fails:
+                key = rec.target or 'Агент'
+                by_target.setdefault(key, [])
+                by_target[key].append(rec)
+
+            # Генерируем якорь только для сервисов с 2+ ошибками
+            for target, recs in by_target.items():
+                if len(recs) < 2:
+                    continue
+                latest = max(recs, key=lambda r: r.created_at or now_utc)
+                err_snippet = (latest.content or '')[:120]
+                source_key = f'agent_fail:{target}'
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='agent_script_failed',
+                    source=source_key,
+                    topic=_t(user,
+                        f'Агент «{target}» не может подключиться ({len(recs)}× за сутки)',
+                        f'Agent «{target}» connection failing ({len(recs)}× in 24h)'),
+                    priority=AnchorPriority.HIGH,
+                    data=json.dumps({'agent': target, 'failures': len(recs), 'last_error': err_snippet},
+                                    ensure_ascii=False),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=12),
+                    cooldown_hours=6,
+                    batch_group='system',
+                ))
+        except Exception as e:
+            logger.debug(f'[ANCHOR] agent_script_failures scan error: {e}')
+        return anchors
+
+    async def _scan_weather_extreme(self, user, profile, now_utc) -> list:
+        """Создаёт якорь при экстремальных погодных условиях в городе пользователя.
+
+        Крайние пороги: температура < -20°C или > 35°C, гроза, метель, ливень.
+        Кэш 3 часа — не тратим API-запрос каждые 5 минут.
+        """
+        anchors = []
+        try:
+            city = (profile.city if profile else None) or getattr(user, 'city', None)
+            if not city:
+                return anchors
+            from config import OPENWEATHERMAP_API_KEY
+            if not OPENWEATHERMAP_API_KEY:
+                return anchors
+
+            # Простой кэш в памяти (ключ: city, TTL 3ч)
+            _cache = getattr(self, '_weather_cache', {})
+            if not hasattr(self, '_weather_cache'):
+                self._weather_cache = {}
+                _cache = self._weather_cache
+            cache_key = city.lower().strip()
+            cached = _cache.get(cache_key)
+            if cached and (now_utc - cached['ts']).total_seconds() < 10800:
+                w = cached['data']
+            else:
+                import aiohttp
+                url = (f'https://api.openweathermap.org/data/2.5/weather'
+                       f'?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru')
+                try:
+                    async with aiohttp.ClientSession() as sess:
+                        async with sess.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                            if resp.status != 200:
+                                return anchors
+                            w = await resp.json()
+                    _cache[cache_key] = {'ts': now_utc, 'data': w}
+                except Exception:
+                    return anchors
+
+            temp = w.get('main', {}).get('temp', 0)
+            weather_id = w.get('weather', [{}])[0].get('id', 0)
+            description = w.get('weather', [{}])[0].get('description', '')
+
+            # Пороги экстремальности
+            extreme_cold = temp < -20
+            extreme_heat = temp > 35
+            # WMO codes: 2xx=гроза, 6xx=снег/метель, 502/503/504=тяжёлый дождь
+            storm = 200 <= weather_id < 300
+            heavy_snow = weather_id in (602, 621, 622)
+            heavy_rain = weather_id in (502, 503, 504, 522)
+
+            is_extreme = extreme_cold or extreme_heat or storm or heavy_snow or heavy_rain
+            if not is_extreme:
+                return anchors
+
+            if extreme_cold:
+                topic_ru = f'Сильный мороз в {city}: {temp:.0f}°C — учти при планировании'
+                topic_en = f'Extreme cold in {city}: {temp:.0f}°C — adjust your schedule'
+            elif extreme_heat:
+                topic_ru = f'Сильная жара в {city}: {temp:.0f}°C'
+                topic_en = f'Extreme heat in {city}: {temp:.0f}°C'
+            elif storm:
+                topic_ru = f'Гроза в {city}: {description}'
+                topic_en = f'Thunderstorm in {city}: {description}'
+            elif heavy_snow:
+                topic_ru = f'Метель/сильный снег в {city}: {description}'
+                topic_en = f'Heavy snow/blizzard in {city}: {description}'
+            else:
+                topic_ru = f'Сильный дождь в {city}: {description}'
+                topic_en = f'Heavy rain in {city}: {description}'
+
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='weather_extreme',
+                source=f'weather:{cache_key}:{weather_id}',
+                topic=_t(user, topic_ru, topic_en),
+                priority=AnchorPriority.HIGH,
+                data=json.dumps({'city': city, 'temp': temp, 'description': description,
+                                 'weather_id': weather_id}, ensure_ascii=False),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(hours=6),
+                cooldown_hours=6,
+                batch_group='system',
+            ))
+        except Exception as e:
+            logger.debug(f'[ANCHOR] weather_extreme scan error: {e}')
+        return anchors
 
 
 # ═══════════════════════════════════════════════════════
