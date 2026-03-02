@@ -3918,6 +3918,68 @@ except Exception as e:
             }
         };
 
+        function mpUpdateServiceHint() {
+            const apiEl = document.getElementById('mpa-apikeys');
+            const hint = document.getElementById('mpa-svc-hint');
+            if (!hint) return;
+            if (!apiEl || !apiEl.value.trim()) { hint.style.display = 'none'; hint.innerHTML = ''; return; }
+            const keyToSvc = {};
+            for (const [svc, tmpl] of Object.entries(_MPA_SVC)) {
+                for (const f of (tmpl.fields || [])) keyToSvc[f.k] = svc;
+            }
+            const lines = apiEl.value.split('\n');
+            const foundSvcs = new Set();
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.includes('=')) continue;
+                const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
+                const svc = keyToSvc[key];
+                if (svc) foundSvcs.add(svc);
+            }
+            if (!foundSvcs.size) { hint.style.display = 'none'; hint.innerHTML = ''; return; }
+            let h = '<div style="font-size:12px;color:#6B7280;margin-bottom:5px;">Подключённые сервисы:</div><div style="display:flex;flex-wrap:wrap;gap:5px;">';
+            for (const svc of foundSvcs) {
+                const name = _MPA_SVC[svc]?.name || svc;
+                h += `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:#F6F8FA;border:1px solid #D1D9E0;border-radius:4px;font-size:12px;color:#374151;">${name}<button type="button" onclick="mpRemoveService('${svc}')" class="delete-btn" title="Удалить" style="width:14px;height:14px;padding:0;margin:0;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 16 16" fill="#9CA3AF"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg></button></span>`;
+            }
+            h += '</div>';
+            hint.innerHTML = h;
+            hint.style.display = 'block';
+        }
+
+        function mpRemoveService(svc) {
+            const tmpl = _MPA_SVC[svc];
+            if (!tmpl) return;
+            const keysToRemove = new Set((tmpl.fields || []).map(f => f.k));
+            const apiEl = document.getElementById('mpa-apikeys');
+            if (apiEl) {
+                const remaining = apiEl.value.split('\n').filter(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.includes('=')) return true;
+                    const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
+                    return !keysToRemove.has(key);
+                });
+                apiEl.value = remaining.filter(l => l.trim()).join('\n');
+            }
+            const codeEl = document.getElementById('mpa-pycode');
+            if (codeEl && codeEl.value.trim()) {
+                const marker = '# === ' + tmpl.name + ' ===';
+                let code = codeEl.value;
+                if (code.includes(marker)) {
+                    const idx = code.indexOf(marker);
+                    const before = code.slice(0, idx).trimEnd();
+                    const after = code.slice(idx + marker.length);
+                    const nextIdx = after.search(/\n# ===/);
+                    const rest = nextIdx >= 0 ? after.slice(nextIdx).trimStart() : '';
+                    codeEl.value = (before + (rest ? '\n\n' + rest : '')).trim();
+                } else if (code.trim() === tmpl.code.trim()) {
+                    codeEl.value = '';
+                }
+                if (codeEl.value) { codeEl.style.height = 'auto'; codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px'; }
+            }
+            mpUpdateServiceHint();
+        }
+
         function mpApplyTemplate(svc) {
             const fieldsEl = document.getElementById('mpa-svc-fields');
             const hintEl = document.getElementById('mpa-svc-hint');
@@ -3981,6 +4043,7 @@ except Exception as e:
             const det = document.getElementById('mpa-advanced-details');
             if (det) det.open = true;
             mpShowStatus('Сервис «' + tmpl.name + '» добавлен. Для ещё одного — выберите следующий сервис выше.', '#ECFDF5', '#059669');
+            mpUpdateServiceHint();
         }
 
         async function mpGenerateAgentCode() {
@@ -4087,27 +4150,7 @@ except Exception as e:
             set('mpa-price', agent.price_per_message);
             set('mpa-trial', agent.trial_messages);
             set('mpa-apikeys', agent.user_api_keys);
-            // Показываем список уже подключённых сервисов
-            if (agent.user_api_keys) {
-                const keys = agent.user_api_keys.split('\n').map(l => l.split('=')[0].trim()).filter(Boolean);
-                const svcMap = {GMAIL_USER:'Gmail',RESEND_API_KEY:'Resend',SLACK_TOKEN:'Slack',NOTION_TOKEN:'Notion',
-                    AIRTABLE_API_KEY:'Airtable',TRELLO_API_KEY:'Trello',STRIPE_SECRET_KEY:'Stripe',SHOPIFY_STORE:'Shopify',
-                    GITHUB_TOKEN:'GitHub',TELEGRAM_BOT_TOKEN:'Telegram Bot',VK_TOKEN:'ВКонтакте',
-                    WB_API_KEY:'Wildberries',OZON_CLIENT_ID:'Ozon',GOOGLE_SHEETS_ID:'Google Sheets',
-                    HH_ACCESS_TOKEN:'hh.ru',JIRA_EMAIL:'Jira',CALENDLY_TOKEN:'Calendly',
-                    COINGECKO_API_KEY:'CoinGecko',YOUTUBE_API_KEY:'YouTube',RSS_URL:'RSS',
-                    WEATHER_API_KEY:'OpenWeatherMap',BITRIX24_WEBHOOK:'Битрикс24',
-                    AMO_SUBDOMAIN:'AmoCRM',HUBSPOT_API_KEY:'HubSpot',HTTP_API_URL:'HTTP API'};
-                const found = [...new Set(keys.map(k => svcMap[k]).filter(Boolean))];
-                if (found.length) {
-                    const hint = document.getElementById('mpa-svc-hint');
-                    if (hint) {
-                        hint.textContent = '✓ Уже настроено: ' + found.join(', ') + ' — выберите следующий сервис, чтобы добавить.';
-                        hint.style.display = 'block';
-                        hint.style.color = '#059669';
-                    }
-                }
-            }
+            mpUpdateServiceHint();
             set('mpa-pycode', agent.python_code);
             const privEl = document.getElementById('mpa-private');
             if (privEl) {
@@ -4322,7 +4365,7 @@ except Exception as e:
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="font-size:13px;color:#374151;margin-bottom:4px;">Переменные окружения</div>
                         <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Ключи добавляются автоматически при нажатии «Добавить сервис». Несколько сервисов — просто выбирайте по очереди. Или добавьте вручную: <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=значение</code></div>
-                        <textarea id="mpa-apikeys" placeholder="Заполнятся автоматически после выбора сервиса выше" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                        <textarea id="mpa-apikeys" placeholder="Заполнятся автоматически после выбора сервиса выше" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;" oninput="mpUpdateServiceHint()"></textarea>
                     </div>
 
                     <!-- Продвинутые настройки: код -->
