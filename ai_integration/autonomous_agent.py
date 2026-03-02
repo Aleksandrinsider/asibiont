@@ -1237,13 +1237,16 @@ class HybridAutonomousAgent:
                     load_agent_personality, build_agent_system_prompt,
                     set_user_focused_agent, remove_user_active_agent,
                 )
-                # Проверяем @упоминание агента в сообщении: "@ИмяАгента текст"
-                _mention_match = _re_agent.match(r'@(\w+)\b', (user_message or '').strip())
+                # Роутинг по имени агента: "@Алиса текст" или просто "Алиса текст"
+                _msg_stripped = (user_message or '').strip()
+                _mention_match = _re_agent.match(r'@(\w+)\b', _msg_stripped)
                 _active_agent_id = None
-                _mention_not_found = False  # флаг: @упоминание было, но агент не найден
+                _mention_not_found = False  # флаг: явное @упоминание было, но агент не найден
+                _all_active_ids = get_user_active_agents(user_id)
+
                 if _mention_match:
+                    # Явный @mention — ищем только среди активных, ошибка если не найден
                     _mention_name = _mention_match.group(1).lower()
-                    _all_active_ids = get_user_active_agents(user_id)
                     for _cid in _all_active_ids:
                         _cdata = load_agent_personality(_cid)
                         if _cdata and _cdata['name'].lower() == _mention_name:
@@ -1255,8 +1258,23 @@ class HybridAutonomousAgent:
                             logger.info(f"[AGENT] @mention routed to '{_cdata['name']}' (id={_cid})")
                             break
                     if _active_agent_id is None:
-                        # @упоминание было, но агент не найден — возвращаем ошибку сразу
                         _mention_not_found = True
+                else:
+                    # Имя без @ — ищем совпадение с началом сообщения (тихий роутинг)
+                    _first_word = _re_agent.match(r'(\w+)\b', _msg_stripped)
+                    if _first_word and len(_all_active_ids) > 1:
+                        _fw = _first_word.group(1).lower()
+                        for _cid in _all_active_ids:
+                            _cdata = load_agent_personality(_cid)
+                            if _cdata and _cdata['name'].lower() == _fw:
+                                _active_agent_id = _cid
+                                try:
+                                    set_user_focused_agent(user_id, _cid)
+                                except Exception:
+                                    pass
+                                logger.info(f"[AGENT] name-prefix routed to '{_cdata['name']}' (id={_cid})")
+                                break
+
                 if not _mention_not_found and _active_agent_id is None:
                     _active_agent_id = get_user_active_agent(user_id)
                 if _active_agent_id:
@@ -1301,7 +1319,7 @@ class HybridAutonomousAgent:
                     _err_msg = (
                         f"Агент @{_not_found_name} не найден среди активных.\n"
                         f"Активные агенты: {_hint}.\n"
-                        f"Используй @ИмяАгента или напиши без @ — ответит фокусный агент."
+                        f"Напиши «{_all_names[0]} привет» или «@{_all_names[0]} привет» — ответит он."
                     )
                 else:
                     _err_msg = (
