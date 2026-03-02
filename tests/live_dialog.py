@@ -16,6 +16,12 @@ import argparse
 import textwrap
 import json
 
+# Принудительно UTF-8 для stdout/stderr (иначе cp1251 не осилит эмодзи)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # ── настройка окружения ────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LOCAL", "1")

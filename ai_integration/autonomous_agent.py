@@ -1469,10 +1469,16 @@ class HybridAutonomousAgent:
                     except Exception:
                         pass
 
+                # Если уже есть результаты инструментов — финальный ответ без tools
+                # (убирает ~40 определений инструментов из запроса → значительно быстрее)
+                _has_results = bool(all_execution_results)
                 response = await self.call_ai(
-                    messages, use_tools=True, subscription_tier=sub_tier,
-                    tool_choice=tc, max_tokens=600,
-                    exclude_tools=tools_to_exclude)
+                    messages,
+                    use_tools=not _has_results,
+                    subscription_tier=sub_tier,
+                    tool_choice=tc if not _has_results else None,
+                    max_tokens=600,
+                    exclude_tools=tools_to_exclude if not _has_results else None)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')

@@ -105,6 +105,7 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
     service_label = agent_data.get('service_label', '')
 
     title_line = f"{name}, {job_title}" if job_title else name
+    _job_line = ("\nДОЛЖНОСТЬ / РОЛЬ: " + job_title) if job_title else ""
 
     overlay = f"""
 ═══════════════════════════════════════════════════════
@@ -114,7 +115,7 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 Веди ВСЕ РАЗГОВОРЫ И ПЕРЕПИСКУ ОТ СВОЕГО ИМЕНИ, а НЕ от имени пользователя.
 Когда нужно написать письмо, сообщение или пост — ты автор, ты отправитель, подпись — твои имя и должность.
 Сохраняй этот характер постоянно. Технические возможности и инструменты платформы работают как обычно.
-{('\nДОЛЖНОСТЬ / РОЛЬ: ' + job_title) if job_title else ''}
+{_job_line}
 
 ЛИЧНОСТЬ И ХАРАКТЕР:
 {personality}
