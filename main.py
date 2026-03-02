@@ -9647,7 +9647,10 @@ async def api_marketplace_publish_agent_handler(request):
             agent.trial_messages = max(0, int(data.get('trial_messages') or 3))
             agent.is_adult = bool(data.get('is_adult', False))
             agent.is_private = bool(data.get('is_private', False))
-            agent.status = 'active'  # Авто-одобрение: агент сразу активен
+            # Новый агент создаётся в статусе 'paused' — активирует пользователь кнопкой «Запустить в чат»
+            # При редактировании существующего агента статус не меняем
+            if not agent_id:
+                agent.status = 'paused'
 
             # Пользовательские API ключи
             agent.user_api_keys = (data.get('user_api_keys') or '').strip()
@@ -9698,9 +9701,9 @@ async def api_marketplace_publish_agent_handler(request):
                 privacy_warning = 'Не удалось сохранить приватность агента — пересохраните его ещё раз.'
                 logger.error(f"[MARKETPLACE] is_private MISMATCH: agent {agent.id} requested private but saved as public!")
             return web.json_response({'success': True, 'id': agent.id, 'slug': agent.slug,
-                                      'status': 'active',
+                                      'status': agent.status,
                                       'is_private': is_private_actual,
-                                      'message': 'Агент опубликован и активен.',
+                                      'message': 'Агент сохранён. Нажмите «Запустить в чат» чтобы он начал писать в Арену.' if agent.status == 'paused' else 'Агент активен.',
                                       'warning': privacy_warning})
         finally:
             session_db.close()
