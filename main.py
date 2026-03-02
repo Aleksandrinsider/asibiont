@@ -6023,6 +6023,22 @@ async def translate_comment_handler(request):
             db_session.close()
 
 
+def _default_avatar_response():
+    """Return a neutral SVG avatar placeholder (200 OK) to avoid browser 404 console errors."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+        '<circle cx="32" cy="32" r="32" fill="#E8ECEF"/>'
+        '<circle cx="32" cy="24" r="10" fill="#B0B8C1"/>'
+        '<ellipse cx="32" cy="52" rx="18" ry="12" fill="#B0B8C1"/>'
+        '</svg>'
+    )
+    return web.Response(
+        body=svg.encode(),
+        content_type='image/svg+xml',
+        headers={'Cache-Control': 'public, max-age=60'}
+    )
+
+
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id.
     Priority: custom_avatar > Telegram/Discord avatar.
@@ -6067,14 +6083,14 @@ async def api_avatar_handler(request):
                 if _user and _user.photo_url:
                     # Discord CDN URLs are public, redirect directly
                     return web.HTTPFound(_user.photo_url)
-                return web.Response(status=404, text='No avatar found')
+                return _default_avatar_response()
             finally:
                 _db.close()
 
         # Telegram users: proxy through server
         if 'bot' not in request.app or not request.app['bot']:
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
-            return web.Response(status=404, text='Avatar service unavailable')
+            return _default_avatar_response()
 
         avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
 
@@ -6092,13 +6108,13 @@ async def api_avatar_handler(request):
                                 headers={'Cache-Control': 'public, max-age=3600'}
                             )
                         else:
-                            return web.Response(status=404, text='Avatar not available')
+                            return _default_avatar_response()
             except Exception as e:
                 logger.warning(f"Failed to proxy avatar for {telegram_id}: {e}")
-                return web.Response(status=404, text='Avatar not available')
+                return _default_avatar_response()
         else:
-            # Return 404 if no avatar found
-            return web.Response(status=404, text='No avatar found')
+            # Return default avatar placeholder if no avatar found
+            return _default_avatar_response()
     except ValueError:
         return web.Response(status=400, text='Invalid telegram_id')
     except Exception as e:
