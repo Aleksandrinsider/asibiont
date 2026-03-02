@@ -3179,7 +3179,12 @@ try:
             for item in items:
                 t = _rss_title(item)
                 lm = re.search(r'<link>\s*(.*?)\s*</link>', item, re.DOTALL)
-                l = (lm.group(1).strip() if lm else '').split()[0] if lm else ''
+                if lm:
+                    raw_l = lm.group(1).strip()
+                    cdata_l = re.match(r'<!\[CDATA\[(.*?)\]\]>', raw_l, re.DOTALL)
+                    l = (cdata_l.group(1) if cdata_l else raw_l).strip().split()[0]
+                else:
+                    l = ''
                 print('- ' + t)
                 if l: print('  ' + l)
 except Exception as e:
