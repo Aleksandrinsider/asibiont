@@ -9458,6 +9458,7 @@ async def api_marketplace_agents_handler(request):
                 result.append({
                     'id': a.id, 'name': a.name, 'slug': a.slug,
                     'description': a.description, 'specialization': a.specialization,
+                    'job_title': a.job_title or '',
                     'avatar_url': a.avatar_url,
                     'price_per_message': a.price_per_message,
                     'trial_messages': a.trial_messages,
@@ -9657,6 +9658,7 @@ async def api_marketplace_publish_agent_handler(request):
             agent.slug = slug
             agent.description = (data.get('description') or '')[:1000]
             agent.specialization = data.get('specialization', 'misc')
+            agent.job_title = (data.get('job_title') or '')[:200]
             agent.personality = (data.get('personality') or '')[:8000]
             agent.tools_allowed = _json.dumps(data.get('tools_allowed') or [])
             agent.knowledge_base = _json.dumps(data.get('knowledge_base') or [])
@@ -9909,6 +9911,7 @@ async def api_marketplace_my_handler(request):
                              'trial_messages': a.trial_messages,
                              'messages_count': arena_counts.get(a.id, 0),
                              'specialization': a.specialization or '',
+                             'job_title': a.job_title or '',
                              'description': a.description or '',
                              'personality': a.personality or '',
                              'avatar_url': a.avatar_url or '',
@@ -10319,6 +10322,7 @@ async def api_marketplace_agent_get_handler(request):
                 'id': agent.id, 'name': agent.name, 'slug': agent.slug,
                 'description': agent.description or '',
                 'specialization': agent.specialization or '',
+                'job_title': agent.job_title or '',
                 'avatar_url': agent.avatar_url or '',
                 'price_per_message': agent.price_per_message,
                 'trial_messages': agent.trial_messages,

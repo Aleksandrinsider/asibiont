@@ -842,6 +842,7 @@ class UserAgent(Base):
     specialization = Column(String(100))                  # marketing/legal/finance/dev/lifestyle/other
 
     # Характер и поведение
+    job_title = Column(String(200))                       # Должность / роль агента (напр. «Финансовый аналитик»)
     personality = Column(Text)                            # System prompt от автора
     tools_allowed = Column(Text)                          # JSON array: ['add_task', 'research_topic', ...]
     knowledge_base = Column(Text)                         # JSON array: [{type, content/url, name}]

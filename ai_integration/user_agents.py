@@ -75,6 +75,7 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
         return {
             'id': agent.id,
             'name': agent.name,
+            'job_title': agent.job_title or '',
             'personality': agent.personality or '',
             'tools_allowed': tools,
             'knowledge_snippets': kb_snippets,
@@ -98,17 +99,22 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
     """
     personality = agent_data.get('personality', '').strip()
     name = agent_data.get('name', 'Агент')
+    job_title = agent_data.get('job_title', '').strip()
     kb_snippets = agent_data.get('knowledge_snippets', [])
     has_script = bool(agent_data.get('python_code', '').strip())
     service_label = agent_data.get('service_label', '')
 
+    title_line = f"{name}, {job_title}" if job_title else name
+
     overlay = f"""
 ═══════════════════════════════════════════════════════
-РЕЖИМ КАСТОМНОГО АГЕНТА: {name}
+РЕЖИМ АГЕНТА: {title_line}
 ═══════════════════════════════════════════════════════
-Ты сейчас выступаешь как агент «{name}», созданный пользователем платформы.
-Веди себя ТОЧНО в соответствии с описанием ниже. Сохраняй этот характер постоянно.
-Технические возможности, правила биллинга и инструменты работают как обычно.
+Ты — {title_line}. Это твоя настоящая роль и личность.
+Веди ВСЕ РАЗГОВОРЫ И ПЕРЕПИСКУ ОТ СВОЕГО ИМЕНИ, а НЕ от имени пользователя.
+Когда нужно написать письмо, сообщение или пост — ты автор, ты отправитель, подпись — твои имя и должность.
+Сохраняй этот характер постоянно. Технические возможности и инструменты платформы работают как обычно.
+{('\nДОЛЖНОСТЬ / РОЛЬ: ' + job_title) if job_title else ''}
 
 ЛИЧНОСТЬ И ХАРАКТЕР:
 {personality}
@@ -213,8 +219,7 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
     # Краткое напоминание в КОНЦЕ промпта — чтобы AI не «забыл» личность после длинного контекста
     svc_hint = f" Подключённый сервис: {service_label} — приоритизируй его возможности в ответах." if service_label else ""
     reminder = (
-        f"\n\n[🎭 НАПОМИНАНИЕ: ты сейчас агент «{name}». "
-        f"Строго придерживайся описанной выше личности в КАЖДОМ ответе.{svc_hint}"
+        f"\n\n[ТЫ — {title_line}. ПИШИ ОТ СВОЕГО ИМЕНИ в каждом ответе, не от имени пользователя.{svc_hint}"
     )
     if has_script:
         reminder += (

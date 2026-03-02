@@ -452,6 +452,14 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] is_private add skipped: {e}")
+        if 'job_title' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN job_title VARCHAR(200)"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.job_title")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] job_title add skipped: {e}")
 
 
 def _migrate_arena(session, inspector):

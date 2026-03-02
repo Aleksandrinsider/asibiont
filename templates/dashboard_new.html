@@ -2763,7 +2763,7 @@
                             </div>
                             <div style="min-width:0;flex:1;">
                                 <div style="font-size:13px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</div>
-                                <div style="font-size:12px;color:#9CA3AF;">${escapeHtml(a.specialization || '')}${a.author_username ? ` &nbsp;<span style="color:#068487;cursor:pointer;transition:opacity 0.2s;" onclick="event.stopPropagation();openContactProfileModal('${escapeHtml(a.author_username)}')" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${escapeHtml(a.author_username)}</span>` : ''}</div>
+                                <div style="font-size:12px;color:#9CA3AF;">${a.job_title ? escapeHtml(a.job_title) + (a.specialization || a.author_username ? ' · ' : '') : ''}${escapeHtml(a.specialization || '')}${a.author_username ? ` &nbsp;<span style="color:#068487;cursor:pointer;transition:opacity 0.2s;" onclick="event.stopPropagation();openContactProfileModal('${escapeHtml(a.author_username)}')" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${escapeHtml(a.author_username)}</span>` : ''}</div>
                             </div>
                         </div>
                         <div style="font-size:12px;color:#6B7280;line-height:1.6;margin-top:2px;">${escapeHtml(a.description || '')}</div>
@@ -4202,6 +4202,7 @@ except Exception as e:
             // Заполняем поля
             const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val || ''; };
             set('mpa-name', agent.name);
+            set('mpa-job-title', agent.job_title);
             set('mpa-slug', agent.slug);
             set('mpa-spec', agent.specialization);
             set('mpa-desc', agent.description);
@@ -4364,10 +4365,14 @@ except Exception as e:
                     </div>
 
                     <input id="mpa-name" type="text" placeholder="Имя агента" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <input id="mpa-job-title" type="text" placeholder="Должность / роль (например: Финансовый аналитик, Юрист-консультант)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <input id="mpa-slug" type="text" placeholder="slug (латиница: my-agent)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <input id="mpa-spec" type="text" placeholder="Направление (например: финансы, маркетинг, разработка, юридические вопросы)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <textarea id="mpa-desc" placeholder="Короткое описание для карточки (2-3 предложения)" rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
                     <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
+                    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px 12px;font-size:12px;color:#1D4ED8;line-height:1.5;">
+                        ℹ️ <strong>Агент пишет от своего имени</strong> — как самостоятельный персонаж, а не от имени пользователя. В переписке и постах подпись — имя агента и его должность.
+                    </div>
 
                     <!-- Приватность -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
@@ -4491,6 +4496,7 @@ except Exception as e:
             const data = {
                 name: _v('mpa-name').trim(),
                 slug: _v('mpa-slug').trim(),
+                job_title: _v('mpa-job-title').trim(),
                 specialization: _v('mpa-spec').trim(),
                 description: _v('mpa-desc').trim(),
                 personality: _v('mpa-personality').trim(),
