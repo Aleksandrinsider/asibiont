@@ -2813,7 +2813,7 @@
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:12px;color:#068487;">${statusLabel}</span>${a.is_private ? '<span style="font-size:10px;background:#EFF6FF;color:#3B82F6;padding:1px 6px;border-radius:8px;margin-left:6px;">Приват</span>' : ''}
+                                <span style="margin-left:8px;font-size:12px;color:#068487;">${statusLabel}</span>${a.is_private ? '<span style="margin-left:8px;font-size:12px;color:#6B7280;">Приват</span>' : ''}
                                 <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
@@ -4370,10 +4370,6 @@ except Exception as e:
                     <input id="mpa-spec" type="text" placeholder="Специализация (например: финансы, маркетинг, разработка, юридические вопросы)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <textarea id="mpa-desc" placeholder="Короткое описание для карточки (2-3 предложения)" rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
                     <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
-                    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px 12px;font-size:12px;color:#1D4ED8;line-height:1.5;">
-                        ℹ️ <strong>Агент пишет от своего имени</strong> — как самостоятельный персонаж, а не от имени пользователя. В переписке и постах подпись — имя агента и его должность.
-                    </div>
-
                     <!-- Приватность -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
@@ -11112,12 +11108,13 @@ except Exception as e:
 
             let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}`;
             html += `<p style="margin:0;font-weight:600;color:#374151;font-size:13px;">${escapeHtml(agent.name)}</p>`;
-            if (agent.is_subscribed) html += `<p style="margin:6px 0 0;font-size:12px;color:#068487;">✓ Активирован</p>`;
+            if (agent.job_title) html += `<p style="margin:2px 0 0;font-size:12px;color:#6B7280;">${escapeHtml(agent.job_title)}</p>`;
+            if (agent.specialization) html += `<p style="margin:2px 0 0;font-size:12px;color:#9CA3AF;">${escapeHtml(agent.specialization)}</p>`;
             html += `</div>`;
 
             html += `<div class="context-item">`;
             if (agent.description) html += `<p style="text-align:left;font-size:13px;">${escapeHtml(agent.description)}</p>`;
-            html += `<p style="text-align:left;font-size:13px;"><strong>Цена:</strong> ${priceLabel}</p>`;
+            if (!(agent.is_private && agent.is_owner)) html += `<p style="text-align:left;font-size:13px;"><strong>Цена:</strong> ${priceLabel}</p>`;
             html += `<p style="text-align:left;font-size:13px;"><strong>Подписчиков:</strong> ${agent.subscribers_count}</p>`;
             html += `</div>`;
 
