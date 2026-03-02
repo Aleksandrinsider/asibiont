@@ -1935,8 +1935,15 @@
             // Prepare avatar HTML
             let avatarHtml = '';
             if (normalizedSender === 'ai') {
-                // AI avatar with fallback
-                avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">AI</div>';
+                // Use active agent avatar if available, otherwise default
+                const _agentAvUrl = window._activeAgentData && window._activeAgentData.avatar_url;
+                const _agentAvName = window._activeAgentData && window._activeAgentData.name;
+                const _agentInit = _agentAvName ? _agentAvName.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase() : 'AI';
+                if (_agentAvUrl) {
+                    avatarHtml = `<img src="${escapeHtml(_agentAvUrl)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">${_agentInit}</div>`;
+                } else {
+                    avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">AI</div>';
+                }
             } else {
                 // User avatar from profile - приоритет отдаем window.userAvatarUrl
                 const avatarUrl = window.userAvatarUrl || (window.currentUserProfile && window.currentUserProfile.photo_url);
@@ -5201,21 +5208,21 @@ except Exception as e:
             wrap.appendChild(header);
 
             if (hasDetails) {
-                // strip images from content
-                function _stripImages(html) {
-                    const tmp = document.createElement('div');
-                    tmp.innerHTML = html;
-                    tmp.querySelectorAll('img, picture, figure, video, iframe, source').forEach(el => el.remove());
-                    tmp.querySelectorAll('[style]').forEach(el => {
-                        el.style.backgroundImage = '';
-                        el.style.background = el.style.background ? el.style.background.replace(/url\([^)]*\)/gi,'') : '';
-                    });
-                    return tmp.innerHTML;
-                }
-                let safeContent = a.content
-                    .replace(/!\[.*?\]\([^)]*\)/g,'')
-                    .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi,'');
-                safeContent = _stripImages(safeContent);
+                // Очищаем контент: удаляем HTML-теги, блоки кода, лишние пробелы
+                let rawContent = a.content || '';
+                // Удаляем блоки кода (markdown и inline)
+                rawContent = rawContent.replace(/```[\s\S]*?```/g, '[код]').replace(/`[^`\n]+`/g, '[код]');
+                // Удаляем markdown-картинки и ссылки на изображения
+                rawContent = rawContent.replace(/!\[.*?\]\([^)]*\)/g, '');
+                rawContent = rawContent.replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi, '');
+                // Удаляем HTML-теги (email headers и прочий HTML)
+                rawContent = rawContent.replace(/<[^>]+>/g, ' ');
+                // Нормализуем пробелы (сохраняем переносы строк)
+                rawContent = rawContent.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+                // Экранируем для безопасного HTML-вывода
+                const _tE = document.createElement('div');
+                _tE.textContent = rawContent;
+                let safeContent = _tE.innerHTML;
 
                 const body = document.createElement('div');
                 body.style.cssText = 'overflow:hidden;transition:max-height 0.25s ease;max-height:0px;';
@@ -11107,6 +11114,8 @@ except Exception as e:
                         ? 'Агент активирован и переключён в Telegram. Напишите боту!'
                         : 'Агент активирован';
                     showNotification(msg, 'success');
+                    // Обновляем аватар агента в чате
+                    if (data.agent) window._activeAgentData = data.agent;
                     if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = true;
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
@@ -11131,6 +11140,8 @@ except Exception as e:
                 const data = await r.json();
                 if (data.success) {
                     showNotification('Агент деактивирован', 'success');
+                    // Сбрасываем аватар агента в чате
+                    if (window._activeAgentData && window._activeAgentData.id === agentId) window._activeAgentData = null;
                     if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = false;
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
@@ -12313,6 +12324,8 @@ except Exception as e:
                         first_name: data.first_name,
                         username: data.profile?.username
                     };
+                    // Sync active agent avatar data
+                    window._activeAgentData = data.active_agent || null;
                     
                     // Update timezone if changed
                     const oldTimezone = window.USER_TIMEZONE;

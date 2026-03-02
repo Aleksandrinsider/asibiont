@@ -8616,6 +8616,23 @@ async def api_profile_handler(request):
             'discord_channel_id': str(user.discord_channel_id) if hasattr(user, 'discord_channel_id') and user.discord_channel_id else None,
         }
 
+        # Добавляем данные активного агента для аватара в чате
+        try:
+            from ai_integration.user_agents import get_user_active_agent as _gaa_p
+            _active_aid = _gaa_p(user_id, session_db)
+            if _active_aid:
+                from models import UserAgent as _UA_p
+                _ag_p = session_db.query(_UA_p).filter_by(id=_active_aid).first()
+                response_data['active_agent'] = {
+                    'id': _ag_p.id,
+                    'name': _ag_p.name or '',
+                    'avatar_url': _ag_p.avatar_url or '',
+                } if _ag_p else None
+            else:
+                response_data['active_agent'] = None
+        except Exception:
+            response_data['active_agent'] = None
+
         return web.json_response(response_data)
     except Exception as e:
         logger.error(f"Error fetching profile: {e}")
@@ -10397,18 +10414,25 @@ async def api_marketplace_agent_activate_handler(request):
                     return web.json_response({'error': 'Agent not found or not active'}, status=404)
             existing = session_db.query(AgentSubscription).filter_by(
                 user_id=user_obj.id, agent_id=agent_id).first()
-            if existing:
-                return web.json_response({'success': True, 'already': True})
-            sub = AgentSubscription(user_id=user_obj.id, agent_id=agent_id)
-            session_db.add(sub)
-            agent.subscribers_count = (agent.subscribers_count or 0) + 1
-            session_db.commit()
-            # Если это собственный агент пользователя — сразу переключаем в Telegram
-            _switched = False
-            if agent.author_id == user_obj.id:
-                from ai_integration.user_agents import set_user_active_agent as _sua
-                _sua(user_id, agent.id)
-                _switched = True
+            if not existing:
+                # Деактивируем все другие активные подписки (один активный агент)
+                other_subs = session_db.query(AgentSubscription).filter(
+                    AgentSubscription.user_id == user_obj.id,
+                    AgentSubscription.agent_id != agent_id
+                ).all()
+                for _os in other_subs:
+                    _oa = session_db.query(UserAgent).filter_by(id=_os.agent_id).first()
+                    if _oa and (_oa.subscribers_count or 0) > 0:
+                        _oa.subscribers_count = _oa.subscribers_count - 1
+                    session_db.delete(_os)
+                sub = AgentSubscription(user_id=user_obj.id, agent_id=agent_id)
+                session_db.add(sub)
+                agent.subscribers_count = (agent.subscribers_count or 0) + 1
+                session_db.commit()
+            # Всегда переключаем активного агента в Telegram
+            from ai_integration.user_agents import set_user_active_agent as _sua
+            _sua(user_id, agent.id)
+            _switched = True
             # Захватываем атрибуты до закрытия сессии
             _aid = agent.id
             _aname = agent.name or 'Агент'
@@ -10417,14 +10441,17 @@ async def api_marketplace_agent_activate_handler(request):
             _adesc = agent.description or ''
             _trial = agent.trial_messages or 0
             _price = agent.price_per_message
+            _aavatar = agent.avatar_url or ''
             # Автор агента
             _author_user = session_db.query(UserModel).filter_by(id=agent.author_id).first()
             _author_uname = (_author_user.username or '') if _author_user else ''
-            # Публикуем первое сообщение агента в арену
-            asyncio.ensure_future(_arena_intro_for_agent(
-                _aid, _aname, _aspec, _apers, _adesc, _author_uname))
+            # Публикуем первое сообщение агента в арену (только при новой подписке)
+            if not existing:
+                asyncio.ensure_future(_arena_intro_for_agent(
+                    _aid, _aname, _aspec, _apers, _adesc, _author_uname))
             return web.json_response({'success': True, 'trial_messages': _trial,
-                                      'price_per_message': _price, 'switched': _switched})
+                                      'price_per_message': _price, 'switched': _switched,
+                                      'agent': {'id': _aid, 'name': _aname, 'avatar_url': _aavatar}})
         finally:
             session_db.close()
     except Exception as e:
