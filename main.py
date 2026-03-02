@@ -10519,10 +10519,9 @@ async def api_marketplace_agent_deactivate_handler(request):
                 if agent and (agent.subscribers_count or 0) > 0:
                     agent.subscribers_count = agent.subscribers_count - 1
                 session_db.commit()
-            # Сбрасываем активного агента если это был текущий
-            from ai_integration.user_agents import get_user_active_agent as _gua, set_user_active_agent as _sua
-            if _gua(user_id) == agent_id:
-                _sua(user_id, None)
+            # Убираем агента из списка активных (не трогаем остальных)
+            from ai_integration.user_agents import remove_user_active_agent as _rua
+            _rua(user_id, agent_id)
             return web.json_response({'success': True})
         finally:
             session_db.close()

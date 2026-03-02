@@ -235,10 +235,32 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
     return combined + reminder
 
 
+def _get_mem(user_id: int, session) -> dict:
+    """Вспомогательная: читает user.memory как dict."""
+    from models import User
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user or not user.memory:
+        return {}
+    try:
+        return json.loads(user.memory)
+    except Exception:
+        return {}
+
+
+def _save_mem(user_id: int, mem: dict, session) -> None:
+    """Вспомогательная: сохраняет dict обратно в user.memory."""
+    from models import User
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if user:
+        user.memory = json.dumps(mem, ensure_ascii=False)
+        session.commit()
+
+
 def get_user_active_agent(user_id: int, session=None) -> Optional[int]:
     """
-    Возвращает agent_id если пользователь сейчас общается с кастомным агентом.
-    Хранится в user.memory JSON под ключом 'active_agent_id'.
+    Возвращает «активный» (focused) agent_id для данного пользователя.
+    Сначала смотрит на focused_agent_id (последний @упомянутый или нажатый),
+    потом на первый в active_agent_ids, потом legacy-ключ active_agent_id.
     """
     close = False
     if session is None:
@@ -246,44 +268,120 @@ def get_user_active_agent(user_id: int, session=None) -> Optional[int]:
         session = Session()
         close = True
     try:
-        from models import User
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user or not user.memory:
-            return None
-        try:
-            mem = json.loads(user.memory)
-            return mem.get('active_agent_id')
-        except Exception:
-            return None
+        mem = _get_mem(user_id, session)
+        # Новая схема
+        focused = mem.get('focused_agent_id')
+        if focused:
+            return focused
+        ids = mem.get('active_agent_ids') or []
+        if ids:
+            return ids[0]
+        # Обратная совместимость со старой схемой
+        return mem.get('active_agent_id')
+    finally:
+        if close:
+            session.close()
+
+
+def get_user_active_agents(user_id: int, session=None) -> list:
+    """
+    Возвращает список всех активированных agent_id для данного пользователя.
+    Список упорядочен: focused — первый.
+    """
+    close = False
+    if session is None:
+        from models import Session
+        session = Session()
+        close = True
+    try:
+        mem = _get_mem(user_id, session)
+        ids = list(mem.get('active_agent_ids') or [])
+        # Обратная совместимость
+        legacy = mem.get('active_agent_id')
+        if legacy and legacy not in ids:
+            ids.insert(0, legacy)
+        # focused — в начало
+        focused = mem.get('focused_agent_id')
+        if focused and focused in ids and ids[0] != focused:
+            ids.remove(focused)
+            ids.insert(0, focused)
+        return ids
     finally:
         if close:
             session.close()
 
 
 def set_user_active_agent(user_id: int, agent_id: Optional[int], session=None):
-    """Устанавливает/сбрасывает активного кастомного агента для пользователя."""
+    """
+    Добавляет agent_id в список активных и ставит его как focused.
+    Если agent_id=None — полностью очищает всех активных агентов.
+    НЕ деактивирует других агентов при активации нового.
+    """
     close = False
     if session is None:
         from models import Session
         session = Session()
         close = True
     try:
-        from models import User
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return
-        mem = {}
-        if user.memory:
-            try:
-                mem = json.loads(user.memory)
-            except Exception:
-                pass
+        mem = _get_mem(user_id, session)
         if agent_id is None:
+            # Явный сброс всех
             mem.pop('active_agent_id', None)
+            mem.pop('active_agent_ids', None)
+            mem.pop('focused_agent_id', None)
         else:
-            mem['active_agent_id'] = agent_id
-        user.memory = json.dumps(mem, ensure_ascii=False)
-        session.commit()
+            ids = list(mem.get('active_agent_ids') or [])
+            # Обратная совместимость: подхватываем старый single-ключ
+            legacy = mem.pop('active_agent_id', None)
+            if legacy and legacy not in ids:
+                ids.append(legacy)
+            # Добавляем новый, если ещё нет
+            if agent_id not in ids:
+                ids.append(agent_id)
+            mem['active_agent_ids'] = ids
+            mem['focused_agent_id'] = agent_id
+        _save_mem(user_id, mem, session)
+    finally:
+        if close:
+            session.close()
+
+
+def remove_user_active_agent(user_id: int, agent_id: int, session=None):
+    """Удаляет конкретного агента из списка активных. Остальные не затрагивает."""
+    close = False
+    if session is None:
+        from models import Session
+        session = Session()
+        close = True
+    try:
+        mem = _get_mem(user_id, session)
+        ids = list(mem.get('active_agent_ids') or [])
+        if agent_id in ids:
+            ids.remove(agent_id)
+        mem['active_agent_ids'] = ids
+        # Если удалённый был focused — переключаемся на первый оставшийся
+        if mem.get('focused_agent_id') == agent_id:
+            mem['focused_agent_id'] = ids[0] if ids else None
+        # Обратная совместимость
+        if mem.get('active_agent_id') == agent_id:
+            mem.pop('active_agent_id', None)
+        _save_mem(user_id, mem, session)
+    finally:
+        if close:
+            session.close()
+
+
+def set_user_focused_agent(user_id: int, agent_id: int, session=None):
+    """Устанавливает focused-агента (не меняет список активных)."""
+    close = False
+    if session is None:
+        from models import Session
+        session = Session()
+        close = True
+    try:
+        mem = _get_mem(user_id, session)
+        mem['focused_agent_id'] = agent_id
+        _save_mem(user_id, mem, session)
     finally:
         if close:
             session.close()
