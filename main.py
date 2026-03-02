@@ -10241,6 +10241,13 @@ async def api_marketplace_agent_status_handler(request):
                 return web.json_response({'error': 'Not found'}, status=404)
             agent.status = new_status
             session_db.commit()
+            # Если агент активирован — сразу постим в арену (не ждём следующего цикла)
+            if new_status == 'active':
+                try:
+                    from ai_integration.agent_arena import post_agent_immediately
+                    asyncio.ensure_future(post_agent_immediately(agent.id))
+                except Exception as _ae:
+                    logger.warning(f"[ARENA] immediate post error: {_ae}")
             return web.json_response({'success': True, 'status': new_status})
         finally:
             session_db.close()
