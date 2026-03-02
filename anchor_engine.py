@@ -164,7 +164,9 @@ class AnchorEngine:
         self.running = False
         self._scan_locks = defaultdict(asyncio.Lock)
         # Семафор для AI-вызовов — ограничивает параллельные запросы к DeepSeek
-        self._ai_semaphore = asyncio.Semaphore(5)
+        # 12 = баланс между скоростью обработки 1000 юзеров и лимитами DeepSeek API
+        # (autonomous_agent использует 20, anchor engine — фоновый, поэтому чуть меньше)
+        self._ai_semaphore = asyncio.Semaphore(12)
         logger.info("[ANCHOR] AnchorEngine initialized")
 
     # ═══════════════════════════════════════════════════════

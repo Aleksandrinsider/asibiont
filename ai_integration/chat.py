@@ -1462,6 +1462,17 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                                         status='completed',
                                     ))
                                 _al_spm.commit()
+                                # Якорь в отдельном потоке — не блокируем event loop
+                                try:
+                                    from ai_integration.autonomous_agent import spawn_integration_anchors as _sia_pm
+                                    import asyncio as _asyncio_pm
+                                    _uid_pm, _anm_pm, _sv_pm, _op_pm = _al_upm.id, _aname_pm, _svc_pm, _out_pm
+                                    _asyncio_pm.get_event_loop().run_in_executor(
+                                        None,
+                                        lambda: _sia_pm(_uid_pm, _anm_pm, _sv_pm, _op_pm)
+                                    )
+                                except Exception as _sia_e:
+                                    logger.warning(f'[PROACTIVE] spawn anchor error: {_sia_e}')
                         finally:
                             _al_spm.close()
                     except Exception as _al_pm_e:

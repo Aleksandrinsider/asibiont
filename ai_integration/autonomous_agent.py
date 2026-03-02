@@ -2076,8 +2076,12 @@ class HybridAutonomousAgent:
                                             status='completed',
                                         ))
                                     _al_s.commit()
-                                    # Создаём якорь если в выводе есть сигнал тревоги (без AI-вызова)
-                                    spawn_integration_anchors(_al_u.id, _agent_display, _svc_lbl, _code_output)
+                                    # Создаём якорь в отдельном потоке — не блокируем event loop
+                                    _uid_ia, _adp_ia, _svc_ia, _out_ia = _al_u.id, _agent_display, _svc_lbl, _code_output
+                                    asyncio.get_event_loop().run_in_executor(
+                                        None,
+                                        lambda: spawn_integration_anchors(_uid_ia, _adp_ia, _svc_ia, _out_ia)
+                                    )
                             finally:
                                 _al_s.close()
                         except Exception as _al_e:
