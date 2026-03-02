@@ -2806,13 +2806,13 @@
                         const statusLabel = isActive ? 'Активен' : isPaused ? 'Пауза' : a.status === 'review' ? 'На модерации' : a.status === 'disabled' ? 'Отключён' : a.status;
                         const initials = a.name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
                         const avatarHtml = a.avatar_url
-                            ? `<img src="${escapeHtml(a.avatar_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">`
-                            : `<div style="width:38px;height:38px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:700;color:#fff;">${initials}</div>`;
+                            ? `<img src="${escapeHtml(a.avatar_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer;" onclick="openAgentProfileModal(${a.id})" alt="">`
+                            : `<div style="width:38px;height:38px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:700;color:#fff;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${initials}</div>`;
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
-                                <span style="font-size:13px;font-weight:500;color:#374151;">${escapeHtml(a.name)}</span>
+                                <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
                                 <span style="margin-left:8px;font-size:12px;color:#068487;">${statusLabel}</span>${a.is_private ? '<span style="font-size:10px;background:#EFF6FF;color:#3B82F6;padding:1px 6px;border-radius:8px;margin-left:6px;">Приват</span>' : ''}
                                 <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
                             </div>
