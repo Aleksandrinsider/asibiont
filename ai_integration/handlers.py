@@ -10847,8 +10847,8 @@ async def generate_image(
             # Telegram получил фото — возвращаем без URL чтобы не было дублирования
             result_msg = f"✅ Изображение отправлено!"
         else:
-            # Web-контекст или Telegram не принял — возвращаем URL для вставки в ответ
-            result_msg = f"🎨 Изображение сгенерировано: {image_url}"
+            # Web-контекст или Telegram не принял — возвращаем markdown-изображение для рендеринга
+            result_msg = f"🎨 Готово!\n\n![изображение]({image_url})"
 
         return result_msg
 

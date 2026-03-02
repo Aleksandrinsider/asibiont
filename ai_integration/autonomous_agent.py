@@ -1242,6 +1242,7 @@ class HybridAutonomousAgent:
                 _mention_match = _re_agent.match(r'@(\w+)\b', _msg_stripped)
                 _active_agent_id = None
                 _mention_not_found = False  # флаг: явное @упоминание было, но агент не найден
+                _stripped_prefix_end = None  # позиция конца @имя/имя для обрезки
                 _all_active_ids = get_user_active_agents(user_id)
 
                 if _mention_match:
@@ -1251,6 +1252,7 @@ class HybridAutonomousAgent:
                         _cdata = load_agent_personality(_cid)
                         if _cdata and _cdata['name'].lower() == _mention_name:
                             _active_agent_id = _cid
+                            _stripped_prefix_end = _mention_match.end()
                             try:
                                 set_user_focused_agent(user_id, _cid)
                             except Exception:
@@ -1262,12 +1264,13 @@ class HybridAutonomousAgent:
                 else:
                     # Имя без @ — ищем совпадение с началом сообщения (тихий роутинг)
                     _first_word = _re_agent.match(r'(\w+)\b', _msg_stripped)
-                    if _first_word and len(_all_active_ids) > 1:
+                    if _first_word and _all_active_ids:
                         _fw = _first_word.group(1).lower()
                         for _cid in _all_active_ids:
                             _cdata = load_agent_personality(_cid)
                             if _cdata and _cdata['name'].lower() == _fw:
                                 _active_agent_id = _cid
+                                _stripped_prefix_end = _first_word.end()
                                 try:
                                     set_user_focused_agent(user_id, _cid)
                                 except Exception:
@@ -1277,6 +1280,13 @@ class HybridAutonomousAgent:
 
                 if not _mention_not_found and _active_agent_id is None:
                     _active_agent_id = get_user_active_agent(user_id)
+
+                # Убираем @имя / имя-триггер из начала сообщения — AI не должен его видеть
+                if _stripped_prefix_end is not None:
+                    _msg_tail = _msg_stripped[_stripped_prefix_end:].strip()
+                    if _msg_tail:
+                        user_message = _msg_tail
+
                 if _active_agent_id:
                     _agent_data = load_agent_personality(_active_agent_id)
                     if _agent_data:
