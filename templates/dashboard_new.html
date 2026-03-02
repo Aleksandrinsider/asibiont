@@ -3776,19 +3776,13 @@ try:
             else:
                 print('Ошибка отправки: ' + json.dumps(result))
     else:
-        # Проверка подключения — отправляем тестовое письмо себе
         if not API_KEY:
             print('Ошибка: RESEND_API_KEY не задан')
         elif not FROM_EMAIL:
             print('Ошибка: RESEND_FROM не задан')
         else:
-            result = send_email(FROM_EMAIL, 'Resend подключён', 'Агент успешно подключён к Resend и готов отправлять письма.')
-            if result.get('id'):
-                print('Resend подключён успешно.')
-                print('Тестовое письмо отправлено на ' + FROM_EMAIL)
-                print('ID: ' + result['id'])
-            else:
-                print('Ошибка: ' + json.dumps(result))
+            print('Resend подключён. Отправитель: ' + FROM_EMAIL)
+            print('Для отправки письма скажите агенту: отправь письмо на email@example.com')
 except Exception as e:
     print('Ошибка Resend: ' + str(e))`
             },
