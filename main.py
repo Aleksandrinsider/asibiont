@@ -9520,6 +9520,11 @@ async def api_agent_generate_code_handler(request):
 
 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ДЛЯ IMAP (работают с Gmail и любой почтой):
 
+0. ТОЛЬКО ДЛЯ GMAIL — фильтруй категории (промоакции, соцсети, обновления — спам). Используй X-GM-RAW:
+   ПРАВИЛЬНО: mail.search(None, '(X-GM-RAW "in:inbox -category:promotions -category:social -category:updates")')
+   Можно комбинировать: mail.search(None, f'(X-GM-RAW "in:inbox -category:promotions -category:social -category:updates") SINCE {{week_ago}}')
+   Для НЕ-Gmail почты (Yandex, Mail.ru и др.) — просто mail.search(None, f"SINCE {{week_ago}}"), X-GM-RAW не нужен.
+
 1. ПОСЛЕДНИЕ письма: mail.search возвращает id от старого к новому.
    ВСЕГДА используй: for eid in reversed(email_ids[-N:])
    НИКОГДА: email_ids[:N]  — это самые СТАРЫЕ письма!
@@ -9559,9 +9564,10 @@ GMAIL_PASS = os.environ.get("GMAIL_PASS", "")
 try:
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_USER, GMAIL_PASS)
-    mail.select("inbox")
+    mail.select("INBOX")
     week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%d-%b-%Y")
-    _, data = mail.search(None, f"SINCE {{week_ago}}")
+    # Только реальные входящие: без Промоакций, Соцсетей, Обновлений (X-GM-RAW — Gmail-расширение IMAP)
+    _, data = mail.search(None, f'(X-GM-RAW "in:inbox -category:promotions -category:social -category:updates") SINCE {{week_ago}}')
     email_ids = data[0].split()
     if not email_ids:
         print("Новых писем нет.")

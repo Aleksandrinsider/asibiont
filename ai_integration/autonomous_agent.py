@@ -1338,7 +1338,7 @@ class HybridAutonomousAgent:
                                     _al_s.add(_AAL(
                                         user_id=_al_u.id,
                                         activity_type='integration',
-                                        title=f'🔄 {_agent_data.get("name","Агент")}: данные получены',
+                                        title=f'{_agent_data.get("name","Агент")}: данные получены',
                                         content=_code_output[:800],
                                         target=_svc_lbl,
                                         status='completed',
@@ -1370,7 +1370,7 @@ class HybridAutonomousAgent:
                                     _al_s.add(_AAL(
                                         user_id=_al_u.id,
                                         activity_type='integration',
-                                        title=f'⚠️ {_agent_data.get("name","Агент")}: ошибка получения данных',
+                                        title=f'{_agent_data.get("name","Агент")}: ошибка получения данных',
                                         content=_err_detail[:800],
                                         target=_svc_lbl,
                                         status='failed',
