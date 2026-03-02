@@ -9534,6 +9534,29 @@ async def api_agent_generate_code_handler(request):
 - Никаких интерактивных вводов, без бесконечных циклов
 - Только код, без пояснений, без markdown-блоков
 
+ПРАВИЛА ДЛЯ RESEND API (отправка email):
+- ВСЕГДА добавляй заголовок 'User-Agent': 'python-requests/2.31.0' — без него Cloudflare блокирует запрос с кодом 403!
+- Эндпоинт отправки: POST https://api.resend.com/emails
+- Заголовки: Authorization: Bearer <RESEND_API_KEY>, Content-Type: application/json, User-Agent: python-requests/2.31.0
+- Пример:
+  req = urllib.request.Request('https://api.resend.com/emails',
+      data=json.dumps({{'from': from_addr, 'to': [to], 'subject': subj, 'html': html}}).encode(),
+      method='POST',
+      headers={{'Authorization': f'Bearer {{key}}', 'Content-Type': 'application/json', 'User-Agent': 'python-requests/2.31.0'}})
+
+ПРАВИЛА ДЛЯ OZON API (ozon.ru seller API):
+- Client-Id и Api-Key читать из env: OZON_CLIENT_ID, OZON_API_KEY
+- Заголовки всех запросов: 'Client-Id': client_id, 'Api-Key': api_key, 'Content-Type': 'application/json'
+- Базовый URL: https://api-seller.ozon.ru
+- РАБОЧИЕ эндпоинты (всегда используй только их, другие дают 403 или 404):
+  * Аналитика/выручка: POST /v1/analytics/data — поля date_from, date_to (YYYY-MM-DD), metrics (список из: revenue, orders_count, returns_amount, cancellations_count), dimension (список из: month/week/day), filters ([]пустой), limit, offset
+  * Список отчётов: POST /v1/report/list — поля page, page_size
+- НЕ ИСПОЛЬЗУЙ (дают 403 у большинства ключей): /v1/warehouse/list, /v3/product/list, /v2/posting/fbo/list
+- Пример аналитики:
+  body = json.dumps({{'date_from': '2026-01-01', 'date_to': '2026-01-31', 'metrics': ['revenue','orders_count'], 'dimension': ['month'], 'filters': [], 'limit': 12, 'offset': 0}}).encode()
+  req = urllib.request.Request('https://api-seller.ozon.ru/v1/analytics/data', data=body, method='POST',
+      headers={{'Client-Id': client_id, 'Api-Key': api_key, 'Content-Type': 'application/json'}})
+
 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ДЛЯ IMAP (работают с Gmail и любой почтой):
 
 0. ЧИТАЙ ВСЕ ПАПКИ, А НЕ ТОЛЬКО INBOX. Агент должен видеть полную картину: входящие И отправленные.
