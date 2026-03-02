@@ -2912,7 +2912,7 @@ else:
                             _ct = part.get_content_type()
                             if _ct == 'text/plain' and not part.get('Content-Disposition'):
                                 raw = part.get_payload(decode=True) or b''
-                                body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
+                                body = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
                                 break
                             if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
                                 raw = part.get_payload(decode=True) or b''
@@ -2922,7 +2922,7 @@ else:
                     else:
                         raw = msg.get_payload(decode=True) or b''
                         _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
-                        body = _strip_html(_dec)[:150] if msg.get_content_type() == 'text/html' else _dec[:150]
+                        body = _strip_html(_dec)[:150]
                     print('От: ' + frm)
                     print('Тема: ' + subject)
                     print('Дата: ' + date)
@@ -2977,7 +2977,7 @@ try:
                         _ct = part.get_content_type()
                         if _ct == 'text/plain' and not part.get('Content-Disposition'):
                             raw = part.get_payload(decode=True) or b''
-                            body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
+                            body = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
                             break
                         if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
                             raw = part.get_payload(decode=True) or b''
@@ -2987,7 +2987,7 @@ try:
                 else:
                     raw = msg.get_payload(decode=True) or b''
                     _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
-                    body = _strip_html(_dec)[:150] if msg.get_content_type() == 'text/html' else _dec[:150]
+                    body = _strip_html(_dec)[:150]
                 print('От: ' + frm)
                 print('Тема: ' + subject)
                 print('Дата: ' + date)
@@ -3042,7 +3042,7 @@ try:
                         _ct = part.get_content_type()
                         if _ct == 'text/plain' and not part.get('Content-Disposition'):
                             raw = part.get_payload(decode=True) or b''
-                            body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
+                            body = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
                             break
                         if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
                             raw = part.get_payload(decode=True) or b''
@@ -3052,7 +3052,7 @@ try:
                 else:
                     raw = msg.get_payload(decode=True) or b''
                     _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
-                    body = _strip_html(_dec)[:150] if msg.get_content_type() == 'text/html' else _dec[:150]
+                    body = _strip_html(_dec)[:150]
                 print('От: ' + frm)
                 print('Тема: ' + subject)
                 print('Дата: ' + date)
@@ -3225,7 +3225,7 @@ except Exception as e:
                     {k:'OZON_CLIENT_ID', label:'Client ID (личный кабинет Ozon Seller)', ph:'123456', t:'text'},
                     {k:'OZON_API_KEY', label:'API Key', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
                 ],
-                hint: 'Ozon Seller → Настройки → API-ключи → Добавить ключ. Обязательные роли: Report (аналитика), Posting FBS read-only (заказы). Client ID — числовой ID из личного кабинета (не email).',
+                hint: 'Ozon Seller → Настройки → API-ключи → Добавить ключ. Необходимые роли: Report (отчёты и аналитика), Posting FBS read-only (заказы).',
                 code: `import urllib.request, json, os
 from datetime import datetime, timedelta
 CLIENT_ID = os.environ.get('OZON_CLIENT_ID', '')
