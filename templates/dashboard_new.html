@@ -3932,7 +3932,7 @@ except Exception as e:
                 for (const f of tmpl.fields) {
                     h += `<div><div style="font-size:11px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
                 }
-                h += `<button type="button" onclick="mpApplyTemplateConfirm('${svc}')" class="mp-action-btn" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Применить шаблон «${tmpl.name}»</button>`;
+                h += `<button type="button" onclick="mpApplyTemplateConfirm('${svc}')" class="mp-action-btn" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Добавить «${tmpl.name}»</button>`;
                 h += '</div>';
                 fieldsEl.innerHTML = h;
                 fieldsEl.style.display = 'block';
@@ -3943,23 +3943,44 @@ except Exception as e:
         function mpApplyTemplateConfirm(svc) {
             const tmpl = _MPA_SVC[svc];
             if (!tmpl) return;
-            const keyLines = [];
+            const newKeys = {};
             for (const f of tmpl.fields) {
                 const el = document.getElementById('mpa-svc-' + f.k);
                 const val = el ? el.value.trim() : '';
-                if (val || f.opt) keyLines.push(f.k + '=' + val);
+                if (val || f.opt) newKeys[f.k] = f.k + '=' + val;
             }
+            // ── Merge: сохраняем уже введённые ключи других сервисов ──
             const apiEl = document.getElementById('mpa-apikeys');
-            if (apiEl) apiEl.value = keyLines.join('\n');
+            if (apiEl) {
+                const existing = {};
+                for (const line of apiEl.value.split('\n')) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.includes('=')) continue;
+                    const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
+                    existing[key] = trimmed;
+                }
+                // новые ключи перекрывают одноимённые старые (обновление)
+                Object.assign(existing, newKeys);
+                apiEl.value = Object.values(existing).join('\n');
+            }
+            // ── Код: добавляем как отдельный блок если уже есть свой код ──
             const codeEl = document.getElementById('mpa-pycode');
             if (codeEl) {
-                codeEl.value = tmpl.code;
+                const existing = codeEl.value.trim();
+                const marker = `# === ${tmpl.name} ===`;
+                if (!existing || existing === '' || existing.includes(marker)) {
+                    // нет кода или это тот же сервис — заменяем целиком
+                    codeEl.value = tmpl.code;
+                } else {
+                    // уже есть код другого сервиса — добавляем блок после
+                    codeEl.value = existing + '\n\n' + marker + '\n' + tmpl.code;
+                }
                 codeEl.style.height = 'auto';
                 codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
             }
             const det = document.getElementById('mpa-advanced-details');
             if (det) det.open = true;
-            mpShowStatus('Шаблон «' + tmpl.name + '» применён — нажмите «Запустить и проверить» для теста', '#ECFDF5', '#059669');
+            mpShowStatus('Сервис «' + tmpl.name + '» добавлен. Для ещё одного — выберите следующий сервис выше.', '#ECFDF5', '#059669');
         }
 
         async function mpGenerateAgentCode() {
@@ -4066,6 +4087,27 @@ except Exception as e:
             set('mpa-price', agent.price_per_message);
             set('mpa-trial', agent.trial_messages);
             set('mpa-apikeys', agent.user_api_keys);
+            // Показываем список уже подключённых сервисов
+            if (agent.user_api_keys) {
+                const keys = agent.user_api_keys.split('\n').map(l => l.split('=')[0].trim()).filter(Boolean);
+                const svcMap = {GMAIL_USER:'Gmail',RESEND_API_KEY:'Resend',SLACK_TOKEN:'Slack',NOTION_TOKEN:'Notion',
+                    AIRTABLE_API_KEY:'Airtable',TRELLO_API_KEY:'Trello',STRIPE_SECRET_KEY:'Stripe',SHOPIFY_STORE:'Shopify',
+                    GITHUB_TOKEN:'GitHub',TELEGRAM_BOT_TOKEN:'Telegram Bot',VK_TOKEN:'ВКонтакте',
+                    WB_API_KEY:'Wildberries',OZON_CLIENT_ID:'Ozon',GOOGLE_SHEETS_ID:'Google Sheets',
+                    HH_ACCESS_TOKEN:'hh.ru',JIRA_EMAIL:'Jira',CALENDLY_TOKEN:'Calendly',
+                    COINGECKO_API_KEY:'CoinGecko',YOUTUBE_API_KEY:'YouTube',RSS_URL:'RSS',
+                    WEATHER_API_KEY:'OpenWeatherMap',BITRIX24_WEBHOOK:'Битрикс24',
+                    AMO_SUBDOMAIN:'AmoCRM',HUBSPOT_API_KEY:'HubSpot',HTTP_API_URL:'HTTP API'};
+                const found = [...new Set(keys.map(k => svcMap[k]).filter(Boolean))];
+                if (found.length) {
+                    const hint = document.getElementById('mpa-svc-hint');
+                    if (hint) {
+                        hint.textContent = '✓ Уже настроено: ' + found.join(', ') + ' — выберите следующий сервис, чтобы добавить.';
+                        hint.style.display = 'block';
+                        hint.style.color = '#059669';
+                    }
+                }
+            }
             set('mpa-pycode', agent.python_code);
             const privEl = document.getElementById('mpa-private');
             if (privEl) {
@@ -4279,7 +4321,7 @@ except Exception as e:
                     <!-- Переменные окружения -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="font-size:13px;color:#374151;margin-bottom:4px;">Переменные окружения</div>
-                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Заполняются автоматически при выборе сервиса. Можно добавить свои: <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=значение</code></div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Ключи добавляются автоматически при нажатии «Добавить сервис». Несколько сервисов — просто выбирайте по очереди. Или добавьте вручную: <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=значение</code></div>
                         <textarea id="mpa-apikeys" placeholder="Заполнятся автоматически после выбора сервиса выше" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                     </div>
 
