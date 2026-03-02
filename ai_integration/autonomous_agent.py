@@ -1730,7 +1730,7 @@ class HybridAutonomousAgent:
         final = clean_technical_details(content or '').strip()
         if not final:
             _lang = get_user_lang(user_id)
-            final = (content or '').strip() or ("Done!" if _lang == 'en' else "Готово!")
+            final = "Done!" if _lang == 'en' else "Готово!"
 
         # Биллинг кастомного агента
         try:

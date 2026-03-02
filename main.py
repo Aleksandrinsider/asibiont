@@ -8637,7 +8637,7 @@ async def api_profile_handler(request):
         try:
             from ai_integration.user_agents import get_user_active_agent as _gaa_p, get_user_active_agents as _gaas_p
             from models import UserAgent as _UA_p
-            _active_aid = _gaa_p(user_id, session_db)
+            _active_aid = _gaa_p(user_id)  # fresh session — identity map кэш session_db стал бы устаревшим
             if _active_aid:
                 _ag_p = session_db.query(_UA_p).filter_by(id=_active_aid).first()
                 response_data['active_agent'] = {
@@ -8648,7 +8648,7 @@ async def api_profile_handler(request):
             else:
                 response_data['active_agent'] = None
             # Все активные агенты
-            _all_aids = _gaas_p(user_id, session_db)
+            _all_aids = _gaas_p(user_id)  # fresh session
             _agents_list = []
             for _aid in _all_aids:
                 _ag = session_db.query(_UA_p).filter_by(id=_aid).first()
