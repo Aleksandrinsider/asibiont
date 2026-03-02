@@ -2015,6 +2015,32 @@ class HybridAutonomousAgent:
                     if agent_data:
                         system_prompt = build_agent_system_prompt(agent_data, system_prompt)
                         logger.info(f"[AGENT] Injected personality: {agent_data['name']} (id={active_agent_id})")
+                        # Акцент на интеграцию агента в проактивных / якорных / reminder режимах
+                        _svc = agent_data.get('service_label', '')
+                        _has_script = bool(agent_data.get('python_code', '').strip())
+                        if _svc and mode in ('proactive', 'anchor', 'reminder'):
+                            if user_lang == 'en':
+                                system_prompt += (
+                                    f"\n\n[INTEGRATION FOCUS: {_svc}]\n"
+                                    f"This agent is connected to {_svc}. "
+                                    + ("Agent script is configured — real data will appear in [AGENT DATA]. " if _has_script else "API keys are set but script is not yet configured. ")
+                                    + "TOPIC PRIORITY for this message:\n"
+                                    f"1. Data and events from {_svc} (if script ran and returned data)\n"
+                                    "2. User tasks / goals related to this integration's domain\n"
+                                    "3. Generic tips or channel posts — only as absolute last resort\n"
+                                    f"Do NOT push email campaigns or channel posts as the default — user has {_svc} for real-world actions."
+                                )
+                            else:
+                                system_prompt += (
+                                    f"\n\n[АКЦЕНТ НА ИНТЕГРАЦИЮ: {_svc}]\n"
+                                    f"Этот агент подключён к {_svc}. "
+                                    + ("Скрипт настроен — актуальные данные будут в секции [ДАННЫЕ ОТ АГЕНТА]. " if _has_script else "Ключи API есть, скрипт не настроен. ")
+                                    + "ПРИОРИТЕТ ТЕМ для этого сообщения:\n"
+                                    f"1. Данные и события из {_svc} (если скрипт отработал и вернул данные)\n"
+                                    "2. Задачи / цели пользователя связанные с доменом этой интеграции\n"
+                                    "3. Общие советы или посты в канал — только как крайний вариант\n"
+                                    f"НЕ предлагай автоматом email-кампании или посты в канал — у пользователя есть {_svc} для реальных действий."
+                                )
                     else:
                         # Агент удалён/деактивирован — сбрасываем
                         from .user_agents import set_user_active_agent

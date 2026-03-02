@@ -232,6 +232,14 @@ Do NOT take tasks/goals/posts from memory or history — they may have been dele
         'ru': "Привет! Готов помочь с задачами и целями. Что обсудим?",
         'en': "Hey! Ready to help with tasks and goals. What shall we discuss?",
     },
+    'fallback_no_active_agent': {
+        'ru': "Если хочешь чтобы я напоминал о задачах, мониторил интеграции и писал первым — подключи агента в Marketplace.",
+        'en': "To get proactive messages, reminders and integration monitoring — connect an agent in the Marketplace.",
+    },
+    'agent_context_hdr': {
+        'ru': '=== АКТИВНЫЕ АГЕНТЫ ПОЛЬЗОВАТЕЛЯ ===',
+        'en': '=== USER ACTIVE AGENTS ===',
+    },
     'error_user_not_found': {
         'ru': "Ошибка: пользователь не найден",
         'en': "Error: user not found",
@@ -606,6 +614,21 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
                 3: "срочный и серьёзный (КРИТИЧЕСКОЕ напоминание, задача требует немедленного внимания)"
             }
             tone = escalation_tones.get(escalation_level, escalation_tones[1])
+            # Добавляем интеграцию активного агента в инструкцию
+            _reminder_svc_hint = ""
+            try:
+                from .user_agents import get_user_active_agent, load_agent_personality as _lap_r
+                _r_aid = get_user_active_agent(user_id)
+                if _r_aid:
+                    _r_adata = _lap_r(_r_aid)
+                    if _r_adata and _r_adata.get('service_label') and _r_adata.get('python_code', '').strip():
+                        _reminder_svc_hint = (
+                            f"\nАгент подключён к {_r_adata['service_label']} — "
+                            f"если задача связана с этим сервисом, предложи конкретное действие через него "
+                            f"вместо общего совета."
+                        )
+            except Exception:
+                pass
             instruction = (
                 f"Напоминание о задаче «{task_title}»"
                 f"{f' (ID: {task_id})' if task_id else ''}.\n"
@@ -613,6 +636,7 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
                 "Подумай: можешь ли ты ПОМОЧЬ решить эту задачу, а не просто напомнить?\n"
                 "Используй find_relevant_contacts_for_task чтобы проверить, есть ли кто-то из сети кто тоже занимается похожей активностью — и если да, упомяни это.\n"
                 "Спроси о статусе."
+                + _reminder_svc_hint
             )
 
         result = await agent.generate_system_message(
@@ -1280,13 +1304,27 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
 async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
     """Единый умный генератор проактивных сообщений через мозг агента.
     
-    Использует _build_proactive_context() для ситуационного анализа,
-    затем передаёт всё через agent.generate_system_message() с tool calling.
+    Генерацию выполняет АКТИВНЫЙ агент пользователя (фокус на его интеграциях).
+    Если активных агентов нет — возвращает системный fallback без вызова ИИ.
     """
     try:
-        # 1. Собираем полный контекст ситуации
         from i18n import get_user_lang
         lang = get_user_lang(user_id)
+
+        # ── 0. Проверяем активных агентов ──
+        # Нет активных → системный fallback без запроса к ИИ (экономим токены)
+        from .user_agents import get_user_active_agents, load_agent_personality
+        _active_ids = get_user_active_agents(user_id)
+        _active_agents_info = []
+        for _aid in _active_ids:
+            _adata = load_agent_personality(_aid)
+            if _adata:
+                _active_agents_info.append(_adata)
+        if not _active_agents_info:
+            logger.info(f"[PROACTIVE] user {user_id} has no active agents — returning system fallback")
+            return _t('fallback_no_active_agent', lang)
+
+        # ── 1. Собираем полный контекст ситуации ──
         ctx = await _build_proactive_context(user_id, lang=lang)
         if not ctx:
             return _t('fallback_short', lang)
@@ -1340,11 +1378,35 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             max_iterations = 2
             instruction = _t('pro_instruction', lang)
 
+        # ── Блок активных агентов: передаём в extra_context ──
+        _agents_block = ""
+        if _active_agents_info:
+            _agent_lines = []
+            for _a in _active_agents_info:
+                _line = f"• {_a['name']}"
+                if _a.get('service_label'):
+                    _has_code = bool(_a.get('python_code', '').strip())
+                    _status = "(скрипт настроен, данные доступны)" if _has_code else "(ключи есть, скрипт не настроен)"
+                    _line += f" — интеграция: {_a['service_label']} {_status}"
+                if _a.get('job_title'):
+                    _line += f" [{_a['job_title']}]"
+                _agent_lines.append(_line)
+            _hdr = _t('agent_context_hdr', lang)
+            if lang == 'ru':
+                _agent_note = ("Пиши сообщение ОТ ЛИЦА этого агента. "
+                               "Главная тема — данные и действия через его интеграцию. "
+                               "Общие советы и посты в канал — только если интеграция не применима.")
+            else:
+                _agent_note = ("Write the message AS this agent. "
+                               "Main topic — data and actions via their integration. "
+                               "Generic advice or channel posts only if integration is not applicable.")
+            _agents_block = f"\n\n{_hdr}\n" + "\n".join(_agent_lines) + f"\n{_agent_note}"
+
         result = await agent.generate_system_message(
             user_id=user_id,
             mode=mode,
             instruction=instruction,
-            extra_context=situation_prompt + anti_repeat,
+            extra_context=situation_prompt + anti_repeat + _agents_block,
             max_tokens=max_tokens,
             max_iterations=max_iterations
         )
