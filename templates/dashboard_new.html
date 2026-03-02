@@ -4140,8 +4140,7 @@ except Exception as e:
 
         async function mpGenerateAgentCode() {
             const descEl = document.getElementById('mpa-code-desc');
-            const fallbackEl = document.getElementById('mpa-desc');
-            const desc = (descEl?.value?.trim()) || (fallbackEl?.value?.trim()) || '';
+            const desc = descEl?.value?.trim() || '';
             const apiKeys = (document.getElementById('mpa-apikeys') || {}).value || '';
             const btn = document.getElementById('mpa-gen-btn');
             const status = document.getElementById('mpa-gen-status');
@@ -4184,7 +4183,6 @@ except Exception as e:
             }
 
             // ── Шаг 2: есть описание → ИИ-генерация ──
-            if (descEl && !descEl.value.trim() && desc) { descEl.value = desc; }
             if (btn) { btn.disabled = true; btn.textContent = 'Генерирую...'; }
             if (status) { status.style.display = 'block'; status.textContent = 'ИИ пишет код...'; }
             try {
@@ -4508,7 +4506,7 @@ except Exception as e:
                     </div>
 
                     <!-- Продвинутые настройки: код -->
-                    <details id="mpa-advanced-details" style="background:white;border:1px solid #D1D9E0;border-radius:8px;overflow:hidden;" ontoggle="const a=this.querySelector('.mpa-adv-arrow');if(a)a.style.transform=this.open?'rotate(0deg)':'rotate(-90deg)';if(this.open){const cd=document.getElementById('mpa-code-desc');const md=document.getElementById('mpa-desc');if(cd&&!cd.value.trim()&&md&&md.value.trim())cd.value=md.value.trim();}">
+                    <details id="mpa-advanced-details" style="background:white;border:1px solid #D1D9E0;border-radius:8px;overflow:hidden;" ontoggle="const a=this.querySelector('.mpa-adv-arrow');if(a)a.style.transform=this.open?'rotate(0deg)':'rotate(-90deg)';">
                         <summary style="padding:10px 12px;cursor:pointer;font-size:13px;color:#6B7280;font-weight:500;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
                             <svg class="mpa-adv-arrow" width="12" height="12" viewBox="0 0 12 12" style="transform:rotate(-90deg);transition:transform 0.2s;flex-shrink:0;"><path d="M2 4l4 4 4-4" stroke="#9CA3AF" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             Продвинутые настройки (Python-код)
