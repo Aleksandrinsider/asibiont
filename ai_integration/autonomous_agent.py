@@ -298,6 +298,256 @@ def _detect_integration_signal(service_label: str, text_lc: str, text_raw: str):
         return (None, None)
 
     # ══════════════════════════════════════════════════════════════
+    # Stripe
+    # Важно: отклонённый платёж, чарджбэк, превышение порога выплат
+    # ══════════════════════════════════════════════════════════════
+    if 'stripe' in svc:
+        if _has(r'chargeback|dispute|мошенничество|fraud|risk.*high'):
+            return ('CRITICAL', 'чарджбэк или спор по платежу Stripe')
+        if _has(r'failed|отклон|declined|payment.*fail|charge.*fail'):
+            m = _find(r'failed|отклон|declined')
+            return ('CRITICAL', (m.group()[:60] if m else 'платёж отклонён'))
+        if _has(r'refund|возврат'):
+            return ('HIGH', 'запрос на возврат средств')
+        m_amt = _find(r'(?:payout|выплата)[^\d]{0,15}([\d\s]+)')
+        if m_amt:
+            return ('MEDIUM', f'выплата: {m_amt.group()[:60]}')
+        m_pay = _find(r'(?:payment|платёж|оплата)[^\d]{0,10}([\d\s]+)')
+        cnt = _first_num(m_pay.group()) if m_pay else 0
+        if cnt > 0:
+            return ('MEDIUM', f'новый платёж Stripe')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'Stripe проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # Shopify
+    # Важно: новые заказы, возвраты, нет в наличии, отзывы
+    # ══════════════════════════════════════════════════════════════
+    if 'shopify' in svc:
+        if _has(r'fraud|мошенническ|high.risk|chargeback'):
+            return ('CRITICAL', 'подозрительный заказ / мошенничество')
+        if _has(r'out of stock|нет в наличии|sold out|остат\w+.*?0\b'):
+            return ('CRITICAL', 'товар закончился')
+        m_orders = _find(r'(\d+)\s*(?:new\s+)?(?:order|заказ)')
+        if not m_orders:
+            m_orders = _find(r'(?:order|заказ)[^\d]{0,10}(\d+)')
+        orders = _first_num(m_orders.group()) if m_orders else 0
+        if orders >= 1:
+            return ('HIGH', f'{orders} новых заказов Shopify')
+        if _has(r'refund|return|возврат'):
+            return ('HIGH', 'запрос возврата')
+        if _has(r'abandoned.*cart|брошен.*корзин'):
+            return ('MEDIUM', 'брошенные корзины')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'Shopify проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # GitHub
+    # Важно: failed CI/CD, PR ожидает ревью, critical issue, security alert
+    # ══════════════════════════════════════════════════════════════
+    if 'github' in svc:
+        if _has(r'security.*alert|vulnerabilit|dependabot|cve-\d'):
+            return ('CRITICAL', 'security-уязвимость в зависимостях')
+        if _has(r'build.*fail|ci.*fail|pipeline.*fail|workflow.*fail|тест.*упал|test.*fail'):
+            m = _find(r'build.*fail|ci.*fail|test.*fail')
+            return ('HIGH', (m.group()[:60] if m else 'CI/CD упал'))
+        if _has(r'pull request|pr.*review|ревью.*ожидает|awaiting.*review|review.*requested'):
+            return ('HIGH', 'PR ожидает ревью')
+        if _has(r'\bbug\b|\bcritical\b|\bhigh\b.*issue|\bблокер\b'):
+            return ('HIGH', 'критический issue или баг')
+        m_pr = _find(r'(\d+)\s*(?:open\s+)?(?:pull request|PR|issue)')
+        if m_pr and _first_num(m_pr.group(1)) > 0:
+            return ('MEDIUM', m_pr.group()[:60])
+        if _has(r'merged|deployed|выпущен|released'):
+            return ('MEDIUM', 'PR влит / деплой')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'GitHub проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # Jira
+    # Важно: blocker/critical, просрочки, назначено на меня
+    # ══════════════════════════════════════════════════════════════
+    if 'jira' in svc:
+        if _has(r'\bblocker\b|\bcritical\b.*(?:issue|task|bug)|приоритет.*критич'):
+            return ('CRITICAL', 'blocker или critical задача')
+        if _has(r'overdue|просроч|deadline.*passed|истёк.*срок|due.*yesterday'):
+            return ('CRITICAL', 'просрочена задача Jira')
+        if _has(r'assigned.*to me|назначен.*на тебя|assigned.*you'):
+            return ('HIGH', 'новая задача назначена на вас')
+        if _has(r'(?:issue|задача|тикет).*(?:создан|opened|created|new)'):
+            return ('MEDIUM', 'новая задача создана')
+        if _has(r'status.*changed|статус.*изменён|moved.*to|переведен.*в'):
+            return ('MEDIUM', 'статус задачи изменён')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'Jira проверена')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # Slack
+    # Важно: прямые сообщения, упоминания @, каналы с алертами
+    # ══════════════════════════════════════════════════════════════
+    if 'slack' in svc:
+        if _has(r'urgent|срочно|critical|инцидент|incident|alert.*channel|#alerts|#incidents'):
+            m = _find(r'urgent|срочно|critical|инцидент|incident')
+            return ('CRITICAL', (m.group()[:60] if m else 'алерт в Slack'))
+        if _has(r'direct message|dm от|написал.*лично|личное сообщение'):
+            return ('HIGH', 'прямое сообщение в Slack')
+        if _has(r'@(?:you|me|тебя)|упомянул|mentioned you|упоминание'):
+            return ('HIGH', 'вас упомянули в Slack')
+        m_msg = _find(r'(\d+)\s*(?:new\s+)?(?:message|сообщен)')
+        cnt = _first_num(m_msg.group(1)) if m_msg else 0
+        if cnt >= 5:
+            return ('MEDIUM', f'{cnt} новых сообщений в Slack')
+        if cnt >= 1:
+            return ('MEDIUM', f'{cnt} новое сообщение')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'Slack проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # CoinGecko (крипто)
+    # Важно: резкое движение цены ±10%, новые важные новости
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('coingecko', 'crypto', 'крипто', 'binance')):
+        # Сильное движение
+        m_pct = _find(r'([+-]?\s*\d{1,3}(?:\.\d+)?)\s*%')
+        if m_pct:
+            try:
+                pct_val = abs(float(m_pct.group(1).replace(' ', '').replace('+', '')))
+                if pct_val >= 20:
+                    sign = '↑' if '+' in m_pct.group(0) or (m_pct.group(1)[0] not in '-−') else '↓'
+                    return ('CRITICAL', f'{sign}{pct_val:.0f}% за период')
+                if pct_val >= 10:
+                    sign = '↑' if '+' in m_pct.group(0) or (m_pct.group(1)[0] not in '-−') else '↓'
+                    return ('HIGH', f'{sign}{pct_val:.0f}% за период')
+                if pct_val >= 5:
+                    return ('MEDIUM', f'{pct_val:.0f}% изменение цены')
+            except ValueError:
+                pass
+        if _has(r'ath|all.time.high|исторический максимум|новый максимум'):
+            return ('HIGH', 'новый исторический максимум')
+        if _has(r'liquidat|ликвидац'):
+            return ('CRITICAL', 'ликвидация позиции')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'крипто данные получены')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # YouTube
+    # Важно: жалобы / страйки, резкое падение просмотров, новые комментарии
+    # ══════════════════════════════════════════════════════════════
+    if 'youtube' in svc:
+        if _has(r'strike|community.*guidelines|copyright.*claim|заблокир|monetization.*disabled'):
+            return ('CRITICAL', 'страйк или блокировка монетизации YouTube')
+        if _has(r'(?:просмотр|view)[^.]{0,20}-\s*\d{2,}\s*%|views.*dropped'):
+            return ('HIGH', 'резкое падение просмотров')
+        m_subs = _find(r'([+-]?\d+)\s*(?:новых?\s+)?(?:подписчик|subscriber)')
+        if m_subs:
+            cnt = abs(_first_num(m_subs.group()))
+            if cnt >= 100:
+                return ('HIGH', f'+{cnt} подписчиков')
+            if cnt >= 10:
+                return ('MEDIUM', f'+{cnt} подписчиков')
+        if _has(r'новый комментарий|new comment|жалоба на видео|video.*reported'):
+            return ('MEDIUM', 'новый комментарий / жалоба на видео')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'YouTube аналитика получена')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # HeadHunter (hh.ru)
+    # Важно: новые отклики на вакансию, приглашения на интервью
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('headhunter', 'hh', 'hh.ru', 'работа')):
+        if _has(r'приглашен.*интервью|interview.*invite|собеседование'):
+            return ('HIGH', 'приглашение на интервью')
+        m_resp = _find(r'(\d+)\s*(?:новых?\s+)?(?:отклик|response|резюме|applicant|кандидат)')
+        cnt = _first_num(m_resp.group(1)) if m_resp else 0
+        if cnt >= 5:
+            return ('HIGH', f'{cnt} новых откликов')
+        if cnt >= 1:
+            return ('MEDIUM', f'{cnt} новый отклик')
+        if _has(r'вакансия.*истекает|job.*expires|срок.*вакансии'):
+            return ('MEDIUM', 'срок вакансии истекает')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'HeadHunter проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # Calendly
+    # Важно: новое бронирование, отмена встречи
+    # ══════════════════════════════════════════════════════════════
+    if 'calendly' in svc:
+        if _has(r'cancel|отменил|отказ'):
+            return ('HIGH', 'встреча отменена в Calendly')
+        if _has(r'новое бронирование|new booking|new event|meeting.*scheduled|встреча.*создана'):
+            return ('HIGH', 'новая встреча забронирована')
+        m_book = _find(r'(\d+)\s*(?:новых?\s+)?(?:бронирован|booking|event|meeting)')
+        cnt = _first_num(m_book.group(1)) if m_book else 0
+        if cnt >= 1:
+            return ('HIGH', f'{cnt} новых бронирований')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'Calendly проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # HubSpot
+    # Практически то же что AmoCRM/Битрикс, но свои термины
+    # ══════════════════════════════════════════════════════════════
+    if 'hubspot' in svc:
+        if _has(r'deal.*won|deal.*lost|сделка.*выиграна|сделка.*проиграна'):
+            m = _find(r'deal.*won|deal.*lost|сделка.*выиграна|сделка.*проиграна')
+            return ('HIGH', (m.group()[:60] if m else 'изменение статуса сделки'))
+        if _has(r'new contact|новый контакт|new lead|новый лид|form.*submitted'):
+            return ('HIGH', 'новый лид / контакт в HubSpot')
+        if _has(r'overdue|просроч|task.*due'):
+            return ('CRITICAL', 'просрочена задача HubSpot')
+        if _has(r'email.*opened|email.*clicked|открыл.*письмо'):
+            return ('MEDIUM', 'контакт открыл письмо')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'HubSpot проверен')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # Airtable / Google Sheets / Trello
+    # Структурированные данные — важны изменения записей
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('airtable', 'google sheets', 'sheets', 'trello')):
+        if _has(r'overdue|просроч|deadline|истёк'):
+            return ('HIGH', 'просрочена задача')
+        if _has(r'(?:запись|record|строка|row|карточка|card).*(?:создан|added|new)'):
+            return ('MEDIUM', 'новая запись / карточка')
+        if _has(r'(?:запись|record|строка|row).*(?:изменен|updated|changed)'):
+            return ('LOW', 'данные обновлены')
+        if len(text_raw.strip()) > 80:
+            return ('LOW', 'данные получены')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
+    # OpenWeatherMap — интересно только если экстрим
+    # ══════════════════════════════════════════════════════════════
+    if any(x in svc for x in ('weather', 'openweather', 'погод')):
+        if _has(r'storm|hurricane|tornado|гроза|шторм|сильный ветер|extreme|экстремальн'):
+            return ('HIGH', 'экстремальная погода')
+        return (None, None)  # обычная погода — не беспокоим
+
+    # ══════════════════════════════════════════════════════════════
+    # Resend — сервис отправки почты (мониторинг доставки)
+    # ══════════════════════════════════════════════════════════════
+    if 'resend' in svc:
+        if _has(r'bounce|spam|block|заблокир|отклон|reject'):
+            return ('CRITICAL', 'письма блокируются / попадают в спам')
+        if _has(r'delivered|доставлен'):
+            m_d = _find(r'(\d+)\s*delivered')
+            cnt = _first_num(m_d.group(1)) if m_d else 0
+            if cnt > 0:
+                return ('LOW', f'{cnt} писем доставлено')
+        return (None, None)
+
+    # ══════════════════════════════════════════════════════════════
     # GENERIC fallback для неизвестных интеграций
     # Используем базовые keyword-сигналы
     # ══════════════════════════════════════════════════════════════
