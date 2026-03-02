@@ -4193,6 +4193,8 @@ except Exception as e:
                         codeEl.style.height = 'auto';
                         codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
                         if (status) { status.style.display = 'block'; status.textContent = 'Готовый шаблон подставлен — проверьте переменные и при необходимости отредактируйте'; }
+                        const advD = document.getElementById('mpa-advanced-details');
+                        if (advD) advD.open = true;
                         mpUpdateServiceHint();
                         return;
                     }
@@ -4215,6 +4217,8 @@ except Exception as e:
                 if (data.error) throw new Error(data.error);
                 if (codeEl) { codeEl.value = (data.code != null ? data.code : ''); codeEl.style.height = 'auto'; codeEl.style.height = codeEl.scrollHeight + 'px'; }
                 if (status) { status.textContent = data.code ? 'Код сгенерирован — проверьте и при необходимости отредактируйте' : 'Код не получен — попробуйте ещё раз или опишите задачу подробнее'; }
+                const advDetails = document.getElementById('mpa-advanced-details');
+                if (advDetails && data.code) advDetails.open = true;
             } catch(e) {
                 if (status) { status.textContent = 'Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'); }
             } finally {
@@ -4525,23 +4529,25 @@ except Exception as e:
                         <textarea id="mpa-apikeys" placeholder="Заполнятся автоматически после выбора сервиса выше" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;" oninput="mpUpdateServiceHint()"></textarea>
                     </div>
 
+                    <!-- Генерация кода — всегда видимый блок -->
+                    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:13px;color:#92400E;font-weight:500;margin-bottom:2px;">⚡ Подключить данные</div>
+                        <div style="font-size:12px;color:#78350F;margin-bottom:8px;">Выбрали сервис выше? Нажмите кнопку — подставим готовый код. Для нестандартной задачи — опишите её и сгенерируем через ИИ.</div>
+                        <textarea id="mpa-code-desc" placeholder="Необязательно: опишите задачу для ИИ-генерации, например: читай RSS и присылай топ-3 новости" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #FDE68A;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#FFFFF0;"></textarea>
+                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;background:#F59E0B;border-color:#D97706;color:white;font-weight:500;" onmouseover="this.style.background='#D97706';" onmouseout="this.style.background='#F59E0B';">✦ Подставить шаблон / сгенерировать код</button>
+                        <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
+                    </div>
+
                     <!-- Продвинутые настройки: код -->
                     <details id="mpa-advanced-details" style="background:white;border:1px solid #D1D9E0;border-radius:8px;overflow:hidden;" ontoggle="const a=this.querySelector('.mpa-adv-arrow');if(a)a.style.transform=this.open?'rotate(0deg)':'rotate(-90deg)';">
                         <summary style="padding:10px 12px;cursor:pointer;font-size:13px;color:#6B7280;font-weight:500;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
                             <svg class="mpa-adv-arrow" width="12" height="12" viewBox="0 0 12 12" style="transform:rotate(-90deg);transition:transform 0.2s;flex-shrink:0;"><path d="M2 4l4 4 4-4" stroke="#9CA3AF" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            Продвинутые настройки (Python-код)
+                            Просмотреть / редактировать код вручную
                         </summary>
                         <div style="padding:0 12px 12px 12px;border-top:1px solid #F3F4F6;">
-                            <div style="padding-top:10px;margin-bottom:6px;">
-                                <div style="font-size:13px;color:#374151;font-weight:500;">Python-код агента</div>
-                                <div style="font-size:11px;color:#6B7280;margin-top:1px;">Добавили сервис выше — нажмие кнопку, подставим готовый шаблон мгновенно. Для нестандартной задачи — опишите её ниже, сгенерируем через ИИ.</div>
-                            </div>
-                            <textarea id="mpa-code-desc" placeholder="Для ИИ-генерации: Например: читай RSS-ленту и присылай топ-3 новости" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#F9FAFB;"></textarea>
-                            <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Подставить шаблон / сгенерировать код</button>
-                            <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
-                            <div style="margin-top:8px;">
+                            <div style="padding-top:8px;">
                                 <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Код агента:</div>
-                                <textarea id="mpa-pycode" placeholder="# Код появится здесь после выбора сервиса или генерации" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:11px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                                <textarea id="mpa-pycode" placeholder="# Код появится здесь после нажатия кнопки выше" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:11px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                                 <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Проверить код</button>
                                 <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
                             </div>
@@ -4602,6 +4608,11 @@ except Exception as e:
             if (_mpEditAgentId) data.id = _mpEditAgentId;
             if (!data.name) { mpShowStatus('Заполните имя агента', '#FEF2F2', '#DC2626'); return; }
             if (!data.personality) { mpShowStatus('Заполните личность агента', '#FEF2F2', '#DC2626'); return; }
+            // Предупреждение: ключи без кода — агент не сможет использовать интеграцию
+            if (data.user_api_keys.trim() && !data.python_code.trim()) {
+                const ok = confirm('⚠️ Вы добавили ключи интеграции, но не сгенерировали код.\n\nБез кода агент не сможет получать данные из подключённого сервиса.\n\nНажмите «Отмена» → «Подставить шаблон / сгенерировать код», или «ОК» чтобы сохранить без кода (можно добавить позже).');
+                if (!ok) return;
+            }
             try {
                 const r = await fetch('/api/marketplace/agents', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
                 if (!r.ok && r.status !== 400) throw new Error('HTTP ' + r.status);
