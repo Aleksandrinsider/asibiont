@@ -10483,12 +10483,10 @@ async def api_marketplace_agent_activate_handler(request):
                 session_db.add(sub)
                 agent.subscribers_count = (agent.subscribers_count or 0) + 1
                 session_db.commit()
-            # Переключаем активного агента в Telegram только для собственных агентов
-            _switched = False
-            if is_own:
-                from ai_integration.user_agents import set_user_active_agent as _sua
-                _sua(user_id, agent.id)
-                _switched = True
+            # Всегда ставим агента как активного (focused) — для корректного отображения в чате
+            from ai_integration.user_agents import set_user_active_agent as _sua
+            _sua(user_id, agent.id)
+            _switched = True
             # Захватываем атрибуты до закрытия сессии
             _aid = agent.id
             _aname = agent.name or 'Агент'
@@ -10501,10 +10499,6 @@ async def api_marketplace_agent_activate_handler(request):
             # Автор агента
             _author_user = session_db.query(UserModel).filter_by(id=agent.author_id).first()
             _author_uname = (_author_user.username or '') if _author_user else ''
-            # Публикуем первое сообщение агента в арену (только при новой подписке)
-            if not existing:
-                asyncio.ensure_future(_arena_intro_for_agent(
-                    _aid, _aname, _aspec, _apers, _adesc, _author_uname))
             return web.json_response({'success': True, 'trial_messages': _trial,
                                       'price_per_message': _price, 'switched': _switched,
                                       'agent': {'id': _aid, 'name': _aname, 'avatar_url': _aavatar}})
