@@ -3157,6 +3157,13 @@ except Exception as e:
                 hint: 'Примеры: lenta.ru/rss/news, habr.com/ru/rss/articles, vc.ru/rss',
                 code: `import urllib.request, re, html, os
 URL = os.environ.get('RSS_URL', '')
+def _rss_title(item):
+    m = re.search(r'<title[^>]*>(.*?)</title>', item, re.DOTALL)
+    if not m:
+        return '(нет)'
+    raw = m.group(1).strip()
+    cdata = re.match(r'<!\[CDATA\[(.*?)\]\]>', raw, re.DOTALL)
+    return html.unescape((cdata.group(1) if cdata else raw).strip() or '(нет)')
 try:
     if not URL:
         print('RSS_URL не задан')
@@ -3170,10 +3177,9 @@ try:
         else:
             print('Последние новости:')
             for item in items:
-                tm = re.search(r'<title[^>]*><!\[CDATA\[(.*?)\]\]>|<title[^>]*>(.*?)</title>', item, re.DOTALL)
-                lm = re.search(r'<link>(.*?)</link>', item, re.DOTALL)
-                t = html.unescape(((tm.group(1) or '') + (tm.group(2) or '')).strip()) if tm else '(нет)'
-                l = lm.group(1).strip() if lm else ''
+                t = _rss_title(item)
+                lm = re.search(r'<link>\s*(.*?)\s*</link>', item, re.DOTALL)
+                l = (lm.group(1).strip() if lm else '').split()[0] if lm else ''
                 print('- ' + t)
                 if l: print('  ' + l)
 except Exception as e:
@@ -3291,6 +3297,9 @@ from datetime import datetime, timedelta
 CLIENT_ID = os.environ.get('OZON_CLIENT_ID', '')
 API_KEY = os.environ.get('OZON_API_KEY', '')
 h = {'Client-Id': CLIENT_ID, 'Api-Key': API_KEY, 'Content-Type': 'application/json'}
+def _m(row, i):
+    ml = row.get('metrics') or []
+    return ml[i] if len(ml) > i else 0
 try:
     date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
     date_to = datetime.now().strftime('%Y-%m-%d')
@@ -3299,21 +3308,22 @@ try:
     with urllib.request.urlopen(req, timeout=10) as r:
         d = json.loads(r.read().decode())
     rows = d.get('result', {}).get('data', [])
-    total_rev = sum((row.get('metrics') or [0])[0] for row in rows)
-    total_units = int(sum((row.get('metrics') or [0, 0])[1] for row in rows))
-    total_returns = round(sum((row.get('metrics') or [0, 0, 0])[2] for row in rows), 0)
-    total_cancel = int(sum((row.get('metrics') or [0, 0, 0, 0])[3] for row in rows))
+    total_rev = sum(_m(row, 0) for row in rows)
+    total_units = int(sum(_m(row, 1) for row in rows))
+    total_returns = round(sum(_m(row, 2) for row in rows), 0)
+    total_cancel = int(sum(_m(row, 3) for row in rows))
     print('Ozon за 30 дней:')
     print('Выручка: ' + str(round(total_rev, 0)) + ' руб.')
     print('Заказано: ' + str(total_units) + ' ед.')
     print('Возвраты: ' + str(total_returns) + ' руб.')
     print('Отмены: ' + str(total_cancel) + ' шт.')
     print('---')
-    non_zero = [r for r in rows if any(m for m in (r.get('metrics') or []))]
+    non_zero = [r for r in rows if any(_m(r, i) for i in range(2))]
     for row in non_zero[-7:]:
-        dim = ((row.get('dimensions') or [{}])[0]).get('id', '')
-        rev = round((row.get('metrics') or [0])[0], 0)
-        units = int((row.get('metrics') or [0, 0])[1])
+        dims = row.get('dimensions') or []
+        dim = (dims[0].get('id', '') if dims else '')
+        rev = round(_m(row, 0), 0)
+        units = int(_m(row, 1))
         if rev or units:
             print(str(dim) + ': ' + str(rev) + ' руб., ' + str(units) + ' ед.')
 except Exception as e:
