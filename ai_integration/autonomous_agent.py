@@ -1240,6 +1240,7 @@ class HybridAutonomousAgent:
                 # Проверяем @упоминание агента в сообщении: "@ИмяАгента текст"
                 _mention_match = _re_agent.match(r'@(\w+)\b', (user_message or '').strip())
                 _active_agent_id = None
+                _mention_not_found = False  # флаг: @упоминание было, но агент не найден
                 if _mention_match:
                     _mention_name = _mention_match.group(1).lower()
                     _all_active_ids = get_user_active_agents(user_id)
@@ -1253,7 +1254,10 @@ class HybridAutonomousAgent:
                                 pass
                             logger.info(f"[AGENT] @mention routed to '{_cdata['name']}' (id={_cid})")
                             break
-                if _active_agent_id is None:
+                    if _active_agent_id is None:
+                        # @упоминание было, но агент не найден — возвращаем ошибку сразу
+                        _mention_not_found = True
+                if not _mention_not_found and _active_agent_id is None:
                     _active_agent_id = get_user_active_agent(user_id)
                 if _active_agent_id:
                     _agent_data = load_agent_personality(_active_agent_id)
@@ -1279,6 +1283,32 @@ class HybridAutonomousAgent:
                             pass
             except Exception as _ae:
                 logger.warning(f"[AGENT] process_request personality inject error: {_ae}")
+
+            # @упоминание было, но агент не найден — сообщаем сразу, не отвечаем от чужого имени
+            if locals().get('_mention_not_found'):
+                try:
+                    _all_names = []
+                    _ids_for_hint = get_user_active_agents(user_id) if 'get_user_active_agents' in dir() else []
+                    for _hid in _ids_for_hint:
+                        _hd = load_agent_personality(_hid) if 'load_agent_personality' in dir() else None
+                        if _hd:
+                            _all_names.append(_hd['name'])
+                except Exception:
+                    _all_names = []
+                _not_found_name = locals().get('_mention_name', '').capitalize()
+                if _all_names:
+                    _hint = ', '.join(_all_names)
+                    _err_msg = (
+                        f"Агент @{_not_found_name} не найден среди активных.\n"
+                        f"Активные агенты: {_hint}.\n"
+                        f"Используй @ИмяАгента или напиши без @ — ответит фокусный агент."
+                    )
+                else:
+                    _err_msg = (
+                        f"Агент @{_not_found_name} не найден. Активных агентов нет.\n"
+                        f"Подключи агента в разделе Маркетплейс."
+                    )
+                return _err_msg
 
             # Запускаем python_code агента (реалтайм-данные перед ответом)
             try:
