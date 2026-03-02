@@ -2901,16 +2901,28 @@ else:
                     subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
                     frm = msg.get('From', '')
                     date = msg.get('Date', '')
+                    import re as _re
+                    def _strip_html(s):
+                        s = _re.sub(r'<[^>]+>', ' ', s)
+                        return _re.sub(r'[ \t]+', ' ', s).strip()
                     body = ''
                     if msg.is_multipart():
+                        _html_fb = ''
                         for part in msg.walk():
-                            if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
+                            _ct = part.get_content_type()
+                            if _ct == 'text/plain' and not part.get('Content-Disposition'):
                                 raw = part.get_payload(decode=True) or b''
                                 body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
                                 break
+                            if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
+                                raw = part.get_payload(decode=True) or b''
+                                _html_fb = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
+                        if not body:
+                            body = _html_fb
                     else:
                         raw = msg.get_payload(decode=True) or b''
-                        body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
+                        _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
+                        body = _strip_html(_dec)[:150] if msg.get_content_type() == 'text/html' else _dec[:150]
                     print('От: ' + frm)
                     print('Тема: ' + subject)
                     print('Дата: ' + date)
@@ -2954,16 +2966,28 @@ try:
                 subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
                 frm = msg.get('From', '')
                 date = msg.get('Date', '')
+                import re as _re
+                def _strip_html(s):
+                    s = _re.sub(r'<[^>]+>', ' ', s)
+                    return _re.sub(r'[ \t]+', ' ', s).strip()
                 body = ''
                 if msg.is_multipart():
+                    _html_fb = ''
                     for part in msg.walk():
-                        if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
+                        _ct = part.get_content_type()
+                        if _ct == 'text/plain' and not part.get('Content-Disposition'):
                             raw = part.get_payload(decode=True) or b''
                             body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
                             break
+                        if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
+                            raw = part.get_payload(decode=True) or b''
+                            _html_fb = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
+                    if not body:
+                        body = _html_fb
                 else:
                     raw = msg.get_payload(decode=True) or b''
-                    body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
+                    _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
+                    body = _strip_html(_dec)[:150] if msg.get_content_type() == 'text/html' else _dec[:150]
                 print('От: ' + frm)
                 print('Тема: ' + subject)
                 print('Дата: ' + date)
@@ -3007,16 +3031,28 @@ try:
                 subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
                 frm = msg.get('From', '')
                 date = msg.get('Date', '')
+                import re as _re
+                def _strip_html(s):
+                    s = _re.sub(r'<[^>]+>', ' ', s)
+                    return _re.sub(r'[ \t]+', ' ', s).strip()
                 body = ''
                 if msg.is_multipart():
+                    _html_fb = ''
                     for part in msg.walk():
-                        if part.get_content_type() == 'text/plain' and not part.get('Content-Disposition'):
+                        _ct = part.get_content_type()
+                        if _ct == 'text/plain' and not part.get('Content-Disposition'):
                             raw = part.get_payload(decode=True) or b''
                             body = raw.decode(part.get_content_charset() or 'utf-8', errors='replace')[:150]
                             break
+                        if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
+                            raw = part.get_payload(decode=True) or b''
+                            _html_fb = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
+                    if not body:
+                        body = _html_fb
                 else:
                     raw = msg.get_payload(decode=True) or b''
-                    body = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')[:150]
+                    _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
+                    body = _strip_html(_dec)[:150] if msg.get_content_type() == 'text/html' else _dec[:150]
                 print('От: ' + frm)
                 print('Тема: ' + subject)
                 print('Дата: ' + date)
