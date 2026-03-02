@@ -4115,8 +4115,8 @@ except Exception as e:
                 const data = await r.json();
                 if (data.error) throw new Error(data.error);
                 const codeEl = document.getElementById('mpa-pycode');
-                if (codeEl) { codeEl.value = data.code; codeEl.style.height = 'auto'; codeEl.style.height = codeEl.scrollHeight + 'px'; }
-                if (status) { status.textContent = 'Код сгенерирован — проверьте и при необходимости отредактируйте'; }
+                if (codeEl) { codeEl.value = (data.code != null ? data.code : ''); codeEl.style.height = 'auto'; codeEl.style.height = codeEl.scrollHeight + 'px'; }
+                if (status) { status.textContent = data.code ? 'Код сгенерирован — проверьте и при необходимости отредактируйте' : 'Код не получен — попробуйте ещё раз или опишите задачу подробнее'; }
             } catch(e) {
                 if (status) { status.textContent = 'Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'); }
             } finally {
