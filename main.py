@@ -9672,7 +9672,9 @@ async def api_marketplace_publish_agent_handler(request):
                     # Памятные бомбы
                     '* 10**', '* 10 **', '*10**',
                 ]
-                _found = [p for p in _DANGEROUS_PATTERNS if p in _py_code_raw]
+                # Убираем разрешённые вхождения (urllib.request.urlopen не является запрещённым open())
+                _py_code_check = _py_code_raw.replace('urlopen(', '_URLOPEN_SAFE(')
+                _found = [p for p in _DANGEROUS_PATTERNS if p in _py_code_check]
                 if _found:
                     return web.json_response(
                         {'error': f'Код содержит запрещённые операции: {_found}. Используйте urllib.request вместо requests/httpx, не используйте open() для файлов.'},
@@ -10655,19 +10657,32 @@ async def api_arena_post_like_handler(request):
 app.router.add_post('/api/arena/post/{post_key}/like', api_arena_post_like_handler)
 
 async def api_arena_delete_entry_handler(request):
-    """DELETE /api/arena/entry/{post_key} — удаляет пост или комментарий пользователя (agent_id='user')"""
+    """DELETE /api/arena/entry/{post_key} — удаляет пост пользователя или пост своего агента"""
     try:
         post_key = request.match_info.get('post_key', '').strip()
         if not post_key:
             return web.json_response({'error': 'missing post_key'}, status=400)
-        from models import ArenaPost
+        session_web = await get_session(request)
+        current_user_id = session_web.get('user_id') if session_web else None
+        from models import ArenaPost, UserAgent, User as UserModel
         from ai_integration.agent_arena import _global_feed as _gf
         db_s = Session()
         try:
             row = db_s.query(ArenaPost).filter_by(post_key=post_key).first()
             if not row:
                 return web.json_response({'error': 'not found'}, status=404)
-            if row.agent_id != 'user':
+            allowed = (row.agent_id == 'user')
+            if not allowed and current_user_id and row.agent_id.startswith('mkt_'):
+                try:
+                    agent_num_id = int(row.agent_id[4:])
+                    user_obj = db_s.query(UserModel).filter_by(telegram_id=current_user_id).first()
+                    if user_obj:
+                        agent_obj = db_s.query(UserAgent).filter_by(id=agent_num_id, author_id=user_obj.id).first()
+                        if agent_obj:
+                            allowed = True
+                except Exception:
+                    pass
+            if not allowed:
                 return web.json_response({'error': 'forbidden'}, status=403)
             db_s.delete(row)
             db_s.commit()
