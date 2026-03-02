@@ -29,7 +29,10 @@ def _validate_email_domain(email: str) -> tuple:
     Uses DNS MX lookup to catch typos and non-existent domains BEFORE sending.
     Caches results for 1 hour to avoid repeated DNS queries.
     """
-    import dns.resolver
+    try:
+        import dns.resolver
+    except ImportError:
+        return True, None  # dnspython not installed — skip check, don't block
     import time
 
     try:
@@ -10317,19 +10320,19 @@ async def send_email(
 
         if not _chosen_integration:
             return (
-                "❌ Не найдено подключённого почтового аккаунта. \
-Чтобы отправлять письма, добавь в настройках агента одну из интеграций:\
-• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx \
-• Яндекс Почта: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\
-• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\
-• Свой Resend: RESEND_API_KEY=re_... и RESEND_FROM=from@yourdomain.com"
+                "❌ Не найдено подключённого почтового аккаунта. "
+                "Чтобы отправлять письма, добавь в настройках агента одну из интеграций: "
+                "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx "
+                "• Яндекс Почта: YANDEX_USER=you@yandex.ru и YANDEX_PASS=... "
+                "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=... "
+                "• Свой Resend: RESEND_API_KEY=re_... и RESEND_FROM=from@yourdomain.com"
             )
 
         # Fallback sender
         if not sender_name:
             sender_name = user.first_name or user.username or 'Team'
-        if not sender_email:
-            sender_email = _chosen_integration['email_user']
+        # Всегда использовать email из интеграции (не из параметров ИИ)
+        sender_email = _chosen_integration['email_user']
 
         # Нормализация: удалить пробелы, lowercase
         to_clean = to.strip().lower()
@@ -10339,51 +10342,20 @@ async def send_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
-        # Проверка bounced/failed — вечный бан
+        # Простой дневной лимит для прямых писем: 50 отправок/день
         from models import EmailOutreach as _EO_check
         from datetime import datetime as _dt_limit, timezone as _tz_limit
-        from datetime import timedelta as _td_cool
-        _bad = session.query(_EO_check).filter(
-            _EO_check.user_id == user.id,
-            _EO_check.recipient_email == to_clean,
-            _EO_check.status.in_(['bounced', 'failed']),
-        ).first()
-        if _bad:
-            return f"⚠️ {to_clean} ранее вернул bounced/failed. Отправка заблокирована."
-
-        # Кросс-кампанийный cooldown (30 дней)
-        _CROSS_COOL = 30
-        _cross = session.query(_EO_check).filter(
-            _EO_check.user_id == user.id,
-            _EO_check.recipient_email == to_clean,
-            _EO_check.status.in_(['sent', 'delivered', 'opened', 'replied']),
-            _EO_check.sent_at >= _dt_limit.now(_tz_limit.utc) - _td_cool(days=_CROSS_COOL),
-        ).first()
-        if _cross:
-            return f"⚠️ На {to_clean} уже отправлялось письмо за последние {_CROSS_COOL} дней (кампания #{_cross.campaign_id}). Cooldown активен."
-
-        # Глобальный дневной лимит: макс 50 уникальных получателей/день
-        from sqlalchemy import func as _func_limit, distinct as _distinct_limit
         import pytz as _pytz_limit
-        _user_tz_limit = _pytz_limit.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
-        _user_now_limit = _dt_limit.now(_user_tz_limit)
-        _day_local_limit = _user_now_limit.replace(hour=0, minute=0, second=0, microsecond=0)
-        _today_start_limit = _day_local_limit.astimezone(_tz_limit.utc)
-        GLOBAL_DAILY_LIMIT = 50
-        _global_sent_today = session.query(
-            _func_limit.count(_distinct_limit(EmailOutreach.recipient_email))
-        ).filter(
-            EmailOutreach.user_id == user.id,
-            EmailOutreach.sent_at >= _today_start_limit,
-            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        _user_tz_p = _pytz_limit.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _today_start = _dt_limit.now(_user_tz_p).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_limit.utc)
+        from sqlalchemy import func as _func_limit
+        _sent_today = session.query(_func_limit.count(_EO_check.id)).filter(
+            _EO_check.user_id == user.id,
+            _EO_check.sent_at >= _today_start,
         ).scalar() or 0
-        _is_new_recip = not session.query(EmailOutreach).filter(
-            EmailOutreach.user_id == user.id,
-            EmailOutreach.recipient_email == to_clean,
-            EmailOutreach.sent_at >= _today_start_limit,
-        ).first()
-        if _is_new_recip and _global_sent_today >= GLOBAL_DAILY_LIMIT:
-            return f"⚠️ Достигнут дневной лимит: {_global_sent_today} новых получателей (макс. {GLOBAL_DAILY_LIMIT}). Продолжим завтра."
+        if _sent_today >= 50:
+            return f"⚠️ Достигнут дневной лимит: {_sent_today} писем отправлено сегодня (макс. 50). Продолжим завтра."
+
 
         from config import WEB_APP_URL
         _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
