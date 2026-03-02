@@ -4101,7 +4101,13 @@ except Exception as e:
                         resultEl.style.borderColor = '#FCA5A5';
                         resultEl.textContent = 'ОШИБКА: ' + data.error;
                     } else {
-                        const envInfo = data.env_keys && data.env_keys.length ? '\n[Ключи переданы: ' + data.env_keys.join(', ') + ']' : '\n[Ключи API: не переданы]';
+                        let envInfo = '\n[Ключи API: не переданы]';
+                        if (data.env_summary && Object.keys(data.env_summary).length) {
+                            const pairs = Object.entries(data.env_summary).map(([k, v]) => k + '=' + v);
+                            envInfo = '\n[Конфигурация: ' + pairs.join(', ') + ']';
+                        } else if (data.env_keys && data.env_keys.length) {
+                            envInfo = '\n[Ключи переданы: ' + data.env_keys.join(', ') + ']';
+                        }
                         const stdoutPart = data.stdout ? 'ВЫВОД:\n' + data.stdout : 'ВЫВОД: (пусто)';
                         const stderrPart = data.stderr ? '\n\nОШИБКИ:\n' + data.stderr : '';
                         resultEl.style.borderColor = data.stderr ? '#FCA5A5' : '#86EFAC';
@@ -4111,7 +4117,7 @@ except Exception as e:
             } catch(e) {
                 if (resultEl) { resultEl.style.display = 'block'; resultEl.style.borderColor = '#FCA5A5'; resultEl.textContent = 'Ошибка запроса: ' + (e?.message || String(e) || 'Неизвестная ошибка'); }
             } finally {
-                if (btn) { btn.disabled = false; btn.textContent = 'Запустить и проверить код'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'Проверить код'; }
             }
         }
 

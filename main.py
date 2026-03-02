@@ -9766,11 +9766,25 @@ async def api_agent_test_code_handler(request):
             stdout, stderr = await _aio_t.wait_for(proc.communicate(), timeout=15.0)
             out = stdout.decode('utf-8', errors='replace').strip()
             err = stderr.decode('utf-8', errors='replace').strip()
+            # Строим маскированное резюме переменных для диагностики
+            _safe_keys = {'EMAIL', 'USER', 'FROM', 'DOMAIN', 'HOST', 'URL', 'PORT', 'REGION', 'BUCKET', 'SHEET', 'ID'}
+            def _mask_val(k, v):
+                ku = k.upper()
+                if any(s in ku for s in _safe_keys):
+                    return v  # не секрет — показываем полностью
+                if not v:
+                    return '(не задан)'
+                if len(v) <= 6:
+                    return '***'
+                return v[:4] + '***'
+            _user_env = {k: v for k, v in _env.items() if k not in ('PATH', 'HOME', 'PYTHONIOENCODING')}
+            env_summary = {k: _mask_val(k, v) for k, v in _user_env.items()}
             return web.json_response({
                 'stdout': out[:3000],
                 'stderr': err[:1000],
                 'returncode': proc.returncode,
-                'env_keys': [k for k in _env if k not in ('PATH', 'HOME', 'PYTHONIOENCODING')],
+                'env_keys': list(_user_env.keys()),
+                'env_summary': env_summary,
             })
         except _aio_t.TimeoutError:
             return web.json_response({'error': 'Тайм-аут (15 сек)', 'stdout': '', 'stderr': ''})
