@@ -10310,14 +10310,23 @@ async def send_email(
                     _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _email_integrations)
                     return f"❌ Аккаунт '{from_account}' не найден среди подключённых почт. Доступные: {_list}"
             else:
-                # Несколько интеграций — запрашиваем уточнение
-                _list = '\n'.join(
-                    f"• {i['label']}: {i['email_user']}" for i in _email_integrations
-                )
-                return (
-                    f"У тебя подключено несколько почтовых аккаунтов:\n{_list}\n\n"
-                    f"С какого адреса отправить письмо?"
-                )
+                # Несколько интеграций — личная почта (SMTP) в приоритете над Resend
+                _smtp_integrations = [i for i in _email_integrations if i.get('type') == 'smtp']
+                if len(_smtp_integrations) == 1:
+                    # Ровно одна личная почта — берём её автоматически, Resend игнорируем
+                    _chosen_integration = _smtp_integrations[0]
+                elif len(_smtp_integrations) > 1:
+                    # Несколько личных почт — спрашиваем только между ними
+                    _list = '\n'.join(
+                        f"• {i['label']}: {i['email_user']}" for i in _smtp_integrations
+                    )
+                    return (
+                        f"У тебя подключено несколько почтовых аккаунтов:\n{_list}\n\n"
+                        f"С какого адреса отправить письмо?"
+                    )
+                else:
+                    # Нет ни одной личной почты — берём первый Resend без вопроса
+                    _chosen_integration = _email_integrations[0]
 
         if not _chosen_integration:
             return (

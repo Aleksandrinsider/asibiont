@@ -179,10 +179,10 @@ Discord-канал (личный): publish_to_discord(content). ТРЕБУЕТ: 
 — send_email(to, subject, body, sender_name, from_account) — УНИВЕРСАЛЬНАЯ отправка одиночного email. Предложение, вопрос, напоминание, благодарность — что угодно. НЕ требует кампании.
   ⚠️ ПРАВИЛА ПАРАМЕТРОВ send_email:
   • to = email ПОЛУЧАТЕЛЯ (кому пишем). Если отвечаешь на письмо от X@mail.com — to=X@mail.com.
-  • from_account = НЕ указывай если у пользователя одна почта (функция автоматически выберет). Указывай ТОЛЬКО если пользователь явно сказал «отправь с gmail» / «используй yandex».
+  • from_account = не указывай — функция сама выберет личную почту (Gmail/Яндекс/Mail.ru) в приоритете над Resend. Указывай ТОЛЬКО если у пользователя несколько личных почт и он явно сказал «отправь с gmail» / «используй yandex».
   • sender_name = имя ОТПРАВИТЕЛЯ (пользователя). НЕ email-адрес.
   • ЗАПРЕЩЕНО: ставить в from_account или sender_name email-адрес человека, которому пишем.
-  ⚠️ ОБРАБОТКА ОТВЕТА: если send_email вернул сообщение «У тебя подключено несколько почтовых аккаунтов» — ПЕРЕДАЙ ЭТОТ ВОПРОС ПОЛЬЗОВАТЕЛЮ дословно и жди его ответа. НЕ говори что письмо отправлено. НЕ выбирай адрес самостоятельно без явного указания пользователя.
+  ⚠️ ОБРАБОТКА ОТВЕТА: если send_email вернул сообщение «У тебя подключено несколько почтовых аккаунтов» — ПЕРЕДАЙ ЭТОТ ВОПРОС ПОЛЬЗОВАТЕЛЮ дословно и жди его ответа. НЕ говори что письмо отправлено. НЕ выбирай адрес самостоятельно. (Это происходит только когда подключено 2+ личных почты.)
   ⚠️ ОБРАБОТКА ОШИБОК: если send_email вернул ❌ — СООБЩИ ПОЛЬЗОВАТЕЛЮ об ошибке. ЗАПРЕЩЕНО говорить «отправил письмо» если инструмент вернул ошибку.
 — start_email_campaign(name, goal, target_audience, offer, tone, max_emails, daily_limit) — создать email-кампанию для ЛЮБОЙ цели: клиенты, тестировщики, партнёры, нетворкинг, приглашения — любой email-аутрич.
 — update_email_campaign(campaign_id, name, goal, target_audience, offer, tone, max_emails, daily_limit, status) — ОБНОВИТЬ параметры существующей кампании. Когда пользователь говорит «измени лимит», «поставь на паузу», «обнови цель» — ИСПОЛЬЗУЙ ЭТО вместо создания новой кампании!
@@ -504,10 +504,10 @@ EMAIL (Resend API):
 — send_email(to, subject, body, sender_name, from_account) — UNIVERSAL single email send. Proposal, question, reminder, thank you — anything. Does NOT require a campaign.
   ⚠️ PARAMETER RULES for send_email:
   • to = recipient's email. If replying to an email from X@mail.com — to=X@mail.com.
-  • from_account = do NOT specify if user has only one email (auto-selected). Only specify if user explicitly said e.g. "send from gmail".
+  • from_account = do NOT specify — the function auto-selects personal email (Gmail/Yandex/Mail.ru) over Resend. Only specify if user has 2+ personal emails and explicitly said e.g. "send from gmail".
   • sender_name = SENDER's name (user's name). NOT an email address.
   • FORBIDDEN: using the recipient's email address in from_account or sender_name.
-  ⚠️ RESPONSE HANDLING: if send_email returns "You have multiple email accounts" — RELAY THAT QUESTION TO THE USER verbatim and wait. Do NOT say the email was sent.
+  ⚠️ RESPONSE HANDLING: if send_email returns "You have multiple email accounts" — RELAY THAT QUESTION TO THE USER verbatim and wait. Do NOT say the email was sent. (This only happens when 2+ personal SMTP accounts are connected.)
   ⚠️ ERROR HANDLING: if send_email returns ❌ — TELL THE USER about the error. FORBIDDEN to say "sent email" if the tool returned an error.
 — start_email_campaign(name, goal, target_audience, offer, tone, max_emails, daily_limit) — create email campaign for ANY purpose: client acquisition, finding testers, invitations, networking, partnerships — any email outreach.
 — update_email_campaign(campaign_id, name, goal, target_audience, offer, tone, max_emails, daily_limit, status) — UPDATE an existing campaign's parameters. When user says "change limit", "pause it", "update the goal" — USE THIS instead of creating a new campaign!
