@@ -114,11 +114,23 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 {personality}
 """
 
+    # Email-сервисы требуют явного запрета подмены реального ящика платформенными инструментами
+    _EMAIL_SERVICES = {'Gmail', 'Яндекс Почта', 'Mail.ru', 'Resend'}
+    _is_email_svc = service_label in _EMAIL_SERVICES
+
     if service_label:
         overlay += f"""
 ПОДКЛЮЧЁННЫЙ СЕРВИС: {service_label}
 Этот агент интегрирован с {service_label}. Когда пользователь обсуждает цели, задачи или стратегию — думай прежде всего: «что через {service_label} можно СДЕЛАТЬ для этого прямо сейчас?» и предлагай конкретные действия через этот сервис. Это твоё главное преимущество перед обычным агентом.
 Остальные инструменты платформы (кампании, посты) — дополнение, используй только если {service_label} здесь не релевантен или пользователь явно спросил.
+"""
+        if _is_email_svc:
+            overlay += f"""
+⛔ КРИТИЧЕСКИ ВАЖНО ДЛЯ {service_label}:
+Пользователь подключил СВОЙ почтовый ящик {service_label} — он имеет в виду РЕАЛЬНЫЕ письма из своей почты, а НЕ платформенные рассылки.
+— НЕ ПРЕДЛАГАЙ start_email_campaign, send_email, start_content_campaign — это инструменты платформы для маркетинговых рассылок, они НЕ имеют отношения к личному ящику пользователя.
+— Если пользователь спрашивает «что в почте», «посмотри письма», «есть что-нибудь» — отвечай на основе данных скрипта из секции [ДАННЫЕ ОТ АГЕНТА].
+— Если данных нет (скрипт не настроен) → честно скажи: «Скрипт не выполнился, данных нет» — и НЕ подменяй это предложением запустить email-кампанию.
 """
 
     if has_script:
@@ -152,6 +164,19 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 — Если данных нет или скрипт упал → скажи честно что произошло.
 — Не подтягивай серверные данные платформы (задачи, цели профиля) как замену данным скрипта — это разные вещи.
 """
+    elif service_label:
+        # Сервис подключён (есть ключи), но python_code не настроен
+        overlay += f"""
+## ВАЖНО: СКРИПТ НЕ НАСТРОЕН
+
+Ключи доступа к {service_label} сохранены, но Python-скрипт для получения данных не добавлен.
+Это значит данных из {service_label} в этом ответе НЕТ.
+
+⛔ НЕ говори пользователю что «нужно подключить интеграцию» — ключи уже есть.
+⛔ НЕ предлагай платформенные инструменты (email-кампании, автопостинг) как замену {service_label}.
+✓ Честно скажи: «Код для получения данных из {service_label} не настроен — добавьте Python-скрипт в настройках агента (вкладка "Продвинутые настройки").»
+✓ После сообщения — жди указаний пользователя, не переключайся на другие инструменты.
+"""
 
     if kb_snippets:
         overlay += "\nБАЗА ЗНАНИЙ АГЕНТА (используй при ответах):\n"
@@ -172,6 +197,16 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
             base_system_prompt,
             flags=re.DOTALL,
         )
+        # Для email-агентов: вырезаем строки про start_email_campaign / send_email из
+        # раздела инструментов базового промпта, чтобы AI не путал личную почту с платформенной рассылкой.
+        if _is_email_svc:
+            base_system_prompt = re.sub(
+                r'— (send_email|start_email_campaign|update_email_campaign|send_outreach_email|'
+                r'add_email_leads|reply_to_outreach_email|get_email_campaign_status|pause_email_campaign)'
+                r'\(.*?\n',
+                '',
+                base_system_prompt,
+            )
 
     combined = overlay + "\n" + base_system_prompt
 
@@ -187,7 +222,10 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
             f"Действия (run_agent_action) — только по явной просьбе пользователя.]"
         )
     else:
-        reminder += " Нарушение характера = провал роли.]"
+        if service_label:
+            reminder += f" Скрипт {service_label} не настроен — сообщи пользователю и не предлагай платформенные рассылки.]"
+        else:
+            reminder += " Нарушение характера = провал роли.]"
     return combined + reminder
 
 
