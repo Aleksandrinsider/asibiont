@@ -10182,8 +10182,57 @@ async def send_follow_up_email(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# GENERIC EMAIL — Отправка одиночных писем через Resend API
+# GENERIC EMAIL — Отправка одиночных писем через Resend API или SMTP
 # ═══════════════════════════════════════════════════════════════════
+
+
+def _get_user_email_integrations(user, session) -> list:
+    """Возвращает список почтовых интеграций из агентов пользователя.
+
+    Каждый элемент: {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
+    """
+    try:
+        from models import UserAgent as _UA
+        agents = session.query(_UA).filter(
+            _UA.author_id == user.id,
+            _UA.status != 'disabled',
+            _UA.user_api_keys != None,
+            _UA.user_api_keys != '',
+        ).all()
+        # SMTP-конфиги для поддерживаемых почтовых сервисов
+        _SVC = [
+            ('GMAIL',  'smtp.gmail.com',  465, 'Gmail'),
+            ('YANDEX', 'smtp.yandex.ru',  465, 'Яндекс Почта'),
+            ('MAILRU', 'smtp.mail.ru',    465, 'Mail.ru'),
+        ]
+        results = []
+        seen_emails: set = set()
+        for agent in agents:
+            env: dict = {}
+            for line in (agent.user_api_keys or '').splitlines():
+                line = line.strip()
+                if '=' in line and not line.startswith('#'):
+                    k, _, v = line.partition('=')
+                    env[k.strip().upper()] = v.strip()
+            for svc_key, smtp_host, smtp_port, label in _SVC:
+                eu = env.get(f'{svc_key}_USER', '')
+                ep = env.get(f'{svc_key}_PASS', '')
+                if eu and ep and eu not in seen_emails:
+                    seen_emails.add(eu)
+                    results.append({
+                        'label': label,
+                        'email_user': eu,
+                        'email_pass': ep,
+                        'smtp_host': smtp_host,
+                        'smtp_port': smtp_port,
+                        'agent_name': agent.name or label,
+                        'agent_id': agent.id,
+                    })
+        return results
+    except Exception as _e:
+        logger.warning(f'[EMAIL_INTEGRATIONS] {_e}')
+        return []
+
 
 async def send_email(
     to: str = None,
@@ -10191,11 +10240,16 @@ async def send_email(
     body: str = None,
     sender_name: str = None,
     sender_email: str = None,
+    from_account: str = None,
     user_id: int = None,
     session=None,
     close_session: bool = True,
 ):
-    """Отправить одиночное email-сообщение через Resend API.
+    """Отправить одиночное email-сообщение.
+
+    Если у пользователя подключён Gmail/Яндекс Почта/Mail.ru — письмо
+    отправляется с его личного ящика через SMTP. Иначе — через Resend API.
+    Если несколько почт подключено — нужно указать from_account (email).
 
     Универсальный инструмент — предложение, вопрос, напоминание,
     благодарность, что угодно. НЕ связан с кампаниями.
@@ -10217,14 +10271,43 @@ async def send_email(
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "❌ Пользователь не найден."
-        if not RESEND_API_KEY:
-            return "❌ Resend API не настроен."
+
+        # ── Проверяем почтовые интеграции пользователя ──────────────────────
+        _email_integrations = _get_user_email_integrations(user, session)
+        _chosen_integration = None
+
+        if _email_integrations:
+            if len(_email_integrations) == 1:
+                # Одна интеграция — используем автоматически
+                _chosen_integration = _email_integrations[0]
+            elif from_account:
+                # Пользователь уточнил откуда отправить
+                _fa = from_account.strip().lower()
+                for _intg in _email_integrations:
+                    if _fa in _intg['email_user'].lower() or _fa in _intg['label'].lower():
+                        _chosen_integration = _intg
+                        break
+                if not _chosen_integration:
+                    _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _email_integrations)
+                    return f"❌ Аккаунт '{from_account}' не найден среди подключённых почт. Доступные: {_list}"
+            else:
+                # Несколько интеграций — запрашиваем уточнение
+                _list = '\n'.join(
+                    f"• {i['label']}: {i['email_user']}" for i in _email_integrations
+                )
+                return (
+                    f"У тебя подключено несколько почтовых аккаунтов:\n{_list}\n\n"
+                    f"С какого адреса отправить письмо?"
+                )
+
+        if not RESEND_API_KEY and not _chosen_integration:
+            return "❌ Resend API не настроен и почтовые интеграции не подключены."
 
         # Fallback sender
         if not sender_name:
             sender_name = user.first_name or user.username or 'Team'
         if not sender_email:
-            sender_email = 'outreach@asibiont.com'
+            sender_email = _chosen_integration['email_user'] if _chosen_integration else 'outreach@asibiont.com'
 
         # Нормализация: удалить пробелы, lowercase
         to_clean = to.strip().lower()
@@ -10285,44 +10368,79 @@ async def send_email(
 
         resend_id = ''
         try:
-            async with _aiohttp.ClientSession() as http:
-                from_header = f"{sender_name} <{sender_email}>"
-                resp = await http.post(
-                    'https://api.resend.com/emails',
-                    headers={
-                        'Authorization': f'Bearer {RESEND_API_KEY}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={
-                        'from': from_header,
-                        'to': [to_clean],
-                        'subject': subject,
-                        'text': body,
-                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
-                    },
-                    timeout=_aiohttp.ClientTimeout(total=15),
-                )
-                resp_data = await resp.json()
-                if resp.status not in (200, 201):
-                    err = resp_data.get('message', str(resp_data))
+            if _chosen_integration:
+                # ── Отправка через личную почту пользователя (SMTP) ────────
+                import smtplib as _smtplib
+                from email.mime.text import MIMEText as _MIMEText
+                from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+                import asyncio as _aio_smtp
+
+                _smtp_host = _chosen_integration['smtp_host']
+                _smtp_port = _chosen_integration['smtp_port']
+                _smtp_user = _chosen_integration['email_user']
+                _smtp_pass = _chosen_integration['email_pass'].replace(' ', '')
+                _from_label = _chosen_integration['label']
+
+                def _smtp_send_personal():
+                    msg = _MIMEMultipart()
+                    msg['From'] = f"{sender_name} <{_smtp_user}>"
+                    msg['To'] = to_clean
+                    msg['Subject'] = subject
+                    msg.attach(_MIMEText(body, 'plain', 'utf-8'))
+                    with _smtplib.SMTP_SSL(_smtp_host, _smtp_port) as s:
+                        s.login(_smtp_user, _smtp_pass)
+                        s.sendmail(_smtp_user, to_clean, msg.as_string())
+
+                loop = _aio_smtp.get_event_loop()
+                try:
+                    await loop.run_in_executor(None, _smtp_send_personal)
+                except Exception as _smtp_err:
+                    return f"❌ Ошибка отправки через {_from_label}: {str(_smtp_err)}"
+
+                # Обновляем sender_email чтобы лог показывал реальный адрес
+                sender_email = _smtp_user
+                logger.info(f'[SEND_EMAIL] Sent via {_from_label} SMTP from {_smtp_user} to {to_clean}')
+            else:
+                # ── Отправка через Resend API (платформенный email) ─────────
+                async with _aiohttp.ClientSession() as http:
+                    from_header = f"{sender_name} <{sender_email}>"
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={
+                            'Authorization': f'Bearer {RESEND_API_KEY}',
+                            'Content-Type': 'application/json',
+                        },
+                        json={
+                            'from': from_header,
+                            'to': [to_clean],
+                            'subject': subject,
+                            'text': body,
+                            'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
+                        },
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    resp_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err = resp_data.get('message', str(resp_data))
+                        try:
+                            from .service_health import record_error as _rec_svc2
+                            _rec_svc2('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
+                        except Exception:
+                            pass
+                        return f"❌ Ошибка Resend API: {err}"
+                    resend_id = resp_data.get('id', '')
                     try:
-                        from .service_health import record_error as _rec_svc2
-                        _rec_svc2('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
+                        from .service_health import clear_error as _clr_svc2
+                        _clr_svc2('resend')
                     except Exception:
                         pass
-                    return f"❌ Ошибка Resend API: {err}"
-                resend_id = resp_data.get('id', '')
-                try:
-                    from .service_health import clear_error as _clr_svc2
-                    _clr_svc2('resend')
-                except Exception:
-                    pass
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
 
-        # Anti-spam задержка (10 сек)
-        import asyncio as _asyncio_delay
-        await _asyncio_delay.sleep(10)
+        # Anti-spam задержка (только для Resend, не для личного SMTP)
+        if not _chosen_integration:
+            import asyncio as _asyncio_delay
+            await _asyncio_delay.sleep(10)
 
         # --- Сохраняем EmailOutreach для трекинга ответов через webhook ---
         try:
@@ -10392,9 +10510,11 @@ async def send_email(
             session.rollback()
 
         lang = _get_lang(user_id)
+        _from_info = f' (от {sender_email})' if _chosen_integration else ''
         if lang == 'en':
-            return f"✅ Email sent to {to_clean}\nSubject: {subject}"
-        return f"✅ Email отправлен на {to_clean}\nТема: {subject}"
+            _from_en = f' from {sender_email}' if _chosen_integration else ''
+            return f"✅ Email sent to {to_clean}{_from_en}\nSubject: {subject}"
+        return f"✅ Email отправлен на {to_clean}{_from_info}\nТема: {subject}"
     except Exception as e:
         logger.error(f"[SEND_EMAIL] Error: {e}", exc_info=True)
         session.rollback()
