@@ -11623,3 +11623,46 @@ async def install_script(script_id: int = None, script_slug: str = None,
     finally:
         if close_session:
             session.close()
+
+
+async def run_agent_action(user_id: int, action: str, params: dict = None,
+                           session=None, close_session: bool = True) -> str:
+    """Запускает действие через скрипт активного кастомного агента пользователя.
+
+    Делегирует в HybridAutonomousAgent._run_external_action.
+    Доступен только когда у пользователя активен агент с настроенным python_code.
+
+    Args:
+        user_id: Telegram ID пользователя
+        action: Название действия (строка, передаётся агенту через AGENT_ACTION)
+        params: Словарь параметров действия (передаются как AGENT_PARAM_* env vars)
+    """
+    from .autonomous_agent import get_autonomous_agent
+    agent = get_autonomous_agent()
+
+    # Убеждаемся, что данные агента загружены в кеш агента
+    if user_id not in agent._active_agent_data:
+        try:
+            from .user_agents import get_user_active_agent, load_agent_personality
+            aid = get_user_active_agent(user_id)
+            if aid:
+                adata = load_agent_personality(aid)
+                if adata:
+                    agent._active_agent_data[user_id] = adata
+        except Exception:
+            pass
+
+    if user_id not in agent._active_agent_data:
+        return "❌ Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."
+
+    raw_params = {'action': action, 'params': params or {}}
+    result = await agent._run_external_action(raw_params, user_id)
+
+    if isinstance(result, dict):
+        if result.get('status') == 'success':
+            output = result.get('output', '')
+            return f"✅ Действие «{action}» выполнено:\n{output}"
+        else:
+            err = result.get('error', 'неизвестная ошибка')
+            return f"❌ Ошибка при выполнении «{action}»: {err}"
+    return str(result)

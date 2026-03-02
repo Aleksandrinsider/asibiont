@@ -470,9 +470,12 @@ class ExternalAPIClient:
 
         try:
             try:
-                from duckduckgo_search import DDGS
+                from ddgs import DDGS
             except ImportError:
-                raise ImportError("duckduckgo-search package not installed")
+                try:
+                    from duckduckgo_search import DDGS  # legacy fallback
+                except ImportError:
+                    raise ImportError("ddgs package not installed. Run: pip install ddgs")
             import asyncio as _aio
 
             def _sync_search():
@@ -679,7 +682,10 @@ class ExternalAPIClient:
             return cached
 
         try:
-            from duckduckgo_search import DDGS
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS  # legacy fallback
             import asyncio as _aio_n
 
             def _sync_news():
