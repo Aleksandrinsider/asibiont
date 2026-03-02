@@ -1936,11 +1936,12 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${normalizedSender}`;
             
+            // Имя агента: объявляем здесь чтобы было в scope для innerHTML ниже
+            const _senderName = (window._activeAgentData && window._activeAgentData.name) || 'ASI Biont';
+
             // Prepare avatar HTML
             let avatarHtml = '';
             if (normalizedSender === 'ai') {
-                // Имя агента над сообщением
-                const _senderName = (window._activeAgentData && window._activeAgentData.name) || 'ASI Biont';
                 // Use active agent avatar if available, otherwise default
                 const _agentAvUrl = window._activeAgentData && window._activeAgentData.avatar_url;
                 const _agentAvName = window._activeAgentData && window._activeAgentData.name;
@@ -2112,6 +2113,10 @@
             window.sendingMessage = true;
             window.lastMessageSent = Date.now();
             
+            // Замораживаем текущего агента до получения ответа,
+            // чтобы updateProfile() не подменил его в процессе ожидания
+            const _frozenAgent = window._activeAgentData ? Object.assign({}, window._activeAgentData) : null;
+
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
             const message = input.value.trim();
@@ -2183,7 +2188,12 @@
                 }
                 if (response.ok) {
                     if (data.response) {
+                        // Восстанавливаем агента который был активен на момент отправки,
+                        // т.к. updateProfile() мог изменить window._activeAgentData за время ожидания
+                        const _origAgent = window._activeAgentData;
+                        if (_frozenAgent) window._activeAgentData = _frozenAgent;
                         addMessage(data.response, 'ai');
+                        window._activeAgentData = _origAgent;
                     }
                     
                     // Sync displayedMessageIds so updateChat() won't re-add these messages
