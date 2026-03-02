@@ -10415,24 +10415,17 @@ async def api_marketplace_agent_activate_handler(request):
             existing = session_db.query(AgentSubscription).filter_by(
                 user_id=user_obj.id, agent_id=agent_id).first()
             if not existing:
-                # Деактивируем все другие активные подписки (один активный агент)
-                other_subs = session_db.query(AgentSubscription).filter(
-                    AgentSubscription.user_id == user_obj.id,
-                    AgentSubscription.agent_id != agent_id
-                ).all()
-                for _os in other_subs:
-                    _oa = session_db.query(UserAgent).filter_by(id=_os.agent_id).first()
-                    if _oa and (_oa.subscribers_count or 0) > 0:
-                        _oa.subscribers_count = _oa.subscribers_count - 1
-                    session_db.delete(_os)
+                # Добавляем подписку, не трогая другие (пользователь может иметь несколько личностей)
                 sub = AgentSubscription(user_id=user_obj.id, agent_id=agent_id)
                 session_db.add(sub)
                 agent.subscribers_count = (agent.subscribers_count or 0) + 1
                 session_db.commit()
-            # Всегда переключаем активного агента в Telegram
-            from ai_integration.user_agents import set_user_active_agent as _sua
-            _sua(user_id, agent.id)
-            _switched = True
+            # Переключаем активного агента в Telegram только для собственных приватных агентов
+            _switched = False
+            if agent.is_private and agent.author_id == user_obj.id:
+                from ai_integration.user_agents import set_user_active_agent as _sua
+                _sua(user_id, agent.id)
+                _switched = True
             # Захватываем атрибуты до закрытия сессии
             _aid = agent.id
             _aname = agent.name or 'Агент'

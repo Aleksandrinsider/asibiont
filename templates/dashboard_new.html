@@ -2777,7 +2777,7 @@
                                 ${a.is_owner
                                     ? `<span style="padding:5px 14px;height:28px;display:inline-flex;align-items:center;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;font-size:12px;color:#9CA3AF;white-space:nowrap;">Ваш агент</span>`
                                     : a.is_subscribed
-                                        ? `<button onclick="mpDeactivateAgent(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Деактивировать</button>`
+                                        ? `<button onclick="mpDeactivateAgent(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Поставить на паузу</button>`
                                         : `<button onclick="mpActivateAgentFromModal(${a.id})" style="padding:5px 14px;height:28px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:#59636E;font-weight:400;white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Активировать</button>`
                                 }
                             </div>
@@ -2821,8 +2821,8 @@
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354l-1.086-1.086ZM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.953 1.953-.558a.25.25 0 0 0 .108-.064l6.286-6.286Z"/></svg>
                                 </button>
                                 ${isActive
-                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="quick-action" title="Поставить на паузу в чате"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5a.75.75 0 0 1 .75-.75Z"/></svg></button>`
-                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="quick-action" title="Запустить в чат"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`}
+                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="quick-action" title="Поставить на паузу"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5a.75.75 0 0 1 .75-.75Z"/></svg></button>`
+                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="quick-action" title="Отправить на арену"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`}
                                 <button onclick="mpAgentDelete(${a.id})" class="quick-action" title="Удалить агента">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
                                 </button>
@@ -5217,6 +5217,11 @@ except Exception as e:
                 rawContent = rawContent.replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi, '');
                 // Удаляем HTML-теги (email headers и прочий HTML)
                 rawContent = rawContent.replace(/<[^>]+>/g, ' ');
+                // Удаляем эмодзи (весь диапазон unicode supplementary plane + misc symbols)
+                rawContent = rawContent.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]/gu, '');
+                rawContent = rawContent.replace(/[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]/g, '');
+                // Удаляем строки, начинающиеся с misc unicode-символов или пустых декораторов
+                rawContent = rawContent.replace(/^[\u2000-\u3300\uFE00-\uFE0F]+\s*/gm, '');
                 // Нормализуем пробелы (сохраняем переносы строк)
                 rawContent = rawContent.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
                 // Экранируем для безопасного HTML-вывода
@@ -11089,7 +11094,7 @@ except Exception as e:
             html += `<button onclick="closeAgentProfileModal()" class="rating-cancel-btn">Закрыть</button>`;
             if (!agent.is_owner) {
                 if (agent.is_subscribed) {
-                    html += `<button onclick="mpDeactivateAgent(${agent.id})" class="rating-cancel-btn" style="border-color:#FECACA;color:#DC2626;">Деактивировать</button>`;
+                    html += `<button onclick="mpDeactivateAgent(${agent.id})" class="rating-cancel-btn" style="border-color:#FECACA;color:#DC2626;">Поставить на паузу</button>`;
                 } else {
                     html += `<button onclick="mpActivateAgentFromModal(${agent.id})" class="rating-submit-btn">Активировать</button>`;
                 }
