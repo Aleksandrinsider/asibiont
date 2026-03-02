@@ -10382,15 +10382,29 @@ async def send_email(
                     msg['To'] = to_clean
                     msg['Subject'] = subject
                     msg.attach(_MIMEText(body, 'plain', 'utf-8'))
-                    with _smtplib.SMTP_SSL(_smtp_host, _smtp_port) as s:
+                    # timeout=30 предотвращает бесконечное зависание SMTP-соединения
+                    with _smtplib.SMTP_SSL(_smtp_host, _smtp_port, timeout=30) as s:
                         s.login(_smtp_user, _smtp_pass)
                         s.sendmail(_smtp_user, to_clean, msg.as_string())
 
-                loop = _aio_smtp.get_event_loop()
+                loop = _aio_smtp.get_running_loop()
                 try:
-                    await loop.run_in_executor(None, _smtp_send_personal)
+                    await _aio_smtp.wait_for(
+                        loop.run_in_executor(None, _smtp_send_personal),
+                        timeout=35.0
+                    )
+                except _aio_smtp.TimeoutError:
+                    return f"❌ Таймаут отправки через {_from_label}: сервер не ответил за 35 сек."
                 except Exception as _smtp_err:
-                    return f"❌ Ошибка отправки через {_from_label}: {str(_smtp_err)}"
+                    _smtp_msg = str(_smtp_err)
+                    # Gmail: 535 = неверный app password
+                    if '535' in _smtp_msg or 'Username and Password not accepted' in _smtp_msg:
+                        return (
+                            f"❌ Gmail не принял пароль. Нужен App Password, а не обычный пароль.\n"
+                            f"Зайди в Google Account → Security → App Passwords → создай пароль для 'Mail'.\n"
+                            f"Вставь его в настройки агента: GMAIL_PASS=xxxx xxxx xxxx xxxx"
+                        )
+                    return f"❌ Ошибка отправки через {_from_label}: {_smtp_msg}"
 
                 # Обновляем sender_email чтобы лог показывал реальный адрес
                 sender_email = _smtp_user
