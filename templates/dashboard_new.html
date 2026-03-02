@@ -2927,8 +2927,13 @@ if ACTION == 'send_email':
         msg['To'] = to
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        s = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        s.login(USER, PASS)
+        import ssl as _ssl
+        _ctx = _ssl.create_default_context()
+        s = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
+        s.ehlo()
+        s.starttls(context=_ctx)
+        s.ehlo()
+        s.login(USER, PASS.replace(' ', ''))
         s.sendmail(USER, to, msg.as_string())
         s.quit()
         print('OK: письмо отправлено на ' + to)
