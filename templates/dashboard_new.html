@@ -3240,46 +3240,37 @@ except Exception as e:
                     {k:'OZON_CLIENT_ID', label:'Client ID (личный кабинет Ozon Seller)', ph:'123456', t:'text'},
                     {k:'OZON_API_KEY', label:'API Key', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
                 ],
-                hint: 'Ozon Seller → Настройки → API-ключи → Добавить ключ. Необходимые роли: Report (отчёты и аналитика), Posting FBS read-only (заказы).',
+                hint: 'Ozon Seller → Настройки → API-ключи → Добавить ключ. Необходимые роли: Report (аналитика и отчёты). Ключ показывает выручку, заказы и возвраты за 30 дней.',
                 code: `import urllib.request, json, os
 from datetime import datetime, timedelta
 CLIENT_ID = os.environ.get('OZON_CLIENT_ID', '')
 API_KEY = os.environ.get('OZON_API_KEY', '')
-ACTION = os.environ.get('AGENT_ACTION', '')
 h = {'Client-Id': CLIENT_ID, 'Api-Key': API_KEY, 'Content-Type': 'application/json'}
 try:
-    if ACTION == 'get_orders':
-        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00.000Z')
-        date_to = datetime.now().strftime('%Y-%m-%dT23:59:59.000Z')
-        body = json.dumps({'dir': 'DESC', 'filter': {'since': date_from, 'to': date_to, 'status': ''}, 'limit': 10, 'offset': 0}).encode()
-        req = urllib.request.Request('https://api-seller.ozon.ru/v3/posting/fbs/list', data=body, headers=h, method='POST')
-        with urllib.request.urlopen(req, timeout=10) as r:
-            d = json.loads(r.read().decode())
-        orders = d.get('result', {}).get('postings', [])
-        print('Ozon отправления за 7 дней (' + str(len(orders)) + '):')
-        for o in orders[:8]:
-            oid = o.get('posting_number', '')
-            status = o.get('status', '')
-            items = ', '.join(p.get('name', '')[:30] for p in o.get('products', [])[:2])
-            print('• ' + oid + ' [' + status + '] ' + items)
-    else:
-        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-        date_to = datetime.now().strftime('%Y-%m-%d')
-        body = json.dumps({'date_from': date_from, 'date_to': date_to, 'metrics': ['revenue', 'ordered_units', 'returns'], 'dimension': ['day'], 'limit': 7}).encode()
-        req = urllib.request.Request('https://api-seller.ozon.ru/v1/analytics/data', data=body, headers=h, method='POST')
-        with urllib.request.urlopen(req, timeout=10) as r:
-            d = json.loads(r.read().decode())
-        rows = d.get('result', {}).get('data', [])
-        total_rev = sum((row.get('metrics') or [0])[0] for row in rows)
-        total_units = int(sum((row.get('metrics') or [0, 0])[1] for row in rows))
-        print('Ozon за 7 дней:')
-        print('Выручка: ' + str(round(total_rev, 0)) + ' руб.')
-        print('Заказано: ' + str(total_units) + ' ед.')
-        for row in rows[-3:]:
-            dim = ((row.get('dimensions') or [{}])[0]).get('id', '')
-            rev = round((row.get('metrics') or [0])[0], 0)
-            units = int((row.get('metrics') or [0, 0])[1])
-            print('  ' + str(dim) + ': ' + str(rev) + ' руб., ' + str(units) + ' ед.')
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    date_to = datetime.now().strftime('%Y-%m-%d')
+    body = json.dumps({'date_from': date_from, 'date_to': date_to, 'metrics': ['revenue', 'ordered_units', 'returns_amount', 'cancellations_count'], 'dimension': ['day'], 'filters': [], 'limit': 30, 'offset': 0}).encode()
+    req = urllib.request.Request('https://api-seller.ozon.ru/v1/analytics/data', data=body, headers=h, method='POST')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    rows = d.get('result', {}).get('data', [])
+    total_rev = sum((row.get('metrics') or [0])[0] for row in rows)
+    total_units = int(sum((row.get('metrics') or [0, 0])[1] for row in rows))
+    total_returns = round(sum((row.get('metrics') or [0, 0, 0])[2] for row in rows), 0)
+    total_cancel = int(sum((row.get('metrics') or [0, 0, 0, 0])[3] for row in rows))
+    print('Ozon за 30 дней:')
+    print('Выручка: ' + str(round(total_rev, 0)) + ' руб.')
+    print('Заказано: ' + str(total_units) + ' ед.')
+    print('Возвраты: ' + str(total_returns) + ' руб.')
+    print('Отмены: ' + str(total_cancel) + ' шт.')
+    print('---')
+    non_zero = [r for r in rows if any(m for m in (r.get('metrics') or []))]
+    for row in non_zero[-7:]:
+        dim = ((row.get('dimensions') or [{}])[0]).get('id', '')
+        rev = round((row.get('metrics') or [0])[0], 0)
+        units = int((row.get('metrics') or [0, 0])[1])
+        if rev or units:
+            print(str(dim) + ': ' + str(rev) + ' руб., ' + str(units) + ' ед.')
 except Exception as e:
     print('Ошибка Ozon: ' + str(e))`
             },
@@ -3809,6 +3800,7 @@ def send_email(to, subject, body_text):
     req = urllib.request.Request('https://api.resend.com/emails', data=data, method='POST')
     req.add_header('Authorization', 'Bearer ' + API_KEY)
     req.add_header('Content-Type', 'application/json')
+    req.add_header('User-Agent', 'python-requests/2.31.0')
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read().decode())
 
