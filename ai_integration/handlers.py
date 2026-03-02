@@ -10189,7 +10189,9 @@ async def send_follow_up_email(
 def _get_user_email_integrations(user, session) -> list:
     """Возвращает список почтовых интеграций из агентов пользователя.
 
-    Каждый элемент: {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
+    Каждый элемент имеет поле 'type':
+      'smtp'   — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
+      'resend' — {label, email_user, resend_key, agent_name, agent_id}
     """
     try:
         from models import UserAgent as _UA
@@ -10200,13 +10202,14 @@ def _get_user_email_integrations(user, session) -> list:
             _UA.user_api_keys != '',
         ).all()
         # SMTP-конфиги для поддерживаемых почтовых сервисов
-        _SVC = [
+        _SMTP_SVC = [
             ('GMAIL',  'smtp.gmail.com',  465, 'Gmail'),
             ('YANDEX', 'smtp.yandex.ru',  465, 'Яндекс Почта'),
             ('MAILRU', 'smtp.mail.ru',    465, 'Mail.ru'),
         ]
         results = []
         seen_emails: set = set()
+        seen_resend: set = set()
         for agent in agents:
             env: dict = {}
             for line in (agent.user_api_keys or '').splitlines():
@@ -10214,12 +10217,14 @@ def _get_user_email_integrations(user, session) -> list:
                 if '=' in line and not line.startswith('#'):
                     k, _, v = line.partition('=')
                     env[k.strip().upper()] = v.strip()
-            for svc_key, smtp_host, smtp_port, label in _SVC:
+            # SMTP-сервисы
+            for svc_key, smtp_host, smtp_port, label in _SMTP_SVC:
                 eu = env.get(f'{svc_key}_USER', '')
                 ep = env.get(f'{svc_key}_PASS', '')
                 if eu and ep and eu not in seen_emails:
                     seen_emails.add(eu)
                     results.append({
+                        'type': 'smtp',
                         'label': label,
                         'email_user': eu,
                         'email_pass': ep,
@@ -10228,6 +10233,19 @@ def _get_user_email_integrations(user, session) -> list:
                         'agent_name': agent.name or label,
                         'agent_id': agent.id,
                     })
+            # Личный Resend API ключ
+            rk = env.get('RESEND_API_KEY', '')
+            re_from = env.get('RESEND_FROM', env.get('SENDER_EMAIL', ''))
+            if rk and rk not in seen_resend:
+                seen_resend.add(rk)
+                results.append({
+                    'type': 'resend',
+                    'label': 'Resend',
+                    'email_user': re_from or 'resend',
+                    'resend_key': rk,
+                    'agent_name': agent.name or 'Resend',
+                    'agent_id': agent.id,
+                })
         return results
     except Exception as _e:
         logger.warning(f'[EMAIL_INTEGRATIONS] {_e}')
@@ -10247,10 +10265,8 @@ async def send_email(
 ):
     """Отправить одиночное email-сообщение.
 
-    Если у пользователя подключён Gmail/Яндекс Почта/Mail.ru — письмо
-    отправляется с его личного ящика через SMTP. Иначе — через Resend API.
-    Если несколько почт подключено — нужно указать from_account (email).
-
+    Требует подключённой почты пользователя (Gmail/Яндекс/Mail.ru) или личного
+    Resend-ключа. Платформенный email НЕ используется.
     Универсальный инструмент — предложение, вопрос, напоминание,
     благодарность, что угодно. НЕ связан с кампаниями.
     """
@@ -10258,7 +10274,6 @@ async def send_email(
         session = Session()
         close_session = True
     try:
-        from config import RESEND_API_KEY
         import aiohttp as _aiohttp
 
         if not to:
@@ -10300,14 +10315,21 @@ async def send_email(
                     f"С какого адреса отправить письмо?"
                 )
 
-        if not RESEND_API_KEY and not _chosen_integration:
-            return "❌ Resend API не настроен и почтовые интеграции не подключены."
+        if not _chosen_integration:
+            return (
+                "❌ Не найдено подключённого почтового аккаунта. \
+Чтобы отправлять письма, добавь в настройках агента одну из интеграций:\
+• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx \
+• Яндекс Почта: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\
+• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\
+• Свой Resend: RESEND_API_KEY=re_... и RESEND_FROM=from@yourdomain.com"
+            )
 
         # Fallback sender
         if not sender_name:
             sender_name = user.first_name or user.username or 'Team'
         if not sender_email:
-            sender_email = _chosen_integration['email_user'] if _chosen_integration else 'outreach@asibiont.com'
+            sender_email = _chosen_integration['email_user']
 
         # Нормализация: удалить пробелы, lowercase
         to_clean = to.strip().lower()
@@ -10368,7 +10390,7 @@ async def send_email(
 
         resend_id = ''
         try:
-            if _chosen_integration:
+            if _chosen_integration and _chosen_integration.get('type') == 'smtp':
                 # ── Отправка через личную почту пользователя (SMTP) ────────
                 import smtplib as _smtplib
                 from email.mime.text import MIMEText as _MIMEText
@@ -10400,14 +10422,15 @@ async def send_email(
                 # Обновляем sender_email чтобы лог показывал реальный адрес
                 sender_email = _smtp_user
                 logger.info(f'[SEND_EMAIL] Sent via {_from_label} SMTP from {_smtp_user} to {to_clean}')
-            else:
-                # ── Отправка через Resend API (платформенный email) ─────────
+            elif _chosen_integration.get('type') == 'resend':
+                # ── Отправка через личный Resend ключ пользователя ────────
+                _user_resend_key = _chosen_integration['resend_key']
                 async with _aiohttp.ClientSession() as http:
                     from_header = f"{sender_name} <{sender_email}>"
                     resp = await http.post(
                         'https://api.resend.com/emails',
                         headers={
-                            'Authorization': f'Bearer {RESEND_API_KEY}',
+                            'Authorization': f'Bearer {_user_resend_key}',
                             'Content-Type': 'application/json',
                         },
                         json={
@@ -10422,23 +10445,14 @@ async def send_email(
                     resp_data = await resp.json()
                     if resp.status not in (200, 201):
                         err = resp_data.get('message', str(resp_data))
-                        try:
-                            from .service_health import record_error as _rec_svc2
-                            _rec_svc2('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
-                        except Exception:
-                            pass
                         return f"❌ Ошибка Resend API: {err}"
                     resend_id = resp_data.get('id', '')
-                    try:
-                        from .service_health import clear_error as _clr_svc2
-                        _clr_svc2('resend')
-                    except Exception:
-                        pass
+                    logger.info(f'[SEND_EMAIL] Sent via user Resend from {sender_email} to {to_clean}')
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
 
         # Anti-spam задержка (только для Resend, не для личного SMTP)
-        if not _chosen_integration:
+        if _chosen_integration and _chosen_integration.get('type') == 'resend':
             import asyncio as _asyncio_delay
             await _asyncio_delay.sleep(10)
 
