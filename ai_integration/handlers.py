@@ -10331,24 +10331,14 @@ async def send_email(
                     _chosen_integration = _email_integrations[0]
 
         if not _chosen_integration:
-            # Нет пользовательских интеграций — используем платформенный Resend (как кампании)
-            from config import RESEND_API_KEY as _PLATFORM_RESEND_KEY
-            if _PLATFORM_RESEND_KEY:
-                _chosen_integration = {
-                    'type': 'resend',
-                    'label': 'Platform Resend',
-                    'email_user': 'outreach@asibiont.com',
-                    'resend_key': _PLATFORM_RESEND_KEY,
-                }
-            else:
-                return (
-                    "❌ Не найдено подключённого почтового аккаунта. "
-                    "Чтобы отправлять письма, добавь в настройках агента одну из интеграций: "
-                    "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx "
-                    "• Яндекс Почта: YANDEX_USER=you@yandex.ru и YANDEX_PASS=... "
-                    "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=... "
-                    "• Свой Resend: RESEND_API_KEY=re_... и RESEND_FROM=from@yourdomain.com"
-                )
+            return (
+                "❌ Не настроена почтовая интеграция. "
+                "Добавь в настройках агента одно из:\n"
+                "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
+                "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
+                "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
+                "• Resend: RESEND_API_KEY=re_... и RESEND_FROM=noreply@твой-домен.com"
+            )
 
         # Fallback sender
         if not sender_name:
