@@ -10448,25 +10448,31 @@ async def api_marketplace_agent_activate_handler(request):
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'error': 'User not found'}, status=404)
-            # Для собственных приватных агентов пропускаем проверку status='active'
             agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
             if not agent:
                 return web.json_response({'error': 'Agent not found'}, status=404)
-            if not agent.is_private or agent.author_id != user_obj.id:
-                # Для чужих/публичных агентов требуем status='active'
+            # Автор активирует свой агент — делаем его публичным и активным в арене
+            is_own = (agent.author_id == user_obj.id)
+            if is_own:
+                if agent.status != 'active' or agent.is_private:
+                    agent.status = 'active'
+                    agent.is_private = False
+            else:
+                # Для чужих агентов требуем status='active'
                 if agent.status != 'active':
                     return web.json_response({'error': 'Agent not found or not active'}, status=404)
             existing = session_db.query(AgentSubscription).filter_by(
                 user_id=user_obj.id, agent_id=agent_id).first()
             if not existing:
-                # Добавляем подписку, не трогая другие (пользователь может иметь несколько личностей)
                 sub = AgentSubscription(user_id=user_obj.id, agent_id=agent_id)
                 session_db.add(sub)
                 agent.subscribers_count = (agent.subscribers_count or 0) + 1
                 session_db.commit()
-            # Переключаем активного агента в Telegram только для собственных приватных агентов
+            else:
+                session_db.commit()  # сохраняем изменения статуса
+            # Переключаем активного агента в Telegram для автора
             _switched = False
-            if agent.is_private and agent.author_id == user_obj.id:
+            if is_own:
                 from ai_integration.user_agents import set_user_active_agent as _sua
                 _sua(user_id, agent.id)
                 _switched = True
@@ -10482,10 +10488,16 @@ async def api_marketplace_agent_activate_handler(request):
             # Автор агента
             _author_user = session_db.query(UserModel).filter_by(id=agent.author_id).first()
             _author_uname = (_author_user.username or '') if _author_user else ''
-            # Публикуем первое сообщение агента в арену (только при новой подписке)
+            # Публикуем в арену: при новой подписке — intro, при повторной активации автором — немедленный пост
             if not existing:
                 asyncio.ensure_future(_arena_intro_for_agent(
                     _aid, _aname, _aspec, _apers, _adesc, _author_uname))
+            elif is_own:
+                try:
+                    from ai_integration.agent_arena import post_agent_immediately
+                    asyncio.ensure_future(post_agent_immediately(_aid))
+                except Exception as _ae:
+                    logger.warning(f"[ARENA] re-activation post error: {_ae}")
             return web.json_response({'success': True, 'trial_messages': _trial,
                                       'price_per_message': _price, 'switched': _switched,
                                       'agent': {'id': _aid, 'name': _aname, 'avatar_url': _aavatar}})
@@ -10512,12 +10524,15 @@ async def api_marketplace_agent_deactivate_handler(request):
                 return web.json_response({'error': 'User not found'}, status=404)
             sub = session_db.query(AgentSubscription).filter_by(
                 user_id=user_obj.id, agent_id=agent_id).first()
+            agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
             if sub:
                 session_db.delete(sub)
-                agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
                 if agent and (agent.subscribers_count or 0) > 0:
                     agent.subscribers_count = agent.subscribers_count - 1
-                session_db.commit()
+            # Автор ставит свой агент на паузу из арены
+            if agent and agent.author_id == user_obj.id:
+                agent.status = 'paused'
+            session_db.commit()
             # Сбрасываем активного агента если это был текущий
             from ai_integration.user_agents import get_user_active_agent as _gua, set_user_active_agent as _sua
             if _gua(user_id) == agent_id:

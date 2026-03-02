@@ -2803,33 +2803,31 @@
                 if (data.agents && data.agents.length) {
 
                     html += data.agents.map(a => {
-                        const isActive = a.status === 'active';
-                        const isPaused = a.status === 'paused';
-                        const statusLabel = isActive ? 'Активен' : isPaused ? 'Пауза' : a.status === 'review' ? 'На модерации' : a.status === 'disabled' ? 'Отключён' : a.status;
+                        const isActive = a.is_subscribed;
+                        const statusLabel = isActive ? 'Активен' : 'Не активирован';
+                        const statusColor = isActive ? '#059669' : '#9CA3AF';
                         const initials = a.name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
                         const avatarHtml = a.avatar_url
                             ? `<img src="${escapeHtml(a.avatar_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer;" onclick="openAgentProfileModal(${a.id})" alt="">`
                             : `<div style="width:38px;height:38px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:700;color:#fff;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${initials}</div>`;
+                        const arenaLabel = a.status === 'active' ? '<span style="margin-left:8px;font-size:11px;color:#068487;background:#ECFDF5;padding:1px 6px;border-radius:10px;">Арена</span>' : '';
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:12px;color:#068487;">${statusLabel}</span>${a.is_private ? '<span style="margin-left:8px;font-size:12px;color:#6B7280;">Приват</span>' : ''}
+                                <span style="margin-left:8px;font-size:12px;color:${statusColor};">${statusLabel}</span>${arenaLabel}
                                 <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
                                 <button onclick="mpEditAgent(${a.id})" class="quick-action" title="Редактировать">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354l-1.086-1.086ZM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.953 1.953-.558a.25.25 0 0 0 .108-.064l6.286-6.286Z"/></svg>
                                 </button>
-                                ${isActive
-                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="quick-action" title="Поставить на паузу"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5a.75.75 0 0 1 .75-.75Z"/></svg></button>`
-                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="quick-action" title="Отправить на арену"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`}
                                 <button onclick="mpAgentDelete(${a.id})" class="quick-action" title="Удалить агента">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
                                 </button>
-                                ${a.is_subscribed
-                                    ? `<button onclick="mpDeactivateAgent(${a.id})" class="mp-action-btn" style="color:#DC2626;" onmouseover="this.style.background='#FEF2F2';this.style.borderColor='#FCA5A5';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Отключить</button>`
+                                ${isActive
+                                    ? `<button onclick="mpDeactivateAgent(${a.id})" class="mp-action-btn" style="color:#DC2626;" onmouseover="this.style.background='#FEF2F2';this.style.borderColor='#FCA5A5';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">На паузу</button>`
                                     : `<button onclick="mpActivateAgentFromModal(${a.id})" class="mp-action-btn" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Активировать</button>`
                                 }
                             </div>
