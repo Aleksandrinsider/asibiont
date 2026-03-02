@@ -72,6 +72,116 @@ def _parse_integration_sections(output: str, agent_name: str) -> list:
     return sections if sections else [(agent_name, output)]
 
 
+def spawn_integration_anchors(user_db_id: int, agent_name: str, service_label: str, output: str) -> None:
+    """
+    Rule-based детекция сигналов тревоги в выводе скрипта интеграции.
+    Если найдены → создаёт Anchor(integration_alert) с cooldown 2ч,
+    который AnchorEngine доставит через Telegram.
+    Не требует AI-вызова — чисто rule-based.
+    """
+    import re as _re_ia, json as _json_ia
+    from datetime import datetime as _dt_ia, timezone as _tz_ia, timedelta as _td_ia
+    try:
+        from models import Anchor as _Anch, AnchorPriority as _AP, Session as _Sess_ia
+    except ImportError:
+        return
+
+    # ─── CRITICAL-сигналы ───────────────────────────────────────────────
+    _CRIT_PATTERNS = [
+        r'\burgent\b', r'\bсрочно\b', r'\bcritical\b', r'\bкритичн',
+        r'\bфатал', r'\bfailed\b', r'\bошибка\b', r'\berror\b',
+        # 5+ непрочитанных писем
+        r'(?:unread|\u043d\u0435\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d)[^\d]{0,15}(\d+)',
+        r'(\d+)[^\d]{0,15}(?:unread|\u043d\u0435\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d)',
+    ]
+    # ─── HIGH-сигналы ───────────────────────────────────────────────
+    _HIGH_PATTERNS = [
+        r'\bwarning\b', r'\bвниман', r'\bimportant\b', r'\bважн',
+        r'-\s*\d{2,}\s*%',         # -10% или хуже
+        r'упа[\u043bаи]\w*\s+на\s+\d', r'снизи[\u043b\u0441]', r'\bdropped\b', r'\bdeclin',
+        r'\bзадерж', r'\boverdue\b', r'\bexpired\b', r'\bpending.*\d+',
+    ]
+
+    text_lc = output.lower()
+    priority = None
+    reason = '—'
+
+    for _pat in _CRIT_PATTERNS:
+        _m = _re_ia.search(_pat, text_lc)
+        if _m:
+            # Для unread: требуется 5+ непрочитанных
+            if 'unread' in _pat or '\u043d\u0435\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d' in _pat:
+                _nums = _re_ia.findall(r'\d+', _m.group(0))
+                if not _nums or max(int(n) for n in _nums) < 5:
+                    continue
+            priority = _AP.CRITICAL
+            reason = _m.group(0)[:80]
+            break
+
+    if priority is None:
+        for _pat in _HIGH_PATTERNS:
+            _m = _re_ia.search(_pat, text_lc)
+            if _m:
+                priority = _AP.HIGH
+                reason = _m.group(0)[:80]
+                break
+
+    # Если ключевых слов нет — создаём LOW-якорь: AI в _ai_decide_and_compose
+    # сам решит SKIP или отправить. Ничего не пропустим.
+    if priority is None:
+        priority = _AP.LOW
+
+    _now = _dt_ia.now(_tz_ia.utc)
+    # source содержит дату+час → cooldown по смыслу: макс 1 якорь в час на сервис
+    _src = f'integration:{service_label}:{_now.strftime("%Y-%m-%d-%H")}'
+
+    _ias = _Sess_ia()
+    try:
+        _exists = _ias.query(_Anch).filter(
+            _Anch.user_id == user_db_id,
+            _Anch.anchor_type == 'integration_alert',
+            _Anch.source == _src,
+            _Anch.delivered_at.is_(None),
+        ).first()
+        if _exists:
+            return
+        _recent = _ias.query(_Anch).filter(
+            _Anch.user_id == user_db_id,
+            _Anch.anchor_type == 'integration_alert',
+            _Anch.source.like(f'integration:{service_label}:%'),
+            _Anch.delivered_at >= _now - _td_ia(hours=2),
+        ).first()
+        if _recent:
+            return
+        _ias.add(_Anch(
+            user_id=user_db_id,
+            anchor_type='integration_alert',
+            source=_src,
+            topic=f'{agent_name}: сигнал от {service_label} — {reason}',
+            priority=priority,
+            data=_json_ia.dumps({
+                'agent_name': agent_name,
+                'service_label': service_label,
+                'signal': reason,
+                'snippet': output.strip()[:400],
+            }),
+            triggered_at=_now,
+            expires_at=_now + _td_ia(hours=4),
+            cooldown_hours=2,
+            batch_group='integration',
+        ))
+        _ias.commit()
+        logger.info(f'[AGENT] integration_alert anchor → {service_label} ({priority.value}): {reason}')
+    except Exception as _ia_e:
+        logger.warning(f'[AGENT] spawn_integration_anchors error: {_ia_e}')
+        try:
+            _ias.rollback()
+        except Exception:
+            pass
+    finally:
+        _ias.close()
+
+
 # === Concurrency controls для 1000+ пользователей ===
 # Максимум 20 одновременных вызовов DeepSeek (лимит API ~40 req/s → оставляем запас)
 _AI_SEMAPHORE: asyncio.Semaphore | None = None
@@ -1482,6 +1592,8 @@ class HybridAutonomousAgent:
                                             status='completed',
                                         ))
                                     _al_s.commit()
+                                    # Создаём якорь если в выводе есть сигнал тревоги (без AI-вызова)
+                                    spawn_integration_anchors(_al_u.id, _agent_display, _svc_lbl, _code_output)
                             finally:
                                 _al_s.close()
                         except Exception as _al_e:
