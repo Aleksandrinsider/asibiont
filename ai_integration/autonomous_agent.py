@@ -1328,6 +1328,26 @@ class HybridAutonomousAgent:
                             f'───────────────'
                         )
                         logger.info(f"[AGENT] python_code output injected ({len(_code_output)} chars)")
+                        try:
+                            from models import AgentActivityLog as _AAL, Session as _SessAL, User as _UserAL
+                            _al_s = _SessAL()
+                            try:
+                                _al_u = _al_s.query(_UserAL).filter_by(telegram_id=user_id).first()
+                                if _al_u:
+                                    _svc_lbl = _agent_data.get('service_label') or _agent_data.get('name', 'Агент')
+                                    _al_s.add(_AAL(
+                                        user_id=_al_u.id,
+                                        activity_type='integration',
+                                        title=f'🔄 {_agent_data.get("name","Агент")}: данные получены',
+                                        content=_code_output[:800],
+                                        target=_svc_lbl,
+                                        status='completed',
+                                    ))
+                                    _al_s.commit()
+                            finally:
+                                _al_s.close()
+                        except Exception as _al_e:
+                            logger.warning(f"[AGENT] activity log (success) error: {_al_e}")
                     else:
                         _err_detail = _code_stderr if _code_stderr else 'скрипт не вернул вывода'
                         base_prompt += (
@@ -1340,6 +1360,26 @@ class HybridAutonomousAgent:
                             f'они не имеют отношения к теме этого агента.'
                         )
                         logger.warning(f"[AGENT] python_code no output, stderr: {_code_stderr}")
+                        try:
+                            from models import AgentActivityLog as _AAL, Session as _SessAL, User as _UserAL
+                            _al_s = _SessAL()
+                            try:
+                                _al_u = _al_s.query(_UserAL).filter_by(telegram_id=user_id).first()
+                                if _al_u:
+                                    _svc_lbl = _agent_data.get('service_label') or _agent_data.get('name', 'Агент')
+                                    _al_s.add(_AAL(
+                                        user_id=_al_u.id,
+                                        activity_type='integration',
+                                        title=f'⚠️ {_agent_data.get("name","Агент")}: ошибка получения данных',
+                                        content=_err_detail[:800],
+                                        target=_svc_lbl,
+                                        status='failed',
+                                    ))
+                                    _al_s.commit()
+                            finally:
+                                _al_s.close()
+                        except Exception as _al_e:
+                            logger.warning(f"[AGENT] activity log (fail) error: {_al_e}")
             except Exception as _pce:
                 logger.warning(f"[AGENT] python_code exec error: {_pce}")
                 if '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
@@ -1351,6 +1391,26 @@ class HybridAutonomousAgent:
                         f'НЕ переключайся на данные профиля пользователя (задачи, кампании) — '
                         f'они не имеют отношения к теме этого агента.'
                     )
+                    try:
+                        from models import AgentActivityLog as _AAL, Session as _SessAL, User as _UserAL
+                        _al_s = _SessAL()
+                        try:
+                            _al_u = _al_s.query(_UserAL).filter_by(telegram_id=user_id).first()
+                            if _al_u:
+                                _svc_lbl = _agent_data.get('service_label') or _agent_data.get('name', 'Агент')
+                                _al_s.add(_AAL(
+                                    user_id=_al_u.id,
+                                    activity_type='integration',
+                                    title=f'❌ {_agent_data.get("name","Агент")}: скрипт не запустился',
+                                    content=str(_pce)[:800],
+                                    target=_svc_lbl,
+                                    status='failed',
+                                ))
+                                _al_s.commit()
+                        finally:
+                            _al_s.close()
+                    except Exception as _al_e:
+                        logger.warning(f"[AGENT] activity log (exc) error: {_al_e}")
 
             messages = [{"role": "system", "content": base_prompt}]
             if history:
