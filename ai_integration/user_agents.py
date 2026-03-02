@@ -136,7 +136,9 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
             overlay += f"""
 ⛔ КРИТИЧЕСКИ ВАЖНО ДЛЯ {service_label}:
 Пользователь подключил СВОЙ почтовый ящик {service_label} — он имеет в виду РЕАЛЬНЫЕ письма из своей почты, а НЕ платформенные рассылки.
-— НЕ ПРЕДЛАГАЙ start_email_campaign, send_email, start_content_campaign — это инструменты платформы для маркетинговых рассылок, они НЕ имеют отношения к личному ящику пользователя.
+— НЕ ПРЕДЛАГАЙ start_email_campaign, start_content_campaign — это инструменты платформы для маркетинговых рассылок, они НЕ имеют отношения к личному ящику пользователя.
+— ✅ Для отправки письма из личного ящика — используй send_email(to, subject, body). Это именно инструмент личной почты через SMTP ({service_label}).
+— Если пользователь просит отправить письмо — вызывай send_email, а НЕ start_email_campaign.
 — Если пользователь спрашивает «что в почте», «посмотри письма», «есть что-нибудь» — отвечай на основе данных скрипта из секции [ДАННЫЕ ОТ АГЕНТА].
 — Если данных нет (скрипт не настроен) → честно скажи: «Скрипт не выполнился, данных нет» — и НЕ подменяй это предложением запустить email-кампанию.
 """
@@ -209,7 +211,7 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
         # раздела инструментов базового промпта, чтобы AI не путал личную почту с платформенной рассылкой.
         if _is_email_svc:
             base_system_prompt = re.sub(
-                r'— (send_email|start_email_campaign|update_email_campaign|send_outreach_email|'
+                r'— (start_email_campaign|update_email_campaign|send_outreach_email|'
                 r'add_email_leads|reply_to_outreach_email|get_email_campaign_status|pause_email_campaign)'
                 r'\(.*?\n',
                 '',
