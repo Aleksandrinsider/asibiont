@@ -3225,7 +3225,7 @@ except Exception as e:
                     {k:'OZON_CLIENT_ID', label:'Client ID (личный кабинет Ozon Seller)', ph:'123456', t:'text'},
                     {k:'OZON_API_KEY', label:'API Key', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
                 ],
-                hint: 'Ozon Seller → Настройки → API-ключи → Добавить ключ. Требуется права: Analytics, Orders.',
+                hint: 'Ozon Seller → Настройки → API-ключи → Добавить ключ. Обязательные роли: Report (аналитика), Posting FBS read-only (заказы). Client ID — числовой ID из личного кабинета (не email).',
                 code: `import urllib.request, json, os
 from datetime import datetime, timedelta
 CLIENT_ID = os.environ.get('OZON_CLIENT_ID', '')
