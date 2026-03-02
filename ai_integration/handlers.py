@@ -10205,11 +10205,12 @@ def _get_user_email_integrations(user, session) -> list:
             _UA.user_api_keys != None,
             _UA.user_api_keys != '',
         ).all()
-        # SMTP-конфиги для поддерживаемых почтовых сервисов
+        # Известные почтовые провайдеры: определяют только host; порт берётся из GMAIL_PORT/YANDEX_PORT/MAILRU_PORT
+        # или по умолчанию 587 (STARTTLS) — Railway не блокирует его, в отличие от 465
         _SMTP_SVC = [
-            ('GMAIL',  'smtp.gmail.com',  465, 'Gmail'),
-            ('YANDEX', 'smtp.yandex.ru',  465, 'Яндекс Почта'),
-            ('MAILRU', 'smtp.mail.ru',    465, 'Mail.ru'),
+            ('GMAIL',  'smtp.gmail.com', 'Gmail'),
+            ('YANDEX', 'smtp.yandex.ru', 'Яндекс Почта'),
+            ('MAILRU', 'smtp.mail.ru',   'Mail.ru'),
         ]
         results = []
         seen_emails: set = set()
@@ -10221,22 +10222,51 @@ def _get_user_email_integrations(user, session) -> list:
                 if '=' in line and not line.startswith('#'):
                     k, _, v = line.partition('=')
                     env[k.strip().upper()] = v.strip()
-            # SMTP-сервисы
-            for svc_key, smtp_host, smtp_port, label in _SMTP_SVC:
+            # Известные SMTP-сервисы: порт и режим могут быть переопределены пользователем
+            for svc_key, smtp_host, label in _SMTP_SVC:
                 eu = env.get(f'{svc_key}_USER', '')
                 ep = env.get(f'{svc_key}_PASS', '')
                 if eu and ep and eu not in seen_emails:
                     seen_emails.add(eu)
+                    # Пользователь может задать свой порт: GMAIL_PORT=465 (ssl) или 587 (starttls)
+                    _port_override = env.get(f'{svc_key}_PORT', '')
+                    _port = int(_port_override) if _port_override.isdigit() else 587
+                    _mode = 'ssl' if _port == 465 else 'starttls'
                     results.append({
                         'type': 'smtp',
                         'label': label,
                         'email_user': eu,
                         'email_pass': ep,
                         'smtp_host': smtp_host,
-                        'smtp_port': smtp_port,
+                        'smtp_port': _port,
+                        'smtp_mode': _mode,
                         'agent_name': agent.name or label,
                         'agent_id': agent.id,
                     })
+            # Пользовательский кастомный SMTP: SMTP_HOST + SMTP_USER + SMTP_PASS [опц] SMTP_PORT, SMTP_MODE
+            _ch = env.get('SMTP_HOST', '')
+            _cu = env.get('SMTP_USER', '')
+            _cp = env.get('SMTP_PASS', '')
+            if _ch and _cu and _cp and _cu not in seen_emails:
+                seen_emails.add(_cu)
+                _cp_raw = env.get('SMTP_PORT', '587')
+                _cport = int(_cp_raw) if _cp_raw.isdigit() else 587
+                _cmode_raw = env.get('SMTP_MODE', '').lower()
+                if _cmode_raw in ('ssl', 'starttls'):
+                    _cmode = _cmode_raw
+                else:
+                    _cmode = 'ssl' if _cport == 465 else 'starttls'
+                results.append({
+                    'type': 'smtp',
+                    'label': env.get('SMTP_LABEL', f'SMTP ({_ch})'),
+                    'email_user': _cu,
+                    'email_pass': _cp,
+                    'smtp_host': _ch,
+                    'smtp_port': _cport,
+                    'smtp_mode': _cmode,
+                    'agent_name': agent.name or 'Custom SMTP',
+                    'agent_id': agent.id,
+                })
             # Личный Resend API ключ
             rk = env.get('RESEND_API_KEY', '')
             re_from = env.get('RESEND_FROM', env.get('SENDER_EMAIL', env.get('FROM_EMAIL', '')))
@@ -10393,6 +10423,8 @@ async def send_email(
                 _smtp_pass = _chosen_integration['email_pass'].replace(' ', '')
                 _from_label = _chosen_integration['label']
 
+                _smtp_mode = _chosen_integration.get('smtp_mode', 'starttls')
+
                 def _smtp_send_personal():
                     import ssl as _ssl
                     msg = _MIMEMultipart()
@@ -10400,11 +10432,20 @@ async def send_email(
                     msg['To'] = to_clean
                     msg['Subject'] = subject
                     msg.attach(_MIMEText(body, 'plain', 'utf-8'))
-                    # timeout=30 предотвращает бесконечное зависание SMTP-соединения
                     _ssl_ctx = _ssl.create_default_context()
-                    with _smtplib.SMTP_SSL(_smtp_host, _smtp_port, context=_ssl_ctx, timeout=30) as s:
-                        s.login(_smtp_user, _smtp_pass)
-                        s.sendmail(_smtp_user, to_clean, msg.as_string())
+                    if _smtp_mode == 'ssl':
+                        # Порт 465: сразу SSL-соединение
+                        with _smtplib.SMTP_SSL(_smtp_host, _smtp_port, context=_ssl_ctx, timeout=30) as s:
+                            s.login(_smtp_user, _smtp_pass)
+                            s.sendmail(_smtp_user, to_clean, msg.as_string())
+                    else:
+                        # Порт 587: SMTP + STARTTLS (работает на Railway/Render/Heroku)
+                        with _smtplib.SMTP(_smtp_host, _smtp_port, timeout=30) as s:
+                            s.ehlo()
+                            s.starttls(context=_ssl_ctx)
+                            s.ehlo()
+                            s.login(_smtp_user, _smtp_pass)
+                            s.sendmail(_smtp_user, to_clean, msg.as_string())
 
                 loop = _aio_smtp.get_running_loop()
                 try:
