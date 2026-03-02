@@ -214,12 +214,89 @@ class HybridAutonomousAgent:
 
     def _select_tools_for_message(self, user_message):
         """Dynamically select tools based on message content.
-        Returns set of tool names to EXCLUDE (all not selected).
+        Returns set of tool names to EXCLUDE to reduce token payload.
 
-        SMART TOOL FILTERING DISABLED — AI sees all tools every call.
-        Re-enable keyword filtering below if token cost becomes a concern.
+        Default: only CORE_TOOLS (~18) are sent.
+        Extra groups activate by keywords — reducing 57 tools / ~36k tokens
+        down to 18-25 tools / ~8-12k tokens for typical messages.
         """
-        return set()  # exclude nothing — let AI pick freely
+        msg = (user_message or "").lower()
+
+        # Groups activated by keywords
+        email_tools = {
+            'send_email', 'save_email_contact', 'list_email_contacts',
+            'update_email_campaign', 'send_outreach_email',
+            'add_email_leads', 'reply_to_outreach_email', 'get_email_campaign_status',
+            'pause_email_campaign', 'send_follow_up_email',
+        }
+        messaging_tools = {
+            'send_message_to_user', 'find_and_message_relevant_users',
+            'reply_to_user_message', 'get_incoming_messages', 'get_message_status',
+        }
+        publishing_tools = {
+            'create_post', 'edit_post', 'get_posts', 'delete_post',
+            'publish_to_telegram', 'publish_to_discord',
+            'set_content_strategy', 'manage_content_campaign',
+        }
+        research_tools = {
+            'research_topic', 'get_news_trends', 'get_stock_info',
+        }
+        delegation_tools = {
+            'delegate_task', 'get_delegation_progress', 'accept_delegated_task',
+            'reject_delegated_task', 'find_relevant_contacts_for_task',
+            'start_delegation_campaign', 'manage_delegation_campaign',
+        }
+        system_tools = {
+            'get_system_status', 'schedule_background_task',
+            'list_marketplace', 'switch_agent', 'run_agent_action',
+        }
+        task_extra_tools = {
+            'restore_task', 'check_time_conflicts', 'set_reminder',
+        }
+        goal_tools = {
+            'update_goal', 'complete_goal', 'delete_goal', 'update_goal_progress',
+        }
+
+        included = set(self.CORE_TOOLS)
+
+        email_kw = ('email', 'письм', 'рассылк', 'outreach', 'почт', 'кампани')
+        msg_kw = ('сообщени', 'напиши', 'написать', 'ответь', 'message')
+        pub_kw = ('пост', 'публик', 'контент', 'telegram', 'discord', 'опубликуй', 'страте')
+        research_kw = ('новост', 'акци', 'исследуй', 'найди информ', 'тренд', 'stock', 'news')
+        deleg_kw = ('делегир', 'партнер', 'контакт', 'delegate', 'найди людей')
+        system_kw = ('статус', 'систем', 'фон', 'marketplace', 'магазин', 'агент', 'переключи')
+        task_kw = ('восстанов', 'конфликт', 'напомн', 'remind', 'remind')
+        goal_kw = ('цел', 'goal', 'прогресс', 'выполн', 'завершить цел')
+
+        if any(k in msg for k in email_kw):
+            included |= email_tools
+        if any(k in msg for k in msg_kw):
+            included |= messaging_tools
+        if any(k in msg for k in pub_kw):
+            included |= publishing_tools
+        if any(k in msg for k in research_kw):
+            included |= research_tools
+        if any(k in msg for k in deleg_kw):
+            included |= delegation_tools
+        if any(k in msg for k in system_kw):
+            included |= system_tools
+        if any(k in msg for k in task_kw):
+            included |= task_extra_tools
+        if any(k in msg for k in goal_kw):
+            included |= goal_tools
+
+        # Always include publish_to_telegram if Telegram mentioned
+        if 'telegram' in msg or 'канал' in msg:
+            included.add('publish_to_telegram')
+
+        from ai_integration.tools import get_available_tools
+        all_names = {t['function']['name'] for t in get_available_tools()}
+        excluded = all_names - included
+        logger.debug(
+            f"[TOOLS] Smart filter: {len(included)} included, "
+            f"{len(excluded)} excluded for: '{user_message[:60]}'"
+        )
+        return excluded
 
     # ===== ADAPTIVE TOOL CHOICE =====
 
