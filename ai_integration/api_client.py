@@ -445,7 +445,7 @@ class ExternalAPIClient:
 
     def _get_ddg_semaphore(self) -> asyncio.Semaphore:
         if self._ddg_semaphore is None:
-            APIClient._ddg_semaphore = asyncio.Semaphore(1)
+            ExternalAPIClient._ddg_semaphore = asyncio.Semaphore(1)
         return self._ddg_semaphore
 
     async def duckduckgo_search(
@@ -494,10 +494,10 @@ class ExternalAPIClient:
                 async with sem:
                     # Выдерживаем минимальный интервал между запросами
                     now = time.time()
-                    elapsed = now - APIClient._ddg_last_request
+                    elapsed = now - ExternalAPIClient._ddg_last_request
                     if elapsed < self._DDG_MIN_INTERVAL:
                         await _aio.sleep(self._DDG_MIN_INTERVAL - elapsed)
-                    APIClient._ddg_last_request = time.time()
+                    ExternalAPIClient._ddg_last_request = time.time()
 
                     try:
                         results = await _aio.wait_for(
