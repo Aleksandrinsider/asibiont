@@ -4098,12 +4098,49 @@ except Exception as e:
             const descEl = document.getElementById('mpa-code-desc');
             const fallbackEl = document.getElementById('mpa-desc');
             const desc = (descEl?.value?.trim()) || (fallbackEl?.value?.trim()) || '';
-            if (!desc) { mpShowStatus('Заполните описание агента перед генерацией кода', '#FEF2F2', '#DC2626'); return; }
-            // Синхронизируем поле кодовой инструкции с основным описанием
-            if (descEl && !descEl.value.trim() && desc) { descEl.value = desc; }
             const apiKeys = (document.getElementById('mpa-apikeys') || {}).value || '';
             const btn = document.getElementById('mpa-gen-btn');
             const status = document.getElementById('mpa-gen-status');
+            const codeEl = document.getElementById('mpa-pycode');
+
+            // ── Шаг 1: если нет текстового описания — пробуем готовые шаблоны ──
+            if (!desc) {
+                const keyToSvc = {};
+                for (const [svc, tmpl] of Object.entries(_MPA_SVC)) {
+                    for (const f of (tmpl.fields || [])) keyToSvc[f.k] = svc;
+                }
+                const foundSvcs = new Set();
+                for (const line of apiKeys.split('\n')) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.includes('=')) continue;
+                    const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
+                    const svc = keyToSvc[key];
+                    if (svc) foundSvcs.add(svc);
+                }
+                if (foundSvcs.size > 0) {
+                    // Есть распознанные сервисы → подставляем готовый код без ИИ
+                    const parts = [];
+                    for (const svc of foundSvcs) {
+                        const tmpl = _MPA_SVC[svc];
+                        if (!tmpl?.code) continue;
+                        parts.push(foundSvcs.size === 1 ? tmpl.code : ('# === ' + tmpl.name + ' ===\n' + tmpl.code));
+                    }
+                    if (parts.length && codeEl) {
+                        codeEl.value = parts.join('\n\n');
+                        codeEl.style.height = 'auto';
+                        codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
+                        if (status) { status.style.display = 'block'; status.textContent = 'Готовый шаблон подставлен — проверьте переменные и при необходимости отредактируйте'; }
+                        mpUpdateServiceHint();
+                        return;
+                    }
+                }
+                // Нет описания и нет распознанных ключей
+                mpShowStatus('Добавьте сервис через форму выше или введите описание задачи для генерации кода', '#FEF2F2', '#DC2626');
+                return;
+            }
+
+            // ── Шаг 2: есть описание → ИИ-генерация ──
+            if (descEl && !descEl.value.trim() && desc) { descEl.value = desc; }
             if (btn) { btn.disabled = true; btn.textContent = 'Генерирую...'; }
             if (status) { status.style.display = 'block'; status.textContent = 'ИИ пишет код...'; }
             try {
@@ -4114,13 +4151,12 @@ except Exception as e:
                 });
                 const data = await r.json();
                 if (data.error) throw new Error(data.error);
-                const codeEl = document.getElementById('mpa-pycode');
                 if (codeEl) { codeEl.value = (data.code != null ? data.code : ''); codeEl.style.height = 'auto'; codeEl.style.height = codeEl.scrollHeight + 'px'; }
                 if (status) { status.textContent = data.code ? 'Код сгенерирован — проверьте и при необходимости отредактируйте' : 'Код не получен — попробуйте ещё раз или опишите задачу подробнее'; }
             } catch(e) {
                 if (status) { status.textContent = 'Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'); }
             } finally {
-                if (btn) { btn.disabled = false; btn.textContent = 'Сгенерировать код'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'Подставить шаблон / сгенерировать код'; }
             }
         }
 
@@ -4435,11 +4471,11 @@ except Exception as e:
                         </summary>
                         <div style="padding:0 12px 12px 12px;border-top:1px solid #F3F4F6;">
                             <div style="padding-top:10px;margin-bottom:6px;">
-                                <div style="font-size:13px;color:#374151;font-weight:500;">Генерация Python-кода</div>
-                                <div style="font-size:11px;color:#6B7280;margin-top:1px;">Опишите задачу агента — сгенерируем код. Или вставьте свой.</div>
+                                <div style="font-size:13px;color:#374151;font-weight:500;">Python-код агента</div>
+                                <div style="font-size:11px;color:#6B7280;margin-top:1px;">Добавили сервис выше — нажмие кнопку, подставим готовый шаблон мгновенно. Для нестандартной задачи — опишите её ниже, сгенерируем через ИИ.</div>
                             </div>
-                            <textarea id="mpa-code-desc" placeholder="Например: получай курс биткоина с CoinGecko" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#F9FAFB;"></textarea>
-                            <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сгенерировать код</button>
+                            <textarea id="mpa-code-desc" placeholder="Для ИИ-генерации: Например: читай RSS-ленту и присылай топ-3 новости" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#F9FAFB;"></textarea>
+                            <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Подставить шаблон / сгенерировать код</button>
                             <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
                             <div style="margin-top:8px;">
                                 <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Код агента:</div>
