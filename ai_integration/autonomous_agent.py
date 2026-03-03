@@ -2974,6 +2974,190 @@ def get_autonomous_agent():
     return _autonomous_agent
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# OFFICE DIRECTOR — ASI координирует агентов прямо в чате
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _has_explicit_mention(message: str) -> bool:
+    """True если сообщение начинается с @Агент или 'ИмяАгента,'."""
+    return bool(re.match(r'@\w+\b', (message or '').strip()))
+
+
+async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
+    """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
+    try:
+        async with aiohttp.ClientSession() as _sess:
+            async with _sess.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": DEEPSEEK_MODEL,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.7,
+                },
+                timeout=aiohttp.ClientTimeout(total=25),
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.debug("[DIRECTOR] AI call error: %s", e)
+    return ""
+
+
+def _save_interaction_for_director(telegram_id: int, content: str):
+    """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата."""
+    try:
+        from models import Session as _Db, User as _User, Interaction as _Intr
+        _s = _Db()
+        try:
+            _u = _s.query(_User).filter_by(telegram_id=telegram_id).first()
+            if _u:
+                _s.add(_Intr(user_id=_u.id, message_type='ai', content=content))
+                _s.commit()
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug("[DIRECTOR] save interaction error: %s", e)
+
+
+async def _office_director_chat(user_message: str, user_id: int) -> str | None:
+    """
+    ASI выступает директором офиса:
+    1. Смотрит на команду агентов → решает кому делегировать
+    2. Пишет в чат сообщение-делегирование (visible as Interaction)
+    3. Агент выполняет (с python_code если есть) и пишет ответ (visible)
+    4. ASI проверяет результат и пишет итог пользователю
+    Возвращает финальный ответ ASI, или None → обычный поток.
+    """
+    import json as _json
+
+    # Загружаем агентов пользователя
+    try:
+        from .user_agents import get_user_active_agents, load_agent_personality
+        _ids = get_user_active_agents(user_id)
+        if not _ids:
+            return None
+        _agents = [d for _id in _ids for d in [load_agent_personality(_id)] if d]
+        if not _agents:
+            return None
+    except Exception as e:
+        logger.debug("[DIRECTOR] agents load error: %s", e)
+        return None
+
+    agents_block = "\n".join(
+        f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:120]}"
+        for a in _agents
+    )
+
+    # ── Шаг 1: ASI решает делегировать или нет ────────────────────────────────
+    decision_raw = await _quick_ai_call_raw([{
+        "role": "user",
+        "content": (
+            f"Ты директор офиса ASI Biont. Твоя команда:\n{agents_block}\n\n"
+            f"Пользователь написал: «{user_message}»\n\n"
+            "Решение: делегировать задачу агенту или ответить самому (ASI)?\n"
+            "Делегируй если задача явно входит в специализацию кого-то из агентов.\n"
+            "Ответь ТОЛЬКО JSON без ```:\n"
+            '{"delegate": true, "agent_name": "точное имя", '
+            '"agent_task": "конкретная задача для агента", '
+            '"director_message": "твоё сообщение пользователю — что делаешь"}\n'
+            "или\n"
+            '{"delegate": false}'
+        ),
+    }], max_tokens=280)
+
+    if not decision_raw:
+        return None
+
+    # Парсим JSON (DeepSeek иногда оборачивает в ```)
+    _jstr = decision_raw
+    _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw)
+    if _jm:
+        _jstr = _jm.group(1)
+    try:
+        decision = _json.loads(_jstr)
+    except Exception:
+        return None
+
+    if not decision.get('delegate') or not decision.get('agent_name'):
+        return None  # ASI отвечает сам — обычный поток
+
+    agent_name = decision['agent_name']
+    agent_task = decision.get('agent_task') or user_message
+    director_msg = decision.get('director_message', '')
+
+    # Ищем агента по имени
+    _agent = next(
+        (a for a in _agents if a['name'].lower() == agent_name.lower()),
+        next((a for a in _agents if agent_name.lower() in a['name'].lower()), None)
+    )
+    if not _agent:
+        return None
+
+    # ── Шаг 2: Сохраняем делегирование от ASI в чат ───────────────────────────
+    if director_msg:
+        _save_interaction_for_director(user_id, director_msg)
+        await asyncio.sleep(0.1)  # чуть подождём, чтобы UI успел подхватить
+
+    # ── Шаг 3: Агент выполняет задачу ─────────────────────────────────────────
+    agent_system = (
+        _agent.get('personality') or
+        f"Ты — {_agent['name']}. {_agent.get('description', '')} Отвечай от своего имени."
+    )
+
+    # Если есть python_code — запускаем и добавляем результат в контекст
+    script_context = ""
+    if (_agent.get('python_code') or '').strip():
+        try:
+            from ai_integration.office_engine import _exec_agent_script_sync
+            _wrapped = _wrap_agent_code(_agent['python_code'].strip())
+            loop = asyncio.get_event_loop()
+            stdout, _ = await loop.run_in_executor(None, _exec_agent_script_sync, _wrapped)
+            if stdout:
+                script_context = f"\n\n[Результат твоего мониторинга/скрипта]:\n{stdout[:800]}"
+        except Exception as e:
+            logger.debug("[DIRECTOR] agent script exec error: %s", e)
+
+    agent_response = await _quick_ai_call_raw([
+        {"role": "system", "content": agent_system + script_context},
+        {"role": "user", "content": agent_task},
+    ], max_tokens=700)
+
+    if not agent_response:
+        agent_response = "Задачу выполнил, но результат пустой — возможно нет данных."
+
+    # ── Шаг 4: Сохраняем ответ агента в чат (с именем/аватаром через JSON) ───
+    agent_content = _json.dumps({
+        '__agent': {
+            'name': _agent.get('name', agent_name),
+            'id': _agent.get('id'),
+            'avatar_url': _agent.get('avatar_url', ''),
+        },
+        'text': agent_response,
+    }, ensure_ascii=False)
+    _save_interaction_for_director(user_id, agent_content)
+    await asyncio.sleep(0.1)
+
+    # ── Шаг 5: ASI проверяет результат и пишет итог ───────────────────────────
+    final_response = await _quick_ai_call_raw([{
+        "role": "user",
+        "content": (
+            f"Пользователь спросил: «{user_message}»\n"
+            f"Ты делегировал задачу агенту {_agent['name']}.\n"
+            f"Агент ответил: «{agent_response[:700]}»\n\n"
+            "Дай краткий итог пользователю. Если агент справился — резюмируй ключевые результаты. "
+            "Если нужны дальнейшие действия — предложи. Говори от ASI Biont."
+        ),
+    }], max_tokens=450)
+
+    if not final_response:
+        final_response = f"Итог: {_agent['name']} выполнил задачу."
+
+    return final_response
+
+
 async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                        db_session=None, message_type=None, subscription_tier=None,
                        progress_callback=None, web_context: bool = False):
@@ -2986,6 +3170,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
     try:
         agent = get_autonomous_agent()
         history_len = len(agent.execution_history)
+
+        # ── Office Director: ASI координирует агентов прямо в чате ──────────
+        # Запускаем когда нет явного @упоминания — ASI сам решает делегировать ли
+        _director_response = None
+        if not _has_explicit_mention(message or ''):
+            try:
+                _director_response = await _office_director_chat(message, user_id)
+            except Exception as _de:
+                logger.debug("[DIRECTOR] error, fallback to normal: %s", _de)
+
+        if _director_response is not None:
+            # Директор обработал — промежуточные Interaction уже сохранены
+            return {
+                'response': _director_response,
+                'tool_calls': [],
+                'tools_used': [],
+                'agent_info': None,  # ASI подводит итог
+            }
 
         response_text = await agent.process_request(
             message, user_id, context, db_session,
