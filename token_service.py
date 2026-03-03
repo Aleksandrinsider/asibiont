@@ -398,6 +398,19 @@ def get_balance_info(user_id: int, session=None) -> str:
             session.close()
 
 
+async def check_and_deduct(user_id: int, action: str, session=None) -> bool:
+    """Асинхронная проверка и списание токенов (используется в anchor_engine).
+    
+    Returns:
+        True — токены есть и списаны успешно
+        False — токенов не хватает (ничего не списывается)
+    """
+    if not has_enough_tokens(user_id, action, session):
+        return False
+    result = spend_tokens(user_id, action, description=f'anchor_{action}', session=session, auto_commit=False)
+    return result.get('success', False)
+
+
 def insufficient_balance_message(user_id: int, action: str, session=None) -> str:
     """Сообщение о недостатке токенов."""
     from i18n import get_user_lang
