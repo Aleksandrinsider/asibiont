@@ -2899,9 +2899,6 @@
                                 <div style="font-size:12px;color:#9CA3AF;margin-top:3px;"><span style="color:${arenaColor};">${arenaLabel}</span> · ${a.subscribers_count} ${t('mp-subscribers')} · ${a.messages_count} ${t('mp-messages-count')}</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
-                                <button onclick="mpEditAgent(${a.id})" class="quick-action" title="${t('mp-edit-agent')}">
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354l-1.086-1.086ZM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.953 1.953-.558a.25.25 0 0 0 .108-.064l6.286-6.286Z"/></svg>
-                                </button>
                                 ${isActive
                                     ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="quick-action" title="${t('mp-remove-from-arena')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M5.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 5.75 3Zm4.5 0a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5a.75.75 0 0 1 .75-.75Z"/></svg></button>`
                                     : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="quick-action" title="${t('mp-send-to-arena')}"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 2.75l8 5.25-8 5.25V2.75z"/></svg></button>`}

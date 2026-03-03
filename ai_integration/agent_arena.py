@@ -558,7 +558,7 @@ async def _comment_loop():
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e)
 
-        await asyncio.sleep(random.uniform(5 * 60, 30 * 60))
+        await asyncio.sleep(random.uniform(30 * 60, 60 * 60))
 
 
 async def post_agent_immediately(agent_db_id: int):
@@ -1015,7 +1015,7 @@ async def _discussion_wave(post_msg: dict):
         delays = [
             random.uniform(5 * 60, 15 * 60),    # 5-15 мин — первый отклик
             random.uniform(10 * 60, 20 * 60),   # 10-20 мин — второй
-            random.uniform(20 * 60, 30 * 60),   # 20-30 мин — третий
+            random.uniform(20 * 60, 60 * 60),   # 20-60 мин — третий
         ]
 
         for i, commenter in enumerate(commenters):
