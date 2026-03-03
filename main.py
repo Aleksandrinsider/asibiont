@@ -10141,8 +10141,30 @@ async def api_marketplace_my_handler(request):
             def _is_subscribed(agent):
                 return bool(session_db.query(AgentSubscription).filter_by(
                     user_id=user_obj.id, agent_id=agent.id).first())
-            return web.json_response({
-                'agents': [{'id': a.id, 'name': a.name, 'slug': a.slug,
+            # Подписанные агенты других пользователей (активированные чужие агенты)
+            ext_subs = session_db.query(AgentSubscription).filter_by(user_id=user_obj.id).all()
+            owned_ids = {a.id for a in agents}
+            ext_agent_ids = [s.agent_id for s in ext_subs if s.agent_id not in owned_ids]
+            ext_agents = []
+            if ext_agent_ids:
+                ext_objs = session_db.query(UserAgent).filter(UserAgent.id.in_(ext_agent_ids)).all()
+                for ea in ext_objs:
+                    ext_agents.append({
+                        'id': ea.id, 'name': ea.name, 'slug': ea.slug,
+                        'status': 'subscribed', 'subscribers_count': ea.subscribers_count,
+                        'price_per_message': ea.price_per_message,
+                        'trial_messages': ea.trial_messages,
+                        'messages_count': 0,
+                        'specialization': ea.specialization or '',
+                        'job_title': ea.job_title or '',
+                        'description': ea.description or '',
+                        'personality': '',
+                        'avatar_url': ea.avatar_url or '',
+                        'is_private': bool(ea.is_private),
+                        'user_api_keys': '', 'python_code': '', 'search_scope': '',
+                        'is_subscribed': True, 'is_external': True,
+                    })
+            own_agents_list = [{'id': a.id, 'name': a.name, 'slug': a.slug,
                              'status': a.status, 'subscribers_count': a.subscribers_count,
                              'price_per_message': a.price_per_message,
                              'trial_messages': a.trial_messages,
@@ -10156,7 +10178,10 @@ async def api_marketplace_my_handler(request):
                              'user_api_keys': (a.user_api_keys or '') if a.author_id == user_obj.id else '',
                              'python_code': (a.python_code or '') if a.author_id == user_obj.id else '',
                              'search_scope': (a.search_scope or '') if a.author_id == user_obj.id else '',
-                             'is_subscribed': _is_subscribed(a)} for a in agents],
+                             'is_subscribed': _is_subscribed(a),
+                             'is_external': False} for a in agents]
+            return web.json_response({
+                'agents': own_agents_list + ext_agents,
                 'scripts': [],
             })
         finally:

@@ -2863,14 +2863,30 @@
                 if (data.agents && data.agents.length) {
 
                     html += data.agents.map(a => {
-                        const isActive = a.status === 'active';
-                        const isPaused = a.status === 'paused';
-                        const statusLabel = isActive ? t('mp-in-arena') : isPaused ? t('mp-paused-short') : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : a.status;
-                        const statusColor = isActive ? '#068487' : '#9CA3AF';
                         const initials = a.name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
                         const avatarHtml = a.avatar_url
                             ? `<img src="${escapeHtml(a.avatar_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer;" onclick="openAgentProfileModal(${a.id})" alt="">`
                             : `<div style="width:38px;height:38px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:700;color:#fff;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${initials}</div>`;
+                        // Чужой активированный агент — только кнопка деактивировать
+                        if (a.is_external) {
+                            const subLabel = a.job_title ? escapeHtml(a.job_title) : (a.specialization ? escapeHtml(a.specialization) : '');
+                            return `
+                        <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+                            ${avatarHtml}
+                            <div style="flex:1;min-width:140px;">
+                                <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
+                                <span style="margin-left:8px;font-size:11px;color:#068487;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:4px;padding:1px 6px;">${t('mp-activated-badge')}</span>
+                                ${subLabel ? `<div style="font-size:12px;color:#9CA3AF;margin-top:2px;">${subLabel}</div>` : ''}
+                            </div>
+                            <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+                                <button onclick="mpDeactivateAgent(${a.id})" class="mp-action-btn" style="color:#DC2626;" onmouseover="this.style.background='#FEF2F2';this.style.borderColor='#FCA5A5';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">${t('mp-deactivate')}</button>
+                            </div>
+                        </div>`;
+                        }
+                        const isActive = a.status === 'active';
+                        const isPaused = a.status === 'paused';
+                        const statusLabel = isActive ? t('mp-in-arena') : isPaused ? t('mp-paused-short') : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : a.status;
+                        const statusColor = isActive ? '#068487' : '#9CA3AF';
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
                             ${avatarHtml}
@@ -3021,68 +3037,94 @@ else:
                     {k:'YANDEX_PASS', label:'Пароль приложения', ph:'пароль', t:'password'}
                 ],
                 hint: 'Яндекс.Почта → Настройки → Клиенты → Включить IMAP, создать пароль приложения',
-                code: `import imaplib, os, datetime
+                code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 USER = os.environ.get('YANDEX_USER', '')
 PASS = os.environ.get('YANDEX_PASS', '')
-try:
-    mail = imaplib.IMAP4_SSL('imap.yandex.ru')
-    mail.login(USER, PASS.replace(' ', ''))
-    mail.select('inbox')
-    since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-    _, data = mail.search(None, 'SINCE ' + since)
-    ids = data[0].split()
-    if not ids:
-        print('Новых писем за неделю нет.')
-    else:
-        print('Писем за неделю: ' + str(len(ids)))
-        for eid in reversed(ids[-5:]):
-            try:
-                _, md = mail.fetch(eid, '(RFC822)')
-                msg = message_from_bytes(md[0][1])
-                subj_raw = msg.get('Subject') or ''
-                pts = decode_header(subj_raw)
-                subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
-                frm = msg.get('From', '')
-                date = msg.get('Date', '')
-                import re as _re
-                import html as _html_ent
-                def _strip_html(s):
+ACTION = os.environ.get('AGENT_ACTION', '')
+if ACTION == 'send_email':
+    to = os.environ.get('AGENT_PARAM_TO', '')
+    subject = os.environ.get('AGENT_PARAM_SUBJECT', '(без темы)')
+    body = os.environ.get('AGENT_PARAM_BODY', '')
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = USER
+        msg['To'] = to
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        import ssl as _ssl
+        _ctx = _ssl.create_default_context()
+        s = smtplib.SMTP('smtp.yandex.ru', 587, timeout=30)
+        s.ehlo()
+        s.starttls(context=_ctx)
+        s.ehlo()
+        s.login(USER, PASS.replace(' ', ''))
+        s.sendmail(USER, to, msg.as_string())
+        s.quit()
+        print('OK: письмо отправлено на ' + to)
+    except Exception as e:
+        print('Ошибка отправки: ' + str(e))
+else:
+    try:
+        mail = imaplib.IMAP4_SSL('imap.yandex.ru')
+        mail.login(USER, PASS.replace(' ', ''))
+        mail.select('inbox')
+        since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
+        _, data = mail.search(None, 'SINCE ' + since)
+        ids = data[0].split()
+        if not ids:
+            print('Новых писем за неделю нет.')
+        else:
+            print('Писем за неделю: ' + str(len(ids)))
+            for eid in reversed(ids[-5:]):
+                try:
+                    _, md = mail.fetch(eid, '(RFC822)')
+                    msg = message_from_bytes(md[0][1])
+                    subj_raw = msg.get('Subject') or ''
+                    pts = decode_header(subj_raw)
+                    subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
+                    frm = msg.get('From', '')
+                    date = msg.get('Date', '')
+                    import re as _re
+                    import html as _html_ent
+                    def _strip_html(s):
                     s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<[^>]+>', ' ', s)
                     s = _html_ent.unescape(s)
-                    s = _re.sub(r'[ ​‌‍⁠﻿­‎‏]', '', s)
+                    s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
                     return _re.sub(r'\s+', ' ', s).strip()
-                body = ''
-                if msg.is_multipart():
-                    _html_fb = ''
-                    for part in msg.walk():
-                        _ct = part.get_content_type()
-                        if _ct == 'text/plain' and not part.get('Content-Disposition'):
-                            raw = part.get_payload(decode=True) or b''
-                            body = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
-                            break
-                        if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
-                            raw = part.get_payload(decode=True) or b''
-                            _html_fb = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
-                    if not body:
-                        body = _html_fb
-                else:
-                    raw = msg.get_payload(decode=True) or b''
-                    _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
-                    body = _strip_html(_dec)[:150]
-                print('От: ' + frm)
-                print('Тема: ' + subject)
-                print('Дата: ' + date)
-                print(body)
-                print('---')
-            except Exception as ex:
-                print('Ошибка письма: ' + str(ex))
-    mail.logout()
-except Exception as e:
-    print('Ошибка: ' + str(e))`
+                    body = ''
+                    if msg.is_multipart():
+                        _html_fb = ''
+                        for part in msg.walk():
+                            _ct = part.get_content_type()
+                            if _ct == 'text/plain' and not part.get('Content-Disposition'):
+                                raw = part.get_payload(decode=True) or b''
+                                body = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
+                                break
+                            if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
+                                raw = part.get_payload(decode=True) or b''
+                                _html_fb = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
+                        if not body:
+                            body = _html_fb
+                    else:
+                        raw = msg.get_payload(decode=True) or b''
+                        _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
+                        body = _strip_html(_dec)[:150]
+                    print('От: ' + frm)
+                    print('Тема: ' + subject)
+                    print('Дата: ' + date)
+                    print(body)
+                    print('---')
+                except Exception as ex:
+                    print('Ошибка письма: ' + str(ex))
+        mail.logout()
+    except Exception as e:
+        print('Ошибка: ' + str(e))`
             },
             mailru: {
                 name: 'Mail.ru',
@@ -3091,68 +3133,94 @@ except Exception as e:
                     {k:'MAILRU_PASS', label:'Пароль для внешних приложений', ph:'пароль', t:'password'}
                 ],
                 hint: 'Mail.ru: Почта → Настройки → Пароль для внешних приложений + включить IMAP',
-                code: `import imaplib, os, datetime
+                code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 USER = os.environ.get('MAILRU_USER', '')
 PASS = os.environ.get('MAILRU_PASS', '')
-try:
-    mail = imaplib.IMAP4_SSL('imap.mail.ru')
-    mail.login(USER, PASS.replace(' ', ''))
-    mail.select('inbox')
-    since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-    _, data = mail.search(None, 'SINCE ' + since)
-    ids = data[0].split()
-    if not ids:
-        print('Новых писем за неделю нет.')
-    else:
-        print('Писем за неделю: ' + str(len(ids)))
-        for eid in reversed(ids[-5:]):
-            try:
-                _, md = mail.fetch(eid, '(RFC822)')
-                msg = message_from_bytes(md[0][1])
-                subj_raw = msg.get('Subject') or ''
-                pts = decode_header(subj_raw)
-                subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
-                frm = msg.get('From', '')
-                date = msg.get('Date', '')
-                import re as _re
-                import html as _html_ent
-                def _strip_html(s):
+ACTION = os.environ.get('AGENT_ACTION', '')
+if ACTION == 'send_email':
+    to = os.environ.get('AGENT_PARAM_TO', '')
+    subject = os.environ.get('AGENT_PARAM_SUBJECT', '(без темы)')
+    body = os.environ.get('AGENT_PARAM_BODY', '')
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = USER
+        msg['To'] = to
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        import ssl as _ssl
+        _ctx = _ssl.create_default_context()
+        s = smtplib.SMTP('smtp.mail.ru', 587, timeout=30)
+        s.ehlo()
+        s.starttls(context=_ctx)
+        s.ehlo()
+        s.login(USER, PASS.replace(' ', ''))
+        s.sendmail(USER, to, msg.as_string())
+        s.quit()
+        print('OK: письмо отправлено на ' + to)
+    except Exception as e:
+        print('Ошибка отправки: ' + str(e))
+else:
+    try:
+        mail = imaplib.IMAP4_SSL('imap.mail.ru')
+        mail.login(USER, PASS.replace(' ', ''))
+        mail.select('inbox')
+        since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
+        _, data = mail.search(None, 'SINCE ' + since)
+        ids = data[0].split()
+        if not ids:
+            print('Новых писем за неделю нет.')
+        else:
+            print('Писем за неделю: ' + str(len(ids)))
+            for eid in reversed(ids[-5:]):
+                try:
+                    _, md = mail.fetch(eid, '(RFC822)')
+                    msg = message_from_bytes(md[0][1])
+                    subj_raw = msg.get('Subject') or ''
+                    pts = decode_header(subj_raw)
+                    subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
+                    frm = msg.get('From', '')
+                    date = msg.get('Date', '')
+                    import re as _re
+                    import html as _html_ent
+                    def _strip_html(s):
                     s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<[^>]+>', ' ', s)
                     s = _html_ent.unescape(s)
-                    s = _re.sub(r'[ ​‌‍⁠﻿­‎‏]', '', s)
+                    s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
                     return _re.sub(r'\s+', ' ', s).strip()
-                body = ''
-                if msg.is_multipart():
-                    _html_fb = ''
-                    for part in msg.walk():
-                        _ct = part.get_content_type()
-                        if _ct == 'text/plain' and not part.get('Content-Disposition'):
-                            raw = part.get_payload(decode=True) or b''
-                            body = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
-                            break
-                        if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
-                            raw = part.get_payload(decode=True) or b''
-                            _html_fb = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
-                    if not body:
-                        body = _html_fb
-                else:
-                    raw = msg.get_payload(decode=True) or b''
-                    _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
-                    body = _strip_html(_dec)[:150]
-                print('От: ' + frm)
-                print('Тема: ' + subject)
-                print('Дата: ' + date)
-                print(body)
-                print('---')
-            except Exception as ex:
-                print('Ошибка письма: ' + str(ex))
-    mail.logout()
-except Exception as e:
-    print('Ошибка: ' + str(e))`
+                    body = ''
+                    if msg.is_multipart():
+                        _html_fb = ''
+                        for part in msg.walk():
+                            _ct = part.get_content_type()
+                            if _ct == 'text/plain' and not part.get('Content-Disposition'):
+                                raw = part.get_payload(decode=True) or b''
+                                body = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
+                                break
+                            if _ct == 'text/html' and not _html_fb and not part.get('Content-Disposition'):
+                                raw = part.get_payload(decode=True) or b''
+                                _html_fb = _strip_html(raw.decode(part.get_content_charset() or 'utf-8', errors='replace'))[:150]
+                        if not body:
+                            body = _html_fb
+                    else:
+                        raw = msg.get_payload(decode=True) or b''
+                        _dec = raw.decode(msg.get_content_charset() or 'utf-8', errors='replace')
+                        body = _strip_html(_dec)[:150]
+                    print('От: ' + frm)
+                    print('Тема: ' + subject)
+                    print('Дата: ' + date)
+                    print(body)
+                    print('---')
+                except Exception as ex:
+                    print('Ошибка письма: ' + str(ex))
+        mail.logout()
+    except Exception as e:
+        print('Ошибка: ' + str(e))`
             },
             openweather: {
                 name: 'Погода',
@@ -14308,7 +14376,7 @@ except Exception as e:
       'confirm-task-return':'Задача вернется в ваш список личных задач.',
       'delegated-to':'Поручена','delegated-from':'Поручена от',
       'mp-no-agents':'Агентов пока нет','mp-free':'Бесплатно','mp-per-msg':'тк/сообщение',
-      'mp-your-agent':'Ваш агент','mp-activate':'Активировать','mp-deactivate':'Отключить',
+      'mp-your-agent':'Ваш агент','mp-activate':'Активировать','mp-deactivate':'Отключить','mp-activated-badge':'подключён',
       'mp-in-arena':'В арене','mp-paused-short':'Пауза','mp-in-review':'На модерации','mp-disabled':'Отключён',
       'mp-subscribers':'подписчиков','mp-messages-count':'сообщений',
       'mp-not-published':'Вы ещё ничего не опубликовали','mp-status-updated':'Статус агента обновлён',
@@ -14567,7 +14635,7 @@ except Exception as e:
       'confirm-task-return':'The task will return to your personal task list.',
       'delegated-to':'Delegated to','delegated-from':'Delegated from',
       'mp-no-agents':'No agents yet','mp-free':'Free','mp-per-msg':'tk/msg',
-      'mp-your-agent':'Your agent','mp-activate':'Activate','mp-deactivate':'Deactivate',
+      'mp-your-agent':'Your agent','mp-activate':'Activate','mp-deactivate':'Deactivate','mp-activated-badge':'connected',
       'mp-in-arena':'In arena','mp-paused-short':'Paused','mp-in-review':'Under review','mp-disabled':'Disabled',
       'mp-subscribers':'subscribers','mp-messages-count':'messages',
       'mp-not-published':'Nothing published yet','mp-status-updated':'Agent status updated',
