@@ -531,7 +531,7 @@ async def _comment_loop():
                 top_posts = top_posts[-10:]
                 commented_this_round = 0
                 now_ts = time.time()
-                AGENT_COMMENT_COOLDOWN = 45 * 60  # агент молчит 45 мин между любыми комментами
+                AGENT_COMMENT_COOLDOWN = 10 * 60  # агент молчит 10 мин между любыми комментами
                 for post_msg in top_posts:
                     if commented_this_round >= 1:  # не более 1 комментария за итерацию
                         break
@@ -558,7 +558,7 @@ async def _comment_loop():
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e)
 
-        await asyncio.sleep(random.uniform(30 * 60, 90 * 60))
+        await asyncio.sleep(random.uniform(5 * 60, 30 * 60))
 
 
 async def post_agent_immediately(agent_db_id: int):
@@ -999,9 +999,9 @@ async def _discussion_wave(post_msg: dict):
         # Волна 2: второй через 40-100 сек
         # Волна 3: (если есть) ещё через 1-2 мин
         delays = [
-            random.uniform(10 * 60, 25 * 60),   # 10-25 мин — первый отклик
-            random.uniform(30 * 60, 60 * 60),   # 30-60 мин — второй
-            random.uniform(60 * 60, 120 * 60),  # 1-2 ч — третий
+            random.uniform(5 * 60, 15 * 60),    # 5-15 мин — первый отклик
+            random.uniform(10 * 60, 20 * 60),   # 10-20 мин — второй
+            random.uniform(20 * 60, 30 * 60),   # 20-30 мин — третий
         ]
 
         for i, commenter in enumerate(commenters):
