@@ -215,19 +215,25 @@ class OfficeEngine:
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] anchor error: %s", agent.name, e)
 
-                # Пишем отчёт агента прямо в чат
+                # Пишем отчёт агента — AI превращает raw stdout в живое сообщение (как в арене)
                 try:
-                    msg_text = f"📊 Выполнил мониторинг:\n{stdout[:800]}"
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(
-                        None,
-                        _save_chat_message_sync,
-                        user.id,
-                        agent.name or 'Агент',
-                        agent.id,
-                        agent.avatar_url or '',
-                        msg_text,
-                    )
+                    async with self._ai_sem:
+                        report = await self._format_agent_report(
+                            agent.name or 'Агент',
+                            agent.specialization or 'агент',
+                            stdout,
+                        )
+                    if report:
+                        loop = asyncio.get_event_loop()
+                        await loop.run_in_executor(
+                            None,
+                            _save_chat_message_sync,
+                            user.id,
+                            agent.name or 'Агент',
+                            agent.id,
+                            agent.avatar_url or '',
+                            report,
+                        )
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] chat save error: %s", agent.name, e)
 
@@ -236,6 +242,12 @@ class OfficeEngine:
                     await self._asi_react_to_agent_output(agent, user, stdout)
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] ASI reaction error: %s", agent.name, e)
+
+                # Агент отвечает на реакцию ASI — создаём диалог
+                try:
+                    await self._post_agent_followup(agent, user)
+                except Exception as e:
+                    logger.debug("[OFFICE-L1] [%s] followup error: %s", agent.name, e)
 
             elif stderr and 'timeout' not in stderr:
                 logger.debug("[OFFICE-L1] [%s] stderr: %s", agent.name, stderr[:150])
@@ -345,6 +357,191 @@ class OfficeEngine:
                 _s3.close()
         except Exception as e:
             logger.debug("[OFFICE-L1] cooldown anchor error: %s", e)
+
+    async def _format_agent_report(self, agent_name: str, agent_spec: str, stdout: str) -> str:
+        """Превращает сырой stdout скрипта в человеческую живую реплику агента.
+        Как в арене: code_output → AI → чистое сообщение без логов и трейсбэков.
+        """
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        import aiohttp
+
+        # Убираем очевидные технические строки прямо здесь — на случай если AI не справится
+        lines = [l for l in stdout.splitlines()
+                 if not l.strip().startswith(('Traceback', 'File "', '  File ', 'DEBUG', 'INFO ', 'WARNING', 'ERROR'))
+                 and 'Traceback' not in l]
+        clean = '\n'.join(lines).strip()
+        if not clean:
+            return ""
+
+        prompt = (
+            f"Ты — {agent_name}, {agent_spec}. Ты только что выполнил мониторинг и получил следующие данные:\n\n"
+            f"{clean[:600]}\n\n"
+            "Напиши одно короткое сообщение (2-3 предложения) в чат пользователю — как живой человек в мессенджере.\n"
+            "Что нашёл, что важного, если нужно — одно действие. Без технических деталей, без логов, без списков.\n"
+            "Только суть. Если данных нет или ничего интересного — напиши одно предложение об этом."
+        )
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": DEEPSEEK_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 150,
+                        "temperature": 0.7,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=12),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.debug("[OFFICE-L1] format_report AI error: %s", e)
+        # Fallback: берём первые 2 значимые строки из clean
+        fallback = '. '.join(lines[:2])
+        return fallback[:300] if fallback else ""
+
+    # ─── Диалог: агент отвечает на реакцию ASI ──────────────────────────────
+
+    @staticmethod
+    def _load_recent_chat_sync(user_id: int, n: int = 6) -> list:
+        """Загружает последние n сообщений из Interaction для пользователя.
+        Возвращает [{speaker, text}, ...] в хронологическом порядке.
+        """
+        try:
+            import json as _j
+            from models import Session as _Db, Interaction
+            _s = _Db()
+            try:
+                rows = (_s.query(Interaction)
+                        .filter(Interaction.user_id == user_id)
+                        .order_by(Interaction.created_at.desc())
+                        .limit(n).all())
+                rows = list(reversed(rows))
+                result = []
+                for r in rows:
+                    try:
+                        data = _j.loads(r.content or '{}')
+                        if isinstance(data, dict) and '__agent' in data:
+                            result.append({
+                                'speaker': data['__agent'].get('name', 'Агент'),
+                                'text': data.get('text', ''),
+                            })
+                        else:
+                            # человеческое сообщение или plain-text AI
+                            text = data if isinstance(data, str) else r.content or ''
+                            result.append({'speaker': 'Пользователь', 'text': str(text)[:300]})
+                    except Exception:
+                        result.append({'speaker': 'Пользователь', 'text': (r.content or '')[:300]})
+                return result
+            finally:
+                _s.close()
+        except Exception:
+            return []
+
+    async def _generate_office_dialogue_reply(self, agent_name: str, agent_spec: str,
+                                               agent_personality: str,
+                                               history: list) -> str:
+        """Агент читает последние сообщения в чате и отвечает естественно — как в арене.
+        history: [{speaker, text}, ...]
+        """
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        import aiohttp
+
+        history_text = '\n'.join(
+            f'[{m["speaker"]}]: {m["text"]}' for m in history[-5:]
+        )
+
+        asi_identity = (
+            "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
+            "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
+            "Ты ДЕЛАЕШЬ, а не просто советуешь. Отвечаешь кратко, без списков и заголовков."
+        )
+        role_overlay = (
+            agent_personality or
+            f"Ты действуешь как {agent_name} — {agent_spec}."
+        )
+        system = f"{asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{role_overlay}"
+
+        user_content = (
+            f"В чате только что написали:\n{history_text}\n\n"
+            "Прочитай последнее сообщение и ответь на него — естественно, по-человечески, "
+            "как коллега в мессенджере. Можешь согласиться, уточнить, предложить следующий шаг "
+            "или задать один вопрос. 1-2 предложения. Никаких списков, никакого официоза."
+        )
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": DEEPSEEK_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "max_tokens": 120,
+                        "temperature": 0.8,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=12),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.debug("[OFFICE-L1] dialogue_reply AI error: %s", e)
+        return ""
+
+    async def _post_agent_followup(self, agent, user):
+        """Агент отвечает на реакцию ASI — замыкает диалог (report → ASI → agent reply)."""
+        # Пауза 10-30 сек — чтобы сообщения шли с реалистичной задержкой
+        await asyncio.sleep(random.randint(10, 30))
+
+        # Читаем последние 5 сообщений — включая отчёт агента и реакцию ASI
+        loop = asyncio.get_event_loop()
+        history = await loop.run_in_executor(
+            None, self._load_recent_chat_sync, user.id, 5
+        )
+        if not history:
+            return
+
+        # Последнее сообщение должно быть от ASI — иначе нет смысла отвечать
+        last = history[-1]
+        if last.get('speaker') not in ('ASI Biont', 'ASI'):
+            return
+
+        async with self._ai_sem:
+            reply = await self._generate_office_dialogue_reply(
+                agent_name=agent.name or 'Агент',
+                agent_spec=agent.specialization or 'агент',
+                agent_personality=agent.personality or '',
+                history=history,
+            )
+
+        if not reply:
+            return
+
+        try:
+            await loop.run_in_executor(
+                None,
+                _save_chat_message_sync,
+                user.id,
+                agent.name or 'Агент',
+                agent.id,
+                agent.avatar_url or '',
+                reply,
+            )
+            logger.info("[OFFICE-L1] [%s] dialogue reply saved for user %d", agent.name, user.id)
+        except Exception as e:
+            logger.debug("[OFFICE-L1] [%s] followup save error: %s", agent.name, e)
 
     async def _ask_asi_reaction(self, agent_name: str, agent_spec: str,
                                   output: str, other_agents: str) -> str:
