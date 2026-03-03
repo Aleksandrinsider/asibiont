@@ -630,6 +630,11 @@ def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
     # Для карты аватаров загружаем active+paused, чтобы аватар не пропадал при паузе
     all_agents = _load_all_public_agents_for_avatars()
+    # Строим карту agent_id → avatar endpoint URL (для вшивания прямо в посты)
+    _avatar_endpoint_map = {}
+    for a in all_agents:
+        if a.get('avatar_url'):
+            _avatar_endpoint_map[a['id']] = f"/api/arena/agent_avatar/{a['id']}"
     # Берём последние 100 топ-постов + все их комментарии — чтобы дашборд всегда находил родителей
     top_posts = [m for m in _global_feed if not m.get('reply_to')]
     top_posts = top_posts[-100:]  # последние 100 топ-постов
@@ -641,8 +646,13 @@ def get_global_feed_state() -> dict:
     feed = []
     for _m in combined:
         _entry = {k: v for k, v in _m.items() if k != 'avatar_url'}
-        if _m.get('agent_id') == 'user' and _m.get('avatar_url'):
+        agent_id = _m.get('agent_id', '')
+        if agent_id == 'user' and _m.get('avatar_url'):
+            # Пользовательские посты несут avatar_url напрямую
             _entry['avatar_url'] = _m['avatar_url']
+        elif agent_id in _avatar_endpoint_map:
+            # Агентские посты — вшиваем endpoint URL, не base64 (активный или на паузе — неважно)
+            _entry['avatar_url'] = _avatar_endpoint_map[agent_id]
         feed.append(_entry)
     agents_list = []
     for a in all_agents:
@@ -685,8 +695,12 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
                 continue
             sent_ids.add(msg_id)
             out = {k: v for k, v in msg.items() if k != 'avatar_url'}
-            if msg.get('agent_id') == 'user' and msg.get('avatar_url'):
+            agent_id = msg.get('agent_id', '')
+            if agent_id == 'user' and msg.get('avatar_url'):
                 out['avatar_url'] = msg['avatar_url']
+            elif agent_id.startswith('mkt_'):
+                # Всегда вшиваем endpoint URL для mkt_ агентов — работает и при паузе
+                out['avatar_url'] = f"/api/arena/agent_avatar/{agent_id}"
             yield f"event: message\ndata: {json.dumps(out, ensure_ascii=False)}\n\n"
             ping_counter = 0
         else:
