@@ -3490,6 +3490,74 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         logger.debug("[CHIME] save error: %s", _e)
 
 
+async def _exec_agent_for_director(agent: dict, task: str, user_id: int) -> str:
+    """Запускает python_code агента + генерирует AI-ответ от его имени.
+    Используется в _office_director_chat для delegate и multi_delegate.
+    Возвращает текст ответа агента.
+    """
+    import subprocess as _sp2, sys as _sys2, os as _os2
+
+    _asi_identity = (
+        "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
+        "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
+        "Ты ДЕЛАЕШЬ, а не просто советуешь. Отвечаешь кратко, без списков и заголовков."
+    )
+    _persona = (
+        agent.get('personality') or
+        f"Ты действуешь как {agent['name']} — {agent.get('specialization', 'специалист')}. "
+        f"{agent.get('description', '')} Отвечай от имени {agent['name']}."
+    )
+    script_context = ""
+    if (agent.get('python_code') or '').strip():
+        try:
+            _wrapped = _wrap_agent_code(agent['python_code'].strip())
+            _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os2.environ.get('PATH', '/usr/bin:/bin')}
+            if _sys2.platform != 'win32':
+                _exec_env['HOME'] = _os2.environ.get('HOME', '/tmp')
+            else:
+                for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR', 'COMSPEC',
+                             'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+                    if _wk in _os2.environ:
+                        _exec_env[_wk] = _os2.environ[_wk]
+            _api_raw = agent.get('user_api_keys', '') or ''
+            for _kl in _api_raw.splitlines():
+                _kl = _kl.strip()
+                if '=' in _kl and not _kl.startswith('#'):
+                    _dk, _, _dv = _kl.partition('=')
+                    _dv = _dv.strip()
+                    if 'PASS' in _dk.upper() or 'PASSWORD' in _dk.upper():
+                        _dv = _dv.replace(' ', '')
+                    _exec_env[_dk.strip()] = _dv
+
+            def _run_script():
+                try:
+                    r = _sp2.run(
+                        [_sys2.executable, '-c', _wrapped],
+                        capture_output=True, text=True, timeout=18, env=_exec_env,
+                    )
+                    return r.stdout[:2000].strip(), r.stderr[:400].strip()
+                except _sp2.TimeoutExpired:
+                    return '', 'timeout'
+                except Exception as _e2:
+                    return '', str(_e2)[:200]
+
+            loop2 = asyncio.get_event_loop()
+            stdout2, _stderr2 = await loop2.run_in_executor(None, _run_script)
+            if stdout2:
+                script_context = f"\n\n[Результат твоего скрипта/мониторинга]:\n{stdout2[:800]}"
+            elif _stderr2 and 'timeout' not in _stderr2:
+                logger.debug("[DIRECTOR-EXEC] script stderr for %s: %s", agent.get('name'), _stderr2[:150])
+        except Exception as _e3:
+            logger.debug("[DIRECTOR-EXEC] script exec error for %s: %s", agent.get('name'), _e3)
+
+    system_prompt = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_persona}{script_context}"
+    response = await _quick_ai_call_raw([
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": task},
+    ], max_tokens=600)
+    return response or "Задачу выполнил, но данных нет."
+
+
 # Слова-сигналы что пользователь хочет действие, а не разговор
 _DIRECTOR_TASK_RE = re.compile(
     r'провер|отправ|напиш|найди|сделай|покажи|получи|загрузи|скача|'
@@ -3583,10 +3651,12 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             f"Ты директор офиса ASI Biont. Твоя команда (с историей работы и интеграциями):\n{agents_block}\n\n"
             f"Пользователь написал: «{user_message}»{_ctx_hint}\n\n"
             "Варианты решения:\n"
-            "1. self — ответить самому как ASI (ПРЕДПОЧТИТЕЛЬНО: для вопросов, разговоров, анализа без живых данных)\n"
-            "2. use_cache — ответить из кэша якоря агента (если агент работал недавно И результат отвечает на вопрос)\n"
-            "3. delegate — делегировать агенту (ТОЛЬКО когда нужны ЖИВЫЕ данные через его интеграцию: проверить почту, получить заказы, мониторинг RSS и т.д. НЕ делегируй для разговора или если агент в cooldown)\n\n"
-            "ВАЖНО: По умолчанию выбирай 'self'. Делегируй только когда задача требует конкретной интеграции агента.\n\n"
+            "1. self — ответить самому как ASI (для разговора, советов, анализа без живых данных)\n"
+            "2. use_cache — ответить из кэша (агент работал недавно и результат подходит)\n"
+            "3. delegate — поручить ОДНОМУ агенту (нужны живые данные: почта, заказы, 1 RSS-лента)\n"
+            "4. multi_delegate — поручить НЕСКОЛЬКИМ агентам параллельно (нужны данные из разных источников: например RSS + почта + анализ)\n\n"
+            "ВАЖНО: Используй multi_delegate когда задача охватывает разные специализации агентов.\n"
+            "director_message в delegate/multi_delegate — это ПРЯМОЕ обращение к агенту в чате, как руководитель к сотруднику. Пиши живо: '404, глянь RSS — что нового по теме X?' НЕ пиши 'ASI поручает'.\n\n"
             "Ответь ТОЛЬКО JSON без ```:\n"
             '{"action": "self"}\n'
             "или\n"
@@ -3594,7 +3664,10 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             '"cache_note": "что использовать из кэша"}\n'
             "или\n"
             '{"action": "delegate", "agent_name": "точное имя", '
-            '"agent_task": "задача", "director_message": "сообщение пользователю"}'
+            '"agent_task": "задача в 1 предложение", "director_message": "прямое обращение к агенту в чате"}\n'
+            "или\n"
+            '{"action": "multi_delegate", "director_intro": "вступительное сообщение ASI в чат", '
+            '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение к агенту"}, ...]}'
         ),
     }], max_tokens=300)
 
@@ -3613,7 +3686,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     action = decision.get('action', 'self')
 
     # ── self: ASI отвечает сам → обычный поток ────────────────────────────────
-    if action == 'self' or (action not in ('delegate', 'use_cache')):
+    if action == 'self' or (action not in ('delegate', 'use_cache', 'multi_delegate')):
         return None
 
     agent_name = decision.get('agent_name', '')
@@ -3646,80 +3719,88 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         logger.info("[DIRECTOR] use_cache for %s (%s ago)", _agent['name'], age_str)
         return cache_response or f"{_agent['name']} проверял это {age_str} назад: {cached[:300]}"
 
-    # ── delegate: запускаем агента ─────────────────────────────────────────────
+    # ── multi_delegate: запускаем несколько агентов параллельно ──────────────
+    if action == 'multi_delegate':
+        tasks_cfg = decision.get('tasks') or []
+        director_intro = decision.get('director_intro', '')
+
+        # Сообщение-вступление от ASI в чат
+        if director_intro:
+            _save_interaction_for_director(user_id, director_intro)
+            await asyncio.sleep(0.05)
+
+        # Для каждой задачи: найти агента, written директорское обращение в чат
+        valid_tasks = []
+        for _t in tasks_cfg:
+            _tname = _t.get('agent_name', '')
+            _tagent = next(
+                (a for a in _agents if a['name'].lower() == _tname.lower()),
+                next((a for a in _agents if _tname.lower() in a['name'].lower()), None)
+            )
+            if not _tagent:
+                continue
+            _dm = _t.get('director_message', '')
+            if _dm:
+                # Сохраняем прямое обращение ASI к агенту как видимое сообщение в чате
+                _save_interaction_for_director(user_id, _dm)
+                await asyncio.sleep(0.05)
+            valid_tasks.append((_tagent, _t.get('agent_task') or user_message))
+
+        if not valid_tasks:
+            return None  # нет валидных агентов → обычный поток
+
+        # Запускаем агентов параллельно
+        _results = await asyncio.gather(
+            *[_exec_agent_for_director(ag, task, user_id) for ag, task in valid_tasks],
+            return_exceptions=True,
+        )
+
+        # Сохраняем ответ каждого агента в чат + якоря
+        agents_summary_parts = []
+        for (ag, task), resp in zip(valid_tasks, _results):
+            if isinstance(resp, Exception) or not resp:
+                resp = "Данных нет."
+            _ac = _json.dumps({
+                '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': ag.get('avatar_url', '')},
+                'text': resp,
+            }, ensure_ascii=False)
+            _save_interaction_for_director(user_id, _ac)
+            await asyncio.sleep(0.05)
+            if user_db_id:
+                _save_agent_delegation_anchor(
+                    user_db_id=user_db_id,
+                    agent_id=ag['id'],
+                    agent_name=ag['name'],
+                    task=task,
+                    result_summary=str(resp)[:400],
+                    cooldown_hours=2.0,
+                )
+            agents_summary_parts.append(f"{ag['name']}: {str(resp)[:500]}")
+
+        # ASI синтезирует всё
+        combined = "\n\n".join(agents_summary_parts)
+        final_response = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Пользователь спросил: «{user_message}»\n"
+                f"Твои агенты выполнили задачи и ответили:\n\n{combined[:1200]}\n\n"
+                "Синтезируй ключевые выводы для пользователя. Что важно, что требует внимания, "
+                "какой следующий шаг. 3-5 предложений. Говори от ASI Biont."
+            ),
+        }], max_tokens=500)
+        return final_response or "Команда отработала. Проверь ответы агентов выше."
+
+    # ── delegate: запускаем одного агента ─────────────────────────────────────
     agent_task = decision.get('agent_task') or user_message
     director_msg = decision.get('director_message', '')
 
-    # Шаг 2: сообщение директора в чат
+    # Шаг 2: прямое обращение ASI к агенту — видимое в чате
     if director_msg:
         _save_interaction_for_director(user_id, director_msg)
         await asyncio.sleep(0.1)
 
-    # Шаг 3: агент выполняет задачу
-    # Агент — это ASI с наложенной ролью/специализацией.
-    # Базовая идентичность ASI + поверх неё persona агента.
-    _asi_identity = (
-        "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
-        "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
-        "Ты ДЕЛАЕШЬ, а не просто советуешь. Отвечаешь кратко, без списков и заголовков."
-    )
-    _agent_persona = (
-        _agent.get('personality') or
-        f"Ты действуешь как {_agent['name']} — {_agent.get('specialization', 'специалист')}. "
-        f"{_agent.get('description', '')} Отвечай от имени {_agent['name']}."
-    )
-    agent_system = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_agent_persona}"
-    script_context = ""
-    if (_agent.get('python_code') or '').strip():
-        try:
-            import subprocess as _sp_dir, sys as _sys_dir, os as _os_dir
-            _wrapped = _wrap_agent_code(_agent['python_code'].strip())
-            # Строим окружение: системные пути + user_api_keys агента (со стриппингом пробелов из паролей)
-            _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os_dir.environ.get('PATH', '/usr/bin:/bin')}
-            if _sys_dir.platform != 'win32':
-                _exec_env['HOME'] = _os_dir.environ.get('HOME', '/tmp')
-            else:
-                for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR', 'COMSPEC', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
-                    if _wk in _os_dir.environ:
-                        _exec_env[_wk] = _os_dir.environ[_wk]
-            _api_raw = _agent.get('user_api_keys', '') or ''
-            for _kl in _api_raw.splitlines():
-                _kl = _kl.strip()
-                if '=' in _kl and not _kl.startswith('#'):
-                    _dk, _, _dv = _kl.partition('=')
-                    _dv = _dv.strip()
-                    if 'PASS' in _dk.upper() or 'PASSWORD' in _dk.upper():
-                        _dv = _dv.replace(' ', '')
-                    _exec_env[_dk.strip()] = _dv
-
-            def _run_script_with_env():
-                try:
-                    r = _sp_dir.run(
-                        [_sys_dir.executable, '-c', _wrapped],
-                        capture_output=True, text=True, timeout=18, env=_exec_env,
-                    )
-                    return r.stdout[:2000].strip(), r.stderr[:400].strip()
-                except _sp_dir.TimeoutExpired:
-                    return '', 'timeout'
-                except Exception as _e:
-                    return '', str(_e)[:200]
-
-            loop = asyncio.get_event_loop()
-            stdout, _stderr = await loop.run_in_executor(None, _run_script_with_env)
-            if stdout:
-                script_context = f"\n\n[Результат твоего скрипта/мониторинга]:\n{stdout[:800]}"
-            elif _stderr and 'timeout' not in _stderr:
-                logger.debug("[DIRECTOR] script stderr for %s: %s", _agent.get('name'), _stderr[:150])
-        except Exception as e:
-            logger.debug("[DIRECTOR] agent script exec error: %s", e)
-
-    agent_response = await _quick_ai_call_raw([
-        {"role": "system", "content": agent_system + script_context},
-        {"role": "user", "content": agent_task},
-    ], max_tokens=700)
-
-    if not agent_response:
-        agent_response = "Задачу выполнил, но результат пустой — возможно нет данных."
+    # Шаг 3: агент выполняет задачу через хелпер
+    agent_response = await _exec_agent_for_director(_agent, agent_task, user_id)
 
     # Шаг 4: сохраняем ответ агента в чат
     agent_content = _json.dumps({
@@ -3735,13 +3816,12 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     # Шаг 4б: сохраняем якорь делегирования (cooldown 2ч + кэш результата)
     if user_db_id:
-        result_summary = agent_response[:400]
         _save_agent_delegation_anchor(
             user_db_id=user_db_id,
             agent_id=_agent['id'],
             agent_name=_agent['name'],
             task=agent_task,
-            result_summary=result_summary,
+            result_summary=agent_response[:400],
             cooldown_hours=2.0,
         )
 
