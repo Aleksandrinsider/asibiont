@@ -3022,16 +3022,91 @@ def _save_interaction_for_director(telegram_id: int, content: str):
         logger.debug("[DIRECTOR] save interaction error: %s", e)
 
 
+def _get_agent_anchors(user_db_id: int, agent_id: int, hours: float = 4.0) -> list:
+    """Загружает свежие якоря делегирования для конкретного агента."""
+    try:
+        import datetime as _dt
+        import json as _json
+        from models import Session as _Db, Anchor as _Anch
+        _s = _Db()
+        try:
+            _since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=hours)
+            rows = (
+                _s.query(_Anch)
+                .filter(
+                    _Anch.user_id == user_db_id,
+                    _Anch.anchor_type == 'agent_delegation',
+                    _Anch.source == f'agent:{agent_id}',
+                    _Anch.created_at >= _since,
+                )
+                .order_by(_Anch.created_at.desc())
+                .limit(3)
+                .all()
+            )
+            result = []
+            for r in rows:
+                d = _json.loads(r.data) if r.data else {}
+                age_min = int(
+                    (_dt.datetime.now(_dt.timezone.utc) -
+                     r.created_at.replace(tzinfo=_dt.timezone.utc)).total_seconds() / 60
+                )
+                result.append({'topic': r.topic, 'data': d, 'age_min': age_min})
+            return result
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug("[DIRECTOR] load anchors error: %s", e)
+        return []
+
+
+def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: str,
+                                  task: str, result_summary: str, cooldown_hours: float = 2.0):
+    """Сохраняет якорь делегирования — ASI будет помнить что агент делал и что нашёл."""
+    try:
+        import datetime as _dt
+        import json as _json
+        from models import Session as _Db, Anchor as _Anch, AnchorPriority
+        _s = _Db()
+        try:
+            now = _dt.datetime.now(_dt.timezone.utc)
+            _s.add(_Anch(
+                user_id=user_db_id,
+                anchor_type='agent_delegation',
+                source=f'agent:{agent_id}',
+                topic=f'{agent_name}: {task[:120]}',
+                priority=AnchorPriority.LOW,
+                data=_json.dumps({
+                    'agent_name': agent_name,
+                    'agent_id': agent_id,
+                    'task': task[:300],
+                    'result_summary': result_summary[:500],
+                }, ensure_ascii=False),
+                triggered_at=now,
+                # expires через cooldown — после этого агент снова «свободен»
+                expires_at=now + _dt.timedelta(hours=cooldown_hours),
+                cooldown_hours=cooldown_hours,
+                batch_group='office',
+            ))
+            _s.commit()
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug("[DIRECTOR] save anchor error: %s", e)
+
+
 async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     """
-    ASI выступает директором офиса:
-    1. Смотрит на команду агентов → решает кому делегировать
-    2. Пишет в чат сообщение-делегирование (visible as Interaction)
-    3. Агент выполняет (с python_code если есть) и пишет ответ (visible)
-    4. ASI проверяет результат и пишет итог пользователю
-    Возвращает финальный ответ ASI, или None → обычный поток.
+    ASI — директор офиса с якорной памятью:
+    1. Загружает агентов + их якоря делегирования (что делали, cooldown)
+    2. ASI решает: делегировать свежему агенту, использовать кэш из якоря, или ответить сам
+    3. Если делегирует: агент работает (python_code) → пишет в чат → сохраняется якорь
+    4. ASI подводит итог с учётом результата
+
+    Якоря дают ASI память: «Кристина 2ч назад проверила почту, нашла 3 письма» →
+    ASI не запускает её снова, а отвечает из кэша. Cooldown 2ч — антиспам.
     """
     import json as _json
+    import datetime as _dt
 
     # Загружаем агентов пользователя
     try:
@@ -3046,32 +3121,70 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         logger.debug("[DIRECTOR] agents load error: %s", e)
         return None
 
-    agents_block = "\n".join(
-        f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:120]}"
-        for a in _agents
-    )
+    # Загружаем user_db_id один раз
+    try:
+        from models import Session as _Db, User as _User
+        _s = _Db()
+        try:
+            _u = _s.query(_User).filter_by(telegram_id=user_id).first()
+            user_db_id = _u.id if _u else None
+        finally:
+            _s.close()
+    except Exception:
+        user_db_id = None
 
-    # ── Шаг 1: ASI решает делегировать или нет ────────────────────────────────
+    # ── Строим контекст агентов с якорной памятью ─────────────────────────────
+    agents_context_lines = []
+    agent_anchor_map: dict[str, list] = {}  # agent_name → anchors
+
+    for a in _agents:
+        anchors = _get_agent_anchors(user_db_id, a['id']) if user_db_id else []
+        agent_anchor_map[a['name']] = anchors
+
+        if anchors:
+            last = anchors[0]
+            age_h = last['age_min'] // 60
+            age_m = last['age_min'] % 60
+            age_str = f"{age_h}ч {age_m}мин назад" if age_h else f"{age_m}мин назад"
+            cached_result = last['data'].get('result_summary', '')[:150]
+            agents_context_lines.append(
+                f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:80]}"
+                f"\n  [Последняя работа {age_str}: {last['topic']}"
+                + (f". Результат: {cached_result}" if cached_result else "")
+                + f". Cooldown ещё {max(0, round(2.0 - last['age_min']/60, 1))}ч]"
+            )
+        else:
+            agents_context_lines.append(
+                f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:80]}"
+                f"\n  [Не работал в последние 4ч — доступен]"
+            )
+
+    agents_block = "\n".join(agents_context_lines)
+
+    # ── Шаг 1: ASI принимает решение с учётом якорной памяти ──────────────────
     decision_raw = await _quick_ai_call_raw([{
         "role": "user",
         "content": (
-            f"Ты директор офиса ASI Biont. Твоя команда:\n{agents_block}\n\n"
+            f"Ты директор офиса ASI Biont. Твоя команда (с историей работы):\n{agents_block}\n\n"
             f"Пользователь написал: «{user_message}»\n\n"
-            "Решение: делегировать задачу агенту или ответить самому (ASI)?\n"
-            "Делегируй если задача явно входит в специализацию кого-то из агентов.\n"
+            "Варианты решения:\n"
+            "1. delegate — делегировать агенту (только если задача в его специализации И он не в cooldown)\n"
+            "2. use_cache — ответить из кэша якоря агента (если агент работал недавно и результат актуален)\n"
+            "3. self — ответить самому как ASI (если нет подходящего агента или вопрос общий)\n\n"
             "Ответь ТОЛЬКО JSON без ```:\n"
-            '{"delegate": true, "agent_name": "точное имя", '
-            '"agent_task": "конкретная задача для агента", '
-            '"director_message": "твоё сообщение пользователю — что делаешь"}\n'
+            '{"action": "delegate", "agent_name": "точное имя", '
+            '"agent_task": "задача", "director_message": "сообщение пользователю"}\n'
             "или\n"
-            '{"delegate": false}'
+            '{"action": "use_cache", "agent_name": "точное имя", '
+            '"cache_note": "что использовать из кэша"}\n'
+            "или\n"
+            '{"action": "self"}'
         ),
-    }], max_tokens=280)
+    }], max_tokens=300)
 
     if not decision_raw:
         return None
 
-    # Парсим JSON (DeepSeek иногда оборачивает в ```)
     _jstr = decision_raw
     _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw)
     if _jm:
@@ -3081,14 +3194,13 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     except Exception:
         return None
 
-    if not decision.get('delegate') or not decision.get('agent_name'):
-        return None  # ASI отвечает сам — обычный поток
+    action = decision.get('action', 'self')
 
-    agent_name = decision['agent_name']
-    agent_task = decision.get('agent_task') or user_message
-    director_msg = decision.get('director_message', '')
+    # ── self: ASI отвечает сам → обычный поток ────────────────────────────────
+    if action == 'self' or (action not in ('delegate', 'use_cache')):
+        return None
 
-    # Ищем агента по имени
+    agent_name = decision.get('agent_name', '')
     _agent = next(
         (a for a in _agents if a['name'].lower() == agent_name.lower()),
         next((a for a in _agents if agent_name.lower() in a['name'].lower()), None)
@@ -3096,18 +3208,42 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     if not _agent:
         return None
 
-    # ── Шаг 2: Сохраняем делегирование от ASI в чат ───────────────────────────
+    # ── use_cache: отвечаем из якорного кэша, не запускаем агента ─────────────
+    if action == 'use_cache':
+        anchors = agent_anchor_map.get(_agent['name'], [])
+        if not anchors:
+            return None  # нет кэша → обычный поток
+        last = anchors[0]
+        cached = last['data'].get('result_summary', '')
+        age_str = f"{last['age_min'] // 60}ч {last['age_min'] % 60}мин"
+        cache_response = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Пользователь спросил: «{user_message}»\n"
+                f"Агент {_agent['name']} работал {age_str} назад.\n"
+                f"Результат из кэша: {cached}\n\n"
+                "Ответь пользователю опираясь на этот кэш. Укажи что данные из недавней сессии агента. "
+                "Если кэш не отвечает на вопрос — скажи что скоро агент обновит данные. "
+                "Говори от ASI Biont."
+            ),
+        }], max_tokens=400)
+        logger.info("[DIRECTOR] use_cache for %s (%s ago)", _agent['name'], age_str)
+        return cache_response or f"{_agent['name']} проверял это {age_str} назад: {cached[:300]}"
+
+    # ── delegate: запускаем агента ─────────────────────────────────────────────
+    agent_task = decision.get('agent_task') or user_message
+    director_msg = decision.get('director_message', '')
+
+    # Шаг 2: сообщение директора в чат
     if director_msg:
         _save_interaction_for_director(user_id, director_msg)
-        await asyncio.sleep(0.1)  # чуть подождём, чтобы UI успел подхватить
+        await asyncio.sleep(0.1)
 
-    # ── Шаг 3: Агент выполняет задачу ─────────────────────────────────────────
+    # Шаг 3: агент выполняет задачу
     agent_system = (
         _agent.get('personality') or
         f"Ты — {_agent['name']}. {_agent.get('description', '')} Отвечай от своего имени."
     )
-
-    # Если есть python_code — запускаем и добавляем результат в контекст
     script_context = ""
     if (_agent.get('python_code') or '').strip():
         try:
@@ -3116,7 +3252,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             loop = asyncio.get_event_loop()
             stdout, _ = await loop.run_in_executor(None, _exec_agent_script_sync, _wrapped)
             if stdout:
-                script_context = f"\n\n[Результат твоего мониторинга/скрипта]:\n{stdout[:800]}"
+                script_context = f"\n\n[Результат твоего скрипта/мониторинга]:\n{stdout[:800]}"
         except Exception as e:
             logger.debug("[DIRECTOR] agent script exec error: %s", e)
 
@@ -3128,7 +3264,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     if not agent_response:
         agent_response = "Задачу выполнил, но результат пустой — возможно нет данных."
 
-    # ── Шаг 4: Сохраняем ответ агента в чат (с именем/аватаром через JSON) ───
+    # Шаг 4: сохраняем ответ агента в чат
     agent_content = _json.dumps({
         '__agent': {
             'name': _agent.get('name', agent_name),
@@ -3140,17 +3276,29 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     _save_interaction_for_director(user_id, agent_content)
     await asyncio.sleep(0.1)
 
-    # ── Шаг 5: ASI проверяет результат и пишет итог ───────────────────────────
+    # Шаг 4б: сохраняем якорь делегирования (cooldown 2ч + кэш результата)
+    if user_db_id:
+        result_summary = agent_response[:400]
+        _save_agent_delegation_anchor(
+            user_db_id=user_db_id,
+            agent_id=_agent['id'],
+            agent_name=_agent['name'],
+            task=agent_task,
+            result_summary=result_summary,
+            cooldown_hours=2.0,
+        )
+
+    # Шаг 5: ASI подводит итог
     final_response = await _quick_ai_call_raw([{
         "role": "user",
         "content": (
             f"Пользователь спросил: «{user_message}»\n"
             f"Ты делегировал задачу агенту {_agent['name']}.\n"
             f"Агент ответил: «{agent_response[:700]}»\n\n"
-            "Дай краткий итог пользователю. Если агент справился — резюмируй ключевые результаты. "
-            "Если нужны дальнейшие действия — предложи. Говори от ASI Biont."
+            "Дай краткий итог пользователю. Резюмируй ключевые результаты. "
+            "Если нужны следующие шаги — предложи. Говори от ASI Biont."
         ),
-    }], max_tokens=450)
+    }], max_tokens=400)
 
     if not final_response:
         final_response = f"Итог: {_agent['name']} выполнил задачу."
