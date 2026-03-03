@@ -2942,7 +2942,7 @@ if ACTION == 'send_email':
 else:
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
-        mail.login(USER, PASS)
+        mail.login(USER, PASS.replace(' ', ''))
         mail.select('inbox')
         since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
         _, data = mail.search(None, 'SINCE ' + since)
@@ -3009,7 +3009,7 @@ USER = os.environ.get('YANDEX_USER', '')
 PASS = os.environ.get('YANDEX_PASS', '')
 try:
     mail = imaplib.IMAP4_SSL('imap.yandex.ru')
-    mail.login(USER, PASS)
+    mail.login(USER, PASS.replace(' ', ''))
     mail.select('inbox')
     since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
     _, data = mail.search(None, 'SINCE ' + since)
@@ -3076,7 +3076,7 @@ USER = os.environ.get('MAILRU_USER', '')
 PASS = os.environ.get('MAILRU_PASS', '')
 try:
     mail = imaplib.IMAP4_SSL('imap.mail.ru')
-    mail.login(USER, PASS)
+    mail.login(USER, PASS.replace(' ', ''))
     mail.select('inbox')
     since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
     _, data = mail.search(None, 'SINCE ' + since)
