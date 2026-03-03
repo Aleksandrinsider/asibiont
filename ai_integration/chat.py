@@ -1364,18 +1364,18 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         if selected_type == 'task_help':
             mode = 'task_assist'
             max_tokens = 1500
-            max_iterations = 2
+            max_iterations = 3
             instruction = _t('pro_task_help', lang)
         elif selected_type in _RESEARCH_TYPES:
             mode = 'proactive'
             max_tokens = 1400
-            max_iterations = 2
+            max_iterations = 3
             # Сначала — обязательный поиск данных, потом — правила формата
             instruction = _t('pro_research_first', lang) + _t('pro_instruction', lang)
         else:
             mode = 'proactive'
             max_tokens = 1200
-            max_iterations = 2
+            max_iterations = 3
             instruction = _t('pro_instruction', lang)
 
         # ── Блок активных агентов: передаём в extra_context ──
