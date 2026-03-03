@@ -4927,7 +4927,7 @@ except Exception as e:
             if (!form) return;
             form.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:10px;">
-                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:2px;">Новый агент</div>
+                    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:2px;">${t('mpa-title')}</div>
 
                     <!-- Аватар -->
                     <div style="display:flex;align-items:center;gap:12px;">
@@ -4935,24 +4935,24 @@ except Exception as e:
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="#9CA3AF"><path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2Zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4Z"/></svg>
                         </div>
                         <div>
-                            <button type="button" onclick="document.getElementById('mpa-avatar-file').click()" class="mp-action-btn" style="margin-bottom:3px;">Загрузить фото</button>
+                            <button type="button" onclick="document.getElementById('mpa-avatar-file').click()" class="mp-action-btn" style="margin-bottom:3px;">${t('mpa-upload-photo')}</button>
 
                         </div>
                         <input id="mpa-avatar-file" type="file" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;" onchange="mpPreviewAvatar(this)">
                     </div>
 
-                    <input id="mpa-name" type="text" placeholder="Имя агента" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
-                    <input id="mpa-job-title" type="text" placeholder="Должность / роль (например: Финансовый аналитик, Юрист-консультант)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
-                    <input id="mpa-slug" type="text" placeholder="slug (латиница: my-agent)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
-                    <input id="mpa-spec" type="text" placeholder="Специализация (например: финансы, маркетинг, разработка, юридические вопросы)" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
-                    <textarea id="mpa-desc" placeholder="Короткое описание для карточки (2-3 предложения)" rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
-                    <textarea id="mpa-personality" placeholder="Личность агента — характер, стиль, как он общается, о чём любит говорить..." rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
+                    <input id="mpa-name" type="text" placeholder="${t('mpa-name-ph')}" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <input id="mpa-job-title" type="text" placeholder="${t('mpa-jobtitle-ph')}" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <input id="mpa-slug" type="text" placeholder="${t('mpa-slug-ph')}" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <input id="mpa-spec" type="text" placeholder="${t('mpa-spec-ph')}" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
+                    <textarea id="mpa-desc" placeholder="${t('mpa-desc-ph')}" rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
+                    <textarea id="mpa-personality" placeholder="${t('mpa-personality-ph')}" rows="6" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:vertical;color:#374151;min-height:120px;"></textarea>
                     <!-- Приватность -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                             <div>
-                                <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:3px;">Приватный агент</div>
-                                <div style="font-size:12px;color:#6B7280;">Только для вас. Не виден в маркетплейсе и арене — идеально для личных агентов с вашими API&nbsp;ключами.</div>
+                                <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:3px;">${t('mpa-private-title')}</div>
+                                <div style="font-size:12px;color:#6B7280;">${t('mpa-private-desc')}</div>
                             </div>
                             <input id="mpa-private" type="checkbox" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;" onchange="document.getElementById('mpa-price-block').style.display=this.checked?'none':'block'">
                         </div>
@@ -4960,10 +4960,10 @@ except Exception as e:
 
                     <!-- Быстрая настройка: выбор сервиса -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:4px;">Подключить сервис</div>
-                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Выберите сервис, введите данные — агент начнёт получать реальные данные перед каждым ответом.</div>
+                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:4px;">${t('mpa-svc-title')}</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">${t('mpa-svc-desc')}</div>
                         <select id="mpa-svc-select" onchange="mpApplyTemplate(this.value)" style="width:100%;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
-                            <option value="" style="font-weight:600;">Выбрать сервис</option>
+                            <option value="" style="font-weight:600;">${t('mpa-svc-ph')}</option>
                             <option value="gmail">Gmail</option>
                             <option value="yandex">Яндекс.Почта</option>
                             <option value="mailru">Mail.ru</option>
@@ -5013,17 +5013,17 @@ except Exception as e:
 
                     <!-- Переменные окружения -->
                     <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#374151;margin-bottom:4px;">Переменные окружения</div>
-                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Ключи добавляются автоматически при нажатии «Добавить сервис». Несколько сервисов — просто выбирайте по очереди. Или добавьте вручную: <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=значение</code></div>
-                        <textarea id="mpa-apikeys" placeholder="Заполнятся автоматически после выбора сервиса выше" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;" oninput="mpUpdateServiceHint()"></textarea>
+                        <div style="font-size:13px;color:#374151;margin-bottom:4px;">${t('mpa-env-title')}</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">${t('mpa-env-desc')} <code style="background:#F3F4F6;padding:1px 4px;border-radius:3px;">KEY=value</code></div>
+                        <textarea id="mpa-apikeys" placeholder="${t('mpa-env-ph')}" rows="3" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;" oninput="mpUpdateServiceHint()"></textarea>
                     </div>
 
                     <!-- Генерация кода — всегда видимый блок -->
                     <div style="background:#F6F8FA;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:2px;">Подключить данные</div>
-                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Выбрали сервис выше? Нажмите кнопку — подставим готовый код. Для нестандартной задачи — опишите её и сгенерируем через ИИ.</div>
-                        <textarea id="mpa-code-desc" placeholder="Необязательно: опишите задачу для ИИ-генерации, например: читай RSS и присылай топ-3 новости" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:white;"></textarea>
-                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Подставить шаблон / сгенерировать код</button>
+                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:2px;">${t('mpa-code-section-title')}</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">${t('mpa-code-section-desc')}</div>
+                        <textarea id="mpa-code-desc" placeholder="${t('mpa-code-task-ph')}" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:white;"></textarea>
+                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">${t('mp-gen-btn')}</button>
                         <div id="mpa-gen-status" style="font-size:12px;color:#6B7280;margin-top:4px;display:none;"></div>
                     </div>
 
@@ -5031,17 +5031,17 @@ except Exception as e:
                     <details id="mpa-advanced-details" style="background:white;border:1px solid #D1D9E0;border-radius:8px;overflow:hidden;" ontoggle="const a=this.querySelector('.mpa-adv-arrow');if(a)a.style.transform=this.open?'rotate(0deg)':'rotate(-90deg)';">
                         <summary style="padding:10px 12px;cursor:pointer;font-size:13px;color:#6B7280;font-weight:500;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
                             <svg class="mpa-adv-arrow" width="12" height="12" viewBox="0 0 12 12" style="transform:rotate(-90deg);transition:transform 0.2s;flex-shrink:0;"><path d="M2 4l4 4 4-4" stroke="#9CA3AF" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            Просмотреть / редактировать код вручную
+                            ${t('mpa-advanced-label')}
                         </summary>
                         <div style="padding:0 12px 12px 12px;border-top:1px solid #F3F4F6;">
                             <div style="padding-top:8px;">
-                                <div style="font-size:12px;color:#6B7280;margin-bottom:4px;">Код агента:</div>
-                                <textarea id="mpa-pycode" placeholder="# Код появится здесь после нажатия кнопки выше" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                                <div style="font-size:12px;color:#6B7280;margin-bottom:4px;">${t('mpa-code-label')}</div>
+                                <textarea id="mpa-pycode" placeholder="${t('mpa-pycode-ph')}" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                                 <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
-                                <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Проверить код</button>
+                                <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">${t('mp-test-btn')}</button>
                                 <button type="button" onclick="mpCopyAgentCode(this)" class="mp-action-btn" style="display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">
                                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1.5" stroke="#374151" stroke-width="1.5"/><path d="M4 11H3a1.5 1.5 0 0 1-1.5-1.5V3A1.5 1.5 0 0 1 3 1.5h6.5A1.5 1.5 0 0 1 11 3v1" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/></svg>
-                                    Скопировать код
+                                    ${t('mpa-copy-btn')}
                                 </button>
                                 </div>
                                 <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:12px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
@@ -5051,27 +5051,27 @@ except Exception as e:
 
                     <!-- Цена — визуально понятно -->
                     <div id="mpa-price-block" style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#374151;margin-bottom:8px;">Монетизация</div>
+                        <div style="font-size:13px;color:#374151;margin-bottom:8px;">${t('mpa-price-title')}</div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <input id="mpa-price" type="number" min="1" max="9999" value="10" style="width:60px;padding:6px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;text-align:center;">
-                                <span style="font-size:12px;color:#6B7280;">токенов за сообщение</span>
+                                <span style="font-size:12px;color:#6B7280;">${t('mpa-tokens-per-msg')}</span>
                             </div>
                         </div>
-                        <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого сообщения агента</div>
+                        <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">${t('mpa-royalty')}</div>
                     </div>
 
-                    <button onclick="mpSubmitAgent()" id="mpa-submit-btn" class="mp-action-btn" style="padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сохранить агента</button>
+                    <button onclick="mpSubmitAgent()" id="mpa-submit-btn" class="mp-action-btn" style="padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">${t('mpa-submit')}</button>
 
                 </div>`;
         }
 
         function mpCopyAgentCode(btn) {
             const code = document.getElementById('mpa-pycode')?.value || '';
-            if (!code.trim()) { mpShowStatus('Код пустой — нечего копировать', '#FEF2F2', '#DC2626'); return; }
+            if (!code.trim()) { mpShowStatus(t('mpa-err-copy-empty'), '#FEF2F2', '#DC2626'); return; }
             navigator.clipboard.writeText(code).then(() => {
                 const orig = btn.innerHTML;
-                btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Скопировано!';
+                btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-7" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + t('mpa-copied');
                 btn.style.color = '#16A34A';
                 setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
             }).catch(() => {
@@ -5081,14 +5081,14 @@ except Exception as e:
                 document.body.appendChild(ta); ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
-                mpShowStatus('Код скопирован', '#F0FDF4', '#16A34A');
+                mpShowStatus(t('mpa-copied'), '#F0FDF4', '#16A34A');
             });
         }
 
         function mpPreviewAvatar(input) {
             if (!input.files || !input.files[0]) return;
             const file = input.files[0];
-            if (file.size > 2 * 1024 * 1024) { mpShowStatus('Файл слишком большой (максимум 2 МБ)', '#FEF2F2', '#DC2626'); return; }
+            if (file.size > 2 * 1024 * 1024) { mpShowStatus(t('mpa-err-file-size'), '#FEF2F2', '#DC2626'); return; }
             const reader = new FileReader();
             reader.onload = function(e) {
                 const preview = document.getElementById('mpa-avatar-preview');
@@ -5120,11 +5120,11 @@ except Exception as e:
                 python_code: _v('mpa-pycode'),
             };
             if (_mpEditAgentId) data.id = _mpEditAgentId;
-            if (!data.name) { mpShowStatus('Заполните имя агента', '#FEF2F2', '#DC2626'); return; }
-            if (!data.personality) { mpShowStatus('Заполните личность агента', '#FEF2F2', '#DC2626'); return; }
+            if (!data.name) { mpShowStatus(t('mpa-err-name'), '#FEF2F2', '#DC2626'); return; }
+            if (!data.personality) { mpShowStatus(t('mpa-err-personality'), '#FEF2F2', '#DC2626'); return; }
             // Предупреждение: ключи без кода — агент не сможет использовать интеграцию
             if (data.user_api_keys.trim() && !data.python_code.trim()) {
-                const ok = confirm('⚠️ Вы добавили ключи интеграции, но не сгенерировали код.\n\nБез кода агент не сможет получать данные из подключённого сервиса.\n\nНажмите «Отмена» → «Подставить шаблон / сгенерировать код», или «ОК» чтобы сохранить без кода (можно добавить позже).');
+                const ok = confirm('⚠️ ' + t('mpa-warn-keys-no-code'));
                 if (!ok) return;
             }
             try {
@@ -14257,6 +14257,26 @@ except Exception as e:
       'mp-template-hint':'Готовый шаблон подставлен — проверьте переменные и при необходимости отредактируйте',
       'mp-test-no-code':'Нет кода — сначала сгенерируйте или вставьте код','mp-test-running':'Запускаем...',
       'mp-test-btn':'Проверить код','mp-test-conn-err':'Ошибка соединения',
+      'mpa-title':'Новый агент','mpa-upload-photo':'Загрузить фото',
+      'mpa-name-ph':'Имя агента','mpa-jobtitle-ph':'Должность / роль (например: Финансовый аналитик, Юрист-консультант)',
+      'mpa-slug-ph':'slug (латиница: my-agent)','mpa-spec-ph':'Специализация (например: финансы, маркетинг, разработка)',
+      'mpa-desc-ph':'Короткое описание для карточки (2-3 предложения)','mpa-personality-ph':'Личность агента — характер, стиль, как он общается, о чём любит говорить...',
+      'mpa-private-title':'Приватный агент','mpa-private-desc':'Только для вас. Не виден в маркетплейсе и арене — идеально для личных агентов с вашими API ключами.',
+      'mpa-svc-title':'Подключить сервис','mpa-svc-desc':'Выберите сервис, введите данные — агент начнёт получать реальные данные перед каждым ответом.',
+      'mpa-svc-ph':'Выбрать сервис',
+      'mpa-env-title':'Переменные окружения','mpa-env-desc':'Ключи добавляются автоматически. Несколько сервисов — выбирайте по очереди. Или вручную:',
+      'mpa-env-ph':'Заполнятся автоматически после выбора сервиса выше',
+      'mpa-code-section-title':'Подключить данные','mpa-code-section-desc':'Выбрали сервис выше? Нажмите кнопку — подставим готовый код. Для нестандартной задачи — опишите её и сгенерируем через ИИ.',
+      'mpa-code-task-ph':'Необязательно: опишите задачу для ИИ-генерации, например: читай RSS и присылай топ-3 новости',
+      'mpa-advanced-label':'Просмотреть / редактировать код вручную','mpa-code-label':'Код агента:',
+      'mpa-pycode-ph':'# Код появится здесь после нажатия кнопки выше',
+      'mpa-copy-btn':'Скопировать код','mpa-copied':'Скопировано!',
+      'mpa-price-title':'Монетизация','mpa-tokens-per-msg':'токенов за сообщение','mpa-royalty':'Вы получаете 70% от каждого сообщения агента',
+      'mpa-submit':'Сохранить агента',
+      'mpa-err-name':'Заполните имя агента','mpa-err-personality':'Заполните личность агента',
+      'mpa-err-file-size':'Файл слишком большой (максимум 2 МБ)',
+      'mpa-warn-keys-no-code':'Вы добавили ключи интеграции, но не сгенерировали код.\n\nБез кода агент не сможет получать данные из подключённого сервиса.\n\nНажмите «Отмена» → «Подставить шаблон / сгенерировать код», или «ОК» чтобы сохранить без кода (можно добавить позже).',
+      'mpa-err-copy-empty':'Код пустой — нечего копировать',
       'in-time':'через','days-short':'дн.','hours-short':'ч.','minutes-short':'мин.','ago':'назад',
       'status-text':'Статус:','to-label':'Кому:','from-label':'От:',
       'no-incoming-deleg':'Нет входящих делегирований','no-outgoing-deleg':'Нет исходящих делегирований',
@@ -14493,6 +14513,26 @@ except Exception as e:
       'mp-template-hint':'Template applied — check variables and edit if needed',
       'mp-test-no-code':'No code — first generate or paste code','mp-test-running':'Running...',
       'mp-test-btn':'Test code','mp-test-conn-err':'Connection error',
+      'mpa-title':'New agent','mpa-upload-photo':'Upload photo',
+      'mpa-name-ph':'Agent name','mpa-jobtitle-ph':'Job title / role (e.g. Financial analyst, Legal advisor)',
+      'mpa-slug-ph':'slug (latin: my-agent)','mpa-spec-ph':'Specialization (e.g. finance, marketing, development)',
+      'mpa-desc-ph':'Short description for the card (2-3 sentences)','mpa-personality-ph':'Agent personality — character, style, communication, favorite topics...',
+      'mpa-private-title':'Private agent','mpa-private-desc':'Only for you. Not visible in marketplace or arena — ideal for personal agents with your own API keys.',
+      'mpa-svc-title':'Connect service','mpa-svc-desc':'Select a service, enter credentials — the agent will start receiving live data before each response.',
+      'mpa-svc-ph':'Choose service',
+      'mpa-env-title':'Environment variables','mpa-env-desc':'Keys are added automatically. Add multiple services one by one. Or manually:',
+      'mpa-env-ph':'Auto-filled after selecting service above',
+      'mpa-code-section-title':'Connect data','mpa-code-section-desc':'Selected a service? Click the button to apply the template. For custom tasks — describe it and we will generate via AI.',
+      'mpa-code-task-ph':'Optional: describe task for AI generation, e.g. read RSS and send top 3 news',
+      'mpa-advanced-label':'View / edit code manually','mpa-code-label':'Agent code:',
+      'mpa-pycode-ph':'# Code will appear here after clicking the button above',
+      'mpa-copy-btn':'Copy code','mpa-copied':'Copied!',
+      'mpa-price-title':'Monetization','mpa-tokens-per-msg':'tokens per message','mpa-royalty':'You earn 70% from each agent message',
+      'mpa-submit':'Save agent',
+      'mpa-err-name':'Enter agent name','mpa-err-personality':'Enter agent personality',
+      'mpa-err-file-size':'File too large (max 2 MB)',
+      'mpa-warn-keys-no-code':'You added integration keys but have not generated code.\n\nWithout code the agent cannot fetch data from the connected service.\n\nClick Cancel → Apply template / generate code, or OK to save without code (can be added later).',
+      'mpa-err-copy-empty':'Code is empty — nothing to copy',
       'in-time':'in','days-short':'d','hours-short':'h','minutes-short':'min','ago':'ago',
       'status-text':'Status:','to-label':'To:','from-label':'From:',
       'no-incoming-deleg':'No incoming delegations','no-outgoing-deleg':'No outgoing delegations',
