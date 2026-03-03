@@ -9766,11 +9766,8 @@ async def api_marketplace_publish_agent_handler(request):
                             if isinstance(_node, _ast.Import):
                                 for _alias in _node.names:
                                     _mod = _alias.name.split('.')[0]
-                                    if _mod in _FORBIDDEN_MODULES or _mod == 'os':
-                                        # os разрешён только для os.environ
-                                        pass  # проверим атрибуты ниже
-                                    else:
-                                        pass
+                                    if _mod in _FORBIDDEN_MODULES:
+                                        _AST_ERRORS.append(f'import {_mod}')
                             if isinstance(_node, _ast.ImportFrom) and _node.module:
                                 _mod = _node.module.split('.')[0]
                                 if _mod in _FORBIDDEN_MODULES:
