@@ -3167,7 +3167,7 @@ def _rss_title(item):
     if not m:
         return '(нет)'
     raw = m.group(1).strip()
-    cdata = re.match(r'<!\[CDATA\[(.*?)\]\]>', raw, re.DOTALL)
+    cdata = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw, re.DOTALL)
     return html.unescape((cdata.group(1) if cdata else raw).strip() or '(нет)')
 try:
     if not URL:
@@ -3183,10 +3183,10 @@ try:
             print('Последние новости:')
             for item in items:
                 t = _rss_title(item)
-                lm = re.search(r'<link>\s*(.*?)\s*</link>', item, re.DOTALL)
+                lm = re.search(r'<link>\\s*(.*?)\\s*</link>', item, re.DOTALL)
                 if lm:
                     raw_l = lm.group(1).strip()
-                    cdata_l = re.match(r'<!\[CDATA\[(.*?)\]\]>', raw_l, re.DOTALL)
+                    cdata_l = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw_l, re.DOTALL)
                     l = (cdata_l.group(1) if cdata_l else raw_l).strip().split()[0]
                 else:
                     l = ''
