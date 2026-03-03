@@ -4808,6 +4808,7 @@ except Exception as e:
             set('mpa-spec', agent.specialization);
             set('mpa-desc', agent.description);
             set('mpa-personality', agent.personality);
+            set('mpa-search-scope', agent.search_scope);
             set('mpa-price', agent.price_per_message);
             set('mpa-apikeys', agent.user_api_keys);
             mpUpdateServiceHint();
@@ -5136,6 +5137,7 @@ except Exception as e:
                 specialization: _v('mpa-spec').trim(),
                 description: _v('mpa-desc').trim(),
                 personality: _v('mpa-personality').trim(),
+                search_scope: _v('mpa-search-scope').trim(),
                 price_per_message: parseInt(_v('mpa-price')) || 10,
                 avatar_data_url: avatarDataUrl,
                 user_api_keys: _v('mpa-apikeys'),
@@ -14319,6 +14321,9 @@ except Exception as e:
       'mpa-name-ph':'Имя агента','mpa-jobtitle-ph':'Должность / роль (например: Финансовый аналитик, Юрист-консультант)',
       'mpa-slug-ph':'slug (латиница: my-agent)','mpa-spec-ph':'Специализация (например: финансы, маркетинг, разработка)',
       'mpa-desc-ph':'Короткое описание для карточки (2-3 предложения)','mpa-personality-ph':'Личность агента — характер, стиль, как он общается, о чём любит говорить...',
+      'mpa-search-scope-title':'Область поиска в интернете',
+      'mpa-search-scope-desc':'Что агент должен искать приоритетно при DDG-поиске. Оставьте пустым — агент будет искать по любой теме.',
+      'mpa-search-scope-ph':'Например: крипта, Bitcoin, DeFi новости',
       'mpa-private-title':'Приватный агент','mpa-private-desc':'Только для вас. Не виден в маркетплейсе и арене — идеально для личных агентов с вашими API ключами.',
       'mpa-svc-title':'Подключить сервис','mpa-svc-desc':'Выберите сервис, введите данные — агент начнёт получать реальные данные перед каждым ответом.',
       'mpa-svc-ph':'Выбрать сервис',
@@ -14575,6 +14580,9 @@ except Exception as e:
       'mpa-name-ph':'Agent name','mpa-jobtitle-ph':'Job title / role (e.g. Financial analyst, Legal advisor)',
       'mpa-slug-ph':'slug (latin: my-agent)','mpa-spec-ph':'Specialization (e.g. finance, marketing, development)',
       'mpa-desc-ph':'Short description for the card (2-3 sentences)','mpa-personality-ph':'Agent personality — character, style, communication, favorite topics...',
+      'mpa-search-scope-title':'Internet search scope',
+      'mpa-search-scope-desc':'Topics the agent should prioritise when searching. Leave empty to search any topic.',
+      'mpa-search-scope-ph':'E.g.: crypto, Bitcoin price, DeFi news',
       'mpa-private-title':'Private agent','mpa-private-desc':'Only for you. Not visible in marketplace or arena — ideal for personal agents with your own API keys.',
       'mpa-svc-title':'Connect service','mpa-svc-desc':'Select a service, enter credentials — the agent will start receiving live data before each response.',
       'mpa-svc-ph':'Choose service',

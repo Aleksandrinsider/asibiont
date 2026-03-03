@@ -461,6 +461,14 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] job_title add skipped: {e}")
+        if 'search_scope' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN search_scope TEXT"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.search_scope")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] search_scope add skipped: {e}")
 
 
 def _migrate_arena(session, inspector):

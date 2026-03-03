@@ -9867,6 +9867,7 @@ async def api_marketplace_publish_agent_handler(request):
             agent.trial_messages = 0  # пробные сообщения отключены
             agent.is_adult = bool(data.get('is_adult', False))
             agent.is_private = bool(data.get('is_private', False))
+            agent.search_scope = (data.get('search_scope') or '').strip()[:500]
             # Новый агент создаётся в статусе 'paused' — активирует пользователь кнопкой «Запустить в чат»
             # При редактировании существующего агента статус не меняем
             if not agent_id:
@@ -10154,6 +10155,7 @@ async def api_marketplace_my_handler(request):
                              'is_private': bool(a.is_private),
                              'user_api_keys': (a.user_api_keys or '') if a.author_id == user_obj.id else '',
                              'python_code': (a.python_code or '') if a.author_id == user_obj.id else '',
+                             'search_scope': (a.search_scope or '') if a.author_id == user_obj.id else '',
                              'is_subscribed': _is_subscribed(a)} for a in agents],
                 'scripts': [],
             })
@@ -10252,10 +10254,21 @@ async def api_agent_chat_handler(request):
             session_db.commit()
 
             # Capture values before session closes
-            agent_personality = agent.personality or f'Ты полезный AI-ассистент по имени {agent.name}.'
+            _agent_personality_raw = agent.personality or f'Ты полезный AI-ассистент по имени {agent.name}.'
+            _agent_search_scope = (agent.search_scope or '').strip()
             user_balance = user_obj.token_balance or 0
         finally:
             session_db.close()
+
+        # Inject search_scope hint into system prompt if configured
+        if _agent_search_scope:
+            agent_personality = (
+                _agent_personality_raw +
+                f"\n\nКогда используешь поиск в интернете — приоритизируй эти темы и источники: {_agent_search_scope}."
+                f" При web-поиске формулируй запросы вокруг этих областей, если тема запроса не указана явно."
+            )
+        else:
+            agent_personality = _agent_personality_raw
 
         # ─── DeepSeek call ───────────────────────────────────────────
         import aiohttp as _aio

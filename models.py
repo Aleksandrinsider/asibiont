@@ -858,6 +858,9 @@ class UserAgent(Base):
     # Python-код, выполняемый агентом перед генерацией ответа (для получения данных)
     python_code = Column(Text)                            # Пользовательский Python-скрипт (stdout → контекст ИИ)
 
+    # Область поиска в интернете (DDG) — приоритетные темы для web_search
+    search_scope = Column(Text)                           # Напр. «крипта, DeFi, новости биткоина»
+
     # Монетизация
     price_per_message = Column(Integer, default=5)        # Токенов за сообщение
     trial_messages = Column(Integer, default=3)           # Бесплатных сообщений для новых

@@ -249,6 +249,7 @@ def _load_marketplace_agents() -> list:
                     '_is_marketplace': True,
                     'author_username': (u.username or '') if u else '',
                     'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
+                    'search_scope': (a.search_scope or '').strip() if hasattr(a, 'search_scope') else '',
                 })
             return result
         finally:
