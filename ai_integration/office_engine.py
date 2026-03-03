@@ -19,6 +19,7 @@ Living Office Engine — агенты живут своей жизнью.
 import asyncio
 import json
 import logging
+import os
 import random
 import subprocess
 import sys
@@ -64,23 +65,49 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
 
 # ── Изолированный запуск скрипта ─────────────────────────────────────────────
 
-def _exec_agent_script_sync(code: str) -> tuple:
+def _exec_agent_script_sync(code: str, env: dict | None = None) -> tuple:
     """Запускает python_code агента в отдельном subprocess (sync).
     Возвращает (stdout: str, stderr: str).
     Безопасно: изолировано от серверного процесса.
+    env — словарь переменных окружения (user_api_keys). Если None — наследует ОС.
     """
     try:
-        result = subprocess.run(
-            [sys.executable, '-c', code],
-            capture_output=True,
-            text=True,
-            timeout=SCRIPT_TIMEOUT_SEC,
-        )
+        kwargs: dict = dict(capture_output=True, text=True, timeout=SCRIPT_TIMEOUT_SEC)
+        if env is not None:
+            kwargs['env'] = env
+        result = subprocess.run([sys.executable, '-c', code], **kwargs)
         return result.stdout[:2000].strip(), result.stderr[:400].strip()
     except subprocess.TimeoutExpired:
         return '', 'timeout'
     except Exception as e:
         return '', str(e)[:200]
+
+
+def _build_agent_env(user_api_keys: str) -> dict:
+    """Строит безопасное окружение subprocess: OS-пути + user_api_keys.
+    Пробелы из App Passwords убираются автоматически.
+    """
+    env = {
+        'PYTHONIOENCODING': 'utf-8',
+        'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
+    }
+    if sys.platform != 'win32':
+        env['HOME'] = os.environ.get('HOME', '/tmp')
+    else:
+        for wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR',
+                   'COMSPEC', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+            if wk in os.environ:
+                env[wk] = os.environ[wk]
+    for line in (user_api_keys or '').splitlines():
+        line = line.strip()
+        if '=' in line and not line.startswith('#'):
+            k, _, v = line.partition('=')
+            v = v.strip()
+            # Gmail App Passwords и другие пароли имеют пробелы между группами
+            if 'PASS' in k.upper() or 'PASSWORD' in k.upper():
+                v = v.replace(' ', '')
+            env[k.strip()] = v
+    return env
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -151,7 +178,9 @@ class OfficeEngine:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _run_one_agent_script(self, agent, user):
-        """Выполняет скрипт одного агента, создаёт якорь если есть данные."""
+        """Выполняет скрипт одного агента, создаёт якорь если есть данные.
+        После интересного результата — ASI проактивно реагирует в чат.
+        """
         py_code = (agent.python_code or '').strip()
         if not py_code:
             return
@@ -160,10 +189,11 @@ class OfficeEngine:
             try:
                 from ai_integration.autonomous_agent import _wrap_agent_code, spawn_integration_anchors
                 wrapped = _wrap_agent_code(py_code)
+                agent_env = _build_agent_env(agent.user_api_keys or '')
 
                 loop = asyncio.get_event_loop()
                 stdout, stderr = await loop.run_in_executor(
-                    None, _exec_agent_script_sync, wrapped
+                    None, _exec_agent_script_sync, wrapped, agent_env
                 )
             except Exception as e:
                 logger.debug("[OFFICE-L1] [%s] exec error: %s", agent.name, e)
@@ -185,7 +215,7 @@ class OfficeEngine:
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] anchor error: %s", agent.name, e)
 
-                # Дополнительно: пишем прямо в чат как обычное сообщение агента
+                # Пишем отчёт агента прямо в чат
                 try:
                     msg_text = f"📊 Выполнил мониторинг:\n{stdout[:800]}"
                     loop = asyncio.get_event_loop()
@@ -200,8 +230,165 @@ class OfficeEngine:
                     )
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] chat save error: %s", agent.name, e)
+
+                # ASI проактивно анализирует находку и предлагает действие
+                try:
+                    await self._asi_react_to_agent_output(agent, user, stdout)
+                except Exception as e:
+                    logger.debug("[OFFICE-L1] [%s] ASI reaction error: %s", agent.name, e)
+
             elif stderr and 'timeout' not in stderr:
                 logger.debug("[OFFICE-L1] [%s] stderr: %s", agent.name, stderr[:150])
+
+    async def _asi_react_to_agent_output(self, agent, user, output: str):
+        """ASI анализирует что нашёл агент и предлагает конкретное действие в чат.
+
+        Это event-driven офис: агент находит новость/письмо/заказ →
+        ASI тут же говорит «вот что это значит для тебя и что можно сделать».
+        """
+        # Cooldown: не реагируем чаще раза в 1 час на одного агента
+        try:
+            from models import Session as _Db, Anchor as _Anch
+            _s = _Db()
+            try:
+                _since = datetime.now(timezone.utc) - timedelta(hours=1)
+                _recent = (
+                    _s.query(_Anch)
+                    .filter(
+                        _Anch.user_id == user.id,
+                        _Anch.anchor_type == 'asi_reaction',
+                        _Anch.source == f'agent:{agent.id}',
+                        _Anch.created_at >= _since,
+                    )
+                    .first()
+                )
+                if _recent:
+                    return
+            finally:
+                _s.close()
+        except Exception:
+            pass
+
+        # Загружаем других активных агентов для контекста (кому можно делегировать)
+        other_agents = ""
+        try:
+            from models import Session as _Db2, UserAgent as _UA
+            _s2 = _Db2()
+            try:
+                _others = (
+                    _s2.query(_UA)
+                    .filter(
+                        _UA.author_id == user.id,
+                        _UA.status == 'active',
+                        _UA.id != agent.id,
+                    )
+                    .limit(5)
+                    .all()
+                )
+                if _others:
+                    other_agents = "\n".join(
+                        f"- {a.name} ({a.specialization or 'агент'}): {(a.description or '')[:80]}"
+                        for a in _others
+                    )
+            finally:
+                _s2.close()
+        except Exception:
+            pass
+
+        async with self._ai_sem:
+            reaction = await self._ask_asi_reaction(
+                agent_name=agent.name or 'Агент',
+                agent_spec=agent.specialization or 'агент',
+                output=output,
+                other_agents=other_agents,
+            )
+
+        if not reaction:
+            return
+
+        # Сохраняем реакцию ASI в чат (от имени ASI, без аватарки агента)
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                _save_chat_message_sync,
+                user.id,
+                'ASI Biont',
+                0,
+                '',
+                f"🧠 {reaction}",
+            )
+            logger.info("[OFFICE-L1] ASI reacted to %s output for user %d", agent.name, user.id)
+        except Exception as e:
+            logger.debug("[OFFICE-L1] ASI reaction save error: %s", e)
+
+        # Сохраняем cooldown якорь
+        try:
+            from models import Session as _Db3, Anchor as _Anch3, AnchorPriority
+            _s3 = _Db3()
+            try:
+                _now = datetime.now(timezone.utc)
+                _s3.add(_Anch3(
+                    user_id=user.id,
+                    anchor_type='asi_reaction',
+                    source=f'agent:{agent.id}',
+                    topic=f'ASI отреагировал на {agent.name}',
+                    priority=AnchorPriority.LOW,
+                    data=json.dumps({'reaction': reaction[:200]}, ensure_ascii=False),
+                    triggered_at=_now,
+                    expires_at=_now + timedelta(hours=2),
+                    cooldown_hours=1,
+                    batch_group='office',
+                ))
+                _s3.commit()
+            finally:
+                _s3.close()
+        except Exception as e:
+            logger.debug("[OFFICE-L1] cooldown anchor error: %s", e)
+
+    async def _ask_asi_reaction(self, agent_name: str, agent_spec: str,
+                                  output: str, other_agents: str) -> str:
+        """Короткий AI-вызов: ASI анализирует находку агента и предлагает действие."""
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        import aiohttp
+
+        delegation_block = (
+            f"\n\nДругие агенты которым можно поручить действие:\n{other_agents}"
+            if other_agents else ""
+        )
+
+        prompt = (
+            f"Ты — ASI Biont, директор офиса. Агент '{agent_name}' ({agent_spec}) "
+            f"только что выполнил мониторинг и нашёл следующее:\n\n"
+            f"{output[:600]}\n\n"
+            "Коротко (2-4 предложения) скажи пользователю:\n"
+            "1. Что важного нашёл агент\n"
+            "2. Одно конкретное действие которое стоит предпринять\n"
+            f"3. Если нужно — кому из команды это поручить{delegation_block}\n\n"
+            "Говори живо и конкретно. Не повторяй всё что сказал агент — только вывод и следующий шаг."
+        )
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": DEEPSEEK_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 200,
+                        "temperature": 0.7,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=12),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.debug("[OFFICE-L1] ASI reaction AI error: %s", e)
+        return ""
 
     # ─── Уровень 2: АСИ-координатор ─────────────────────────────────────────
 

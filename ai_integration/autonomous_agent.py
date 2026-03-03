@@ -62,11 +62,11 @@ def _ssrf_safe_open(url, *_a, **_kw):
             pass
     return _ssrf_orig_open(url, *_a, **_kw)
 _ssrf_ur.urlopen = _ssrf_safe_open
-# Auto-strip spaces from App Passwords (Gmail App Password: 'xxxx xxxx xxxx xxxx' → 'xxxxxxxxxxxxxxxx')
+# Auto-strip spaces from App Passwords (Gmail App Password: xxxx xxxx xxxx xxxx -> xxxxxxxxxxxxxxxx)
 import os as _fix_os
 for _fix_k in list(_fix_os.environ.keys()):
-    if 'PASS' in _fix_k:
-        _fix_os.environ[_fix_k] = _fix_os.environ[_fix_k].replace(\' \', \'\')
+    if "PASS" in _fix_k:
+        _fix_os.environ[_fix_k] = _fix_os.environ[_fix_k].replace(" ", "")
 '''
 
 
