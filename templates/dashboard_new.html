@@ -4548,10 +4548,10 @@ except Exception as e:
 
                     <!-- Генерация кода — всегда видимый блок -->
                     <div style="background:#F6F8FA;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:2px;">⚡ Подключить данные</div>
+                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:2px;">Подключить данные</div>
                         <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Выбрали сервис выше? Нажмите кнопку — подставим готовый код. Для нестандартной задачи — опишите её и сгенерируем через ИИ.</div>
                         <textarea id="mpa-code-desc" placeholder="Необязательно: опишите задачу для ИИ-генерации, например: читай RSS и присылай топ-3 новости" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:white;"></textarea>
-                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">⚡ Подставить шаблон / сгенерировать код</button>
+                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Подставить шаблон / сгенерировать код</button>
                         <div id="mpa-gen-status" style="font-size:12px;color:#6B7280;margin-top:4px;display:none;"></div>
                     </div>
 
@@ -4583,7 +4583,7 @@ except Exception as e:
                         <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого сообщения агента</div>
                     </div>
 
-                    <button onclick="mpSubmitAgent()" class="mp-action-btn" style="background:#068487;color:white;border-color:#056b6e;padding:9px;font-weight:500;" onmouseover="this.style.background='#056b6e';" onmouseout="this.style.background='#068487';">Сохранить агента</button>
+                    <button onclick="mpSubmitAgent()" id="mpa-submit-btn" class="mp-action-btn" style="padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сохранить агента</button>
 
                 </div>`;
         }
