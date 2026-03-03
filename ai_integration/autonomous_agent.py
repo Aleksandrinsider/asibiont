@@ -3756,16 +3756,19 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     if action == 'self' or (action not in ('delegate', 'use_cache', 'multi_delegate')):
         return None
 
-    agent_name = decision.get('agent_name', '')
-    _agent = next(
-        (a for a in _agents if a['name'].lower() == agent_name.lower()),
-        next((a for a in _agents if agent_name.lower() in a['name'].lower()), None)
-    )
-    if not _agent:
-        return None
+    def _find_agent(name: str):
+        if not name:
+            return None
+        return next(
+            (a for a in _agents if a['name'].lower() == name.lower()),
+            next((a for a in _agents if name.lower() in a['name'].lower()), None),
+        )
 
     # ── use_cache: отвечаем из якорного кэша, не запускаем агента ─────────────
     if action == 'use_cache':
+        _agent = _find_agent(decision.get('agent_name', ''))
+        if not _agent:
+            return None
         anchors = agent_anchor_map.get(_agent['name'], [])
         if not anchors:
             return None  # нет кэша → обычный поток
@@ -3799,11 +3802,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         # Для каждой задачи: найти агента, written директорское обращение в чат
         valid_tasks = []
         for _t in tasks_cfg:
-            _tname = _t.get('agent_name', '')
-            _tagent = next(
-                (a for a in _agents if a['name'].lower() == _tname.lower()),
-                next((a for a in _agents if _tname.lower() in a['name'].lower()), None)
-            )
+            _tagent = _find_agent(_t.get('agent_name', ''))
             if not _tagent:
                 continue
             _dm = _t.get('director_message', '')
@@ -3858,6 +3857,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         return final_response or "Команда отработала. Проверь ответы агентов выше."
 
     # ── delegate: запускаем одного агента ─────────────────────────────────────
+    _agent = _find_agent(decision.get('agent_name', ''))
+    if not _agent:
+        return None
     agent_task = decision.get('agent_task') or user_message
     director_msg = decision.get('director_message', '')
 
@@ -3872,7 +3874,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     # Шаг 4: сохраняем ответ агента в чат
     agent_content = _json.dumps({
         '__agent': {
-            'name': _agent.get('name', agent_name),
+            'name': _agent.get('name', ''),
             'id': _agent.get('id'),
             'avatar_url': _agent.get('avatar_url', ''),
         },
