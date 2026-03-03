@@ -3489,22 +3489,26 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
 
 
 async def _exec_agent_for_director(agent: dict, task: str, user_id: int) -> str:
-    """Запускает python_code агента + генерирует AI-ответ от его имени.
+    """Запускает агента с полноценным tool-calling циклом (по tools_allowed).
+    1. Выполняет python_code (внешние данные: IMAP, RSS, HTTP)
+    2. Запускает tool-loop через платформенные инструменты (до 3 итераций)
+    3. Агент реально вызывает send_email, research_topic и т.д. по своему tools_allowed
     Используется в _office_director_chat для delegate и multi_delegate.
-    Возвращает текст ответа агента.
     """
     import subprocess as _sp2, sys as _sys2, os as _os2
 
-    _asi_identity = (
-        "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
-        "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
-        "Ты ДЕЛАЕШЬ, а не просто советуешь. Отвечаешь кратко, без списков и заголовков."
-    )
     _persona = (
         agent.get('personality') or
         f"Ты действуешь как {agent['name']} — {agent.get('specialization', 'специалист')}. "
         f"{agent.get('description', '')} Отвечай от имени {agent['name']}."
     )
+    system_prompt = (
+        "Ты — агент в команде ASI Biont. Действуй от своего имени, выполняй поручение директора "
+        "используя доступные инструменты. Отвечай кратко и по делу. Без списков и заголовков.\n\n"
+        f"ТВОЯ РОЛЬ:\n{_persona}"
+    )
+
+    # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
     script_context = ""
     if (agent.get('python_code') or '').strip():
         try:
@@ -3542,18 +3546,96 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int) -> str:
             loop2 = asyncio.get_event_loop()
             stdout2, _stderr2 = await loop2.run_in_executor(None, _run_script)
             if stdout2:
-                script_context = f"\n\n[Результат твоего скрипта/мониторинга]:\n{stdout2[:800]}"
+                script_context = f"\n\n[Данные от твоего скрипта/интеграции]:\n{stdout2[:800]}"
+                system_prompt += script_context
             elif _stderr2 and 'timeout' not in _stderr2:
                 logger.debug("[DIRECTOR-EXEC] script stderr for %s: %s", agent.get('name'), _stderr2[:150])
         except Exception as _e3:
             logger.debug("[DIRECTOR-EXEC] script exec error for %s: %s", agent.get('name'), _e3)
 
-    system_prompt = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_persona}{script_context}"
-    response = await _quick_ai_call_raw([
+    # ── Шаг 2: Определяем разрешённые инструменты ─────────────────────────────
+    _allowed_tools: set[str] = set()
+    try:
+        _raw_tools = agent.get('tools_allowed') or '[]'
+        if isinstance(_raw_tools, list):
+            _allowed_tools = set(_raw_tools)
+        else:
+            _allowed_tools = set(json.loads(_raw_tools))
+        # Fallback: agent['tools'] already parsed
+        if not _allowed_tools:
+            _t2 = agent.get('tools') or []
+            if isinstance(_t2, list):
+                _allowed_tools = set(_t2)
+    except Exception:
+        pass
+
+    # Вычисляем exclude_tools = все инструменты минус разрешённые
+    _exclude_for_agent: set[str] | None = None
+    if _allowed_tools:
+        try:
+            from .tools import get_available_tools as _gat2
+            _all_names = {t['function']['name'] for t in _gat2()}
+            _exclude_for_agent = _all_names - _allowed_tools
+        except Exception:
+            pass
+
+    # ── Шаг 3: Tool-calling loop (макс 3 итерации) ────────────────────────────
+    _agent_inst = get_autonomous_agent()
+    _messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
-    ], max_tokens=600)
-    return response or "Задачу выполнил, но данных нет."
+    ]
+    _use_tools = bool(_allowed_tools)  # tool loop только если есть разрешённые инструменты
+
+    for _iter in range(3):
+        _resp = await _agent_inst.call_ai(
+            _messages,
+            use_tools=_use_tools,
+            tool_choice="auto" if _use_tools else None,
+            exclude_tools=_exclude_for_agent if _use_tools else None,
+            max_tokens=500,
+        )
+        _msg = _resp['choices'][0]['message']
+        _content = _msg.get('content') or ''
+        _tool_calls = _msg.get('tool_calls') or []
+
+        if not _tool_calls:
+            # Агент ответил текстом — возвращаем
+            return _content or "Задачу выполнил."
+
+        # Агент вызвал инструменты — выполняем
+        _messages.append(_msg)
+        for _tc in _tool_calls:
+            _tname = _tc.get('function', {}).get('name', '')
+            try:
+                _targs = json.loads(_tc.get('function', {}).get('arguments', '{}'))
+            except Exception:
+                _targs = {}
+
+            # Проверяем доступность инструмента
+            if _allowed_tools and _tname not in _allowed_tools:
+                _tc_result = json.dumps({"error": f"tool {_tname} not in tools_allowed"}, ensure_ascii=False)
+            else:
+                try:
+                    _tres = await _agent_inst.execute_actions(
+                        [{"tool": _tname, "params": _targs, "reason": f"{agent['name']}: {_tname}"}],
+                        user_id, session=None, user_message=task,
+                    )
+                    _r0 = _tres[0] if _tres else {"success": False}
+                    if _r0.get('success'):
+                        _tc_result = json.dumps(_r0['result'], ensure_ascii=False, default=str)
+                        _tc_result = _tc_result[:1500]
+                    else:
+                        _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
+                except Exception as _te:
+                    _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
+                    logger.debug("[DIRECTOR-EXEC] tool %s error for %s: %s", _tname, agent['name'], _te)
+
+            _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+
+    # Если израсходовали все итерации — финальный ответ без tools
+    _final = await _quick_ai_call_raw(_messages, max_tokens=400)
+    return _final or "Задачу выполнил."
 
 
 # Слова-сигналы что пользователь хочет действие, а не разговор
