@@ -4801,6 +4801,9 @@ except Exception as e:
                 privEl.checked = !!agent.is_private;
                 const priceBlock = document.getElementById('mpa-price-block');
                 if (priceBlock) priceBlock.style.display = agent.is_private ? 'none' : 'block';
+                const pts = privEl.parentElement ? privEl.parentElement.querySelectorAll('span') : [];
+                if (pts[0]) pts[0].style.background = agent.is_private ? '#374151' : '#D1D9E0';
+                if (pts[1]) pts[1].style.transform = agent.is_private ? 'translateX(18px)' : 'translateX(0)';
             }
 
             // Аватар
@@ -4954,7 +4957,11 @@ except Exception as e:
                                 <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:3px;">${t('mpa-private-title')}</div>
                                 <div style="font-size:12px;color:#6B7280;">${t('mpa-private-desc')}</div>
                             </div>
-                            <input id="mpa-private" type="checkbox" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;" onchange="document.getElementById('mpa-price-block').style.display=this.checked?'none':'block'">
+                            <label for="mpa-private" style="position:relative;display:inline-flex;width:40px;height:22px;cursor:pointer;flex-shrink:0;">
+                                <input id="mpa-private" type="checkbox" style="opacity:0;width:0;height:0;position:absolute;" onchange="var ts=this.parentElement.querySelectorAll('span');ts[0].style.background=this.checked?'#374151':'#D1D9E0';ts[1].style.transform=this.checked?'translateX(18px)':'translateX(0)';document.getElementById('mpa-price-block').style.display=this.checked?'none':'block';">
+                                <span style="position:absolute;inset:0;background:#D1D9E0;border-radius:11px;transition:background 0.2s;"></span>
+                                <span style="position:absolute;top:3px;left:3px;width:16px;height:16px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.18);"></span>
+                            </label>
                         </div>
                     </div>
 
