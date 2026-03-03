@@ -9596,7 +9596,7 @@ async def reply_to_outreach_email(
 ):
     """Ответить на входящий reply от получателя (AI автоматически или по запросу).
 
-    Приоритет отправки: Gmail OAuth → SMTP пользователя → Resend пользователя → платформенный Resend.
+    Приоритет отправки: SMTP пользователя → Resend пользователя → платформенный Resend.
     """
     if not session:
         session = Session()
@@ -9656,70 +9656,7 @@ async def reply_to_outreach_email(
 
         _send_error = None
 
-        if _matched and _matched.get('type') == 'gmail_oauth':
-            # ── Gmail API (OAuth2, HTTPS) ───────────────────────────────────────
-            import json as _jgm
-            import base64 as _b64gm
-            from email.mime.text import MIMEText as _MimeGm
-            from email.mime.multipart import MIMEMultipart as _MMgm
-
-            _oa_data = _jgm.loads(user.google_oauth_token or '{}')
-            _ga_token = _oa_data.get('access_token', '')
-            _ga_refresh = _oa_data.get('refresh_token', '')
-            _ga_from = _oa_data.get('email', sender_addr)
-
-            async def _gmail_refresh_reply():
-                from config import GOOGLE_CLIENT_ID as _GCI, GOOGLE_CLIENT_SECRET as _GCS
-                async with _aiohttp.ClientSession() as _rh:
-                    _rr = await _rh.post(
-                        'https://oauth2.googleapis.com/token',
-                        data={'grant_type': 'refresh_token', 'refresh_token': _ga_refresh,
-                              'client_id': _GCI, 'client_secret': _GCS},
-                        timeout=_aiohttp.ClientTimeout(total=10),
-                    )
-                    _rd = await _rr.json()
-                    if 'access_token' in _rd:
-                        _upd = dict(_oa_data)
-                        _upd['access_token'] = _rd['access_token']
-                        user.google_oauth_token = _jgm.dumps(_upd)
-                        try:
-                            session.commit()
-                        except Exception:
-                            pass
-                        return _rd['access_token']
-                    return None
-
-            _gmsg = _MMgm()
-            _gmsg['From'] = f"{sender_name} <{_ga_from}>"
-            _gmsg['To'] = to_clean
-            _gmsg['Subject'] = subject
-            _gmsg.attach(_MimeGm(reply_body, 'plain', 'utf-8'))
-            _graw = _b64gm.urlsafe_b64encode(_gmsg.as_bytes()).decode('utf-8')
-
-            async def _gapi_post(tok):
-                async with _aiohttp.ClientSession() as _gh:
-                    _r = await _gh.post(
-                        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-                        headers={'Authorization': f'Bearer {tok}', 'Content-Type': 'application/json'},
-                        json={'raw': _graw},
-                        timeout=_aiohttp.ClientTimeout(total=30),
-                    )
-                    return _r.status, await _r.json()
-
-            _gs, _gd = await _gapi_post(_ga_token)
-            if _gs == 401:
-                _new_tok = await _gmail_refresh_reply()
-                if _new_tok:
-                    _gs, _gd = await _gapi_post(_new_tok)
-                else:
-                    _send_error = "Gmail: токен истёк. Переподключи Gmail в Настройках профиля."
-            if not _send_error and _gs not in (200, 201):
-                _gerr = _gd.get('error', {})
-                _send_error = _gerr.get('message', str(_gd)) if isinstance(_gerr, dict) else str(_gerr)
-            if not _send_error:
-                logger.info(f'[EMAIL_REPLY] Sent via Gmail API OAuth from {_ga_from} to {to_clean}')
-
-        elif _matched and _matched.get('type') == 'smtp':
+        if _matched and _matched.get('type') == 'smtp':
             # ── SMTP пользователя (Яндекс / Mail.ru / Gmail app-password) ──────
             import smtplib as _smtplib
             from email.mime.text import MIMEText as _MimeSmtp
@@ -10196,7 +10133,7 @@ async def send_follow_up_email(
     """Отправить follow-up email (агент вызывает автономно при якоре email_follow_up).
 
     Обновляет follow_up_count, next_follow_up_at.
-    Приоритет отправки: Gmail OAuth → SMTP пользователя → Resend пользователя → платформенный Resend.
+    Приоритет отправки: SMTP пользователя → Resend пользователя → платформенный Resend.
     """
     if not session:
         session = Session()
@@ -10246,7 +10183,7 @@ async def send_follow_up_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
-        # ── Выбор канала отправки (приоритет: Gmail OAuth → SMTP → user Resend → platform Resend) ──
+        # ── Выбор канала отправки: SMTP пользователя → user Resend → platform Resend ──
         sender_name = campaign.sender_name or ''
         sender_addr = campaign.sender_email or ''
         to_clean = outreach.recipient_email.strip().lower()
@@ -10264,59 +10201,7 @@ async def send_follow_up_email(
 
         _send_error = None
 
-        if _matched and _matched.get('type') == 'gmail_oauth':
-            import json as _jgm2
-            import base64 as _b64gm2
-            from email.mime.text import MIMEText as _MimeGm2
-            from email.mime.multipart import MIMEMultipart as _MMgm2
-            _oa2 = _jgm2.loads(user.google_oauth_token or '{}')
-            _tok2 = _oa2.get('access_token', '')
-            _ref2 = _oa2.get('refresh_token', '')
-            _gfrom2 = _oa2.get('email', sender_addr)
-
-            async def _grefresh2():
-                from config import GOOGLE_CLIENT_ID as _GCI2, GOOGLE_CLIENT_SECRET as _GCS2
-                async with _aiohttp.ClientSession() as _rh2:
-                    _rr2 = await _rh2.post('https://oauth2.googleapis.com/token',
-                        data={'grant_type': 'refresh_token', 'refresh_token': _ref2,
-                              'client_id': _GCI2, 'client_secret': _GCS2},
-                        timeout=_aiohttp.ClientTimeout(total=10))
-                    _rd2 = await _rr2.json()
-                    if 'access_token' in _rd2:
-                        _u2 = dict(_oa2); _u2['access_token'] = _rd2['access_token']
-                        user.google_oauth_token = _jgm2.dumps(_u2)
-                        try: session.commit()
-                        except Exception: pass
-                        return _rd2['access_token']
-                    return None
-
-            _gm2 = _MMgm2()
-            _gm2['From'] = f"{sender_name} <{_gfrom2}>"
-            _gm2['To'] = to_clean
-            _gm2['Subject'] = subject
-            _gm2.attach(_MimeGm2(body, 'plain', 'utf-8'))
-            _graw2 = _b64gm2.urlsafe_b64encode(_gm2.as_bytes()).decode('utf-8')
-
-            async def _gpost2(tok):
-                async with _aiohttp.ClientSession() as _gh2:
-                    _r2 = await _gh2.post(
-                        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-                        headers={'Authorization': f'Bearer {tok}', 'Content-Type': 'application/json'},
-                        json={'raw': _graw2}, timeout=_aiohttp.ClientTimeout(total=30))
-                    return _r2.status, await _r2.json()
-
-            _gs2, _gd2 = await _gpost2(_tok2)
-            if _gs2 == 401:
-                _nt2 = await _grefresh2()
-                if _nt2: _gs2, _gd2 = await _gpost2(_nt2)
-                else: _send_error = "Gmail: токен истёк, переподключи Gmail."
-            if not _send_error and _gs2 not in (200, 201):
-                _ge2 = _gd2.get('error', {})
-                _send_error = _ge2.get('message', str(_gd2)) if isinstance(_ge2, dict) else str(_ge2)
-            if not _send_error:
-                logger.info(f'[EMAIL_FOLLOWUP] Sent via Gmail API OAuth from {_gfrom2} to {to_clean}')
-
-        elif _matched and _matched.get('type') == 'smtp':
+        if _matched and _matched.get('type') == 'smtp':
             import smtplib as _smtplib2
             from email.mime.text import MIMEText as _MimeSmtp2
             from email.mime.multipart import MIMEMultipart as _MMsmtp2
@@ -10485,8 +10370,8 @@ async def negotiate_by_email(
 
         if not _chosen:
             return (
-                "❌ Не настроена почтовая интеграция. Добавь в агента:\n"
-                "• Gmail OAuth: подключи в Настройках профиля\n"
+                "❌ Не настроена почтовая интеграция. Добавь в ключи агента:\n"
+                "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
                 "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
                 "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
                 "• Resend: RESEND_API_KEY=re_... и RESEND_FROM=noreply@домен.com"
@@ -10596,32 +10481,13 @@ def _get_user_email_integrations(user, session) -> list:
     """Возвращает список почтовых интеграций из агентов пользователя.
 
     Каждый элемент имеет поле 'type':
-      'gmail_oauth' — {label, email_user, agent_name, agent_id}  ← Gmail API (OAuth2, HTTPS)
-      'smtp'        — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
-      'resend'      — {label, email_user, resend_key, agent_name, agent_id}
+      'smtp'    — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
+      'resend'  — {label, email_user, resend_key, agent_name, agent_id}
     """
     try:
         results = []
         seen_emails: set = set()
         seen_resend: set = set()
-
-        # Gmail OAuth2 — наивысший приоритет (отправка через HTTPS, не SMTP)
-        if getattr(user, 'google_oauth_token', None):
-            try:
-                import json as _joa
-                _oa = _joa.loads(user.google_oauth_token)
-                _ga_email = _oa.get('email', '')
-                if _ga_email and '@' in _ga_email:
-                    seen_emails.add(_ga_email)
-                    results.append({
-                        'type': 'gmail_oauth',
-                        'label': 'Gmail',
-                        'email_user': _ga_email,
-                        'agent_name': 'Gmail OAuth',
-                        'agent_id': None,
-                    })
-            except Exception as _oe:
-                logger.warning(f'[EMAIL_INTEGRATIONS] Gmail OAuth parse error: {_oe}')
 
         from models import UserAgent as _UA
         agents = session.query(_UA).filter(
@@ -10931,74 +10797,6 @@ async def send_email(
                         return f"❌ Ошибка Resend API: {err}"
                     resend_id = resp_data.get('id', '')
                     logger.info(f'[SEND_EMAIL] Sent via user Resend from {sender_email} to {to_clean}')
-            elif _chosen_integration.get('type') == 'gmail_oauth':
-                # ── Отправка через Gmail API (OAuth2, без SMTP) ────
-                import json as _jgm
-                import base64 as _b64gm
-                from email.mime.text import MIMEText as _MimeGm
-                from email.mime.multipart import MIMEMultipart as _MMgm
-
-                _oa_data = _jgm.loads(user.google_oauth_token or '{}')
-                _ga_token = _oa_data.get('access_token', '')
-                _ga_refresh = _oa_data.get('refresh_token', '')
-                _ga_from = _oa_data.get('email', sender_email)
-
-                async def _gmail_refresh():
-                    from config import GOOGLE_CLIENT_ID as _GCI, GOOGLE_CLIENT_SECRET as _GCS
-                    async with _aiohttp.ClientSession() as _rh:
-                        _rr = await _rh.post(
-                            'https://oauth2.googleapis.com/token',
-                            data={
-                                'grant_type': 'refresh_token',
-                                'refresh_token': _ga_refresh,
-                                'client_id': _GCI,
-                                'client_secret': _GCS,
-                            },
-                            timeout=_aiohttp.ClientTimeout(total=10),
-                        )
-                        _rd = await _rr.json()
-                        if 'access_token' in _rd:
-                            _updated = dict(_oa_data)
-                            _updated['access_token'] = _rd['access_token']
-                            user.google_oauth_token = _jgm.dumps(_updated)
-                            try:
-                                session.commit()
-                            except Exception:
-                                pass
-                            return _rd['access_token']
-                        return None
-
-                # Строим RFC 2822 сообщение
-                _gmsg = _MMgm()
-                _gmsg['From'] = f"{sender_name} <{_ga_from}>"
-                _gmsg['To'] = to_clean
-                _gmsg['Subject'] = subject
-                _gmsg.attach(_MimeGm(body, 'plain', 'utf-8'))
-                _graw = _b64gm.urlsafe_b64encode(_gmsg.as_bytes()).decode('utf-8')
-
-                async def _gmail_api_post(tok):
-                    async with _aiohttp.ClientSession() as _gh:
-                        _r = await _gh.post(
-                            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-                            headers={'Authorization': f'Bearer {tok}', 'Content-Type': 'application/json'},
-                            json={'raw': _graw},
-                            timeout=_aiohttp.ClientTimeout(total=30),
-                        )
-                        return _r.status, await _r.json()
-
-                _gs, _gd = await _gmail_api_post(_ga_token)
-                if _gs == 401:  # Токен истёк — обновляем
-                    _new_tok = await _gmail_refresh()
-                    if _new_tok:
-                        _gs, _gd = await _gmail_api_post(_new_tok)
-                    else:
-                        return ("❌ Gmail: токен истёк. Подключи Gmail заново в Настройках профиля.")
-                if _gs not in (200, 201):
-                    _gerr = _gd.get('error', {})
-                    _gmsg2 = _gerr.get('message', str(_gd)) if isinstance(_gerr, dict) else str(_gerr)
-                    return f"❌ Gmail API ошибка: {_gmsg2}"
-                sender_email = _ga_from
-                logger.info(f'[SEND_EMAIL] Sent via Gmail API OAuth from {_ga_from} to {to_clean}')
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
 
