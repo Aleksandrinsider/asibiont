@@ -3099,6 +3099,160 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
         logger.debug("[DIRECTOR] save anchor error: %s", e)
 
 
+# ── Агент вклинивается в разговор ──────────────────────────────────────────
+
+async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
+    """
+    После ответа ASI один из агентов пользователя может вклиниться в разговор.
+    Как в арене: читает последний обмен, реагирует со своей экспертизой.
+    Вызывается как фоновая задача — не блокирует основной ответ.
+    Вероятность: 55% на каждое сообщение. Cooldown 8 мин на агента.
+    """
+    import random as _rnd
+    import json as _json
+
+    # Вероятностный фильтр — не на каждое сообщение
+    if _rnd.random() > 0.55:
+        return
+
+    # Задержка для реализма — агент «думает» 8–25 сек
+    await asyncio.sleep(_rnd.uniform(8, 25))
+
+    # Загружаем агентов пользователя
+    try:
+        from .user_agents import get_user_active_agents, load_agent_personality
+        from models import Session as _Db, User as _User, Interaction as _Itr, UserAgent as _UA
+    except ImportError:
+        return
+
+    try:
+        _s = _Db()
+        try:
+            _u = _s.query(_User).filter_by(telegram_id=user_id).first()
+            user_db_id = _u.id if _u else None
+        finally:
+            _s.close()
+    except Exception:
+        return
+
+    if not user_db_id:
+        return
+
+    # Загружаем агентов
+    _agents = []
+    try:
+        _ids = get_user_active_agents(user_db_id)
+        if _ids:
+            _agents = [d for _id in _ids for d in [load_agent_personality(_id)] if d]
+    except Exception:
+        return
+
+    if not _agents:
+        return
+
+    # Cooldown: агент не вклинивается чаще раза в 8 минут
+    _now_ts = __import__('time').time()
+    _cooldown_key = '_chime_ts'
+    for _a in _agents:
+        _last = _a.get(_cooldown_key, 0)
+        if _now_ts - _last < 480:  # 8 мин
+            _agents = [x for x in _agents if x is not _a]
+
+    if not _agents:
+        return
+
+    # Выбираем агента: тот чья специализация ближе к теме, иначе случайный
+    _topic = (user_message + ' ' + asi_response).lower()
+    _scored = []
+    for _a in _agents:
+        _spec = (_a.get('specialization') or _a.get('description') or '').lower()
+        _score = sum(1 for w in _spec.split() if len(w) > 4 and w in _topic)
+        _scored.append((_score, _a))
+    _scored.sort(key=lambda x: x[0], reverse=True)
+    _agent = _scored[0][1] if _scored[0][0] > 0 else _rnd.choice(_agents)
+
+    # Ставим cooldown сразу
+    _agent[_cooldown_key] = _now_ts
+
+    # Строим промпт — агент видит последний обмен
+    _asi_identity = (
+        "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
+        "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
+        "Ты ДЕЛАЕШЬ, а не просто советуешь. Отвечаешь кратко, без списков и заголовков."
+    )
+    _persona = (
+        _agent.get('personality') or
+        f"Ты действуешь как {_agent['name']} — {_agent.get('specialization', 'специалист')}. "
+        f"{_agent.get('description', '')}"
+    )
+    _system = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_persona}"
+
+    _user_content = (
+        f"В чате только что написали:\n"
+        f"[Пользователь]: {user_message[:200]}\n"
+        f"[ASI]: {asi_response[:300]}\n\n"
+        "Ты — коллега ASI. Прочитал этот обмен и хочешь добавить что-то ценное со своей стороны. "
+        "Можешь предложить конкретный ресурс, идею, связанную с твоей специализацией, или взять себе задачу. "
+        "1-2 предложения. Живо, без официоза. Если тебе нечего добавить — молчи (ответь пустой строкой)."
+    )
+
+    try:
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        import aiohttp
+        async with aiohttp.ClientSession() as _sess:
+            async with _sess.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": DEEPSEEK_MODEL,
+                    "messages": [
+                        {"role": "system", "content": _system},
+                        {"role": "user", "content": _user_content},
+                    ],
+                    "max_tokens": 120,
+                    "temperature": 0.85,
+                },
+                timeout=aiohttp.ClientTimeout(total=12),
+            ) as _resp:
+                if _resp.status != 200:
+                    return
+                _data = await _resp.json()
+                _reply = _data["choices"][0]["message"]["content"].strip()
+    except Exception as _e:
+        logger.debug("[CHIME] AI error: %s", _e)
+        return
+
+    if not _reply or len(_reply) < 5:
+        return
+
+    # Сохраняем в Interaction
+    try:
+        _s2 = _Db()
+        try:
+            # Загружаем avatar_url агента
+            _db_ag = _s2.query(_UA).filter_by(id=_agent.get('id')).first()
+            _avatar = (_db_ag.avatar_url or '') if _db_ag else ''
+            _content = _json.dumps({
+                '__agent': {
+                    'name': _agent['name'],
+                    'id': _agent.get('id', 0),
+                    'avatar_url': _avatar,
+                },
+                'text': _reply,
+            }, ensure_ascii=False)
+            _s2.add(_Itr(
+                user_id=user_db_id,
+                message_type='ai',
+                content=_content,
+            ))
+            _s2.commit()
+            logger.info("[CHIME] %s chimed in for user %d", _agent['name'], user_db_id)
+        finally:
+            _s2.close()
+    except Exception as _e:
+        logger.debug("[CHIME] save error: %s", _e)
+
+
 # Слова-сигналы что пользователь хочет действие, а не разговор
 _DIRECTOR_TASK_RE = re.compile(
     r'провер|отправ|напиш|найди|сделай|покажи|получи|загрузи|скача|'
@@ -3440,6 +3594,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 'job_title': _answered_agent.get('job_title', ''),
                 'avatar_url': _avatar or '',
             }
+
+        # Агент вклинивается в разговор — фоновая задача, не блокирует ответ
+        # Только когда отвечает сам ASI (не через @упоминание конкретного агента)
+        if not _answered_agent and not _has_explicit_mention(message or ''):
+            asyncio.ensure_future(
+                _agent_chimes_in(message or '', response_text or '', user_id)
+            )
 
         return {
             'response': response_text,
