@@ -4027,6 +4027,465 @@ try:
                 print('ID=' + c['id'] + ' | ' + (name_str or '(без имени)') + ' | ' + p.get('email','') + ' | ' + p.get('lifecyclestage',''))
 except Exception as e:
     print('Ошибка HubSpot: ' + str(e))`
+            },
+            postgresql: {
+                name: 'PostgreSQL',
+                fields: [
+                    {k:'PG_HOST', label:'Хост (host)', ph:'db.example.com', t:'text'},
+                    {k:'PG_PORT', label:'Порт', ph:'5432', t:'text', opt:true},
+                    {k:'PG_DB', label:'База данных', ph:'mydb', t:'text'},
+                    {k:'PG_USER', label:'Пользователь', ph:'postgres', t:'text'},
+                    {k:'PG_PASS', label:'Пароль', ph:'xxxxxxxxxx', t:'password'}
+                ],
+                hint: 'psycopg2 установлен. Подходит для Supabase, Railway PostgreSQL, Neon, любого PostgreSQL. Совет: создайте отдельного read-only пользователя для безопасности.',
+                code: `import psycopg2, os
+HOST = os.environ.get('PG_HOST', '')
+PORT = int(os.environ.get('PG_PORT', '5432') or '5432')
+DB   = os.environ.get('PG_DB', '')
+USER = os.environ.get('PG_USER', '')
+PASS = os.environ.get('PG_PASS', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+try:
+    conn = psycopg2.connect(host=HOST, port=PORT, dbname=DB, user=USER, password=PASS, connect_timeout=8, sslmode='require')
+    cur = conn.cursor()
+    if ACTION == 'query':
+        sql = os.environ.get('AGENT_PARAM_SQL', 'SELECT 1')
+        cur.execute(sql)
+        rows = cur.fetchmany(20)
+        cols = [d[0] for d in (cur.description or [])]
+        if cols:
+            print(' | '.join(cols))
+            print('-' * 60)
+        for row in rows:
+            print(' | '.join(str(v)[:30] for v in row))
+        print('---')
+        print('Строк: ' + str(len(rows)))
+    else:
+        cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name LIMIT 20")
+        tables = [r[0] for r in cur.fetchall()]
+        print('PostgreSQL подключён: ' + HOST + '/' + DB)
+        print('Таблицы (' + str(len(tables)) + '): ' + ', '.join(tables[:15]))
+    cur.close()
+    conn.close()
+except Exception as e:
+    print('Ошибка PostgreSQL: ' + str(e))`
+            },
+            mysql: {
+                name: 'MySQL',
+                fields: [
+                    {k:'MYSQL_HOST', label:'Хост', ph:'db.example.com', t:'text'},
+                    {k:'MYSQL_PORT', label:'Порт', ph:'3306', t:'text', opt:true},
+                    {k:'MYSQL_DB',   label:'База данных', ph:'mydb', t:'text'},
+                    {k:'MYSQL_USER', label:'Пользователь', ph:'root', t:'text'},
+                    {k:'MYSQL_PASS', label:'Пароль', ph:'xxxxxxxxxx', t:'password'}
+                ],
+                hint: 'Работает с PlanetScale, Railway MySQL, AWS RDS. Внимание: требует установленного pymysql. Если не работает — добавьте pymysql в requirements.txt и пересоберите проект.',
+                code: `import os
+HOST = os.environ.get('MYSQL_HOST', '')
+PORT = int(os.environ.get('MYSQL_PORT', '3306') or '3306')
+DB   = os.environ.get('MYSQL_DB', '')
+USER = os.environ.get('MYSQL_USER', '')
+PASS = os.environ.get('MYSQL_PASS', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+try:
+    import pymysql
+    conn = pymysql.connect(host=HOST, port=PORT, db=DB, user=USER, password=PASS, connect_timeout=8, charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
+    with conn:
+        with conn.cursor() as cur:
+            if ACTION == 'query':
+                sql = os.environ.get('AGENT_PARAM_SQL', 'SELECT 1')
+                cur.execute(sql)
+                rows = cur.fetchmany(20)
+                if rows:
+                    print(' | '.join(str(k)[:20] for k in rows[0].keys()))
+                    print('-' * 60)
+                    for row in rows:
+                        print(' | '.join(str(v)[:25] for v in row.values()))
+                print('Строк: ' + str(len(rows)))
+            else:
+                cur.execute("SHOW TABLES")
+                tables = [list(r.values())[0] for r in cur.fetchall()]
+                print('MySQL подключён: ' + HOST + '/' + DB)
+                print('Таблицы (' + str(len(tables)) + '): ' + ', '.join(tables[:15]))
+except ImportError:
+    print('Ошибка: pymysql не установлен. Добавьте pymysql в requirements.txt и пересоберите.')
+except Exception as e:
+    print('Ошибка MySQL: ' + str(e))`
+            },
+            mongodb: {
+                name: 'MongoDB Atlas',
+                fields: [
+                    {k:'MONGO_API_KEY', label:'API Key (Data API)', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'MONGO_APP_ID',  label:'App ID (Data API)', ph:'application-0-xxxxx', t:'text'},
+                    {k:'MONGO_DB',      label:'Название базы данных', ph:'mydb', t:'text'},
+                    {k:'MONGO_COLL',    label:'Коллекция (по умолчанию)', ph:'tasks', t:'text', opt:true}
+                ],
+                hint: 'MongoDB Atlas → App Services → Data API → Enable → Create API Key. App ID — в адресной строке браузера после /apps/.',
+                code: `import urllib.request, json, os
+API_KEY  = os.environ.get('MONGO_API_KEY', '')
+APP_ID   = os.environ.get('MONGO_APP_ID', '')
+DATABASE = os.environ.get('MONGO_DB', '')
+COLL     = os.environ.get('MONGO_COLL', 'tasks')
+ACTION   = os.environ.get('AGENT_ACTION', '')
+BASE = 'https://data.mongodb-api.com/app/' + APP_ID + '/endpoint/data/v1'
+h = {'api-key': API_KEY, 'Content-Type': 'application/json'}
+def mdb(action, data):
+    body = json.dumps(data).encode()
+    req = urllib.request.Request(BASE + '/action/' + action, data=body, headers=h, method='POST')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+try:
+    if ACTION == 'insert':
+        doc_str = os.environ.get('AGENT_PARAM_DOCUMENT', '{}')
+        try: doc = json.loads(doc_str)
+        except: doc = {'text': doc_str}
+        res = mdb('insertOne', {'dataSource': 'Cluster0', 'database': DATABASE, 'collection': COLL, 'document': doc})
+        print('OK: документ вставлен, ID=' + str(res.get('insertedId', '?')))
+    else:
+        filter_str = os.environ.get('AGENT_PARAM_FILTER', '{}')
+        try: flt = json.loads(filter_str)
+        except: flt = {}
+        res = mdb('find', {'dataSource': 'Cluster0', 'database': DATABASE, 'collection': COLL, 'filter': flt, 'limit': 10})
+        docs = res.get('documents', [])
+        print('MongoDB коллекция «' + COLL + '»: ' + str(len(docs)) + ' документов')
+        for doc in docs:
+            _id = str(doc.pop('_id', ''))
+            line = str(doc)[:120]
+            print(('id=' + _id[:8] + '... ' if _id else '') + line)
+except Exception as e:
+    print('Ошибка MongoDB: ' + str(e))`
+            },
+            redis_db: {
+                name: 'Redis',
+                fields: [
+                    {k:'REDIS_URL', label:'Redis URL', ph:'redis://:password@host:6379/0', t:'text'}
+                ],
+                hint: 'redis пакет установлен. Поддерживает Redis Cloud, Upstash, Railway Redis. URL формат: redis://:pass@host:port/db или rediss:// для TLS.',
+                code: `import redis, os
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+ACTION = os.environ.get('AGENT_ACTION', '')
+try:
+    r = redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=8, socket_timeout=8)
+    r.ping()
+    if ACTION == 'set':
+        key   = os.environ.get('AGENT_PARAM_KEY', 'agent_key')
+        value = os.environ.get('AGENT_PARAM_VALUE', '')
+        ttl   = os.environ.get('AGENT_PARAM_TTL', '')
+        if ttl and ttl.isdigit():
+            r.setex(key, int(ttl), value)
+        else:
+            r.set(key, value)
+        print('OK: ' + key + ' = ' + value[:80])
+    elif ACTION == 'get':
+        key = os.environ.get('AGENT_PARAM_KEY', 'agent_key')
+        val = r.get(key)
+        print((key + ' = ' + str(val)) if val is not None else key + ' (не найден)')
+    else:
+        info = r.info('keyspace')
+        keys_total = sum(v.get('keys', 0) for v in info.values()) if info else r.dbsize()
+        sample = r.scan(count=10)[1][:10]
+        print('Redis подключён: ' + REDIS_URL.split('@')[-1].split('/')[0])
+        print('Ключей в DB: ' + str(keys_total))
+        if sample:
+            print('Примеры ключей: ' + ', '.join(sample))
+except Exception as e:
+    print('Ошибка Redis: ' + str(e))`
+            },
+            openai_api: {
+                name: 'OpenAI API',
+                fields: [
+                    {k:'OPENAI_API_KEY', label:'API Key', ph:'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'OPENAI_MODEL',   label:'Модель', ph:'gpt-4o-mini', t:'text', opt:true}
+                ],
+                hint: 'platform.openai.com → API Keys → Create. Используется для дополнительных вызовов GPT внутри скрипта агента.',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('OPENAI_API_KEY', '')
+MODEL   = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
+ACTION  = os.environ.get('AGENT_ACTION', '')
+def gpt(messages, max_tokens=512):
+    body = json.dumps({'model': MODEL, 'messages': messages, 'max_tokens': max_tokens}).encode()
+    req = urllib.request.Request('https://api.openai.com/v1/chat/completions', data=body)
+    req.add_header('Authorization', 'Bearer ' + API_KEY)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=30) as r:
+        d = json.loads(r.read().decode())
+    return d['choices'][0]['message']['content']
+try:
+    if ACTION == 'ask':
+        prompt = os.environ.get('AGENT_PARAM_PROMPT', 'Привет!')
+        reply = gpt([{'role': 'user', 'content': prompt}])
+        print(reply[:1500])
+    elif ACTION == 'analyze':
+        text    = os.environ.get('AGENT_PARAM_TEXT', '')
+        task    = os.environ.get('AGENT_PARAM_TASK', 'Проанализируй этот текст')
+        reply = gpt([{'role': 'system', 'content': 'Отвечай кратко и по делу.'}, {'role': 'user', 'content': task + ':\\n\\n' + text}])
+        print(reply[:1500])
+    else:
+        req = urllib.request.Request('https://api.openai.com/v1/models')
+        req.add_header('Authorization', 'Bearer ' + API_KEY)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        models = [m['id'] for m in d.get('data', []) if 'gpt' in m['id']][:6]
+        print('OpenAI подключён. Доступные GPT-модели:')
+        for m in models:
+            print('  • ' + m)
+        print('Активная модель: ' + MODEL)
+except Exception as e:
+    print('Ошибка OpenAI: ' + str(e))`
+            },
+            gemini: {
+                name: 'Gemini (Google AI)',
+                fields: [
+                    {k:'GEMINI_API_KEY', label:'API Key', ph:'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'GEMINI_MODEL',   label:'Модель', ph:'gemini-2.0-flash', t:'text', opt:true}
+                ],
+                hint: 'aistudio.google.com → Get API Key → Create API Key. Бесплатный tier достаточен для большинства задач.',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('GEMINI_API_KEY', '')
+MODEL   = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
+ACTION  = os.environ.get('AGENT_ACTION', '')
+def gemini(text, sys_prompt=''):
+    parts = []
+    if sys_prompt:
+        parts.append({'role': 'user',  'parts': [{'text': sys_prompt}]})
+        parts.append({'role': 'model', 'parts': [{'text': 'Понял, буду следовать инструкциям.'}]})
+    parts.append({'role': 'user', 'parts': [{'text': text}]})
+    body = json.dumps({'contents': parts, 'generationConfig': {'maxOutputTokens': 1024}}).encode()
+    url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent?key=' + API_KEY
+    req = urllib.request.Request(url, data=body)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=30) as r:
+        d = json.loads(r.read().decode())
+    return d['candidates'][0]['content']['parts'][0]['text']
+try:
+    if ACTION in ('ask', 'analyze'):
+        prompt  = os.environ.get('AGENT_PARAM_PROMPT', '') or os.environ.get('AGENT_PARAM_TEXT', 'Привет!')
+        sys_p   = os.environ.get('AGENT_PARAM_SYSTEM', '')
+        reply = gemini(prompt, sys_p)
+        print(reply[:1500])
+    else:
+        reply = gemini('Скажи только: "Gemini подключён"')
+        print(reply.strip())
+        print('Модель: ' + MODEL)
+except Exception as e:
+    print('Ошибка Gemini: ' + str(e))`
+            },
+            twilio: {
+                name: 'Twilio (SMS/Voice)',
+                fields: [
+                    {k:'TWILIO_ACCOUNT_SID', label:'Account SID', ph:'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'TWILIO_AUTH_TOKEN',  label:'Auth Token', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'password'},
+                    {k:'TWILIO_FROM',        label:'Номер отправителя (Twilio номер)', ph:'+1234567890', t:'text'}
+                ],
+                hint: 'console.twilio.com → Account Info → Account SID + Auth Token. Номер отправителя — купленный в Twilio.',
+                code: `import urllib.request, urllib.parse, json, os, base64
+SID   = os.environ.get('TWILIO_ACCOUNT_SID', '')
+TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
+FROM  = os.environ.get('TWILIO_FROM', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+auth = base64.b64encode((SID + ':' + TOKEN).encode()).decode()
+def twilio(path, data):
+    url = 'https://api.twilio.com/2010-04-01/Accounts/' + SID + path
+    body = urllib.parse.urlencode(data).encode()
+    req = urllib.request.Request(url, data=body)
+    req.add_header('Authorization', 'Basic ' + auth)
+    req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+try:
+    if ACTION == 'send_sms':
+        to   = os.environ.get('AGENT_PARAM_TO', '')
+        body = os.environ.get('AGENT_PARAM_BODY', '')
+        if not to or not body:
+            print('Укажите AGENT_PARAM_TO и AGENT_PARAM_BODY')
+        else:
+            res = twilio('/Messages.json', {'From': FROM, 'To': to, 'Body': body})
+            if res.get('sid'):
+                print('OK: SMS отправлен на ' + to + ', SID=' + res['sid'])
+            else:
+                print('Ошибка: ' + json.dumps(res.get('message', res)))
+    else:
+        res = twilio('/Messages.json?PageSize=5', {})
+        msgs = res.get('messages', [])
+        print('Twilio подключён. Последние сообщения: ' + str(len(msgs)))
+        for m in msgs:
+            print('• ' + m.get('date_sent','')[:10] + ' → ' + m.get('to','') + ': ' + (m.get('body') or '')[:60])
+except Exception as e:
+    print('Ошибка Twilio: ' + str(e))`
+            },
+            playwright: {
+                name: 'Playwright (веб-скрапинг)',
+                fields: [
+                    {k:'SCRAPE_URL', label:'URL для парсинга', ph:'https://example.com', t:'url'},
+                    {k:'SCRAPE_SELECTOR', label:'CSS-селектор элементов (опционально)', ph:'h2, .price, #title', t:'text', opt:true}
+                ],
+                hint: 'Playwright недоступен в sandbox — используется лёгкий скрапинг через urllib + html.parser. Подходит для статических страниц. JS-сайты могут не работать.',
+                code: `import urllib.request, os
+from html.parser import HTMLParser
+URL  = os.environ.get('SCRAPE_URL', '')
+SEL  = os.environ.get('SCRAPE_SELECTOR', '').strip()
+class _TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.texts, self._skip = [], False
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script','style','noscript','nav','footer','head'):
+            self._skip = True
+    def handle_endtag(self, tag):
+        if tag in ('script','style','noscript','nav','footer','head'):
+            self._skip = False
+    def handle_data(self, data):
+        if not self._skip:
+            t = data.strip()
+            if len(t) > 20:
+                self.texts.append(t)
+try:
+    if not URL:
+        print('SCRAPE_URL не задан')
+    else:
+        req = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0 (compatible; AgentBot/1.0)'})
+        with urllib.request.urlopen(req, timeout=12) as r:
+            html = r.read().decode('utf-8', errors='replace')
+        p = _TextExtractor()
+        p.feed(html)
+        import re
+        title_m = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
+        title = (title_m.group(1).strip() if title_m else '(нет)')
+        print('URL: ' + URL)
+        print('Заголовок: ' + title[:100])
+        print('Текстовые блоки (' + str(len(p.texts)) + '):')
+        for t in p.texts[:15]:
+            print('  ' + t[:150])
+except Exception as e:
+    print('Ошибка скрапинга: ' + str(e))`
+            },
+            firebase: {
+                name: 'Firebase / Firestore',
+                fields: [
+                    {k:'FIREBASE_PROJECT_ID', label:'Project ID', ph:'my-project-12345', t:'text'},
+                    {k:'FIREBASE_API_KEY',    label:'Web API Key', ph:'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'FIREBASE_COLLECTION', label:'Коллекция Firestore', ph:'tasks', t:'text', opt:true}
+                ],
+                hint: 'Firebase Console → Project Settings. Web API Key — во вкладке General. Правила Firestore должны разрешать чтение (или используйте Service Account + OAuth для закрытых данных).',
+                code: `import urllib.request, json, os
+PROJECT  = os.environ.get('FIREBASE_PROJECT_ID', '')
+API_KEY  = os.environ.get('FIREBASE_API_KEY', '')
+COLL     = os.environ.get('FIREBASE_COLLECTION', 'tasks')
+ACTION   = os.environ.get('AGENT_ACTION', '')
+BASE  = 'https://firestore.googleapis.com/v1/projects/' + PROJECT + '/databases/(default)/documents'
+def fs_get(path):
+    req = urllib.request.Request(BASE + path + '?key=' + API_KEY)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+def _val(v):
+    if not isinstance(v, dict): return str(v)
+    for t in ('stringValue','integerValue','doubleValue','booleanValue','timestampValue'):
+        if t in v: return str(v[t])
+    if 'arrayValue' in v:
+        return '[' + ','.join(_val(x) for x in v['arrayValue'].get('values',[])) + ']'
+    return str(v)
+try:
+    if ACTION == 'add':
+        title = os.environ.get('AGENT_PARAM_TITLE', 'Новая запись')
+        body_str = os.environ.get('AGENT_PARAM_DATA', '{}')
+        try: extra = json.loads(body_str)
+        except: extra = {}
+        import datetime as _dt
+        fields = {'title': {'stringValue': title}, 'created': {'timestampValue': _dt.datetime.utcnow().isoformat() + 'Z'}}
+        for k, val in extra.items():
+            fields[k] = {'stringValue': str(val)}
+        body = json.dumps({'fields': fields}).encode()
+        req = urllib.request.Request(BASE + '/' + COLL + '?key=' + API_KEY, data=body, method='POST')
+        req.add_header('Content-Type', 'application/json')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        print('OK: документ создан — ' + d.get('name','?').split('/')[-1])
+    else:
+        d = fs_get('/' + COLL)
+        docs = d.get('documents', [])
+        print('Firebase «' + COLL + '»: ' + str(len(docs)) + ' документов')
+        for doc in docs[:8]:
+            name = doc.get('name','').split('/')[-1]
+            fields = doc.get('fields', {})
+            parts = [k + '=' + _val(v)[:30] for k, v in list(fields.items())[:3]]
+            print('• ' + name[:12] + ' | ' + ' | '.join(parts))
+except Exception as e:
+    print('Ошибка Firebase: ' + str(e))`
+            },
+            aws_s3: {
+                name: 'AWS S3',
+                fields: [
+                    {k:'AWS_ACCESS_KEY_ID',     label:'Access Key ID', ph:'AKIAIOSFODNN7EXAMPLE', t:'text'},
+                    {k:'AWS_SECRET_ACCESS_KEY', label:'Secret Access Key', ph:'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLE', t:'password'},
+                    {k:'AWS_S3_BUCKET',         label:'Имя бакета', ph:'my-bucket', t:'text'},
+                    {k:'AWS_REGION',            label:'Регион', ph:'us-east-1', t:'text', opt:true}
+                ],
+                hint: 'AWS Console → IAM → Users → Create User → Attach AmazonS3ReadOnlyAccess. Для записи — AmazonS3FullAccess. Только stdlib (hmac, hashlib) — boto3 не нужен.',
+                code: `import urllib.request, json, os, datetime, hmac, hashlib
+ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY_ID', '')
+SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+BUCKET     = os.environ.get('AWS_S3_BUCKET', '')
+REGION     = os.environ.get('AWS_REGION', 'us-east-1')
+ACTION     = os.environ.get('AGENT_ACTION', '')
+def sign(key, msg):
+    return hmac.new(key, msg.encode(), hashlib.sha256).digest()
+def get_signature_key(secret, date_stamp, region, service):
+    k = sign(('AWS4' + secret).encode(), date_stamp)
+    k = sign(k, region)
+    k = sign(k, service)
+    return sign(k, 'aws4_request')
+def s3_request(method, path, body=b'', headers_extra=None):
+    t = datetime.datetime.utcnow()
+    amz_date  = t.strftime('%Y%m%dT%H%M%SZ')
+    date_stamp = t.strftime('%Y%m%d')
+    host = BUCKET + '.s3.' + REGION + '.amazonaws.com'
+    payload_hash = hashlib.sha256(body).hexdigest()
+    canon_hdrs = 'host:' + host + '\\nx-amz-content-sha256:' + payload_hash + '\\nx-amz-date:' + amz_date + '\\n'
+    signed_hdrs = 'host;x-amz-content-sha256;x-amz-date'
+    canon_req = method + '\\n' + path + '\\n\\n' + canon_hdrs + '\\n' + signed_hdrs + '\\n' + payload_hash
+    cred_scope = date_stamp + '/' + REGION + '/s3/aws4_request'
+    string_to_sign = 'AWS4-HMAC-SHA256\\n' + amz_date + '\\n' + cred_scope + '\\n' + hashlib.sha256(canon_req.encode()).hexdigest()
+    signing_key = get_signature_key(SECRET_KEY, date_stamp, REGION, 's3')
+    signature = hmac.new(signing_key, string_to_sign.encode(), hashlib.sha256).hexdigest()
+    auth = 'AWS4-HMAC-SHA256 Credential=' + ACCESS_KEY + '/' + cred_scope + ', SignedHeaders=' + signed_hdrs + ', Signature=' + signature
+    hdrs = {'Host': host, 'x-amz-date': amz_date, 'x-amz-content-sha256': payload_hash, 'Authorization': auth}
+    if headers_extra: hdrs.update(headers_extra)
+    url = 'https://' + host + path
+    req = urllib.request.Request(url, data=body or None, headers=hdrs, method=method)
+    with urllib.request.urlopen(req, timeout=12) as r:
+        return r.read().decode('utf-8', errors='replace'), r.status
+def _parse_s3_list(xml):
+    import re
+    keys  = re.findall(r'<Key>(.*?)</Key>', xml)
+    sizes = re.findall(r'<Size>(\\d+)</Size>', xml)
+    return list(zip(keys, sizes))
+try:
+    if ACTION == 'list':
+        prefix = os.environ.get('AGENT_PARAM_PREFIX', '')
+        path = '/?list-type=2' + ('&prefix=' + prefix if prefix else '') + '&max-keys=20'
+        xml, _ = s3_request('GET', path)
+        items = _parse_s3_list(xml)
+        print('S3 бакет: ' + BUCKET + ' (' + str(len(items)) + ' объектов)')
+        for key, size in items:
+            kb = str(round(int(size)/1024, 1)) + ' KB'
+            print('  ' + key + ' — ' + kb)
+    elif ACTION == 'get':
+        key = os.environ.get('AGENT_PARAM_KEY', '')
+        content, _ = s3_request('GET', '/' + key)
+        print(content[:2000])
+    else:
+        xml, _ = s3_request('GET', '/?list-type=2&max-keys=5')
+        items = _parse_s3_list(xml)
+        import re
+        count_m = re.search(r'<KeyCount>(\\d+)</KeyCount>', xml)
+        total_m = re.search(r'<Name>(.*?)</Name>', xml)
+        print('AWS S3 подключён. Бакет: ' + (total_m.group(1) if total_m else BUCKET))
+        print('Объектов в бакете: ' + (count_m.group(1) if count_m else str(len(items))))
+        for key, size in items:
+            kb = str(round(int(size)/1024, 1)) + ' KB'
+            print('  ' + key + ' — ' + kb)
+except Exception as e:
+    print('Ошибка AWS S3: ' + str(e))`
             }
         };
 
