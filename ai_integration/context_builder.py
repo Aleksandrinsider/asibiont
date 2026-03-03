@@ -442,7 +442,7 @@ class ContextBuilder:
                         intent_map = {'meeting': 'встреча', 'collaboration': 'сотрудничество', 'idea': 'идея', 'project_invite': 'проект', 'question': 'вопрос', 'reply': 'ответ'}
                         intent_str = intent_map.get(m.intent, m.intent or '')
                         msg_lines.append(f"  {s_name} ({intent_str}): {m.message_text[:80]}...")
-                    hints.append(f"НЕПРОЧИТАННЫХ СООБЩЕНИЙ: {len(unread_msgs)} — вызови get_incoming_messages и расскажи пользователю\n" + "\n".join(msg_lines))
+                    hints.append(f"СООБЩЕНИЯ В ЯЩИКЕ ({len(unread_msgs)} непрочит.): если пользователь ни о чём не просил — можно упомянуть вскользь.\n" + "\n".join(msg_lines))
                 
                 # Проверяем ответы на отправленные сообщения
                 new_replies = session.query(UM).filter(
