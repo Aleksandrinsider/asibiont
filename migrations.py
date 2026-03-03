@@ -501,6 +501,54 @@ def _migrate_arena(session, inspector):
                 logger.debug(f"[MIGRATION] author_username add skipped: {e}")
 
 
+def _migrate_fix_agent_python_code(session):
+    """Патчит python_code у существующих агентов: исправляет 3 бага в старых шаблонах.
+
+    1. mail.login(USER, PASS) → mail.login(USER, PASS.replace(' ', ''))
+       (IMAP не принимает app-пароли с пробелами)
+    2. r'<![CDATA[(.*?)]]>' → r'<!\[CDATA\[(.*?)\]\]>'
+       (скобки в regex нужно экранировать)
+    3. r'<link>s*(.*?)s*</link>' → r'<link>\s*(.*?)\s*</link>'
+       (пропущен backslash перед \s)
+    """
+    try:
+        from models import UserAgent
+        agents = session.query(UserAgent).filter(
+            UserAgent.python_code != None,
+            UserAgent.python_code != '',
+        ).all()
+        patched = 0
+        for agent in agents:
+            code = agent.python_code or ''
+            new_code = code
+            # Fix 1: IMAP login without .replace
+            new_code = new_code.replace(
+                'mail.login(USER, PASS)\n',
+                'mail.login(USER, PASS.replace(\' \', \'\'))\n',
+            )
+            # Fix 2: CDATA regex — unescaped brackets
+            new_code = new_code.replace(
+                r"r'<![CDATA[(.*?)]]>'",
+                r"r'<!\[CDATA\[(.*?)\]\]>'",
+            )
+            # Fix 3: RSS link regex — missing backslash
+            new_code = new_code.replace(
+                r"r'<link>s*(.*?)s*</link>'",
+                r"r'<link>\s*(.*?)\s*</link>'",
+            )
+            if new_code != code:
+                agent.python_code = new_code
+                patched += 1
+        if patched:
+            session.commit()
+            logger.info(f"[MIGRATION] Fixed python_code bugs in {patched} agents")
+        else:
+            logger.debug("[MIGRATION] No agents needed python_code fixes")
+    except Exception as e:
+        session.rollback()
+        logger.warning(f"[MIGRATION] _migrate_fix_agent_python_code skipped: {e}")
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -522,6 +570,7 @@ def run_migrations():
         _migrate_email_contacts(session, inspector)
         _migrate_marketplace(session, inspector)
         _migrate_arena(session, inspector)
+        _migrate_fix_agent_python_code(session)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")
