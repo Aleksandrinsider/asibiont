@@ -10915,7 +10915,7 @@ async def api_arena_agent_avatar_handler(request):
                 return web.Response(
                     body=img_bytes,
                     content_type=ct,
-                    headers={'Cache-Control': 'public, max-age=3600'}
+                    headers={'Cache-Control': 'no-cache, no-store, must-revalidate'}
                 )
         return web.Response(status=404)
     except Exception as e:
