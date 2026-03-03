@@ -521,12 +521,14 @@ class ExternalAPIClient:
                     except Exception as e:
                         err_str = str(e)
                         # 202 Ratelimit или DuckDuckGoRatelimitException
-                        if '202' in err_str or 'atelimit' in err_str or 'Ratelimit' in err_str:
-                            wait = base_delay * (2 ** attempt) + 2.0
-                            logger.warning(f"[DDG] Rate limit on attempt {attempt+1}, waiting {wait:.1f}s: {query[:40]}")
-                            if attempt < max_retries - 1:
-                                await _aio.sleep(wait)
-                                continue
+                        _is_ratelimit = '202' in err_str or 'atelimit' in err_str or 'Ratelimit' in err_str
+                        # Транзиентные ошибки декодирования тела ответа (httpx/DDGS)
+                        _is_transient = 'DecodeError' in err_str or 'decode' in err_str.lower() or 'Body collection' in err_str or 'body' in err_str.lower()
+                        if (_is_ratelimit or _is_transient) and attempt < max_retries - 1:
+                            wait = base_delay * (2 ** attempt) + (2.0 if _is_ratelimit else 1.0)
+                            logger.warning(f"[DDG] {'Rate limit' if _is_ratelimit else 'Transient error'} on attempt {attempt+1}, retry in {wait:.1f}s: {err_str[:80]}")
+                            await _aio.sleep(wait)
+                            continue
                         _rec_err('ddg', f"Search failed: {e}")
                         logger.warning(f"[DDG] Error: {e}")
                         return None
