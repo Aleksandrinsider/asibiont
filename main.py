@@ -9519,6 +9519,7 @@ async def api_agent_generate_code_handler(request):
         data = await request.json()
         description = (data.get('description') or '').strip()
         api_keys_raw = (data.get('api_keys') or '').strip()
+        base_code = (data.get('base_code') or '').strip()
         if not description:
             return web.json_response({'error': 'description required'}, status=400)
 
@@ -9535,7 +9536,19 @@ async def api_agent_generate_code_handler(request):
         if key_names:
             keys_hint = f'\nДоступные переменные окружения (os.environ): {", ".join(key_names)}'
 
-        prompt = f"""Напиши Python-скрипт для AI-агента. Скрипт выполняется перед каждым ответом агента и должен напечатать (print) актуальные данные в stdout — они попадут в контекст ИИ.
+        # Если передан базовый шаблон — просим ИИ модифицировать его, а не писать с нуля
+        if base_code:
+            prompt = f"""У тебя есть готовый рабочий Python-скрипт агента:
+
+```python
+{base_code}
+```
+
+Задача пользователя: {description}{keys_hint}
+
+Модифицируй скрипт согласно задаче. Сохрани всю правильную структуру кода (IMAP логин, strip пробелов из пароля, try/except, reversed(), is_multipart и т.д.). Верни ТОЛЬКО итоговый Python-код без пояснений и без markdown-блоков."""
+        else:
+            prompt = f"""Напиши Python-скрипт для AI-агента. Скрипт выполняется перед каждым ответом агента и должен напечатать (print) актуальные данные в stdout — они попадут в контекст ИИ.
 
 Задача агента: {description}{keys_hint}
 

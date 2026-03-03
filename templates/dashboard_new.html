@@ -4205,13 +4205,38 @@ except Exception as e:
             }
 
             // ── Шаг 2: есть описание → ИИ-генерация ──
+            // Если есть ключи известных сервисов — передаём шаблон как контекст для ИИ
+            let base_code = '';
+            {
+                const keyToSvc2 = {};
+                for (const [svc, tmpl] of Object.entries(_MPA_SVC)) {
+                    for (const f of (tmpl.fields || [])) keyToSvc2[f.k] = svc;
+                }
+                const foundSvcs2 = new Set();
+                for (const line of apiKeys.split('\n')) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.includes('=')) continue;
+                    const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
+                    const svc = keyToSvc2[key];
+                    if (svc) foundSvcs2.add(svc);
+                }
+                if (foundSvcs2.size > 0) {
+                    const parts = [];
+                    for (const svc of foundSvcs2) {
+                        const tmpl = _MPA_SVC[svc];
+                        if (tmpl?.code) parts.push(tmpl.code);
+                    }
+                    base_code = parts.join('\n\n');
+                }
+            }
+
             if (btn) { btn.disabled = true; btn.textContent = 'Генерирую...'; }
             if (status) { status.style.display = 'block'; status.textContent = 'ИИ пишет код...'; }
             try {
                 const r = await fetch('/api/marketplace/agents/generate-code', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({description: desc, api_keys: apiKeys})
+                    body: JSON.stringify({description: desc, api_keys: apiKeys, base_code})
                 });
                 const data = await r.json();
                 if (data.error) throw new Error(data.error);
