@@ -587,6 +587,23 @@ class ReminderService:
                 # Для тестов - вывод в консоль
                 logger.info(f"[REMINDER SENT] To user {user_id}: {reminder_text}")
                 reminder_sent_successfully = True
+
+            # ── Discord DM (дополнительно, если пользователь привязал Discord) ────────────────
+            if reminder_text:
+                try:
+                    _ddb = Session()
+                    try:
+                        from models import User as _UReminder
+                        _du = _ddb.query(_UReminder).filter_by(telegram_id=user_id).first()
+                        _discord_id = getattr(_du, 'discord_id', None) if _du else None
+                    finally:
+                        _ddb.close()
+                    if _discord_id:
+                        from discord_bot import send_discord_dm
+                        await send_discord_dm(_discord_id, reminder_text)
+                        logger.info(f"[REMINDER] Discord DM sent to discord_id={_discord_id}")
+                except Exception as _de:
+                    logger.warning(f"[REMINDER] Discord DM failed for user {user_id}: {_de}")
         except Exception as e:
             logger.error(f"❌ Critical error in send_reminder for task {task_id}: {type(e).__name__}: {e}")
             logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -1103,6 +1120,16 @@ class ReminderService:
                     self._save_to_chat_history(user_id, proactive_text)
                 else:
                     logger.info(f"[PROACTIVE] To user {user_id}: {proactive_text}")
+
+                # ── Discord DM (дополнительно) ────────────────────────────────────
+                _discord_id_p = getattr(user, 'discord_id', None)
+                if _discord_id_p:
+                    try:
+                        from discord_bot import send_discord_dm
+                        await send_discord_dm(_discord_id_p, proactive_text)
+                        logger.info(f"[PROACTIVE] Discord DM sent to discord_id={_discord_id_p}")
+                    except Exception as _de:
+                        logger.warning(f"[PROACTIVE] Discord DM failed for user {user_id}: {_de}")
             except Exception as e:
                 logging.error(f"Failed to send proactive message to user {user_id}: {e}")
                 db.rollback()

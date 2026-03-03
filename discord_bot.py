@@ -120,6 +120,25 @@ async def stop_discord_bot():
             pass
 
 
+async def send_discord_dm(discord_id: int, text: str) -> bool:
+    """Send a DM to a Discord user by their discord_id.
+
+    Returns True on success, False on failure.
+    Used by reminder_service to push reminders/proactive messages.
+    """
+    if not _discord_bot or _discord_bot.is_closed():
+        return False
+    try:
+        user = await _discord_bot.fetch_user(discord_id)
+        for chunk in _split_message(text):
+            await user.send(chunk)
+        logger.info(f"[DISCORD] DM sent to discord_id={discord_id}")
+        return True
+    except Exception as e:
+        logger.warning(f"[DISCORD] Failed to send DM to discord_id={discord_id}: {e}")
+        return False
+
+
 async def discord_oauth_callback(request):
     """
     aiohttp route: GET /auth/discord
