@@ -2220,12 +2220,14 @@
                                 syncData.interactions.forEach(i => displayedMessageIds.add(i.id));
                                 lastMessageCount = syncData.interactions.length;
                                 // Update pending checkpoint separators with real interaction IDs
+                                const normalize = s => (s || '').trim().replace(/\s+/g, ' ');
                                 document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
                                     const rawText = (sep.dataset.pendingText || '').trim();
                                     const userInteractions = syncData.interactions.filter(i => i.message_type === 'user');
                                     const match = rawText
-                                        ? userInteractions.filter(i => (i.content || '').trim() === rawText).pop()
-                                        : (() => { const userMsgEl = sep.nextElementSibling; if (!userMsgEl || !userMsgEl.classList.contains('user')) return null; const t2 = (userMsgEl.querySelector('.message-text')?.innerText || '').trim(); return userInteractions.filter(i => (i.content || '').trim() === t2).pop(); })();
+                                        ? userInteractions.filter(i => normalize(i.content) === normalize(rawText)).pop()
+                                        || userInteractions.filter(i => normalize(i.content).includes(normalize(rawText).slice(0, 30))).pop()
+                                        : (() => { const userMsgEl = sep.nextElementSibling; if (!userMsgEl || !userMsgEl.classList.contains('user')) return null; const t2 = normalize(userMsgEl.querySelector('.message-text')?.innerText || ''); return userInteractions.filter(i => normalize(i.content) === t2).pop(); })();
                                     if (match) { sep.dataset.interactionId = String(match.id); delete sep.dataset.pendingText; }
                                 });
                             }
@@ -2461,10 +2463,32 @@
         }
 
         async function rollbackCheckpoint(separatorEl) {
-            const interactionId = separatorEl && separatorEl.dataset.interactionId;
+            let interactionId = separatorEl && separatorEl.dataset.interactionId;
             if (!interactionId || interactionId === 'pending') {
-                showNotification('Контрольная точка ещё не синхронизирована, подождите секунду', 'error');
-                return;
+                // Try immediate re-sync to resolve pending checkpoint
+                try {
+                    const syncResp = await fetch('/api/interactions', { credentials: 'include', cache: 'no-store' });
+                    if (syncResp.ok) {
+                        const syncData = await syncResp.json();
+                        if (syncData.interactions) {
+                            document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
+                                const rawText = (sep.dataset.pendingText || '').trim();
+                                const userInteractions = syncData.interactions.filter(i => i.message_type === 'user');
+                                const normalize = s => (s || '').trim().replace(/\s+/g, ' ');
+                                const match = rawText
+                                    ? userInteractions.filter(i => normalize(i.content) === normalize(rawText)).pop()
+                                    || userInteractions.filter(i => normalize(i.content).includes(normalize(rawText).slice(0, 30))).pop()
+                                    : (() => { const userMsgEl = sep.nextElementSibling; if (!userMsgEl || !userMsgEl.classList.contains('user')) return null; const t2 = normalize(userMsgEl.querySelector('.message-text')?.innerText || ''); return userInteractions.filter(i => normalize(i.content) === t2).pop(); })();
+                                if (match) { sep.dataset.interactionId = String(match.id); delete sep.dataset.pendingText; }
+                            });
+                        }
+                    }
+                } catch(e) {}
+                interactionId = separatorEl.dataset.interactionId;
+                if (!interactionId || interactionId === 'pending') {
+                    showNotification('Контрольная точка ещё не синхронизирована, подождите секунду', 'error');
+                    return;
+                }
             }
             if (!confirm('Удалить все сообщения начиная с этой точки? Действие нельзя отменить.')) return;
             try {
