@@ -2965,7 +2965,7 @@ else:
                         s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                         s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                         s = _re.sub(r'<[^>]+>', ' ', s)
-                        return _re.sub(r'[ \t]+', ' ', s).strip()
+                        return _re.sub(r'\s+', ' ', s).strip()
                     body = ''
                     if msg.is_multipart():
                         _html_fb = ''
@@ -3032,7 +3032,7 @@ try:
                     s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<[^>]+>', ' ', s)
-                    return _re.sub(r'[ \t]+', ' ', s).strip()
+                    return _re.sub(r'\s+', ' ', s).strip()
                 body = ''
                 if msg.is_multipart():
                     _html_fb = ''
@@ -3099,7 +3099,7 @@ try:
                     s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<[^>]+>', ' ', s)
-                    return _re.sub(r'[ \t]+', ' ', s).strip()
+                    return _re.sub(r'\s+', ' ', s).strip()
                 body = ''
                 if msg.is_multipart():
                     _html_fb = ''
