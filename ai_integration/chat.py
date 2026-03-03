@@ -1426,11 +1426,21 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                     if '=' in _kl and not _kl.startswith('#'):
                         _k_, _, _v_ = _kl.partition('=')
                         _env_pm[_k_.strip()] = _v_.strip()
+                def _pm_resource_limits():
+                    try:
+                        import resource as _r
+                        _r.setrlimit(_r.RLIMIT_AS,     (64*1024*1024, 64*1024*1024))
+                        _r.setrlimit(_r.RLIMIT_CPU,    (12, 12))
+                        _r.setrlimit(_r.RLIMIT_NOFILE, (32, 32))
+                    except Exception:
+                        pass
+                from ai_integration.autonomous_agent import _wrap_agent_code as _pm_wac
                 _proc_pm = await _aio_pm.create_subprocess_exec(
-                    _sys_pm.executable, '-c', _a_py,
+                    _sys_pm.executable, '-c', _pm_wac(_a_py),
                     stdout=_aio_pm.subprocess.PIPE,
                     stderr=_aio_pm.subprocess.PIPE,
                     env=_env_pm,
+                    **({} if _sys_pm.platform == 'win32' else {'preexec_fn': _pm_resource_limits}),
                 )
                 try:
                     _out_pm, _err_pm = await _aio_pm.wait_for(_proc_pm.communicate(), timeout=10.0)

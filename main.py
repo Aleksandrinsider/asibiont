@@ -9737,29 +9737,66 @@ async def api_marketplace_publish_agent_handler(request):
             # Python-код агента (выполняется перед генерацией ответа)
             _py_code_raw = (data.get('python_code') or '').strip()
             if _py_code_raw:
-                _DANGEROUS_PATTERNS = [
-                    # Системные операции
-                    'os.system', 'os.popen', 'os.remove', 'os.rmdir', 'os.listdir',
-                    'os.execv', 'os.fork', 'os.kill',
-                    'subprocess', 'shutil.',
-                    # Файловая система
-                    'open(', 'pathlib', 'tempfile', 'glob.',
-                    # Динамическое выполнение
-                    'eval(', 'exec(', '__import__(', 'compile(',
-                    'importlib', 'ctypes', 'pickle', 'marshal',
-                    # Сетевые операции (предотвращаем исходящие запросы с нашего IP)
-                    # smtplib, imaplib, urllib.request разрешены для работы с почтой и API
-                    'socket.', 'requests.', 'httpx.', 'aiohttp.',
-                    'http.client', 'ftplib', 'telnetlib',
-                    # Памятные бомбы
-                    '* 10**', '* 10 **', '*10**',
-                ]
-                # Убираем разрешённые вхождения (urllib.request.urlopen не является запрещённым open())
-                _py_code_check = _py_code_raw.replace('urlopen(', '_URLOPEN_SAFE(')
-                _found = [p for p in _DANGEROUS_PATTERNS if p in _py_code_check]
-                if _found:
+                import ast as _ast
+                # ── AST-анализ: строковый blacklist тривиально обходится ──────────────
+                _FORBIDDEN_MODULES = {
+                    'subprocess', 'shutil', 'socket', 'requests', 'httpx', 'aiohttp',
+                    'http', 'ftplib', 'telnetlib', 'asyncio', 'threading', 'multiprocessing',
+                    'ctypes', 'pickle', 'marshal', 'importlib', 'runpy',
+                    'pty', 'tty', 'termios', 'nis', 'pwd', 'grp', 'spwd',
+                    'pathlib', 'tempfile', 'glob', 'fnmatch',
+                }
+                _FORBIDDEN_CALLS = {
+                    'eval', 'exec', 'compile', '__import__', 'open',
+                    'input', 'breakpoint', 'quit', 'exit',
+                }
+                _FORBIDDEN_ATTRS = {
+                    '__class__', '__bases__', '__subclasses__', '__mro__',
+                    '__builtins__', '__globals__', '__code__', '__closure__',
+                    '__import__', '__loader__', '__spec__',
+                    'system', 'popen', 'execv', 'execvp', 'execve',
+                    'fork', 'forkpty', 'kill', 'killpg', 'remove', 'rmdir',
+                }
+                _AST_ERRORS = []
+                try:
+                    _tree = _ast.parse(_py_code_raw)
+                    for _node in _ast.walk(_tree):
+                        # Запрещённые импорты
+                        if isinstance(_node, (_ast.Import, _ast.ImportFrom)):
+                            if isinstance(_node, _ast.Import):
+                                for _alias in _node.names:
+                                    _mod = _alias.name.split('.')[0]
+                                    if _mod in _FORBIDDEN_MODULES or _mod == 'os':
+                                        # os разрешён только для os.environ
+                                        pass  # проверим атрибуты ниже
+                                    else:
+                                        pass
+                            if isinstance(_node, _ast.ImportFrom) and _node.module:
+                                _mod = _node.module.split('.')[0]
+                                if _mod in _FORBIDDEN_MODULES:
+                                    _AST_ERRORS.append(f'import {_node.module}')
+                        # Запрещённые имена функций и атрибутов
+                        if isinstance(_node, _ast.Call):
+                            if isinstance(_node.func, _ast.Name):
+                                if _node.func.id in _FORBIDDEN_CALLS:
+                                    _AST_ERRORS.append(f'вызов {_node.func.id}()')
+                            if isinstance(_node.func, _ast.Attribute):
+                                if _node.func.attr in _FORBIDDEN_ATTRS:
+                                    _AST_ERRORS.append(f'атрибут .{_node.func.attr}')
+                        # Доступ к dunders (__class__, __subclasses__ и т.д.)
+                        if isinstance(_node, _ast.Attribute):
+                            if _node.attr in _FORBIDDEN_ATTRS:
+                                _AST_ERRORS.append(f'атрибут .{_node.attr}')
+                        if isinstance(_node, _ast.Name):
+                            if _node.id in _FORBIDDEN_CALLS:
+                                _AST_ERRORS.append(f'имя {_node.id}')
+                except SyntaxError as _se:
+                    return web.json_response({'error': f'Синтаксическая ошибка в коде: {_se}'}, status=400)
+                if _AST_ERRORS:
+                    _uniq = list(dict.fromkeys(_AST_ERRORS))[:5]
                     return web.json_response(
-                        {'error': f'Код содержит запрещённые операции: {_found}. Используйте urllib.request вместо requests/httpx, не используйте open() для файлов.'},
+                        {'error': f'Код содержит запрещённые операции: {", ".join(_uniq)}. '
+                                  f'Используйте urllib.request для HTTP-запросов, os.environ для переменных среды.'},
                         status=400
                     )
             agent.python_code = _py_code_raw

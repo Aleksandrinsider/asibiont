@@ -42,6 +42,34 @@ from .self_learning import get_learner
 
 logger = logging.getLogger(__name__)
 
+# ── SSRF-защита: преамбула, которая инжектируется перед кодом агента ─────────
+# Патчит urllib.request.urlopen, блокируя запросы во внутренние сети (RFC-1918,
+# link-local, loopback). Защищает от атак типа Server-Side Request Forgery,
+# даже если AST-валидация на upload-этапе пропустила подозрительный код.
+_AGENT_CODE_PREAMBLE = '''\
+import urllib.request as _ssrf_ur, socket as _ssrf_sk, ipaddress as _ssrf_ia
+_ssrf_orig_open = _ssrf_ur.urlopen
+def _ssrf_safe_open(url, *_a, **_kw):
+    import re as _ssrf_re
+    _u = url.full_url if hasattr(url, 'full_url') else str(url)
+    _m = _ssrf_re.search(r'https?://([^/:?#\\s]+)', _u)
+    if _m:
+        try:
+            _ip = _ssrf_ia.ip_address(_ssrf_sk.gethostbyname(_m.group(1)))
+            if not _ip.is_global:
+                raise PermissionError('SSRF: internal network requests are blocked')
+        except (ValueError, OSError):
+            pass
+    return _ssrf_orig_open(url, *_a, **_kw)
+_ssrf_ur.urlopen = _ssrf_safe_open
+'''
+
+
+def _wrap_agent_code(code: str) -> str:
+    """Оборачивает агентский код SSRF-преамбулой."""
+    return _AGENT_CODE_PREAMBLE + code
+
+
 # ── Хелпер: разбивает вывод скрипта по именованным секциям ──────────────────
 def _parse_integration_sections(output: str, agent_name: str) -> list:
     """
@@ -1212,7 +1240,7 @@ class HybridAutonomousAgent:
             action_params = {}
         if not action:
             return {"error": "Параметр action не указан"}
-        py_code = agent_data['python_code'].strip()
+        py_code = _wrap_agent_code(agent_data['python_code'].strip())
         api_keys_raw = agent_data.get('user_api_keys', '') or ''
         _is_linux_ea = _sys_ea.platform != 'win32'
         env = {
@@ -1236,17 +1264,21 @@ class HybridAutonomousAgent:
         for _k, _v in action_params.items():
             env[f'AGENT_PARAM_{str(_k).upper()}'] = str(_v)
         _is_linux = _sys_ea.platform != 'win32'
-        def _mem_limit():
+        def _resource_limits():
             try:
                 import resource as _res
-                _lim = 64 * 1024 * 1024
-                _res.setrlimit(_res.RLIMIT_AS, (_lim, _lim))
+                _mem = 64 * 1024 * 1024   # 64 MB RAM
+                _res.setrlimit(_res.RLIMIT_AS, (_mem, _mem))
+                _cpu = 12                  # 12 сек CPU-времени
+                _res.setrlimit(_res.RLIMIT_CPU, (_cpu, _cpu))
+                _files = 32                # не более 32 open file descriptors
+                _res.setrlimit(_res.RLIMIT_NOFILE, (_files, _files))
             except Exception:
                 pass
         try:
             _kwargs = dict(stdout=_aio_ea.subprocess.PIPE, stderr=_aio_ea.subprocess.PIPE, env=env)
             if _is_linux:
-                _kwargs['preexec_fn'] = _mem_limit
+                _kwargs['preexec_fn'] = _resource_limits
             proc = await _aio_ea.create_subprocess_exec(_sys_ea.executable, '-c', py_code, **_kwargs)
             try:
                 stdout, stderr = await _aio_ea.wait_for(proc.communicate(), timeout=15.0)
