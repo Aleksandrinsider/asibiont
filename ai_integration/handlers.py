@@ -10823,19 +10823,48 @@ async def send_email(
             try:
                 from models import EmailOutreach as _EO_log_g
                 from models import EmailCampaign as _EC_log_g
-                _camp_g = session.query(_EC_log_g).filter_by(user_id=user.id, status='personal').first()
+                import datetime as _dt_mod_g
+                _now_g = _dt_mod_g.datetime.now(_dt_mod_g.timezone.utc)
+                # Ищем личную кампанию для этого gmail-адреса отправителя
+                _camp_g = session.query(_EC_log_g).filter_by(
+                    user_id=user.id, status='personal',
+                    sender_email=_gmail_reply_to
+                ).first()
                 if not _camp_g:
-                    from datetime import datetime as _dt_g, timezone as _tz_g
-                    _camp_g = _EC_log_g(user_id=user.id, name='Личная почта', goal='', target_audience='',
-                                        offer='', sender_name=sender_name, sender_email=_gmail_reply_to,
-                                        status='personal', daily_limit=50, max_emails=0)
-                    session.add(_camp_g); session.flush()
-                session.add(_EO_log_g(campaign_id=_camp_g.id, user_id=user.id,
-                    recipient_email=to_clean, subject=subject, body=body,
-                    sender_email='outreach@asibiont.com', status='sent'))
+                    _camp_g = _EC_log_g(
+                        user_id=user.id, name='Личная почта',
+                        goal='', target_audience='', offer='',
+                        sender_name=sender_name, sender_email=_gmail_reply_to,
+                        status='personal', daily_limit=50, max_emails=0,
+                        emails_sent=0, emails_replied=0,
+                    )
+                    session.add(_camp_g)
+                    session.flush()
+                # Обновляем существующий outreach или создаём новый
+                # (уникальный индекс: campaign_id + recipient_email)
+                _eo_g = session.query(_EO_log_g).filter_by(
+                    campaign_id=_camp_g.id, recipient_email=to_clean
+                ).first()
+                if _eo_g:
+                    _eo_g.subject = subject
+                    _eo_g.body = body
+                    _eo_g.status = 'sent'
+                    _eo_g.sent_at = _now_g
+                else:
+                    session.add(_EO_log_g(
+                        campaign_id=_camp_g.id, user_id=user.id,
+                        recipient_email=to_clean, subject=subject, body=body,
+                        sender_email='outreach@asibiont.com',
+                        status='sent', sent_at=_now_g,
+                    ))
+                    _camp_g.emails_sent = (_camp_g.emails_sent or 0) + 1
                 session.commit()
-            except Exception:
-                pass
+            except Exception as _log_err_g:
+                logger.warning(f'[SEND_EMAIL] Campaign log error: {_log_err_g}')
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
             _reply_hint = f" (ответы придут на {_gmail_reply_to})" if _gmail_reply_to and '@' in _gmail_reply_to else ''
             return f"✅ Письмо отправлено на {to_clean} (Gmail){_reply_hint}"
 
@@ -11036,20 +11065,34 @@ async def send_email(
                 session.add(campaign)
                 session.flush()
             now_utc = _dt2.now(_tz2.utc)
-            outreach = _EmailOutreach(
-                campaign_id=campaign.id,
-                user_id=user.id,
-                recipient_email=to_clean,
-                subject=subject,
-                body=body,
-                status='sent',
-                resend_id=resend_id,
-                sent_at=now_utc,
-            )
-            session.add(outreach)
-            campaign.emails_sent = (campaign.emails_sent or 0) + 1
+            # Обновляем или создаём запись outreach (unique: campaign_id + recipient_email)
+            _eo_existing = session.query(_EmailOutreach).filter_by(
+                campaign_id=campaign.id, recipient_email=to_clean
+            ).first()
+            if _eo_existing:
+                _eo_existing.subject = subject
+                _eo_existing.body = body
+                _eo_existing.status = 'sent'
+                _eo_existing.sent_at = now_utc
+                if resend_id:
+                    _eo_existing.resend_id = resend_id
+                _eo_saved = _eo_existing
+            else:
+                _eo_new = _EmailOutreach(
+                    campaign_id=campaign.id,
+                    user_id=user.id,
+                    recipient_email=to_clean,
+                    subject=subject,
+                    body=body,
+                    status='sent',
+                    resend_id=resend_id,
+                    sent_at=now_utc,
+                )
+                session.add(_eo_new)
+                campaign.emails_sent = (campaign.emails_sent or 0) + 1
+                _eo_saved = _eo_new
             session.commit()
-            logger.info(f"[SEND_EMAIL] Outreach #{outreach.id} saved for {to_clean} (campaign #{campaign.id})")
+            logger.info(f"[SEND_EMAIL] Outreach saved for {to_clean} (campaign #{campaign.id})")
             # --- Автоматически создаём EmailContact если его ещё нет ---
             try:
                 from models import EmailContact as _EmailContact
