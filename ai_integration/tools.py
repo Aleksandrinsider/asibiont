@@ -61,6 +61,7 @@ EXCLUDED_TOOLS = {
     # 'toggle_autonomous_feature' — разблокирован, AI может управлять автопостингом
     'cancel_delegation',                 # покрывается reject_delegated_task
     'web_search',                        # дубль research_topic (поиск + анализ)
+    'get_stock_info',                    # удалён — заменён research_topic
     'and_',                              # SQLAlchemy operator leak
     'or_',                               # SQLAlchemy operator leak
 }
@@ -650,23 +651,6 @@ TOOLS = [
                     }
                 },
                 "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_stock_info",
-            "description": "📈 Котировки и анализ любых финансовых активов через поиск + AI. Акции, сырьё (нефть, золото), криптовалюты, индексы. Вызывай когда спрашивают про цену, курс, котировки любого актива. Возвращает текущую цену, изменение, ключевые факторы и экспертный вывод. Для ГЛУБОКОГО рыночного анализа (тренды, прогнозы, стратегии) — используй research_topic.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "symbol": {
-                        "type": "string",
-                        "description": "Тикер или название актива. Примеры: 'AAPL' (Apple), 'GOOGL' (Google), 'SBER' (Сбербанк), 'Brent oil', 'Gold price', 'Bitcoin', 'EUR/USD', 'S&P 500'"
-                    }
-                },
-                "required": ["symbol"]
             }
         }
     },

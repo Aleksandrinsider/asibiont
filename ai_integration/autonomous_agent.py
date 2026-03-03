@@ -853,10 +853,6 @@ class HybridAutonomousAgent:
             'tools': {'send_message_to_user', 'reply_to_user_message',
                       'get_incoming_messages', 'find_and_message_relevant_users'},
         },
-        'finance': {
-            'keywords': ['акци', 'stock', 'биржа', 'курс', 'invest'],
-            'tools': {'get_stock_info'},
-        },
         'marketplace': {
             'keywords': ['маркетплейс', 'marketplace', 'агент', 'agent', '@',
                          'переключ', 'switch'],
