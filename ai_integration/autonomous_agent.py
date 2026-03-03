@@ -821,9 +821,6 @@ class HybridAutonomousAgent:
         'update_profile', 'research_topic',
         'create_goal', 'delete_goal', 'list_goals', 'update_goal_progress',
         'find_relevant_contacts_for_task', 'set_contact_alert', 'generate_image',
-        # Reminder & scheduling — часто нужны
-        'set_reminder', 'check_time_conflicts', 'schedule_background_task',
-        'restore_task', 'get_news_trends',
         # Campaign management always available — conversation can span multiple turns
         'start_content_campaign', 'manage_content_campaign',
         'start_email_campaign', 'start_delegation_campaign',
@@ -869,65 +866,25 @@ class HybridAutonomousAgent:
 
     def _select_tools_for_message(self, user_message):
         """Dynamically select tools based on message content.
-        Returns set of tool names to EXCLUDE (reduces tokens sent to API).
+        Returns set of tool names to EXCLUDE (all not selected).
 
-        Logic: always include CORE_TOOLS (~23 tools), add groups by keywords.
-        Saves ~1000-3000 tokens per request vs sending all 58 tools.
+        SMART TOOL FILTERING DISABLED — AI sees all tools every call.
+        Re-enable keyword filtering below if token cost becomes a concern.
         """
-        try:
-            from .tools import get_available_tools as _gat
-            all_tool_names = {t['function']['name'] for t in _gat()}
-        except Exception:
-            return set()  # fallback: ничего не исключаем
-
-        msg_lower = (user_message or '').lower()
-        allowed = set(self.CORE_TOOLS)
-
-        # Добавляем группы по ключевым словам
-        for _group in self.TOOL_GROUPS.values():
-            if any(kw in msg_lower for kw in _group['keywords']):
-                allowed.update(_group['tools'])
-
-        # Всегда оставляем run_agent_action — отдельная логика ниже по коду
-        allowed.add('run_agent_action')
-        allowed.add('run_user_script')
-
-        # Исключаем всё что не в allowed
-        return all_tool_names - allowed
+        return set()  # exclude nothing — let AI pick freely
 
     # ===== ADAPTIVE TOOL CHOICE =====
 
     # Тривиальные сообщения — tool_choice=auto (не заставляем)
     def _determine_tool_choice(self, user_message, profile_data=None, tasks_data=None):
-        """ГИБРИДНЫЙ ПОДХОД: 'required' только когда пользователь явно заполняет профиль.
+        """PERF_OPT_V1: всегда auto — убрали лишний round-trip при пустом профиле.
         
-        Ранее: required при profile<2 — форсировало инструменты даже на 'привет',
-        добавляя лишний round-trip к DeepSeek.
-        Теперь: required только когда сообщение похоже на заполнение профиля (длинное
-        и содержит личные данные), иначе 'auto' — AI сам решает нужен ли инструмент.
+        Откат: вернуть `if filled < 2: return "required"` после подсчёта filled.
         """
         profile_data = profile_data or {}
         key_fields = ['city', 'company', 'position', 'skills', 'interests', 'goals']
         filled = sum(1 for f in key_fields if profile_data.get(f))
-
-        # Триггеры профиля — пользователь рассказывает о себе
-        _PROFILE_TRIGGERS = [
-            'работаю', 'работать', 'занимаюсь', 'компани', 'должность',
-            'город', 'навык', 'умею', 'интерес', 'цель', 'хочу достичь',
-            'меня зовут', 'я из', 'специализ', 'живу в',
-            'i work', 'my company', 'i am', 'i live', 'my goal',
-        ]
-        msg_lower = (user_message or '').lower()
-        _is_profile_message = (
-            filled < 2
-            and len(user_message or '') > 25
-            and any(t in msg_lower for t in _PROFILE_TRIGGERS)
-        )
-
-        if _is_profile_message:
-            logger.info(f"[HYBRID] tool_choice=required (profile {filled}/6, profile-msg) for: '{user_message[:50]}'")
-            return "required"
-
+        # PERF_OPT_V1: было return "required" когда filled < 2
         logger.info(f"[HYBRID] tool_choice=auto (profile {filled}/6) for: '{user_message[:50]}'")
         return "auto"
 
