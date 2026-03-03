@@ -517,40 +517,48 @@ async def seed_global_feed_if_empty():
 
 async def _comment_loop():
     """
-    Раз в 10-20 минут проверяет: есть ли свежие топ-посты с менее чем 6 комментами.
-    Если да — до 3 агентов пишут комментарий за итерацию.
+    Раз в 30-90 минут проверяет: есть ли свежие топ-посты с менее чем 4 комментами.
+    Максимум 1 комментарий за итерацию. Кулдаун 45 мин per-agent чтобы не спамить.
     """
-    await asyncio.sleep(30)  # начальная задержка 30 сек
+    await asyncio.sleep(60)  # начальная задержка 60 сек
     while True:
         try:
             loop = asyncio.get_event_loop()
             all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
             if all_agents:
-                # Ищем топ-посты (без reply_to) у которых мало комментов
-                top_posts = [m for m in _global_feed[-40:] if not m.get('reply_to') and m.get('agent_id') != 'system']
+                # Смотрим только последние 10 топ-постов (не весь хвост из 40)
+                top_posts = [m for m in _global_feed[-20:] if not m.get('reply_to') and m.get('agent_id') != 'system']
+                top_posts = top_posts[-10:]
                 commented_this_round = 0
+                now_ts = time.time()
+                AGENT_COMMENT_COOLDOWN = 45 * 60  # агент молчит 45 мин между любыми комментами
                 for post_msg in top_posts:
-                    if commented_this_round >= 3:
+                    if commented_this_round >= 1:  # не более 1 комментария за итерацию
                         break
                     post_id = post_msg.get('id', '')
                     existing = [m for m in _global_feed if m.get('reply_to') == post_id]
-                    if len(existing) < 6:
-                        # Выбираем агента, который ещё не комментировал этот пост и не является автором
+                    if len(existing) < 4:  # комментируем только если <4 (не 6)
                         post_author_id = post_msg.get('agent_id', '')
                         if post_id in _posts_being_discussed:
                             continue
                         commented_ids = {m.get('agent_id') for m in existing}
                         commented_ids.add(post_author_id)
-                        candidates = [a for a in all_agents if a['id'] not in commented_ids]
+                        # Исключаем агентов на кулдауне (недавно постили топ или комментировали)
+                        candidates = [
+                            a for a in all_agents
+                            if a['id'] not in commented_ids
+                            and now_ts - _agent_last_post_ts.get(a['id'], 0) >= AGENT_COMMENT_COOLDOWN
+                        ]
                         if not candidates:
-                            continue  # все уже прокомментировали или только автор — пропускаем
+                            continue
                         commenter = random.choice(candidates)
                         await _post_comment(post_msg, commenter)
+                        _agent_last_post_ts[commenter['id']] = time.time()  # обновляем кулдаун
                         commented_this_round += 1
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e)
 
-        await asyncio.sleep(random.uniform(10 * 60, 20 * 60))
+        await asyncio.sleep(random.uniform(30 * 60, 90 * 60))
 
 
 async def post_agent_immediately(agent_db_id: int):
@@ -991,9 +999,9 @@ async def _discussion_wave(post_msg: dict):
         # Волна 2: второй через 40-100 сек
         # Волна 3: (если есть) ещё через 1-2 мин
         delays = [
-            random.uniform(3 * 60, 8 * 60),    # 3-8 мин — первый отклик
-            random.uniform(10 * 60, 20 * 60),  # 10-20 мин — второй
-            random.uniform(20 * 60, 35 * 60),  # 20-35 мин — третий
+            random.uniform(10 * 60, 25 * 60),   # 10-25 мин — первый отклик
+            random.uniform(30 * 60, 60 * 60),   # 30-60 мин — второй
+            random.uniform(60 * 60, 120 * 60),  # 1-2 ч — третий
         ]
 
         for i, commenter in enumerate(commenters):
