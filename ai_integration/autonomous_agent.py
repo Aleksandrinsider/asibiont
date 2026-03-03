@@ -1946,11 +1946,11 @@ class HybridAutonomousAgent:
                                 logger.info(f"[AGENT] name-prefix routed to '{_cdata['name']}' (id={_cid})")
                                 break
 
+                # Режим офиса: ASI главный по умолчанию.
+                # Кастомный агент включается только при явном @упоминании или имени-префиксе.
+                # Используем focused_agent только если пользователь явно переключился (explicit /use).
                 if not _mention_not_found and _active_agent_id is None:
-                    # Режим офиса: ASI главный по умолчанию.
-                    # Кастомные агенты отвечают только при явном обращении (@имя / имя-префикс)
-                    # или если пользователь вручную переключился через /use.
-                    _active_agent_id = get_user_active_agent(user_id)
+                    pass  # ASI default — не подтягиваем focused_agent автоматически
 
                 # Убираем @имя / имя-триггер из начала сообщения — AI не должен его видеть
                 if _stripped_prefix_end is not None:
@@ -3007,15 +3007,39 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                         }
                     })
 
+        # Определяем кто ответил: кастомный агент или ASI
+        _answered_agent = agent._active_agent_data.get(user_id)
+        agent_info = None
+        if _answered_agent:
+            # Загружаем avatar_url из БД (не хранится в _active_agent_data)
+            try:
+                from models import Session as _Sess, UserAgent as _UA
+                _s = _Sess()
+                try:
+                    _db_agent = _s.query(_UA).filter_by(id=_answered_agent['id']).first()
+                    _avatar = _db_agent.avatar_url if _db_agent else None
+                finally:
+                    _s.close()
+            except Exception:
+                _avatar = None
+            agent_info = {
+                'id': _answered_agent.get('id'),
+                'name': _answered_agent.get('name', 'Агент'),
+                'job_title': _answered_agent.get('job_title', ''),
+                'avatar_url': _avatar or '',
+            }
+
         return {
             'response': response_text,
             'tool_calls': tool_calls,
-            'tools_used': tools_used
+            'tools_used': tools_used,
+            'agent_info': agent_info,
         }
 
     except Exception as e:
         logger.error(f"[AGENT] ERROR: {e}\n{traceback.format_exc()}")
         return {
             'response': f"Извините, произошла ошибка: {str(e)}",
-            'tool_calls': []
+            'tool_calls': [],
+            'agent_info': None,
         }

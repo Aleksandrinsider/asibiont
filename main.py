@@ -1940,7 +1940,7 @@ async def chat_handler(request):
         if queue:
             await queue.put({'type': 'done'})
 
-        return web.json_response({'response': response})
+        return web.json_response({'response': response, 'agent_info': ai_result.get('agent_info')})
     except Exception as e:
         logger.error(f"Unexpected error in chat_handler: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
@@ -9949,29 +9949,16 @@ async def api_marketplace_publish_agent_handler(request):
 
             session_db.commit()
             session_db.refresh(agent)  # читаем актуальные данные из БД
-
-            # Автоматически назначаем нового агента активным для его владельца,
-            # чтобы после создания сразу общаться с ним в Telegram/чате.
-            _is_new_agent = not agent_id
-            if _is_new_agent:
-                try:
-                    from ai_integration.user_agents import set_user_active_agent as _sua
-                    _sua(user_id, agent.id)
-                except Exception as _e:
-                    logger.warning(f"[MARKETPLACE] auto-activate new agent failed: {_e}")
-
             is_private_actual = bool(agent.is_private)
             is_private_requested = bool(data.get('is_private', False))
             privacy_warning = None
             if is_private_requested and not is_private_actual:
                 privacy_warning = 'Не удалось сохранить приватность агента — пересохраните его ещё раз.'
                 logger.error(f"[MARKETPLACE] is_private MISMATCH: agent {agent.id} requested private but saved as public!")
-            _msg = ('Агент создан и активирован в вашем чате!' if _is_new_agent
-                    else ('Агент сохранён. Нажмите «Запустить в чат» чтобы он начал писать в Арену.' if agent.status == 'paused' else 'Агент активен.'))
             return web.json_response({'success': True, 'id': agent.id, 'slug': agent.slug,
                                       'status': agent.status,
                                       'is_private': is_private_actual,
-                                      'message': _msg,
+                                      'message': 'Агент сохранён. Нажмите «Запустить в чат» чтобы он начал писать в Арену.' if agent.status == 'paused' else 'Агент активен.',
                                       'warning': privacy_warning})
         finally:
             session_db.close()
@@ -10069,13 +10056,15 @@ async def api_agent_test_code_handler(request):
 
 
 async def api_office_activity_handler(request):
-    """GET /api/office/activity — лента фоновой деятельности офиса: якоря agent_office_update + integration_alert"""
+    """GET /api/office/activity — лента фоновой активности офиса (якоря agent_office_update + integration_alert)"""
     try:
         session_web = await get_session(request)
         user_id = session_web.get('user_id') if session_web else None
         if not user_id:
             return web.json_response({'error': 'Not authenticated'}, status=401)
-        limit = min(int(request.rel_url.query.get('limit', 50)), 100)
+        # since= позволяет поллингу запрашивать только новые
+        since_ts = request.rel_url.query.get('since')
+        limit = min(int(request.rel_url.query.get('limit', 30)), 100)
         session_db = Session()
         try:
             import json as _json
@@ -10084,33 +10073,34 @@ async def api_office_activity_handler(request):
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'items': []})
-            since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=7)
-            rows = (
-                session_db.query(Anchor)
-                .filter(
-                    Anchor.user_id == user_obj.id,
-                    Anchor.anchor_type.in_(['agent_office_update', 'integration_alert']),
-                    Anchor.created_at >= since,
-                )
-                .order_by(Anchor.created_at.desc())
-                .limit(limit)
-                .all()
+            q = session_db.query(Anchor).filter(
+                Anchor.user_id == user_obj.id,
+                Anchor.anchor_type.in_(['agent_office_update', 'integration_alert']),
             )
+            if since_ts:
+                try:
+                    since_dt = _dt.datetime.fromisoformat(since_ts.replace('Z', '+00:00'))
+                    q = q.filter(Anchor.created_at > since_dt)
+                except Exception:
+                    pass
+            else:
+                since7 = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=7)
+                q = q.filter(Anchor.created_at >= since7)
+            rows = q.order_by(Anchor.created_at.desc()).limit(limit).all()
             items = []
             for a in rows:
                 try:
                     d = _json.loads(a.data or '{}')
                 except Exception:
                     d = {}
-                item = {
+                items.append({
                     'id': a.id,
                     'type': a.anchor_type,
                     'topic': a.topic or '',
                     'priority': a.priority.value if a.priority else 'MEDIUM',
                     'created_at': a.created_at.isoformat() if a.created_at else '',
                     'data': d,
-                }
-                items.append(item)
+                })
             return web.json_response({'items': items})
         finally:
             session_db.close()

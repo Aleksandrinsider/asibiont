@@ -1164,7 +1164,6 @@
                                 <button id="mp-tab-agents" onclick="mpSwitchTab('agents')" class="mp-tab-btn" data-i18n="marketplace">Маркетплейс</button>
                                 <button id="mp-tab-my" onclick="mpSwitchTab('my')" class="mp-tab-btn mp-tab-active" data-i18n="mp-my-agents">Мои агенты</button>
                                 <button id="mp-tab-create" onclick="mpSwitchTab('create')" class="mp-tab-btn" data-i18n="mp-create-agent">Создать агента</button>
-                                <button id="mp-tab-office" onclick="mpSwitchTab('office')" class="mp-tab-btn" title="Что делают агенты в фоне">🏢 Офис</button>
                                 <div style="flex: 1; min-width: 110px;">
                                     <input id="mp-search" type="text" placeholder="Поиск..." oninput="mpSearch(this.value)" data-i18n-ph="mp-search-ph"
                                            style="width: 100%; box-sizing: border-box; padding: 5px 10px; font-size: 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-family: inherit; outline: none; color: #374151;">
@@ -1186,20 +1185,6 @@
                             <!-- Форма создания -->
                             <div id="mp-create-panel" style="display: none;">
                                 <div id="mp-create-form"></div>
-                            </div>
-
-                            <!-- Офис — лента фоновой активности агентов -->
-                            <div id="mp-office-panel" style="display: none;">
-                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                                    <div>
-                                        <div style="font-size:14px;font-weight:600;color:#1F2328;">🏢 Активность офиса</div>
-                                        <div style="font-size:12px;color:#8C959F;margin-top:2px;">Что агенты делали в фоне за последние 7 дней</div>
-                                    </div>
-                                    <button onclick="mpLoadOffice()" style="font-size:11px;padding:5px 10px;border:1px solid #D1D9E0;border-radius:6px;background:#f6f8fa;cursor:pointer;color:#374151;">↻ Обновить</button>
-                                </div>
-                                <div id="mp-office-feed" style="display:flex;flex-direction:column;gap:8px;">
-                                    <div style="color:#9CA3AF;font-size:13px;text-align:center;padding:32px 0;">Загрузка...</div>
-                                </div>
                             </div>
 
                             <!-- Статус-сообщение -->
@@ -1881,7 +1866,7 @@
             return true;
         }
         
-        function addMessage(text, sender, timestamp, interactionId) {
+        function addMessage(text, sender, timestamp, interactionId, agentInfo) {
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
@@ -1966,15 +1951,15 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${normalizedSender}`;
             
-            // Имя агента: объявляем здесь чтобы было в scope для innerHTML ниже
-            const _senderName = (window._activeAgentData && window._activeAgentData.name) || 'ASI Biont';
+            // Имя агента: из agentInfo (пер-сообщение), или глобальный (window._activeAgentData), или ASI
+            const _resolvedAgent = agentInfo || null;  // не берём window._activeAgentData — ASI по умолчанию
+            const _senderName = (_resolvedAgent && _resolvedAgent.name) || 'ASI Biont';
 
             // Prepare avatar HTML
             let avatarHtml = '';
             if (normalizedSender === 'ai') {
-                // Use active agent avatar if available, otherwise default
-                const _agentAvUrl = window._activeAgentData && window._activeAgentData.avatar_url;
-                const _agentAvName = window._activeAgentData && window._activeAgentData.name;
+                const _agentAvUrl = _resolvedAgent && _resolvedAgent.avatar_url;
+                const _agentAvName = _resolvedAgent && _resolvedAgent.name;
                 const _agentInit = _agentAvName ? _agentAvName.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase() : 'AI';
                 if (_agentAvUrl) {
                     avatarHtml = `<img src="${escapeHtml(_agentAvUrl)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: white; border: 2px solid #E8ECEF; flex-shrink: 0; margin-right: 8px;">${_agentInit}</div>`;
@@ -2218,12 +2203,8 @@
                 }
                 if (response.ok) {
                     if (data.response) {
-                        // Восстанавливаем агента который был активен на момент отправки,
-                        // т.к. updateProfile() мог изменить window._activeAgentData за время ожидания
-                        const _origAgent = window._activeAgentData;
-                        if (_frozenAgent) window._activeAgentData = _frozenAgent;
-                        addMessage(data.response, 'ai');
-                        window._activeAgentData = _origAgent;
+                        // Передаём agent_info из ответа — правильное имя/аватар для этого сообщения
+                        addMessage(data.response, 'ai', null, null, data.agent_info || null);
                     }
                     
                     // Sync displayedMessageIds so updateChat() won't re-add these messages
@@ -2819,7 +2800,7 @@
 
         function mpSwitchTab(tab) {
             _mpCurrentTab = tab;
-            const tabs = ['agents','my','create','office'];
+            const tabs = ['agents','my','create'];
             tabs.forEach(t => {
                 const btn = document.getElementById('mp-tab-' + t);
                 const panel = document.getElementById('mp-' + t + '-panel');
@@ -2829,7 +2810,6 @@
             if (tab === 'agents') mpLoadAgents();
             else if (tab === 'my') mpLoadMy();
             else if (tab === 'create') mpShowCreateAgent();
-            else if (tab === 'office') mpLoadOffice();
             else if (tab === 'arena') { _arenaInitialized = false; arenaInit(); }
         }
 
@@ -2838,48 +2818,6 @@
             _mpSearchTimer = setTimeout(() => {
                 if (_mpCurrentTab === 'agents') mpLoadAgents(val);
             }, 400);
-        }
-
-        async function mpLoadOffice() {
-            const feed = document.getElementById('mp-office-feed');
-            if (!feed) return;
-            feed.innerHTML = '<div style="color:#9CA3AF;font-size:13px;text-align:center;padding:32px 0;">Загрузка...</div>';
-            try {
-                const r = await fetch('/api/office/activity?limit=50');
-                const data = await r.json();
-                if (!data.items || !data.items.length) {
-                    feed.innerHTML = '<div style="color:#9CA3AF;font-size:13px;text-align:center;padding:32px 0;">Агенты ещё не выполняли фоновых задач.<br><span style="font-size:12px;">Активируйте агентов с python-скриптами — они начнут работать автономно.</span></div>';
-                    return;
-                }
-                feed.innerHTML = data.items.map(item => {
-                    const d = item.data || {};
-                    const isOffice = item.type === 'agent_office_update';
-                    const isAlert = item.type === 'integration_alert';
-                    const priorityColor = {'CRITICAL':'#DC2626','HIGH':'#D97706','MEDIUM':'#2563EB','LOW':'#6B7280'}[item.priority] || '#6B7280';
-                    const iconEl = isOffice ? '🤖' : (d.service_label ? '🔌' : '📡');
-                    const titleEl = isOffice
-                        ? (d.plan || item.topic || 'Координатор назначил задачу')
-                        : (d.agent_name ? `${d.agent_name}${d.service_label ? ' → ' + d.service_label : ''}` : (item.topic || 'Интеграция'));
-                    const bodyEl = isOffice
-                        ? (d.goal_count ? `Целей: ${d.goal_count}, агентов: ${d.agent_count || 1}` : '')
-                        : (d.snippet ? escapeHtml(d.snippet.substring(0, 200)) + (d.snippet.length > 200 ? '…' : '') : '');
-                    const timeEl = item.created_at ? new Date(item.created_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-                    return `
-                    <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;background:#fafbfc;display:flex;gap:10px;align-items:flex-start;">
-                        <div style="font-size:20px;line-height:1;flex-shrink:0;margin-top:2px;">${iconEl}</div>
-                        <div style="flex:1;min-width:0;">
-                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                                <span style="font-size:12px;font-weight:600;color:#1F2328;">${titleEl}</span>
-                                <span style="font-size:10px;font-weight:600;color:${priorityColor};border:1px solid ${priorityColor};border-radius:4px;padding:0 4px;">${item.priority}</span>
-                                <span style="font-size:11px;color:#9CA3AF;margin-left:auto;">${timeEl}</span>
-                            </div>
-                            ${bodyEl ? `<div style="font-size:12px;color:#6B7280;margin-top:4px;white-space:pre-wrap;word-break:break-word;">${isAlert ? bodyEl : escapeHtml(bodyEl)}</div>` : ''}
-                        </div>
-                    </div>`;
-                }).join('');
-            } catch(e) {
-                feed.innerHTML = '<div style="color:#DC2626;font-size:12px;padding:12px;">Ошибка загрузки: ' + escapeHtml(String(e)) + '</div>';
-            }
         }
 
         async function mpLoadAgents(search) {
@@ -13539,6 +13477,59 @@ except Exception as e:
                 console.error('Error updating chat:', error);
             }
         }
+
+        // ── Офисные уведомления в чате ──────────────────────────────────────
+        // Поллинг каждые 60 сек. Новые якоря офиса появляются в чате как
+        // системные сообщения — пользователь видит что агенты делали в фоне.
+        let _officeLastSeen = null;
+        let _officeShownIds = new Set();
+
+        function _addOfficeNotification(item) {
+            if (_officeShownIds.has(item.id)) return;
+            _officeShownIds.add(item.id);
+            const d = item.data || {};
+            const isOffice = item.type === 'agent_office_update';
+            const icon = isOffice ? '🤖' : '🔌';
+            const agentName = isOffice
+                ? (d.plan ? d.plan.split(':')[0] : 'Офис')
+                : (d.agent_name || 'Агент');
+            const body = isOffice
+                ? (d.plan || item.topic || '')
+                : (d.snippet ? d.snippet.substring(0, 180) + (d.snippet.length > 180 ? '…' : '') : (item.topic || ''));
+            if (!body) return;
+            // Добавляем как system-сообщение в чат
+            const messages = document.getElementById('chat-messages');
+            if (!messages) return;
+            const div = document.createElement('div');
+            div.className = 'message ai';
+            div.style.cssText = 'opacity:0.85;';
+            const timeStr = item.created_at ? new Date(item.created_at).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}) : '';
+            div.innerHTML = `<div style="display:flex;align-items:flex-start;gap:0;"><div style="width:24px;height:24px;border-radius:50%;background:#F3F4F6;border:2px solid #E8ECEF;flex-shrink:0;margin-right:8px;display:flex;align-items:center;justify-content:center;font-size:13px;">${icon}</div><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:#6B7280;margin-bottom:3px;">${escapeHtml(agentName)} <span style="font-weight:400;font-size:11px;">(фон)</span></div><div class="message-text" style="font-size:13px;color:#374151;">${escapeHtml(body)}</div><div class="message-time">${timeStr}</div></div></div>`;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function pollOfficeActivity() {
+            try {
+                let url = '/api/office/activity?limit=20';
+                if (_officeLastSeen) url += '&since=' + encodeURIComponent(_officeLastSeen);
+                const r = await fetch(url, {credentials: 'include'});
+                if (!r.ok) return;
+                const data = await r.json();
+                if (data.items && data.items.length) {
+                    data.items.slice().reverse().forEach(item => _addOfficeNotification(item));
+                    _officeLastSeen = data.items[0].created_at; // самый новый (desc)
+                }
+            } catch(e) { /* тихо */ }
+        }
+
+        // Запускаем поллинг офиса через 10 сек после загрузки, потом каждые 60 сек
+        {% if logged_in %}
+        setTimeout(function() {
+            pollOfficeActivity();
+            setInterval(pollOfficeActivity, 60000);
+        }, 10000);
+        {% endif %}
 
         async function clearUserTasks() {
             if (confirm(t('confirm-delete-all-tasks'))) {
