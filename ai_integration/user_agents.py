@@ -423,36 +423,82 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
             sub = AgentSubscription(user_id=user.id, agent_id=agent_id)
             session.add(sub)
             session.flush()
+            agent.subscribers_count = (agent.subscribers_count or 0) + 1
+
+        # Автор использует своего агента — биллинг не нужен
+        is_owner = (agent.author_id == user.id)
+        if is_owner:
+            sub.messages_count = (sub.messages_count or 0) + 1
+            sub.last_message_at = datetime.datetime.now(datetime.timezone.utc)
+            agent.messages_count = (agent.messages_count or 0) + 1
+            run = AgentRun(user_id=user.id, agent_id=agent_id,
+                           tokens_charged=0, author_earnings=0,
+                           platform_earnings=0, is_trial=False)
+            session.add(run)
+            session.commit()
+            return {'success': True, 'is_owner': True, 'is_trial': False, 'error': ''}
+
+        # Пробные сообщения — бесплатно
+        is_trial = (sub.trial_messages_used or 0) < (agent.trial_messages or 0)
+        if is_trial:
+            sub.trial_messages_used = (sub.trial_messages_used or 0) + 1
+            sub.messages_count = (sub.messages_count or 0) + 1
+            sub.last_message_at = datetime.datetime.now(datetime.timezone.utc)
+            agent.messages_count = (agent.messages_count or 0) + 1
+            run = AgentRun(user_id=user.id, agent_id=agent_id,
+                           tokens_charged=0, author_earnings=0,
+                           platform_earnings=0, is_trial=True)
+            session.add(run)
+            session.commit()
+            return {'success': True, 'is_owner': False, 'is_trial': True, 'error': ''}
 
         # Платное сообщение
-        cost = agent.price_per_message
+        cost = agent.price_per_message or 5
         balance = user.token_balance or 0
         if balance < cost:
             return {'success': False,
+                    'is_owner': False, 'is_trial': False,
                     'error': f'Недостаточно токенов. Нужно {cost}, баланс {balance}'}
 
-        author_share = int(cost * agent.author_royalty_pct / 100)
+        royalty_pct = agent.author_royalty_pct or 70
+        author_share = int(cost * royalty_pct / 100)
         platform_share = cost - author_share
 
         user.token_balance = balance - cost
         user.tokens_spent = (user.tokens_spent or 0) + cost
 
-        # Начисляем автору
+        # Начисляем автору (только если это другой пользователь)
         author = session.query(User).filter_by(id=agent.author_id).first()
-        if author:
+        if author and author.id != user.id:
             author.token_balance = (author.token_balance or 0) + author_share
+            author.referral_balance = (author.referral_balance or 0) + author_share
+            from models import TokenTransaction
+            session.add(TokenTransaction(
+                user_id=author.id, amount=author_share,
+                action='agent_royalty',
+                description=f'Роялти за сообщение агенту «{agent.name}»',
+                balance_after=author.token_balance
+            ))
 
-        sub.messages_count += 1
-        sub.tokens_spent += cost
+        from models import TokenTransaction as _TT
+        session.add(_TT(
+            user_id=user.id, amount=-cost,
+            action='agent_message',
+            description=f'Сообщение агенту «{agent.name}»',
+            balance_after=user.token_balance
+        ))
+
+        sub.messages_count = (sub.messages_count or 0) + 1
+        sub.tokens_spent = (sub.tokens_spent or 0) + cost
         sub.last_message_at = datetime.datetime.now(datetime.timezone.utc)
-        agent.messages_count += 1
+        agent.messages_count = (agent.messages_count or 0) + 1
 
         run = AgentRun(user_id=user.id, agent_id=agent_id,
                        tokens_charged=cost, author_earnings=author_share,
                        platform_earnings=platform_share, is_trial=False)
         session.add(run)
         session.commit()
-        return {'success': True, 'error': ''}
+        return {'success': True, 'is_owner': False, 'is_trial': False, 'error': ''}
     except Exception as e:
         session.rollback()
         logger.error(f"[BILLING] bill_agent_message error: {e}")
