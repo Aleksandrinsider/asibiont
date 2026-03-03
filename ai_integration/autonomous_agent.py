@@ -3623,6 +3623,24 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         anchors = _get_agent_anchors(user_db_id, a['id']) if user_db_id else []
         agent_anchor_map[a['name']] = anchors
 
+        # Интеграции агента — что он РЕАЛЬНО умеет делать
+        _intg: list[str] = []
+        try:
+            _intg = _parse_agent_integrations(
+                a.get('user_api_keys') or '',
+                a.get('python_code') or '',
+                a.get('tools_allowed') or '',
+                a.get('search_scope') or '',
+            )
+        except Exception:
+            pass
+        _intg_str = f"\n  Может: {', '.join(_intg[:6])}" if _intg else ''
+
+        _base = (
+            f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:100]}"
+            f"{_intg_str}"
+        )
+
         if anchors:
             last = anchors[0]
             age_h = last['age_min'] // 60
@@ -3630,15 +3648,15 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             age_str = f"{age_h}ч {age_m}мин назад" if age_h else f"{age_m}мин назад"
             cached_result = last['data'].get('result_summary', '')[:150]
             agents_context_lines.append(
-                f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:80]}"
-                f"\n  [Последняя работа {age_str}: {last['topic']}"
+                _base
+                + f"\n  [Последняя работа {age_str}: {last['topic']}"
                 + (f". Результат: {cached_result}" if cached_result else "")
                 + f". Cooldown ещё {max(0, round(2.0 - last['age_min']/60, 1))}ч]"
             )
         else:
             agents_context_lines.append(
-                f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:80]}"
-                f"\n  [Не работал в последние 4ч — доступен]"
+                _base
+                + f"\n  [Доступен]"
             )
 
     agents_block = "\n".join(agents_context_lines)
@@ -3648,8 +3666,8 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     decision_raw = await _quick_ai_call_raw([{
         "role": "user",
         "content": (
-            f"Ты директор офиса ASI Biont. Твоя команда (с историей работы и интеграциями):\n{agents_block}\n\n"
-            f"Пользователь написал: «{user_message}»{_ctx_hint}\n\n"
+            f"Ты — ASI Biont, директор офиса. Твоя команда агентов (у каждого указаны интеграции — что он реально умеет):\n{agents_block}\n\n"
+            f"Цели пользователя уже есть в контексте. Пользователь написал: «{user_message}»{_ctx_hint}\n\n"
             "Варианты решения:\n"
             "1. self — ответить самому как ASI (для разговора, советов, анализа без живых данных)\n"
             "2. use_cache — ответить из кэша (агент работал недавно и результат подходит)\n"
