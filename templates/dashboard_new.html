@@ -4037,7 +4037,7 @@ except Exception as e:
                     {k:'PG_USER', label:'Пользователь', ph:'postgres', t:'text'},
                     {k:'PG_PASS', label:'Пароль', ph:'xxxxxxxxxx', t:'password'}
                 ],
-                hint: 'psycopg2 установлен. Подходит для Supabase, Railway PostgreSQL, Neon, любого PostgreSQL. Совет: создайте отдельного read-only пользователя для безопасности.',
+                hint: 'Подходит для Supabase, Railway PostgreSQL, Neon и любого PostgreSQL. Вставьте строку подключения — агент будет читать данные из вашей базы перед каждым ответом.',
                 code: `import psycopg2, os
 HOST = os.environ.get('PG_HOST', '')
 PORT = int(os.environ.get('PG_PORT', '5432') or '5432')
@@ -4079,7 +4079,7 @@ except Exception as e:
                     {k:'MYSQL_USER', label:'Пользователь', ph:'root', t:'text'},
                     {k:'MYSQL_PASS', label:'Пароль', ph:'xxxxxxxxxx', t:'password'}
                 ],
-                hint: 'Работает с PlanetScale, Railway MySQL, AWS RDS. Внимание: требует установленного pymysql. Если не работает — добавьте pymysql в requirements.txt и пересоберите проект.',
+                hint: 'Работает с PlanetScale, Railway MySQL, AWS RDS и любым MySQL-сервером.',
                 code: `import os
 HOST = os.environ.get('MYSQL_HOST', '')
 PORT = int(os.environ.get('MYSQL_PORT', '3306') or '3306')
