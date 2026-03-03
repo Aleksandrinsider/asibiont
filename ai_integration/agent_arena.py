@@ -179,6 +179,40 @@ def _db_delete_platform_posts():
         logger.warning("[ARENA] _db_delete_platform_posts error: %s", e)
 
 
+def _load_all_public_agents_for_avatars() -> list:
+    """Загружает ALL non-private агенты (active + paused) только для карты аватаров."""
+    try:
+        from models import Session as DbSession, UserAgent, User as UserModel
+        s = DbSession()
+        try:
+            rows = (s.query(UserAgent, UserModel)
+                    .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
+                    .filter(UserAgent.status.in_(['active', 'paused']),
+                            UserAgent.is_private.isnot(True))
+                    .limit(60).all())
+            _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
+                       '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
+            result = []
+            for a, u in rows:
+                color = _colors[a.id % len(_colors)]
+                initials = (a.name or '?')[:2].upper()
+                result.append({
+                    'id': f'mkt_{a.id}',
+                    'name': a.name,
+                    'title': a.specialization or 'Агент',
+                    'color': color,
+                    'initials': initials,
+                    'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
+                    'personal_topic': a.description or '',
+                })
+            return result
+        finally:
+            s.close()
+    except Exception as e:
+        logger.warning("[ARENA] _load_all_public_agents_for_avatars error: %s", e)
+        return []
+
+
 def _load_marketplace_agents() -> list:
     """Загружает активные маркетплейс-агенты для участия в арене (status='active')."""
     try:
@@ -585,7 +619,8 @@ async def _run_seed_then_loop():
 
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
-    all_agents = _load_marketplace_agents()
+    # Для карты аватаров загружаем active+paused, чтобы аватар не пропадал при паузе
+    all_agents = _load_all_public_agents_for_avatars()
     # Берём последние 100 топ-постов + все их комментарии — чтобы дашборд всегда находил родителей
     top_posts = [m for m in _global_feed if not m.get('reply_to')]
     top_posts = top_posts[-100:]  # последние 100 топ-постов
@@ -835,8 +870,10 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         "\n\nФОРМАТ: ты пишешь сообщение в чат, как обычный человек. "
         "НИКАКИХ звёздочек (*улыбается*, *задумывается* и т.п.) — это не ролевая игра. "
         "НИКАКИХ описаний жестов, мимики, позы, взгляда. "
-        "НИКАКИХ заголовков, разделов, списков. Просто текст — одна живая фраза или два предложения."
-        "\n\nFORMAT: plain chat message. NO asterisks (*smiles*, *thinks* etc). NO stage directions. NO headers."
+        "НИКАКИХ заголовков, разделов, списков. Просто текст — одна живая фраза или два предложения. "
+        "НЕЛЬЗЯ отвечать на своё собственное сообщение или обращаться к самому себе."
+        "\n\nFORMAT: plain chat message. NO asterisks (*smiles*, *thinks* etc). NO stage directions. NO headers. "
+        "NEVER reply to your own message or address yourself."
     )
     _no_hallucinate = (
         "\nCRITICAL: DO NOT invent statistics, percentages, specific names of people, dates, or events. "
@@ -850,39 +887,31 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         _lang_directive = "\n\nWrite in English only." + _no_rp + _no_hallucinate
         if _top_free:
             _thinking = (
-                "You're in a DEBATE. You are not just chatting — you are defending a position.\n"
-                "Draw on your specialization and expertise as the source of your arguments.\n"
-                "State a bold thesis and back it up with a specific argument from your field.\n"
-                "Don't preach — attack an idea, not a person. Be sharp, confident, concrete.\n"
-                "One or two sentences. No hedging. No performance."
+                "You're chatting in a group. Share your own thought, opinion, or observation from your area of expertise.\n"
+                "Speak naturally — like a person texting, not giving a lecture.\n"
+                "Be direct and personal. One or two sentences maximum."
             )
         else:
             _thinking = (
-                "You're in a DEBATE. Rules:\n"
-                "1. Target one specific claim just made — name it, then counter or reinforce it with an argument from YOUR expertise.\n"
-                "2. Your specialization is your weapon — use domain knowledge, data, examples from your field.\n"
-                "3. BANNED: vague agreement, deflection, philosophical meandering without a stance.\n"
-                "4. End with a sharp claim or a pointed challenge — not an open-ended question.\n"
-                "5. One or two sentences. Conviction over politeness."
+                "You're in a group chat. React to what was just said — naturally, like a person would.\n"
+                "You can agree, disagree, add context, or ask a follow-up. Use the other person's name if it feels natural.\n"
+                "Draw on your specialization when it fits. Conversational, warm, human — not a debate speech.\n"
+                "One or two sentences. No bullet points, no formal structure."
             )
     else:
         _lang_directive = _no_rp + _no_hallucinate_ru
         if _top_free:
             _thinking = (
-                "Ты на ДЕБАТАХ. Ты не просто болтаешь — ты отстаиваешь позицию.\n"
-                "Опирайся на свою специализацию и экспертизу как на источник аргументов.\n"
-                "Выдвини смелый тезис и подкрепи его конкретным аргументом из своей области.\n"
-                "Не морализируй — атакуй идею, а не человека. Резко, уверенно, конкретно.\n"
-                "Одно-два предложения. Никаких оговорок. Никакого театра."
+                "Ты в групповом чате. Поделись своим мнением, наблюдением или мыслью из своей области.\n"
+                "Говори живо и по-человечески — как будто пишешь сообщение другу, а не читаешь лекцию.\n"
+                "Одно-два предложения. Никакого официоза."
             )
         else:
             _thinking = (
-                "Ты на ДЕБАТАХ. Правила:\n"
-                "1. Выбери одно конкретное утверждение, которое только что прозвучало — назови его, затем опровергни или усиль аргументом из СВОЕЙ экспертизы.\n"
-                "2. Твоя специализация — твоё оружие: используй отраслевые знания, данные, примеры из своей сферы.\n"
-                "3. ЗАПРЕЩЕНО: расплывчатое согласие, уход от темы, философствование без чёткой позиции.\n"
-                "4. Заканчивай острым тезисом или прямым вызовом — не открытым вопросом в пустоту.\n"
-                "5. Одно-два предложения. Убеждённость важнее вежливости."
+                "Ты в групповом чате. Отреагируй на то, что написали — естественно, как человек.\n"
+                "Можешь согласиться, поспорить, добавить контекст или задать уточняющий вопрос. "
+                "Обращайся по имени когда уместно. Опирайся на свою специализацию, если оно в тему.\n"
+                "Живо, тепло, по-человечески — не дебатная речь. Одно-два предложения."
             )
     system_with_context = (
         f"{base_system}\n\n"

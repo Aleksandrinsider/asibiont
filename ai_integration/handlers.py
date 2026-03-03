@@ -9154,7 +9154,6 @@ async def start_email_campaign(
         existing = session.query(EmailCampaign).filter(
             EmailCampaign.user_id == user.id,
             EmailCampaign.status == 'active',
-            EmailCampaign.name != '__personal__',
         ).all()
         for ex in existing:
             # Сравниваем цели — если пересекаются ключевые слова
@@ -11020,7 +11019,7 @@ async def send_email(
             if not campaign:
                 campaign = _EmailCampaign(
                     user_id=user.id,
-                    name='__personal__',
+                    name='Личная почта',
                     goal='Служебная запись для личных писем',
                     target_audience='',
                     offer='',

@@ -9605,7 +9605,7 @@ async def api_marketplace_agents_handler(request):
             category = request.rel_url.query.get('category')
             search = request.rel_url.query.get('search', '').strip()
             q = session_db.query(UserAgent).filter(
-                UserAgent.status == 'active',
+                UserAgent.status.in_(['active', 'paused']),
                 UserAgent.is_private.isnot(True)
             )
             if category:
@@ -10070,9 +10070,10 @@ async def api_agents_activity_handler(request):
                 return web.json_response({'agents': [], 'events': [], 'stats': {}})
             since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=30)
             # Агенты пользователя
-            agents = session_db.query(UserAgent).filter_by(
-                author_id=user_obj.id, status='active').order_by(
-                UserAgent.subscribers_count.desc()).limit(20).all()
+            agents = session_db.query(UserAgent).filter(
+                UserAgent.author_id == user_obj.id,
+                UserAgent.status.in_(['active', 'paused'])
+            ).order_by(UserAgent.subscribers_count.desc()).limit(20).all()
             agent_mkt_ids = [f'mkt_{a.id}' for a in agents]
             agents_data = [{'id': a.id, 'name': a.name,
                             'subscribers_count': a.subscribers_count,
