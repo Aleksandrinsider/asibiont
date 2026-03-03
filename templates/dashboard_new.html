@@ -256,7 +256,7 @@
         }
         /* ── Arena social feed ─────────────────────────── */
         .arena-bubble-system {
-            font-size: 11px; color: #9CA3AF; text-align: center;
+            font-size: 12px; color: #9CA3AF; text-align: center;
             padding: 4px 0;
         }
         /* Legacy alias — keep in case old arena-msg refs exist */
@@ -1478,7 +1478,7 @@
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg>
                 </button>
             </div>
-            <div id="agent-chat-info" style="font-size:11px;color:#6B7280;padding:6px 16px;border-bottom:1px solid #F3F4F6;flex-shrink:0;"></div>
+            <div id="agent-chat-info" style="font-size:12px;color:#6B7280;padding:6px 16px;border-bottom:1px solid #F3F4F6;flex-shrink:0;"></div>
             <div id="agent-chat-messages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;min-height:200px;max-height:40vh;"></div>
             <div style="flex-shrink:0;padding:10px 16px;border-top:1px solid #D1D9E0;display:flex;gap:6px;">
                 <input id="agent-chat-input" type="text" placeholder="Сообщение агенту..."
@@ -1970,7 +1970,7 @@
                 <div style="display: flex; align-items: flex-start; gap: 0;">
                     ${avatarHtml}
                     <div style="flex: 1; min-width: 0;">
-                        ${normalizedSender === 'ai' ? `<div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:3px;">${escapeHtml(_senderName)}</div>` : ''}
+                        ${normalizedSender === 'ai' ? `<div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:3px;">${escapeHtml(_senderName)}</div>` : ''}
                         <div class="message-text">${processedText}</div>
                         <div class="message-time">${dateString} ${timeString} ${saveBtn}</div>
                     </div>
@@ -2042,7 +2042,7 @@
                 // Нет агентов — показываем ASI Biont
                 bar.style.display = 'flex';
                 bar.innerHTML = `
-                    <span style="font-size:11px;color:#9CA3AF;margin-right:4px;white-space:nowrap;">Активные</span>
+                    <span style="font-size:12px;color:#9CA3AF;margin-right:4px;white-space:nowrap;">Активные</span>
                     <div style="display:flex;align-items:center;gap:5px;">
                         <img src="/static/asibiont.svg" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1.5px solid #D1D9E0;">
                         <div style="display:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">AI</div>
@@ -2052,13 +2052,13 @@
                 return;
             }
             bar.style.display = 'flex';
-            let html = `<span style="font-size:11px;color:#9CA3AF;margin-right:4px;white-space:nowrap;">Активные</span>`;
+            let html = `<span style="font-size:12px;color:#9CA3AF;margin-right:4px;white-space:nowrap;">Активные</span>`;
             for (const ag of agents) {
                 const init = ag.name ? ag.name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase() : 'AI';
                 const av = ag.avatar_url ? `<img src="${escapeHtml(ag.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1.5px solid #D1D9E0;"><div style="display:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">${init}</div>` :
                     `<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">${init}</div>`;
                 const title = ag.job_title ? `${escapeHtml(ag.name)} \u2014 ${escapeHtml(ag.job_title)}` : escapeHtml(ag.name);
-                html += `<div style="display:flex;align-items:center;gap:4px;padding:2px 6px 2px 3px;background:#F6F8FA;border:1px solid #E8ECEF;border-radius:20px;" title="${title}">${av}<span style="font-size:11px;color:#374151;font-weight:500;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(ag.name)}</span></div>`;
+                html += `<div style="display:flex;align-items:center;gap:4px;padding:2px 6px 2px 3px;background:#F6F8FA;border:1px solid #E8ECEF;border-radius:20px;" title="${title}">${av}<span style="font-size:12px;color:#374151;font-weight:500;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(ag.name)}</span></div>`;
             }
             bar.innerHTML = html;
         }
@@ -2800,7 +2800,7 @@
                 }
                 _mpCatalogAgents = data.agents;
                 list.innerHTML = data.agents.map(a => {
-                    const priceLabel = a.price_per_message === 0 ? '<span style="color:#068487;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${a.price_per_message}</span><span style="font-size:11px;color:#6B7280;margin-left:2px;">тк/сообщение</span>`;
+                    const priceLabel = a.price_per_message === 0 ? '<span style="color:#068487;">Бесплатно</span>' : `<span style="font-size:13px;font-weight:600;color:#374151;">${a.price_per_message}</span><span style="font-size:12px;color:#6B7280;margin-left:2px;">тк/сообщение</span>`;
                     return `
                     <div class="mp-card">
                         <div style="display:flex;align-items:center;gap:10px;">
@@ -2816,7 +2816,7 @@
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;border-top:1px solid #F3F4F6;padding-top:8px;margin-top:6px;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 ${priceLabel}
-                                ${a.rating !== null && a.rating !== undefined ? `<span style="font-size:11px;color:#9CA3AF;">·</span><span style="font-size:11px;color:#068487;">★ ${a.rating}</span>` : ''}
+                                ${a.rating !== null && a.rating !== undefined ? `<span style="font-size:12px;color:#9CA3AF;">·</span><span style="font-size:12px;color:#068487;">★ ${a.rating}</span>` : ''}
                             </div>
                             <div style="display:flex;align-items:center;gap:4px;">
                                 ${!a.is_owner ? `<button onclick="openAgentRatingModal(${a.id})" style="padding:5px 8px;height:28px;background:#FFFFFF;border:1px solid ${a.user_rating ? '#068487' : '#D1D9E0'};border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:12px;color:${a.user_rating ? '#068487' : '#6B7280'};white-space:nowrap;" onmouseover="this.style.background='#F6F8FA';" onmouseout="this.style.background='#FFFFFF';" title="Оценить агента">★${a.user_rating ? ' ' + a.user_rating : ''}</button>` : ''}
@@ -2861,7 +2861,7 @@
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
                                 <span style="margin-left:8px;font-size:12px;color:${statusColor};">${statusLabel}</span>
-                                <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
+                                <div style="font-size:12px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} подписчиков · ${a.messages_count} сообщений</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
                                 <button onclick="mpEditAgent(${a.id})" class="quick-action" title="Редактировать">
@@ -4104,7 +4104,7 @@ except Exception as e:
             if (fieldsEl) {
                 let h = '<div style="display:flex;flex-direction:column;gap:7px;">';
                 for (const f of tmpl.fields) {
-                    h += `<div><div style="font-size:11px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
+                    h += `<div><div style="font-size:12px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
                 }
                 h += `<button type="button" onclick="mpApplyTemplateConfirm('${svc}')" class="mp-action-btn" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Добавить «${tmpl.name}»</button>`;
                 h += '</div>';
@@ -4544,7 +4544,7 @@ except Exception as e:
                             <option value="hubspot">HubSpot</option>
                         </select>
                         <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>
-                        <div id="mpa-svc-hint" style="font-size:11px;color:#6B7280;margin-top:5px;display:none;"></div>
+                        <div id="mpa-svc-hint" style="font-size:12px;color:#6B7280;margin-top:5px;display:none;"></div>
                     </div>
 
                     <!-- Переменные окружения -->
@@ -4555,12 +4555,12 @@ except Exception as e:
                     </div>
 
                     <!-- Генерация кода — всегда видимый блок -->
-                    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;">
-                        <div style="font-size:13px;color:#92400E;font-weight:500;margin-bottom:2px;">⚡ Подключить данные</div>
-                        <div style="font-size:12px;color:#78350F;margin-bottom:8px;">Выбрали сервис выше? Нажмите кнопку — подставим готовый код. Для нестандартной задачи — опишите её и сгенерируем через ИИ.</div>
-                        <textarea id="mpa-code-desc" placeholder="Необязательно: опишите задачу для ИИ-генерации, например: читай RSS и присылай топ-3 новости" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #FDE68A;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:#FFFFF0;"></textarea>
-                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;background:#F59E0B;border-color:#D97706;color:white;font-weight:500;" onmouseover="this.style.background='#D97706';" onmouseout="this.style.background='#F59E0B';">✦ Подставить шаблон / сгенерировать код</button>
-                        <div id="mpa-gen-status" style="font-size:11px;color:#6B7280;margin-top:4px;display:none;"></div>
+                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:13px;color:#374151;font-weight:500;margin-bottom:2px;">⚡ Подключить данные</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">Выбрали сервис выше? Нажмите кнопку — подставим готовый код. Для нестандартной задачи — опишите её и сгенерируем через ИИ.</div>
+                        <textarea id="mpa-code-desc" placeholder="Необязательно: опишите задачу для ИИ-генерации, например: читай RSS и присылай топ-3 новости" rows="2" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;resize:none;color:#374151;background:white;"></textarea>
+                        <button type="button" id="mpa-gen-btn" onclick="mpGenerateAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;background:#068487;border-color:#056b6e;color:white;font-weight:500;" onmouseover="this.style.background='#056b6e';" onmouseout="this.style.background='#068487';">⚡ Подставить шаблон / сгенерировать код</button>
+                        <div id="mpa-gen-status" style="font-size:12px;color:#6B7280;margin-top:4px;display:none;"></div>
                     </div>
 
                     <!-- Продвинутые настройки: код -->
@@ -4571,10 +4571,10 @@ except Exception as e:
                         </summary>
                         <div style="padding:0 12px 12px 12px;border-top:1px solid #F3F4F6;">
                             <div style="padding-top:8px;">
-                                <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Код агента:</div>
-                                <textarea id="mpa-pycode" placeholder="# Код появится здесь после нажатия кнопки выше" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:11px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                                <div style="font-size:12px;color:#6B7280;margin-bottom:4px;">Код агента:</div>
+                                <textarea id="mpa-pycode" placeholder="# Код появится здесь после нажатия кнопки выше" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
                                 <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="margin-top:6px;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Проверить код</button>
-                                <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
+                                <div id="mpa-test-result" style="margin-top:6px;display:none;background:#F8F9FA;border:1px solid #D1D9E0;border-radius:6px;padding:8px;font-size:12px;font-family:monospace;white-space:pre-wrap;color:#374151;max-height:200px;overflow-y:auto;"></div>
                             </div>
                         </div>
                     </details>
@@ -4591,7 +4591,7 @@ except Exception as e:
                         <div style="font-size:12px;color:#9CA3AF;margin-top:6px;">Вы получаете 70% от каждого сообщения агента</div>
                     </div>
 
-                    <button onclick="mpSubmitAgent()" class="mp-action-btn" style="background:#FFFFFF;color:#374151;border-color:#D1D9E0;padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Сохранить агента</button>
+                    <button onclick="mpSubmitAgent()" class="mp-action-btn" style="background:#068487;color:white;border-color:#056b6e;padding:9px;font-weight:500;" onmouseover="this.style.background='#056b6e';" onmouseout="this.style.background='#068487';">Сохранить агента</button>
 
                 </div>`;
         }
