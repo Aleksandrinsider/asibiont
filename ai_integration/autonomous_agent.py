@@ -62,6 +62,11 @@ def _ssrf_safe_open(url, *_a, **_kw):
             pass
     return _ssrf_orig_open(url, *_a, **_kw)
 _ssrf_ur.urlopen = _ssrf_safe_open
+# Auto-strip spaces from App Passwords (Gmail App Password: 'xxxx xxxx xxxx xxxx' → 'xxxxxxxxxxxxxxxx')
+import os as _fix_os
+for _fix_k in list(_fix_os.environ.keys()):
+    if 'PASS' in _fix_k:
+        _fix_os.environ[_fix_k] = _fix_os.environ[_fix_k].replace(\' \', \'\')
 '''
 
 
@@ -3094,6 +3099,16 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
         logger.debug("[DIRECTOR] save anchor error: %s", e)
 
 
+# Слова-сигналы что пользователь хочет действие, а не разговор
+_DIRECTOR_TASK_RE = re.compile(
+    r'провер|отправ|напиш|найди|сделай|покажи|получи|загрузи|скача|'
+    r'запусти|узнай|мониторинг|анализ|отчёт|докла|статистик|'
+    r'новост|письм|почт|заказ|позвони|уточни|обнов|синхрониз|'
+    r'check|send|write|find|do|show|get|run|fetch|update|monitor',
+    re.IGNORECASE,
+)
+
+
 async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     """
     ASI — директор офиса с якорной памятью:
@@ -3105,6 +3120,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     Якоря дают ASI память: «Кристина 2ч назад проверила почту, нашла 3 письма» →
     ASI не запускает её снова, а отвечает из кэша. Cooldown 2ч — антиспам.
     """
+    # Если сообщение не похоже на задачу — не перехватываем, пусть ASI ответит сам
+    if not _DIRECTOR_TASK_RE.search(user_message or ''):
+        return None
     import json as _json
     import datetime as _dt
 
@@ -3168,17 +3186,18 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             f"Ты директор офиса ASI Biont. Твоя команда (с историей работы):\n{agents_block}\n\n"
             f"Пользователь написал: «{user_message}»\n\n"
             "Варианты решения:\n"
-            "1. delegate — делегировать агенту (только если задача в его специализации И он не в cooldown)\n"
-            "2. use_cache — ответить из кэша якоря агента (если агент работал недавно и результат актуален)\n"
-            "3. self — ответить самому как ASI (если нет подходящего агента или вопрос общий)\n\n"
+            "1. self — ответить самому как ASI (ПРЕДПОЧТИТЕЛЬНО: для вопросов, разговоров, анализа без живых данных)\n"
+            "2. use_cache — ответить из кэша якоря агента (если агент работал недавно И результат отвечает на вопрос)\n"
+            "3. delegate — делегировать агенту (ТОЛЬКО когда нужны ЖИВЫЕ данные через интеграцию: проверить почту, получить заказы, запустить мониторинг. НЕ делегируй для разговора или если агент в cooldown)\n\n"
+            "ВАЖНО: По умолчанию выбирай 'self'. Делегируй только когда задача требует запуска интеграции агента.\n\n"
             "Ответь ТОЛЬКО JSON без ```:\n"
-            '{"action": "delegate", "agent_name": "точное имя", '
-            '"agent_task": "задача", "director_message": "сообщение пользователю"}\n'
+            '{"action": "self"}\n'
             "или\n"
             '{"action": "use_cache", "agent_name": "точное имя", '
             '"cache_note": "что использовать из кэша"}\n'
             "или\n"
-            '{"action": "self"}'
+            '{"action": "delegate", "agent_name": "точное имя", '
+            '"agent_task": "задача", "director_message": "сообщение пользователю"}'
         ),
     }], max_tokens=300)
 
@@ -3247,12 +3266,44 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     script_context = ""
     if (_agent.get('python_code') or '').strip():
         try:
-            from ai_integration.office_engine import _exec_agent_script_sync
+            import subprocess as _sp_dir, sys as _sys_dir, os as _os_dir
             _wrapped = _wrap_agent_code(_agent['python_code'].strip())
+            # Строим окружение: системные пути + user_api_keys агента (со стриппингом пробелов из паролей)
+            _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os_dir.environ.get('PATH', '/usr/bin:/bin')}
+            if _sys_dir.platform != 'win32':
+                _exec_env['HOME'] = _os_dir.environ.get('HOME', '/tmp')
+            else:
+                for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR', 'COMSPEC', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+                    if _wk in _os_dir.environ:
+                        _exec_env[_wk] = _os_dir.environ[_wk]
+            _api_raw = _agent.get('user_api_keys', '') or ''
+            for _kl in _api_raw.splitlines():
+                _kl = _kl.strip()
+                if '=' in _kl and not _kl.startswith('#'):
+                    _dk, _, _dv = _kl.partition('=')
+                    _dv = _dv.strip()
+                    if 'PASS' in _dk.upper() or 'PASSWORD' in _dk.upper():
+                        _dv = _dv.replace(' ', '')
+                    _exec_env[_dk.strip()] = _dv
+
+            def _run_script_with_env():
+                try:
+                    r = _sp_dir.run(
+                        [_sys_dir.executable, '-c', _wrapped],
+                        capture_output=True, text=True, timeout=18, env=_exec_env,
+                    )
+                    return r.stdout[:2000].strip(), r.stderr[:400].strip()
+                except _sp_dir.TimeoutExpired:
+                    return '', 'timeout'
+                except Exception as _e:
+                    return '', str(_e)[:200]
+
             loop = asyncio.get_event_loop()
-            stdout, _ = await loop.run_in_executor(None, _exec_agent_script_sync, _wrapped)
+            stdout, _stderr = await loop.run_in_executor(None, _run_script_with_env)
             if stdout:
                 script_context = f"\n\n[Результат твоего скрипта/мониторинга]:\n{stdout[:800]}"
+            elif _stderr and 'timeout' not in _stderr:
+                logger.debug("[DIRECTOR] script stderr for %s: %s", _agent.get('name'), _stderr[:150])
         except Exception as e:
             logger.debug("[DIRECTOR] agent script exec error: %s", e)
 
