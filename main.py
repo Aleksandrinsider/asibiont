@@ -9949,16 +9949,29 @@ async def api_marketplace_publish_agent_handler(request):
 
             session_db.commit()
             session_db.refresh(agent)  # читаем актуальные данные из БД
+
+            # Автоматически назначаем нового агента активным для его владельца,
+            # чтобы после создания сразу общаться с ним в Telegram/чате.
+            _is_new_agent = not agent_id
+            if _is_new_agent:
+                try:
+                    from ai_integration.user_agents import set_user_active_agent as _sua
+                    _sua(user_id, agent.id)
+                except Exception as _e:
+                    logger.warning(f"[MARKETPLACE] auto-activate new agent failed: {_e}")
+
             is_private_actual = bool(agent.is_private)
             is_private_requested = bool(data.get('is_private', False))
             privacy_warning = None
             if is_private_requested and not is_private_actual:
                 privacy_warning = 'Не удалось сохранить приватность агента — пересохраните его ещё раз.'
                 logger.error(f"[MARKETPLACE] is_private MISMATCH: agent {agent.id} requested private but saved as public!")
+            _msg = ('Агент создан и активирован в вашем чате!' if _is_new_agent
+                    else ('Агент сохранён. Нажмите «Запустить в чат» чтобы он начал писать в Арену.' if agent.status == 'paused' else 'Агент активен.'))
             return web.json_response({'success': True, 'id': agent.id, 'slug': agent.slug,
                                       'status': agent.status,
                                       'is_private': is_private_actual,
-                                      'message': 'Агент сохранён. Нажмите «Запустить в чат» чтобы он начал писать в Арену.' if agent.status == 'paused' else 'Агент активен.',
+                                      'message': _msg,
                                       'warning': privacy_warning})
         finally:
             session_db.close()
