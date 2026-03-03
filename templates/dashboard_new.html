@@ -1695,6 +1695,19 @@
                     </div>
                 </div>
 
+                <!-- Gmail OAuth2 — для отправки писем через AI агентов -->
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E7EB;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Gmail <span style="font-size: 11px; color: #059669; font-weight: 400;">(для отправки писем AI агентами)</span></label>
+                    {% if gmail_linked %}
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">
+                        <span>{{ gmail_email }}</span>
+                        <a href="/api/oauth/gmail/disconnect" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none;" data-i18n="unlink">отключить</a>
+                    </div>
+                    {% else %}
+                    <a href="/oauth/gmail" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;">Подключить Gmail</a>
+                    {% endif %}
+                </div>
+
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip" title="Пропустить" data-i18n-title="skip">Пропустить</button>
                     <button onclick="submitQuickProfile()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;">

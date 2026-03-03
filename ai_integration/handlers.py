@@ -9656,7 +9656,18 @@ async def reply_to_outreach_email(
 
         _send_error = None
 
-        if _matched and _matched.get('type') == 'smtp':
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            # ── Gmail OAuth2 API (HTTPS, работает на Railway) ─────────────────
+            _go_ok, _go_err = await _send_via_gmail_oauth(
+                to_clean, subject, reply_body, sender_name,
+                _matched['token_data'], user, session
+            )
+            if not _go_ok:
+                _send_error = f'Gmail OAuth: {_go_err}'
+            else:
+                logger.info(f'[EMAIL_REPLY] Sent via Gmail OAuth ({_matched["email_user"]}) to {to_clean}')
+
+        elif _matched and _matched.get('type') == 'smtp':
             # ── SMTP пользователя (Яндекс / Mail.ru / Gmail app-password) ──────
             import smtplib as _smtplib
             from email.mime.text import MIMEText as _MimeSmtp
@@ -10201,7 +10212,18 @@ async def send_follow_up_email(
 
         _send_error = None
 
-        if _matched and _matched.get('type') == 'smtp':
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            # ── Gmail OAuth2 API (HTTPS, работает на Railway) ─────────────────
+            _go_ok2, _go_err2 = await _send_via_gmail_oauth(
+                to_clean, subject, body, sender_name,
+                _matched['token_data'], user, session
+            )
+            if not _go_ok2:
+                _send_error = f'Gmail OAuth: {_go_err2}'
+            else:
+                logger.info(f'[EMAIL_FOLLOWUP] Sent via Gmail OAuth ({_matched["email_user"]}) to {to_clean}')
+
+        elif _matched and _matched.get('type') == 'smtp':
             import smtplib as _smtplib2
             from email.mime.text import MIMEText as _MimeSmtp2
             from email.mime.multipart import MIMEMultipart as _MMsmtp2
@@ -10477,17 +10499,105 @@ async def negotiate_by_email(
 # ═══════════════════════════════════════════════════════════════════
 
 
+async def _send_via_gmail_oauth(
+    to_email: str, subject: str, body: str, sender_name: str,
+    token_data: dict, user_obj, session_obj
+) -> tuple:
+    """Отправить письмо через Gmail API (HTTPS, обходит блокировку SMTP на Railway).
+    При 401 автоматически обновляет access_token через refresh_token.
+    Возвращает (success: bool, error_str: str).
+    """
+    import base64 as _b64_go, json as _jsn_go
+    from email.mime.text import MIMEText as _MT_go
+    from email.mime.multipart import MIMEMultipart as _MM_go
+    import aiohttp as _ah_go
+
+    _go_email = token_data.get('email', '')
+    _go_access = token_data.get('access_token', '')
+    _go_refresh = token_data.get('refresh_token', '')
+
+    msg_go = _MM_go()
+    msg_go['From'] = f"{sender_name} <{_go_email}>"
+    msg_go['To'] = to_email
+    msg_go['Subject'] = subject
+    msg_go.attach(_MT_go(body, 'plain', 'utf-8'))
+    _raw_go = _b64_go.urlsafe_b64encode(msg_go.as_bytes()).decode()
+
+    async def _gmail_post(token):
+        async with _ah_go.ClientSession() as _hh:
+            _rr = await _hh.post(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+                json={'raw': _raw_go},
+                timeout=_ah_go.ClientTimeout(total=20),
+            )
+            return _rr.status, await _rr.json()
+
+    _gs, _gd = await _gmail_post(_go_access)
+    if _gs in (200, 201):
+        return True, ''
+
+    if _gs == 401 and _go_refresh:
+        # Обновляем access_token
+        try:
+            from config import GOOGLE_CLIENT_ID as _GCI_r, GOOGLE_CLIENT_SECRET as _GCS_r
+            async with _ah_go.ClientSession() as _hh2:
+                _tr = await _hh2.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'client_id': _GCI_r, 'client_secret': _GCS_r,
+                        'refresh_token': _go_refresh, 'grant_type': 'refresh_token',
+                    },
+                    timeout=_ah_go.ClientTimeout(total=10),
+                )
+                _td = await _tr.json()
+            if 'error' in _td:
+                return False, f"Gmail токен истёк, переподключи Gmail в профиле: {_td.get('error_description', _td.get('error'))}"
+            _new_access = _td['access_token']
+            user_obj.google_oauth_token = _jsn_go.dumps({**token_data, 'access_token': _new_access})
+            try:
+                session_obj.commit()
+            except Exception:
+                pass
+            _gs2, _gd2 = await _gmail_post(_new_access)
+            if _gs2 in (200, 201):
+                return True, ''
+            return False, (_gd2.get('error') or {}).get('message', str(_gd2))
+        except Exception as _ref_e:
+            return False, f'Ошибка обновления Gmail токена: {_ref_e}'
+
+    return False, (_gd.get('error') or {}).get('message', str(_gd))
+
+
 def _get_user_email_integrations(user, session) -> list:
-    """Возвращает список почтовых интеграций из агентов пользователя.
+    """Возвращает список почтовых интеграций пользователя.
 
     Каждый элемент имеет поле 'type':
-      'smtp'    — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
-      'resend'  — {label, email_user, resend_key, agent_name, agent_id}
+      'gmail_oauth' — {label, email_user, token_data}  ← приоритет #1, HTTPS
+      'smtp'        — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
+      'resend'      — {label, email_user, resend_key, agent_name, agent_id}
     """
     try:
         results = []
         seen_emails: set = set()
         seen_resend: set = set()
+
+        # Gmail OAuth2 — приоритет #1, отправка через HTTPS Gmail API (не SMTP)
+        if getattr(user, 'google_oauth_token', None):
+            import json as _jsn_go_i
+            try:
+                _go_data_i = _jsn_go_i.loads(user.google_oauth_token)
+                _go_email_i = _go_data_i.get('email', '')
+                if _go_email_i and _go_email_i not in seen_emails:
+                    seen_emails.add(_go_email_i)
+                    results.append({
+                        'type': 'gmail_oauth',
+                        'label': 'Gmail OAuth',
+                        'email_user': _go_email_i,
+                        'token_data': _go_data_i,
+                    })
+            except Exception:
+                pass
 
         from models import UserAgent as _UA
         agents = session.query(_UA).filter(
@@ -10600,23 +10710,25 @@ async def send_email(
                     _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _email_integrations)
                     return f"❌ Аккаунт '{from_account}' не найден среди подключённых почт. Доступные: {_list}"
             else:
-                # Несколько интеграций — личная почта (SMTP) в приоритете над Resend
-                _smtp_integrations = [i for i in _email_integrations if i.get('type') == 'smtp']
-                if len(_smtp_integrations) == 1:
-                    # Ровно одна личная почта — берём её автоматически, Resend игнорируем
-                    _chosen_integration = _smtp_integrations[0]
-                elif len(_smtp_integrations) > 1:
-                    # Несколько личных почт — спрашиваем только между ними
-                    _list = '\n'.join(
-                        f"• {i['label']}: {i['email_user']}" for i in _smtp_integrations
-                    )
-                    return (
-                        f"У тебя подключено несколько почтовых аккаунтов:\n{_list}\n\n"
-                        f"С какого адреса отправить письмо?"
-                    )
+                # Несколько интеграций — Gmail OAuth в приоритете, затем SMTP
+                _oauth_integrations = [i for i in _email_integrations if i.get('type') == 'gmail_oauth']
+                if _oauth_integrations:
+                    _chosen_integration = _oauth_integrations[0]
                 else:
-                    # Нет ни одной личной почты — берём первый Resend без вопроса
-                    _chosen_integration = _email_integrations[0]
+                    _smtp_integrations = [i for i in _email_integrations if i.get('type') == 'smtp']
+                    if len(_smtp_integrations) == 1:
+                        _chosen_integration = _smtp_integrations[0]
+                    elif len(_smtp_integrations) > 1:
+                        _list = '\n'.join(
+                            f"• {i['label']}: {i['email_user']}" for i in _smtp_integrations
+                        )
+                        return (
+                            f"У тебя подключено несколько почтовых аккаунтов:\n{_list}\n\n"
+                            f"С какого адреса отправить письмо?"
+                        )
+                    else:
+                        # Нет личной почты — берём первый Resend без вопроса
+                        _chosen_integration = _email_integrations[0]
 
         if not _chosen_integration:
             return (
@@ -10633,6 +10745,36 @@ async def send_email(
             sender_name = user.first_name or user.username or 'Team'
         # Всегда использовать email из интеграции (не из параметров ИИ)
         sender_email = _chosen_integration['email_user']
+        # Нормализация адресата
+        to_clean = to.strip().lower()
+
+        # ── Gmail OAuth2 API (HTTPS, основной путь на Railway) ────────────────
+        if _chosen_integration.get('type') == 'gmail_oauth':
+            _go_ok_s, _go_err_s = await _send_via_gmail_oauth(
+                to_clean, subject, body, sender_name,
+                _chosen_integration['token_data'], user, session
+            )
+            if _go_ok_s:
+                logger.info(f'[SEND_EMAIL] Sent via Gmail OAuth ({sender_email}) to {to_clean}')
+                # Записываем отправку и возвращаем успех
+                from models import EmailOutreach as _EO_log
+                try:
+                    _eo = _EO_log(
+                        user_id=user.id,
+                        campaign_id=None,
+                        recipient_email=to_clean,
+                        subject=subject,
+                        body=body,
+                        sender_email=sender_email,
+                        status='sent',
+                    )
+                    session.add(_eo)
+                    session.commit()
+                except Exception:
+                    pass
+                return f"✅ Письмо отправлено на {to_clean} (Gmail)"
+            else:
+                return f"❌ Gmail OAuth ошибка: {_go_err_s}"
 
         # Для Resend: проверяем что from-адрес задан и валиден
         if _chosen_integration.get('type') == 'resend' and '@' not in (sender_email or ''):
@@ -10701,6 +10843,8 @@ async def send_email(
                         s.sendmail(_smtp_user, to_clean, msg.as_string())
 
                 loop = _aio_smtp.get_running_loop()
+                # Перед SMTP пробуем Gmail OAuth если текущая интеграция — не oauth,
+                # но oauth доступен (на случай если выбрали SMTP а oauth есть)
                 _smtp_net_err = None  # сетевая ошибка → будет Resend fallback
                 try:
                     await _aio_smtp.wait_for(
