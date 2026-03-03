@@ -96,6 +96,7 @@ ACTION_COSTS = {
     'pause_email_campaign':      2,  # Пауза/возобновление кампании
     'save_email_contact':        2,  # Сохранение email-контакта
     'list_email_contacts':       2,  # Просмотр контактов
+    'negotiate_by_email':       12,  # Запуск переговоров по email (первое письмо + отслеживание)
 
     # ── Контент-кампании ──
     'start_content_campaign':   15,  # Создание контент-кампании

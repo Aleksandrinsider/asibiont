@@ -9595,20 +9595,20 @@ async def reply_to_outreach_email(
     session=None,
     close_session: bool = True,
 ):
-    """Ответить на входящий reply от получателя (AI автоматически или по запросу)."""
+    """Ответить на входящий reply от получателя (AI автоматически или по запросу).
+
+    Приоритет отправки: Gmail OAuth → SMTP пользователя → Resend пользователя → платформенный Resend.
+    """
     if not session:
         session = Session()
         close_session = True
     try:
-        from config import RESEND_API_KEY
         from datetime import datetime as dt, timezone as tz
+        import aiohttp as _aiohttp
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "❌ Пользователь не найден"
-
-        if not RESEND_API_KEY:
-            return "❌ Resend API не настроен."
 
         # Найти письмо
         outreach = None
@@ -9636,33 +9636,165 @@ async def reply_to_outreach_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
-        # Отправляем reply через Resend — plain text
-        import aiohttp as _aiohttp
-
         subject = f"Re: {outreach.subject}" if outreach.subject else "Re: Your inquiry"
-        try:
-            async with _aiohttp.ClientSession() as http:
-                from_header = f"{campaign.sender_name} <{campaign.sender_email}>"
-                resp = await http.post(
-                    'https://api.resend.com/emails',
-                    headers={
-                        'Authorization': f'Bearer {RESEND_API_KEY}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={
-                        'from': from_header,
-                        'to': [outreach.recipient_email],
-                        'subject': subject,
-                        'text': reply_body,
-                    },
-                    timeout=_aiohttp.ClientTimeout(total=15),
-                )
-                resp_data = await resp.json()
-                if resp.status not in (200, 201):
-                    err = resp_data.get('message', str(resp_data))
-                    return f"❌ Ошибка Resend API: {err}"
-        except Exception as e:
-            return f"❌ Ошибка отправки: {str(e)}"
+        to_clean = outreach.recipient_email.strip().lower()
+        sender_name = campaign.sender_name or ''
+        sender_addr = campaign.sender_email or ''
+
+        # ── Выбор канала отправки ──────────────────────────────────────────────
+        # Ищем интеграцию пользователя с адресом = sender_addr кампании.
+        # Если совпадение есть — используем его (Gmail OAuth / SMTP / user Resend).
+        # Если не найдено — fallback на платформенный Resend с адресом кампании.
+        _integrations = _get_user_email_integrations(user, session)
+        _matched = None
+        for _intg in _integrations:
+            if _intg.get('email_user', '').lower() == sender_addr.lower():
+                _matched = _intg
+                break
+        # Нет точного совпадения — берём первую доступную интеграцию (пользователь настроил почту)
+        if not _matched and _integrations:
+            _matched = _integrations[0]
+
+        _send_error = None
+
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            # ── Gmail API (OAuth2, HTTPS) ───────────────────────────────────────
+            import json as _jgm
+            import base64 as _b64gm
+            from email.mime.text import MIMEText as _MimeGm
+            from email.mime.multipart import MIMEMultipart as _MMgm
+
+            _oa_data = _jgm.loads(user.google_oauth_token or '{}')
+            _ga_token = _oa_data.get('access_token', '')
+            _ga_refresh = _oa_data.get('refresh_token', '')
+            _ga_from = _oa_data.get('email', sender_addr)
+
+            async def _gmail_refresh_reply():
+                from config import GOOGLE_CLIENT_ID as _GCI, GOOGLE_CLIENT_SECRET as _GCS
+                async with _aiohttp.ClientSession() as _rh:
+                    _rr = await _rh.post(
+                        'https://oauth2.googleapis.com/token',
+                        data={'grant_type': 'refresh_token', 'refresh_token': _ga_refresh,
+                              'client_id': _GCI, 'client_secret': _GCS},
+                        timeout=_aiohttp.ClientTimeout(total=10),
+                    )
+                    _rd = await _rr.json()
+                    if 'access_token' in _rd:
+                        _upd = dict(_oa_data)
+                        _upd['access_token'] = _rd['access_token']
+                        user.google_oauth_token = _jgm.dumps(_upd)
+                        try:
+                            session.commit()
+                        except Exception:
+                            pass
+                        return _rd['access_token']
+                    return None
+
+            _gmsg = _MMgm()
+            _gmsg['From'] = f"{sender_name} <{_ga_from}>"
+            _gmsg['To'] = to_clean
+            _gmsg['Subject'] = subject
+            _gmsg.attach(_MimeGm(reply_body, 'plain', 'utf-8'))
+            _graw = _b64gm.urlsafe_b64encode(_gmsg.as_bytes()).decode('utf-8')
+
+            async def _gapi_post(tok):
+                async with _aiohttp.ClientSession() as _gh:
+                    _r = await _gh.post(
+                        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                        headers={'Authorization': f'Bearer {tok}', 'Content-Type': 'application/json'},
+                        json={'raw': _graw},
+                        timeout=_aiohttp.ClientTimeout(total=30),
+                    )
+                    return _r.status, await _r.json()
+
+            _gs, _gd = await _gapi_post(_ga_token)
+            if _gs == 401:
+                _new_tok = await _gmail_refresh_reply()
+                if _new_tok:
+                    _gs, _gd = await _gapi_post(_new_tok)
+                else:
+                    _send_error = "Gmail: токен истёк. Переподключи Gmail в Настройках профиля."
+            if not _send_error and _gs not in (200, 201):
+                _gerr = _gd.get('error', {})
+                _send_error = _gerr.get('message', str(_gd)) if isinstance(_gerr, dict) else str(_gerr)
+            if not _send_error:
+                logger.info(f'[EMAIL_REPLY] Sent via Gmail API OAuth from {_ga_from} to {to_clean}')
+
+        elif _matched and _matched.get('type') == 'smtp':
+            # ── SMTP пользователя (Яндекс / Mail.ru / Gmail app-password) ──────
+            import smtplib as _smtplib
+            from email.mime.text import MIMEText as _MimeSmtp
+            from email.mime.multipart import MIMEMultipart as _MMsmtp
+            import asyncio as _aio_smtp
+            import ssl as _ssl_smtp
+
+            _smtp_host = _matched['smtp_host']
+            _smtp_port = _matched['smtp_port']
+            _smtp_user = _matched['email_user']
+            _smtp_pass = _matched['email_pass'].replace(' ', '')
+
+            def _do_smtp():
+                msg = _MMsmtp()
+                msg['From'] = f"{sender_name} <{_smtp_user}>"
+                msg['To'] = to_clean
+                msg['Subject'] = subject
+                msg.attach(_MimeSmtp(reply_body, 'plain', 'utf-8'))
+                _ctx = _ssl_smtp.create_default_context()
+                with _smtplib.SMTP(_smtp_host, _smtp_port, timeout=30) as s:
+                    s.ehlo(); s.starttls(context=_ctx); s.ehlo()
+                    s.login(_smtp_user, _smtp_pass)
+                    s.sendmail(_smtp_user, to_clean, msg.as_string())
+
+            _loop_smtp = _aio_smtp.get_running_loop()
+            try:
+                await _aio_smtp.wait_for(_loop_smtp.run_in_executor(None, _do_smtp), timeout=35.0)
+                logger.info(f'[EMAIL_REPLY] Sent via SMTP ({_matched["label"]}) from {_smtp_user} to {to_clean}')
+            except Exception as _se:
+                _send_error = f'SMTP ({_matched["label"]}): {_se}'
+
+        elif _matched and _matched.get('type') == 'resend':
+            # ── Личный Resend ключ пользователя ───────────────────────────────
+            _urk = _matched['resend_key']
+            _uf = _matched.get('email_user') or sender_addr
+            try:
+                async with _aiohttp.ClientSession() as http:
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {_urk}', 'Content-Type': 'application/json'},
+                        json={'from': f"{sender_name} <{_uf}>", 'to': [to_clean],
+                              'subject': subject, 'text': reply_body},
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    rd = await resp.json()
+                    if resp.status not in (200, 201):
+                        _send_error = rd.get('message', str(rd))
+                    else:
+                        logger.info(f'[EMAIL_REPLY] Sent via user Resend from {_uf} to {to_clean}')
+            except Exception as _re:
+                _send_error = f'Resend: {_re}'
+
+        # Fallback: платформенный Resend (если нет интеграции или предыдущие упали)
+        if _matched is None or _send_error:
+            from config import RESEND_API_KEY
+            if not RESEND_API_KEY:
+                return f"❌ Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
+            try:
+                async with _aiohttp.ClientSession() as http:
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
+                        json={'from': f"{sender_name} <{sender_addr}>", 'to': [to_clean],
+                              'subject': subject, 'text': reply_body},
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    resp_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err = resp_data.get('message', str(resp_data))
+                        prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
+                        return f"❌ Ошибка Resend API: {err}{prev_err}"
+                    logger.info(f'[EMAIL_REPLY] Sent via platform Resend from {sender_addr} to {to_clean}')
+            except Exception as e:
+                return f"❌ Ошибка отправки: {_send_error or str(e)}"
 
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
@@ -10064,20 +10196,19 @@ async def send_follow_up_email(
 ):
     """Отправить follow-up email (агент вызывает автономно при якоре email_follow_up).
 
-    Обновляет follow_up_count, next_follow_up_at и отправляет через Resend.
+    Обновляет follow_up_count, next_follow_up_at.
+    Приоритет отправки: Gmail OAuth → SMTP пользователя → Resend пользователя → платформенный Resend.
     """
     if not session:
         session = Session()
         close_session = True
     try:
-        from config import RESEND_API_KEY
         from datetime import datetime as dt, timezone as tz
+        import aiohttp as _aiohttp
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "❌ Пользователь не найден"
-        if not RESEND_API_KEY:
-            return "❌ Resend API не настроен."
 
         # Найти письмо
         outreach = None
@@ -10116,35 +10247,137 @@ async def send_follow_up_email(
         if not mx_valid:
             return f"❌ {mx_err}"
 
-        # Отправляем через Resend — plain text
-        import aiohttp as _aiohttp
+        # ── Выбор канала отправки (приоритет: Gmail OAuth → SMTP → user Resend → platform Resend) ──
+        sender_name = campaign.sender_name or ''
+        sender_addr = campaign.sender_email or ''
+        to_clean = outreach.recipient_email.strip().lower()
         from config import WEB_APP_URL
         _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
 
-        try:
-            async with _aiohttp.ClientSession() as http:
-                from_header = f"{campaign.sender_name} <{campaign.sender_email}>"
-                resp = await http.post(
-                    'https://api.resend.com/emails',
-                    headers={
-                        'Authorization': f'Bearer {RESEND_API_KEY}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={
-                        'from': from_header,
-                        'to': [outreach.recipient_email],
-                        'subject': subject,
-                        'text': body,
-                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
-                    },
-                    timeout=_aiohttp.ClientTimeout(total=15),
-                )
-                resp_data = await resp.json()
-                if resp.status not in (200, 201):
-                    err = resp_data.get('message', str(resp_data))
-                    return f"❌ Ошибка Resend API: {err}"
-        except Exception as e:
-            return f"❌ Ошибка отправки: {str(e)}"
+        _integrations = _get_user_email_integrations(user, session)
+        _matched = None
+        for _intg in _integrations:
+            if _intg.get('email_user', '').lower() == sender_addr.lower():
+                _matched = _intg
+                break
+        if not _matched and _integrations:
+            _matched = _integrations[0]
+
+        _send_error = None
+
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            import json as _jgm2
+            import base64 as _b64gm2
+            from email.mime.text import MIMEText as _MimeGm2
+            from email.mime.multipart import MIMEMultipart as _MMgm2
+            _oa2 = _jgm2.loads(user.google_oauth_token or '{}')
+            _tok2 = _oa2.get('access_token', '')
+            _ref2 = _oa2.get('refresh_token', '')
+            _gfrom2 = _oa2.get('email', sender_addr)
+
+            async def _grefresh2():
+                from config import GOOGLE_CLIENT_ID as _GCI2, GOOGLE_CLIENT_SECRET as _GCS2
+                async with _aiohttp.ClientSession() as _rh2:
+                    _rr2 = await _rh2.post('https://oauth2.googleapis.com/token',
+                        data={'grant_type': 'refresh_token', 'refresh_token': _ref2,
+                              'client_id': _GCI2, 'client_secret': _GCS2},
+                        timeout=_aiohttp.ClientTimeout(total=10))
+                    _rd2 = await _rr2.json()
+                    if 'access_token' in _rd2:
+                        _u2 = dict(_oa2); _u2['access_token'] = _rd2['access_token']
+                        user.google_oauth_token = _jgm2.dumps(_u2)
+                        try: session.commit()
+                        except Exception: pass
+                        return _rd2['access_token']
+                    return None
+
+            _gm2 = _MMgm2()
+            _gm2['From'] = f"{sender_name} <{_gfrom2}>"
+            _gm2['To'] = to_clean
+            _gm2['Subject'] = subject
+            _gm2.attach(_MimeGm2(body, 'plain', 'utf-8'))
+            _graw2 = _b64gm2.urlsafe_b64encode(_gm2.as_bytes()).decode('utf-8')
+
+            async def _gpost2(tok):
+                async with _aiohttp.ClientSession() as _gh2:
+                    _r2 = await _gh2.post(
+                        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                        headers={'Authorization': f'Bearer {tok}', 'Content-Type': 'application/json'},
+                        json={'raw': _graw2}, timeout=_aiohttp.ClientTimeout(total=30))
+                    return _r2.status, await _r2.json()
+
+            _gs2, _gd2 = await _gpost2(_tok2)
+            if _gs2 == 401:
+                _nt2 = await _grefresh2()
+                if _nt2: _gs2, _gd2 = await _gpost2(_nt2)
+                else: _send_error = "Gmail: токен истёк, переподключи Gmail."
+            if not _send_error and _gs2 not in (200, 201):
+                _ge2 = _gd2.get('error', {})
+                _send_error = _ge2.get('message', str(_gd2)) if isinstance(_ge2, dict) else str(_ge2)
+            if not _send_error:
+                logger.info(f'[EMAIL_FOLLOWUP] Sent via Gmail API OAuth from {_gfrom2} to {to_clean}')
+
+        elif _matched and _matched.get('type') == 'smtp':
+            import smtplib as _smtplib2
+            from email.mime.text import MIMEText as _MimeSmtp2
+            from email.mime.multipart import MIMEMultipart as _MMsmtp2
+            import asyncio as _aio_smtp2
+            import ssl as _ssl2
+            _sh2 = _matched['smtp_host']; _sp2 = _matched['smtp_port']
+            _su2 = _matched['email_user']; _spw2 = _matched['email_pass'].replace(' ', '')
+
+            def _do_smtp2():
+                msg2 = _MMsmtp2()
+                msg2['From'] = f"{sender_name} <{_su2}>"
+                msg2['To'] = to_clean; msg2['Subject'] = subject
+                msg2.attach(_MimeSmtp2(body, 'plain', 'utf-8'))
+                _ctx2 = _ssl2.create_default_context()
+                with _smtplib2.SMTP(_sh2, _sp2, timeout=30) as s2:
+                    s2.ehlo(); s2.starttls(context=_ctx2); s2.ehlo()
+                    s2.login(_su2, _spw2); s2.sendmail(_su2, to_clean, msg2.as_string())
+
+            _loop2 = _aio_smtp2.get_running_loop()
+            try:
+                await _aio_smtp2.wait_for(_loop2.run_in_executor(None, _do_smtp2), timeout=35.0)
+                logger.info(f'[EMAIL_FOLLOWUP] Sent via SMTP ({_matched["label"]}) to {to_clean}')
+            except Exception as _se2:
+                _send_error = f'SMTP ({_matched["label"]}): {_se2}'
+
+        elif _matched and _matched.get('type') == 'resend':
+            _urk2 = _matched['resend_key']
+            _uf2 = _matched.get('email_user') or sender_addr
+            try:
+                async with _aiohttp.ClientSession() as http2:
+                    resp2 = await http2.post('https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {_urk2}', 'Content-Type': 'application/json'},
+                        json={'from': f"{sender_name} <{_uf2}>", 'to': [to_clean], 'subject': subject,
+                              'text': body, 'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}},
+                        timeout=_aiohttp.ClientTimeout(total=15))
+                    rd2 = await resp2.json()
+                    if resp2.status not in (200, 201):
+                        _send_error = rd2.get('message', str(rd2))
+            except Exception as _re2:
+                _send_error = f'Resend: {_re2}'
+
+        # Fallback: платформенный Resend
+        if _matched is None or _send_error:
+            from config import RESEND_API_KEY
+            if not RESEND_API_KEY:
+                return f"❌ Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
+            try:
+                async with _aiohttp.ClientSession() as http:
+                    resp = await http.post('https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
+                        json={'from': f"{sender_name} <{sender_addr}>", 'to': [to_clean], 'subject': subject,
+                              'text': body, 'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}},
+                        timeout=_aiohttp.ClientTimeout(total=15))
+                    resp_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err = resp_data.get('message', str(resp_data))
+                        prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
+                        return f"❌ Ошибка Resend API: {err}{prev_err}"
+            except Exception as e:
+                return f"❌ Ошибка отправки: {_send_error or str(e)}"
 
         # Anti-spam задержка (10 сек)
         import asyncio as _asyncio_delay
@@ -10178,6 +10411,176 @@ async def send_follow_up_email(
         return f"✅ Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
     except Exception as e:
         logger.error(f"[EMAIL_FOLLOWUP] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# NEGOTIATE BY EMAIL — Автономные переговоры для достижения цели
+# ═══════════════════════════════════════════════════════════════════
+
+
+async def negotiate_by_email(
+    contact_email: str = None,
+    contact_name: str = None,
+    goal: str = None,
+    opening_message: str = None,
+    subject: str = None,
+    sender_name: str = None,
+    from_account: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Начать email-переговоры с конкретным человеком для достижения цели.
+
+    Агент автономно ведёт переписку: отправляет первое письмо, отслеживает ответы
+    (через якорь email_reply_received) и продолжает диалог до достижения цели.
+
+    Примеры целей:
+    - «Договориться о встрече на следующей неделе»
+    - «Согласовать условия партнёрства»
+    - «Уточнить детали заказа и получить подтверждение»
+    - «Договориться об интервью»
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from datetime import datetime as dt, timezone as tz
+
+        if not contact_email or '@' not in contact_email:
+            return "❌ Укажи email контакта (contact_email)."
+        if not goal:
+            return "❌ Укажи цель переговоров (goal)."
+        if not opening_message:
+            return "❌ Нужен текст открывающего письма (opening_message)."
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден."
+
+        # MX-проверка
+        mx_valid, mx_err = _validate_email_domain(contact_email.strip().lower())
+        if not mx_valid:
+            return f"❌ {mx_err}"
+
+        # ── Определяем имя и адрес отправителя ──────────────────────────────
+        _integrations = _get_user_email_integrations(user, session)
+        _chosen = None
+        if _integrations:
+            if from_account:
+                _fa = from_account.strip().lower()
+                for _i in _integrations:
+                    if _fa in _i.get('email_user', '').lower() or _fa in _i.get('label', '').lower():
+                        _chosen = _i
+                        break
+                if not _chosen:
+                    _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _integrations)
+                    return f"❌ Аккаунт '{from_account}' не найден. Доступные: {_list}"
+            else:
+                _chosen = _integrations[0]
+
+        if not _chosen:
+            return (
+                "❌ Не настроена почтовая интеграция. Добавь в агента:\n"
+                "• Gmail OAuth: подключи в Настройках профиля\n"
+                "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
+                "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
+                "• Resend: RESEND_API_KEY=re_... и RESEND_FROM=noreply@домен.com"
+            )
+
+        _sender_addr = _chosen['email_user']
+        _sender_name = sender_name or user.first_name or user.username or 'Team'
+        _subject = subject or f"Regarding: {goal[:60]}"
+
+        # ── Создаём мини-кампанию для отслеживания переговоров ──────────────
+        campaign = EmailCampaign(
+            user_id=user.id,
+            name=f"Переговоры: {goal[:80]}",
+            goal=goal,
+            target_audience=f"{contact_name or contact_email}",
+            offer=goal,
+            tone='professional',
+            sender_name=_sender_name,
+            sender_email=_sender_addr,
+            max_emails=1,           # один контакт
+            daily_limit=5,          # follow-ups разрешены
+            status='active',
+            max_follow_ups=3,
+        )
+        session.add(campaign)
+        session.flush()  # получаем campaign.id
+
+        # ── Сохраняем контакт в переговорную кампанию ───────────────────────
+        outreach = EmailOutreach(
+            campaign_id=campaign.id,
+            user_id=user.id,
+            recipient_email=contact_email.strip().lower(),
+            recipient_name=contact_name,
+            subject=_subject,
+            body=opening_message,
+            status='draft',
+        )
+        session.add(outreach)
+        session.flush()
+
+        # ── Отправляем первое письмо ─────────────────────────────────────────
+        # Повторно используем логику из send_email (без дублирования кода)
+        send_result = await send_email(
+            to=contact_email,
+            subject=_subject,
+            body=opening_message,
+            sender_name=_sender_name,
+            from_account=_sender_addr,
+            user_id=user_id,
+            session=session,
+            close_session=False,
+        )
+
+        if '✅' in (send_result or ''):
+            # Помечаем outreach как отправленный
+            outreach.status = 'sent'
+            outreach.sent_at = dt.now(tz.utc)
+            outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=3)
+            campaign.emails_sent = 1
+
+            # Логируем в AgentActivityLog
+            try:
+                from models import AgentActivityLog
+                log_entry = AgentActivityLog(
+                    user_id=user.id,
+                    activity_type='email',
+                    title=f"Переговоры → {contact_email}",
+                    content=f"Цель: {goal}\n\nТема: {_subject}\n\n{opening_message[:400]}",
+                    target=contact_email,
+                    status='sent',
+                    ref_id=outreach.id,
+                )
+                session.add(log_entry)
+            except Exception as _le:
+                logger.warning(f"[NEGOTIATE_EMAIL] Activity log error: {_le}")
+
+            session.commit()
+            return (
+                f"✅ Переговоры начаты!\n"
+                f"📧 Кому: {contact_email}{' (' + contact_name + ')' if contact_name else ''}\n"
+                f"📌 Цель: {goal}\n"
+                f"📨 Тема: {_subject}\n"
+                f"📁 Кампания #{campaign.id} (активна — агент отслеживает ответы)\n\n"
+                f"Когда {contact_email} ответит — агент автоматически продолжит диалог "
+                f"через якорь email_reply_received."
+            )
+        else:
+            # Отправка не удалась — удаляем пустую кампанию
+            session.rollback()
+            return f"❌ Не удалось отправить первое письмо: {send_result}"
+
+    except Exception as e:
+        logger.error(f"[NEGOTIATE_EMAIL] Error: {e}", exc_info=True)
         session.rollback()
         return f"❌ Ошибка: {str(e)}"
     finally:
