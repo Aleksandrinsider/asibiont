@@ -3027,6 +3027,216 @@ def _save_interaction_for_director(telegram_id: int, content: str):
         logger.debug("[DIRECTOR] save interaction error: %s", e)
 
 
+# ══ Универсальный контекст пользователя и агента ══════════════════════════════
+
+# Маппинг ключей → человекочитаемые названия сервисов
+_INTEGRATION_LABELS: dict = {
+    'GMAIL': 'Gmail (почта)',
+    'YANDEX_MAIL': 'Яндекс Почта',
+    'IMAP': 'IMAP почта',
+    'SMTP': 'SMTP почта',
+    'OZON': 'Ozon (маркетплейс)',
+    'WILDBERRIES': 'Wildberries',
+    'WB_': 'Wildberries',
+    'AMOCRM': 'AmoCRM',
+    'BITRIX': 'Битрикс24',
+    'NOTION': 'Notion',
+    'VK_': 'ВКонтакте',
+    'TELEGRAM': 'Telegram',
+    'DISCORD': 'Discord',
+    'RSS': 'RSS-лента новостей',
+    'TASS': 'ТАСС (RSS)',
+    'OPENAI': 'OpenAI API',
+    'ANTHROPIC': 'Anthropic Claude',
+    'GOOGLE': 'Google API',
+    'ALPHA_VANTAGE': 'Биржевые данные (Alpha Vantage)',
+    'BINANCE': 'Binance (крипта)',
+    'BYBIT': 'Bybit (крипта)',
+    'COINBASE': 'Coinbase (крипта)',
+    'STRIPE': 'Stripe (платежи)',
+    'YOOKASSA': 'ЮКасса (платежи)',
+    'RESEND': 'Email-рассылка (Resend)',
+    'SENDGRID': 'Email-рассылка (SendGrid)',
+    'OPENWEATHER': 'Погода (OpenWeatherMap)',
+    'REPLICATE': 'Генерация изображений (Replicate)',
+    'PINECONE': 'Векторная БД (Pinecone)',
+    'REDIS': 'Redis (кэш/очереди)',
+    'POSTGRES': 'PostgreSQL',
+    'MYSQL': 'MySQL',
+    'MONGO': 'MongoDB',
+    'S3': 'Amazon S3 (хранилище)',
+    'AWS': 'Amazon AWS',
+    'AZURE': 'Microsoft Azure',
+    'GITHUB': 'GitHub API',
+    'GITLAB': 'GitLab API',
+    'JIRA': 'Jira',
+    'SLACK': 'Slack',
+    'HUBSPOT': 'HubSpot CRM',
+    'SALESFORCE': 'Salesforce CRM',
+    'SHOPIFY': 'Shopify',
+    'TWITTER': 'Twitter/X',
+    'INSTAGRAM': 'Instagram',
+    'YOUTUBE': 'YouTube API',
+}
+
+
+def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
+                               tools_allowed: str = '', search_scope: str = '') -> list[str]:
+    """Универсально определяет что агент реально умеет по его настройкам.
+    Возвращает список человекочитаемых названий сервисов.
+    """
+    found: set = set()
+
+    # 1. Из user_api_keys — смотрим имена ключей
+    for line in (user_api_keys or '').splitlines():
+        line = line.strip()
+        if '=' not in line or line.startswith('#'):
+            continue
+        key = line.split('=')[0].upper()
+        for prefix, label in _INTEGRATION_LABELS.items():
+            if key.startswith(prefix):
+                found.add(label)
+                break
+
+    # 2. Из python_code — ищем import и характерные строки
+    code_lc = (python_code or '').lower()
+    _code_hints = {
+        'imaplib': 'IMAP почта', 'smtplib': 'SMTP почта',
+        'gmail': 'Gmail (почта)', 'yandex': 'Яндекс Почта',
+        'ozon': 'Ozon (маркетплейс)', 'wildberries': 'Wildberries',
+        'amocrm': 'AmoCRM', 'bitrix': 'Битрикс24',
+        'notion': 'Notion', 'vk.com': 'ВКонтакте',
+        'binance': 'Binance (крипта)', 'bybit': 'Bybit (крипта)',
+        'feedparser': 'RSS-лента', 'rss': 'RSS-лента новостей',
+        'openai': 'OpenAI API', 'anthropic': 'Anthropic Claude',
+        'stripe': 'Stripe (платежи)', 'yookassa': 'ЮКасса (платежи)',
+        'alpha_vantage': 'Биржевые данные', 'coinbase': 'Coinbase (крипта)',
+        'telegram': 'Telegram', 'discord': 'Discord',
+        'replicate': 'Генерация изображений',
+        'requests.get': 'HTTP-запросы', 'aiohttp': 'HTTP-запросы',
+        'selenium': 'Браузерная автоматизация',
+        'playwright': 'Браузерная автоматизация',
+        'pandas': 'Анализ данных (pandas)',
+        'sqlite': 'SQLite', 'psycopg': 'PostgreSQL',
+    }
+    for hint, label in _code_hints.items():
+        if hint in code_lc:
+            found.add(label)
+
+    # 3. Из tools_allowed (JSON)
+    try:
+        import json as _j
+        tools = _j.loads(tools_allowed or '[]')
+        _tool_labels = {
+            'web_search': 'Поиск в интернете',
+            'research_topic': 'Исследование тем',
+            'add_task': 'Управление задачами',
+            'send_email': 'Отправка email',
+            'add_note': 'Заметки',
+            'analyze_data': 'Анализ данных',
+        }
+        for t in tools:
+            if t in _tool_labels:
+                found.add(_tool_labels[t])
+    except Exception:
+        pass
+
+    # 4. Из search_scope
+    if search_scope and search_scope.strip():
+        found.add(f'Поиск: {search_scope.strip()[:60]}')
+
+    return sorted(found)
+
+
+def _build_user_context_sync(user_db_id: int) -> str:
+    """Строит универсальный контекст пользователя для инжекта в промпты агентов.
+    Включает: профиль (кто он), цели (что хочет), агенты (его команда).
+    """
+    try:
+        import json as _j
+        from models import Session as _Db, User as _U, UserProfile as _UP, Goal as _G, UserAgent as _UA
+        _s = _Db()
+        try:
+            user = _s.query(_U).filter_by(id=user_db_id).first()
+            profile = _s.query(_UP).filter_by(user_id=user_db_id).first()
+            goals = (_s.query(_G)
+                     .filter_by(user_id=user_db_id, status='active')
+                     .order_by(_G.priority.desc())
+                     .limit(5).all())
+            agents = (_s.query(_UA)
+                      .filter_by(author_id=user_db_id, status='active')
+                      .limit(10).all())
+        finally:
+            _s.close()
+    except Exception:
+        return ''
+
+    parts: list[str] = []
+
+    # --- Кто пользователь ---
+    identity_parts: list[str] = []
+    if user:
+        name = user.first_name or user.username or ''
+        if name:
+            identity_parts.append(name)
+    if profile:
+        if profile.position:
+            identity_parts.append(profile.position)
+        if profile.company:
+            identity_parts.append(f'из «{profile.company}»')
+        if profile.city:
+            identity_parts.append(f'г. {profile.city}')
+        if profile.bio:
+            identity_parts.append(f'О себе: {profile.bio[:150]}')
+        if profile.skills:
+            identity_parts.append(f'Навыки: {profile.skills[:100]}')
+        if profile.interests:
+            identity_parts.append(f'Интересы: {profile.interests[:100]}')
+        if profile.current_plans:
+            identity_parts.append(f'Сейчас: {profile.current_plans[:100]}')
+        if profile.content_strategy:
+            identity_parts.append(f'Контент-стратегия: {profile.content_strategy[:100]}')
+
+    if identity_parts:
+        parts.append('ПОЛЬЗОВАТЕЛЬ: ' + ', '.join(identity_parts))
+
+    # --- Его цели ---
+    if goals:
+        goal_lines = []
+        for g in goals:
+            line = f'• {g.title}'
+            if g.progress_percentage:
+                line += f' [{g.progress_percentage}%]'
+            if g.target_date:
+                line += f' до {g.target_date.strftime("%d.%m.%Y")}'
+            if g.metric_target and g.metric_unit:
+                line += f' (цель: {g.metric_current or 0}/{g.metric_target} {g.metric_unit})'
+            goal_lines.append(line)
+        parts.append('ЦЕЛИ:\n' + '\n'.join(goal_lines))
+
+    # --- Его команда агентов + их реальные возможности ---
+    if agents:
+        agent_lines = []
+        for a in agents:
+            integrations = _parse_agent_integrations(
+                a.user_api_keys or '',
+                a.python_code or '',
+                a.tools_allowed or '',
+                a.search_scope or '',
+            )
+            line = f'• {a.name}'
+            if a.specialization:
+                line += f' ({a.specialization})'
+            if a.description:
+                line += f': {a.description[:80]}'
+            if integrations:
+                line += f'\n  Интеграции: {", ".join(integrations[:5])}'
+            agent_lines.append(line)
+        parts.append('АГЕНТЫ ПОЛЬЗОВАТЕЛЯ:\n' + '\n'.join(agent_lines))
+
+    return '\n\n'.join(parts)
+
+
 def _get_agent_anchors(user_db_id: int, agent_id: int, hours: float = 4.0) -> list:
     """Загружает свежие якоря делегирования для конкретного агента."""
     try:
@@ -3174,7 +3384,31 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     # Ставим cooldown сразу
     _agent[_cooldown_key] = _now_ts
 
-    # Строим промпт — агент видит последний обмен
+    # Строим универсальный контекст пользователя + возможностей агента
+    _user_ctx = _build_user_context_sync(user_db_id)
+
+    # Реальные возможности агента из DB
+    _integrations: list = []
+    try:
+        _db_ag_tmp = _Db()
+        try:
+            _db_rec = _db_ag_tmp.query(_UA).filter_by(id=_agent.get('id')).first()
+            if _db_rec:
+                _integrations = _parse_agent_integrations(
+                    _db_rec.user_api_keys or '',
+                    _db_rec.python_code or '',
+                    _db_rec.tools_allowed or '',
+                    _db_rec.search_scope or '',
+                )
+        finally:
+            _db_ag_tmp.close()
+    except Exception:
+        pass
+
+    _integrations_hint = (
+        f"\nТвои подключённые сервисы: {', '.join(_integrations)}." if _integrations else ''
+    )
+
     _asi_identity = (
         "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
         "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
@@ -3185,15 +3419,18 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         f"Ты действуешь как {_agent['name']} — {_agent.get('specialization', 'специалист')}. "
         f"{_agent.get('description', '')}"
     )
-    _system = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_persona}"
+    _ctx_block = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_ctx}" if _user_ctx else ''
+    _system = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_persona}{_integrations_hint}{_ctx_block}"
 
     _user_content = (
         f"В чате только что написали:\n"
         f"[Пользователь]: {user_message[:200]}\n"
         f"[ASI]: {asi_response[:300]}\n\n"
-        "Ты — коллега ASI. Прочитал этот обмен и хочешь добавить что-то ценное со своей стороны. "
-        "Можешь предложить конкретный ресурс, идею, связанную с твоей специализацией, или взять себе задачу. "
-        "1-2 предложения. Живо, без официоза. Если тебе нечего добавить — молчи (ответь пустой строкой)."
+        "Ты — коллега ASI. Прочитал этот обмен и хочешь добавить что-то ценное со своей стороны.\n"
+        "Можешь: предложить конкретный ресурс/инструмент из своей области, взять задачу на себя "
+        "(если у тебя есть нужная интеграция), добавить экспертное мнение.\n"
+        "Учитывай кто этот пользователь и чем он занимается — отвечай релевантно его контексту.\n"
+        "1-2 предложения. Живо, без официоза. Если нечего добавить — ответь пустой строкой."
     )
 
     try:
@@ -3307,6 +3544,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     except Exception:
         user_db_id = None
 
+    # Строим универсальный контекст пользователя (профиль + цели + команда с интеграциями)
+    _user_full_ctx = _build_user_context_sync(user_db_id) if user_db_id else ''
+
     # ── Строим контекст агентов с якорной памятью ─────────────────────────────
     agents_context_lines = []
     agent_anchor_map: dict[str, list] = {}  # agent_name → anchors
@@ -3336,16 +3576,17 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     agents_block = "\n".join(agents_context_lines)
 
     # ── Шаг 1: ASI принимает решение с учётом якорной памяти ──────────────────
+    _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
     decision_raw = await _quick_ai_call_raw([{
         "role": "user",
         "content": (
-            f"Ты директор офиса ASI Biont. Твоя команда (с историей работы):\n{agents_block}\n\n"
-            f"Пользователь написал: «{user_message}»\n\n"
+            f"Ты директор офиса ASI Biont. Твоя команда (с историей работы и интеграциями):\n{agents_block}\n\n"
+            f"Пользователь написал: «{user_message}»{_ctx_hint}\n\n"
             "Варианты решения:\n"
             "1. self — ответить самому как ASI (ПРЕДПОЧТИТЕЛЬНО: для вопросов, разговоров, анализа без живых данных)\n"
             "2. use_cache — ответить из кэша якоря агента (если агент работал недавно И результат отвечает на вопрос)\n"
-            "3. delegate — делегировать агенту (ТОЛЬКО когда нужны ЖИВЫЕ данные через интеграцию: проверить почту, получить заказы, запустить мониторинг. НЕ делегируй для разговора или если агент в cooldown)\n\n"
-            "ВАЖНО: По умолчанию выбирай 'self'. Делегируй только когда задача требует запуска интеграции агента.\n\n"
+            "3. delegate — делегировать агенту (ТОЛЬКО когда нужны ЖИВЫЕ данные через его интеграцию: проверить почту, получить заказы, мониторинг RSS и т.д. НЕ делегируй для разговора или если агент в cooldown)\n\n"
+            "ВАЖНО: По умолчанию выбирай 'self'. Делегируй только когда задача требует конкретной интеграции агента.\n\n"
             "Ответь ТОЛЬКО JSON без ```:\n"
             '{"action": "self"}\n'
             "или\n"

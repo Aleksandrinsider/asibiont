@@ -25,6 +25,12 @@ import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
 
+try:
+    from ai_integration.autonomous_agent import _build_user_context_sync, _parse_agent_integrations
+except Exception:  # циклический импорт или ещё не загружен — lazy fallback
+    _build_user_context_sync = None  # type: ignore
+    _parse_agent_integrations = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # ── Интервалы ────────────────────────────────────────────────────────────────
@@ -222,6 +228,7 @@ class OfficeEngine:
                             agent.name or 'Агент',
                             agent.specialization or 'агент',
                             stdout,
+                            user.id,
                         )
                     if report:
                         loop = asyncio.get_event_loop()
@@ -358,7 +365,8 @@ class OfficeEngine:
         except Exception as e:
             logger.debug("[OFFICE-L1] cooldown anchor error: %s", e)
 
-    async def _format_agent_report(self, agent_name: str, agent_spec: str, stdout: str) -> str:
+    async def _format_agent_report(self, agent_name: str, agent_spec: str, stdout: str,
+                                      user_db_id: int = 0) -> str:
         """Превращает сырой stdout скрипта в человеческую живую реплику агента.
         Как в арене: code_output → AI → чистое сообщение без логов и трейсбэков.
         """
@@ -373,12 +381,22 @@ class OfficeEngine:
         if not clean:
             return ""
 
+        # Контекст профиля пользователя — чтобы агент говорил релевантно его бизнесу
+        _user_ctx = ''
+        if user_db_id and _build_user_context_sync:
+            try:
+                loop = asyncio.get_event_loop()
+                _user_ctx = await loop.run_in_executor(None, _build_user_context_sync, user_db_id)
+            except Exception:
+                pass
+        _ctx_block = f"\n\nКонтекст о пользователе:\n{_user_ctx[:400]}" if _user_ctx else ''
+
         prompt = (
             f"Ты — {agent_name}, {agent_spec}. Ты только что выполнил мониторинг и получил следующие данные:\n\n"
             f"{clean[:600]}\n\n"
             "Напиши одно короткое сообщение (2-3 предложения) в чат пользователю — как живой человек в мессенджере.\n"
             "Что нашёл, что важного, если нужно — одно действие. Без технических деталей, без логов, без списков.\n"
-            "Только суть. Если данных нет или ничего интересного — напиши одно предложение об этом."
+            f"Только суть. Если данных нет или ничего интересного — напиши одно предложение об этом.{_ctx_block}"
         )
         try:
             async with aiohttp.ClientSession() as session:
@@ -445,7 +463,8 @@ class OfficeEngine:
 
     async def _generate_office_dialogue_reply(self, agent_name: str, agent_spec: str,
                                                agent_personality: str,
-                                               history: list) -> str:
+                                               history: list,
+                                               user_db_id: int = 0) -> str:
         """Агент читает последние сообщения в чате и отвечает естественно — как в арене.
         history: [{speaker, text}, ...]
         """
@@ -456,6 +475,16 @@ class OfficeEngine:
             f'[{m["speaker"]}]: {m["text"]}' for m in history[-5:]
         )
 
+        # Контекст профиля пользователя для релевантного ответа
+        _user_ctx = ''
+        if user_db_id and _build_user_context_sync:
+            try:
+                loop = asyncio.get_event_loop()
+                _user_ctx = await loop.run_in_executor(None, _build_user_context_sync, user_db_id)
+            except Exception:
+                pass
+        _ctx_block = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_ctx[:400]}" if _user_ctx else ''
+
         asi_identity = (
             "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
             "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
@@ -465,12 +494,13 @@ class OfficeEngine:
             agent_personality or
             f"Ты действуешь как {agent_name} — {agent_spec}."
         )
-        system = f"{asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{role_overlay}"
+        system = f"{asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{role_overlay}{_ctx_block}"
 
         user_content = (
             f"В чате только что написали:\n{history_text}\n\n"
             "Прочитай последнее сообщение и ответь на него — естественно, по-человечески, "
-            "как коллега в мессенджере. Можешь согласиться, уточнить, предложить следующий шаг "
+            "как коллега в мессенджере. Учитывай кто этот пользователь и чем он занимается — "
+            "отвечай релевантно его контексту. Можешь согласиться, уточнить, предложить следующий шаг "
             "или задать один вопрос. 1-2 предложения. Никаких списков, никакого официоза."
         )
 
@@ -524,6 +554,7 @@ class OfficeEngine:
                 agent_spec=agent.specialization or 'агент',
                 agent_personality=agent.personality or '',
                 history=history,
+                user_db_id=user.id,
             )
 
         if not reply:
@@ -679,10 +710,23 @@ class OfficeEngine:
                         + (f" дедлайн {g.target_date.strftime('%d.%m')}" if g.target_date else "")
                         for g in goals
                     )
-                    agents_text = "\n".join(
-                        f"- {a.name} ({a.specialization or 'Агент'}): {(a.description or '')[:120]}"
-                        for a in agents
-                    )
+                    _agents_lines = []
+                    for _a in agents:
+                        _line = f"- {_a.name} ({_a.specialization or 'Агент'}): {(_a.description or '')[:120]}"
+                        if _parse_agent_integrations:
+                            try:
+                                _intg = _parse_agent_integrations(
+                                    _a.user_api_keys or '',
+                                    _a.python_code or '',
+                                    _a.tools_allowed or '',
+                                    _a.search_scope or '',
+                                )
+                                if _intg:
+                                    _line += f"\n  Интеграции: {', '.join(_intg[:5])}"
+                            except Exception:
+                                pass
+                        _agents_lines.append(_line)
+                    agents_text = "\n".join(_agents_lines)
                     # Сохраняем имя→инфо для поиска агента после закрытия сессии
                     agents_info = {
                         a.name.lower().strip(): {'id': a.id, 'name': a.name, 'avatar_url': a.avatar_url or ''}
