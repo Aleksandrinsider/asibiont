@@ -2885,9 +2885,9 @@
                         const isActive = a.status === 'active';
                         const isPaused = a.status === 'paused';
                         const privacyLabel = a.is_private ? t('mp-private') : t('mp-public');
-                        const privacyColor = a.is_private ? '#6B7280' : '#068487';
-                        const privacyBg = a.is_private ? '#F3F4F6' : '#ECFDF5';
-                        const privacyBorder = a.is_private ? '#E5E7EB' : '#A7F3D0';
+                        const privacyColor = '#6B7280';
+                        const privacyBg = '#F3F4F6';
+                        const privacyBorder = '#E5E7EB';
                         const arenaLabel = isActive ? t('mp-in-arena-dot') : isPaused ? t('mp-paused-dot') : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : a.status;
                         const arenaColor = isActive ? '#059669' : '#9CA3AF';
                         return `
