@@ -16,7 +16,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://asibiont.com/subscription-tiers">
     <meta property="og:title" content="Токены ASI Biont — AI-партнёр, который не спит">
-    <meta property="og:description" content="Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 15 000₽ (+20%). 1 500 бесплатных токенов при регистрации.">
+    <meta property="og:description" content="Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 15 000₽ (+20%).">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-pricing.png">
 
     <!-- Twitter Card -->
@@ -124,7 +124,7 @@
                     {% if show_yookassa %}Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.{% else %}All features unlocked from the start. Pay only for what you use. 1 token = $0.01 USDT.{% endif %}
                 </div>
                 <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 32px auto;">
-                    <b>{% if show_yookassa %}При регистрации вы получаете 1 500 бесплатных токенов.{% else %}You get 1,500 free tokens upon registration.{% endif %}</b>
+                    <b>{% if show_yookassa %}Все функции доступны сразу.{% else %}All features available immediately.{% endif %}</b>
                 </div>
             </div>
 
@@ -169,7 +169,7 @@
 
             <!-- CTA -->
             <div class="cta-section" style="text-align: center; margin: 32px 0 0 0; padding: 24px 16px;">
-                <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">1 500 токенов при регистрации. Все функции доступны сразу.</p>
+                <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">Все функции доступны сразу.</p>
                 <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
                     <a href="https://t.me/asibiont_bot" target="_blank" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">Попробовать бесплатно — 1 500 токенов</a>
                     <button id="pwa-install-btn" onclick="triggerPwaInstall()" style="display: inline-flex; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s; align-items: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Установить приложение</button>
@@ -213,7 +213,7 @@
       back: '← На главную',
       h1: 'Пополните баланс токенов',
       desc1: 'Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.',
-      desc2: 'При регистрации вы получаете 1 500 бесплатных токенов.',
+      desc2: 'Все функции доступны сразу.',
       badge: 'ВЫГОДНЫЙ',
       cards: [
         { name: 'Стартовый', sub: 'Для знакомства с AI-партнёром', desc: '«Напомни завтра в 9 про созвон» — он помнит. «Найди дизайнера» — находит. Все функции открыты с первого токена.' },
@@ -224,7 +224,7 @@
       topupRub: ['Pay 1 500 ₽ (RUB)', 'Pay 5 000 ₽ (RUB)', 'Pay 15 000 ₽ (RUB)'],
       topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $150 USDT'],
       ctaBtn1: 'Попробовать бесплатно — 1 500 токенов', ctaBtn2: 'Установить приложение',
-      cta: '1 500 токенов при регистрации. Все функции доступны сразу.',
+      cta: 'Все функции доступны сразу.',
       fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал', fArena: 'Арена AI'
     },
     en: {
@@ -232,7 +232,7 @@
       back: '← Home',
       h1: 'Top Up Token Balance',
       desc1: 'All features unlocked from the start. Pay only for what you use. 1 token = $0.01 USDT.',
-      desc2: 'You get 1,500 free tokens upon registration.',
+      desc2: 'All features available immediately.',
       badge: 'POPULAR',
       cards: [
         { name: 'Starter', sub: 'Get started with your AI partner', desc: '"Remind me tomorrow at 9 about the call" — it remembers. "Find a designer" — it finds. All features unlocked from token one.' },
@@ -243,7 +243,7 @@
       topupRub: ['Pay 1,500 ₽ (RUB)', 'Pay 5,000 ₽ (RUB)', 'Pay 15,000 ₽ (RUB)'],
       topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $150 USDT'],
       ctaBtn1: 'Try for free — 1,500 tokens', ctaBtn2: 'Install App',
-      cta: '1,500 tokens on signup. All features available immediately.',
+      cta: 'All features available immediately.',
       fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial', fArena: 'Arena AI'
     }
   };
