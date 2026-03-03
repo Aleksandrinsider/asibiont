@@ -3585,32 +3585,81 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     import json as _json
     import datetime as _dt
 
-    # Загружаем агентов пользователя (опционально — ASI работает и без них)
+    # ── Загружаем user_db_id + агентов: сессионно-активированные + собственные ─
+    user_db_id = None
     _agents = []
     try:
-        from .user_agents import get_user_active_agents, load_agent_personality
-        _ids = get_user_active_agents(user_id)
-        if _ids:
-            _agents = [d for _id in _ids for d in [load_agent_personality(_id)] if d]
-    except Exception as e:
-        logger.debug("[DIRECTOR] agents load error: %s", e)
-
-    # Если нет агентов — не перехватываем, пусть ASI ответит сам через process_request
-    # (там полный промпт, инструменты, контекст задач и целей)
-    if not _agents:
-        return None
-
-    # Загружаем user_db_id один раз
-    try:
-        from models import Session as _Db, User as _User
+        from models import Session as _Db, User as _User, UserAgent as _UA
         _s = _Db()
         try:
             _u = _s.query(_User).filter_by(telegram_id=user_id).first()
-            user_db_id = _u.id if _u else None
+            if not _u:
+                return None
+            user_db_id = _u.id
+
+            # Источник 1: агенты активированные в сессии (в т.ч. публичные)
+            _session_ids: list[int] = []
+            try:
+                from .user_agents import get_user_active_agents
+                _session_ids = get_user_active_agents(user_id) or []
+            except Exception:
+                pass
+
+            # Источник 2: собственные активные агенты пользователя из БД
+            _own_agents = (
+                _s.query(_UA)
+                .filter(_UA.author_id == user_db_id, _UA.status == 'active')
+                .limit(10)
+                .all()
+            )
+            _own_ids = {a.id for a in _own_agents}
+
+            # Источник 3: сессионно-активированные с загрузкой из БД (если не вошли в own)
+            _extra_ids = [i for i in _session_ids if i not in _own_ids]
+            _extra_agents = []
+            if _extra_ids:
+                _extra_agents = (
+                    _s.query(_UA)
+                    .filter(_UA.id.in_(_extra_ids), _UA.status == 'active')
+                    .all()
+                )
+
+            # Объединяем, порядок: сначала сессионно-активированные, потом остальные собственные
+            _seen: set[int] = set()
+            _all_db: list = []
+            for _a in _extra_agents + list(_own_agents):
+                if _a.id not in _seen:
+                    _seen.add(_a.id)
+                    _all_db.append(_a)
+
+            for _dba in _all_db:
+                _tools = []
+                try:
+                    _tools = json.loads(_dba.tools_allowed or '[]')
+                except Exception:
+                    pass
+                _agents.append({
+                    'id': _dba.id,
+                    'name': _dba.name or 'Агент',
+                    'job_title': _dba.job_title or '',
+                    'specialization': _dba.specialization or '',
+                    'description': _dba.description or '',
+                    'personality': _dba.personality or '',
+                    'python_code': _dba.python_code or '',
+                    'user_api_keys': _dba.user_api_keys or '',
+                    'tools_allowed': _dba.tools_allowed or '',
+                    'search_scope': _dba.search_scope or '',
+                    'avatar_url': _dba.avatar_url or '',
+                    'tools': _tools,
+                })
         finally:
             _s.close()
-    except Exception:
-        user_db_id = None
+    except Exception as e:
+        logger.debug("[DIRECTOR] agents/user load error: %s", e)
+
+    # Если нет агентов — не перехватываем, пусть ASI ответит сам
+    if not _agents:
+        return None
 
     # Строим универсальный контекст пользователя (профиль + цели + команда с интеграциями)
     _user_full_ctx = _build_user_context_sync(user_db_id) if user_db_id else ''
