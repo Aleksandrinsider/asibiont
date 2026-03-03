@@ -9723,7 +9723,7 @@ async def api_marketplace_publish_agent_handler(request):
             agent.tools_allowed = _json.dumps(data.get('tools_allowed') or [])
             agent.knowledge_base = _json.dumps(data.get('knowledge_base') or [])
             agent.price_per_message = max(1, int(data.get('price_per_message') or 5))
-            agent.trial_messages = max(0, int(data.get('trial_messages') or 3))
+            agent.trial_messages = 0  # пробные сообщения отключены
             agent.is_adult = bool(data.get('is_adult', False))
             agent.is_private = bool(data.get('is_private', False))
             # Новый агент создаётся в статусе 'paused' — активирует пользователь кнопкой «Запустить в чат»
@@ -10028,13 +10028,12 @@ async def api_agent_chat_handler(request):
                 agent.subscribers_count = (agent.subscribers_count or 0) + 1
 
             # Billing
-            is_trial = (sub.trial_messages_used or 0) < (agent.trial_messages or 0)
             is_owner = (agent.author_id == user_obj.id)
             tokens_charged = 0
             author_earnings = 0
             platform_earnings = 0
 
-            if not is_trial and not is_owner:
+            if not is_owner:
                 price = agent.price_per_message or 5
                 if (user_obj.token_balance or 0) < price:
                     session_db.close()
@@ -10065,9 +10064,6 @@ async def api_agent_chat_handler(request):
                     description=f'Сообщение агенту «{agent.name}»',
                     balance_after=user_obj.token_balance
                 ))
-            else:
-                sub.trial_messages_used = (sub.trial_messages_used or 0) + 1
-
             sub.messages_count = (sub.messages_count or 0) + 1
             sub.tokens_spent = (sub.tokens_spent or 0) + tokens_charged
             sub.last_message_at = _dt.datetime.now(_dt.timezone.utc)
@@ -10075,13 +10071,12 @@ async def api_agent_chat_handler(request):
             session_db.add(AgentRun(
                 user_id=user_obj.id, agent_id=agent_id,
                 tokens_charged=tokens_charged, author_earnings=author_earnings,
-                platform_earnings=platform_earnings, is_trial=is_trial
+                platform_earnings=platform_earnings, is_trial=False
             ))
             session_db.commit()
 
             # Capture values before session closes
             agent_personality = agent.personality or f'Ты полезный AI-ассистент по имени {agent.name}.'
-            trial_remaining = max(0, (agent.trial_messages or 0) - (sub.trial_messages_used or 0))
             user_balance = user_obj.token_balance or 0
         finally:
             session_db.close()
@@ -10107,8 +10102,6 @@ async def api_agent_chat_handler(request):
         ai_reply = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip() or '...'
         return web.json_response({
             'reply': ai_reply,
-            'is_trial': is_trial,
-            'trial_remaining': trial_remaining,
             'tokens_charged': tokens_charged,
             'balance': user_balance
         })
@@ -10506,13 +10499,12 @@ async def api_marketplace_agent_activate_handler(request):
             _aspec = agent.specialization or 'Агент'
             _apers = agent.personality or ''
             _adesc = agent.description or ''
-            _trial = agent.trial_messages or 0
             _price = agent.price_per_message
             _aavatar = agent.avatar_url or ''
             # Автор агента
             _author_user = session_db.query(UserModel).filter_by(id=agent.author_id).first()
             _author_uname = (_author_user.username or '') if _author_user else ''
-            return web.json_response({'success': True, 'trial_messages': _trial,
+            return web.json_response({'success': True,
                                       'price_per_message': _price, 'switched': _switched,
                                       'agent': {'id': _aid, 'name': _aname, 'avatar_url': _aavatar}})
         finally:

@@ -438,20 +438,6 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
             session.commit()
             return {'success': True, 'is_owner': True, 'is_trial': False, 'error': ''}
 
-        # Пробные сообщения — бесплатно
-        is_trial = (sub.trial_messages_used or 0) < (agent.trial_messages or 0)
-        if is_trial:
-            sub.trial_messages_used = (sub.trial_messages_used or 0) + 1
-            sub.messages_count = (sub.messages_count or 0) + 1
-            sub.last_message_at = datetime.datetime.now(datetime.timezone.utc)
-            agent.messages_count = (agent.messages_count or 0) + 1
-            run = AgentRun(user_id=user.id, agent_id=agent_id,
-                           tokens_charged=0, author_earnings=0,
-                           platform_earnings=0, is_trial=True)
-            session.add(run)
-            session.commit()
-            return {'success': True, 'is_owner': False, 'is_trial': True, 'error': ''}
-
         # Платное сообщение
         cost = agent.price_per_message or 5
         balance = user.token_balance or 0
@@ -498,7 +484,7 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
                        platform_earnings=platform_share, is_trial=False)
         session.add(run)
         session.commit()
-        return {'success': True, 'is_owner': False, 'is_trial': False, 'error': ''}
+        return {'success': True, 'is_owner': False, 'is_trial': False, 'error': ''}  # noqa
     except Exception as e:
         session.rollback()
         logger.error(f"[BILLING] bill_agent_message error: {e}")

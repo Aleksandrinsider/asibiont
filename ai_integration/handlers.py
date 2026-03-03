@@ -11524,9 +11524,7 @@ async def switch_agent(agent_slug: str = None, reset: bool = False,
 
         set_user_active_agent(user_id, agent.id)
 
-        trial_left = agent.trial_messages - (sub.trial_messages_used if sub else 0)
-        trial_note = f" У тебя {trial_left} пробных сообщений 🎁" if trial_left > 0 else ""
-        return (f"✅ Подключён агент **{agent.name}**!{trial_note}\n"
+        return (f"✅ Подключён агент **{agent.name}**!\n"
                 f"Цена: {agent.price_per_message} токенов/сообщение.\n"
                 f"Чтобы вернуться к стандартному режиму — скажи «переключись на ASI Biont».")
     except Exception as e:

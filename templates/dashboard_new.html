@@ -4334,7 +4334,6 @@ except Exception as e:
             set('mpa-desc', agent.description);
             set('mpa-personality', agent.personality);
             set('mpa-price', agent.price_per_message);
-            set('mpa-trial', agent.trial_messages);
             set('mpa-apikeys', agent.user_api_keys);
             mpUpdateServiceHint();
             set('mpa-pycode', agent.python_code);
@@ -4364,25 +4363,21 @@ except Exception as e:
         let _agentChatId = null;
         let _agentChatHistory = [];
         let _agentChatPrice = 0;
-        let _agentChatTrial = 0;
         let _mpMyAgents = [];      // кеш моих агентов для редактирования
         let _mpCatalogAgents = []; // кеш агентов каталога
         let _mpEditAgentId = null; // id агента при редактировании (null = создание)
 
-        function mpOpenAgentChat(agentId, agentName, price, trial) {
+        function mpOpenAgentChat(agentId, agentName, price) {
             _agentChatId = agentId;
             _agentChatHistory = [];
             _agentChatPrice = price;
-            _agentChatTrial = trial;
             const modal = document.getElementById('agent-chat-modal');
             const title = document.getElementById('agent-chat-title');
             const info = document.getElementById('agent-chat-info');
             const msgs = document.getElementById('agent-chat-messages');
             if (!modal) return;
             title.textContent = agentName;
-            info.textContent = trial > 0
-                ? `${trial} ${t('mp-trial-free')} ${price} ${t('mp-per-msg')}`
-                : `${price} ${t('mp-per-msg')}`;
+            info.textContent = `${price} ${t('mp-per-msg')}`;
             msgs.innerHTML = '';
             modal.style.display = 'flex';
             document.getElementById('agent-chat-input').focus();
@@ -4448,10 +4443,7 @@ except Exception as e:
 
                     // Update info line
                     if (info) {
-                        const trialLeft = data.trial_remaining || 0;
-                        info.textContent = data.is_trial
-                            ? `Пробный период: ещё ${trialLeft} бесплатных сообщений`
-                            : `Списано ${data.tokens_charged} тк · Баланс ${data.balance} тк`;
+                        info.textContent = `Списано ${data.tokens_charged} тк · Баланс ${data.balance} тк`;
                     }
                 }
             } catch(e) {
@@ -11237,7 +11229,6 @@ except Exception as e:
                 : `<div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`;
 
             const priceLabel = agent.price_per_message === 0 ? 'Бесплатно' : `${agent.price_per_message} тк/сообщение`;
-            const trialLabel = agent.trial_messages ? `${agent.trial_messages} ${t('mp-free-msgs')}` : t('mp-no-trial');
             const ratingLabel = agent.rating ? agent.rating + '/10' : t('mp-no-ratings');
 
             let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avatarHtml}`;
