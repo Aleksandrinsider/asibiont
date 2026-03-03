@@ -318,7 +318,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 logger.debug(f"Returning cached avatar for user {user_id}")
                 return user.photo_url
             
-            # Загружаем сежий аатар из Telegram
+            # Загружаем свежий аватар из Telegram
             if bot:
                 try:
                     photos = await bot.get_user_profile_photos(user_id, limit=1)
@@ -326,7 +326,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                         file = await bot.get_file(photos.photos[0][-1].file_id)
                         avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                         
-                        # Сохраняем  БД для кэшироая
+                        # Сохраняем в БД для кэширования
                         if user:
                             user.photo_url = avatar_url
                             db.commit()
@@ -336,6 +336,11 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 except Exception as e:
                     logger.debug(f"Could not fetch avatar from Telegram for user {user_id}: {e}")
             
+            # Fallback: если Telegram API не вернул фото — используем кешированный photo_url из БД
+            if user and user.photo_url:
+                logger.debug(f"Using cached photo_url for user {user_id} after failed force_refresh")
+                return user.photo_url
+
             logger.debug(f"No avatar available for user {user_id}")
             return None
         finally:
