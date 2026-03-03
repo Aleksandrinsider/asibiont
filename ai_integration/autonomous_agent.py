@@ -3559,13 +3559,6 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int) -> str:
 
 
 # Слова-сигналы что пользователь хочет действие, а не разговор
-_DIRECTOR_TASK_RE = re.compile(
-    r'провер|отправ|напиш|найди|сделай|покажи|получи|загрузи|скача|'
-    r'запусти|узнай|мониторинг|анализ|отчёт|докла|статистик|'
-    r'новост|письм|почт|заказ|позвони|уточни|обнов|синхрониз|'
-    r'check|send|write|find|do|show|get|run|fetch|update|monitor',
-    re.IGNORECASE,
-)
 
 
 async def _office_director_chat(user_message: str, user_id: int) -> str | None:
@@ -3579,9 +3572,6 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     Якоря дают ASI память: «Кристина 2ч назад проверила почту, нашла 3 письма» →
     ASI не запускает её снова, а отвечает из кэша. Cooldown 2ч — антиспам.
     """
-    # Если сообщение не похоже на задачу — не перехватываем, пусть ASI ответит сам
-    if not _DIRECTOR_TASK_RE.search(user_message or ''):
-        return None
     import json as _json
     import datetime as _dt
 
