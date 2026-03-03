@@ -2977,10 +2977,13 @@ else:
                     frm = msg.get('From', '')
                     date = msg.get('Date', '')
                     import re as _re
+                    import html as _html_ent
                     def _strip_html(s):
                         s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                         s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                         s = _re.sub(r'<[^>]+>', ' ', s)
+                        s = _html_ent.unescape(s)
+                        s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
                         return _re.sub(r'\s+', ' ', s).strip()
                     body = ''
                     if msg.is_multipart():
@@ -3044,10 +3047,13 @@ try:
                 frm = msg.get('From', '')
                 date = msg.get('Date', '')
                 import re as _re
+                import html as _html_ent
                 def _strip_html(s):
                     s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<[^>]+>', ' ', s)
+                    s = _html_ent.unescape(s)
+                    s = _re.sub(r'[ ​‌‍⁠﻿­‎‏]', '', s)
                     return _re.sub(r'\s+', ' ', s).strip()
                 body = ''
                 if msg.is_multipart():
@@ -3111,10 +3117,13 @@ try:
                 frm = msg.get('From', '')
                 date = msg.get('Date', '')
                 import re as _re
+                import html as _html_ent
                 def _strip_html(s):
                     s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
                     s = _re.sub(r'<[^>]+>', ' ', s)
+                    s = _html_ent.unescape(s)
+                    s = _re.sub(r'[ ​‌‍⁠﻿­‎‏]', '', s)
                     return _re.sub(r'\s+', ' ', s).strip()
                 body = ''
                 if msg.is_multipart():
