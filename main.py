@@ -11564,6 +11564,14 @@ if __name__ == "__main__":
                 except Exception as e:
                     logger.error(f"Failed to start AnchorEngine: {e}")
 
+                # Start Living Office Engine — L1 мониторинг скриптов + L2 координатор
+                try:
+                    from ai_integration.office_engine import start_office_engine
+                    start_office_engine()
+                    logger.info("[OFFICE] Living Office Engine started")
+                except Exception as _oe_err:
+                    logger.warning(f"[OFFICE] Failed to start OfficeEngine: {_oe_err}")
+
                 # Start polling for bot ONLY in local mode
                 polling_task = None
                 if LOCAL and bot and dp:

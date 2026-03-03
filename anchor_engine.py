@@ -145,6 +145,8 @@ BATCH_GROUPS = {
     'background_research_ready': 'insights',
     # Интеграции пользовательских агентов
     'integration_alert': 'integration',  # Gmail/Ozon/RSS/любые скрипты
+    # Офисный координатор (Living Office Engine)
+    'agent_office_update': 'integration',  # АСИ назначил агенту задачу по целям
 }
 
 
@@ -4425,6 +4427,7 @@ class AnchorEngine:
                 "",
                 "ПРАВИЛА ДЛЯ ЯКОРЯ ИНТЕГРАЦИИ:",
                 "— integration_alert: скрипт агента вернул данные (Gmail, Ozon, RSS, CRM и др.). В data: snippet (вывод скрипта), signal (ключевое слово если есть), service_label. Прочитай snippet и САМИ РЕШИ имеет ли это ценность для пользователя прямо сейчас. CRITICAL/HIGH = пиши обязательно: один факт + один вопрос/действие. MEDIUM = пиши если есть конкретная новость (новое письмо, изменение статуса, достиженение/падение показателя). LOW = SKIP если рутина (пустой инбокс, список без изменений, технический вывод). НЕ пересказывай snippet — вычлени суть в 1-2 фразах.",
+                "— agent_office_update: офисный координатор назначил конкретное действие агенту по целям пользователя. В data: plan (строка формата '[Имя агента]: [действие]'), agent_count, goal_count. Сообщи кратко — что конкретно предлагает сделать агент и к какой цели это относится. Спроси: 'Запустить?' или 'Дать команду агенту?'. Не пиши 'координатор запланировал' — пиши живо, как будто агент сам хочет взяться за дело.",
                 "— НЕ НАЧИНАЙ С ПРИВЕТСТВИЯ: никаких 'Привет!', 'Здравствуй!', 'Доброе утро!' и т.п. Сразу по делу — с факта, вопроса или наблюдения. Ты не здороваешься каждый раз, ты уже рядом.",
                 "— ОДНА ТЕМА НА СООБЩЕНИЕ: выбери самый важный якорь и ФОКУСИРУЙСЯ на нём. НЕ пытайся охватить всё: если есть просроченная задача + пустой профиль + предложение — пиши ТОЛЬКО про просроченную задачу. Остальное — в следующий раз. Сообщение которое пытается решить 3 проблемы сразу = мусор.",
                 "— Сначала данные (через инструменты), потом выводы. Не наоборот.",
@@ -4450,17 +4453,26 @@ class AnchorEngine:
                     f"{i}. [{ad['priority']}] {ad['type']}: {ad['topic']} "
                     f"(источник: {ad['source']}, возраст: {ad['age_minutes']}мин)"
                 )
-                # Для integration_alert передаём snippet в промпт
-            INTEGRATION_DATA_TYPES = {'integration_alert'}
-            if ad.get('type') in INTEGRATION_DATA_TYPES and ad.get('data'):
-                _sn = ad['data'].get('snippet', '')
-                _sl = ad['data'].get('service_label', '')
-                _sig = ad['data'].get('signal', '')
-                if _sn or _sl:
-                    prompt_parts.append(
-                        f"   Данные [{_sl}]: {_sn[:400]}"
-                        + (f" (сигнал: {_sig})" if _sig else '')
-                    )
+                # Для integration_alert и agent_office_update передаём данные в промпт
+                INTEGRATION_DATA_TYPES = {'integration_alert', 'agent_office_update'}
+                if ad.get('type') in INTEGRATION_DATA_TYPES and ad.get('data'):
+                    if ad.get('type') == 'agent_office_update':
+                        _plan = ad['data'].get('plan', '')
+                        _ac = ad['data'].get('agent_count', '')
+                        _gc = ad['data'].get('goal_count', '')
+                        if _plan:
+                            prompt_parts.append(
+                                f"   Офисный план ({_gc} целей, {_ac} агентов): {_plan}"
+                            )
+                    else:
+                        _sn = ad['data'].get('snippet', '')
+                        _sl = ad['data'].get('service_label', '')
+                        _sig = ad['data'].get('signal', '')
+                        if _sn or _sl:
+                            prompt_parts.append(
+                                f"   Данные [{_sl}]: {_sn[:400]}"
+                                + (f" (сигнал: {_sig})" if _sig else '')
+                            )
             # Для email-якорей передаём полные данные — AI нужны outreach_id, reply_text, campaign_goal
                 if ad.get('type') in EMAIL_DATA_TYPES and ad.get('data'):
                     data = ad['data']
