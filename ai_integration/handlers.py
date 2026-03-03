@@ -10413,27 +10413,76 @@ async def send_email(
                         s.sendmail(_smtp_user, to_clean, msg.as_string())
 
                 loop = _aio_smtp.get_running_loop()
+                _smtp_net_err = None  # сетевая ошибка → будет Resend fallback
                 try:
                     await _aio_smtp.wait_for(
                         loop.run_in_executor(None, _smtp_send_personal),
                         timeout=35.0
                     )
                 except _aio_smtp.TimeoutError:
-                    return f"❌ Таймаут отправки через {_from_label}: сервер не ответил за 35 сек."
+                    _smtp_net_err = f"Таймаут ({_from_label}): сервер не ответил за 35 сек."
                 except Exception as _smtp_err:
                     _smtp_msg = str(_smtp_err)
-                    # Gmail: 535 = неверный app password
+                    # Gmail: 535 = неверный app password — это не сетевая ошибка, сразу возвращаем
                     if '535' in _smtp_msg or 'Username and Password not accepted' in _smtp_msg:
                         return (
                             f"❌ Gmail не принял пароль. Нужен App Password, а не обычный пароль.\n"
                             f"Зайди в Google Account → Security → App Passwords → создай пароль для 'Mail'.\n"
                             f"Вставь его в настройки агента: GMAIL_PASS=xxxx xxxx xxxx xxxx"
                         )
-                    return f"❌ Ошибка отправки через {_from_label}: {_smtp_msg}"
+                    _smtp_net_err = f"{_from_label}: {_smtp_msg}"
 
-                # Обновляем sender_email чтобы лог показывал реальный адрес
-                sender_email = _smtp_user
-                logger.info(f'[SEND_EMAIL] Sent via {_from_label} SMTP from {_smtp_user} to {to_clean}')
+                if _smtp_net_err:
+                    # ── Автоматический fallback на Resend (Railway блокирует SMTP) ──
+                    logger.warning(f"[SEND_EMAIL] SMTP failed ({_smtp_net_err}), trying Resend fallback")
+                    # 1. Ищем Resend-интеграцию пользователя
+                    _resend_fallback_key = None
+                    _resend_fallback_from = None
+                    for _ri in _email_integrations:
+                        if _ri.get('type') == 'resend' and _ri.get('resend_key') and _ri.get('email_user') and '@' in _ri['email_user']:
+                            _resend_fallback_key = _ri['resend_key']
+                            _resend_fallback_from = _ri['email_user']
+                            break
+                    # 2. Если нет — используем платформенный Resend
+                    if not _resend_fallback_key:
+                        from config import RESEND_API_KEY as _PLAT_RESEND_KEY
+                        if _PLAT_RESEND_KEY:
+                            _resend_fallback_key = _PLAT_RESEND_KEY
+                            _resend_fallback_from = 'outreach@asibiont.com'
+                    if _resend_fallback_key and _resend_fallback_from:
+                        try:
+                            async with _aiohttp.ClientSession() as _fb_http:
+                                _fb_resp = await _fb_http.post(
+                                    'https://api.resend.com/emails',
+                                    headers={
+                                        'Authorization': f'Bearer {_resend_fallback_key}',
+                                        'Content-Type': 'application/json',
+                                    },
+                                    json={
+                                        'from': f"{sender_name} <{_resend_fallback_from}>",
+                                        'to': [to_clean],
+                                        'subject': subject,
+                                        'text': body,
+                                    },
+                                    timeout=_aiohttp.ClientTimeout(total=15),
+                                )
+                                _fb_data = await _fb_resp.json()
+                                if _fb_resp.status in (200, 201):
+                                    resend_id = _fb_data.get('id', '')
+                                    sender_email = _resend_fallback_from
+                                    logger.info(f'[SEND_EMAIL] Sent via Resend fallback ({_resend_fallback_from}) to {to_clean}')
+                                    # не возвращаем ошибку — письмо дошло
+                                else:
+                                    _fb_err = _fb_data.get('message', str(_fb_data))
+                                    return f"❌ Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n❌ Резервный Resend тоже не сработал: {_fb_err}"
+                        except Exception as _fb_exc:
+                            return f"❌ Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n❌ Резервный Resend тоже не сработал: {_fb_exc}"
+                    else:
+                        return f"❌ Ошибка отправки через {_from_label}: {_smtp_net_err}"
+                else:
+                    # Обновляем sender_email чтобы лог показывал реальный адрес
+                    sender_email = _smtp_user
+                    logger.info(f'[SEND_EMAIL] Sent via {_from_label} SMTP from {_smtp_user} to {to_clean}')
             elif _chosen_integration.get('type') == 'resend':
                 # ── Отправка через личный Resend ключ пользователя ────────
                 _user_resend_key = _chosen_integration['resend_key']
