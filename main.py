@@ -10220,6 +10220,10 @@ async def api_agent_chat_handler(request):
                 return web.json_response({'error': 'Agent not found'}, status=404)
             if agent.status == 'disabled':
                 return web.json_response({'error': 'Agent not available'}, status=400)
+            # Приватные агенты — только владелец может с ними общаться
+            is_owner_chat = bool(user_obj and agent.author_id == user_obj.id)
+            if agent.is_private and not is_owner_chat:
+                return web.json_response({'error': 'Agent not available'}, status=403)
 
             # Get or create subscription
             sub = session_db.query(AgentSubscription).filter_by(
@@ -10590,6 +10594,10 @@ async def api_marketplace_agent_get_handler(request):
             agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
             if not agent:
                 return web.json_response({'error': 'Not found'}, status=404)
+            # Приватные агенты доступны только владельцу
+            is_owner_get = bool(user_obj and agent.author_id == user_obj.id)
+            if agent.is_private and not is_owner_get:
+                return web.json_response({'error': 'Not found'}, status=404)
             rating = round(agent.rating_sum / agent.rating_count, 1) if agent.rating_count else None
             is_subscribed = False
             if user_obj:
@@ -10692,6 +10700,9 @@ async def api_marketplace_agent_activate_handler(request):
                 return web.json_response({'error': 'Agent not found'}, status=404)
             is_own = (agent.author_id == user_obj.id)
             if not is_own:
+                # Приватные агенты нельзя активировать другим пользователям
+                if agent.is_private:
+                    return web.json_response({'error': 'Agent not found or not active'}, status=404)
                 # Для чужих/публичных агентов требуем status='active'
                 if agent.status != 'active':
                     return web.json_response({'error': 'Agent not found or not active'}, status=404)
