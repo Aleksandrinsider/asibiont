@@ -4716,11 +4716,11 @@ except Exception as e:
                 const data = await r.json();
                 if (data.error) throw new Error(data.error);
                 if (codeEl) { codeEl.value = (data.code != null ? data.code : ''); codeEl.style.height = 'auto'; codeEl.style.height = codeEl.scrollHeight + 'px'; }
-                if (status) { status.textContent = data.code ? t('mp-gen-success') : t('mp-gen-empty'); }
+                if (status) { status.style.color = data.code ? '#059669' : '#B45309'; status.textContent = data.code ? t('mp-gen-success') : t('mp-gen-empty'); }
                 const advDetails = document.getElementById('mpa-advanced-details');
-                if (advDetails && data.code) advDetails.open = true;
+                if (advDetails && data.code) { advDetails.open = true; advDetails.scrollIntoView({behavior:'smooth', block:'nearest'}); }
             } catch(e) {
-                if (status) { status.textContent = t('err-prefix') + ' ' + (e?.message || String(e) || t('err-word')); }
+                if (status) { status.style.color = '#DC2626'; status.textContent = t('err-prefix') + ' ' + (e?.message || String(e) || t('err-word')); }
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = t('mp-gen-btn'); }
             }

@@ -9807,7 +9807,7 @@ except Exception as e:
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
                 json={'model': DEEPSEEK_MODEL, 'messages': [{'role': 'user', 'content': prompt}],
                       'max_tokens': 1400, 'temperature': 0.1},
-                timeout=_aio_h.ClientTimeout(total=20)
+                timeout=_aio_h.ClientTimeout(total=50)
             ) as resp:
                 result = await resp.json()
         code = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
