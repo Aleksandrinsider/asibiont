@@ -180,15 +180,14 @@ def _db_delete_platform_posts():
 
 
 def _load_all_public_agents_for_avatars() -> list:
-    """Загружает ALL non-private агенты (active + paused) только для карты аватаров."""
+    """Загружает ALL агенты (active + paused) для карты аватаров — включая приватных."""
     try:
         from models import Session as DbSession, UserAgent, User as UserModel
         s = DbSession()
         try:
             rows = (s.query(UserAgent, UserModel)
                     .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
-                    .filter(UserAgent.status.in_(['active', 'paused']),
-                            UserAgent.is_private.isnot(True))
+                    .filter(UserAgent.status.in_(['active', 'paused']))
                     .limit(60).all())
             _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
                        '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
