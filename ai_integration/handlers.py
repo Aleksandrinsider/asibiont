@@ -10731,12 +10731,6 @@ async def send_email(
                             _resend_fallback_key = _ri['resend_key']
                             _resend_fallback_from = _ri['email_user']
                             break
-                    # 2. Если нет — используем платформенный Resend
-                    if not _resend_fallback_key:
-                        from config import RESEND_API_KEY as _PLAT_RESEND_KEY
-                        if _PLAT_RESEND_KEY:
-                            _resend_fallback_key = _PLAT_RESEND_KEY
-                            _resend_fallback_from = 'outreach@asibiont.com'
                     if _resend_fallback_key and _resend_fallback_from:
                         try:
                             async with _aiohttp.ClientSession() as _fb_http:
@@ -10766,7 +10760,12 @@ async def send_email(
                         except Exception as _fb_exc:
                             return f"❌ Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n❌ Резервный Resend тоже не сработал: {_fb_exc}"
                     else:
-                        return f"❌ Ошибка отправки через {_from_label}: {_smtp_net_err}"
+                        return (
+                            f"❌ Не удалось отправить через {_from_label} (SMTP): {_smtp_net_err}\n\n"
+                            f"Варианты решения:\n"
+                            f"• Gmail: убедись, что GMAIL_PASS — это App Password (не обычный пароль)\n"
+                            f"• Добавь Resend-интеграцию: RESEND_API_KEY=re_... и RESEND_FROM=noreply@домен.com"
+                        )
                 else:
                     # Обновляем sender_email чтобы лог показывал реальный адрес
                     sender_email = _smtp_user

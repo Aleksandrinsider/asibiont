@@ -5037,9 +5037,9 @@ except Exception as e:
                                 <div style="font-size:12px;color:#6B7280;">${t('mpa-private-desc')}</div>
                             </div>
                             <label for="mpa-private" style="position:relative;display:inline-flex;width:40px;height:22px;cursor:pointer;flex-shrink:0;">
-                                <input id="mpa-private" type="checkbox" style="opacity:0;width:0;height:0;position:absolute;" onchange="var ts=this.parentElement.querySelectorAll('span');ts[0].style.background=this.checked?'#374151':'#D1D9E0';ts[1].style.transform=this.checked?'translateX(18px)':'translateX(0)';document.getElementById('mpa-price-block').style.display=this.checked?'none':'block';">
-                                <span style="position:absolute;inset:0;background:#D1D9E0;border-radius:11px;transition:background 0.2s;"></span>
-                                <span style="position:absolute;top:3px;left:3px;width:16px;height:16px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.18);"></span>
+                                <input id="mpa-private" type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute;" onchange="var ts=this.parentElement.querySelectorAll('span');ts[0].style.background=this.checked?'#374151':'#D1D9E0';ts[1].style.transform=this.checked?'translateX(18px)':'translateX(0)';document.getElementById('mpa-price-block').style.display=this.checked?'none':'block';">
+                                <span style="position:absolute;inset:0;background:#374151;border-radius:11px;transition:background 0.2s;"></span>
+                                <span style="position:absolute;top:3px;left:3px;width:16px;height:16px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.18);transform:translateX(18px);"></span>
                             </label>
                         </div>
                     </div>
@@ -5136,7 +5136,7 @@ except Exception as e:
                     </details>
 
                     <!-- Цена — визуально понятно -->
-                    <div id="mpa-price-block" style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                    <div id="mpa-price-block" style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;display:none;">
                         <div style="font-size:13px;color:#374151;margin-bottom:8px;">${t('mpa-price-title')}</div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <div style="display:flex;align-items:center;gap:6px;">
