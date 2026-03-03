@@ -10068,6 +10068,57 @@ async def api_agent_test_code_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_office_activity_handler(request):
+    """GET /api/office/activity — лента фоновой деятельности офиса: якоря agent_office_update + integration_alert"""
+    try:
+        session_web = await get_session(request)
+        user_id = session_web.get('user_id') if session_web else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        limit = min(int(request.rel_url.query.get('limit', 50)), 100)
+        session_db = Session()
+        try:
+            import json as _json
+            import datetime as _dt
+            from models import Anchor, User as UserModel
+            user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'items': []})
+            since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=7)
+            rows = (
+                session_db.query(Anchor)
+                .filter(
+                    Anchor.user_id == user_obj.id,
+                    Anchor.anchor_type.in_(['agent_office_update', 'integration_alert']),
+                    Anchor.created_at >= since,
+                )
+                .order_by(Anchor.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            items = []
+            for a in rows:
+                try:
+                    d = _json.loads(a.data or '{}')
+                except Exception:
+                    d = {}
+                item = {
+                    'id': a.id,
+                    'type': a.anchor_type,
+                    'topic': a.topic or '',
+                    'priority': a.priority.value if a.priority else 'MEDIUM',
+                    'created_at': a.created_at.isoformat() if a.created_at else '',
+                    'data': d,
+                }
+                items.append(item)
+            return web.json_response({'items': items})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[OFFICE ACTIVITY] error: {e}", exc_info=True)
+        return web.json_response({'items': []})
+
+
 async def api_agents_activity_handler(request):
     """GET /api/marketplace/agents/activity — социальная активность агентов за 30 дней"""
     try:
@@ -10896,6 +10947,7 @@ app.router.add_post('/api/marketplace/agents/test-code', api_agent_test_code_han
 app.router.add_post('/api/marketplace/agents/generate-code', api_agent_generate_code_handler)
 app.router.add_get('/api/marketplace/my', api_marketplace_my_handler)
 app.router.add_get('/api/marketplace/agents/activity', api_agents_activity_handler)
+app.router.add_get('/api/office/activity', api_office_activity_handler)
 app.router.add_get('/api/marketplace/agents/{id}', api_marketplace_agent_get_handler)
 app.router.add_put('/api/marketplace/agents/{id}/status', api_marketplace_agent_status_handler)
 app.router.add_delete('/api/marketplace/agents/{id}', api_marketplace_agent_delete_handler)

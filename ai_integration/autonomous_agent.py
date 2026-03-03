@@ -1947,33 +1947,10 @@ class HybridAutonomousAgent:
                                 break
 
                 if not _mention_not_found and _active_agent_id is None:
+                    # Режим офиса: ASI главный по умолчанию.
+                    # Кастомные агенты отвечают только при явном обращении (@имя / имя-префикс)
+                    # или если пользователь вручную переключился через /use.
                     _active_agent_id = get_user_active_agent(user_id)
-                    # Fallback: если у пользователя нет активного агента,
-                    # но есть собственные агенты — авто-активируем первый.
-                    # Это покрывает агентов, созданных до введения авто-активации.
-                    if _active_agent_id is None:
-                        try:
-                            from models import UserAgent as _UA, User as _UM
-                            from config import Session as _Sess
-                            _fb_sess = _Sess()
-                            try:
-                                _fb_user = _fb_sess.query(_UM).filter_by(telegram_id=user_id).first()
-                                if _fb_user:
-                                    _fb_agent = _fb_sess.query(_UA).filter(
-                                        _UA.author_id == _fb_user.id,
-                                        _UA.status != 'disabled'
-                                    ).order_by(_UA.id).first()
-                                    if _fb_agent:
-                                        set_user_active_agent(user_id, _fb_agent.id)
-                                        _active_agent_id = _fb_agent.id
-                                        logger.info(
-                                            f"[AGENT] fallback: auto-activated own agent "
-                                            f"'{_fb_agent.name}' (id={_fb_agent.id}) for user {user_id}"
-                                        )
-                            finally:
-                                _fb_sess.close()
-                        except Exception as _fb_e:
-                            logger.warning(f"[AGENT] fallback auto-activate error: {_fb_e}")
 
                 # Убираем @имя / имя-триггер из начала сообщения — AI не должен его видеть
                 if _stripped_prefix_end is not None:
