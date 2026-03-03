@@ -2884,15 +2884,19 @@
                         }
                         const isActive = a.status === 'active';
                         const isPaused = a.status === 'paused';
-                        const statusLabel = isActive ? t('mp-in-arena') : isPaused ? t('mp-paused-short') : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : a.status;
-                        const statusColor = isActive ? '#068487' : '#9CA3AF';
+                        const privacyLabel = a.is_private ? 'Приватный' : 'Публичный';
+                        const privacyColor = a.is_private ? '#6B7280' : '#068487';
+                        const privacyBg = a.is_private ? '#F3F4F6' : '#ECFDF5';
+                        const privacyBorder = a.is_private ? '#E5E7EB' : '#A7F3D0';
+                        const arenaLabel = isActive ? '● В арене' : isPaused ? '○ Пауза' : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : a.status;
+                        const arenaColor = isActive ? '#059669' : '#9CA3AF';
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:12px;color:${statusColor};">${statusLabel}</span>
-                                <div style="font-size:12px;color:#9CA3AF;margin-top:3px;">${a.subscribers_count} ${t('mp-subscribers')} · ${a.messages_count} ${t('mp-messages-count')}</div>
+                                <span style="margin-left:6px;font-size:11px;color:${privacyColor};background:${privacyBg};border:1px solid ${privacyBorder};border-radius:4px;padding:1px 6px;">${privacyLabel}</span>
+                                <div style="font-size:12px;color:#9CA3AF;margin-top:3px;"><span style="color:${arenaColor};">${arenaLabel}</span> · ${a.subscribers_count} ${t('mp-subscribers')} · ${a.messages_count} ${t('mp-messages-count')}</div>
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
                                 <button onclick="mpEditAgent(${a.id})" class="quick-action" title="${t('mp-edit-agent')}">
