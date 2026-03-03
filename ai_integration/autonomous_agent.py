@@ -3126,17 +3126,19 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     import json as _json
     import datetime as _dt
 
-    # Загружаем агентов пользователя
+    # Загружаем агентов пользователя (опционально — ASI работает и без них)
+    _agents = []
     try:
         from .user_agents import get_user_active_agents, load_agent_personality
         _ids = get_user_active_agents(user_id)
-        if not _ids:
-            return None
-        _agents = [d for _id in _ids for d in [load_agent_personality(_id)] if d]
-        if not _agents:
-            return None
+        if _ids:
+            _agents = [d for _id in _ids for d in [load_agent_personality(_id)] if d]
     except Exception as e:
         logger.debug("[DIRECTOR] agents load error: %s", e)
+
+    # Если нет агентов — не перехватываем, пусть ASI ответит сам через process_request
+    # (там полный промпт, инструменты, контекст задач и целей)
+    if not _agents:
         return None
 
     # Загружаем user_db_id один раз
@@ -3259,10 +3261,19 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         await asyncio.sleep(0.1)
 
     # Шаг 3: агент выполняет задачу
-    agent_system = (
-        _agent.get('personality') or
-        f"Ты — {_agent['name']}. {_agent.get('description', '')} Отвечай от своего имени."
+    # Агент — это ASI с наложенной ролью/специализацией.
+    # Базовая идентичность ASI + поверх неё persona агента.
+    _asi_identity = (
+        "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
+        "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
+        "Ты ДЕЛАЕШЬ, а не просто советуешь. Отвечаешь кратко, без списков и заголовков."
     )
+    _agent_persona = (
+        _agent.get('personality') or
+        f"Ты действуешь как {_agent['name']} — {_agent.get('specialization', 'специалист')}. "
+        f"{_agent.get('description', '')} Отвечай от имени {_agent['name']}."
+    )
+    agent_system = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_agent_persona}"
     script_context = ""
     if (_agent.get('python_code') or '').strip():
         try:
