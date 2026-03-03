@@ -1781,6 +1781,8 @@ async def dashboard_handler(request):
             'is_discord_user': (user.telegram_id < 0) if user else False,
             'telegram_linked': (user.telegram_id > 0) if user else False,
             'telegram_username': user.username if user and user.telegram_id > 0 else '',
+            'gmail_linked': bool(getattr(user, 'google_oauth_token', None)) if user else False,
+            'gmail_email': (lambda t: (json.loads(t).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or '') if user else '',
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -8635,6 +8637,8 @@ async def api_profile_handler(request):
             'discord_server_name': user.discord_server_name if hasattr(user, 'discord_server_name') else None,
             'discord_guild_id': str(user.discord_guild_id) if hasattr(user, 'discord_guild_id') and user.discord_guild_id else None,
             'discord_channel_id': str(user.discord_channel_id) if hasattr(user, 'discord_channel_id') and user.discord_channel_id else None,
+            'gmail_linked': bool(getattr(user, 'google_oauth_token', None)),
+            'gmail_email': (lambda t: (json.loads(t).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or ''),
         }
 
         # Добавляем данные активного агента для аватара в чате (focused/first)
@@ -8731,6 +8735,138 @@ async def discord_unlink_handler(request):
 async def extend_subscription_handler(request):
     """Перенаправление на страницу пополнения токенов"""
     return web.HTTPFound('/subscription-tiers')
+
+
+# ── Gmail OAuth2 handlers ────────────────────────────────────────────────────
+
+async def gmail_oauth_redirect(request):
+    """GET /oauth/gmail — редиректим пользователя на Google Consent Screen."""
+    user_id = await get_user_id_from_request(request)
+    if not user_id:
+        return web.HTTPFound('/?next=/oauth/gmail')
+    from config import GOOGLE_CLIENT_ID as _GCI, WEB_APP_URL as _WAU
+    if not _GCI:
+        return web.Response(text="Google OAuth not configured (GOOGLE_CLIENT_ID missing)", status=501)
+    import urllib.parse as _up
+    params = {
+        'client_id': _GCI,
+        'redirect_uri': f"{_WAU}/oauth/gmail/callback",
+        'response_type': 'code',
+        'scope': 'https://www.googleapis.com/auth/gmail.send email profile',
+        'access_type': 'offline',
+        'prompt': 'consent',
+        'state': str(user_id),
+    }
+    url = 'https://accounts.google.com/o/oauth2/v2/auth?' + _up.urlencode(params)
+    return web.HTTPFound(url)
+
+
+async def gmail_oauth_callback(request):
+    """GET /oauth/gmail/callback — обмениваем code на токены и сохраняем."""
+    code = request.rel_url.query.get('code')
+    state = request.rel_url.query.get('state', '')
+    error = request.rel_url.query.get('error', '')
+
+    if error or not code:
+        logger.warning(f"Gmail OAuth callback error: {error}")
+        return web.HTTPFound('/dashboard?gmail_auth=error')
+
+    try:
+        from config import GOOGLE_CLIENT_ID as _GCI, GOOGLE_CLIENT_SECRET as _GCS, WEB_APP_URL as _WAU
+        import json as _jsn
+
+        async with aiohttp.ClientSession() as http:
+            # Обмен code → tokens
+            token_resp = await http.post(
+                'https://oauth2.googleapis.com/token',
+                data={
+                    'code': code,
+                    'client_id': _GCI,
+                    'client_secret': _GCS,
+                    'redirect_uri': f"{_WAU}/oauth/gmail/callback",
+                    'grant_type': 'authorization_code',
+                },
+                timeout=aiohttp.ClientTimeout(total=15),
+            )
+            token_data = await token_resp.json()
+            if 'error' in token_data:
+                logger.error(f"Gmail OAuth token error: {token_data}")
+                return web.HTTPFound('/dashboard?gmail_auth=error')
+
+            access_token = token_data.get('access_token', '')
+            refresh_token = token_data.get('refresh_token', '')
+
+            # Получаем email пользователя
+            ui_resp = await http.get(
+                'https://www.googleapis.com/oauth2/v2/userinfo',
+                headers={'Authorization': f'Bearer {access_token}'},
+                timeout=aiohttp.ClientTimeout(total=10),
+            )
+            userinfo = await ui_resp.json()
+            gmail_email = userinfo.get('email', '')
+
+        # Сохраняем в БД
+        session_db = Session()
+        try:
+            user = None
+            if state and state.lstrip('-').isdigit():
+                user = session_db.query(User).filter_by(telegram_id=int(state)).first()
+            if not user:
+                web_sess = await get_session(request)
+                uid = web_sess.get('user_id')
+                if uid:
+                    user = session_db.query(User).filter_by(telegram_id=uid).first()
+            if user:
+                import datetime as _dt_oa
+                token_json = _jsn.dumps({
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'email': gmail_email,
+                    'saved_at': _dt_oa.datetime.utcnow().isoformat(),
+                })
+                user.google_oauth_token = token_json
+                session_db.commit()
+                logger.info(f"✅ Gmail OAuth saved for user {user.id}: {gmail_email}")
+        finally:
+            session_db.close()
+
+        return web.HTTPFound('/dashboard?gmail_auth=ok')
+    except Exception as e:
+        logger.exception(f"Gmail OAuth callback exception: {e}")
+        return web.HTTPFound('/dashboard?gmail_auth=error')
+
+
+async def gmail_oauth_status(request):
+    """GET /api/oauth/gmail/status — проверяем подключён ли Gmail."""
+    user_id = await get_user_id_from_request(request)
+    if not user_id:
+        return web.json_response({'connected': False})
+    import json as _jsn
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if user and user.google_oauth_token:
+            td = _jsn.loads(user.google_oauth_token)
+            return web.json_response({'connected': True, 'email': td.get('email', '')})
+        return web.json_response({'connected': False})
+    finally:
+        session_db.close()
+
+
+async def gmail_oauth_disconnect(request):
+    """POST /api/oauth/gmail/disconnect — удаляем токены Gmail."""
+    user_id = await get_user_id_from_request(request)
+    if not user_id:
+        return web.json_response({'ok': False}, status=401)
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            user.google_oauth_token = None
+            session_db.commit()
+        return web.json_response({'ok': True})
+    finally:
+        session_db.close()
 
 
 # ── Geo detection for payment method selection ──────────────────────────────
@@ -11039,6 +11175,11 @@ app.router.add_post('/webhook/yookassa', yookassa_webhook)
 app.router.add_get('/create_crypto_payment', create_crypto_payment_handler)
 app.router.add_post('/webhook/nowpayments', nowpayments_webhook)
 app.router.add_post('/webhook/resend', resend_webhook_handler)
+# Gmail OAuth2
+app.router.add_get('/oauth/gmail', gmail_oauth_redirect)
+app.router.add_get('/oauth/gmail/callback', gmail_oauth_callback)
+app.router.add_get('/api/oauth/gmail/status', gmail_oauth_status)
+app.router.add_post('/api/oauth/gmail/disconnect', gmail_oauth_disconnect)
 # Discord OAuth2 callback + login/link redirects
 try:
     from discord_bot import discord_oauth_callback, discord_login_redirect, discord_link_redirect

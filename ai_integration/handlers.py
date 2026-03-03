@@ -10194,10 +10194,33 @@ def _get_user_email_integrations(user, session) -> list:
     """Возвращает список почтовых интеграций из агентов пользователя.
 
     Каждый элемент имеет поле 'type':
-      'smtp'   — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
-      'resend' — {label, email_user, resend_key, agent_name, agent_id}
+      'gmail_oauth' — {label, email_user, agent_name, agent_id}  ← Gmail API (OAuth2, HTTPS)
+      'smtp'        — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
+      'resend'      — {label, email_user, resend_key, agent_name, agent_id}
     """
     try:
+        results = []
+        seen_emails: set = set()
+        seen_resend: set = set()
+
+        # Gmail OAuth2 — наивысший приоритет (отправка через HTTPS, не SMTP)
+        if getattr(user, 'google_oauth_token', None):
+            try:
+                import json as _joa
+                _oa = _joa.loads(user.google_oauth_token)
+                _ga_email = _oa.get('email', '')
+                if _ga_email and '@' in _ga_email:
+                    seen_emails.add(_ga_email)
+                    results.append({
+                        'type': 'gmail_oauth',
+                        'label': 'Gmail',
+                        'email_user': _ga_email,
+                        'agent_name': 'Gmail OAuth',
+                        'agent_id': None,
+                    })
+            except Exception as _oe:
+                logger.warning(f'[EMAIL_INTEGRATIONS] Gmail OAuth parse error: {_oe}')
+
         from models import UserAgent as _UA
         agents = session.query(_UA).filter(
             _UA.author_id == user.id,
@@ -10213,9 +10236,6 @@ def _get_user_email_integrations(user, session) -> list:
             ('YANDEX', 'smtp.yandex.ru',  587, 'Яндекс Почта'),
             ('MAILRU', 'smtp.mail.ru',    587, 'Mail.ru'),
         ]
-        results = []
-        seen_emails: set = set()
-        seen_resend: set = set()
         for agent in agents:
             env: dict = {}
             for line in (agent.user_api_keys or '').splitlines():
@@ -10509,6 +10529,74 @@ async def send_email(
                         return f"❌ Ошибка Resend API: {err}"
                     resend_id = resp_data.get('id', '')
                     logger.info(f'[SEND_EMAIL] Sent via user Resend from {sender_email} to {to_clean}')
+            elif _chosen_integration.get('type') == 'gmail_oauth':
+                # ── Отправка через Gmail API (OAuth2, без SMTP) ────
+                import json as _jgm
+                import base64 as _b64gm
+                from email.mime.text import MIMEText as _MimeGm
+                from email.mime.multipart import MIMEMultipart as _MMgm
+
+                _oa_data = _jgm.loads(user.google_oauth_token or '{}')
+                _ga_token = _oa_data.get('access_token', '')
+                _ga_refresh = _oa_data.get('refresh_token', '')
+                _ga_from = _oa_data.get('email', sender_email)
+
+                async def _gmail_refresh():
+                    from config import GOOGLE_CLIENT_ID as _GCI, GOOGLE_CLIENT_SECRET as _GCS
+                    async with _aiohttp.ClientSession() as _rh:
+                        _rr = await _rh.post(
+                            'https://oauth2.googleapis.com/token',
+                            data={
+                                'grant_type': 'refresh_token',
+                                'refresh_token': _ga_refresh,
+                                'client_id': _GCI,
+                                'client_secret': _GCS,
+                            },
+                            timeout=_aiohttp.ClientTimeout(total=10),
+                        )
+                        _rd = await _rr.json()
+                        if 'access_token' in _rd:
+                            _updated = dict(_oa_data)
+                            _updated['access_token'] = _rd['access_token']
+                            user.google_oauth_token = _jgm.dumps(_updated)
+                            try:
+                                session.commit()
+                            except Exception:
+                                pass
+                            return _rd['access_token']
+                        return None
+
+                # Строим RFC 2822 сообщение
+                _gmsg = _MMgm()
+                _gmsg['From'] = f"{sender_name} <{_ga_from}>"
+                _gmsg['To'] = to_clean
+                _gmsg['Subject'] = subject
+                _gmsg.attach(_MimeGm(body, 'plain', 'utf-8'))
+                _graw = _b64gm.urlsafe_b64encode(_gmsg.as_bytes()).decode('utf-8')
+
+                async def _gmail_api_post(tok):
+                    async with _aiohttp.ClientSession() as _gh:
+                        _r = await _gh.post(
+                            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                            headers={'Authorization': f'Bearer {tok}', 'Content-Type': 'application/json'},
+                            json={'raw': _graw},
+                            timeout=_aiohttp.ClientTimeout(total=30),
+                        )
+                        return _r.status, await _r.json()
+
+                _gs, _gd = await _gmail_api_post(_ga_token)
+                if _gs == 401:  # Токен истёк — обновляем
+                    _new_tok = await _gmail_refresh()
+                    if _new_tok:
+                        _gs, _gd = await _gmail_api_post(_new_tok)
+                    else:
+                        return ("❌ Gmail: токен истёк. Подключи Gmail заново в Настройках профиля.")
+                if _gs not in (200, 201):
+                    _gerr = _gd.get('error', {})
+                    _gmsg2 = _gerr.get('message', str(_gd)) if isinstance(_gerr, dict) else str(_gerr)
+                    return f"❌ Gmail API ошибка: {_gmsg2}"
+                sender_email = _ga_from
+                logger.info(f'[SEND_EMAIL] Sent via Gmail API OAuth from {_ga_from} to {to_clean}')
         except Exception as e:
             return f"❌ Ошибка отправки: {str(e)}"
 

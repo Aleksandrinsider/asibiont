@@ -1694,6 +1694,22 @@
                         </div>
                     </div>
                 </div>
+                <!-- Gmail OAuth2 — отправка писем напрямую с Gmail-почты пользователя -->
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #E5E7EB;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px; font-weight: 500;">Gmail <span style="font-size: 11px; color: #6B7280; font-weight: 400;">— отправка писем от имени вашей почты</span></label>
+                    {% if gmail_linked %}
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #BBF7D0; border-radius: 6px; font-size: 13px; color: #374151; background: #F0FDF4;">
+                        <span>✅ {{ gmail_email }}</span>
+                        <a href="#" onclick="disconnectGmail(); return false;" style="color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">отключить</a>
+                    </div>
+                    {% else %}
+                    <a href="/oauth/gmail" style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA; text-decoration: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 6C22 4.9 21.1 4 20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6ZM20 6L12 11L4 6H20ZM20 18H4V8L12 13L20 8V18Z" fill="#EA4335"/></svg>
+                        Подключить Gmail
+                    </a>
+                    <p style="font-size: 11px; color: #9CA3AF; margin: 4px 0 0 0;">Письма будут уходить с вашей Gmail-почты. Работает на Railway.</p>
+                    {% endif %}
+                </div>
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip" title="Пропустить" data-i18n-title="skip">Пропустить</button>
                     <button onclick="submitQuickProfile()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;">
@@ -11272,6 +11288,41 @@ except Exception as e:
                 alert('Ошибка сети');
             }
         }
+
+        async function disconnectGmail() {
+            if (!confirm('Отключить Gmail? Письма будут отправляться через Resend.')) return;
+            try {
+                const res = await fetch('/api/oauth/gmail/disconnect', { method: 'POST', credentials: 'include' });
+                if (res.ok) { location.reload(); }
+                else { alert('Ошибка отключения'); }
+            } catch (e) { alert('Ошибка сети'); }
+        }
+
+        // Gmail OAuth callback notification
+        (function() {
+            const p = new URLSearchParams(window.location.search);
+            const ga = p.get('gmail_auth');
+            if (ga === 'ok') {
+                setTimeout(() => {
+                    const n = document.createElement('div');
+                    n.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#16A34A;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15)';
+                    n.textContent = '✅ Gmail подключён — письма пойдут с вашей почты';
+                    document.body.appendChild(n);
+                    setTimeout(() => n.remove(), 4000);
+                    // Убираем параметр из URL
+                    history.replaceState({}, '', window.location.pathname);
+                }, 500);
+            } else if (ga === 'error') {
+                setTimeout(() => {
+                    const n = document.createElement('div');
+                    n.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#DC2626;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15)';
+                    n.textContent = '❌ Не удалось подключить Gmail. Попробуй ещё раз.';
+                    document.body.appendChild(n);
+                    setTimeout(() => n.remove(), 4000);
+                    history.replaceState({}, '', window.location.pathname);
+                }, 500);
+            }
+        })();
 
         function skipQuickProfile() {
             const modal = document.getElementById('quick-profile-modal');

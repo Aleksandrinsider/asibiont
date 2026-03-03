@@ -61,6 +61,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=True, index=True)  # Email for web login
     password_hash = Column(String(500), nullable=True)  # PBKDF2 hash for email login
     phone = Column(String(20), nullable=True, index=True)  # Phone number
+    google_oauth_token = Column(Text, nullable=True)  # JSON: {access_token, refresh_token, email, saved_at}
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 

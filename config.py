@@ -132,6 +132,12 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 # Full-access key for reading inbound/received emails (Resend Receiving API)
 RESEND_RECEIVING_API_KEY = os.getenv("RESEND_RECEIVING_API_KEY", "") or RESEND_API_KEY
 
+# Google OAuth2 — для Gmail API (отправка писем напрямую с Gmail пользователя)
+# Создать на console.cloud.google.com → OAuth 2.0 Client IDs → Web application
+# Authorized redirect URI: https://ваш-домен/oauth/gmail/callback
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
 # Reminder settings
 DAILY_REPORT_HOUR = int(os.getenv("DAILY_REPORT_HOUR", 22))
 PROACTIVE_CHECK_INTERVAL_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_MINUTES", 120))  # Каждые 2 часа вместо 30 минут
