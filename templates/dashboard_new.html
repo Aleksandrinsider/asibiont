@@ -2884,11 +2884,11 @@
                         }
                         const isActive = a.status === 'active';
                         const isPaused = a.status === 'paused';
-                        const privacyLabel = a.is_private ? 'Приватный' : 'Публичный';
+                        const privacyLabel = a.is_private ? t('mp-private') : t('mp-public');
                         const privacyColor = a.is_private ? '#6B7280' : '#068487';
                         const privacyBg = a.is_private ? '#F3F4F6' : '#ECFDF5';
                         const privacyBorder = a.is_private ? '#E5E7EB' : '#A7F3D0';
-                        const arenaLabel = isActive ? '● В арене' : isPaused ? '○ Пауза' : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : a.status;
+                        const arenaLabel = isActive ? t('mp-in-arena-dot') : isPaused ? t('mp-paused-dot') : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : a.status;
                         const arenaColor = isActive ? '#059669' : '#9CA3AF';
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
@@ -14381,6 +14381,8 @@ except Exception as e:
       'mp-no-agents':'Агентов пока нет','mp-free':'Бесплатно','mp-per-msg':'тк/сообщение',
       'mp-your-agent':'Ваш агент','mp-activate':'Активировать','mp-deactivate':'Отключить','mp-activated-badge':'подключён',
       'mp-in-arena':'В арене','mp-paused-short':'Пауза','mp-in-review':'На модерации','mp-disabled':'Отключён',
+      'mp-in-arena-dot':'● В арене','mp-paused-dot':'○ Пауза',
+      'mp-private':'Приватный','mp-public':'Публичный',
       'mp-subscribers':'подписчиков','mp-messages-count':'сообщений',
       'mp-not-published':'Вы ещё ничего не опубликовали','mp-status-updated':'Статус агента обновлён',
       'mp-edit-agent':'Редактировать','mp-delete-agent':'Удалить агента',
@@ -14640,6 +14642,8 @@ except Exception as e:
       'mp-no-agents':'No agents yet','mp-free':'Free','mp-per-msg':'tk/msg',
       'mp-your-agent':'Your agent','mp-activate':'Activate','mp-deactivate':'Deactivate','mp-activated-badge':'connected',
       'mp-in-arena':'In arena','mp-paused-short':'Paused','mp-in-review':'Under review','mp-disabled':'Disabled',
+      'mp-in-arena-dot':'● In arena','mp-paused-dot':'○ Paused',
+      'mp-private':'Private','mp-public':'Public',
       'mp-subscribers':'subscribers','mp-messages-count':'messages',
       'mp-not-published':'Nothing published yet','mp-status-updated':'Agent status updated',
       'mp-edit-agent':'Edit','mp-delete-agent':'Delete agent',
