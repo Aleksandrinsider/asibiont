@@ -1877,6 +1877,18 @@
                 console.error('Message text is undefined or empty');
                 return;
             }
+
+            // Авто-разбор JSON-сообщений от офисного движка
+            // Формат: {"__agent": {name, id, avatar_url}, "text": "..."}
+            if (typeof text === 'string' && text.trim().startsWith('{')) {
+                try {
+                    const _parsed = JSON.parse(text);
+                    if (_parsed.__agent && _parsed.text) {
+                        if (!agentInfo) agentInfo = _parsed.__agent;
+                        text = _parsed.text;
+                    }
+                } catch(e) { /* обычный текст — продолжаем */ }
+            }
             
             // Normalize sender: 'agent', 'proactive', 'reminder' -> 'ai' for consistent styling
             const normalizedSender = ['agent', 'ai', 'proactive', 'reminder'].includes(sender) ? 'ai' : sender;
@@ -13477,59 +13489,6 @@ except Exception as e:
                 console.error('Error updating chat:', error);
             }
         }
-
-        // ── Офисные уведомления в чате ──────────────────────────────────────
-        // Поллинг каждые 60 сек. Новые якоря офиса появляются в чате как
-        // системные сообщения — пользователь видит что агенты делали в фоне.
-        let _officeLastSeen = null;
-        let _officeShownIds = new Set();
-
-        function _addOfficeNotification(item) {
-            if (_officeShownIds.has(item.id)) return;
-            _officeShownIds.add(item.id);
-            const d = item.data || {};
-            const isOffice = item.type === 'agent_office_update';
-            const icon = isOffice ? '🤖' : '🔌';
-            const agentName = isOffice
-                ? (d.plan ? d.plan.split(':')[0] : 'Офис')
-                : (d.agent_name || 'Агент');
-            const body = isOffice
-                ? (d.plan || item.topic || '')
-                : (d.snippet ? d.snippet.substring(0, 180) + (d.snippet.length > 180 ? '…' : '') : (item.topic || ''));
-            if (!body) return;
-            // Добавляем как system-сообщение в чат
-            const messages = document.getElementById('chat-messages');
-            if (!messages) return;
-            const div = document.createElement('div');
-            div.className = 'message ai';
-            div.style.cssText = 'opacity:0.85;';
-            const timeStr = item.created_at ? new Date(item.created_at).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}) : '';
-            div.innerHTML = `<div style="display:flex;align-items:flex-start;gap:0;"><div style="width:24px;height:24px;border-radius:50%;background:#F3F4F6;border:2px solid #E8ECEF;flex-shrink:0;margin-right:8px;display:flex;align-items:center;justify-content:center;font-size:13px;">${icon}</div><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:#6B7280;margin-bottom:3px;">${escapeHtml(agentName)} <span style="font-weight:400;font-size:11px;">(фон)</span></div><div class="message-text" style="font-size:13px;color:#374151;">${escapeHtml(body)}</div><div class="message-time">${timeStr}</div></div></div>`;
-            messages.appendChild(div);
-            messages.scrollTop = messages.scrollHeight;
-        }
-
-        async function pollOfficeActivity() {
-            try {
-                let url = '/api/office/activity?limit=20';
-                if (_officeLastSeen) url += '&since=' + encodeURIComponent(_officeLastSeen);
-                const r = await fetch(url, {credentials: 'include'});
-                if (!r.ok) return;
-                const data = await r.json();
-                if (data.items && data.items.length) {
-                    data.items.slice().reverse().forEach(item => _addOfficeNotification(item));
-                    _officeLastSeen = data.items[0].created_at; // самый новый (desc)
-                }
-            } catch(e) { /* тихо */ }
-        }
-
-        // Запускаем поллинг офиса через 10 сек после загрузки, потом каждые 60 сек
-        {% if logged_in %}
-        setTimeout(function() {
-            pollOfficeActivity();
-            setInterval(pollOfficeActivity, 60000);
-        }, 10000);
-        {% endif %}
 
         async function clearUserTasks() {
             if (confirm(t('confirm-delete-all-tasks'))) {

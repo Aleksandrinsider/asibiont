@@ -32,6 +32,36 @@ OFFICE_INTERVAL_SEC  = (2 * 3600, 4 * 3600) # 2-4 ч между координа
 SCRIPT_TIMEOUT_SEC   = 18                    # таймаут на один скрипт агента
 
 
+# ── Сохранение сообщения агента в историю чата ──────────────────────────────
+
+def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar_url: str, text: str):
+    """Сохраняет сообщение агента напрямую в Interaction — появится в чате как обычное AI-сообщение."""
+    try:
+        import json as _json
+        from models import Session as _Db, Interaction
+        content = _json.dumps({
+            '__agent': {
+                'name': agent_name,
+                'id': agent_id,
+                'avatar_url': avatar_url or '',
+            },
+            'text': text,
+        }, ensure_ascii=False)
+        _s = _Db()
+        try:
+            _s.add(Interaction(
+                user_id=user_id,
+                message_type='ai',
+                content=content,
+            ))
+            _s.commit()
+            logger.debug('[OFFICE] chat msg saved for user %d (%s)', user_id, agent_name)
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug('[OFFICE] chat msg save error: %s', e)
+
+
 # ── Изолированный запуск скрипта ─────────────────────────────────────────────
 
 def _exec_agent_script_sync(code: str) -> tuple:
@@ -154,6 +184,22 @@ class OfficeEngine:
                     logger.debug("[OFFICE-L1] [%s] anchored (%d chars)", agent.name, len(stdout))
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] anchor error: %s", agent.name, e)
+
+                # Дополнительно: пишем прямо в чат как обычное сообщение агента
+                try:
+                    msg_text = f"📊 Выполнил мониторинг:\n{stdout[:800]}"
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(
+                        None,
+                        _save_chat_message_sync,
+                        user.id,
+                        agent.name or 'Агент',
+                        agent.id,
+                        agent.avatar_url or '',
+                        msg_text,
+                    )
+                except Exception as e:
+                    logger.debug("[OFFICE-L1] [%s] chat save error: %s", agent.name, e)
             elif stderr and 'timeout' not in stderr:
                 logger.debug("[OFFICE-L1] [%s] stderr: %s", agent.name, stderr[:150])
 
@@ -253,6 +299,11 @@ class OfficeEngine:
                         f"- {a.name} ({a.specialization or 'Агент'}): {(a.description or '')[:120]}"
                         for a in agents
                     )
+                    # Сохраняем имя→инфо для поиска агента после закрытия сессии
+                    agents_info = {
+                        a.name.lower().strip(): {'id': a.id, 'name': a.name, 'avatar_url': a.avatar_url or ''}
+                        for a in agents
+                    }
                 finally:
                     s.close()
             except Exception as e:
@@ -263,6 +314,28 @@ class OfficeEngine:
             plan = await self._ask_asi_for_plan(goals_text, agents_text)
             if not plan:
                 return
+
+            # Определяем агента из плана формата «Имя агента: действие»
+            _matched_agent = None
+            for _akey, _ainfo in agents_info.items():
+                _plan_start = plan.lower().split(':')[0].strip()
+                if _plan_start == _akey or _plan_start.startswith(_akey):
+                    _matched_agent = _ainfo
+                    break
+            if _matched_agent is None and agents_info:
+                _matched_agent = next(iter(agents_info.values()))
+
+            # Пишем план прямо в чат как сообщение агента (L2)
+            try:
+                _save_chat_message_sync(
+                    user_id=user_id,
+                    agent_name=_matched_agent['name'] if _matched_agent else 'АСИ',
+                    agent_id=_matched_agent['id'] if _matched_agent else 0,
+                    avatar_url=_matched_agent['avatar_url'] if _matched_agent else '',
+                    text=f"📋 {plan}",
+                )
+            except Exception as e:
+                logger.debug("[OFFICE-L2] chat save error for user %d: %s", user_id, e)
 
             # Создаём якорь agent_office_update
             try:
