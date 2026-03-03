@@ -828,16 +828,14 @@ class HybridAutonomousAgent:
         'find_relevant_contacts_for_task', 'set_contact_alert', 'generate_image',
         # Campaign management always available — conversation can span multiple turns
         'start_content_campaign', 'manage_content_campaign',
-        'start_email_campaign', 'start_delegation_campaign',
+        'start_delegation_campaign',
     }
 
     # Extended tool groups — activated by keywords in user message
     TOOL_GROUPS = {
         'email': {
-            'keywords': ['email', 'e-mail', 'почт', 'письм', 'рассылк', 'лид', 'lead', 'outreach', 'campaign', 'кампани'],
-            'tools': {'send_email', 'send_outreach_email', 'send_follow_up_email', 'reply_to_outreach_email',
-                      'add_email_leads', 'start_email_campaign', 'pause_email_campaign',
-                      'get_email_campaign_status', 'update_email_campaign', 'list_email_contacts', 'save_email_contact'},
+            'keywords': ['email', 'e-mail', 'почт', 'письм', 'отправ', 'письм', 'переписк', 'перегов'],
+            'tools': {'send_email', 'negotiate_by_email', 'list_email_contacts', 'save_email_contact'},
         },
         'delegation': {
             'keywords': ['делегир', 'delegat', 'поруч', 'назнач'],
@@ -2196,8 +2194,8 @@ class HybridAutonomousAgent:
             MAX_TOOLS_PER_ITERATION = 3  # Лимит инструментов за одну итерацию
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
-            once_only_tools = {'create_post', 'delete_post', 'delegate_task', 'start_email_campaign', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз
-            multi_limit_tools = {'add_task': 3, 'add_email_leads': 3, 'update_profile': 2, 'create_goal': 2, 'run_agent_action': 5, 'send_email': 1, 'send_outreach_email': 3}  # лимиты per turn
+            once_only_tools = {'create_post', 'delete_post', 'delegate_task', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз
+            multi_limit_tools = {'add_task': 3, 'update_profile': 2, 'create_goal': 2, 'run_agent_action': 5, 'send_email': 1}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
 
