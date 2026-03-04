@@ -1370,6 +1370,10 @@ class AnchorEngine:
             UserProfile.updated_at >= yesterday
         ).limit(20).all()
 
+        # Batch-load users for recent_profiles (avoid N+1 inside nested loops)
+        _cp_prof_uids = [p.user_id for p in recent_profiles]
+        _cp_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_cp_prof_uids)).all()} if _cp_prof_uids else {}
+
         for alert in contact_alerts[:3]:
             for prof in recent_profiles:
                 match = False
@@ -1393,7 +1397,7 @@ class AnchorEngine:
                         match = False
 
                 if match:
-                    prof_user = session.query(User).filter_by(id=prof.user_id).first()
+                    prof_user = _cp_user_by_id.get(prof.user_id)
                     if prof_user and prof_user.username:
                         detail = alert.skill or alert.interest
                         anchors.append(Anchor(

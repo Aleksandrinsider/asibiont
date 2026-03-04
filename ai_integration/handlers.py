@@ -3136,6 +3136,16 @@ def get_partners_list(user_id=None, session=None):
     user_skills = _norm_set(user_profile, 'skills')
     user_goals = _norm_set(user_profile, 'goals')
 
+    # Batch-load active tasks for all partners (avoid N+1 in task-keyword matching loop)
+    _enrich_partner_uids = list({p.user_id for p in partners if p.user_id})
+    _enrich_partner_tasks_all = session.query(Task).filter(
+        Task.user_id.in_(_enrich_partner_uids),
+        Task.status.in_(['active', 'pending', 'in_progress'])
+    ).all() if _enrich_partner_uids else []
+    _enrich_ptasks_by_uid: dict = {}
+    for _ept in _enrich_partner_tasks_all:
+        _enrich_ptasks_by_uid.setdefault(_ept.user_id, []).append(_ept)
+
     for partner in partners:
         # Common interests — cross-language via normalized
         partner_interests = _norm_set(partner, 'interests')
@@ -3223,12 +3233,9 @@ def get_partners_list(user_id=None, session=None):
                     logger.debug(f"[PARTNERS] user_id={partner.user_id} task relevance: {task_interest_match}")
             
             # Проверяем совпадение задач партнера с задачами пользователя (схожие активности)
-            partner_user = _user_by_id.get(partner.user_id) or session.query(User).filter_by(id=partner.user_id).first()
+            partner_user = _user_by_id.get(partner.user_id)
             if partner_user:
-                partner_tasks = session.query(Task).filter(
-                    Task.user_id == partner_user.id,
-                    Task.status.in_(['active', 'pending', 'in_progress'])
-                ).all()
+                partner_tasks = _enrich_ptasks_by_uid.get(partner_user.id, [])
                 
                 partner_task_keywords = set()
                 for task in partner_tasks:

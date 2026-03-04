@@ -268,6 +268,9 @@ class ContextBuilder:
                         Task.status.in_(['pending', 'active', 'in_progress']),
                     ).order_by(Task.reminder_time.asc()).limit(5).all()
                     if deleg_in:
+                        # Batch-load delegators
+                        _din_delegator_ids = list({dt.delegated_by for dt in deleg_in if dt.delegated_by})
+                        _din_delegator_by_id = {u.id: u for u in session.query(_UserD).filter(_UserD.id.in_(_din_delegator_ids)).all()} if _din_delegator_ids else {}
                         d_in_lines = []
                         for dt in deleg_in:
                             _ds = dt.delegation_status or 'pending'
@@ -276,7 +279,7 @@ class ContextBuilder:
                             # Находим кто делегировал
                             _from = ''
                             if dt.delegated_by:
-                                _delegator = session.query(_UserD).filter_by(id=dt.delegated_by).first()
+                                _delegator = _din_delegator_by_id.get(dt.delegated_by)
                                 if _delegator and _delegator.username:
                                     _from = f' от @{_delegator.username}'
                             d_in_lines.append(f"  {_dbl}{_from}: {dt.title}")
@@ -363,6 +366,17 @@ class ContextBuilder:
 
             if all_goals:
                 goal_lines = []
+                # Batch-load linked tasks for all goals (avoid N+1)
+                _ctx_goal_ids = [g.id for g in all_goals]
+                _ctx_linked_tasks_all = session.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.goal_id.in_(_ctx_goal_ids),
+                    Task.status.in_(['pending', 'active', 'in_progress'])
+                ).all() if _ctx_goal_ids else []
+                _ctx_ltasks_by_goal: dict = {}
+                for _clt in _ctx_linked_tasks_all:
+                    if _clt.goal_id is not None:
+                        _ctx_ltasks_by_goal.setdefault(_clt.goal_id, []).append(_clt)
                 for g in all_goals:
                     st = status_map_full.get(g.status, g.status)
                     if g.metric_target and g.metric_unit:
@@ -379,11 +393,7 @@ class ContextBuilder:
                             line += f" осталось {days}дн"
                     # Активные задачи привязанные к проекту
                     if g.status == 'active':
-                        linked_tasks = session.query(Task).filter(
-                            Task.user_id == user.id,
-                            Task.goal_id == g.id,
-                            Task.status.in_(['pending', 'active', 'in_progress'])
-                        ).limit(5).all()
+                        linked_tasks = _ctx_ltasks_by_goal.get(g.id, [])[:5]
                         if linked_tasks:
                             task_titles = ', '.join(t.title for t in linked_tasks)
                             line += f" [задачи: {task_titles}]"
