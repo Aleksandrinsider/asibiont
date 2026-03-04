@@ -752,6 +752,58 @@ class ContextBuilder:
             if alert_hints:
                 hints.extend(alert_hints[:2])
 
+            # ═══ КОМАНДА АГЕНТОВ: ASI видит кто есть и что умеет ═══
+            try:
+                from models import UserAgent as _UA_ctx
+                _team = (
+                    session.query(_UA_ctx)
+                    .filter(_UA_ctx.author_id == user.id, _UA_ctx.status.in_(['active', 'paused']))
+                    .order_by(_UA_ctx.id.asc())
+                    .limit(8)
+                    .all()
+                )
+                if _team:
+                    _KEY_MAP = {
+                        'GMAIL': 'Gmail', 'YANDEX_MAIL': 'Яндекс Почта', 'MAILRU': 'Mail.ru',
+                        'MAIL_RU': 'Mail.ru', 'IMAP': 'IMAP', 'SMTP': 'SMTP',
+                        'OZON': 'Ozon', 'WILDBERRIES': 'WB', 'WB_': 'WB',
+                        'RSS': 'RSS', 'NOTION': 'Notion', 'VK_': 'VK',
+                        'TELEGRAM': 'TG', 'DISCORD': 'Discord',
+                        'SLACK': 'Slack', 'GITHUB': 'GitHub', 'TRELLO': 'Trello',
+                        'BINANCE': 'Binance', 'BYBIT': 'Bybit', 'STRIPE': 'Stripe',
+                        'OPENAI': 'OpenAI', 'ANTHROPIC': 'Claude',
+                    }
+                    _agent_summaries = []
+                    for _ta in _team:
+                        _intg = set()
+                        for _kl in (_ta.user_api_keys or '').splitlines():
+                            _kl = _kl.strip()
+                            if '=' not in _kl or _kl.startswith('#'):
+                                continue
+                            _k = _kl.split('=')[0].upper()
+                            for _pfx, _lbl in _KEY_MAP.items():
+                                if _k.startswith(_pfx):
+                                    _intg.add(_lbl)
+                                    break
+                        _code = (_ta.python_code or '').lower()
+                        if 'gmail' in _code: _intg.add('Gmail')
+                        if 'yandex' in _code: _intg.add('Яндекс почта')
+                        if 'mail.ru' in _code: _intg.add('Mail.ru')
+                        if 'feedparser' in _code or ('rss' in _code and 'import' in _code): _intg.add('RSS')
+                        if 'imaplib' in _code and not _intg: _intg.add('IMAP почта')
+
+                        _spec = _ta.specialization or _ta.job_title or ''
+                        _intg_str = ', '.join(sorted(_intg)[:3]) if _intg else (_spec or 'агент')
+                        _agent_summaries.append(f"{_ta.name} [{_intg_str}]")
+
+                    _status = "активны" if len(_team) > 1 else "активен"
+                    hints.append(
+                        f"КОМАНДА АГЕНТОВ ({len(_team)} {_status}): {', '.join(_agent_summaries)} — "
+                        f"при задачах с интеграциями предлагай их помощь; обратиться: «{_team[0].name}, ...» или «@{_team[0].name} ...»"
+                    )
+            except Exception as _ae:
+                logger.debug(f"[PROACTIVE] agents load error: {_ae}")
+
             # ═══ ПОХОЖИЕ ПОЛЬЗОВАТЕЛИ И ВОЗМОЖНЫЕ КОЛЛАБОРАЦИИ ═══
             similar_hints = self._find_similar_users(user, profile, session, user_tz)
             if similar_hints:

@@ -3075,6 +3075,13 @@ _INTEGRATION_LABELS: dict = {
     'TWITTER': 'Twitter/X',
     'INSTAGRAM': 'Instagram',
     'YOUTUBE': 'YouTube API',
+    'MAILRU': 'Mail.ru почта',
+    'MAIL_RU': 'Mail.ru почта',
+    'TRELLO': 'Trello',
+    'ASANA': 'Asana',
+    'TODOIST': 'Todoist',
+    'FIGMA': 'Figma',
+    'ZOOM': 'Zoom',
 }
 
 
@@ -3101,6 +3108,7 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
     _code_hints = {
         'imaplib': 'IMAP почта', 'smtplib': 'SMTP почта',
         'gmail': 'Gmail (почта)', 'yandex': 'Яндекс Почта',
+        'mail.ru': 'Mail.ru почта',
         'ozon': 'Ozon (маркетплейс)', 'wildberries': 'Wildberries',
         'amocrm': 'AmoCRM', 'bitrix': 'Битрикс24',
         'notion': 'Notion', 'vk.com': 'ВКонтакте',
@@ -3110,6 +3118,9 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         'stripe': 'Stripe (платежи)', 'yookassa': 'ЮКасса (платежи)',
         'alpha_vantage': 'Биржевые данные', 'coinbase': 'Coinbase (крипта)',
         'telegram': 'Telegram', 'discord': 'Discord',
+        'slack': 'Slack', 'trello': 'Trello', 'asana': 'Asana', 'todoist': 'Todoist',
+        'github': 'GitHub API', 'gitlab': 'GitLab API',
+        'zoom': 'Zoom', 'figma': 'Figma API', 'shopify': 'Shopify',
         'replicate': 'Генерация изображений',
         'requests.get': 'HTTP-запросы', 'aiohttp': 'HTTP-запросы',
         'selenium': 'Браузерная автоматизация',
@@ -3819,7 +3830,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         _intg_str = f"\n  Может: {', '.join(_intg[:6])}" if _intg else ''
 
         _base = (
-            f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:100]}"
+            f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:200]}"
             f"{_intg_str}"
         )
 
