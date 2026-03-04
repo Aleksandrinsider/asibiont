@@ -11890,16 +11890,22 @@ async def list_marketplace(category: str = None, search: str = None,
         session = Session()
         close_session = True
     try:
-        from models import UserAgent, UserScript
+        from models import UserAgent
+        try:
+            from models import UserScript as _UserScript
+        except ImportError:
+            _UserScript = None
         import json as _json
 
         if item_type == 'scripts':
-            q = session.query(UserScript).filter_by(status='active')
+            if _UserScript is None:
+                return "🛒 Раздел скриптов временно недоступен."
+            q = session.query(_UserScript).filter_by(status='active')
             if category:
-                q = q.filter(UserScript.category == category)
+                q = q.filter(_UserScript.category == category)
             if search:
-                q = q.filter(UserScript.name.ilike(f'%{search}%'))
-            items = q.order_by(UserScript.installs_count.desc()).limit(10).all()
+                q = q.filter(_UserScript.name.ilike(f'%{search}%'))
+            items = q.order_by(_UserScript.installs_count.desc()).limit(10).all()
             if not items:
                 return "🛒 Скриптов пока нет. Будьте первым — создайте скрипт!"
             lines = ["🛒 **Маркетплейс скриптов:**\n"]
