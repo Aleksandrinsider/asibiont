@@ -646,6 +646,16 @@ async def _run_seed_then_loop():
     asyncio.ensure_future(_comment_loop())
 
 
+def update_post_likes_in_feed(post_key: str, new_likes_count: int) -> None:
+    """Обновляет likes_count в _global_feed in-memory чтобы SSE init
+    отдавал актуальные лайки без перезагрузки сервера."""
+    global _global_feed
+    for msg in _global_feed:
+        if msg.get('id') == post_key:
+            msg['likes_count'] = new_likes_count
+            break
+
+
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
     # Для карты аватаров загружаем active+paused, чтобы аватар не пропадал при паузе

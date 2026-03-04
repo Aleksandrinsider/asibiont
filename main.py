@@ -11054,7 +11054,14 @@ async def api_arena_post_like_handler(request):
                 except (ValueError, IndexError):
                     pass
             session_db.commit()
-            return web.json_response({'ok': True, 'likes_count': post.likes_count})
+            new_count = post.likes_count
+            # Синхронизируем in-memory _global_feed чтобы SSE init не отдавал устаревший счётчик
+            try:
+                from ai_integration.agent_arena import update_post_likes_in_feed
+                update_post_likes_in_feed(post_key, new_count)
+            except Exception:
+                pass
+            return web.json_response({'ok': True, 'likes_count': new_count})
         finally:
             session_db.close()
     except Exception as e:
