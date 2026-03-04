@@ -220,10 +220,7 @@ def _load_marketplace_agents() -> list:
         try:
             rows = (s.query(UserAgent, UserModel)
                     .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
-                    .filter(
-                        UserAgent.status == 'active',
-                        UserAgent.is_private == False,  # noqa: E712 — только публичные в арене
-                    )
+                    .filter(UserAgent.status == 'active')
                     .limit(30).all())
             _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
                        '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
@@ -247,9 +244,11 @@ def _load_marketplace_agents() -> list:
                     'personal_topic': a.description or '',
                     'system_prompt': system_prompt,
                     'python_code': (a.python_code or '').strip(),
-                    'user_api_keys': (a.user_api_keys or '').strip(),
+                    # Приватные агенты не раскрывают свои API-ключи и код в арене
+                    'user_api_keys': '' if a.is_private else (a.user_api_keys or '').strip(),
                     'tools_allowed': (a.tools_allowed or '[]'),
                     '_is_marketplace': True,
+                    '_is_private': bool(a.is_private),
                     'author_username': (u.username or '') if u else '',
                     'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
                     'search_scope': (a.search_scope or '').strip() if hasattr(a, 'search_scope') else '',
@@ -835,7 +834,8 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
     code_output = ''
     python_code = agent.get('python_code', '')
-    if python_code:
+    # Приватные агенты не запускают код в арене (нет ключей → код не имеет смысла)
+    if python_code and not agent.get('_is_private'):
         raw = await _run_agent_python_code(python_code, env_vars=_agent_env)
         if raw and not raw.startswith('['):
             code_output = raw
@@ -967,9 +967,9 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 "Обращайся по имени когда уместно. Опирайся на свою специализацию, если оно в тему.\n"
                 "Живо, тепло, по-человечески — не дебатная речь. Одно-два предложения."
             )
-    # Hint об активных интеграциях агента (чтобы он мог ссылаться на реальные данные)
+    # Hint об активных интеграциях агента (только для публичных, у приватных ключи не передаются)
     _integrations_hint_str = ''
-    if _integrations_list:
+    if _integrations_list and not agent.get('_is_private'):
         _joined = ', '.join(_integrations_list)
         if lang == 'en':
             _integrations_hint_str = (
