@@ -1346,8 +1346,20 @@ class AnchorEngine:
                     match = True
                 if alert.interest and prof.interests and alert.interest.lower() in prof.interests.lower():
                     match = True
-                if match and alert.city and prof.city and alert.city.lower() not in prof.city.lower():
-                    match = False
+                if match and alert.city:
+                    # Check city using all normalized variants (cross-language: EN/RU/raw)
+                    alert_city_lc = alert.city.strip().lower()
+                    prof_city_variants = set(filter(None, [
+                        (getattr(prof, 'city_normalized', None) or '').strip().lower(),
+                        (getattr(prof, 'city_normalized_ru', None) or '').strip().lower(),
+                        (prof.city or '').strip().lower(),
+                    ]))
+                    city_match = any(
+                        alert_city_lc in v or v.startswith(alert_city_lc) or alert_city_lc.startswith(v)
+                        for v in prof_city_variants if v
+                    )
+                    if not city_match:
+                        match = False
 
                 if match:
                     prof_user = session.query(User).filter_by(id=prof.user_id).first()

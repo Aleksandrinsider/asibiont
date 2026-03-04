@@ -1456,6 +1456,7 @@ async def dashboard_handler(request):
         try:
             partners = all_partners
         except NameError:
+            # all_partners not defined means the first try-block failed entirely
             try:
                 session_db = Session()
                 user_tmp = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -1464,8 +1465,8 @@ async def dashboard_handler(request):
             except Exception as e:
                 logger.error(f"Error getting partners: {e}", exc_info=True)
                 partners = []
-                delegating_to_me = []
-                delegating_by_me = []
+                # Do NOT reset delegating_to_me/delegating_by_me here —
+                # they may already be populated from the first try block above
 
         # Add common interests, skills, goals and recommendation reason
         # Uses normalized (English) fields for cross-language matching with fallback to originals

@@ -2919,35 +2919,44 @@ def get_partners_list(user_id=None, session=None):
         _sort_user_goals = []
         _sort_user_goal_cats = set()
 
+    # Предвычисляем данные текущего пользователя один раз для всех сортировок
+    def _split_norm(obj, field):
+        v = _norm(obj, field)
+        if not v:
+            return set()
+        return set(x.strip().lower() for x in v.replace(';', ',').split(',') if x.strip())
+
+    _u_sort_skills = _split_norm(user_profile, 'skills')
+    _u_sort_interests = _split_norm(user_profile, 'interests')
+    _u_sort_goals = _split_norm(user_profile, 'goals')
+
+    def _city_variants_set(obj):
+        vs = set()
+        for attr in ('city_normalized', 'city_normalized_ru', 'city'):
+            v = (getattr(obj, attr, None) or '').strip().lower()
+            if v:
+                vs.add(v)
+        return vs
+
+    _u_sort_cities = _city_variants_set(user_profile)
+
     def sort_key(p):
-        relevance_score = 0  # Инициализируем счетчик релевантности
-        
-        # Совпадения навыков дают высокий балл (cross-language via normalized)
-        _us = _norm(user_profile, 'skills')
-        _ps = _norm(p, 'skills')
-        if _us and _ps:
-            user_skills = set(s.strip().lower() for s in _us.replace(';', ',').split(","))
-            profile_skills = set(s.strip().lower() for s in _ps.replace(';', ',').split(","))
-            skill_matches = len(user_skills & profile_skills)
-            relevance_score += skill_matches * 3
+        relevance_score = 0
 
-        # Совпадения интересов дают средний балл (cross-language)
-        _ui = _norm(user_profile, 'interests')
-        _pi = _norm(p, 'interests')
-        if _ui and _pi:
-            user_interests = set(i.strip().lower() for i in _ui.replace(';', ',').split(","))
-            profile_interests = set(i.strip().lower() for i in _pi.replace(';', ',').split(","))
-            interest_matches = len(user_interests & profile_interests)
-            relevance_score += interest_matches * 2
+        # Совпадения навыков (cross-language via normalized, user data pre-computed)
+        p_skills = _split_norm(p, 'skills')
+        if p_skills:
+            relevance_score += len(_u_sort_skills & p_skills) * 3
 
-        # Совпадения целей дают высокий балл (cross-language)
-        _ug = _norm(user_profile, 'goals')
-        _pg = _norm(p, 'goals')
-        if _ug and _pg:
-            user_goals = set(g.strip().lower() for g in _ug.replace(';', ',').split(","))
-            profile_goals = set(g.strip().lower() for g in _pg.replace(';', ',').split(","))
-            goal_matches = len(user_goals & profile_goals)
-            relevance_score += goal_matches * 4
+        # Совпадения интересов (cross-language)
+        p_interests = _split_norm(p, 'interests')
+        if p_interests:
+            relevance_score += len(_u_sort_interests & p_interests) * 2
+
+        # Совпадения целей (cross-language)
+        p_goals = _split_norm(p, 'goals')
+        if p_goals:
+            relevance_score += len(_u_sort_goals & p_goals) * 4
 
         # Бонус за совпадение структурированных целей (Goal table) — цели юзера уже загружены выше
         try:
@@ -2960,17 +2969,8 @@ def get_partners_list(user_id=None, session=None):
         except Exception as e:
             logger.debug(f"Failed to compare goal categories: {e}")
 
-        # Бонус за тот же город (cross-language: EN/RU/raw)
-        city_bonus = 0
-        def _cvars(obj):
-            vs = set()
-            for attr in ('city_normalized', 'city_normalized_ru', 'city'):
-                v = (getattr(obj, attr, None) or '').strip().lower()
-                if v:
-                    vs.add(v)
-            return vs
-        if user_city and (_cvars(p) & {user_city} or _cvars(user_profile) & _cvars(p)):
-            city_bonus = 1  # Небольшой бонус за локальность
+        # Бонус за тот же город (cross-language, user cities pre-computed)
+        city_bonus = 1 if _u_sort_cities & _city_variants_set(p) else 0
 
         return (-relevance_score, -city_bonus, -(p.average_rating or 0))
 
