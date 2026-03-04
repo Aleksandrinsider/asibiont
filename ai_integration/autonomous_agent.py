@@ -3580,7 +3580,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int) -> str:
             pass
 
     # ── Шаг 3: Tool-calling loop (макс 3 итерации) ────────────────────────────
-    _agent_inst = get_autonomous_agent()
+    # Создаём изолированный инстанс — не делим состояние с глобальным ASI
+    # (execution_history, счётчики, лимиты у каждого агента свои)
+    _agent_inst = HybridAutonomousAgent()
     _messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
