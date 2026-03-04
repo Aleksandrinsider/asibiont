@@ -3300,8 +3300,12 @@ def get_partners_list(user_id=None, session=None):
     not_relevant_count = len(partners) - relevant_count
     logger.info(f"[PARTNERS] Task-relevant partners: {relevant_count}, other: {not_relevant_count}")
     
+    # Batch-load top-5 partner users for logging and common-goals enrichment
+    _top5_uids = [p.user_id for p in partners[:5]]
+    _top5_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_top5_uids)).all()}
+
     for partner in partners[:5]:  # Log top 5
-        partner_user = session.query(User).filter_by(id=partner.user_id).first()
+        partner_user = _top5_user_by_id.get(partner.user_id)
         if partner_user:
             logger.info(f"[PARTNERS] Top partner: @{partner_user.username}, task_score={partner.task_relevance_score}, relevance={partner.task_relevance}")
         else:
@@ -3372,19 +3376,28 @@ def analyze_group_opportunities(user_id, session):
     
     # Анализируем их задачи
     partner_activities = []
+    # Batch-load top-10 partner users to avoid N+1
+    _ago_uids = [p.user_id for p in partners[:10]]
+    _ago_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_ago_uids)).all()}
+    # Batch-load partner tasks for next 48h (avoid N+1 per partner)
+    _ago_tasks_all = session.query(Task).filter(
+        Task.user_id.in_(_ago_uids),
+        Task.status.in_(['pending', 'active', 'in_progress']),
+        Task.reminder_time.isnot(None),
+        Task.reminder_time >= base_now,
+        Task.reminder_time <= base_now + timedelta(hours=48)
+    ).order_by(Task.reminder_time.asc()).all()
+    _ago_tasks_by_uid: dict = {}
+    for _t in _ago_tasks_all:
+        _ago_tasks_by_uid.setdefault(_t.user_id, []).append(_t)
+
     for partner in partners[:10]:  # Топ-10 партнеров
-        partner_user = session.query(User).filter_by(id=partner.user_id).first()
+        partner_user = _ago_user_by_id.get(partner.user_id)
         if not partner_user or not partner_user.username:
             continue
         
-        # Получаем активные задачи партнера
-        partner_tasks = session.query(Task).filter(
-            Task.user_id == partner_user.id,
-            Task.status.in_(['pending', 'active', 'in_progress']),
-            Task.reminder_time.isnot(None),
-            Task.reminder_time >= base_now,
-            Task.reminder_time <= base_now + timedelta(hours=48)
-        ).order_by(Task.reminder_time.asc()).limit(5).all()
+        # Получаем активные задачи партнера (из batch-карты)
+        partner_tasks = _ago_tasks_by_uid.get(partner_user.id, [])[:5]
         
         for task in partner_tasks:
             # Проверяем релевантность по интересам
@@ -3463,6 +3476,9 @@ def analyze_group_opportunities(user_id, session):
     
     # Извлекаем значимые слова из задач
     word_to_tasks = defaultdict(list)
+    # Batch-load all unique users from recent tasks (avoid N+1 per task)
+    _art_uids = list({t.user_id for t in all_recent_tasks})
+    _art_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_art_uids)).all()} if _art_uids else {}
     for task in all_recent_tasks:
         task_text = f"{task.title} {task.description or ''}".lower()
         words = [w.strip('.,!?;:()[]{}') for w in task_text.split()]
@@ -3470,7 +3486,7 @@ def analyze_group_opportunities(user_id, session):
         # Берем только значимые слова (>= 4 символа, не стоп-слова)
         significant_words = [w for w in words if len(w) >= 4 and w not in stop_words]
         
-        task_user = session.query(User).filter_by(id=task.user_id).first()
+        task_user = _art_user_by_id.get(task.user_id)
         if not task_user or not task_user.username:
             continue
         
@@ -7484,8 +7500,11 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
                         similar_tasks.append(task)
 
                 logger.info(f"[TASK_CONTACTS] Найдено похожих задач: {len(similar_tasks)}")
+                # Batch-load users for similar tasks logging and match lookup
+                _st_uids = list({st.user_id for st in similar_tasks})
+                _st_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_st_uids)).all()} if _st_uids else {}
                 for st in similar_tasks[:5]:  # Ограничим для логов
-                    st_user = session.query(User).filter_by(id=st.user_id).first()
+                    st_user = _st_user_by_id.get(st.user_id)
                     st_username = st_user.first_name if st_user else "Unknown"
                     logger.info(f"[TASK_CONTACTS]   - '{st.title}' (пользователь: {st_username})")
 
@@ -7506,7 +7525,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
                     # Проверяем, что этого пользователя еще нет в контактах
                     existing_contact_ids = [c.user_id for c in analysis_data['relevant_contacts']]
                     if match['user_id'] not in existing_contact_ids:
-                        match_user = session.query(User).filter_by(id=match['user_id']).first()
+                        match_user = _st_user_by_id.get(match['user_id'])
                         if match_user:
                             # Используем first_name или telegram_id как username
                             display_name = match_user.first_name or f"user_{match_user.telegram_id}"

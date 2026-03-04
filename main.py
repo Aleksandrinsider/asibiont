@@ -9210,13 +9210,23 @@ async def add_test_users_handler(request):
         all_users = sport_users + business_users
         added = []
         skipped = []
-        
+
+        # Batch-load existing users to avoid N+1
+        _seed_tids = [u['telegram_id'] for u in all_users]
+        _seed_existing = {u.telegram_id: u for u in session.query(User).filter(User.telegram_id.in_(_seed_tids)).all()}
+        # Batch-load existing subscriptions for those users
+        _seed_existing_uids = [u.id for u in _seed_existing.values()]
+        _seed_subs = {s.user_id: s for s in (
+            session.query(Subscription).filter(Subscription.user_id.in_(_seed_existing_uids)).all()
+            if _seed_existing_uids else []
+        )}
+
         for user_data in all_users:
-            existing_user = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
+            existing_user = _seed_existing.get(user_data['telegram_id'])
             
             if existing_user:
-                # Проеряем есть ли subscription
-                existing_sub = session.query(Subscription).filter_by(user_id=existing_user.id).first()
+                # Проверяем есть ли subscription (из batch-карты)
+                existing_sub = _seed_subs.get(existing_user.id)
                 if existing_sub:
                     skipped.append(user_data['username'])
                     continue

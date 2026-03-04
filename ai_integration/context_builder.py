@@ -102,6 +102,10 @@ class ContextBuilder:
                     UserProfile.updated_at >= yesterday
                 ).order_by(UserProfile.updated_at.desc()).limit(20).all()
 
+                # Batch-load User objects for all recent profiles
+                _rp_uids = [p.user_id for p in recent_profiles]
+                _rp_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_rp_uids)).all()} if _rp_uids else {}
+
                 for alert in contact_alerts[:2]:  # Limit to 2 alerts
                     try:
                         for profile in recent_profiles:
@@ -133,7 +137,7 @@ class ContextBuilder:
                                     match = False
 
                             if match:
-                                profile_user = session.query(User).filter_by(id=profile.user_id).first()
+                                profile_user = _rp_user_by_id.get(profile.user_id)
                                 if profile_user and profile_user.username:
                                     username = profile_user.username
                                     detail = alert.skill or alert.interest
