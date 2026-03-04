@@ -3159,11 +3159,11 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
 
 def _build_user_context_sync(user_db_id: int) -> str:
     """Строит универсальный контекст пользователя для инжекта в промпты агентов.
-    Включает: профиль (кто он), цели (что хочет), агенты (его команда).
+    Включает: профиль (кто он), цели (что хочет), агенты (его команда), email-контакты.
     """
     try:
         import json as _j
-        from models import Session as _Db, User as _U, UserProfile as _UP, Goal as _G, UserAgent as _UA
+        from models import Session as _Db, User as _U, UserProfile as _UP, Goal as _G, UserAgent as _UA, EmailContact as _EC
         _s = _Db()
         try:
             user = _s.query(_U).filter_by(id=user_db_id).first()
@@ -3175,6 +3175,10 @@ def _build_user_context_sync(user_db_id: int) -> str:
             agents = (_s.query(_UA)
                       .filter_by(author_id=user_db_id, status='active')
                       .limit(10).all())
+            contacts = (_s.query(_EC)
+                        .filter_by(user_id=user_db_id)
+                        .order_by(_EC.created_at.desc())
+                        .limit(30).all())
         finally:
             _s.close()
     except Exception:
@@ -3242,6 +3246,22 @@ def _build_user_context_sync(user_db_id: int) -> str:
                 line += f'\n  Интеграции: {", ".join(integrations[:5])}'
             agent_lines.append(line)
         parts.append('АГЕНТЫ ПОЛЬЗОВАТЕЛЯ:\n' + '\n'.join(agent_lines))
+
+    # --- Email-контакты пользователя ---
+    if contacts:
+        contact_lines = []
+        for c in contacts:
+            line = f'• {c.name or "(нет имени)"} <{c.email}>'
+            if c.company:
+                line += f', {c.company}'
+            if c.position:
+                line += f', {c.position}'
+            if c.status and c.status != 'new':
+                line += f' [{c.status}]'
+            if c.notes:
+                line += f' — {c.notes[:80]}'
+            contact_lines.append(line)
+        parts.append('EMAIL-КОНТАКТЫ ПОЛЬЗОВАТЕЛЯ:\n' + '\n'.join(contact_lines))
 
     return '\n\n'.join(parts)
 
@@ -3520,7 +3540,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         f"ТВОЯ РОЛЬ:\n{_persona}"
     )
     if dialog_context:
-        system_prompt += f"\n\n[КОНТЕКСТ ДИАЛОГА — используй чтобы не терять нить разговора]:\n{dialog_context}"
+        system_prompt += (
+            f"\n\n[КОНТЕКСТ — профиль пользователя, его email-контакты, цели, история диалога. "
+            f"Используй чтобы понимать КТО пользователь, КОМУ он пишет, ЧТО ищет]:\n{dialog_context}"
+        )
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
     script_context = ""
@@ -3902,7 +3925,12 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             break
 
     if _direct_agent:
-        _agent_ctx = _history_block.strip()
+        _direct_ctx_parts = []
+        if _user_full_ctx:
+            _direct_ctx_parts.append(_user_full_ctx)
+        if _history_block.strip():
+            _direct_ctx_parts.append(_history_block.strip())
+        _agent_ctx = '\n\n'.join(_direct_ctx_parts)
         await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
         # Агент уже ответил и сохранён в DB — ASI молчит, не дублирует
         return "__agent_handled__"
@@ -3987,12 +4015,17 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             if action not in ('delegate', 'multi_delegate'):
                 break  # finalize → выходим из цикла
 
-        # Строим контекст диалога для агентов: история + уже собранные результаты
-        _agent_ctx = _history_block.strip()
+        # Строим контекст диалога для агентов: профиль пользователя + история + предыдущие результаты
+        _agent_ctx_parts = []
+        if _user_full_ctx:
+            _agent_ctx_parts.append(_user_full_ctx)
+        if _history_block.strip():
+            _agent_ctx_parts.append(_history_block.strip())
         if all_results:
-            _agent_ctx += "\n\nРАНЕЕ ВЫПОЛНЕННЫЕ ЗАДАЧИ КОМАНДЫ:\n" + "\n".join(
+            _agent_ctx_parts.append("РАНЕЕ ВЫПОЛНЕННЫЕ ЗАДАЧИ КОМАНДЫ:\n" + "\n".join(
                 f"{_n}: {_r[:300]}" for _n, _t2, _r in all_results
-            )
+            ))
+        _agent_ctx = '\n\n'.join(_agent_ctx_parts)
 
         # Выполняем текущее решение
         if action == 'delegate':
