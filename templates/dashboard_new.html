@@ -4660,6 +4660,172 @@ try:
             print('  ' + key + ' — ' + kb)
 except Exception as e:
     print('Ошибка AWS S3: ' + str(e))`
+            },
+            avito: {
+                name: 'Авито',
+                fields: [
+                    {k:'AVITO_CLIENT_ID', label:'Client ID (личный кабинет → Настройки → Для разработчиков)', ph:'Xxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'AVITO_CLIENT_SECRET', label:'Client Secret', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Авито → Аккаунт → Настройки → Для разработчиков → Создать приложение. Нужны права: items (объявления), stats (статистика).',
+                code: `import urllib.request, urllib.parse, json, os
+CLIENT_ID     = os.environ.get('AVITO_CLIENT_ID', '')
+CLIENT_SECRET = os.environ.get('AVITO_CLIENT_SECRET', '')
+try:
+    # Получаем токен
+    token_data = urllib.parse.urlencode({'grant_type':'client_credentials','client_id':CLIENT_ID,'client_secret':CLIENT_SECRET}).encode()
+    req = urllib.request.Request('https://api.avito.ru/token', data=token_data, headers={'Content-Type':'application/x-www-form-urlencoded'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        token = json.loads(r.read().decode())['access_token']
+    # Статистика объявлений
+    req2 = urllib.request.Request('https://api.avito.ru/core/v1/accounts/self', headers={'Authorization':'Bearer '+token})
+    with urllib.request.urlopen(req2, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    print('Авито аккаунт: ' + d.get('name', '?'))
+    print('Баланс: ' + str(d.get('balance', {}).get('bonus', 0)) + ' бонусов')
+except Exception as e:
+    print('Ошибка Авито: ' + str(e))`
+            },
+            yandex_direct: {
+                name: 'Яндекс.Директ',
+                fields: [
+                    {k:'YANDEX_DIRECT_TOKEN', label:'OAuth-токен Яндекс.Директ', ph:'y0_AgAAAABxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'YANDEX_DIRECT_LOGIN', label:'Логин Яндекс (или Client Login для агентств)', ph:'mylogin', t:'text'}
+                ],
+                hint: 'Яндекс → OAuth → Создать приложение, разрешение «Яндекс.Директ». Получить токен через oauth.yandex.ru.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('YANDEX_DIRECT_TOKEN', '')
+LOGIN = os.environ.get('YANDEX_DIRECT_LOGIN', '')
+hdrs  = {'Authorization': 'Bearer ' + TOKEN, 'Client-Login': LOGIN, 'Content-Type': 'application/json; charset=utf-8', 'Accept-Language': 'ru'}
+body  = json.dumps({'method':'get','params':{'SelectionCriteria':{},'FieldNames':['Id','Name','Status','Funds'],'Page':{'Limit':5}}}).encode('utf-8')
+try:
+    req = urllib.request.Request('https://api.direct.yandex.com/json/v5/campaigns', data=body, headers=hdrs, method='POST')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    camps = d.get('result',{}).get('Campaigns',[])
+    print('Кампании Яндекс.Директ (' + str(len(camps)) + '):')
+    for c in camps:
+        budget = c.get('Funds',{}).get('SharedAccountFunds',{}).get('Spend',0)
+        print('  ' + c.get('Name','?') + ' [' + c.get('Status','?') + '] потрачено: ' + str(budget/1000000) + ' руб.')
+except Exception as e:
+    print('Ошибка Яндекс.Директ: ' + str(e))`
+            },
+            yandex_market: {
+                name: 'Яндекс.Маркет',
+                fields: [
+                    {k:'YANDEX_MARKET_TOKEN', label:'OAuth-токен (Личный кабинет Маркета)', ph:'y0_AgAAAABxxxxxxxxx', t:'text'},
+                    {k:'YANDEX_MARKET_CAMPAIGN_ID', label:'ID кампании (магазина)', ph:'123456789', t:'text'}
+                ],
+                hint: 'Яндекс.Маркет → Партнёрский интерфейс → Настройки → API. Создать токен с нужными правами.',
+                code: `import urllib.request, json, os
+TOKEN  = os.environ.get('YANDEX_MARKET_TOKEN', '')
+CAMP   = os.environ.get('YANDEX_MARKET_CAMPAIGN_ID', '')
+hdrs   = {'Authorization': 'OAuth ' + TOKEN, 'Content-Type': 'application/json'}
+try:
+    req = urllib.request.Request('https://api.partner.market.yandex.ru/campaigns/' + CAMP + '/offers?limit=5', headers=hdrs)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    offers = d.get('result', {}).get('offers', d.get('offers', []))
+    print('Яндекс.Маркет магазин, первые товары:')
+    for o in offers[:5]:
+        print('  ' + o.get('name', o.get('offerId', '?')) + ' — ' + str(o.get('price', {}).get('value', '?')) + ' руб.')
+except Exception as e:
+    print('Ошибка Яндекс.Маркет: ' + str(e))`
+            },
+            yandex_metrika: {
+                name: 'Яндекс.Метрика',
+                fields: [
+                    {k:'YANDEX_METRIKA_TOKEN', label:'OAuth-токен Яндекс', ph:'y0_AgAAAABxxxxxxxxx', t:'text'},
+                    {k:'YANDEX_METRIKA_COUNTER', label:'ID счётчика', ph:'12345678', t:'text'}
+                ],
+                hint: 'oauth.yandex.ru → приложение с правом metrika:read. ID счётчика — в адресной строке Метрики.',
+                code: `import urllib.request, json, os
+TOKEN   = os.environ.get('YANDEX_METRIKA_TOKEN', '')
+COUNTER = os.environ.get('YANDEX_METRIKA_COUNTER', '')
+import datetime
+date_to   = datetime.date.today().isoformat()
+date_from = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+url = ('https://api-metrika.yandex.net/stat/v1/data?id=' + COUNTER +
+       '&metrics=ym:s:visits,ym:s:users,ym:s:bounceRate&date1=' + date_from +
+       '&date2=' + date_to + '&limit=1')
+try:
+    req = urllib.request.Request(url, headers={'Authorization': 'OAuth ' + TOKEN})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    totals = d.get('totals', [])
+    if len(totals) >= 3:
+        print('Яндекс.Метрика за 30 дней:')
+        print('  Визиты: ' + str(int(totals[0])))
+        print('  Пользователи: ' + str(int(totals[1])))
+        print('  Отказы: ' + str(round(totals[2],1)) + '%')
+except Exception as e:
+    print('Ошибка Яндекс.Метрика: ' + str(e))`
+            },
+            moysklad: {
+                name: 'МойСклад',
+                fields: [
+                    {k:'MOYSKLAD_TOKEN', label:'Токен доступа (Настройки → Безопасность → Токены)', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'МойСклад → Настройки аккаунта → Безопасность → Токены доступа → Создать токен.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('MOYSKLAD_TOKEN', '')
+hdrs  = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}
+try:
+    req = urllib.request.Request('https://api.moysklad.ru/api/remap/1.2/entity/product?limit=5', headers=hdrs)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    rows = d.get('rows', [])
+    print('МойСклад — товары (' + str(d.get('meta',{}).get('size',len(rows))) + ' всего):')
+    for p in rows[:5]:
+        price_val = (p.get('salePrices',[{}])[0].get('value',0) or 0) / 100
+        print('  ' + p.get('name','?') + ' — ' + str(price_val) + ' руб.')
+except Exception as e:
+    print('Ошибка МойСклад: ' + str(e))`
+            },
+            linkedin: {
+                name: 'LinkedIn',
+                fields: [
+                    {k:'LINKEDIN_ACCESS_TOKEN', label:'Access Token (LinkedIn Developer → OAuth 2.0)', ph:'AQXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'LinkedIn → developers.linkedin.com → Создать приложение → OAuth 2.0 → Request Access Token. Разрешения: r_liteprofile, r_emailaddress.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('LINKEDIN_ACCESS_TOKEN', '')
+hdrs  = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}
+try:
+    req = urllib.request.Request('https://api.linkedin.com/v2/me?projection=(id,firstName,lastName,headline)', headers=hdrs)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    first = (d.get('firstName',{}).get('localized',{}) or {}).get('ru_RU', list((d.get('firstName',{}).get('localized',{}) or {}).values() or ['?'])[0])
+    last  = (d.get('lastName',{}).get('localized',{}) or {}).get('ru_RU', list((d.get('lastName',{}).get('localized',{}) or {}).values() or ['?'])[0])
+    headline = (d.get('headline',{}).get('localized',{}) or {}).get('en_US', '')
+    print('LinkedIn профиль: ' + str(first) + ' ' + str(last))
+    if headline: print('Позиция: ' + str(headline))
+    print('ID: ' + d.get('id','?'))
+except Exception as e:
+    print('Ошибка LinkedIn: ' + str(e))`
+            },
+            superjob: {
+                name: 'SuperJob',
+                fields: [
+                    {k:'SUPERJOB_API_KEY', label:'API ключ SuperJob (superjob.ru/api для разработчиков)', ph:'v3.r.xxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'superjob.ru → Работодатель → API → Создать приложение. Ключ выдаётся автоматически после регистрации приложения.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('SUPERJOB_API_KEY', '')
+hdrs  = {'X-Api-App-Id': TOKEN, 'Content-Type': 'application/json'}
+try:
+    req = urllib.request.Request('https://api.superjob.ru/2.0/vacancies/?count=5&publishdate=1', headers=hdrs)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode())
+    vacancies = d.get('objects', [])
+    print('SuperJob — активные вакансии (' + str(d.get('total',0)) + ' всего):')
+    for v in vacancies:
+        salary = v.get('payment_from',0) or 0
+        salary_to = v.get('payment_to',0) or 0
+        sal_str = (str(salary) + '–' + str(salary_to) if salary and salary_to else str(salary or salary_to or 'не указана')) + ' руб.'
+        print('  ' + v.get('profession','?') + ' — ' + sal_str)
+except Exception as e:
+    print('Ошибка SuperJob: ' + str(e))`
             }
         };
 
@@ -5158,9 +5324,16 @@ except Exception as e:
                             <option value="vk">ВКонтакте</option>
                             <option value="wildberries">Wildberries</option>
                             <option value="ozon">Ozon</option>
+                            <option value="avito">Авито</option>
+                            <option value="yandex_market">Яндекс.Маркет</option>
+                            <option value="yandex_direct">Яндекс.Директ</option>
+                            <option value="yandex_metrika">Яндекс.Метрика</option>
+                            <option value="moysklad">МойСклад</option>
                             <option value="google_sheets">Google Sheets</option>
                             <option value="github">GitHub</option>
                             <option value="hh">hh.ru</option>
+                            <option value="superjob">SuperJob</option>
+                            <option value="linkedin">LinkedIn</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Международные</option>
                             <option value="notion">Notion</option>
                             <option value="airtable">Airtable</option>
