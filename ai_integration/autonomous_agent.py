@@ -1831,14 +1831,14 @@ class HybridAutonomousAgent:
                 emotion = CognitiveEngine.detect_emotion(user_message)
                 intent = CognitiveEngine.classify_intent(user_message)
                 
-                # Семантическая память из Pinecone — ОТКЛЮЧЕНА (в разработке)
+                # Семантическая память из Pinecone
                 memory_context = ""
-                # try:
-                #     memory_context = await build_memory_context(user_id, user_message, max_chars=1200)
-                #     if memory_context:
-                #         base_prompt += memory_context
-                # except Exception as e:
-                #     logger.warning(f"[VECTOR] Memory search failed: {e}")
+                try:
+                    memory_context = await build_memory_context(user_id, user_message, max_chars=1200)
+                    if memory_context:
+                        base_prompt += memory_context
+                except Exception as e:
+                    logger.warning(f"[VECTOR] Memory search failed: {e}")
                 
                 orchestrator = get_orchestrator()
                 user_now = ctx.get('user_now')
@@ -2506,22 +2506,22 @@ class HybridAutonomousAgent:
             if len(self.context_memory) > 100:
                 self.context_memory = self.context_memory[-100:]
 
-        # === Семантическая память (Pinecone) — ОТКЛЮЧЕНА (в разработке) ===
-        # try:
-        #     from .cognitive import CognitiveEngine
-        #     emotion = CognitiveEngine.detect_emotion(user_message)
-        #     intent = CognitiveEngine.classify_intent(user_message)
-        #     asyncio.get_event_loop().create_task(
-        #         store_conversation_turn(
-        #             user_id=user_id,
-        #             user_message=user_message,
-        #             bot_response=response,
-        #             emotion=emotion,
-        #             intent=intent
-        #         )
-        #     )
-        # except Exception as e:
-        #     logger.warning(f"[VECTOR] Store failed: {e}")
+        # === Семантическая память (Pinecone) — fire-and-forget ===
+        try:
+            from .cognitive import CognitiveEngine as _VecCE
+            _vec_emotion = _VecCE.detect_emotion(user_message)
+            _vec_intent = _VecCE.classify_intent(user_message)
+            asyncio.get_event_loop().create_task(
+                store_conversation_turn(
+                    user_id=user_id,
+                    user_message=user_message,
+                    bot_response=response,
+                    emotion=_vec_emotion,
+                    intent=_vec_intent
+                )
+            )
+        except Exception as e:
+            logger.warning(f"[VECTOR] Store failed: {e}")
 
         # === Self-learning feedback loop (fire-and-forget для скорости) ===
         async def _self_learn_bg():
