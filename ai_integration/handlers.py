@@ -1310,8 +1310,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
 async def reschedule_task(task_title=None, new_time=None, user_id=None, session=None):
     from models import User  # Явный импорт для избежания конфликтов области видимости
     logger.info(f"[RESCHEDULE_TASK] Called with task_title='{task_title}', new_time='{new_time}', user_id={user_id}")
-    logger.info(f"[RESCHEDULE_TASK] task_title type: {type(task_title)}, repr: {repr(task_title)}, bytes: {task_title.encode('utf-8') if task_title else None}")
-    
+
     if user_id is None:
         logger.error("[RESCHEDULE_TASK] ERROR: user_id is None!")
         return "ERROR: user_id is required"

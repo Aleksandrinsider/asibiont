@@ -11303,7 +11303,6 @@ app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/subscription_tiers', subscription_tiers_handler)
 app.router.add_get('/subscription-tiers', subscription_tiers_handler)  # Alias with dash
 app.router.add_get('/create_payment', create_payment_handler)
-# app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
 # SEO: verification files
 app.router.add_get('/yandex_48ffa2026650f03f.html', lambda r: web.FileResponse('static/yandex_48ffa2026650f03f.html'))
