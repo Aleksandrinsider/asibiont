@@ -2214,21 +2214,32 @@
                     return;
                 }
                 if (response.ok) {
-                    if (data.response) {
-                        // Передаём agent_info из ответа — правильное имя/аватар для этого сообщения
-                        addMessage(data.response, 'ai', null, null, data.agent_info || null);
-                    }
-                    
-                    // Sync displayedMessageIds so updateChat() won't re-add these messages
+                    // Сначала синкаем DB — забираем все промежуточные пузыри агентов
+                    // (director intro + agent responses), которые были сохранены во время обработки
+                    let intermediateMessages = [];
                     try {
                         const syncResp = await fetch('/api/interactions', { credentials: 'include', cache: 'no-store' });
                         if (syncResp.ok) {
                             const syncData = await syncResp.json();
                             if (syncData.interactions) {
-                                syncData.interactions.forEach(i => displayedMessageIds.add(i.id));
+                                // Находим новые AI-сообщения, которые ещё не показаны
+                                const normalize = s => (s || '').trim().replace(/\s+/g, ' ');
+                                const finalText = normalize(data.response || '');
+                                const sorted = syncData.interactions.sort((a, b) => a.id - b.id);
+                                sorted.forEach(i => {
+                                    if (!displayedMessageIds.has(i.id)) {
+                                        if (i.message_type === 'ai') {
+                                            // Пропускаем финальный синтез — он будет показан отдельно
+                                            const iText = normalize(i.content || '');
+                                            if (iText !== finalText) {
+                                                intermediateMessages.push(i);
+                                            }
+                                        }
+                                        displayedMessageIds.add(i.id);
+                                    }
+                                });
                                 lastMessageCount = syncData.interactions.length;
                                 // Update pending checkpoint separators with real interaction IDs
-                                const normalize = s => (s || '').trim().replace(/\s+/g, ' ');
                                 document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
                                     const rawText = (sep.dataset.pendingText || '').trim();
                                     const userInteractions = syncData.interactions.filter(i => i.message_type === 'user');
@@ -2241,6 +2252,20 @@
                             }
                         }
                     } catch(syncErr) {}
+
+                    // Показываем сообщения по очереди с задержкой:
+                    // сначала промежуточные пузыри (директор + агенты), потом финальный синтез
+                    let msgDelay = 0;
+                    for (const im of intermediateMessages) {
+                        const _im = im;
+                        setTimeout(() => addMessage(_im.content, 'ai', _im.created_at), msgDelay);
+                        msgDelay += 350;
+                    }
+                    if (data.response) {
+                        setTimeout(() => {
+                            addMessage(data.response, 'ai', null, null, data.agent_info || null);
+                        }, msgDelay);
+                    }
                     
                     setTimeout(async () => {
                         try {
