@@ -1949,11 +1949,14 @@ class HybridAutonomousAgent:
                                 logger.info(f"[AGENT] name-prefix routed to '{_cdata['name']}' (id={_cid})")
                                 break
 
-                # Режим офиса: ASI главный по умолчанию.
-                # Кастомный агент включается только при явном @упоминании или имени-префиксе.
-                # Используем focused_agent только если пользователь явно переключился (explicit /use).
+                # Если пользователь активировал агента из маркетплейса (focused_agent_id задан),
+                # используем его автоматически — даже без @упоминания.
+                # Явный @mention на другое имя всегда перебивает focused_agent.
                 if not _mention_not_found and _active_agent_id is None:
-                    pass  # ASI default — не подтягиваем focused_agent автоматически
+                    _focused_id = get_user_active_agent(user_id)
+                    if _focused_id and _focused_id in _all_active_ids:
+                        _active_agent_id = _focused_id
+                        logger.info(f"[AGENT] auto-inject focused agent id={_focused_id}")
 
                 # Убираем @имя / имя-триггер из начала сообщения — AI не должен его видеть
                 if _stripped_prefix_end is not None:
