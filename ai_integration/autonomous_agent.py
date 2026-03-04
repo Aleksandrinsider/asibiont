@@ -1949,14 +1949,12 @@ class HybridAutonomousAgent:
                                 logger.info(f"[AGENT] name-prefix routed to '{_cdata['name']}' (id={_cid})")
                                 break
 
-                # Если пользователь активировал агента из маркетплейса (focused_agent_id задан),
-                # используем его автоматически — даже без @упоминания.
-                # Явный @mention на другое имя всегда перебивает focused_agent.
+                # Субагенты встревают ТОЛЬКО при явном вызове:
+                # 1. Пользователь написал @имя или имя-префикс (обработано выше)
+                # 2. ASI сам передаёт управление агенту (через focused_agent set внутри tool-chain)
+                # Автоматического инжекта без вызова — нет.
                 if not _mention_not_found and _active_agent_id is None:
-                    _focused_id = get_user_active_agent(user_id)
-                    if _focused_id and _focused_id in _all_active_ids:
-                        _active_agent_id = _focused_id
-                        logger.info(f"[AGENT] auto-inject focused agent id={_focused_id}")
+                    pass  # ASI default — не подтягиваем focused_agent автоматически
 
                 # Убираем @имя / имя-триггер из начала сообщения — AI не должен его видеть
                 if _stripped_prefix_end is not None:
