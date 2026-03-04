@@ -22,11 +22,20 @@ _discord_bot = None
 _discord_task: Optional[asyncio.Task] = None
 _processed_msg_ids: set[int] = set()       # dedup guard
 _DEDUP_MAX = 500                           # ring-buffer size
+_processing_lock: asyncio.Lock | None = None  # prevents parallel duplicate processing
 
 
 async def start_discord_bot():
     """Start the Discord bot as a background asyncio task."""
     global _discord_bot, _discord_task
+
+    # Guard: don't start a second instance if already running
+    if _discord_bot is not None and not _discord_bot.is_closed():
+        logger.info("Discord bot already running, skipping duplicate start")
+        return
+    if _discord_task is not None and not _discord_task.done():
+        logger.info("Discord bot task already active, skipping duplicate start")
+        return
 
     try:
         from config import DISCORD_BOT_TOKEN, DISCORD_ENABLED
@@ -63,6 +72,10 @@ async def start_discord_bot():
 
     @bot.event
     async def on_message(message: discord.Message):
+        global _processing_lock
+        if _processing_lock is None:
+            _processing_lock = asyncio.Lock()
+
         # Ignore self
         if message.author == bot.user:
             return
@@ -72,13 +85,15 @@ async def start_discord_bot():
             return
 
         # ── Dedup guard (reconnect / gateway replay) ──
-        if message.id in _processed_msg_ids:
-            logger.debug(f"[DISCORD] Skipping duplicate msg {message.id}")
-            return
-        _processed_msg_ids.add(message.id)
-        if len(_processed_msg_ids) > _DEDUP_MAX:
-            to_drop = sorted(_processed_msg_ids)[:_DEDUP_MAX // 2]
-            _processed_msg_ids.difference_update(to_drop)
+        # Use lock to prevent two coroutines processing the same message.id simultaneously
+        async with _processing_lock:
+            if message.id in _processed_msg_ids:
+                logger.debug(f"[DISCORD] Skipping duplicate msg {message.id}")
+                return
+            _processed_msg_ids.add(message.id)
+            if len(_processed_msg_ids) > _DEDUP_MAX:
+                to_drop = sorted(_processed_msg_ids)[:_DEDUP_MAX // 2]
+                _processed_msg_ids.difference_update(to_drop)
 
         discord_user_id = message.author.id
         text = message.content.strip()
