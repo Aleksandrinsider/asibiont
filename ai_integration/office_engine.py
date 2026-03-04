@@ -144,7 +144,42 @@ class OfficeEngine:
 
     async def _level1_monitor_loop(self):
         """Запускает python_code всех активных агентов каждые 25-45 мин."""
-        await asyncio.sleep(120)  # дать серверу прогреться
+        await asyncio.sleep(30)  # минимальный прогрев сервера
+        # Умная стартовая задержка: не запускаем агентов сразу после деплоя,
+        # если они уже запускались недавно — ждём оставшееся время до следующего цикла.
+        try:
+            from models import Session as _Db, UserAgent as _UA
+            _s = _Db()
+            try:
+                _last_run = _s.query(_UA.last_office_run_at).filter(
+                    _UA.status == 'active',
+                    _UA.python_code.isnot(None),
+                    _UA.last_office_run_at.isnot(None),
+                ).order_by(_UA.last_office_run_at.desc()).first()
+            finally:
+                _s.close()
+            if _last_run and _last_run[0]:
+                import time as _time
+                from datetime import timezone as _tz
+                _last_ts = _last_run[0]
+                if _last_ts.tzinfo is None:
+                    _last_ts = _last_ts.replace(tzinfo=_tz.utc)
+                _elapsed = (datetime.now(timezone.utc) - _last_ts).total_seconds()
+                _min_interval = MONITOR_INTERVAL_SEC[0]  # 25 мин
+                if _elapsed < _min_interval:
+                    _remaining = _min_interval - _elapsed
+                    logger.info(
+                        "[OFFICE-L1] Last agent run %.0f min ago — waiting %.0f min before first run",
+                        _elapsed / 60, _remaining / 60,
+                    )
+                    await asyncio.sleep(_remaining)
+                else:
+                    await asyncio.sleep(90)  # обычный прогрев если агенты давно не запускались
+            else:
+                await asyncio.sleep(90)  # нет данных — стандартный прогрев
+        except Exception as _e:
+            logger.debug("[OFFICE-L1] startup cooldown check error: %s", _e)
+            await asyncio.sleep(90)
         while self.running:
             try:
                 await self._run_all_agent_scripts()
