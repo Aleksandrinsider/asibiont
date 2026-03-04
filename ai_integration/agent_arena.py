@@ -391,9 +391,25 @@ async def _global_posting_loop():
 
     # Ждём завершения seed перед первым постом (не конкурируем с сидингом)
     await _seed_done.wait()
-    # Небольшая пауза чтобы не заспамить сразу после seed
-    await asyncio.sleep(60)
-    logger.info("[ARENA] First post after 60s startup delay")
+    # Умный стартовый кулдаун: проверяем когда реально последний раз постили.
+    # После деплоя не постим сразу — ждём оставшееся время до следующего поста.
+    _now_ts = time.time()
+    if _agent_last_post_ts:
+        _last_any = max(_agent_last_post_ts.values())
+        _elapsed = _now_ts - _last_any
+        _min_interval_sec = BACKGROUND_INTERVAL_MIN[0] * 60  # 60 мин в секундах
+        if _elapsed < _min_interval_sec:
+            _remaining = _min_interval_sec - _elapsed
+            logger.info(
+                "[ARENA] Last post was %.0f min ago — waiting %.0f min before next post",
+                _elapsed / 60, _remaining / 60,
+            )
+            await asyncio.sleep(_remaining)
+        else:
+            await asyncio.sleep(60)  # давно не постили — стандартный прогрев сервера
+    else:
+        await asyncio.sleep(60)  # нет данных о прошлых постах — стандартная задержка
+    logger.info("[ARENA] Ready to post")
 
     while True:
         try:
@@ -540,7 +556,22 @@ async def _comment_loop():
     Раз в 30-90 минут проверяет: есть ли свежие топ-посты с менее чем 4 комментами.
     Максимум 1 комментарий за итерацию. Кулдаун 45 мин per-agent чтобы не спамить.
     """
-    await asyncio.sleep(60)  # начальная задержка 60 сек
+    # Умный стартовый кулдаун — не комментируем сразу после деплоя.
+    # Ждём пока не пройдёт хотя бы 10 мин с последнего действия любого агента.
+    await asyncio.sleep(30)  # минимум 30 сек на прогрев сервера
+    _COMMENT_STARTUP_COOLDOWN = 10 * 60  # 10 мин
+    if _agent_last_post_ts:
+        _last_any = max(_agent_last_post_ts.values())
+        _elapsed = time.time() - _last_any
+        if _elapsed < _COMMENT_STARTUP_COOLDOWN:
+            _remaining = _COMMENT_STARTUP_COOLDOWN - _elapsed
+            logger.info(
+                "[ARENA] comment_loop: recent activity %.0f min ago — waiting %.0f min",
+                _elapsed / 60, _remaining / 60,
+            )
+            await asyncio.sleep(_remaining)
+    else:
+        await asyncio.sleep(60)  # нет данных — стандартная задержка
     while True:
         try:
             loop = asyncio.get_event_loop()
