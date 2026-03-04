@@ -819,10 +819,10 @@
                                     <div class="avatar-wrap" style="position: relative;">
                                         {% set tier_glow = '#D1D9E0' %}
                                         {% if user_avatar_url %}
-                                        <img id="profile-avatar-img" src="{{ user_avatar_url }}" alt="Avatar" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                        <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username }}')" style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <img id="profile-avatar-img" src="{{ user_avatar_url }}" alt="Avatar" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }})" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }})" style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% else %}
-                                        <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }})" style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
                                         <!-- Upload avatar overlay -->
                                         <div class="avatar-upload-overlay" onclick="document.getElementById('avatar-upload-input').click();" title="Загрузить фото">
@@ -833,7 +833,7 @@
                                 </div>
                                 
                                 <!-- Имя и ник под аватаром -->
-                                <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;"><a href="#" onclick="openContactProfileModal('{{ user.username }}'); return false;" style="color: #374151; text-decoration: none; cursor: pointer;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %}</a> <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
+                                <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;"><a href="#" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }}); return false;" style="color: #374151; text-decoration: none; cursor: pointer;">{% if user.first_name %}{{ user.first_name }}{% else %}<span data-i18n="user">Пользователь</span>{% endif %}</a> <a href="#" onclick="openStatusModal(); return false;" style="font-weight: 400; color: #6C727F; font-size: 12px; text-decoration: none;" id="status-display">{% if profile and profile.status_text %}{{ profile.status_text }}{% else %}<span data-i18n="status-set">+ указать статус</span>{% endif %}</a></p>
                                 <p style="margin: 4px 0 0 0; color: #374151; font-size: 13px;">@{% if user.username %}{{ user.username }}{% else %}<span data-i18n="unknown-user">неизвестен</span>{% endif %}</p>
                                 {% if profile.average_rating is defined and profile.average_rating > 0 %}
                                 <p style="margin: 4px 0 0 0; font-size: 12px;{% if profile.average_rating < 5 %} color: #d73a49;{% elif profile.average_rating >= 8 %} color: #068487;{% else %} color: #6C727F;{% endif %}"><span data-i18n="rating-label">Рекомендация:</span> {{ profile.average_rating }}/10</p>
@@ -841,16 +841,16 @@
                                 <p style="margin: 4px 0 0 0; font-size: 12px; color: #6C727F;" data-i18n="no-ratings">Нет рекомендаций</p>
                                 {% endif %}
                             </div>
-                            <p>{% if profile_i18n and profile_i18n.country or profile.country %}<span data-i18n="country-label">Страна:</span> {{ profile_i18n.country if profile_i18n and profile_i18n.country else profile.country }} &nbsp;|&nbsp; {% endif %}<span data-i18n="city-label">Город:</span> {% if profile_i18n and profile_i18n.city %}{{ profile_i18n.city }}{% elif profile.city %}{{ profile.city }}{% else %}<span data-i18n="not-specified">Не указан</span>{% endif %}</p>
-                            {% if profile.birthdate %}
+                            <p>{% if (profile_i18n and profile_i18n.country) or (profile and profile.country) %}<span data-i18n="country-label">Страна:</span> {{ profile_i18n.country if profile_i18n and profile_i18n.country else profile.country }} &nbsp;|&nbsp; {% endif %}<span data-i18n="city-label">Город:</span> {% if profile_i18n and profile_i18n.city %}{{ profile_i18n.city }}{% elif profile and profile.city %}{{ profile.city }}{% else %}<span data-i18n="not-specified">Не указан</span>{% endif %}</p>
+                            {% if profile and profile.birthdate %}
                             <p><span data-i18n="birthday-label">День рождения:</span> {{ profile.birthdate }} ({{ ((current_date | strptime('%d.%m.%Y')).year - (profile.birthdate | strptime('%d.%m.%Y')).year - (((current_date | strptime('%d.%m.%Y')).month, (current_date | strptime('%d.%m.%Y')).day) < ((profile.birthdate | strptime('%d.%m.%Y')).month, (profile.birthdate | strptime('%d.%m.%Y')).day)) | int) }} <span data-i18n="years-old">лет</span>)</p>
                             {% else %}
                             <p><span data-i18n="birthday-label">День рождения:</span> <span data-i18n="not-specified-f">Не указана</span></p>
                             {% endif %}
-                            <p><span data-i18n="company-label">Компания:</span> {% if profile_i18n and profile_i18n.company %}{{ profile_i18n.company }}{% elif profile.company %}{{ profile.company }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %} &nbsp;|&nbsp; <span data-i18n="position-label">Должность:</span> {% if profile_i18n and profile_i18n.position %}{{ profile_i18n.position }}{% elif profile.position %}{{ profile.position }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
-                            <p><span data-i18n="goals-label">Цели:</span> {% if profile_i18n and profile_i18n.goals %}{{ profile_i18n.goals }}{% elif profile.goals %}{{ profile.goals }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
-                            <p><span data-i18n="skills-label">Навыки:</span> {% if profile_i18n and profile_i18n.skills %}{{ profile_i18n.skills }}{% elif profile.skills %}{{ profile.skills }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
-                            <p><span data-i18n="interests-label">Интересы:</span> {% if profile_i18n and profile_i18n.interests %}{{ profile_i18n.interests|unique_interests }}{% elif profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
+                            <p><span data-i18n="company-label">Компания:</span> {% if profile_i18n and profile_i18n.company %}{{ profile_i18n.company }}{% elif profile and profile.company %}{{ profile.company }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %} &nbsp;|&nbsp; <span data-i18n="position-label">Должность:</span> {% if profile_i18n and profile_i18n.position %}{{ profile_i18n.position }}{% elif profile and profile.position %}{{ profile.position }}{% else %}<span data-i18n="not-specified-f">Не указана</span>{% endif %}</p>
+                            <p><span data-i18n="goals-label">Цели:</span> {% if profile_i18n and profile_i18n.goals %}{{ profile_i18n.goals }}{% elif profile and profile.goals %}{{ profile.goals }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
+                            <p><span data-i18n="skills-label">Навыки:</span> {% if profile_i18n and profile_i18n.skills %}{{ profile_i18n.skills }}{% elif profile and profile.skills %}{{ profile.skills }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
+                            <p><span data-i18n="interests-label">Интересы:</span> {% if profile_i18n and profile_i18n.interests %}{{ profile_i18n.interests|unique_interests }}{% elif profile and profile.interests %}{{ profile.interests|unique_interests }}{% else %}<span data-i18n="not-specified-pl">Не указаны</span>{% endif %}</p>
                             {% set channel_parts = [] %}
                             {% if telegram_channel %}{% set tg_clean = telegram_channel.replace('@', '') %}{% if channel_parts.append('<span data-i18n="tg-channel-label">Telegram:</span> <a href="https://t.me/' ~ tg_clean ~ '" target="_blank" style="color: #068487; text-decoration: none;">@' ~ tg_clean ~ '</a>') %}{% endif %}{% endif %}
                             {% if discord_webhook and discord_server_name %}{% if discord_guild_id and discord_channel_id %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <a href="https://discord.com/channels/' ~ discord_guild_id ~ '/' ~ discord_channel_id ~ '" target="_blank" style="color: #068487; text-decoration: none;">' ~ discord_server_name ~ '</a>') %}{% endif %}{% else %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <span style="color: #068487;">' ~ discord_server_name ~ '</span>') %}{% endif %}{% endif %}{% endif %}
@@ -11785,8 +11785,8 @@ except Exception as e:
             return age;
         }
         
-        async function openContactProfileModal(username, canAccess = true) {
-            console.log('openContactProfileModal called:', {username, canAccess, type: typeof username});
+        async function openContactProfileModal(username, canAccess = true, userId = null) {
+            console.log('openContactProfileModal called:', {username, canAccess, userId, type: typeof username});
             
             // Check if this contact has restricted access
             if (!canAccess) {
@@ -11794,18 +11794,27 @@ except Exception as e:
                 return; // Don't open modal for restricted contacts
             }
             
-            // Remove @ symbol if present
-            const cleanUsername = username.replace('@', '');
+            // Remove @ symbol if present; treat 'None' / empty as truly absent
+            const cleanUsername = (username && username !== 'None') ? username.replace('@', '') : '';
             console.log('Clean username:', cleanUsername);
             
-            currentProfileUsername = cleanUsername;
+            currentProfileUsername = cleanUsername || (userId ? String(userId) : null);
             const modal = document.getElementById('contact-profile-modal');
             const content = document.getElementById('contact-profile-content');
             
+            // If neither username nor userId - nothing to show
+            if (!cleanUsername && !userId) return;
+
             try {
                 // Get contact profile data
                 const _cpLang = (typeof _currentLang !== 'undefined' && _currentLang) ? _currentLang : (localStorage.getItem('asibiont_lang') || 'ru');
-                const response = await fetch(`/api/contact_profile?username=${encodeURIComponent(cleanUsername)}&lang=${_cpLang}`, {
+                let _cpUrl;
+                if (cleanUsername) {
+                    _cpUrl = `/api/contact_profile?username=${encodeURIComponent(cleanUsername)}&lang=${_cpLang}`;
+                } else {
+                    _cpUrl = `/api/contact_profile?user_id=${encodeURIComponent(userId)}&lang=${_cpLang}`;
+                }
+                const response = await fetch(_cpUrl, {
                     credentials: 'include'
                 });
                 
@@ -11915,7 +11924,9 @@ except Exception as e:
                     // Action buttons
                     html += '<div class="rating-modal-actions">';
                     html += `<button onclick="closeContactProfileModal()" class="rating-cancel-btn">${t('close')}</button>`;
-                    html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">${t('write-msg')}</button>`;
+                    if (partner.contact_info) {
+                        html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">${t('write-msg')}</button>`;
+                    }
                     html += '</div>';
                     
                     content.innerHTML = html;

@@ -4412,14 +4412,23 @@ async def api_contact_profile_handler(request):
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
-        username = request.query.get('username')
-        if not username:
-            return web.json_response({'error': 'Username required'}, status=400)
+        username = request.query.get('username') or ''
+        lookup_user_id = request.query.get('user_id')
+
+        if not username and not lookup_user_id:
+            return web.json_response({'error': 'Username or user_id required'}, status=400)
 
         session_db = Session()
         try:
-            # Find the contact user
-            contact_user = session_db.query(User).filter_by(username=username).first()
+            # Find the contact user — by username or by internal user_id
+            contact_user = None
+            if username:
+                contact_user = session_db.query(User).filter_by(username=username).first()
+            if not contact_user and lookup_user_id:
+                try:
+                    contact_user = session_db.query(User).filter_by(id=int(lookup_user_id)).first()
+                except (ValueError, TypeError):
+                    pass
             if not contact_user:
                 return web.json_response({'error': 'Contact not found'}, status=404)
 
