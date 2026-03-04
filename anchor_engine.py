@@ -1959,6 +1959,20 @@ class AnchorEngine:
         user_tz = _pytz_cc.timezone(user.timezone or 'Europe/Moscow')
         user_now = now_utc.astimezone(user_tz)
 
+        # today_start is the same for all campaigns (same user)
+        _cc_today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
+        # Batch-load posts_today count per campaign (avoid N+1 AgentActivityLog count per campaign)
+        from sqlalchemy import func as _func_cc
+        _cc_camp_ids = [c.id for c in campaigns]
+        _cc_posts_today_raw = session.query(AgentActivityLog.result, _func_cc.count(AgentActivityLog.id)).filter(
+            AgentActivityLog.user_id == user.id,
+            AgentActivityLog.activity_type.in_(['post_newsfeed', 'post_telegram', 'post_discord']),
+            AgentActivityLog.created_at >= _cc_today_start,
+            AgentActivityLog.result.in_([f'campaign:{cid}' for cid in _cc_camp_ids]),
+        ).group_by(AgentActivityLog.result).all() if _cc_camp_ids else []
+        _cc_posts_today_map = {int(r.split(':')[1]): cnt for r, cnt in _cc_posts_today_raw if r and ':' in r}
+
         for campaign in campaigns:
             # --- Общий лимит ---
             if campaign.max_posts and campaign.max_posts > 0:
@@ -1990,13 +2004,7 @@ class AnchorEngine:
                     continue
 
             # --- Дневной лимит ---
-            today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-            posts_today = session.query(AgentActivityLog).filter(
-                AgentActivityLog.user_id == user.id,
-                AgentActivityLog.activity_type.in_(['post_newsfeed', 'post_telegram', 'post_discord']),
-                AgentActivityLog.created_at >= today_start,
-                AgentActivityLog.result == f'campaign:{campaign.id}',
-            ).count()
+            posts_today = _cc_posts_today_map.get(campaign.id, 0)
 
             if posts_today >= (campaign.daily_limit or 1):
                 logger.debug(f"[ANCHOR] Content campaign #{campaign.id}: skip — {posts_today} posts today (limit {campaign.daily_limit})")
@@ -2084,6 +2092,26 @@ class AnchorEngine:
         if user_now.hour < 10 or user_now.hour >= 20:
             return anchors
 
+        # today_start is same for all campaigns (same user timezone)
+        _dc_today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
+        # Batch-load delegation counts + already-delegated usernames for all campaigns
+        _dc_camp_ids = [c.id for c in campaigns]
+        from sqlalchemy import func as _func_dc
+        _dc_today_counts = dict(session.query(Task.delegation_campaign_id, _func_dc.count(Task.id)).filter(
+            Task.delegated_by == user.id,
+            Task.delegation_campaign_id.in_(_dc_camp_ids),
+            Task.created_at >= _dc_today_start,
+        ).group_by(Task.delegation_campaign_id).all()) if _dc_camp_ids else {}
+        # All delegated usernames per campaign
+        _dc_all_delegated = session.query(Task.delegation_campaign_id, Task.delegated_to_username).filter(
+            Task.delegation_campaign_id.in_(_dc_camp_ids),
+            Task.delegated_to_username.isnot(None),
+        ).all() if _dc_camp_ids else []
+        _dc_delegated_by_camp: dict = {}
+        for _dc_cid, _dc_uname in _dc_all_delegated:
+            _dc_delegated_by_camp.setdefault(_dc_cid, set()).add(_dc_uname.lower())
+
         for campaign in campaigns:
             # --- Общий лимит ---
             if campaign.max_delegations and campaign.max_delegations > 0:
@@ -2106,12 +2134,7 @@ class AnchorEngine:
                     continue
 
             # --- Дневной лимит ---
-            today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-            delegations_today = session.query(Task).filter(
-                Task.delegated_by == user.id,
-                Task.delegation_campaign_id == campaign.id,
-                Task.created_at >= today_start,
-            ).count()
+            delegations_today = _dc_today_counts.get(campaign.id, 0)
 
             if delegations_today >= (campaign.daily_limit or 3):
                 continue
@@ -2122,11 +2145,7 @@ class AnchorEngine:
                 continue
 
             # Получаем уже привлечённых (чтобы не повторяться)
-            already_delegated = session.query(Task.delegated_to_username).filter(
-                Task.delegation_campaign_id == campaign.id,
-                Task.delegated_to_username.isnot(None),
-            ).distinct().all()
-            already_usernames = {r[0].lower() for r in already_delegated if r[0]}
+            already_usernames = _dc_delegated_by_camp.get(campaign.id, set())
 
             # Ищем пользователей по interests/skills/bio
             from sqlalchemy import or_
