@@ -4656,7 +4656,7 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
             relevance_score += partner.task_relevance_score
         
         if relevance_score > 0:
-            partner_user = session.query(User).filter_by(id=partner.user_id).first()
+            partner_user = _frt_ap_user_by_id.get(partner.user_id)
             if partner_user and partner_user.username:
                 partner_lang = get_user_lang_by_db_id(partner.user_id, session=session)
                 relevant_contacts.append({
@@ -4665,6 +4665,8 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
                     'interests': partner.interests or '',
                     'skills': partner.skills or '',
                     'city': partner.city or '',
+                    'city_normalized': getattr(partner, 'city_normalized', None) or '',
+                    'city_normalized_ru': getattr(partner, 'city_normalized_ru', None) or '',
                     'score': relevance_score,
                     'reasons': match_reasons,
                     'lang': partner_lang,
@@ -4678,10 +4680,13 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
         # Основной скор релевантности
         base_score = contact['score']
 
-        # Бонус за тот же город (для оффлайн активностей)
+        # Бонус за тот же город (cross-language: EN/RU/raw варианты)
         city_bonus = 0
-        contact_city = contact['city'].lower().strip() if contact['city'] else None
-        contact_city_variants = set(filter(None, [contact_city]))
+        contact_city_variants = {v for v in (
+            (contact.get('city') or '').lower().strip(),
+            (contact.get('city_normalized') or '').lower().strip(),
+            (contact.get('city_normalized_ru') or '').lower().strip(),
+        ) if v}
         if user_city_variants & contact_city_variants:
             if is_offline_activity:
                 city_bonus = 3  # Бонус для оффлайн активностей
