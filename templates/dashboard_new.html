@@ -4950,6 +4950,8 @@ except Exception as e:
             set('mpa-apikeys', agent.user_api_keys);
             mpUpdateServiceHint();
             set('mpa-pycode', agent.python_code);
+            const freqEl = document.getElementById('mpa-notify-freq');
+            if (freqEl) freqEl.value = String(agent.notification_frequency || 0);
             const privEl = document.getElementById('mpa-private');
             if (privEl) {
                 privEl.checked = !!agent.is_private;
@@ -5210,6 +5212,20 @@ except Exception as e:
                         </div>
                     </details>
 
+                    <!-- Частота проактивных сообщений -->
+                    <div style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;">
+                        <div style="font-size:13px;color:#374151;margin-bottom:2px;">${t('mpa-notify-freq-title')}</div>
+                        <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">${t('mpa-notify-freq-desc')}</div>
+                        <select id="mpa-notify-freq" style="width:100%;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;color:#374151;background:white;outline:none;">
+                            <option value="0">${t('mpa-notify-never')}</option>
+                            <option value="1">1 ${t('hours-short')}</option>
+                            <option value="2">2 ${t('hours-short')}</option>
+                            <option value="4">4 ${t('hours-short')}</option>
+                            <option value="12">12 ${t('hours-short')}</option>
+                            <option value="24" selected>24 ${t('hours-short')}</option>
+                        </select>
+                    </div>
+
                     <!-- Цена — визуально понятно -->
                     <div id="mpa-price-block" style="background:white;border:1px solid #D1D9E0;border-radius:8px;padding:10px 12px;display:none;">
                         <div style="font-size:13px;color:#374151;margin-bottom:8px;">${t('mpa-price-title')}</div>
@@ -5280,6 +5296,7 @@ except Exception as e:
                 user_api_keys: _v('mpa-apikeys'),
                 is_private: _c('mpa-private'),
                 python_code: _v('mpa-pycode'),
+                notification_frequency: parseInt(_v('mpa-notify-freq')) || 0,
             };
             if (_mpEditAgentId) data.id = _mpEditAgentId;
             if (!data.name) { mpShowStatus(t('mpa-err-name'), '#FEF2F2', '#DC2626'); return; }
@@ -14468,6 +14485,9 @@ except Exception as e:
       'mpa-search-scope-title':'Область поиска в интернете',
       'mpa-search-scope-desc':'Что агент должен искать приоритетно при DDG-поиске. Оставьте пустым — агент будет искать по любой теме.',
       'mpa-search-scope-ph':'Например: крипта, Bitcoin, DeFi новости',
+      'mpa-notify-freq-title':'Частота проактивных сообщений',
+      'mpa-notify-freq-desc':'Как часто агент будет писать первым на основе данных интеграций. Работает только если подключена интеграция.',
+      'mpa-notify-never':'Никогда',
       'mpa-private-title':'Приватный агент','mpa-private-desc':'Только для вас. Не виден в маркетплейсе и арене — идеально для личных агентов с вашими API ключами.',
       'mpa-svc-title':'Подключить сервис','mpa-svc-desc':'Выберите сервис, введите данные — агент начнёт получать реальные данные перед каждым ответом.',
       'mpa-svc-ph':'Выбрать сервис',
@@ -14729,6 +14749,9 @@ except Exception as e:
       'mpa-search-scope-title':'Internet search scope',
       'mpa-search-scope-desc':'Topics the agent should prioritise when searching. Leave empty to search any topic.',
       'mpa-search-scope-ph':'E.g.: crypto, Bitcoin price, DeFi news',
+      'mpa-notify-freq-title':'Proactive message frequency',
+      'mpa-notify-freq-desc':'How often the agent writes first based on integration data. Only works if an integration is connected.',
+      'mpa-notify-never':'Never',
       'mpa-private-title':'Private agent','mpa-private-desc':'Only for you. Not visible in marketplace or arena — ideal for personal agents with your own API keys.',
       'mpa-svc-title':'Connect service','mpa-svc-desc':'Select a service, enter credentials — the agent will start receiving live data before each response.',
       'mpa-svc-ph':'Choose service',

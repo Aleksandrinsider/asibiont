@@ -9876,6 +9876,19 @@ async def api_marketplace_publish_agent_handler(request):
             # Пользовательские API ключи
             agent.user_api_keys = (data.get('user_api_keys') or '').strip()
 
+            # Частота проактивных уведомлений
+            _notify_freq = int(data.get('notification_frequency') or 0)
+            if _notify_freq > 0:
+                import json as _jf
+                agent.custom_anchors = _jf.dumps([{
+                    'id': 'auto-notify',
+                    'topic': f'Агент {agent.name or ""} пишет первым',
+                    'priority': 'MEDIUM',
+                    'cooldown_hours': _notify_freq,
+                }], ensure_ascii=False)
+            else:
+                agent.custom_anchors = None
+
             # Python-код агента (выполняется перед генерацией ответа)
             _py_code_raw = (data.get('python_code') or '').strip()
             if _py_code_raw:
@@ -10211,6 +10224,16 @@ async def api_marketplace_my_handler(request):
             def _is_subscribed(agent):
                 return bool(session_db.query(AgentSubscription).filter_by(
                     user_id=user_obj.id, agent_id=agent.id).first())
+            def _parse_notify_freq(custom_anchors_json):
+                import json as _j
+                try:
+                    lst = _j.loads(custom_anchors_json or '[]')
+                    for e in lst:
+                        if e.get('id') == 'auto-notify':
+                            return int(e.get('cooldown_hours', 0))
+                except Exception:
+                    pass
+                return 0
             # Подписанные агенты других пользователей (активированные чужие агенты)
             ext_subs = session_db.query(AgentSubscription).filter_by(user_id=user_obj.id).all()
             owned_ids = {a.id for a in agents}
@@ -10248,6 +10271,7 @@ async def api_marketplace_my_handler(request):
                              'user_api_keys': (a.user_api_keys or '') if a.author_id == user_obj.id else '',
                              'python_code': (a.python_code or '') if a.author_id == user_obj.id else '',
                              'search_scope': (a.search_scope or '') if a.author_id == user_obj.id else '',
+                             'notification_frequency': _parse_notify_freq(a.custom_anchors) if a.author_id == user_obj.id else 0,
                              'is_subscribed': _is_subscribed(a),
                              'is_external': False} for a in agents]
             return web.json_response({
