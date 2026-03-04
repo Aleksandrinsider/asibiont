@@ -3515,7 +3515,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     )
     system_prompt = (
         "Ты — агент в команде ASI Biont. Действуй от своего имени, выполняй поручение директора "
-        "используя доступные инструменты. Отвечай кратко и по делу. Без списков и заголовков.\n\n"
+        "используя доступные инструменты. Отвечай кратко и по делу. Без списков и заголовков.\n"
+        "НИКАКИХ звёздочек (*улыбается*, *думает*, *открывает базу* и т.п.) — только текст, никакой ролевой игры.\n\n"
         f"ТВОЯ РОЛЬ:\n{_persona}"
     )
     if dialog_context:
@@ -3534,6 +3535,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                              'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
                     if _wk in _os2.environ:
                         _exec_env[_wk] = _os2.environ[_wk]
+            _exec_env['AGENT_TASK'] = str(task or '')[:500]
             _api_raw = agent.get('user_api_keys', '') or ''
             for _kl in _api_raw.splitlines():
                 _kl = _kl.strip()
@@ -3901,17 +3903,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     if _direct_agent:
         _agent_ctx = _history_block.strip()
-        _resp = await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
-        final_response = await _quick_ai_call_raw([{
-            "role": "user",
-            "content": (
-                f"Пользователь обратился напрямую к {_direct_agent['name']}. "
-                f"Ответ агента:\n\n{_resp[:1500]}\n\n"
-                "Ответь пользователю от ASI Biont — живо, своими словами, без шаблонных фраз. "
-                "Без markdown, без списков, без заголовков."
-            ),
-        }], max_tokens=400)
-        return final_response or _resp
+        await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
+        # Агент уже ответил и сохранён в DB — ASI молчит, не дублирует
+        return "__agent_handled__"
 
     # ── Начальное решение ASI ──────────────────────────────────────────────────
     _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
@@ -4076,6 +4070,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 logger.debug("[DIRECTOR] error, fallback to normal: %s", _de)
 
         if _director_response is not None:
+            # Агент ответил напрямую — ASI молчит (ответ уже в DB)
+            if _director_response == "__agent_handled__":
+                return {'response': '', 'tool_calls': [], 'tools_used': [], 'agent_info': None}
             # Директор обработал — промежуточные Interaction уже сохранены
             return {
                 'response': _director_response,

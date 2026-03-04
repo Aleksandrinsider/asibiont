@@ -3037,7 +3037,14 @@ else:
         mail.login(USER, PASS.replace(' ', ''))
         mail.select('inbox')
         since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-        _, data = mail.search(None, 'SINCE ' + since)
+        import re as _re, os as _os
+        _task_env = _os.environ.get('AGENT_TASK', '')
+        _from_match = _re.search(r'(?:от|from)\s+([\u0400-\u04ff\w][\u0400-\u04ff\w]+(?:\s+[\u0400-\u04ff\w]+)?)', _task_env, _re.IGNORECASE)
+        _search_from = _from_match.group(1).strip() if _from_match else ''
+        if _search_from:
+            _, data = mail.search(None, 'FROM', '"' + _search_from + '"')
+        else:
+            _, data = mail.search(None, 'SINCE ' + since)
         ids = data[0].split()
         if not ids:
             print('Новых писем за неделю нет.')
@@ -3133,7 +3140,14 @@ else:
         mail.login(USER, PASS.replace(' ', ''))
         mail.select('inbox')
         since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-        _, data = mail.search(None, 'SINCE ' + since)
+        import re as _re, os as _os
+        _task_env = _os.environ.get('AGENT_TASK', '')
+        _from_match = _re.search(r'(?:от|from)\s+([\u0400-\u04ff\w][\u0400-\u04ff\w]+(?:\s+[\u0400-\u04ff\w]+)?)', _task_env, _re.IGNORECASE)
+        _search_from = _from_match.group(1).strip() if _from_match else ''
+        if _search_from:
+            _, data = mail.search(None, 'FROM', '"' + _search_from + '"')
+        else:
+            _, data = mail.search(None, 'SINCE ' + since)
         ids = data[0].split()
         if not ids:
             print('Новых писем за неделю нет.')
@@ -3229,7 +3243,14 @@ else:
         mail.login(USER, PASS.replace(' ', ''))
         mail.select('inbox')
         since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-        _, data = mail.search(None, 'SINCE ' + since)
+        import re as _re, os as _os
+        _task_env = _os.environ.get('AGENT_TASK', '')
+        _from_match = _re.search(r'(?:от|from)\s+([\u0400-\u04ff\w][\u0400-\u04ff\w]+(?:\s+[\u0400-\u04ff\w]+)?)', _task_env, _re.IGNORECASE)
+        _search_from = _from_match.group(1).strip() if _from_match else ''
+        if _search_from:
+            _, data = mail.search(None, 'FROM', '"' + _search_from + '"')
+        else:
+            _, data = mail.search(None, 'SINCE ' + since)
         ids = data[0].split()
         if not ids:
             print('Новых писем за неделю нет.')
