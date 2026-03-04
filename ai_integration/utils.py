@@ -176,12 +176,18 @@ def parse_time_to_datetime(time_text, user_id):
         target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
         target_dt = user_tz.localize(target_dt)
         return target_dt.strftime("%Y-%m-%d %H:%M")
-    # Проверяем дни недели
+    # Проверяем дни недели (винительный + именительный падеж)
     weekdays = {
-        'понедельник': 0, 'вторник': 1, 'среда': 2, 'четверг': 3,
-        'пятница': 4, 'суббота': 5, 'воскресенье': 6
+        'понедельник': 0, 'вторник': 1, 'среда': 2, 'среду': 2,
+        'четверг': 3, 'пятница': 4, 'пятницу': 4,
+        'суббота': 5, 'субботу': 5, 'воскресенье': 6,
     }
-    weekday_match = re.search(r"(понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)(?:\s+(?:в\s+)?(\d{1,2}):(\d{2}))?", time_text)
+    weekday_match = re.search(
+        r"(понедельник|вторник|среду|среда|четверг"
+        r"|пятницу|пятница|субботу|суббота|воскресенье)"
+        r"(?:\s+(?:в\s+)?(\d{1,2}):(\d{2}))?",
+        time_text,
+    )
     if weekday_match:
         weekday_name = weekday_match.group(1).lower()
         target_weekday = weekdays[weekday_name]
