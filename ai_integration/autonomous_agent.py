@@ -3677,14 +3677,47 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             except Exception:
                 pass
 
-            # Источник 2: агенты пользователя из БД (active + paused — оба доступны для делегирования).
-            # paused = агент не запускается сам, но директор может давать ему задания вручную.
-            _own_agents = (
-                _s.query(_UA)
-                .filter(_UA.author_id == user_db_id, _UA.status.in_(['active', 'paused']))
-                .limit(10)
-                .all()
-            )
+            # Источник 2: собственные агенты пользователя с активной подпиской (AgentSubscription).
+            # Activate/Deactivate в UI управляет именно этой таблицей.
+            # Миграция: если у пользователя нет ни одной подписки на свои агенты — авто-подписываем
+            # все его агенты (первый запуск), чтобы они работали без ручного клика «Активировать».
+            try:
+                from models import AgentSubscription as _AS
+                _own_all = (
+                    _s.query(_UA)
+                    .filter(_UA.author_id == user_db_id, _UA.status.in_(['active', 'paused']))
+                    .limit(10)
+                    .all()
+                )
+                _existing_subs = {
+                    row.agent_id
+                    for row in _s.query(_AS).filter(
+                        _AS.user_id == user_db_id,
+                        _AS.agent_id.in_([a.id for a in _own_all]),
+                    ).all()
+                } if _own_all else set()
+
+                # Первый запуск (нет ни одной подписки): авто-мигрируем
+                if _own_all and not _existing_subs:
+                    for _oa in _own_all:
+                        _s.add(_AS(user_id=user_db_id, agent_id=_oa.id))
+                        try:
+                            from .user_agents import set_user_active_agent as _sua_dir
+                            _sua_dir(user_id, _oa.id)
+                        except Exception:
+                            pass
+                    _s.commit()
+                    _existing_subs = {a.id for a in _own_all}
+
+                _own_agents = [a for a in _own_all if a.id in _existing_subs]
+            except Exception:
+                # Fallback: загружаем все собственные агенты без фильтра
+                _own_agents = (
+                    _s.query(_UA)
+                    .filter(_UA.author_id == user_db_id, _UA.status.in_(['active', 'paused']))
+                    .limit(10)
+                    .all()
+                )
             _own_ids = {a.id for a in _own_agents}
 
             # Источник 3: сессионно-активированные с загрузкой из БД (если не вошли в own)

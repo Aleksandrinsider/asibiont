@@ -9949,6 +9949,22 @@ async def api_marketplace_publish_agent_handler(request):
 
             session_db.commit()
             session_db.refresh(agent)  # читаем актуальные данные из БД
+
+            # Авто-подписка для нового агента (создаёт AgentSubscription + добавляет в сессию),
+            # чтобы он сразу участвовал в директорском потоке без ручного «Активировать».
+            if not agent_id:
+                try:
+                    from models import AgentSubscription as _AS_pub
+                    _existing_pub = session_db.query(_AS_pub).filter_by(
+                        user_id=user_obj.id, agent_id=agent.id).first()
+                    if not _existing_pub:
+                        session_db.add(_AS_pub(user_id=user_obj.id, agent_id=agent.id))
+                        session_db.commit()
+                    from ai_integration.user_agents import set_user_active_agent as _sua_pub
+                    _sua_pub(user_id, agent.id)
+                except Exception as _ae:
+                    logger.debug("[MARKETPLACE] auto-subscribe on create error: %s", _ae)
+
             is_private_actual = bool(agent.is_private)
             is_private_requested = bool(data.get('is_private', False))
             privacy_warning = None
