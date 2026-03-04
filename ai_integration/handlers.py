@@ -10069,8 +10069,9 @@ def get_email_campaign_status(
             _cs_emails_by_camp.setdefault(_e.campaign_id, []).append(_e)
 
         # Batch: sent_today per campaign via GROUP BY
+        from sqlalchemy import func as _func_cs
         _cs_sent_today_map = dict(
-            session.query(EmailOutreach.campaign_id, func.count(EmailOutreach.id)).filter(
+            session.query(EmailOutreach.campaign_id, _func_cs.count(EmailOutreach.id)).filter(
                 EmailOutreach.campaign_id.in_(_cs_camp_ids),
                 EmailOutreach.sent_at >= _today_start_cs,
                 EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
