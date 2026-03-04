@@ -49,6 +49,14 @@ class ContextBuilder:
                     Task.status == 'pending'
                 ).order_by(Task.created_at.desc()).limit(20).all()
 
+                # Pre-fetch all task owners (batch, avoid N+1)
+                if recent_tasks:
+                    _rt_owner_ids = list({t.user_id for t in recent_tasks})
+                    _rt_owners = session.query(User).filter(User.id.in_(_rt_owner_ids)).all()
+                    _rt_owner_by_id = {u.id: u for u in _rt_owners}
+                else:
+                    _rt_owner_by_id = {}
+
                 for alert in activity_alerts[:2]:  # Limit to 2 alerts
                     try:
                         keywords = json.loads(alert.keywords)
@@ -57,8 +65,8 @@ class ContextBuilder:
                         for task in recent_tasks:
                             task_text = (task.title + ' ' + (task.description or '')).lower()
                             if any(kw.lower() in task_text for kw in keywords):
-                                # Get task owner
-                                task_owner = session.query(User).filter_by(id=task.user_id).first()
+                                # Get task owner (batch-loaded)
+                                task_owner = _rt_owner_by_id.get(task.user_id)
                                 if task_owner and task_owner.username:
                                     username = task_owner.username
                                     time_str = ""
@@ -1198,6 +1206,14 @@ class ContextBuilder:
                 UserProfile.user_id != user.id
             ).limit(50).all()
 
+            # Pre-fetch all profile owners (batch, avoid N+1)
+            if other_profiles:
+                _op_uids = [op.user_id for op in other_profiles]
+                _op_users = session.query(User).filter(User.id.in_(_op_uids)).all()
+                _op_user_by_id = {u.id: u for u in _op_users}
+            else:
+                _op_user_by_id = {}
+
             matches = []
             for op in other_profiles:
                 other_keywords = set()
@@ -1210,7 +1226,7 @@ class ContextBuilder:
 
                 overlap = user_keywords & other_keywords
                 if len(overlap) >= 2:  # минимум 2 совпадения
-                    other_user = session.query(User).filter_by(id=op.user_id).first()
+                    other_user = _op_user_by_id.get(op.user_id)
                     if other_user and other_user.username:
                         matches.append({
                             'username': other_user.username,
@@ -1242,12 +1258,20 @@ class ContextBuilder:
                     Task.status == 'pending'
                 ).order_by(Task.created_at.desc()).limit(30).all()
 
+                # Pre-fetch task owners (batch, avoid N+1)
+                if recent_others_tasks:
+                    _rot_uids = list({t.user_id for t in recent_others_tasks})
+                    _rot_owners = session.query(User).filter(User.id.in_(_rot_uids)).all()
+                    _rot_owner_by_id = {u.id: u for u in _rot_owners}
+                else:
+                    _rot_owner_by_id = {}
+
                 similar_tasks = []
                 for t in recent_others_tasks:
                     task_words = set(t.title.lower().split())
                     overlap = user_keywords & task_words
                     if overlap:
-                        task_owner = session.query(User).filter_by(id=t.user_id).first()
+                        task_owner = _rot_owner_by_id.get(t.user_id)
                         if task_owner and task_owner.username:
                             similar_tasks.append(f"  @{task_owner.username}: {t.title}")
 
