@@ -2699,6 +2699,21 @@ def get_partners_list(user_id=None, session=None):
     # Stop-words (defined once outside the loop)
     _stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
 
+    # Предвычисляем данные текущего пользователя ОДИН РАЗ до цикла
+    def _city_variants(obj):
+        variants = set()
+        for attr in ('city_normalized', 'city_normalized_ru', 'city'):
+            v = (getattr(obj, attr, None) or '').strip().lower()
+            if v:
+                variants.add(v)
+        return variants
+
+    _u_skills = _norm(user_profile, 'skills')
+    _u_interests = _norm(user_profile, 'interests')
+    _u_goals = _norm(user_profile, 'goals')
+    _u_company = _norm(user_profile, 'company')
+    _u_cities = _city_variants(user_profile)
+
     partners = []
     for profile in all_profiles:
         profile_user = session.query(User).filter_by(id=profile.user_id).first()
@@ -2713,7 +2728,6 @@ def get_partners_list(user_id=None, session=None):
         match_reasons = []  # Для логирования причин совпадения
 
         # Check skills - улучшенная логика с частичным совпадением (cross-language via normalized)
-        _u_skills = _norm(user_profile, 'skills')
         _p_skills = _norm(profile, 'skills')
         if _u_skills and _p_skills:
             user_skills = set(s.strip().lower() for s in _u_skills.replace(';', ',').split(","))
@@ -2749,7 +2763,6 @@ def get_partners_list(user_id=None, session=None):
                         break
 
         # Check interests - улучшенная логика с частичным совпадением (cross-language via normalized)
-        _u_interests = _norm(user_profile, 'interests')
         _p_interests = _norm(profile, 'interests')
         if _u_interests and _p_interests:
             user_interests = set(i.strip().lower() for i in _u_interests.replace(';', ',').split(","))
@@ -2835,7 +2848,6 @@ def get_partners_list(user_id=None, session=None):
                     break
 
         # Check goals (text from UserProfile, cross-language via normalized)
-        _u_goals = _norm(user_profile, 'goals')
         _p_goals = _norm(profile, 'goals')
         if _u_goals and _p_goals:
             user_goals = set(g.strip().lower() for g in _u_goals.replace(';', ',').split(","))
@@ -2875,7 +2887,6 @@ def get_partners_list(user_id=None, session=None):
                 logger.debug(f"[PARTNERS] Goal table check error: {e}")
 
         # Check company (cross-language via normalized)
-        _u_company = _norm(user_profile, 'company')
         _p_company = _norm(profile, 'company')
         if _u_company and _p_company:
             if _u_company.lower() == _p_company.lower():
@@ -2883,15 +2894,7 @@ def get_partners_list(user_id=None, session=None):
                     match_reasons.append(f"company: {profile.company}")
 
         # Check city — одного города достаточно для показа в рекомендациях
-        # Собираем все варианты города для cross-language сравнения (EN/RU/raw)
-        def _city_variants(obj):
-            variants = set()
-            for attr in ('city_normalized', 'city_normalized_ru', 'city'):
-                v = (getattr(obj, attr, None) or '').strip().lower()
-                if v:
-                    variants.add(v)
-            return variants
-        _u_cities = _city_variants(user_profile)
+        # _u_cities и _city_variants вынесены выше, до цикла
         _p_cities = _city_variants(profile)
         if _u_cities and _p_cities and (_u_cities & _p_cities):
             has_match = True

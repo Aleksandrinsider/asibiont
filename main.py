@@ -1457,16 +1457,19 @@ async def dashboard_handler(request):
             partners = all_partners
         except NameError:
             # all_partners not defined means the first try-block failed entirely
+            _fallback_session = None
             try:
-                session_db = Session()
-                user_tmp = session_db.query(User).filter_by(telegram_id=user_id).first()
+                _fallback_session = Session()
+                user_tmp = _fallback_session.query(User).filter_by(telegram_id=user_id).first()
                 partners = get_partners_list(user_id=user_tmp.id) if user_tmp else []
-                session_db.close()
             except Exception as e:
                 logger.error(f"Error getting partners: {e}", exc_info=True)
                 partners = []
                 # Do NOT reset delegating_to_me/delegating_by_me here —
                 # they may already be populated from the first try block above
+            finally:
+                if _fallback_session:
+                    _fallback_session.close()
 
         # Add common interests, skills, goals and recommendation reason
         # Uses normalized (English) fields for cross-language matching with fallback to originals
@@ -4732,7 +4735,7 @@ async def rate_user_handler(request):
                     session_db.commit()
 
             # Don't save to Interaction - show notification instead
-            success_message = f'Оцеа {rating}/10 для @{rated_username} сохра'
+            success_message = f'Оценка {rating}/10 для @{rated_username} сохранена'
 
             return web.json_response({
                 'success': True,
