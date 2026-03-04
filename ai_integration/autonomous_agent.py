@@ -3217,7 +3217,9 @@ def _infer_capabilities_from_role(job_title: str, specialization: str, descripti
     caps.update(['исследование и анализ', 'написание и редактура текстов',
                  'составление списков и планов', 'генерация идей'])
     return sorted(caps)
-(user_db_id: int) -> str:
+
+
+def _build_user_context_sync(user_db_id: int) -> str:
     """Строит универсальный контекст пользователя для инжекта в промпты агентов.
     Включает: профиль (кто он), цели (что хочет), агенты (его команда), email-контакты.
     """
