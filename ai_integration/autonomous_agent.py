@@ -3488,7 +3488,7 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         logger.debug("[CHIME] save error: %s", _e)
 
 
-async def _exec_agent_for_director(agent: dict, task: str, user_id: int) -> str:
+async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_context: str = "") -> str:
     """Запускает агента с полноценным tool-calling циклом (по tools_allowed).
     1. Выполняет python_code (внешние данные: IMAP, RSS, HTTP)
     2. Запускает tool-loop через платформенные инструменты (до 3 итераций)
@@ -3507,6 +3507,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int) -> str:
         "используя доступные инструменты. Отвечай кратко и по делу. Без списков и заголовков.\n\n"
         f"ТВОЯ РОЛЬ:\n{_persona}"
     )
+    if dialog_context:
+        system_prompt += f"\n\n[КОНТЕКСТ ДИАЛОГА — используй чтобы не терять нить разговора]:\n{dialog_context}"
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
     script_context = ""
@@ -3851,8 +3853,8 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         )
 
     # ── Вспомогательная функция сохранения результата агента ──────────────────
-    async def _run_agent_task(ag, task):
-        resp = await _exec_agent_for_director(ag, task, user_id)
+    async def _run_agent_task(ag, task, extra_context: str = ""):
+        resp = await _exec_agent_for_director(ag, task, user_id, dialog_context=extra_context)
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
         _ac = _json.dumps({
@@ -3915,8 +3917,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                 f"Ты — ASI Biont. В твоей команде: {_agents_short}.\n"
                 f"{_history_block.strip()}\n\nПользователь: {user_message}\n\n"
                 f"{'Команда могла бы помочь: ' + _team_hint + '. ' if _team_hint else ''}"
-                "Ответь развёрнуто. Если задача подходит кому-то из команды — предложи это естественно в ответе. "
-                "В конце — один короткий вопрос: стоит ли продолжить эту тему, нужно ли принять какое-то решение, или есть конкретное действие которое поможет."
+                "Ответь кратко — 3-5 предложений, без списков и заголовков. "
+                "Если задача подходит кому-то из команды — предложи это одной фразой. "
+                "В конце — один короткий вопрос: стоит ли продолжить, нужно ли решение, или есть следующий шаг."
             ),
         }], max_tokens=600)
         return _self_resp or None
@@ -3963,6 +3966,13 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             if action not in ('delegate', 'multi_delegate'):
                 break  # finalize → выходим из цикла
 
+        # Строим контекст диалога для агентов: история + уже собранные результаты
+        _agent_ctx = _history_block.strip()
+        if all_results:
+            _agent_ctx += "\n\nРАНЕЕ ВЫПОЛНЕННЫЕ ЗАДАЧИ КОМАНДЫ:\n" + "\n".join(
+                f"{_n}: {_r[:300]}" for _n, _t2, _r in all_results
+            )
+
         # Выполняем текущее решение
         if action == 'delegate':
             _ag = _find_agent(decision.get('agent_name', ''))
@@ -3974,7 +3984,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                 await asyncio.sleep(0.05)
             called_agents.add(_ag['name'])
             _task = decision.get('agent_task') or user_message
-            _resp = await _run_agent_task(_ag, _task)
+            _resp = await _run_agent_task(_ag, _task, extra_context=_agent_ctx)
             all_results.append((_ag['name'], _task, _resp))
 
         elif action == 'multi_delegate':
@@ -3993,7 +4003,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             if not _valid:
                 break
             _resps = await asyncio.gather(
-                *[_run_agent_task(ag, task) for ag, task in _valid],
+                *[_run_agent_task(ag, task, extra_context=_agent_ctx) for ag, task in _valid],
                 return_exceptions=True,
             )
             for (ag, task), resp in zip(_valid, _resps):
