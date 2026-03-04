@@ -3060,18 +3060,23 @@ class AnchorEngine:
                     'inactivity_reengagement',
                 }
                 OPTIONAL_LOW = {'market_insight', 'content_opportunity', 'event_discovery'}
+                # Pre-load doubled-cooldown results per OPTIONAL_LOW type (avoid N+1 per anchor)
+                _opt_low_anchors = [a for a in result if a.priority == AnchorPriority.LOW and a.anchor_type in OPTIONAL_LOW]
+                _recent_opt_by_type: dict = {}
+                for _opt_type in {a.anchor_type for a in _opt_low_anchors}:
+                    _type_max_cd = max(((a.cooldown_hours or 8) * 2) for a in _opt_low_anchors if a.anchor_type == _opt_type)
+                    _recent_opt_by_type[_opt_type] = session.query(Anchor).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == _opt_type,
+                        Anchor.delivered_at.isnot(None),
+                        Anchor.delivered_at >= now_utc - timedelta(hours=_type_max_cd)
+                    ).first()
                 # Необязательные LOW — удваиваем cooldown (через доп. фильтр)
                 filtered = []
                 for a in result:
                     if a.priority == AnchorPriority.LOW and a.anchor_type in OPTIONAL_LOW:
                         # Проверяем двойной cooldown
-                        double_cd = (a.cooldown_hours or 8) * 2
-                        recent_opt = session.query(Anchor).filter(
-                            Anchor.user_id == user.id,
-                            Anchor.anchor_type == a.anchor_type,
-                            Anchor.delivered_at.isnot(None),
-                            Anchor.delivered_at >= now_utc - timedelta(hours=double_cd)
-                        ).first()
+                        recent_opt = _recent_opt_by_type.get(a.anchor_type)
                         if recent_opt:
                             logger.debug(f"[ANCHOR] High ignore rate → doubled cooldown for {a.anchor_type}")
                             continue

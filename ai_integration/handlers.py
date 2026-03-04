@@ -5291,11 +5291,13 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         # Удаляем дочерние задачи (рекурентные инстансы с parent_task_id)
         # Иначе FK constraint на parent_task_id не даст удалить родителя
         child_tasks = session.query(Task).filter(Task.parent_task_id == task_db_id).all()
+        if child_tasks:
+            # Batch-reset current_task_id for all child tasks (avoid N+1)
+            _child_ids = [c.id for c in child_tasks]
+            _child_users = session.query(User).filter(User.current_task_id.in_(_child_ids)).all()
+            for _cu in _child_users:
+                _cu.current_task_id = None
         for child in child_tasks:
-            # Сбрасываем current_task_id для дочерних тоже
-            child_users = session.query(User).filter(User.current_task_id == child.id).all()
-            for cu in child_users:
-                cu.current_task_id = None
             session.delete(child)
             logger.info(f"[DELETE_TASK] Deleted child task ID: {child.id}")
         
