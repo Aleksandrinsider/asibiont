@@ -527,15 +527,10 @@ def _migrate_arena(session, inspector):
 
 
 def _migrate_fix_agent_python_code(session):
-    """Патчит python_code у существующих агентов: исправляет 3 бага в старых шаблонах.
-
-    1. mail.login(USER, PASS) → mail.login(USER, PASS.replace(' ', ''))
-       (IMAP не принимает app-пароли с пробелами)
-    2. r'<![CDATA[(.*?)]]>' → r'<!\[CDATA\[(.*?)\]\]>'
-       (скобки в regex нужно экранировать)
-    3. r'<link>s*(.*?)s*</link>' → r'<link>\s*(.*?)\s*</link>'
-       (пропущен backslash перед \s)
-    """
+    # Патч python_code у агентов: 3 бага в старых шаблонах
+    # 1. IMAP login: PASS → PASS.replace(' ', '')
+    # 2. CDATA regex: экранирование скобок
+    # 3. RSS link regex: пропущен \s backslash
     try:
         from models import UserAgent
         agents = session.query(UserAgent).filter(
