@@ -622,10 +622,16 @@ async def check_and_create_posts():
         users = session.query(User).join(UserProfile).filter(
             UserProfile.city.isnot(None)  # Only users who completed profile
         ).all()
-        
+
+        # Batch-load profiles (avoid N+1 inside the loop)
+        _apc_uids = [u.id for u in users]
+        _apc_profile_by_uid = {p.user_id: p for p in session.query(UserProfile).filter(
+            UserProfile.user_id.in_(_apc_uids)
+        ).all()} if _apc_uids else {}
+
         for user in users:
             try:
-                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                profile = _apc_profile_by_uid.get(user.id)
                 if not profile:
                     continue
                 

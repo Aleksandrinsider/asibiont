@@ -1834,12 +1834,17 @@ class AnchorEngine:
             Goal.status == 'active',
         ).all()
 
+        # Batch-load linked task counts per goal (avoid N+1 count query per goal)
+        from sqlalchemy import func as _func_goal_scan
+        _gd_goal_ids = [g.id for g in active_goals]
+        _gd_task_counts = dict(session.query(Task.goal_id, _func_goal_scan.count(Task.id)).filter(
+            Task.goal_id.in_(_gd_goal_ids),
+            Task.status.in_(['pending', 'in_progress']),
+        ).group_by(Task.goal_id).all()) if _gd_goal_ids else {}
+
         for goal in active_goals:
             # Проверяем есть ли ХОТЬ ОДНА активная задача, привязанная к цели
-            linked_tasks = session.query(Task).filter(
-                Task.goal_id == goal.id,
-                Task.status.in_(['pending', 'in_progress']),
-            ).count()
+            linked_tasks = _gd_task_counts.get(goal.id, 0)
 
             if linked_tasks > 0:
                 continue
@@ -2226,27 +2231,40 @@ class AnchorEngine:
         if not campaigns:
             return anchors
 
+        # Compute today_start ONCE (same user → same timezone for all campaigns)
+        import pytz as _pytz_email
+        _utz_email = _pytz_email.timezone(user.timezone or 'Europe/Moscow')
+        _user_now_local = now_utc.astimezone(_utz_email)
+        today_start = _user_now_local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
+        # Batch-load ALL EmailOutreach for all campaigns (avoid N+1 per campaign)
+        _ec_campaign_ids = [c.id for c in campaigns]
+        _ec_all_outreach = session.query(EmailOutreach).filter(
+            EmailOutreach.campaign_id.in_(_ec_campaign_ids)
+        ).all() if _ec_campaign_ids else []
+        _ec_outreach_by_camp: dict = {}
+        for _eo_item in _ec_all_outreach:
+            _ec_outreach_by_camp.setdefault(_eo_item.campaign_id, []).append(_eo_item)
+
         for campaign in campaigns:
             is_paused = campaign.status == 'paused'
+            _camp_outreach = _ec_outreach_by_camp.get(campaign.id, [])
 
             # --- 1. Есть черновики (draft) — агент должен написать и отправить ---
             # Пропускаем для paused кампаний
             drafts = []
             if not is_paused:
-                drafts = session.query(EmailOutreach).filter_by(
-                    campaign_id=campaign.id, status='draft'
-                ).limit(10).all()
+                drafts = [o for o in _camp_outreach if o.status == 'draft'][:10]
 
             # Дневной лимит — считаем «сегодня» по таймзоне пользователя, не UTC
-            import pytz as _pytz_email
-            _utz_email = _pytz_email.timezone(user.timezone or 'Europe/Moscow')
-            _user_now_local = now_utc.astimezone(_utz_email)
-            today_start = _user_now_local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-            sent_today = session.query(EmailOutreach).filter(
-                EmailOutreach.campaign_id == campaign.id,
-                EmailOutreach.sent_at >= today_start,
-                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-            ).count()
+            def _ts_aware(dt):
+                return dt if dt is not None and dt.tzinfo is not None else (dt.replace(tzinfo=timezone.utc) if dt else None)
+
+            sent_today = sum(
+                1 for o in _camp_outreach
+                if _ts_aware(o.sent_at) and _ts_aware(o.sent_at) >= today_start
+                and o.status in ('sent', 'delivered', 'opened', 'replied')
+            )
 
             remaining_daily = max(0, campaign.daily_limit - sent_today)
             # max_emails=0 означает безлимитную кампанию
@@ -2290,12 +2308,13 @@ class AnchorEngine:
             # --- 2. Follow-up: отправлено > 3 дней назад, без ответа, follow_up_count < max ---
             # Пропускаем для paused кампаний
             max_follow_ups = campaign.max_follow_ups or 2
-            stale_emails = [] if is_paused else session.query(EmailOutreach).filter(
-                EmailOutreach.campaign_id == campaign.id,
-                EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
-                EmailOutreach.follow_up_count < max_follow_ups,
-                EmailOutreach.next_follow_up_at <= now_utc,
-            ).limit(5).all()
+            stale_emails = [] if is_paused else [
+                o for o in _camp_outreach
+                if o.status in ('sent', 'delivered', 'opened')
+                and o.follow_up_count < max_follow_ups
+                and o.next_follow_up_at is not None
+                and (_ts_aware(o.next_follow_up_at) or o.next_follow_up_at.replace(tzinfo=timezone.utc)) <= now_utc
+            ][:5]
 
             for email in stale_emails:
                 days_since = 0
@@ -2333,12 +2352,10 @@ class AnchorEngine:
                 ))
 
             # --- 3. Входящие ответы (reply_text заполнен, но ai_reply не отправлен) ---
-            unreplied = session.query(EmailOutreach).filter(
-                EmailOutreach.campaign_id == campaign.id,
-                EmailOutreach.status == 'replied',
-                EmailOutreach.reply_text.isnot(None),
-                EmailOutreach.ai_reply_sent_at.is_(None),
-            ).all()
+            unreplied = [
+                o for o in _camp_outreach
+                if o.status == 'replied' and o.reply_text and not o.ai_reply_sent_at
+            ]
 
             for email in unreplied:
                 anchors.append(Anchor(
@@ -2377,20 +2394,16 @@ class AnchorEngine:
             if not is_paused and not drafts and not stale_emails and remaining_total <= 0:
                 # Письма у которых ещё не закрыт цикл:
                 # sent/delivered/opened с незакрытыми follow-up ИЛИ replied без ответа агента
-                open_outreach = session.query(EmailOutreach).filter(
-                    EmailOutreach.campaign_id == campaign.id,
-                    EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
-                    EmailOutreach.follow_up_count < (campaign.max_follow_ups or 2),
-                ).count()
-                unanswered_replies = session.query(EmailOutreach).filter(
-                    EmailOutreach.campaign_id == campaign.id,
-                    EmailOutreach.status == 'replied',
-                    EmailOutreach.reply_text.isnot(None),
-                    EmailOutreach.ai_reply_sent_at.is_(None),
-                ).count()
-                total_outreach = session.query(EmailOutreach).filter(
-                    EmailOutreach.campaign_id == campaign.id,
-                ).count()
+                open_outreach = sum(
+                    1 for o in _camp_outreach
+                    if o.status in ('sent', 'delivered', 'opened')
+                    and o.follow_up_count < (campaign.max_follow_ups or 2)
+                )
+                unanswered_replies = sum(
+                    1 for o in _camp_outreach
+                    if o.status == 'replied' and o.reply_text and not o.ai_reply_sent_at
+                )
+                total_outreach = len(_camp_outreach)
                 if total_outreach > 0 and open_outreach == 0 and unanswered_replies == 0:
                     campaign.status = 'completed'
                     try:
@@ -2404,9 +2417,7 @@ class AnchorEngine:
             # Срабатывает когда: активная кампания, 0 черновиков, ещё есть квота (total/daily)
             if not is_paused and not drafts and remaining_daily > 0 and remaining_total > 0:
                 # Считаем сколько контактов уже есть (sent + draft)
-                total_in_pipeline = session.query(EmailOutreach).filter(
-                    EmailOutreach.campaign_id == campaign.id,
-                ).count()
+                total_in_pipeline = len(_camp_outreach)
                 # Запускаем поиск только если ещё есть в квоте место
                 if remaining_total > total_in_pipeline or remaining_total >= 999999:
                     anchors.append(Anchor(
