@@ -1976,6 +1976,39 @@ async def chat_handler(request):
         if queue:
             await queue.put({'type': 'done'})
 
+        # ── Авто-пуш ответа ASI в TG + Discord (если подключены) ──
+        if response and not response.startswith('Произошла ошибка'):
+            try:
+                _push_s = Session()
+                try:
+                    _push_user = _push_s.query(User).filter_by(telegram_id=user_id).first()
+                    if _push_user:
+                        # TG push
+                        try:
+                            from handlers import bot as _tg_bot
+                            await _tg_bot.send_message(
+                                chat_id=_push_user.telegram_id,
+                                text=response[:4096],
+                            )
+                        except Exception as _tg_err:
+                            logger.debug(f"[CHAT PUSH] TG failed: {_tg_err}")
+                        # Discord push
+                        if _push_user.discord_webhook and _push_user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
+                            try:
+                                import aiohttp as _aio_push
+                                async with _aio_push.ClientSession() as _http_push:
+                                    await _http_push.post(
+                                        _push_user.discord_webhook,
+                                        json={'content': response[:2000]},
+                                        timeout=_aio_push.ClientTimeout(total=5),
+                                    )
+                            except Exception as _dc_err:
+                                logger.debug(f"[CHAT PUSH] Discord failed: {_dc_err}")
+                finally:
+                    _push_s.close()
+            except Exception as _push_err:
+                logger.debug(f"[CHAT PUSH] error: {_push_err}")
+
         return web.json_response({'response': response, 'agent_info': ai_result.get('agent_info')})
     except Exception as e:
         logger.error(f"Unexpected error in chat_handler: {e}", exc_info=True)
