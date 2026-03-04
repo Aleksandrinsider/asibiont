@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>FAQ — ASI Biont | Частые вопросы об AI-агенте в Telegram</title>
     <meta name="description" content="Ответы на частые вопросы об ASI Biont — AI-агенте в Telegram. Что это, сколько стоит, чем отличается от ChatGPT, как начать пользоваться, какие функции доступны.">
     <meta name="keywords" content="ASI Biont FAQ, AI агент вопросы, Telegram бот помощник, управление задачами AI, делегирование задач, автопостинг AI, DeepSeek V3">
@@ -22,7 +25,11 @@
     <meta name="twitter:description" content="Что такое ASI Biont, сколько стоит, чем отличается от ChatGPT, как начать пользоваться — все ответы.">
     <meta name="twitter:image" content="https://asibiont.com/static/asibiont-preview.png">
 
+    <link rel="icon" type="image/svg+xml" href="/static/asibiont.svg">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#ffffff">
     <link rel="canonical" href="https://asibiont.com{% if lang == 'en' %}/en{% endif %}/faq">
     <link rel="alternate" hreflang="ru" href="https://asibiont.com/faq">
     <link rel="alternate" hreflang="en" href="https://asibiont.com/en/faq">
@@ -367,7 +374,6 @@
             <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
             <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
             <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
-            <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Туториал</a>
             <a href="/arena" style="color: #59636E; text-decoration: none;">Арена AI</a>
             <div style="margin-top: 8px;">2026 ASI Biont</div>
         </div>
@@ -405,7 +411,7 @@
       howTo: 'В Telegram: откройте <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, нажмите /start. В Discord: напишите в личные сообщения @asibiont_bot. Бот зарегистрирует вас. Просто пишите, что нужно сделать — на любом языке. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a>.',
       cta: 'Все функции доступны сразу.',
       btnTop: 'Попробовать бесплатно — 1 500 токенов', btnInstall: 'Установить приложение',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал', fArena: 'Арена AI'
+      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
     },
     en: {
       title: 'FAQ — ASI Biont | Frequently Asked Questions about Multilingual AI Agent',
@@ -435,7 +441,7 @@
       howTo: 'In Telegram: open <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, press /start. On Discord: DM @asibiont_bot. The bot registers you. Just write what you need in any language. A <a href="/dashboard" style="color: #374151; font-weight: 500;">web dashboard</a> is also available.',
       cta: 'All features available immediately.',
       btnTop: 'Try for free — 1,500 tokens', btnInstall: 'Install App',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial', fArena: 'Arena AI'
+      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -496,8 +502,7 @@
     if (fl[3]) fl[3].textContent = t.fSupport;
     if (fl[4]) fl[4].textContent = t.fPrivacy;
     if (fl[5]) fl[5].textContent = t.fTerms;
-    if (fl[6]) fl[6].textContent = t.fTutorial;
-    if (fl[7]) fl[7].textContent = t.fArena;
+    if (fl[6]) fl[6].textContent = t.fArena;
   }
   window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {

@@ -183,7 +183,6 @@
                 <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
                 <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
                 <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
-                <a href="/tutorial" style="color: #59636E; text-decoration: none; margin-right: 16px;">Туториал</a>
                 <a href="/arena" style="color: #59636E; text-decoration: none;">Арена AI</a>
                 <div style="margin-top: 8px;">2026 ASI Biont</div>
             </div>
@@ -225,7 +224,7 @@
       topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $150 USDT'],
       ctaBtn1: 'Попробовать бесплатно — 1 500 токенов', ctaBtn2: 'Установить приложение',
       cta: 'Все функции доступны сразу.',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fTutorial: 'Туториал', fArena: 'Арена AI'
+      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
     },
     en: {
       title: 'ASI Biont Tokens — Top Up Balance | AI Partner for Business',
@@ -244,7 +243,7 @@
       topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $150 USDT'],
       ctaBtn1: 'Try for free — 1,500 tokens', ctaBtn2: 'Install App',
       cta: 'All features available immediately.',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fTutorial: 'Tutorial', fArena: 'Arena AI'
+      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -302,8 +301,7 @@
     if (fl[3]) fl[3].textContent = t.fSupport;
     if (fl[4]) fl[4].textContent = t.fPrivacy;
     if (fl[5]) fl[5].textContent = t.fTerms;
-    if (fl[6]) fl[6].textContent = t.fTutorial;
-    if (fl[7]) fl[7].textContent = t.fArena;
+    if (fl[6]) fl[6].textContent = t.fArena;
   }
   window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {

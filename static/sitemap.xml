@@ -47,26 +47,6 @@
     </url>
 
     <url>
-        <loc>https://asibiont.com/tutorial</loc>
-        <xhtml:link rel="alternate" hreflang="ru" href="https://asibiont.com/tutorial"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://asibiont.com/en/tutorial"/>
-        <xhtml:link rel="alternate" hreflang="x-default" href="https://asibiont.com/tutorial"/>
-        <lastmod>2026-02-27</lastmod>
-        <changefreq>monthly</changefreq>
-        <priority>0.8</priority>
-    </url>
-
-    <url>
-        <loc>https://asibiont.com/en/tutorial</loc>
-        <xhtml:link rel="alternate" hreflang="ru" href="https://asibiont.com/tutorial"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://asibiont.com/en/tutorial"/>
-        <xhtml:link rel="alternate" hreflang="x-default" href="https://asibiont.com/tutorial"/>
-        <lastmod>2026-02-27</lastmod>
-        <changefreq>monthly</changefreq>
-        <priority>0.7</priority>
-    </url>
-
-    <url>
         <loc>https://asibiont.com/faq</loc>
         <xhtml:link rel="alternate" hreflang="ru" href="https://asibiont.com/faq"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://asibiont.com/en/faq"/>

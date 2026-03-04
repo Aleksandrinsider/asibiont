@@ -8934,15 +8934,6 @@ async def terms_handler(request):
     return aiohttp_jinja2.render_template('terms.html', request, {})
 
 
-@aiohttp_jinja2.template('tutorial.html')
-async def tutorial_handler(request):
-    """Страница туториала со всеми командами"""
-    lang = request.match_info.get('lang', 'ru')
-    if lang not in ('ru', 'en'):
-        lang = 'ru'
-    return {'lang': lang}
-
-
 async def create_payment_handler(request):
     """Создает платеж для пакета токенов или тарифа"""
     session_obj = await get_session(request)
@@ -11243,7 +11234,6 @@ app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/subscription_tiers', subscription_tiers_handler)
 app.router.add_get('/subscription-tiers', subscription_tiers_handler)  # Alias with dash
-app.router.add_get('/tutorial', tutorial_handler)
 app.router.add_get('/create_payment', create_payment_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
@@ -11303,13 +11293,9 @@ async def subscription_tiers_handler_en(request):
     flags = await get_payment_flags(request)
     return aiohttp_jinja2.render_template('subscription_tiers.html', request, {'lang': 'en', **flags})
 
-async def tutorial_handler_en(request):
-    return aiohttp_jinja2.render_template('tutorial.html', request, {'lang': 'en'})
-
 app.router.add_get('/en', login_handler_en)
 app.router.add_get('/en/', login_handler_en)
 app.router.add_get('/en/faq', faq_handler_en)
-app.router.add_get('/en/tutorial', tutorial_handler_en)
 app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')
@@ -11530,7 +11516,6 @@ async def start_reminder_service(app):
         await notify_indexnow([
             "https://asibiont.com/",
             "https://asibiont.com/subscription-tiers",
-            "https://asibiont.com/tutorial",
             "https://asibiont.com/dashboard",
             "https://asibiont.com/faq",
             "https://asibiont.com/llms.txt",
