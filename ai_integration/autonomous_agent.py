@@ -3548,7 +3548,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             loop2 = asyncio.get_event_loop()
             stdout2, _stderr2 = await loop2.run_in_executor(None, _run_script)
             if stdout2:
-                script_context = f"\n\n[Данные от твоего скрипта/интеграции]:\n{stdout2[:800]}"
+                script_context = f"\n\n[Данные от твоего скрипта/интеграции]:\n{stdout2[:2000]}"
                 system_prompt += script_context
             elif _stderr2 and 'timeout' not in _stderr2:
                 logger.debug("[DIRECTOR-EXEC] script stderr for %s: %s", agent.get('name'), _stderr2[:150])
