@@ -1965,8 +1965,8 @@ async def chat_handler(request):
                     logger.error(f"Error getting AI response: {e}", exc_info=True)
                     response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
 
-                # Save agent response to Interaction table
-                if user_db_id:
+                # Save agent response to Interaction table (skip empty — agents already saved their own messages)
+                if user_db_id and response and response.strip():
                     agent_response_timestamp = datetime.now(dt_timezone.utc)
                     interaction_agent = Interaction(
                         user_id=user_db_id,
@@ -1977,6 +1977,8 @@ async def chat_handler(request):
                     session_db.add(interaction_agent)
                     session_db.commit()
                     logger.info("Saved AI response to database")
+                elif user_db_id and not (response and response.strip()):
+                    logger.debug("[CHAT] Skipping empty response save to Interaction")
             finally:
                 session_db.close()
         finally:

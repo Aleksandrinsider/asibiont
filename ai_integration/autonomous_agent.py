@@ -3013,7 +3013,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
                     "max_tokens": max_tokens,
                     "temperature": 0.7,
                 },
-                timeout=aiohttp.ClientTimeout(total=25),
+                timeout=aiohttp.ClientTimeout(total=40),
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -4382,14 +4382,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         if _director_response is not None:
             # Агент ответил напрямую — ASI молчит (ответ уже в DB)
             if _director_response == "__agent_handled__":
+                # Агент уже сохранил ответ в DB — возвращаем пустую строку,
+                # фронтенд покажет его через /api/interactions sync
                 return {'response': '', 'tool_calls': [], 'tools_used': [], 'agent_info': None}
-            # Директор обработал — промежуточные Interaction уже сохранены
-            return {
-                'response': _director_response,
-                'tool_calls': [],
-                'tools_used': [],
-                'agent_info': None,  # ASI подводит итог
-            }
+            # Директор обработал — если пустой ответ (таймаут AI) — fallback
+            if not _director_response.strip():
+                logger.warning("[DIRECTOR] empty synthesis — falling through to process_request")
+                _director_response = None
+            else:
+                # Промежуточные Interaction уже сохранены
+                return {
+                    'response': _director_response,
+                    'tool_calls': [],
+                    'tools_used': [],
+                    'agent_info': None,  # ASI подводит итог
+                }
 
         response_text = await agent.process_request(
             message, user_id, context, db_session,
