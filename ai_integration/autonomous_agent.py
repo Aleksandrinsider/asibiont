@@ -4000,9 +4000,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         "- self — только для приветствий, прощаний, личных вопросов о тебе как ASI.\n"
         "- delegate — запрос выполнит ОДИН агент через свои интеграции.\n"
         "- multi_delegate — данные нужны от НЕСКОЛЬКИХ агентов НЕЗАВИСИМО (можно параллельно).\n"
-        "- chain — задача СЛОЖНАЯ или СТРАТЕГИЧЕСКАЯ: каждый агент строит на результате предыдущего. "
-        "Используй когда важен ПОРЯДОК: сначала исследование → потом план → потом действие. "
-        "Каждый следующий агент видит полный вывод всех предыдущих и ИСПОЛЬЗУЕТ его в своей работе.\n\n"
+        "- adaptive — ТОЛЬКО для явно сложных/стратегических задач (исследование+план+действие, анализ+продвижение и т.п.). "
+        "ASI выбирает ПЕРВОГО агента — затем после каждого результата решает КОГО вызвать следующим на основе реального вывода. "
+        "НЕ используй для простых вопросов и одиночных действий — только когда задача требует последовательной цепочки разных специалистов.\n\n"
         "⚡ Смотри на ИНТЕГРАЦИИ каждого агента (поле 'Может:'). Делегируй тому, чьи интеграции подходят под задачу.\n"
         "director_message — живое прямое обращение к агенту: '404, глянь RSS — что нового по теме X?' НЕ пиши 'ASI поручает'.\n\n"
         "Ответь ТОЛЬКО JSON без ```:\n"
@@ -4014,9 +4014,11 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         '{"action": "multi_delegate", "director_intro": "вступление ASI", '
         '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение к агенту"}, ...]}\n'
         "или\n"
-        '{"action": "chain", "director_intro": "вступление ASI в чат — что будем делать", '
-        '"steps": [{"agent_name": "точное имя", "agent_task": "задача шага 1 (без контекста предыдущих)", "director_message": "прямое обращение"}, '
-        '{"agent_name": "точное имя", "agent_task": "задача шага 2 — используй что нашёл предыдущий агент", "director_message": "прямое обращение"}, ...]}'
+        '{"action": "adaptive", "director_intro": "вступление ASI в чат — что будем делать", '
+        '"mission_brief": "цель миссии в 1 предложении", '
+        '"first_agent_name": "точное имя первого агента", '
+        '"first_agent_task": "задача первого агента", '
+        '"director_message": "прямое обращение к первому агенту"}'
     )
 
     decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=350)
@@ -4033,65 +4035,131 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
     # ASI сам отвечает с доступом ко всем инструментам (создание задач, поиск и т.д.)
-    if action == 'self' or (action not in ('delegate', 'multi_delegate', 'chain')):
+    if action == 'self' or (action not in ('delegate', 'multi_delegate', 'adaptive')):
         return None
 
-    # ── chain: последовательная цепочка агентов ───────────────────────────────
-    # Каждый следующий агент видит ПОЛНЫЙ вывод всех предыдущих и строит на его основе
-    if action == 'chain':
-        _chain_intro = decision.get('director_intro', '')
-        if _chain_intro:
-            _save_interaction_for_director(user_id, _chain_intro)
+    # ── adaptive: адаптивный роутинг — ASI выбирает следующего агента динамически ──
+    # После каждого результата ASI решает кого вызвать дальше, основываясь на реальном выводе
+    if action == 'adaptive':
+        _adp_intro = decision.get('director_intro', '')
+        if _adp_intro:
+            _save_interaction_for_director(user_id, _adp_intro)
             await asyncio.sleep(0.05)
 
-        _steps = decision.get('steps') or []
-        _chain_results: list = []   # [(name, task, result)]
+        _mission_brief = decision.get('mission_brief', user_message)
+        _adp_results: list = []   # [(name, task, result)]
 
-        for _step in _steps:
-            _ag = _find_agent(_step.get('agent_name', ''))
+        # Сохраняем mission brief в anchor-памяти (персистентно на 24ч)
+        try:
+            _save_agent_delegation_anchor(
+                user_db_id=user_db_id,
+                agent_id=0,
+                agent_name="__mission__",
+                task=user_message,
+                result_summary=_mission_brief,
+                cooldown_hours=24,
+            )
+        except Exception:
+            pass
+
+        # Первый агент задан в решении
+        _next_agent_name = decision.get('first_agent_name', '')
+        _next_agent_task = decision.get('first_agent_task') or user_message
+
+        MAX_ADAPTIVE_STEPS = 4
+        for _adp_step in range(MAX_ADAPTIVE_STEPS):
+            _ag = _find_agent(_next_agent_name)
             if not _ag:
-                continue
+                break
 
-            # Формируем контекст: профиль + история + ВСЕ предыдущие результаты цепочки
-            _chain_ctx_parts = []
+            # Накопленный контекст для агента
+            _adp_ctx_parts = []
             if _user_full_ctx:
-                _chain_ctx_parts.append(_user_full_ctx)
+                _adp_ctx_parts.append(_user_full_ctx)
             if _history_block.strip():
-                _chain_ctx_parts.append(_history_block.strip())
-            if _chain_results:
-                _prev_block = "РЕЗУЛЬТАТЫ ПРЕДЫДУЩИХ АГЕНТОВ В ЦЕПОЧКЕ:\n" + "\n\n".join(
-                    f"[{_n}]: {_r}" for _n, _t, _r in _chain_results
+                _adp_ctx_parts.append(_history_block.strip())
+            _adp_ctx_parts.append(f"МИССИЯ: {_mission_brief}")
+            if _adp_results:
+                _prev_block = "РЕЗУЛЬТАТЫ ПРЕДЫДУЩИХ АГЕНТОВ:\n" + "\n\n".join(
+                    f"[{_n}]: {_r}" for _n, _t, _r in _adp_results
                 )
-                _chain_ctx_parts.append(_prev_block)
-            _chain_ctx = '\n\n'.join(_chain_ctx_parts)
+                _adp_ctx_parts.append(_prev_block)
+            _adp_ctx = '\n\n'.join(_adp_ctx_parts)
 
-            # Задача агента — исходная, плюс указание опереться на предыдущих
-            _step_task = _step.get('agent_task') or user_message
-            if _chain_results:
-                _step_task = (
-                    f"{_step_task}\n\n"
-                    f"ВАЖНО: используй и развивай результаты предыдущих агентов из контекста. "
-                    f"Не повторяй то что они уже сделали — иди дальше."
-                )
+            # Добавляем инструкцию агенту — в конце сигнализировать что нужно дальше
+            _agent_task_with_signal = (
+                f"{_next_agent_task}\n\n"
+                + ("ВАЖНО: используй и развивай результаты предыдущих агентов из контекста. "
+                   "Не повторяй то что они уже сделали — иди дальше.\n\n" if _adp_results else "")
+                + "В конце своего ответа добавь строку: ПЕРЕДАЮ: [что ещё нужно проверить или кому передать задачу]"
+            )
 
-            _resp = await _run_agent_task(_ag, _step_task, extra_context=_chain_ctx)
-            _chain_results.append((_ag['name'], _step_task, _resp))
+            _resp = await _run_agent_task(_ag, _agent_task_with_signal, extra_context=_adp_ctx)
+            _adp_results.append((_ag['name'], _next_agent_task, _resp))
 
-        if not _chain_results:
+            # Роутинговый вызов: ASI решает кого вызвать следующим
+            _remaining_agents = [
+                a for a in _agents
+                if a.get('name') not in {n for n, _, _ in _adp_results}
+            ]
+            _remaining_block = "\n".join(
+                f"- {a['name']}: {a.get('description','')[:80]}" for a in _remaining_agents[:8]
+            ) if _remaining_agents else "(все агенты использованы)"
+
+            _results_so_far = "\n\n".join(
+                f"[{n}] задача: {t[:100]}\nрезультат: {r[:300]}" for n, t, r in _adp_results
+            )
+            _routing_prompt = (
+                f"Миссия: {_mission_brief}\n\n"
+                f"Запрос пользователя: «{user_message}»\n\n"
+                f"Агенты уже поработали:\n{_results_so_far}\n\n"
+                f"Сигнал последнего агента (что он рекомендует проверить дальше):\n"
+                f"{_resp[-300:] if _resp else '(нет сигнала)'}\n\n"
+                f"Доступные агенты (не задействованные):\n{_remaining_block}\n\n"
+                "Реши: миссия выполнена — или нужен ещё один агент?\n"
+                "Если выполнена → {\"action\": \"finalize\"}\n"
+                "Если нужен ещё агент → {\"action\": \"next\", \"agent_name\": \"точное имя\", "
+                "\"agent_task\": \"что сделать (1 предложение)\", \"director_message\": \"прямое обращение\"}\n"
+                "Ответь ТОЛЬКО JSON без ```."
+            )
+            _routing_raw = await _quick_ai_call_raw(
+                [{"role": "user", "content": _routing_prompt}], max_tokens=200
+            )
+            _rjm = re.search(r'```(?:json)?\s*([\s\S]*?)```', _routing_raw or '')
+            try:
+                _routing = _json.loads(_rjm.group(1) if _rjm else (_routing_raw or '{}'))
+            except Exception:
+                _routing = {}
+
+            if _routing.get('action') == 'finalize' or not _remaining_agents:
+                break
+
+            if _routing.get('action') == 'next':
+                _dm = _routing.get('director_message', '')
+                if _dm:
+                    _save_interaction_for_director(user_id, _dm)
+                    await asyncio.sleep(0.05)
+                _next_agent_name = _routing.get('agent_name', '')
+                _next_agent_task = _routing.get('agent_task') or user_message
+            else:
+                break
+
+        if not _adp_results:
             return None
 
-        # Финальный синтез ASI по всей цепочке
-        _chain_combined = "\n\n".join(f"{n}: {r}" for n, _, r in _chain_results)
-        _chain_final = await _quick_ai_call_raw([{
+        # Финальный синтез ASI
+        _adp_combined = "\n\n".join(f"{n}: {r}" for n, _, r in _adp_results)
+        _adp_final = await _quick_ai_call_raw([{
             "role": "user",
             "content": (
-                f"Пользователь попросил: «{user_message}»\n\n"
-                f"Агенты отработали по цепочке:\n\n{_chain_combined[:2000]}\n\n"
+                f"Миссия: {_mission_brief}\n"
+                f"Пользователь просил: «{user_message}»\n\n"
+                f"Команда агентов отработала:\n\n{_adp_combined[:2500]}\n\n"
                 "Подведи итог как ASI Biont — что в итоге сделано / найдено / запущено. "
                 "Живо, по существу, без шаблонов и markdown. Как в мессенджере."
             ),
         }], max_tokens=400)
-        return _chain_final or "Цепочка завершена. Смотри ответы агентов выше."
+        return _adp_final or "Миссия выполнена. Смотри ответы агентов выше."
 
     # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
     MAX_ROUNDS = 3
