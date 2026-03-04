@@ -3891,13 +3891,11 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     if _direct_agent:
         _agent_ctx = _history_block.strip()
         _resp = await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
-        all_results = [(_direct_agent['name'], user_message, _resp)]
-        combined = _resp
         final_response = await _quick_ai_call_raw([{
             "role": "user",
             "content": (
                 f"Пользователь обратился напрямую к {_direct_agent['name']}. "
-                f"Ответ агента:\n\n{combined[:1500]}\n\n"
+                f"Ответ агента:\n\n{_resp[:1500]}\n\n"
                 "Ответь пользователю от ASI Biont — живо, своими словами, без шаблонных фраз."
             ),
         }], max_tokens=400)
