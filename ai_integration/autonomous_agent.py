@@ -3770,6 +3770,31 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
     # Строим универсальный контекст пользователя (профиль + цели + команда с интеграциями)
     _user_full_ctx = _build_user_context_sync(user_db_id) if user_db_id else ''
 
+    # ── Загружаем последние 5 сообщений истории диалога ─────────────────────
+    _history_lines: list[str] = []
+    if user_db_id:
+        try:
+            from models import Interaction as _Itr
+            _hs = _Db()
+            try:
+                _recent = (
+                    _hs.query(_Itr)
+                    .filter(_Itr.user_id == user_db_id)
+                    .order_by(_Itr.id.desc())
+                    .limit(5)
+                    .all()
+                )
+                for _r in reversed(_recent):
+                    _role = 'Пользователь' if _r.message_type == 'user' else 'ASI'
+                    _txt = (_r.content or '').strip()[:200]
+                    if _txt:
+                        _history_lines.append(f"{_role}: {_txt}")
+            finally:
+                _hs.close()
+        except Exception:
+            pass
+    _history_block = ('\n\nПОСЛЕДНИЕ СООБЩЕНИЯ:\n' + '\n'.join(_history_lines)) if _history_lines else ''
+
     # ── Строим контекст агентов с якорной памятью ─────────────────────────────
     agents_context_lines = []
     agent_anchor_map: dict[str, list] = {}  # agent_name → anchors
@@ -3822,16 +3847,16 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         "role": "user",
         "content": (
             f"Ты — ASI Biont, директор офиса. Твоя команда агентов (у каждого указаны интеграции — что он реально умеет):\n{agents_block}\n\n"
-            f"Цели пользователя уже есть в контексте. Пользователь написал: «{user_message}»{_ctx_hint}\n\n"
-            "Варианты решения:\n"
-            "1. self — ответить самому как ASI (для разговора, советов, анализа без живых данных)\n"
-            "2. use_cache — ответить из кэша (агент работал недавно и результат подходит)\n"
-            "3. delegate — поручить ОДНОМУ агенту (нужны живые данные: почта, заказы, 1 RSS-лента)\n"
-            "4. multi_delegate — поручить НЕСКОЛЬКИМ агентам параллельно (нужны данные из разных источников: например RSS + почта + анализ)\n\n"
-            "ВАЖНО: Используй multi_delegate когда задача охватывает разные специализации агентов.\n"
-            "director_message в delegate/multi_delegate — это ПРЯМОЕ обращение к агенту в чате, как руководитель к сотруднику. Пиши живо: '404, глянь RSS — что нового по теме X?' НЕ пиши 'ASI поручает'.\n\n"
+            f"Пользователь написал: «{user_message}»{_ctx_hint}{_history_block}\n\n"
+            "ПРАВИЛО ВЫБОРА ДЕЙСТВИЯ:\n"
+            "- self — ТОЛЬКО для: приветствий, благодарностей ('спасибо', 'привет'), прощаний, вопросов о тебе как ASI, вопросов требующих создания задач/напоминаний. В ответе ВСЕГДА упоминай что именно агенты из команды могут помочь.\n"
+            "- use_cache — агент работал недавно (cooldown ещё идёт) И кэшированный результат НАПРЯМУЮ отвечает на вопрос.\n"
+            "- delegate — DEFAULT выбор для ЛЮБОГО запроса о новостях, почте, данных, анализе, мониторинге, контенте. Поручает ОДНОМУ подходящему агенту.\n"
+            "- multi_delegate — когда нужны данные из НЕСКОЛЬКИХ источников одновременно (RSS + почта, анализ + мониторинг).\n\n"
+            "⚡ ВАЖНО: Предпочитай delegate/multi_delegate даже если агент недавно работал — свежие данные лучше кэша. use_cache только если cooldown < 15 минут И вопрос тот же.\n"
+            "director_message — ПРЯМОЕ живое обращение к агенту: '404, глянь RSS — что нового по теме X?' НЕ пиши 'ASI поручает'.\n\n"
             "Ответь ТОЛЬКО JSON без ```:\n"
-            '{"action": "self"}\n'
+            '{"action": "self", "team_hint": "что из команды могло бы помочь (1 предложение)"}\n'
             "или\n"
             '{"action": "use_cache", "agent_name": "точное имя", '
             '"cache_note": "что использовать из кэша"}\n'
@@ -3842,7 +3867,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             '{"action": "multi_delegate", "director_intro": "вступительное сообщение ASI в чат", '
             '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение к агенту"}, ...]}'
         ),
-    }], max_tokens=300)
+    }], max_tokens=350)
 
     if not decision_raw:
         return None
@@ -3858,9 +3883,26 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     action = decision.get('action', 'self')
 
-    # ── self: ASI отвечает сам → обычный поток ────────────────────────────────
+    # ── self: ASI отвечает сам, но с контекстом команды ─────────────────────
     if action == 'self' or (action not in ('delegate', 'use_cache', 'multi_delegate')):
-        return None
+        # Если это запрос на создание задач/напоминаний — пусть process_request обработает
+        _tool_keywords = ('создай задачу', 'добавь задачу', 'напомни', 'поставь напоминание',
+                          'создай напоминание', 'удали задачу', 'покажи задачи', 'список задач')
+        if any(kw in (user_message or '').lower() for kw in _tool_keywords):
+            return None
+        # Для всех остальных случаев — ASI отвечает сам, но знает о команде
+        _team_hint = decision.get('team_hint', '')
+        _agents_short = ', '.join(a['name'] for a in _agents) if _agents else 'нет агентов'
+        _self_resp = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Ты — ASI Biont. В твоей команде: {_agents_short}.\n"
+                f"{_history_block.strip()}\n\nПользователь: {user_message}\n\n"
+                f"{'Команда могла бы помочь: ' + _team_hint + '. ' if _team_hint else ''}"
+                "Ответь развёрнуто. Если задача подходит кому-то из команды — предложи это естественно в ответе."
+            ),
+        }], max_tokens=600)
+        return _self_resp or None
 
     def _find_agent(name: str):
         if not name:
@@ -3945,7 +3987,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                     agent_name=ag['name'],
                     task=task,
                     result_summary=str(resp)[:400],
-                    cooldown_hours=2.0,
+                    cooldown_hours=0.5,
                 )
             agents_summary_parts.append(f"{ag['name']}: {str(resp)[:500]}")
 
@@ -3997,7 +4039,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             agent_name=_agent['name'],
             task=agent_task,
             result_summary=agent_response[:400],
-            cooldown_hours=2.0,
+            cooldown_hours=0.5,
         )
 
     # Шаг 5: ASI подводит итог
