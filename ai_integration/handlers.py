@@ -4612,6 +4612,15 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
     _frt_ap_users = session.query(User).filter(User.id.in_(_frt_ap_uids)).all()
     _frt_ap_user_by_id = {u.id: u for u in _frt_ap_users}
 
+    # Batch-load Goal objects for all partners (avoid N+1 in ПРИОРИТЕТ 4.5 loop)
+    _frt_goals_all = session.query(Goal).filter(
+        Goal.user_id.in_(_frt_ap_uids),
+        Goal.status.in_(['active', 'in_progress'])
+    ).all() if _frt_ap_uids else []
+    _frt_goals_by_uid: dict = {}
+    for _fg in _frt_goals_all:
+        _frt_goals_by_uid.setdefault(_fg.user_id, []).append(_fg)
+
     for partner in all_partners:
         relevance_score = 0
         match_reasons = []
@@ -4655,12 +4664,9 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
                 relevance_score += len(goal_match) * 6  # Цели важны
                 match_reasons.append(f"{'goals' if lang == 'en' else 'цели'}: {', '.join(list(goal_match)[:2])}")
         
-        # ПРИОРИТЕТ 4.5: Структурированные цели (Goal table)
+        # ПРИОРИТЕТ 4.5: Структурированные цели (Goal table, из batch-карты)
         try:
-            partner_goals_db = session.query(Goal).filter(
-                Goal.user_id == partner.user_id,
-                Goal.status.in_(['active', 'in_progress'])
-            ).all()
+            partner_goals_db = _frt_goals_by_uid.get(partner.user_id, [])
             if partner_goals_db:
                 for pg in partner_goals_db:
                     goal_text = ((pg.title or '') + ' ' + (pg.description or '') + ' ' + (pg.category or '')).lower()
@@ -8413,6 +8419,18 @@ def get_message_status(
         else:
             _sent_recipient_by_id = {}
 
+        # Pre-fetch all reply messages from recipients (batch, avoid N+1 per sent msg)
+        _unreplied_rids = list({m.recipient_id for m in messages if m.status != 'replied'})
+        _reply_msgs_all = session.query(UserMessage).filter(
+            UserMessage.sender_id.in_(_unreplied_rids),
+            UserMessage.recipient_id == user.id,
+            UserMessage.intent == 'reply'
+        ).order_by(UserMessage.created_at.asc()).all() if _unreplied_rids else []
+        # Index: sender_id → list of reply messages
+        _reply_msgs_by_sender: dict = {}
+        for _rm in _reply_msgs_all:
+            _reply_msgs_by_sender.setdefault(_rm.sender_id, []).append(_rm)
+
         result_lines = []
         for msg in messages:
             recipient = _sent_recipient_by_id.get(msg.recipient_id)
@@ -8443,14 +8461,14 @@ def get_message_status(
             if msg.status == 'replied' and msg.reply_text:
                 line += f"\n  Ответ: {msg.reply_text[:100]}{'...' if len(msg.reply_text) > 100 else ''}"
             
-            # Проверяем ответные сообщения (reply intent)
+            # Проверяем ответные сообщения (reply intent) — без N+1
             if msg.status != 'replied':
-                reply_msg = session.query(UserMessage).filter(
-                    UserMessage.sender_id == msg.recipient_id,
-                    UserMessage.recipient_id == user.id,
-                    UserMessage.intent == 'reply',
-                    UserMessage.created_at > msg.created_at
-                ).first()
+                # Find earliest reply from this recipient after msg.created_at
+                _candidate_replies = _reply_msgs_by_sender.get(msg.recipient_id, [])
+                reply_msg = next(
+                    (_r for _r in _candidate_replies if _r.created_at > msg.created_at),
+                    None
+                )
                 if reply_msg:
                     line += f"\n  💬 Ответ: {reply_msg.message_text[:100]}{'...' if len(reply_msg.message_text) > 100 else ''}"
                     msg.status = 'replied'
