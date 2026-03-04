@@ -147,6 +147,10 @@ BATCH_GROUPS = {
     'integration_alert': 'integration',  # Gmail/Ozon/RSS/любые скрипты
     # Офисный координатор (Living Office Engine)
     'agent_office_update': 'integration',  # АСИ назначил агенту задачу по целям
+    # Делегирование (результаты от директорского агента)
+    'agent_delegation': 'office',          # Итог делегирования субагенту
+    # Кастомные якоря из UserAgent.custom_anchors
+    'custom_anchor': 'integration',        # Пользовательский триггер агента
 }
 
 
@@ -778,6 +782,9 @@ class AnchorEngine:
 
         # --- НЕУДАЧНЫЕ ПЛАТЕЖИ ---
         anchors.extend(self._scan_payment_failed(user, session, now_utc))
+
+        # --- КАСТОМНЫЕ ЯКОРЯ АГЕНТОВ (UserAgent.custom_anchors) ---
+        anchors.extend(self._scan_custom_anchors(user, session, user_tz, user_now, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         anchors = await self._enrich_anchors_with_ddg(anchors, profile)
@@ -4862,6 +4869,95 @@ class AnchorEngine:
             ))
         except Exception as e:
             logger.debug(f'[ANCHOR] payment_failed scan error: {e}')
+        return anchors
+
+    def _scan_custom_anchors(self, user, session, user_tz, user_now, now_utc) -> list:
+        """Сканирует UserAgent.custom_anchors — создаёт якоря по расписанию/триггерам,
+        заданным автором агента.
+
+        Формат каждого элемента custom_anchors (JSON array):
+        {
+            "id": "daily-report",          // уникальный id (для dedup)
+            "topic": "Ежедневный отчёт",   // тема якоря
+            "anchor_type": "custom_anchor",// тип (если не задан — custom_anchor)
+            "priority": "MEDIUM",          // CRITICAL / HIGH / MEDIUM / LOW
+            "schedule_time": "09:00",      // необязательно: время дня HH:MM (окно ±30 мин)
+            "cooldown_hours": 20,          // необязательно (default 20)
+            "data": {}                     // необязательно: дополнительные поля в anchor.data
+        }
+        """
+        anchors = []
+        try:
+            from models import UserAgent
+            agents = session.query(UserAgent).filter(
+                UserAgent.author_id == user.id,
+                UserAgent.status == 'active',
+                UserAgent.custom_anchors.isnot(None),
+            ).all()
+
+            for agent in agents:
+                try:
+                    custom_list = json.loads(agent.custom_anchors)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if not isinstance(custom_list, list):
+                    continue
+
+                for entry in custom_list:
+                    if not isinstance(entry, dict):
+                        continue
+
+                    entry_id = str(entry.get('id') or entry.get('topic') or 'default')
+                    topic = entry.get('topic') or f'Агент {agent.name}: кастомный якорь'
+                    anchor_type = entry.get('anchor_type') or 'custom_anchor'
+                    priority_str = str(entry.get('priority', 'MEDIUM')).upper()
+                    cooldown_h = float(entry.get('cooldown_hours', 20))
+                    schedule_time = entry.get('schedule_time')  # "HH:MM"
+
+                    # Проверяем расписание: окно ±29 мин от schedule_time
+                    if schedule_time:
+                        try:
+                            sched_h, sched_m = map(int, schedule_time.split(':'))
+                            target_minutes = sched_h * 60 + sched_m
+                            now_minutes = user_now.hour * 60 + user_now.minute
+                            diff = abs(now_minutes - target_minutes)
+                            # Учитываем переход через полночь
+                            diff = min(diff, 24 * 60 - diff)
+                            if diff > 29:
+                                continue  # ещё не время (или уже прошло)
+                        except (ValueError, AttributeError):
+                            pass  # без расписания — всегда активен
+
+                    priority_map = {
+                        'CRITICAL': AnchorPriority.CRITICAL,
+                        'HIGH': AnchorPriority.HIGH,
+                        'MEDIUM': AnchorPriority.MEDIUM,
+                        'LOW': AnchorPriority.LOW,
+                    }
+                    priority = priority_map.get(priority_str, AnchorPriority.MEDIUM)
+
+                    source = f'agent:{agent.id}:custom:{entry_id}'
+
+                    extra_data = {'agent_name': agent.name, 'agent_id': agent.id, 'entry_id': entry_id}
+                    if isinstance(entry.get('data'), dict):
+                        extra_data.update(entry['data'])
+
+                    bg = BATCH_GROUPS.get(anchor_type, 'integration')
+
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type=anchor_type,
+                        source=source,
+                        topic=topic,
+                        priority=priority,
+                        data=json.dumps(extra_data, ensure_ascii=False),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(hours=cooldown_h * 1.5),
+                        cooldown_hours=cooldown_h,
+                        batch_group=bg,
+                    ))
+        except Exception as e:
+            logger.debug(f'[ANCHOR] custom_anchors scan error: {e}')
         return anchors
 
     # CLEANUP
