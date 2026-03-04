@@ -3043,7 +3043,7 @@ else:
             print('Новых писем за неделю нет.')
         else:
             print('Писем за неделю: ' + str(len(ids)))
-            for eid in reversed(ids[-5:]):
+            for eid in reversed(ids[-20:]):
                 try:
                     _, md = mail.fetch(eid, '(RFC822)')
                     msg = message_from_bytes(md[0][1])
@@ -3139,7 +3139,7 @@ else:
             print('Новых писем за неделю нет.')
         else:
             print('Писем за неделю: ' + str(len(ids)))
-            for eid in reversed(ids[-5:]):
+            for eid in reversed(ids[-20:]):
                 try:
                     _, md = mail.fetch(eid, '(RFC822)')
                     msg = message_from_bytes(md[0][1])
@@ -3235,7 +3235,7 @@ else:
             print('Новых писем за неделю нет.')
         else:
             print('Писем за неделю: ' + str(len(ids)))
-            for eid in reversed(ids[-5:]):
+            for eid in reversed(ids[-20:]):
                 try:
                     _, md = mail.fetch(eid, '(RFC822)')
                     msg = message_from_bytes(md[0][1])

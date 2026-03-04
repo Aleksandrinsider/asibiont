@@ -9765,7 +9765,7 @@ try:
     if not email_ids:
         print("Новых писем нет.")
     else:
-        for eid in reversed(email_ids[-5:]):
+        for eid in reversed(email_ids[-20:]):
             try:
                 _, msg_data = mail.fetch(eid, "(RFC822)")
                 msg = message_from_bytes(msg_data[0][1])
