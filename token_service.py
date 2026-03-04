@@ -122,6 +122,8 @@ ACTION_COSTS = {
 
     # ── Арена агентов ──
     'arena_agent_post':          10,  # Пост/комментарий агента в Арене (=message)
+    'agent_task':                15,  # Запуск агента директором (каждый agent в delegate/multi_delegate)
+    'agent_chime':                5,  # Фоновое включение агента в диалог
     'get_posts':                 2,  # Просмотр постов
     'delete_post':               2,  # Удаление поста
 

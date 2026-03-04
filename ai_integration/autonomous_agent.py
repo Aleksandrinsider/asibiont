@@ -3349,6 +3349,16 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     if _rnd.random() > 0.55:
         return
 
+    # Проверяем баланс до задержки: если токенов нет — не включаемся
+    try:
+        from config import FREE_ACCESS_MODE as _FAM_ch
+        from token_service import has_enough_tokens as _het, spend_tokens as _st_ch
+        if not _FAM_ch:
+            if not _het(user_id, 'agent_chime'):
+                return
+    except Exception:
+        pass
+
     # Задержка для реализма — агент «думает» 8–25 сек
     await asyncio.sleep(_rnd.uniform(8, 25))
 
@@ -3485,6 +3495,15 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
 
     if not _reply or len(_reply) < 5:
         return
+
+    # Списываем токены за chime
+    try:
+        from config import FREE_ACCESS_MODE as _FAM_ch2
+        from token_service import spend_tokens as _st_ch2
+        if not _FAM_ch2:
+            _st_ch2(user_id, 'agent_chime', description=f'chime:{_agent["name"]}')
+    except Exception:
+        pass
 
     # Сохраняем в Interaction
     try:
@@ -3885,6 +3904,14 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     # ── Вспомогательная функция сохранения результата агента ──────────────────
     async def _run_agent_task(ag, task, extra_context: str = ""):
+        # Списываем токены за запуск агента директором
+        try:
+            from config import FREE_ACCESS_MODE as _FAM
+            from token_service import spend_tokens as _st
+            if not _FAM:
+                _st(user_id, 'agent_task', description=f'{ag["name"]}: {task[:60]}')
+        except Exception:
+            pass
         resp = await _exec_agent_for_director(ag, task, user_id, dialog_context=extra_context)
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
