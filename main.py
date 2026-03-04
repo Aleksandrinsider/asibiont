@@ -71,11 +71,11 @@ warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
 
 
 def normalize_city(city):
-    """Normalize city names for comparison"""
+    """Normalize city names for comparison (bidirectional RU ↔ EN)"""
     if not city:
         return None
     city = city.lower().strip()
-    # Маппинг русских названий на английские
+    # RU → EN mapping
     city_map = {
         'москва': 'moscow',
         'санкт-петербург': 'saint petersburg',
@@ -83,7 +83,35 @@ def normalize_city(city):
         'спб': 'saint petersburg',
         'екатеринбург': 'yekaterinburg',
         'новосибирск': 'novosibirsk',
-        'казань': 'kazan'
+        'казань': 'kazan',
+        'пермь': 'perm',
+        'нижний новгород': 'nizhny novgorod',
+        'самара': 'samara',
+        'омск': 'omsk',
+        'красноярск': 'krasnoyarsk',
+        'уфа': 'ufa',
+        'ростов-на-дону': 'rostov-on-don',
+        'челябинск': 'chelyabinsk',
+        'воронеж': 'voronezh',
+        'краснодар': 'krasnodar',
+        'саратов': 'saratov',
+        'тюмень': 'tyumen',
+        'тольятти': 'togliatti',
+        'ижевск': 'izhevsk',
+        'барнаул': 'barnaul',
+        'томск': 'tomsk',
+        'рязань': 'ryazan',
+        'тула': 'tula',
+        'ярославль': 'yaroslavl',
+        'иркутск': 'irkutsk',
+        'волгоград': 'volgograd',
+        'хабаровск': 'khabarovsk',
+        'владивосток': 'vladivostok',
+        'астрахань': 'astrakhan',
+        'сочи': 'sochi',
+        'белгород': 'belgorod',
+        'киров': 'kirov',
+        'липецк': 'lipetsk',
     }
     return city_map.get(city, city)
 

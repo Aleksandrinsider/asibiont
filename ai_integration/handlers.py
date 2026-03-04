@@ -3270,9 +3270,20 @@ def get_partners_list(user_id=None, session=None):
                         logger.info(f"[PARTNERS] @{partner_user.username} has exact same active tasks: {exact_task_matches}")
     
     # Пересортируем ВСЕХ партнеров: (1) релевантность, (2) город, (3) рейтинг
+    def _same_city_sort(p):
+        """Cross-language city match: сравниваем все варианты названий (EN/RU/raw)."""
+        if not _u_cities:
+            return False
+        p_vars = {v for v in (
+            (getattr(p, 'city', '') or '').strip().lower(),
+            (getattr(p, 'city_normalized', '') or '').strip().lower(),
+            (getattr(p, 'city_normalized_ru', '') or '').strip().lower(),
+        ) if v}
+        return bool(_u_cities & p_vars)
+
     partners.sort(key=lambda p: (
         -p.task_relevance_score,  # релевантность
-        0 if (user_city and (p.city.lower() if p.city else None) == user_city) else 1,  # город
+        0 if _same_city_sort(p) else 1,  # город (EN/RU/raw all compared)
         -(p.average_rating or 0)  # рейтинг
     ))
     
@@ -7879,9 +7890,19 @@ async def find_and_message_relevant_users(
                         score += 2
                         match_reasons.append(f"цели: {kw}")
             
-            # Поиск по городу
-            if match_by in ('city', 'all') and profile.city and sender_profile:
-                if sender_profile.city and profile.city.lower() == sender_profile.city.lower():
+            # Поиск по городу (cross-language: EN/RU/raw варианты)
+            if match_by in ('city', 'all') and sender_profile:
+                _sp_cvars = {v for v in (
+                    (getattr(sender_profile, 'city', '') or '').strip().lower(),
+                    (getattr(sender_profile, 'city_normalized', '') or '').strip().lower(),
+                    (getattr(sender_profile, 'city_normalized_ru', '') or '').strip().lower(),
+                ) if v}
+                _p_cvars = {v for v in (
+                    (getattr(profile, 'city', '') or '').strip().lower(),
+                    (getattr(profile, 'city_normalized', '') or '').strip().lower(),
+                    (getattr(profile, 'city_normalized_ru', '') or '').strip().lower(),
+                ) if v}
+                if _sp_cvars and _p_cvars and _sp_cvars & _p_cvars:
                     score += 1
                     match_reasons.append(f"город: {profile.city}")
             
