@@ -3171,7 +3171,53 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
     return sorted(found)
 
 
-def _build_user_context_sync(user_db_id: int) -> str:
+def _infer_capabilities_from_role(job_title: str, specialization: str, description: str) -> list[str]:
+    """Derives agent capabilities from role/description when no explicit integrations configured."""
+    caps: set[str] = set()
+    combined = f"{job_title} {specialization} {description}".lower()
+
+    _role_map: list[tuple[tuple, list]] = [
+        (('маркетолог', 'marketing', 'smm', 'реклам', 'продвиж', 'promo'),
+         ['рекламные тексты', 'стратегия продвижения', 'поиск площадок и каналов',
+          'контент-план', 'анализ аудитории', 'SEO/SMM советы']),
+        (('аналитик', 'analyst', 'analytic', 'data', 'статист', 'исследован'),
+         ['анализ данных', 'исследование рынка', 'отчёты и инсайты',
+          'сравнительный анализ', 'выявление паттернов']),
+        (('разработчик', 'developer', 'программист', 'engineer', 'инженер', 'backend', 'frontend', 'fullstack'),
+         ['написание кода', 'техническая архитектура', 'код-ревью',
+          'отладка', 'API-интеграции']),
+        (('копирайтер', 'copywriter', 'контент', 'content', 'журналист', 'редактор', 'писател'),
+         ['написание текстов', 'редактура и корректура', 'сторителлинг',
+          'сценарии и скрипты', 'посты для соцсетей']),
+        (('дизайнер', 'designer', 'ui', 'ux', 'визуал', 'creative'),
+         ['UI/UX рекомендации', 'визуальная концепция', 'брендинг советы']),
+        (('менеджер', 'manager', 'product', 'проект', 'project', 'pm', 'руководител'),
+         ['планирование проекта', 'декомпозиция задач', 'управление командой',
+          'дорожная карта', 'OKR / KPI']),
+        (('продаж', 'sales', 'account', 'коммерц', 'бизнес-развит'),
+         ['поиск клиентов', 'скрипты продаж', 'стратегия привлечения',
+          'работа с возражениями', 'анализ конкурентов']),
+        (('hr', 'рекрутер', 'персонал', 'talent'),
+         ['поиск кандидатов', 'оценка резюме', 'онбординг']),
+        (('финанс', 'бухгалтер', 'finance', 'accounting', 'cfo', 'эконом'),
+         ['финансовый анализ', 'бюджетирование', 'P&L оценка']),
+        (('юрист', 'legal', 'law', 'право', 'договор'),
+         ['юридический анализ', 'составление договоров', 'оценка рисков']),
+        (('стратег', 'strateg', 'консульт', 'consult', 'advisor', 'советник'),
+         ['стратегическое планирование', 'бизнес-анализ', 'рекомендации и план действий']),
+    ]
+
+    for keywords_tuple, abilities in _role_map:
+        for kw in keywords_tuple:
+            if kw in combined:
+                caps.update(abilities)
+                break
+
+    # Базовые AI-возможности есть у ЛЮБОГО агента без интеграций
+    caps.update(['исследование и анализ', 'написание и редактура текстов',
+                 'составление списков и планов', 'генерация идей'])
+    return sorted(caps)
+(user_db_id: int) -> str:
     """Строит универсальный контекст пользователя для инжекта в промпты агентов.
     Включает: профиль (кто он), цели (что хочет), агенты (его команда), email-контакты.
     """
@@ -3903,10 +3949,18 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             )
         except Exception:
             pass
-        _intg_str = f"\n  Может: {', '.join(_intg[:6])}" if _intg else ''
+        # Если нет технических интеграций — выводим возможности из роли/специализации
+        if not _intg:
+            _intg = _infer_capabilities_from_role(
+                a.get('job_title') or '',
+                a.get('specialization') or '',
+                a.get('description') or '',
+            )
+        _intg_str = f"\n  Может: {', '.join(_intg[:8])}"
 
         _base = (
-            f"- {a['name']} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:200]}"
+            f"- {a['name']} [{a.get('job_title', '')}] ({a.get('specialization', 'агент')}): "
+            f"{(a.get('description') or '')[:300]}"
             f"{_intg_str}"
         )
 
