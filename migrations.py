@@ -469,6 +469,14 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] search_scope add skipped: {e}")
+        if 'last_office_run_at' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN last_office_run_at TIMESTAMP"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.last_office_run_at")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] last_office_run_at add skipped: {e}")
 
 
 def _migrate_arena(session, inspector):

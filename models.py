@@ -881,6 +881,10 @@ class UserAgent(Base):
     rating_sum = Column(Integer, default=0)
     rating_count = Column(Integer, default=0)
 
+    # Время последнего запуска python_code в фоновом OfficeEngine — персистится в БД,
+    # чтобы после рестарта не перезапускать скрипты раньше интервала.
+    last_office_run_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
     updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
                         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))

@@ -191,6 +191,23 @@ class OfficeEngine:
         if not py_code:
             return
 
+        # Персистентный cooldown: пропускаем агента если он запускался < MONITOR_INTERVAL_SEC[0] назад.
+        # Защищает от лавины отчётов сразу после рестарта деплоя.
+        if agent.last_office_run_at is not None:
+            try:
+                _last = agent.last_office_run_at
+                if _last.tzinfo is None:
+                    _last = _last.replace(tzinfo=timezone.utc)
+                _elapsed = (datetime.now(timezone.utc) - _last).total_seconds()
+                if _elapsed < MONITOR_INTERVAL_SEC[0]:
+                    logger.debug(
+                        "[OFFICE-L1] [%s] skipped (ran %.0f min ago, cooldown %.0f min)",
+                        agent.name, _elapsed / 60, MONITOR_INTERVAL_SEC[0] / 60,
+                    )
+                    return
+            except Exception:
+                pass
+
         async with self._script_sem:
             try:
                 from ai_integration.autonomous_agent import _wrap_agent_code, spawn_integration_anchors
@@ -201,6 +218,24 @@ class OfficeEngine:
                 stdout, stderr = await loop.run_in_executor(
                     None, _exec_agent_script_sync, wrapped, agent_env
                 )
+
+                # Сразу фиксируем время запуска в БД — даже если stdout пустой.
+                # Это предотвращает лавину повторных запусков после рестарта деплоя.
+                def _update_last_run(agent_id: int):
+                    try:
+                        from models import Session as _Db, UserAgent as _UA
+                        _s = _Db()
+                        try:
+                            _s.query(_UA).filter_by(id=agent_id).update(
+                                {'last_office_run_at': datetime.now(timezone.utc)},
+                                synchronize_session=False,
+                            )
+                            _s.commit()
+                        finally:
+                            _s.close()
+                    except Exception as _ue:
+                        logger.debug("[OFFICE-L1] last_office_run_at update error: %s", _ue)
+                await loop.run_in_executor(None, _update_last_run, agent.id)
             except Exception as e:
                 logger.debug("[OFFICE-L1] [%s] exec error: %s", agent.name, e)
                 return

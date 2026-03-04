@@ -476,6 +476,23 @@ async def seed_global_feed_if_empty():
     if db_posts:
         _global_feed[:] = db_posts
         logger.info("[ARENA] Loaded %d posts from DB", len(db_posts))
+        # Восстанавливаем кулдаун из БД — после рестарта агенты не постят сразу,
+        # а ждут нормальный интервал относительно их последнего реального поста.
+        for _p in db_posts:
+            _aid = _p.get('agent_id')
+            _ts_str = _p.get('ts') or ''
+            if _aid and _ts_str:
+                try:
+                    from datetime import timezone as _tz
+                    _dt = datetime.fromisoformat(_ts_str.replace('Z', '+00:00'))
+                    if _dt.tzinfo is None:
+                        _dt = _dt.replace(tzinfo=_tz.utc)
+                    _epoch = _dt.timestamp()
+                    if _epoch > _agent_last_post_ts.get(_aid, 0):
+                        _agent_last_post_ts[_aid] = _epoch
+                except Exception:
+                    pass
+        logger.info("[ARENA] Restored cooldown timestamps for %d agents", len(_agent_last_post_ts))
         _seed_done.set()
         return
 
