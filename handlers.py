@@ -1138,9 +1138,13 @@ async def process_other_message(user_id, message, state):
                     ).limit(5).all()
                     
                     if nearby_profiles:
+                        # Pre-fetch partner users (batch)
+                        _nb_uids = [p.user_id for p in nearby_profiles]
+                        _nb_users = session.query(User).filter(User.id.in_(_nb_uids)).all()
+                        _nb_user_by_id = {u.id: u for u in _nb_users}
                         nearby_lines = []
                         for p in nearby_profiles:
-                            partner_user = session.query(User).filter_by(id=p.user_id).first()
+                            partner_user = _nb_user_by_id.get(p.user_id)
                             if partner_user and partner_user.username:
                                 info = []
                                 if p.skills:
@@ -1234,8 +1238,12 @@ def get_delegation_report(user_id, session=None):
         if delegated_to_user:
             header_to = "📥 TASKS DELEGATED TO YOU:" if lang == 'en' else "📥 ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:"
             report.append(header_to)
+            # Pre-fetch delegators (batch)
+            _h_delegator_ids = list({t.delegated_by for t in delegated_to_user[:10] if t.delegated_by})
+            _h_delegators = session.query(User).filter(User.id.in_(_h_delegator_ids)).all()
+            _h_delegator_by_id = {u.id: u for u in _h_delegators}
             for task in delegated_to_user[:10]:
-                delegator = session.query(User).filter_by(id=task.delegated_by).first()
+                delegator = _h_delegator_by_id.get(task.delegated_by)
                 unknown_lbl = "unknown" if lang == 'en' else "неизвестный"
                 delegator_name = f"@{delegator.username}" if delegator and delegator.username else unknown_lbl
 

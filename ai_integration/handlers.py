@@ -2008,8 +2008,12 @@ def get_delegation_progress(user_id, session=None):
 
         if delegated_to_user:
             report.append("📥 ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:")
+            # Pre-fetch delegators (batch)
+            _dt_delegator_ids = list({t.delegated_by for t in delegated_to_user[:10] if t.delegated_by})
+            _dt_delegators = session.query(User).filter(User.id.in_(_dt_delegator_ids)).all()
+            _dt_delegator_by_id = {u.id: u for u in _dt_delegators}
             for task in delegated_to_user[:10]:
-                delegator = session.query(User).filter_by(id=task.delegated_by).first()
+                delegator = _dt_delegator_by_id.get(task.delegated_by)
                 delegator_name = f"@{delegator.username}" if delegator and delegator.username else "неизвестный"
 
                 status_emoji = {
@@ -2618,8 +2622,12 @@ def get_partners_list(user_id=None, session=None):
             )
             .all()
         )
+        # Pre-fetch delegated task owners (batch)
+        _dtm_task_user_ids = list({t.user_id for t in delegated_to_me if t.user_id})
+        _dtm_task_users = session.query(User).filter(User.id.in_(_dtm_task_user_ids)).all() if _dtm_task_user_ids else []
+        _dtm_task_user_by_id = {u.id: u for u in _dtm_task_users}
         for task in delegated_to_me:
-            delegated_user = session.query(User).filter_by(id=task.user_id).first()
+            delegated_user = _dtm_task_user_by_id.get(task.user_id)
             if delegated_user:
                 delegated_usernames.add(delegated_user.username.lower() if delegated_user.username else "")
     else:
@@ -8263,9 +8271,17 @@ def get_incoming_messages(
                 return "📭 Нет новых сообщений"
             return "📭 Нет сообщений"
         
+        # Pre-fetch senders (batch)
+        if messages:
+            _inbox_sids = list({m.sender_id for m in messages})
+            _inbox_senders = session.query(User).filter(User.id.in_(_inbox_sids)).all()
+            _inbox_sender_by_id = {u.id: u for u in _inbox_senders}
+        else:
+            _inbox_sender_by_id = {}
+
         result_lines = []
         for msg in messages:
-            sender = session.query(User).filter_by(id=msg.sender_id).first()
+            sender = _inbox_sender_by_id.get(msg.sender_id)
             sender_name = f"@{sender.username}" if sender and sender.username else "Пользователь"
             
             intent_labels = {
@@ -8344,9 +8360,17 @@ def get_message_status(
         if not messages:
             return "📭 Нет отправленных сообщений"
         
+        # Pre-fetch recipients (batch)
+        if messages:
+            _sent_rids = list({m.recipient_id for m in messages})
+            _sent_recipients = session.query(User).filter(User.id.in_(_sent_rids)).all()
+            _sent_recipient_by_id = {u.id: u for u in _sent_recipients}
+        else:
+            _sent_recipient_by_id = {}
+
         result_lines = []
         for msg in messages:
-            recipient = session.query(User).filter_by(id=msg.recipient_id).first()
+            recipient = _sent_recipient_by_id.get(msg.recipient_id)
             recipient_name = f"@{recipient.username}" if recipient and recipient.username else "Пользователь"
             
             time_ago = ""
