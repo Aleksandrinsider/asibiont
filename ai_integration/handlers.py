@@ -2886,13 +2886,21 @@ def get_partners_list(user_id=None, session=None):
         # Все пользователи видят всех (токенная модель, без тарифных ограничений)
         
         if user_profile.favorite_contacts:
-            favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
+            try:
+                _fav_raw = json.loads(user_profile.favorite_contacts)
+                favorite_usernames = [str(u).strip().lower().replace('@', '') for u in _fav_raw]
+            except (json.JSONDecodeError, TypeError):
+                favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
             if profile_user.username and profile_user.username.replace('@', '').lower() in favorite_usernames:
                 has_match = True  # Принудительно показываем избранных
                 match_reasons.append("favorite contact")
                 
         if user_profile.blocked_contacts:
-            blocked_usernames = [u.strip().lower().replace('@', '') for u in user_profile.blocked_contacts.split(',')]
+            try:
+                _blk_raw = json.loads(user_profile.blocked_contacts)
+                blocked_usernames = [str(u).strip().lower().replace('@', '') for u in _blk_raw]
+            except (json.JSONDecodeError, TypeError):
+                blocked_usernames = [u.strip().lower().replace('@', '') for u in user_profile.blocked_contacts.split(',')]
             if profile_user.username and profile_user.username.replace('@', '').lower() in blocked_usernames:
                 has_match = True  # Принудительно показываем заблокированных
                 match_reasons.append("blocked contact")
