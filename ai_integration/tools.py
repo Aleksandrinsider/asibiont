@@ -810,123 +810,15 @@ TOOLS = [
             }
         }
     },
-    # ═════ EMAIL OUTREACH — автономные email-кампании (любая цель) ═════
-    {
-        "type": "function",
-        "function": {
-            "name": "start_email_campaign",
-            "description": "📧 Запустить автономную email-кампанию: агент ищет контакты, пишет персонализированные письма, отвечает на входящие. Любая цель: клиенты, тестировщики, партнёры, нетворкинг.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Название кампании. Примеры: 'Поиск тестировщиков для бета-теста', 'Приглашение на митап', 'Нетворкинг с разработчиками'"
-                    },
-                    "goal": {
-                        "type": "string",
-                        "description": "Подробная цель — что хотим добиться. Примеры: 'Найти 10 бета-тестеров для AI-приложения', 'Пригласить 20 спикеров на конференцию', 'Найти партнёров для совместного проекта'"
-                    },
-                    "target_audience": {
-                        "type": "string",
-                        "description": "Описание целевой аудитории — кого ищем. Примеры: 'Тестировщики и ранние пользователи AI-продуктов', 'Фрилансеры-дизайнеры', 'Инди-разработчики Telegram-ботов'"
-                    },
-                    "offer": {
-                        "type": "string",
-                        "description": "Что предлагаем — может быть продукт, возможность, приглашение, идея. Примеры: 'Бесплатный ранний доступ к AI-ассистенту', 'Участие в хакатоне с призами', 'Коллаборация над open-source проектом'"
-                    },
-                    "sender_name": {
-                        "type": "string",
-                        "description": "Имя отправителя (как подписываться в письмах). По умолчанию — имя пользователя."
-                    },
-                    "sender_email": {
-                        "type": "string",
-                        "description": "Email отправителя (должен быть верифицирован в Resend). По умолчанию: outreach@asibiont.com"
-                    },
-                    "tone": {
-                        "type": "string",
-                        "description": "Тон писем",
-                        "enum": ["professional", "friendly", "formal"],
-                        "default": "professional"
-                    },
-                    "max_emails": {
-                        "type": "integer",
-                        "description": "Макс. количество писем в кампании. 0 = безлимит. По умолчанию 0 (безлимит).",
-                        "default": 0
-                    },
-                    "daily_limit": {
-                        "type": "integer",
-                        "description": "Макс. писем в день. По умолчанию 50 — это максимум, ВСЕГДА ставь 50 если пользователь не указал другое.",
-                        "default": 50
-                    }
-                },
-                "required": ["name", "goal", "target_audience", "offer"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "update_email_campaign",
-            "description": "✏️ Обновить параметры существующей email-кампании. Используй вместо создания новой.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "campaign_id": {
-                        "type": "integer",
-                        "description": "ID кампании для обновления. Если не указан — обновляется последняя активная."
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Новое название кампании"
-                    },
-                    "goal": {
-                        "type": "string",
-                        "description": "Новая цель кампании"
-                    },
-                    "target_audience": {
-                        "type": "string",
-                        "description": "Новое описание целевой аудитории"
-                    },
-                    "offer": {
-                        "type": "string",
-                        "description": "Новое предложение"
-                    },
-                    "tone": {
-                        "type": "string",
-                        "description": "Тон писем",
-                        "enum": ["professional", "friendly", "formal"]
-                    },
-                    "max_emails": {
-                        "type": "integer",
-                        "description": "Новый лимит писем всего (0 = безлимитно)"
-                    },
-                    "daily_limit": {
-                        "type": "integer",
-                        "description": "Новый дневной лимит писем (1-50)"
-                    },
-                    "status": {
-                        "type": "string",
-                        "description": "Новый статус кампании",
-                        "enum": ["active", "paused", "completed", "cancelled"]
-                    }
-                },
-                "required": []
-            }
-        }
-    },
+    # ═════ EMAIL — отправка писем конкретному адресату ═════
     {
         "type": "function",
         "function": {
             "name": "send_outreach_email",
-            "description": "📤 Отправить персонализированный email получателю в рамках кампании.",
+            "description": "📤 Отправить персонализированное email конкретному адресату. Используй для outreach: пиши первое письмо конкретному человеку с персонализированным текстом.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "campaign_id": {
-                        "type": "integer",
-                        "description": "ID кампании (если не указан, берётся последняя активная)"
-                    },
                     "recipient_email": {
                         "type": "string",
                         "description": "Email получателя"
@@ -941,7 +833,7 @@ TOOLS = [
                     },
                     "recipient_context": {
                         "type": "string",
-                        "description": "Почему этот контакт релевантен кампании. Примеры: 'Автор Telegram-бота с 5k пользователей', 'Тестировщик, ищет проекты для портфолио', 'Ведёт канал про AI-инструменты'"
+                        "description": "Контекст получателя — почему пишем именно этому человеку. Примеры: 'Автор Telegram-бота с 5k пользователей', 'Тестировщик, ищет проекты для портфолио', 'Ведёт канал про AI-инструменты'"
                     },
                     "subject": {
                         "type": "string",
@@ -949,7 +841,7 @@ TOOLS = [
                     },
                     "body": {
                         "type": "string",
-                        "description": "Текст письма — персонализированный, с учётом цели кампании и контекста получателя. Пиши от первого лица, коротко (3-5 абзацев), с конкретным предложением и CTA."
+                        "description": "Текст письма — персонализированный. Пиши от первого лица, коротко (3-5 абзацев), с конкретным предложением и CTA."
                     }
                 },
                 "required": ["recipient_email", "subject", "body"]
@@ -959,29 +851,8 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "add_email_leads",
-            "description": "📋 ДОБАВИТЬ EMAIL-АДРЕСА в кампанию. Используй после web_search, когда нашёл email-адреса нужных людей (клиенты, тестировщики, партнёры, спикеры — любая аудитория). Принимает JSON-массив или список email через запятую.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "campaign_id": {
-                        "type": "integer",
-                        "description": "ID кампании (если не указан, берётся последняя активная)"
-                    },
-                    "leads": {
-                        "type": "string",
-                        "description": "Email-адреса: JSON [{\"email\":\"a@b.com\",\"name\":\"Name\",\"company\":\"Co\",\"context\":\"why\"}] или через запятую: a@b.com, c@d.com"
-                    }
-                },
-                "required": ["leads"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "reply_to_outreach_email",
-            "description": "💬 ОТВЕТИТЬ на входящее письмо от получателя в рамках email-кампании. AI автоматически формирует ответ в рамках цели кампании. Вызывается автономно при входящем reply или когда пользователь просит ответить.",
+            "description": "💬 ОТВЕТИТЬ на входящее письмо от конкретного человека. Вызывается автономно при входящем reply или когда пользователь просит ответить.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -999,45 +870,6 @@ TOOLS = [
                     }
                 },
                 "required": ["reply_body"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_email_campaign_status",
-            "description": "📊 СТАТУС EMAIL-КАМПАНИИ: сколько отправлено, ответов, ошибок. Вызывай когда: 'статус email', 'как кампания', 'сколько ответов'. Также вызывается проактивно при наличии новых ответов.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "campaign_id": {
-                        "type": "integer",
-                        "description": "ID кампании (если не указан, покажет все)"
-                    }
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "pause_email_campaign",
-            "description": "⏸️ ПАУЗА/ВОЗОБНОВЛЕНИЕ email-кампании. Управляет статусом: pause (остановить), resume (продолжить), cancel (отменить).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "campaign_id": {
-                        "type": "integer",
-                        "description": "ID кампании"
-                    },
-                    "action": {
-                        "type": "string",
-                        "description": "Действие",
-                        "enum": ["pause", "resume", "cancel"]
-                    }
-                },
-                "required": ["action"]
             }
         }
     },
