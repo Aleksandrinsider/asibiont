@@ -2,6 +2,7 @@
 AI Marketing Agent - автоматическая генерация маркетингового контента
 """
 
+import asyncio
 import logging
 import json
 from datetime import datetime, timedelta, timezone
