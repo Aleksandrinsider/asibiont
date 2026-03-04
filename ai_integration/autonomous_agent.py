@@ -3907,22 +3907,10 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     action = decision.get('action', 'self')
 
-    # ── self: ASI отвечает сам, но знает о команде ────────────────────────────
+    # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
+    # ASI сам отвечает с доступом ко всем инструментам (создание задач, поиск и т.д.)
     if action == 'self' or (action not in ('delegate', 'multi_delegate')):
-        _team_hint = decision.get('team_hint', '')
-        _agents_short = ', '.join(a['name'] for a in _agents) if _agents else 'нет агентов'
-        _self_resp = await _quick_ai_call_raw([{
-            "role": "user",
-            "content": (
-                f"Ты — ASI Biont. В твоей команде: {_agents_short}.\n"
-                f"{_history_block.strip()}\n\nПользователь: {user_message}\n\n"
-                f"{'Команда могла бы помочь: ' + _team_hint + '. ' if _team_hint else ''}"
-                "Ответь кратко — 3-5 предложений, без списков и заголовков. "
-                "Если задача подходит кому-то из команды — предложи это одной фразой. "
-                "В конце — один короткий вопрос: стоит ли продолжить, нужно ли решение, или есть следующий шаг."
-            ),
-        }], max_tokens=600)
-        return _self_resp or None
+        return None
 
     # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
     MAX_ROUNDS = 3
