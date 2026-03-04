@@ -139,6 +139,17 @@ def parse_time_to_datetime(time_text, user_id):
     user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.timezone('Europe/Moscow')
     session.close()
     now = datetime.now(user_tz)
+
+    # Проверяем ISO-формат: «2026-12-15 10:00:00» / «2026-12-15 10:00» / «2026-12-15»
+    _iso_text = (time_text or '').strip()
+    for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            _dt = datetime.strptime(_iso_text, _fmt)
+            _dt = user_tz.localize(_dt)
+            return _dt.strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            pass
+
     time_text = time_text.lower().strip()
     # Проверяем "через X минут/часов"
     through_time_match = re.search(r"через\s+(\d+)\s+(минут|час)", time_text)

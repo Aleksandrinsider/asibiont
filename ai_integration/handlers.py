@@ -7386,7 +7386,9 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
             # Берем первый интерес для анализа трендов
             primary_interest = analysis_data['profile_interests'][0]
             try:
-                trends_result = await get_news_info(primary_interest, user_id, session)
+                trends_result = await get_news_trends(
+                    topic=primary_interest, user_id=user_id, session=session
+                )
                 if trends_result and "❌" not in trends_result and len(trends_result.strip()) > 10:
                     analysis_data['trends_info'] = trends_result  # Сохраняем конкретную информацию
                     analysis_data['trends_topic'] = primary_interest
