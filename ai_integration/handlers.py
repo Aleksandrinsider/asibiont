@@ -4576,7 +4576,12 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
     
     # Найти релевантные контакты
     relevant_contacts = []
-    
+
+    # Pre-fetch all partner User objects (batch, avoid N+1 in reverse_matches/task loops)
+    _frt_ap_uids = [p.user_id for p in all_partners]
+    _frt_ap_users = session.query(User).filter(User.id.in_(_frt_ap_uids)).all()
+    _frt_ap_user_by_id = {u.id: u for u in _frt_ap_users}
+
     for partner in all_partners:
         relevance_score = 0
         match_reasons = []
@@ -4686,7 +4691,7 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
     if user_profile and user_profile.skills:
         user_skills_set = set(s.strip().lower() for s in user_profile.skills.split(','))
         for partner in all_partners:
-            partner_user = session.query(User).filter_by(id=partner.user_id).first()
+            partner_user = _frt_ap_user_by_id.get(partner.user_id)
             if not partner_user or not partner_user.username:
                 continue
             
@@ -4732,7 +4737,7 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
                 # Найти партнеров для этой задачи
                 task_contacts = []
                 for partner in all_partners:
-                    partner_user = session.query(User).filter_by(id=partner.user_id).first()
+                    partner_user = _frt_ap_user_by_id.get(partner.user_id)
                     if not partner_user or not partner_user.username:
                         continue
                     
@@ -7848,9 +7853,17 @@ async def find_and_message_relevant_users(
             User.id != sender.id,
             User.telegram_id.isnot(None)
         ).all()
-        
+
+        # Pre-fetch all candidate User objects (batch, avoid N+1)
+        if all_profiles:
+            _cand_uids = [p.user_id for p in all_profiles]
+            _cand_users = session.query(User).filter(User.id.in_(_cand_uids)).all()
+            _cand_user_by_id = {u.id: u for u in _cand_users}
+        else:
+            _cand_user_by_id = {}
+
         for profile in all_profiles:
-            user = session.query(User).filter_by(id=profile.user_id).first()
+            user = _cand_user_by_id.get(profile.user_id)
             if not user or not user.telegram_id:
                 continue
             

@@ -453,9 +453,13 @@ class ContextBuilder:
                 ).order_by(UM.created_at.desc()).limit(5).all()
                 
                 if unread_msgs:
+                    # Pre-fetch senders (batch)
+                    _um_sids = list({m.sender_id for m in unread_msgs})
+                    _um_senders = session.query(User).filter(User.id.in_(_um_sids)).all()
+                    _um_sender_by_id = {u.id: u for u in _um_senders}
                     msg_lines = []
                     for m in unread_msgs:
-                        s = session.query(User).filter_by(id=m.sender_id).first()
+                        s = _um_sender_by_id.get(m.sender_id)
                         s_name = f"@{s.username}" if s and s.username else "Пользователь"
                         intent_map = {'meeting': 'встреча', 'collaboration': 'сотрудничество', 'idea': 'идея', 'project_invite': 'проект', 'question': 'вопрос', 'reply': 'ответ'}
                         intent_str = intent_map.get(m.intent, m.intent or '')
@@ -471,9 +475,13 @@ class ContextBuilder:
                 ).order_by(UM.created_at.desc()).limit(3).all()
                 
                 if new_replies:
+                    # Pre-fetch reply senders (batch)
+                    _rp_sids = list({r.sender_id for r in new_replies})
+                    _rp_senders = session.query(User).filter(User.id.in_(_rp_sids)).all()
+                    _rp_sender_by_id = {u.id: u for u in _rp_senders}
                     reply_lines = []
                     for r in new_replies:
-                        s = session.query(User).filter_by(id=r.sender_id).first()
+                        s = _rp_sender_by_id.get(r.sender_id)
                         s_name = f"@{s.username}" if s and s.username else "Пользователь"
                         reply_lines.append(f"  {s_name}: {r.message_text[:80]}...")
                     hints.append(f"НОВЫЕ ОТВЕТЫ ({len(new_replies)}): пользователи ответили на сообщения\n" + "\n".join(reply_lines))

@@ -1678,9 +1678,14 @@ class AnchorEngine:
             return anchors
 
         # Группируем по отправителю
+        # Pre-fetch all senders (batch, avoid N+1)
+        _unread_sids = list({msg.sender_id for msg in unread})
+        _unread_senders = session.query(User).filter(User.id.in_(_unread_sids)).all()
+        _unread_sender_by_id = {u.id: u for u in _unread_senders}
+
         senders = {}
         for msg in unread:
-            sender = session.query(User).filter_by(id=msg.sender_id).first()
+            sender = _unread_sender_by_id.get(msg.sender_id)
             uname = sender.username if sender else 'unknown'
             if uname not in senders:
                 senders[uname] = []
@@ -2097,8 +2102,16 @@ class AnchorEngine:
                     or_(*filters),
                 ).limit(20).all()
 
+                # Pre-fetch all profile users (batch, avoid N+1)
+                if profiles:
+                    _prof_uids = [p.user_id for p in profiles]
+                    _prof_users = session.query(User).filter(User.id.in_(_prof_uids)).all()
+                    _prof_user_by_id = {u.id: u for u in _prof_users}
+                else:
+                    _prof_user_by_id = {}
+
                 for p in profiles:
-                    p_user = session.query(User).filter_by(id=p.user_id).first()
+                    p_user = _prof_user_by_id.get(p.user_id)
                     if not p_user or not p_user.username:
                         continue
                     if p_user.username.lower() in already_usernames:
