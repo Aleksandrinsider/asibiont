@@ -6165,39 +6165,39 @@ except Exception as e:
                 const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0;
                 if (emptyEl) emptyEl.style.display = hasListItems ? 'none' : '';
 
-                // === 30-day filter ===
-                const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-                const isWithin30 = s => s && s >= thirtyDaysAgo;
-                const activities30 = agentActivities.filter(a => isWithin30(a.created_at));
+                // === 7-day filter ===
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                const isWithin7 = s => s && s >= sevenDaysAgo;
+                const activities7 = agentActivities.filter(a => isWithin7(a.created_at));
 
-                // === Summary stats (last 30 days) ===
+                // === Summary stats (last 7 days) ===
                 let totalSent = 0, totalReplied = 0;
                 campaigns.forEach(c => {
                     let oSent = 0, oReplied = 0;
                     if (c.outreach) {
                         c.outreach.forEach(o => {
-                            if (o.status && o.status !== 'draft' && isWithin30(o.sent_at)) oSent++;
-                            if (o.status === 'replied' && isWithin30(o.sent_at)) oReplied++;
+                            if (o.status && o.status !== 'draft' && isWithin7(o.sent_at)) oSent++;
+                            if (o.status === 'replied' && isWithin7(o.sent_at)) oReplied++;
                         });
                     }
                     totalSent += oSent;
                     totalReplied += oReplied;
                 });
-                totalSent += emails.filter(e => isWithin30(e.sent_at || e.created_at)).length;
-                const campaigns30 = campaigns.filter(c => isWithin30(c.created_at)).length;
+                totalSent += emails.filter(e => isWithin7(e.sent_at || e.created_at)).length;
+                const campaigns7 = campaigns.filter(c => isWithin7(c.created_at)).length;
                 const totalConv = totalSent > 0 ? Math.round(totalReplied / totalSent * 100) : 0;
 
-                const totalDelegations = activities30.filter(a => a.activity_type === 'delegation').length;
-                const totalPostsNewsfeed = activities30.filter(a => a.activity_type === 'post_newsfeed').length;
-                const totalPostsTg = activities30.filter(a => a.activity_type === 'post_telegram').length;
-                const totalPostsDiscord = activities30.filter(a => a.activity_type === 'post_discord').length;
+                const totalDelegations = activities7.filter(a => a.activity_type === 'delegation').length;
+                const totalPostsNewsfeed = activities7.filter(a => a.activity_type === 'post_newsfeed').length;
+                const totalPostsTg = activities7.filter(a => a.activity_type === 'post_telegram').length;
+                const totalPostsDiscord = activities7.filter(a => a.activity_type === 'post_discord').length;
                 const postStats = data.post_stats || {total: 0, likes: 0, views: 0, comments: 0};
                 const delegatedToMe = data.delegated_to_me || 0;
                 const delegatedToMeToday = data.delegated_to_me_today || 0;
                 const tokensToday = data.tokens_today || 0;
                 const personalStats = data.personal_stats || {};
-                const contentCampaigns30 = (data.content_campaigns || []).filter(c => isWithin30(c.created_at)).length;
-                const delegCampaigns30 = (data.delegation_campaigns || []).filter(c => isWithin30(c.created_at)).length;
+                const contentCampaigns7 = (data.content_campaigns || []).filter(c => isWithin7(c.created_at)).length;
+                const delegCampaigns7 = (data.delegation_campaigns || []).filter(c => isWithin7(c.created_at)).length;
 
                 // Today's deltas from existing data
                 const todayStr = new Date().toISOString().slice(0, 10);
@@ -6358,15 +6358,15 @@ except Exception as e:
                         ${sc(totalSent, t('stat-email-sent'), sentToday)}
                         ${sc(totalReplied, t('stat-email-replied'), repliedToday)}
                         ${sc(totalConv + '%', t('stat-email-conv'), 0)}
-                        ${sc(campaigns30, t('stat-email-campaigns'), 0)}
+                        ${sc(campaigns7, t('stat-email-campaigns'), 0)}
                         ${sc(delegatedToMe, t('stat-deleg-me'), delegatedToMeToday)}
                         ${sc(totalDelegations, t('stat-deleg-by-me'), delegByMeToday)}
                         ${sc(totalPostsNewsfeed, t('stat-posts-feed'), nfToday)}
                         ${sc(totalPostsTg, t('stat-posts-tg'), tgToday)}
                         ${sc(totalPostsDiscord, t('stat-posts-discord'), discordToday)}
                         ${sc(tokensToday, t('stat-tokens-today'), 0)}
-                        ${sc(contentCampaigns30, t('stat-content-camps'), 0)}
-                        ${sc(delegCampaigns30, t('stat-deleg-camps'), 0)}
+                        ${sc(contentCampaigns7, t('stat-content-camps'), 0)}
+                        ${sc(delegCampaigns7, t('stat-deleg-camps'), 0)}
                     </div>
                 `;
 
@@ -6420,7 +6420,7 @@ except Exception as e:
                     const _loadAgentSocActivity = () => {
                     const inner = agentSocDetails.querySelector('#agent-soc-inner');
                     if (!inner) return;
-                    inner.innerHTML = '<div style="color:#9CA3AF;font-size:12px;">Загрузка...</div>';
+                    inner.innerHTML = '<div style="color:#9CA3AF;font-size:12px;">' + t('mp-loading') + '</div>';
                     fetch('/api/marketplace/agents/activity')
                         .then(r => r.json())
                         .then(actData => {
@@ -6430,24 +6430,24 @@ except Exception as e:
                             html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
                                 <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
                                     <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.posts_feed||0}</div>
-                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">Постов</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-posts')}</div>
                                 </div>
                                 <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
                                     <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.likes||0}</div>
-                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">Лайков</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-likes')}</div>
                                 </div>
                                 <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
                                     <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.views||0}</div>
-                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">Просмотров</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-views')}</div>
                                 </div>
                                 <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
                                     <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.comments||0}</div>
-                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">Комментариев</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-comments')}</div>
                                 </div>
                             </div>`;
                             inner.innerHTML = html;
                         })
-                        .catch(() => { inner.innerHTML = '<div style="font-size:12px;color:#9CA3AF;">Нет данных</div>'; });
+                        .catch(() => { inner.innerHTML = '<div style="font-size:12px;color:#9CA3AF;">' + t('stat-no-data') + '</div>'; });
                 };
 
                 agentSocHeader.onclick = () => {
@@ -14332,13 +14332,13 @@ except Exception as e:
       'notes':'Заметки','notes-empty':'Заметок пока нет','notes-empty-desc':'Добавьте заметку в поле ниже...','note-saved':'Заметка сохранена!','note-deleted':'Заметка удалена',
       'reports':'Активность','reports-empty':'Действий агента пока нет','reports-empty-desc':'Здесь появятся кампании: кому агент писал, что ответили, статус переговоров.',
       'report-campaign':'Кампания','report-sent':'Отправлено','report-replied':'Ответов','report-conversion':'Конверсия','report-opened':'Открыто','report-delivered':'Доставлено','report-bounced':'Ошибок','report-status':'Статус','report-email-to':'Кому','report-email-subject':'Тема','report-email-at':'Когда','report-no-emails':'Писем ещё нет','report-generic':'Одиночные письма',
-      'stat-personal':'Личная активность','stat-social':'Социальная активность','stat-biz':'Деловая активность','stat-30d':'за 30 дней','stat-today':'сегодня',
+      'stat-personal':'Личная активность','stat-social':'Социальная активность','stat-biz':'Деловая активность','stat-30d':'за 7 дней','stat-today':'сегодня',
       'stat-posts':'Постов','stat-likes':'Лайков','stat-views':'Просмотров','stat-comments':'Комментариев',
       'stat-goals-done':'Целей достигнуто','stat-tasks-done':'Задач выполнено','stat-tasks-deleted':'Задач удалено','stat-activity-index':'Индекс активности',
       'stat-email-sent':'Email отправлено','stat-email-replied':'Email ответов','stat-email-conv':'Email конверсия','stat-email-campaigns':'Email кампаний',
       'stat-deleg-me':'Поручено мне','stat-deleg-by-me':'Поручено мной','stat-posts-feed':'Постов в ленту','stat-posts-tg':'Постов в Telegram','stat-posts-discord':'Постов в Discord',
       'stat-tokens-today':'Токены сегодня','стат-content-camps':'Контент-кампаний','stat-content-camps':'Контент-кампаний','stat-deleg-camps':'Делег. кампаний',
-      'stat-token-expenses':'Статистика расходов','tokcat-total':'Всего списано','tokcat-chat':'Диалоги','tokcat-proactive':'Проактив','tokcat-reminders':'Напоминания','tokcat-autoposts':'Автопосты','tokcat-research':'Исследования','tokcat-other':'Прочее','stat-no-token-data':'Расходов за 30 дней нет',
+      'stat-token-expenses':'Статистика расходов','tokcat-total':'Всего списано','tokcat-chat':'Диалоги','tokcat-proactive':'Проактив','tokcat-reminders':'Напоминания','tokcat-autoposts':'Автопосты','tokcat-research':'Исследования','tokcat-other':'Прочее','stat-no-token-data':'Расходов за 7 дней нет','stat-no-data':'Нет данных',
       'activity-onboarding-desc':'Здесь будут отображаться все действия агента: созданные задачи, достигнутые цели, отправленные посты. Напишите агенту — и активность появится здесь.',
       'camp-active':'Активна','camp-paused':'На паузе','camp-completed':'Завершена','camp-launched':'Кампания запущена','camp-on-pause':'Кампания на паузе',
       'camp-sending':'Отправляет','camp-wait-day':'Ждёт завтра','camp-no-leads':'Нет лидов','camp-searching':'Ищет контакты',
@@ -14596,13 +14596,13 @@ except Exception as e:
       'notes':'Notes','notes-empty':'No notes yet','notes-empty-desc':'Add a note in the field below...','note-saved':'Note saved!','note-deleted':'Note deleted',
       'reports':'Activity','reports-empty':'No agent activity yet','reports-empty-desc':'Campaigns will appear here: who the agent contacted, what they replied, negotiation status.',
       'report-campaign':'Campaign','report-sent':'Sent','report-replied':'Replied','report-conversion':'Conversion','report-opened':'Opened','report-delivered':'Delivered','report-bounced':'Bounced','report-status':'Status','report-email-to':'To','report-email-subject':'Subject','report-email-at':'When','report-no-emails':'No emails yet','report-generic':'Individual emails',
-      'stat-personal':'Personal activity','stat-social':'Social activity','stat-biz':'Business activity','stat-30d':'last 30 days','stat-today':'today',
+      'stat-personal':'Personal activity','stat-social':'Social activity','stat-biz':'Business activity','stat-30d':'last 7 days','stat-today':'today',
       'stat-posts':'Posts','stat-likes':'Likes','stat-views':'Views','stat-comments':'Comments',
       'stat-goals-done':'Goals achieved','stat-tasks-done':'Tasks completed','stat-tasks-deleted':'Tasks deleted','stat-activity-index':'Activity index',
       'stat-email-sent':'Emails sent','stat-email-replied':'Email replies','stat-email-conv':'Email conversion','stat-email-campaigns':'Email campaigns',
       'stat-deleg-me':'Assigned to me','stat-deleg-by-me':'Assigned by me','stat-posts-feed':'Feed posts','stat-posts-tg':'Telegram posts','stat-posts-discord':'Discord posts',
       'stat-tokens-today':'Tokens today','stat-content-camps':'Content campaigns','stat-deleg-camps':'Deleg. campaigns',
-      'stat-token-expenses':'Expense stats','tokcat-total':'Total spent','tokcat-chat':'Dialogs','tokcat-proactive':'Proactive','tokcat-reminders':'Reminders','tokcat-autoposts':'Autoposts','tokcat-research':'Research','tokcat-other':'Other','stat-no-token-data':'No token expenses in 30 days',
+      'stat-token-expenses':'Expense stats','tokcat-total':'Total spent','tokcat-chat':'Dialogs','tokcat-proactive':'Proactive','tokcat-reminders':'Reminders','tokcat-autoposts':'Autoposts','tokcat-research':'Research','tokcat-other':'Other','stat-no-token-data':'No token expenses in 7 days','stat-no-data':'No data',
       'activity-onboarding-desc':'All agent actions will appear here: created tasks, achieved goals, sent posts. Write to the agent — and the activity will show up here.',
       'camp-active':'Active','camp-paused':'Paused','camp-completed':'Completed','camp-launched':'Campaign launched','camp-on-pause':'Campaign paused',
       'camp-sending':'Sending','camp-wait-day':'Waiting tomorrow','camp-no-leads':'No leads','camp-searching':'Searching contacts',

@@ -7970,14 +7970,14 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading agent activities: {e}")
 
-            # Post engagement stats (last 30 days)
+            # Post engagement stats (last 7 days)
             post_stats = {'total': 0, 'likes': 0, 'views': 0, 'comments': 0}
             try:
                 from datetime import timedelta
-                thirty_days_ago = datetime.now(dt_timezone.utc) - timedelta(days=30)
+                seven_days_ago_stats = datetime.now(dt_timezone.utc) - timedelta(days=7)
                 user_posts = session_db.query(Post).filter(
                     Post.user_id == user.id,
-                    Post.created_at >= thirty_days_ago
+                    Post.created_at >= seven_days_ago_stats
                 ).all()
                 post_stats['total'] = len(user_posts)
                 if user_posts:
@@ -8044,7 +8044,7 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading task stats: {e}")
 
-            # Personal activity stats (last 30 days)
+            # Personal activity stats (last 7 days)
             personal_stats = {
                 'tasks_completed': 0, 'tasks_completed_today': 0,
                 'tasks_deleted': 0, 'tasks_deleted_today': 0,
@@ -8053,14 +8053,14 @@ async def api_reports_handler(request):
             }
             try:
                 today_start_ps = datetime.now(dt_timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-                # Tasks completed in 30d (prefer actual_completion_time, fallback to created_at)
+                # Tasks completed in 7d (prefer actual_completion_time, fallback to created_at)
                 from sqlalchemy import or_, and_
                 completed_tasks_30d = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'completed',
                     or_(
-                        and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= thirty_days_ago),
-                        and_(Task.actual_completion_time.is_(None), Task.created_at >= thirty_days_ago)
+                        and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= seven_days_ago_stats),
+                        and_(Task.actual_completion_time.is_(None), Task.created_at >= seven_days_ago_stats)
                     )
                 ).all()
                 personal_stats['tasks_completed'] = len(completed_tasks_30d)
@@ -8069,13 +8069,13 @@ async def api_reports_handler(request):
                     if (t.actual_completion_time or t.created_at) and
                        (t.actual_completion_time or t.created_at).replace(tzinfo=dt_timezone.utc) >= today_start_ps
                 )
-                # Cancelled / deleted tasks in 30d
+                # Cancelled / deleted tasks in 7d
                 personal_stats['tasks_deleted'] = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'cancelled',
                     or_(
-                        and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= thirty_days_ago),
-                        and_(Task.actual_completion_time.is_(None), Task.created_at >= thirty_days_ago)
+                        and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= seven_days_ago_stats),
+                        and_(Task.actual_completion_time.is_(None), Task.created_at >= seven_days_ago_stats)
                     )
                 ).count()
                 personal_stats['tasks_deleted_today'] = session_db.query(Task).filter(
@@ -8086,22 +8086,22 @@ async def api_reports_handler(request):
                         and_(Task.actual_completion_time.is_(None), Task.created_at >= today_start_ps)
                     )
                 ).count()
-                # Goals completed in 30d
+                # Goals completed in 7d
                 from models import Goal as _Goal
                 goals_30d = session_db.query(_Goal).filter(
                     _Goal.user_id == user.id,
                     _Goal.status == 'completed',
-                    _Goal.completed_at >= thirty_days_ago
+                    _Goal.completed_at >= seven_days_ago_stats
                 ).all()
                 personal_stats['goals_completed'] = len(goals_30d)
                 personal_stats['goals_completed_today'] = sum(
                     1 for g in goals_30d
                     if g.completed_at and g.completed_at.replace(tzinfo=dt_timezone.utc) >= today_start_ps
                 )
-                # Active days (days with at least one interaction in 30d)
+                # Active days (days with at least one interaction in 7d)
                 interactions_30d = session_db.query(Interaction.created_at).filter(
                     Interaction.user_id == user.id,
-                    Interaction.created_at >= thirty_days_ago
+                    Interaction.created_at >= seven_days_ago_stats
                 ).all()
                 active_days = len(set(i.created_at.date() for i in interactions_30d if i.created_at))
                 personal_stats['active_days'] = active_days
@@ -8129,14 +8129,13 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading token stats: {e}")
 
-            # Token spend breakdown for last 30 days
+            # Token spend breakdown for last 7 days
             token_stats_30d = {}
             try:
-                tt_thirty_ago = datetime.now(dt_timezone.utc) - timedelta(days=30)
                 tt_list = session_db.query(TokenTransaction).filter(
                     TokenTransaction.user_id == user.id,
                     TokenTransaction.amount < 0,
-                    TokenTransaction.created_at >= tt_thirty_ago
+                    TokenTransaction.created_at >= seven_days_ago_stats
                 ).all()
                 total_30d = 0
                 for tx in tt_list:
