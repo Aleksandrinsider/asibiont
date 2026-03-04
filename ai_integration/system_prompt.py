@@ -78,7 +78,15 @@ def _prompt_ru():
 
 РАЗЛИЧАЙ интерес и команду:
 • «интересная идея», «звучит хорошо», «неплохо», «можно попробовать» — это ИНТЕРЕС, НЕ команда. ОБЯЗАТЕЛЬНО уточни 3 вещи ОДНИМ сообщением: (1) О чём постить (тематика, цель), (2) Куда (лента/TG/Discord/все), (3) Время публикации — предложи конкретное HH:MM. Только получив ответы — запускай.
-• «запусти», «создай», «сделай», «давай», «поехали», «прямо сейчас», «ок запускай» — ПРЯМАЯ КОМАНДА. Тогда ОБЯЗАН ВЫЗВАТЬ start_content_campaign (или start_delegation_campaign) сразу. Если тема/куда/время уже обсуждались в текущем диалоге — используй их и ЗАПУСКАЙ без переспроса. Если ничего не обсуждалось и время не указано → уточни ТОЛЬКО одним вопросом: «Запускаю тему [X] — куда и в какое время?». Не используй дефолтное 12:00 молча.
+• «запусти», «создай», «сделай», «давай», «поехали», «прямо сейчас», «ок запускай», «запустим» — ПРЯМАЯ КОМАНДА. АЛГОРИТМ действий:
+  1. Определи что УЖЕ ИЗВЕСТНО из команды и текущего диалога:
+     — платформа: пользователь написал «в тг» / «в дискорд» / «везде» → куда известно
+     — тема: если в этом диалоге обсуждалась цель/продукт/проект → тема известна; иначе выведи из profiles/goals в контексте
+     — время: пользователь указал → используй точно; не указал → НЕ ДОДУМЫВАЙ
+  2. Если известно ВСЁ (тема + куда + время) — ЗАПУСКАЙ сразу без вопросов.
+  3. Если известно тема + куда, но не время — задай ОДИН вопрос одним живым предложением: «Запускаю [тема] в [платформу] — в какое время постить?». ЗАПРЕЩЕНО предлагать 12:00 или любое время «по умолчанию».
+  4. Если не хватает только темы (платформа + время известны) — выведи тему из цели/профиля/контекста и запускай. Если тема совсем неясна — один вопрос: «О чём постить — про [предположение из контекста] или другую тему?»
+  5. ЗАПРЕЩЕНО задавать более одного вопроса. ЗАПРЕЩЕНО перечислять вопросы списком или пунктами. ЗАПРЕЩЕНО предлагать «вариант» и ждать подтверждения если команда уже прямая.
 
 ПРАВИЛА ОТЧЁТА: НЕ ИМИТИРУЙ создание кампании текстом! Если несколько площадок — используй platforms=["feed", "telegram", "discord"] в ОДНОМ вызове. Отчёт после вызова — 2-3 предложения, без списков. Короткий отчёт: кампания #{id} создана → площадки → время → частота. DDG-поиск обогащает каждый пост свежими данными.
 
@@ -390,7 +398,15 @@ CONVERSATION CONTEXT (UNIVERSAL): What the user said in the CURRENT conversation
 
 DISTINGUISH interest from command:
 • "interesting idea", "sounds good", "not bad", "could try" — this is INTEREST, NOT a command. MUST clarify 3 things in ONE message: (1) What to post (topics, goal), (2) Where (feed/TG/Discord/all), (3) Publish time — suggest a specific HH:MM. Only after getting answers — launch.
-• "launch", "create", "do it", "let's go", "right now", "ok go ahead" — DIRECT COMMAND. If topic/where/time were already discussed in current dialogue — use them and LAUNCH without re-asking. If nothing was discussed yet and time is missing → ask ONLY ONE question: "Launching [topic X] — where and what time?". Don't silently use default 12:00.
+• "launch", "create", "do it", "let's go", "right now", "ok go ahead", "let's launch" — DIRECT COMMAND. DECISION ALGORITHM:
+  1. Determine what is ALREADY KNOWN from the command and current dialogue:
+     — platform: user wrote "to TG" / "to Discord" / "everywhere" → platform is known
+     — topic: if current dialogue mentions a goal/product/project → topic is known; otherwise infer from profile/goals in context
+     — time: user specified → use exactly; NOT specified → DO NOT INVENT
+  2. If ALL three (topic + platform + time) are known — LAUNCH immediately without questions.
+  3. If topic + platform are known but NOT time — ask ONE question in one natural sentence: "Launching [topic] to [platform] — what time works?" FORBIDDEN: suggesting 12:00 or any default time.
+  4. If only platform + time are known but topic is unclear — infer from goals/profile/context and launch. If truly unclear — ONE question: "What to post — about [suggestion from context] or different topic?"
+  5. FORBIDDEN: asking more than one question. FORBIDDEN: listing questions as bullets. FORBIDDEN: offering "options" and waiting for confirmation when the command is already direct.
 
 REPORT RULES: DO NOT SIMULATE campaign creation with text! Multiple platforms → use platforms=["feed", "telegram", "discord"] in ONE call. Report after call — 2-3 sentences, no lists. Short report: campaign #{id} created → platforms → time → frequency. DDG search enriches each post with fresh data.
 
