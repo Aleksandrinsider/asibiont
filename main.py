@@ -1551,9 +1551,14 @@ async def dashboard_handler(request):
                     reasons.append('общие интересы')
                 if p.common_goals:
                     reasons.append('общие цели')
-                user_city = (getattr(profile, 'city_normalized', None) or profile.city or '').lower()
-                partner_city = (getattr(p, 'city_normalized', None) or getattr(p, 'city', None) or '').lower()
-                if user_city and partner_city and user_city == partner_city:
+                def _city_vars_a(obj):
+                    vs = set()
+                    for attr in ('city_normalized', 'city_normalized_ru', 'city'):
+                        v = (getattr(obj, attr, None) or '').strip().lower()
+                        if v:
+                            vs.add(v)
+                    return vs
+                if _city_vars_a(profile) & _city_vars_a(p):
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
@@ -3354,9 +3359,14 @@ async def api_partners_handler(request):
                     reasons.append('общие интересы')
                 if p.common_goals:
                     reasons.append('общие цели')
-                user_city = (getattr(profile, 'city_normalized', None) or profile.city or '').lower()
-                partner_city = (getattr(p, 'city_normalized', None) or getattr(p, 'city', None) or '').lower()
-                if user_city and partner_city and user_city == partner_city:
+                def _city_vars_b(obj):
+                    vs = set()
+                    for attr in ('city_normalized', 'city_normalized_ru', 'city'):
+                        v = (getattr(obj, attr, None) or '').strip().lower()
+                        if v:
+                            vs.add(v)
+                    return vs
+                if _city_vars_b(profile) & _city_vars_b(p):
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 

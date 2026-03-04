@@ -2860,9 +2860,17 @@ def get_partners_list(user_id=None, session=None):
                     match_reasons.append(f"company: {profile.company}")
 
         # Check city — одного города достаточно для показа в рекомендациях
-        _u_city_raw = (user_profile.city_normalized or user_profile.city or '').strip().lower()
-        _p_city_raw = (profile.city_normalized or profile.city or '').strip().lower()
-        if _u_city_raw and _p_city_raw and _u_city_raw == _p_city_raw:
+        # Собираем все варианты города для cross-language сравнения (EN/RU/raw)
+        def _city_variants(obj):
+            variants = set()
+            for attr in ('city_normalized', 'city_normalized_ru', 'city'):
+                v = (getattr(obj, attr, None) or '').strip().lower()
+                if v:
+                    variants.add(v)
+            return variants
+        _u_cities = _city_variants(user_profile)
+        _p_cities = _city_variants(profile)
+        if _u_cities and _p_cities and (_u_cities & _p_cities):
             has_match = True
             match_reasons.append(f"city: {profile.city}")
 
@@ -2939,10 +2947,16 @@ def get_partners_list(user_id=None, session=None):
         except Exception as e:
             logger.debug(f"Failed to compare goal categories: {e}")
 
-        # Бонус за тот же город (но не блокировка, cross-language)
+        # Бонус за тот же город (cross-language: EN/RU/raw)
         city_bonus = 0
-        partner_city = (p.city_normalized or p.city or '').lower() or None
-        if user_city and partner_city == user_city:
+        def _cvars(obj):
+            vs = set()
+            for attr in ('city_normalized', 'city_normalized_ru', 'city'):
+                v = (getattr(obj, attr, None) or '').strip().lower()
+                if v:
+                    vs.add(v)
+            return vs
+        if user_city and (_cvars(p) & {user_city} or _cvars(user_profile) & _cvars(p)):
             city_bonus = 1  # Небольшой бонус за локальность
 
         return (-relevance_score, -city_bonus, -(p.average_rating or 0))
@@ -4428,7 +4442,16 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     
     # Получить город пользователя для приоритизации
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-    user_city = user_profile.city.lower().strip() if user_profile and user_profile.city else None
+    def _get_city_variants(obj):
+        """Return set of all city name variants (EN normalized, RU normalized, raw) in lowercase."""
+        vs = set()
+        for attr in ('city_normalized', 'city_normalized_ru', 'city'):
+            v = (getattr(obj, attr, None) or '').strip().lower()
+            if v:
+                vs.add(v)
+        return vs
+    user_city_variants = _get_city_variants(user_profile) if user_profile else set()
+    user_city = next(iter(user_city_variants), None)  # primary city value for display
     
     # Определить тип активности (оффлайн = город критичен)
     offline_keywords = {'пробежка', 'бег', 'бегать', 'тренировка', 'зал', 'спорт', 'йога', 'плавание', 
@@ -4467,8 +4490,9 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
         match_reasons = []
         
         # ПРИОРИТЕТ 1: Город (особенно для оффлайн активностей)
-        partner_city = partner.city.lower().strip() if partner.city else None
-        same_city = user_city and partner_city and user_city == partner_city
+        partner_city_variants = _get_city_variants(partner)
+        partner_city = next(iter(partner_city_variants), None)
+        same_city = bool(user_city_variants & partner_city_variants)
         
         if same_city:
             if is_offline_activity:
@@ -4552,7 +4576,8 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
         # Бонус за тот же город (для оффлайн активностей)
         city_bonus = 0
         contact_city = contact['city'].lower().strip() if contact['city'] else None
-        if user_city and contact_city and user_city == contact_city:
+        contact_city_variants = set(filter(None, [contact_city]))
+        if user_city_variants & contact_city_variants:
             if is_offline_activity:
                 city_bonus = 3  # Бонус для оффлайн активностей
             else:
