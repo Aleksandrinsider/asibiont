@@ -220,7 +220,10 @@ def _load_marketplace_agents() -> list:
         try:
             rows = (s.query(UserAgent, UserModel)
                     .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
-                    .filter(UserAgent.status == 'active')
+                    .filter(
+                        UserAgent.status == 'active',
+                        UserAgent.is_private == False,  # noqa: E712 — только публичные в арене
+                    )
                     .limit(30).all())
             _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
                        '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
@@ -244,6 +247,8 @@ def _load_marketplace_agents() -> list:
                     'personal_topic': a.description or '',
                     'system_prompt': system_prompt,
                     'python_code': (a.python_code or '').strip(),
+                    'user_api_keys': (a.user_api_keys or '').strip(),
+                    'tools_allowed': (a.tools_allowed or '[]'),
                     '_is_marketplace': True,
                     'author_username': (u.username or '') if u else '',
                     'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
@@ -739,16 +744,23 @@ def get_arena_state(arena_id: str = "default") -> dict:
 
 # ─── Генерация реплики агента ──────────────────────────────────────────────
 
-async def _run_agent_python_code(code: str, timeout: int = 15) -> str:
+async def _run_agent_python_code(code: str, timeout: int = 15, env_vars: dict = None) -> str:
     """
     Выполняет Python-код агента в отдельном subprocess с тайм-аутом.
+    env_vars — словарь {KEY: value} из user_api_keys агента (инжектируются как env)
     Возвращает stdout (макс. 2000 симв.) или сообщение об ошибке.
     """
+    import os as _os
+    _env = _os.environ.copy()
+    if env_vars:
+        for k, v in env_vars.items():
+            _env[k] = str(v)
     try:
         proc = await asyncio.create_subprocess_exec(
             sys.executable, '-c', code,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=_env,
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -799,11 +811,32 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     personal = agent.get('personal_topic', '')
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}.\n" if personal else ""
 
+    # Разбираем интеграции агента и строим env-словарь для subprocess
+    _user_api_keys_str = agent.get('user_api_keys', '')
+    _agent_env: dict = {}
+    for _line in _user_api_keys_str.splitlines():
+        _line = _line.strip()
+        if '=' in _line and not _line.startswith('#'):
+            _k, _, _v = _line.partition('=')
+            _agent_env[_k.strip()] = _v.strip()
+
+    # Список человекочитаемых интеграций для системного промпта
+    try:
+        from ai_integration.autonomous_agent import _parse_agent_integrations
+        _integrations_list = _parse_agent_integrations(
+            _user_api_keys_str,
+            agent.get('python_code', ''),
+            agent.get('tools_allowed', '[]'),
+            agent.get('search_scope', ''),
+        )
+    except Exception:
+        _integrations_list = []
+
     # Выполняем Python-код агента (если задан), автоматически инъектируем вывод в контекст
     code_output = ''
     python_code = agent.get('python_code', '')
     if python_code:
-        raw = await _run_agent_python_code(python_code)
+        raw = await _run_agent_python_code(python_code, env_vars=_agent_env)
         if raw and not raw.startswith('['):
             code_output = raw
             logger.info(f"[ARENA] {agent['name']} python_code output ({len(code_output)} chars)")
@@ -934,9 +967,29 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 "Обращайся по имени когда уместно. Опирайся на свою специализацию, если оно в тему.\n"
                 "Живо, тепло, по-человечески — не дебатная речь. Одно-два предложения."
             )
+    # Hint об активных интеграциях агента (чтобы он мог ссылаться на реальные данные)
+    _integrations_hint_str = ''
+    if _integrations_list:
+        _joined = ', '.join(_integrations_list)
+        if lang == 'en':
+            _integrations_hint_str = (
+                f"\n\n[YOUR ACTIVE INTEGRATIONS: {_joined}]\n"
+                "You have real data access from these services. If you ran a data script, "
+                "cite actual numbers/facts from it. Otherwise you may mention your integrations "
+                "naturally when relevant — but never invent data you don't have."
+            )
+        else:
+            _integrations_hint_str = (
+                f"\n\n[ТВОИ АКТИВНЫЕ ИНТЕГРАЦИИ: {_joined}]\n"
+                "У тебя есть доступ к реальным данным из этих сервисов. Если скрипт вернул данные — "
+                "используй конкретные цифры/факты из них. Иначе можешь упоминать свои интеграции "
+                "естественно, когда уместно — но никогда не придумывай данные которых нет."
+            )
+
     system_with_context = (
         f"{base_system}\n\n"
         f"{_thinking}"
+        f"{_integrations_hint_str}"
         f"{no_repeat_hint}{_lang_directive}"
     )
 
