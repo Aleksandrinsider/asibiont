@@ -3677,10 +3677,11 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             except Exception:
                 pass
 
-            # Источник 2: собственные активные агенты пользователя из БД
+            # Источник 2: агенты пользователя из БД (active + paused — оба доступны для делегирования).
+            # paused = агент не запускается сам, но директор может давать ему задания вручную.
             _own_agents = (
                 _s.query(_UA)
-                .filter(_UA.author_id == user_db_id, _UA.status == 'active')
+                .filter(_UA.author_id == user_db_id, _UA.status.in_(['active', 'paused']))
                 .limit(10)
                 .all()
             )
@@ -3692,7 +3693,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             if _extra_ids:
                 _extra_agents = (
                     _s.query(_UA)
-                    .filter(_UA.id.in_(_extra_ids), _UA.status == 'active')
+                    .filter(_UA.id.in_(_extra_ids), _UA.status.in_(['active', 'paused']))
                     .all()
                 )
 
