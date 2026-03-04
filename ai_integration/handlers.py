@@ -2670,6 +2670,13 @@ def get_partners_list(user_id=None, session=None):
         return []
 
     # Filter only those with matches
+    # Helper: get normalized field value or fallback to original (defined once, not inside the loop)
+    def _norm(obj, field):
+        return getattr(obj, f'{field}_normalized', None) or getattr(obj, field, None)
+
+    # Stop-words (defined once outside the loop)
+    _stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
+
     partners = []
     for profile in all_profiles:
         profile_user = session.query(User).filter_by(id=profile.user_id).first()
@@ -2683,10 +2690,6 @@ def get_partners_list(user_id=None, session=None):
         has_match = False
         match_reasons = []  # Для логирования причин совпадения
 
-        # Helper: get normalized field value or fallback to original
-        def _norm(obj, field):
-            return getattr(obj, f'{field}_normalized', None) or getattr(obj, field, None)
-
         # Check skills - улучшенная логика с частичным совпадением (cross-language via normalized)
         _u_skills = _norm(user_profile, 'skills')
         _p_skills = _norm(profile, 'skills')
@@ -2695,7 +2698,7 @@ def get_partners_list(user_id=None, session=None):
             profile_skills = set(s.strip().lower() for s in _p_skills.replace(';', ',').split(","))
             
             # Стоп-слова
-            stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
+            stop_words = _stop_words
             
             # Точное совпадение навыков
             if user_skills & profile_skills:
@@ -2731,7 +2734,7 @@ def get_partners_list(user_id=None, session=None):
             profile_interests = set(i.strip().lower() for i in _p_interests.replace(';', ',').split(","))
             
             # Стоп-слова которые игнорируем при частичном совпадении
-            stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
+            stop_words = _stop_words
             
             # Семантические группы для расширения совпадений
             sport_keywords = {'спорт', 'бег', 'пробежка', 'йога', 'фитнес', 'тренировка', 'велоспорт', 'плавание', 
@@ -2906,6 +2909,16 @@ def get_partners_list(user_id=None, session=None):
     # Приоритет: (1) релевантность, (2) город (бонус, но не ограничение), (3) Premium, (4) рейтинг
     user_city = (user_profile.city_normalized or user_profile.city or '').lower() or None
 
+    # Фетчим цели пользователя ОДИН РАЗ — не внутри sort_key
+    try:
+        _sort_user_goals = session.query(Goal).filter(
+            Goal.user_id == user.id, Goal.status.in_(['active', 'in_progress'])
+        ).all()
+        _sort_user_goal_cats = set(g.category.lower().strip() for g in _sort_user_goals if g.category)
+    except Exception:
+        _sort_user_goals = []
+        _sort_user_goal_cats = set()
+
     def sort_key(p):
         relevance_score = 0  # Инициализируем счетчик релевантности
         
@@ -2936,18 +2949,14 @@ def get_partners_list(user_id=None, session=None):
             goal_matches = len(user_goals & profile_goals)
             relevance_score += goal_matches * 4
 
-        # Бонус за совпадение структурированных целей (Goal table)
+        # Бонус за совпадение структурированных целей (Goal table) — цели юзера уже загружены выше
         try:
-            user_goals_db = session.query(Goal).filter(
-                Goal.user_id == user.id, Goal.status.in_(['active', 'in_progress'])
-            ).all()
-            partner_goals_db = session.query(Goal).filter(
-                Goal.user_id == p.user_id, Goal.status.in_(['active', 'in_progress'])
-            ).all()
-            if user_goals_db and partner_goals_db:
-                u_cats = set(g.category.lower().strip() for g in user_goals_db if g.category)
+            if _sort_user_goal_cats:
+                partner_goals_db = session.query(Goal).filter(
+                    Goal.user_id == p.user_id, Goal.status.in_(['active', 'in_progress'])
+                ).all()
                 p_cats = set(g.category.lower().strip() for g in partner_goals_db if g.category)
-                relevance_score += len(u_cats & p_cats) * 5
+                relevance_score += len(_sort_user_goal_cats & p_cats) * 5
         except Exception as e:
             logger.debug(f"Failed to compare goal categories: {e}")
 
@@ -3130,7 +3139,7 @@ def get_partners_list(user_id=None, session=None):
                 if task_skill_match:
                     partner.task_relevance = f"навыки для задач: {', '.join(list(task_skill_match)[:3])}"
                     partner.task_relevance_score += len(task_skill_match) * 3  # Высокий приоритет
-                    logger.info(f"[PARTNERS] @{session.query(User).filter_by(id=partner.user_id).first().username if session.query(User).filter_by(id=partner.user_id).first() else 'unknown'} relevant for tasks: {task_skill_match}")
+                    logger.debug(f"[PARTNERS] user_id={partner.user_id} relevant for tasks: {task_skill_match}")
             
             # Проверяем совпадение интересов партнера с задачами
             if partner.interests:
@@ -3157,7 +3166,7 @@ def get_partners_list(user_id=None, session=None):
                     matched_words = [m.split('~')[0] if '~' in m else m for m in list(task_interest_match)[:3]]
                     partner.task_relevance = f"интересы для задач: {', '.join(matched_words)}"
                     partner.task_relevance_score += len(task_interest_match) * 2
-                    logger.info(f"[PARTNERS] @{session.query(User).filter_by(id=partner.user_id).first().username if session.query(User).filter_by(id=partner.user_id).first() else 'unknown'} task relevance: {task_interest_match}")
+                    logger.debug(f"[PARTNERS] user_id={partner.user_id} task relevance: {task_interest_match}")
             
             # Проверяем совпадение задач партнера с задачами пользователя (схожие активности)
             partner_user = session.query(User).filter_by(id=partner.user_id).first()

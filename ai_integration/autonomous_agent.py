@@ -2511,7 +2511,7 @@ class HybridAutonomousAgent:
             from .cognitive import CognitiveEngine as _VecCE
             _vec_emotion = _VecCE.detect_emotion(user_message)
             _vec_intent = _VecCE.classify_intent(user_message)
-            asyncio.get_event_loop().create_task(
+            asyncio.get_running_loop().create_task(
                 store_conversation_turn(
                     user_id=user_id,
                     user_message=user_message,
@@ -2543,7 +2543,7 @@ class HybridAutonomousAgent:
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Record failed: {e}")
         try:
-            asyncio.get_event_loop().create_task(_self_learn_bg())
+            asyncio.get_running_loop().create_task(_self_learn_bg())
         except Exception:
             pass
 
