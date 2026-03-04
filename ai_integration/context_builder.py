@@ -109,9 +109,19 @@ class ContextBuilder:
                                 if alert.interest.lower() in profile.interests.lower():
                                     match = True
 
-                            # Check city filter
-                            if match and alert.city and profile.city:
-                                if alert.city.lower() not in profile.city.lower():
+                            # Check city filter (cross-language: EN/RU/raw variants)
+                            if match and alert.city:
+                                _alert_city_lc = alert.city.strip().lower()
+                                _prof_city_variants = set(filter(None, [
+                                    (getattr(profile, 'city_normalized', None) or '').strip().lower(),
+                                    (getattr(profile, 'city_normalized_ru', None) or '').strip().lower(),
+                                    (profile.city or '').strip().lower(),
+                                ]))
+                                _city_matched = any(
+                                    _alert_city_lc in v or v.startswith(_alert_city_lc) or _alert_city_lc.startswith(v)
+                                    for v in _prof_city_variants if v
+                                )
+                                if not _city_matched:
                                     match = False
 
                             if match:
