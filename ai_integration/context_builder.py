@@ -396,8 +396,10 @@ class ContextBuilder:
                     partners = get_partners_list(user.id, session)
                     self._cached_partners = partners  # кеш для _build_social_metrics
                     if partners:
+                        _cb_partner_uids = [p.user_id for p in partners[:5]]
+                        _cb_partner_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_cb_partner_uids)).all()}
                         for p in partners[:5]:
-                            partner_user = session.query(User).filter_by(id=p.user_id).first()
+                            partner_user = _cb_partner_by_id.get(p.user_id)
                             if partner_user and partner_user.username:
                                 details = []
                                 if p.skills:

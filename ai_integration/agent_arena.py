@@ -1541,9 +1541,15 @@ def seed_test_agents():
                 logger.warning("[ARENA] No author user found, skipping agent seed.")
                 return
 
+            # Batch-load all existing agent slugs to avoid N+1 per agent
+            _arena_slugs = [a["id"] for a in ARENA_AGENTS]
+            _existing_slugs = {
+                row[0] for row in
+                session.query(UserAgent.slug).filter(UserAgent.slug.in_(_arena_slugs)).all()
+            }
+
             for agent_data in ARENA_AGENTS:
-                exists = session.query(UserAgent).filter_by(slug=agent_data["id"]).first()
-                if exists:
+                if agent_data["id"] in _existing_slugs:
                     continue
                 ua = UserAgent(
                     author_id=admin.id,

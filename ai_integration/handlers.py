@@ -3430,10 +3430,13 @@ def analyze_group_opportunities(user_id, session):
     # Если нет конкретных задач, анализируем goals
     if profile.goals:
         user_goals = set(g.strip().lower() for g in profile.goals.split(','))
+        _g_pids = [p.user_id for p in partners[:5]]
+        _g_profiles = {pp.user_id: pp for pp in session.query(UserProfile).filter(UserProfile.user_id.in_(_g_pids)).all()}
+        _g_users = {u.id: u for u in session.query(User).filter(User.id.in_(_g_pids)).all()}
         for partner in partners[:5]:
-            partner_profile = session.query(UserProfile).filter_by(user_id=partner.user_id).first()
+            partner_profile = _g_profiles.get(partner.user_id)
             if partner_profile and partner_profile.goals:
-                partner_user = session.query(User).filter_by(id=partner.user_id).first()
+                partner_user = _g_users.get(partner.user_id)
                 if partner_user and partner_user.username:
                     partner_goals = set(g.strip().lower() for g in partner_profile.goals.split(','))
                     common_goals = user_goals & partner_goals
@@ -4347,8 +4350,11 @@ def find_partners(user_id=None, session=None):
     else:
         response = "Нашел интересных людей для твоего роста и развития:\n\n"
 
+    _rec_uids = [p.user_id for p in partners[:5]]
+    _rec_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_rec_uids)).all()}
+
     for idx, p in enumerate(partners[:5], 1):
-        partner_user = session.query(User).filter_by(id=p.user_id).first()
+        partner_user = _rec_user_by_id.get(p.user_id)
         if partner_user and partner_user.username:
             # Get partner language badge
             partner_lang = get_user_lang_by_db_id(p.user_id, session=session)
@@ -7568,8 +7574,10 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
         # Контакты
         contact_names = []
         if analysis_data['relevant_contacts']:
+            _ac_uids = [c.user_id for c in analysis_data['relevant_contacts'][:3]]
+            _ac_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_ac_uids)).all()}
             for contact in analysis_data['relevant_contacts'][:3]:
-                partner = session.query(User).filter_by(id=contact.user_id).first()
+                partner = _ac_user_by_id.get(contact.user_id)
                 if partner and partner.first_name:
                     reason = contact.common_interests or contact.common_skills or ""
                     contact_names.append(f"{partner.first_name} ({reason})" if reason else partner.first_name)
@@ -10032,20 +10040,34 @@ def get_email_campaign_status(
         _user_now_cs = datetime.now(_user_tz_cs)
         _today_start_cs = _user_now_cs.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_cs.utc)
 
+        # Batch: load all emails for all campaigns in one query
+        _cs_camp_ids = [c.id for c in campaigns]
+        _cs_all_emails = session.query(EmailOutreach).filter(
+            EmailOutreach.campaign_id.in_(_cs_camp_ids)
+        ).all()
+        _cs_emails_by_camp: dict = {}
+        for _e in _cs_all_emails:
+            _cs_emails_by_camp.setdefault(_e.campaign_id, []).append(_e)
+
+        # Batch: sent_today per campaign via GROUP BY
+        _cs_sent_today_map = dict(
+            session.query(EmailOutreach.campaign_id, func.count(EmailOutreach.id)).filter(
+                EmailOutreach.campaign_id.in_(_cs_camp_ids),
+                EmailOutreach.sent_at >= _today_start_cs,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).group_by(EmailOutreach.campaign_id).all()
+        )
+
         for c in campaigns:
-            emails = session.query(EmailOutreach).filter_by(campaign_id=c.id).all()
+            emails = _cs_emails_by_camp.get(c.id, [])
             draft = sum(1 for e in emails if e.status == 'draft')
             sent = sum(1 for e in emails if e.status == 'sent')
             delivered = sum(1 for e in emails if e.status == 'delivered')
             replied = sum(1 for e in emails if e.status == 'replied')
             bounced = sum(1 for e in emails if e.status in ('bounced', 'failed'))
 
-            # Сколько отправлено сегодня
-            sent_today = session.query(EmailOutreach).filter(
-                EmailOutreach.campaign_id == c.id,
-                EmailOutreach.sent_at >= _today_start_cs,
-                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-            ).count()
+            # Сколько отправлено сегодня (из batch-карты)
+            sent_today = _cs_sent_today_map.get(c.id, 0)
             daily_limit = c.daily_limit or 50
 
             # Умный подстатус

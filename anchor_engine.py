@@ -1583,6 +1583,9 @@ class AnchorEngine:
             contact_profiles_map = {p.user_id: p for p in same_city_profiles}
 
             if contact_user_ids:
+                # Batch-load User objects for all contacts (avoid N+1 in activity loops)
+                _ca_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(contact_user_ids)).all()}
+
                 # Задачи контактов за последние 7 дней
                 week_ago = now_utc - timedelta(days=7)
                 contact_tasks = session.query(Task).filter(
@@ -1600,7 +1603,7 @@ class AnchorEngine:
                     if not match:
                         continue
                     if t.user_id not in contact_activities:
-                        c_user = session.query(User).filter_by(id=t.user_id).first()
+                        c_user = _ca_user_by_id.get(t.user_id)
                         c_prof = contact_profiles_map.get(t.user_id)
                         contact_activities[t.user_id] = {
                             'username': c_user.username if c_user else 'unknown',
@@ -1623,7 +1626,7 @@ class AnchorEngine:
                     if not plans or cp.user_id in contact_activities:
                         continue
                     if any(pw in plans for pw in profile_words):
-                        c_user = session.query(User).filter_by(id=cp.user_id).first()
+                        c_user = _ca_user_by_id.get(cp.user_id)
                         if c_user and c_user.username:
                             contact_activities[cp.user_id] = {
                                 'username': c_user.username,
