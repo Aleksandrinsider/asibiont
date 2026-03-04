@@ -3300,9 +3300,17 @@ def get_partners_list(user_id=None, session=None):
     not_relevant_count = len(partners) - relevant_count
     logger.info(f"[PARTNERS] Task-relevant partners: {relevant_count}, other: {not_relevant_count}")
     
-    # Batch-load top-5 partner users for logging and common-goals enrichment
+    # Batch-load top-5 partner users for logging and common-goals/tasks enrichment
     _top5_uids = [p.user_id for p in partners[:5]]
     _top5_user_by_id = {u.id: u for u in session.query(User).filter(User.id.in_(_top5_uids)).all()}
+
+    # Batch-load tasks: own user tasks + all top-5 partner tasks (avoid N+1)
+    _own_tasks = session.query(Task).filter_by(user_id=user.id).all() if user.id else []
+    _own_task_titles = set(t.title.lower().strip() for t in _own_tasks if t.title)
+    _partner_tasks_all = session.query(Task).filter(Task.user_id.in_(_top5_uids)).all() if _top5_uids else []
+    _partner_tasks_by_uid: dict = {}
+    for _pt in _partner_tasks_all:
+        _partner_tasks_by_uid.setdefault(_pt.user_id, []).append(_pt)
 
     for partner in partners[:5]:  # Log top 5
         partner_user = _top5_user_by_id.get(partner.user_id)
@@ -3321,13 +3329,9 @@ def get_partners_list(user_id=None, session=None):
             
         # Common tasks
         if partner.user_id:
-            user_tasks = session.query(Task).filter_by(user_id=user.id).all()
-            user_task_titles = set(t.title.lower().strip() for t in user_tasks if t.title)
-            
-            partner_tasks = session.query(Task).filter_by(user_id=partner.user_id).all()
-            partner_task_titles = set(t.title.lower().strip() for t in partner_tasks if t.title)
-            
-            common_task_titles = user_task_titles & partner_task_titles
+            _p_tasks = _partner_tasks_by_uid.get(partner.user_id, [])
+            partner_task_titles = set(t.title.lower().strip() for t in _p_tasks if t.title)
+            common_task_titles = _own_task_titles & partner_task_titles
             partner.common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
         else:
             partner.common_tasks = None
@@ -3903,6 +3907,17 @@ def list_goals(status_filter=None, user_id=None, session=None):
         status_emoji = {'active': '🎯', 'completed': '✅', 'paused': '⏸️', 'cancelled': '❌'}
         
         result = "🎯 **Твои цели:**\n\n"
+
+        # Batch-load all linked tasks for all goals (avoid N+1)
+        _gl_goal_ids = [g.id for g in goals]
+        _gl_tasks_all = session.query(Task).filter(
+            Task.user_id == user.id, Task.goal_id.in_(_gl_goal_ids)
+        ).all() if _gl_goal_ids else []
+        _gl_tasks_by_goal: dict = {}
+        for _glt in _gl_tasks_all:
+            if _glt.goal_id is not None:
+                _gl_tasks_by_goal.setdefault(_glt.goal_id, []).append(_glt)
+
         for g in goals:
             emoji = status_emoji.get(g.status, '🎯')
             pri = priority_emoji.get(g.priority, '')
@@ -3926,7 +3941,7 @@ def list_goals(status_filter=None, user_id=None, session=None):
                         result += f" | до {g.target_date.strftime('%d.%m.%Y')}"
             
             # Связанные задачи
-            linked = session.query(Task).filter_by(user_id=user.id, goal_id=g.id).all()
+            linked = _gl_tasks_by_goal.get(g.id, [])
             if linked:
                 done = sum(1 for t in linked if t.status == 'completed')
                 total = len(linked)

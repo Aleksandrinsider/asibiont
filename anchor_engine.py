@@ -219,6 +219,39 @@ class AnchorEngine:
             ).all()
 
             now_utc = datetime.now(timezone.utc)
+
+            # Batch pre-load night-exception flags for all users (avoid 4×N queries)
+            _pf_uids = [u.id for u in users]
+            _night_exc_reminders = {row[0] for row in session.query(Task.user_id).filter(
+                Task.user_id.in_(_pf_uids),
+                Task.reminder_sent == False,
+                Task.reminder_time <= now_utc,
+                Task.status.in_(['pending', 'in_progress', 'active'])
+            ).distinct().all()} if _pf_uids else set()
+            _night_exc_unreplied = {row[0] for row in session.query(EmailCampaign.user_id).join(
+                EmailOutreach, EmailOutreach.campaign_id == EmailCampaign.id
+            ).filter(
+                EmailCampaign.user_id.in_(_pf_uids),
+                EmailOutreach.status == 'replied',
+                EmailOutreach.reply_text.isnot(None),
+                EmailOutreach.ai_reply_sent_at.is_(None),
+            ).distinct().all()} if _pf_uids else set()
+            _night_exc_drafts = {row[0] for row in session.query(EmailCampaign.user_id).join(
+                EmailOutreach, EmailOutreach.campaign_id == EmailCampaign.id
+            ).filter(
+                EmailCampaign.user_id.in_(_pf_uids),
+                EmailCampaign.status == 'active',
+                EmailOutreach.status == 'draft',
+            ).distinct().all()} if _pf_uids else set()
+            _night_exc_followups = {row[0] for row in session.query(EmailCampaign.user_id).join(
+                EmailOutreach, EmailOutreach.campaign_id == EmailCampaign.id
+            ).filter(
+                EmailCampaign.user_id.in_(_pf_uids),
+                EmailCampaign.status == 'active',
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                EmailOutreach.next_follow_up_at <= now_utc,
+            ).distinct().all()} if _pf_uids else set()
+
             eligible = []
             skipped_night = 0
             skipped_dnd = 0
@@ -238,33 +271,11 @@ class AnchorEngine:
                     user_tz = pytz.timezone(u.timezone or 'Europe/Moscow')
                     user_now = datetime.now(user_tz)
                     if user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR:
-                        # НЕ пропускаем если есть pending напоминания — они должны доставляться в любое время
-                        has_pending_reminder = session.query(Task).filter(
-                            Task.user_id == u.id,
-                            Task.reminder_sent == False,
-                            Task.reminder_time <= now_utc,
-                            Task.status.in_(['pending', 'in_progress', 'active'])
-                        ).first() is not None
-                        # НЕ пропускаем если есть непрочитанные email-ответы (CRITICAL)
-                        has_unreplied_email = session.query(EmailOutreach).join(EmailCampaign).filter(
-                            EmailCampaign.user_id == u.id,
-                            EmailOutreach.status == 'replied',
-                            EmailOutreach.reply_text.isnot(None),
-                            EmailOutreach.ai_reply_sent_at.is_(None),
-                        ).first() is not None
-                        # НЕ пропускаем если есть email-черновики для отправки (silent, не будят юзера)
-                        has_email_drafts = session.query(EmailOutreach).join(EmailCampaign).filter(
-                            EmailCampaign.user_id == u.id,
-                            EmailCampaign.status == 'active',
-                            EmailOutreach.status == 'draft',
-                        ).first() is not None
-                        # НЕ пропускаем если есть follow-up для отправки (silent)
-                        has_follow_ups = session.query(EmailOutreach).join(EmailCampaign).filter(
-                            EmailCampaign.user_id == u.id,
-                            EmailCampaign.status == 'active',
-                            EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
-                            EmailOutreach.next_follow_up_at <= now_utc,
-                        ).first() is not None
+                        # Use pre-loaded batch sets (no per-user queries)
+                        has_pending_reminder = u.id in _night_exc_reminders
+                        has_unreplied_email = u.id in _night_exc_unreplied
+                        has_email_drafts = u.id in _night_exc_drafts
+                        has_follow_ups = u.id in _night_exc_followups
                         if not has_pending_reminder and not has_unreplied_email and not has_email_drafts and not has_follow_ups:
                             skipped_night += 1
                             continue
@@ -500,6 +511,15 @@ class AnchorEngine:
 
         # ── STALENESS CHECK: задача могла быть выполнена/удалена после создания якоря ──
         task_anchor_types = {'task_overdue', 'task_deadline_soon', 'task_stale', 'task_reminder', 'task_result_check'}
+        # Batch-load all referenced tasks (avoid N+1 per anchor)
+        _stale_tids = []
+        for _sa in ready:
+            if _sa.anchor_type in task_anchor_types and _sa.source and _sa.source.startswith('task:'):
+                try:
+                    _stale_tids.append(int(_sa.source.split(':')[1]))
+                except (ValueError, IndexError):
+                    pass
+        _src_task_by_id = {t.id: t for t in session.query(Task).filter(Task.id.in_(_stale_tids)).all()} if _stale_tids else {}
         stale_ids = []
         for a in ready:
             if a.anchor_type in task_anchor_types and a.source and a.source.startswith('task:'):
@@ -507,7 +527,7 @@ class AnchorEngine:
                     tid = int(a.source.split(':')[1])
                 except (ValueError, IndexError):
                     continue
-                src_task = session.query(Task).filter_by(id=tid).first()
+                src_task = _src_task_by_id.get(tid)
                 if not src_task or src_task.status in ('completed', 'deleted', 'cancelled'):
                     a.delivered_at = datetime.now(timezone.utc)  # auto-expire
                     stale_ids.append(a.id)
@@ -1069,15 +1089,26 @@ class AnchorEngine:
             Task.status.in_(['pending', 'in_progress', 'active', 'completed'])
         ).all()
 
+        # Batch-load all child task instances for recurring tasks (avoid N+1)
+        _recur_ids = [rt.id for rt in recurring_tasks]
+        _recur_children_all = session.query(Task).filter(
+            Task.parent_task_id.in_(_recur_ids)
+        ).order_by(Task.reminder_time.desc()).all() if _recur_ids else []
+        # latest child per parent (desc order → first seen = latest)
+        _recur_last_by_parent: dict = {}
+        _recur_children_by_parent: dict = {}
+        for _rc in _recur_children_all:
+            if _rc.parent_task_id not in _recur_last_by_parent:
+                _recur_last_by_parent[_rc.parent_task_id] = _rc
+            _recur_children_by_parent.setdefault(_rc.parent_task_id, []).append(_rc)
+
         for rtask in recurring_tasks:
             if rtask.reminder_time and rtask.recurrence_pattern:
                 rt = rtask.reminder_time
                 if rt.tzinfo is None:
                     rt = rt.replace(tzinfo=timezone.utc)
                 # Проверяем: последний экземпляр уже в прошлом?
-                last_instance = session.query(Task).filter(
-                    Task.parent_task_id == rtask.id
-                ).order_by(Task.reminder_time.desc()).first()
+                last_instance = _recur_last_by_parent.get(rtask.id)
                 
                 last_time = last_instance.reminder_time if last_instance else rt
                 if last_time and last_time.tzinfo is None:
@@ -1086,11 +1117,11 @@ class AnchorEngine:
                 if last_time and last_time < now_utc:
                     # Создаём новый экземпляр повторяющейся задачи
                     next_time = self._calculate_next_recurrence(last_time, rtask.recurrence_pattern, rtask.recurrence_interval or 1)
-                    # Проверяем что такой экземпляр ещё не создан
-                    existing = session.query(Task).filter(
-                        Task.parent_task_id == rtask.id,
-                        Task.reminder_time == next_time
-                    ).first()
+                    # Проверяем что такой экземпляр ещё не создан (используем предзагруженные дочерние задачи)
+                    existing = next(
+                        (_c for _c in _recur_children_by_parent.get(rtask.id, []) if _c.reminder_time == next_time),
+                        None
+                    )
                     if not existing:
                         new_task = Task(
                             user_id=rtask.user_id,
