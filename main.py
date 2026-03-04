@@ -10785,8 +10785,8 @@ async def api_marketplace_agent_activate_handler(request):
                 # Приватные агенты нельзя активировать другим пользователям
                 if agent.is_private:
                     return web.json_response({'error': 'Agent not found or not active'}, status=404)
-                # Для чужих/публичных агентов требуем status='active'
-                if agent.status != 'active':
+                # Для чужих/публичных агентов требуем status='active' или 'paused' (видны в маркете)
+                if agent.status not in ('active', 'paused'):
                     return web.json_response({'error': 'Agent not found or not active'}, status=404)
             existing = session_db.query(AgentSubscription).filter_by(
                 user_id=user_obj.id, agent_id=agent_id).first()
