@@ -3896,7 +3896,8 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             "content": (
                 f"Пользователь обратился напрямую к {_direct_agent['name']}. "
                 f"Ответ агента:\n\n{_resp[:1500]}\n\n"
-                "Ответь пользователю от ASI Biont — живо, своими словами, без шаблонных фраз."
+                "Ответь пользователю от ASI Biont — живо, своими словами, без шаблонных фраз. "
+                "Без markdown, без списков, без заголовков."
             ),
         }], max_tokens=400)
         return final_response or _resp
@@ -3993,10 +3994,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             _ag = _find_agent(decision.get('agent_name', ''))
             if not _ag or _ag['name'] in called_agents:
                 break
-            _dm = decision.get('director_message', '')
-            if _dm:
-                _save_interaction_for_director(user_id, _dm)
-                await asyncio.sleep(0.05)
+            # director_message НЕ сохраняем — агент отвечает сразу, без предварительного пузырька ASI
             called_agents.add(_ag['name'])
             _task = decision.get('agent_task') or user_message
             _resp = await _run_agent_task(_ag, _task, extra_context=_agent_ctx)
@@ -4037,6 +4035,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             f"Пользователь спросил: «{user_message}»\n"
             f"Агенты команды ответили:\n\n{combined[:1500]}\n\n"
             "Ответь пользователю как ASI Biont — живо, по существу, без шаблонных формулировок. "
+            "Без markdown, без списков, без заголовков — пиши как в мессенджере. "
             "Говори своими словами, опираясь на то что принесли агенты."
         ),
     }], max_tokens=500)
