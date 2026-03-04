@@ -2676,6 +2676,10 @@ def get_partners_list(user_id=None, session=None):
         if not profile_user or not profile_user.username:
             continue
 
+        # Skip users already in delegation (delegated_usernames set built above)
+        if profile_user.username.lower() in delegated_usernames:
+            continue
+
         has_match = False
         match_reasons = []  # Для логирования причин совпадения
 
@@ -3058,32 +3062,54 @@ def get_partners_list(user_id=None, session=None):
         logger.debug(f"Failed to extract goal keywords: {e}")
     
     # Добавляем информацию об общих интересах, навыках, целях и задачах
-    user_interests = set(i.strip().lower() for i in user_profile.interests.split(',')) if user_profile.interests else set()
-    user_skills = set(s.strip().lower() for s in user_profile.skills.split(',')) if user_profile.skills else set()
-    user_goals = set(g.strip().lower() for g in user_profile.goals.split(',')) if user_profile.goals else set()
-    
+    # Используем нормализованные поля чтобы EN/RU правильно совпадали
+    def _norm_set(obj, field):
+        val = getattr(obj, f'{field}_normalized', None) or getattr(obj, field, None)
+        if not val:
+            return set()
+        return set(v.strip().lower() for v in val.replace(';', ',').split(',') if v.strip())
+
+    user_interests = _norm_set(user_profile, 'interests')
+    user_skills = _norm_set(user_profile, 'skills')
+    user_goals = _norm_set(user_profile, 'goals')
+
     for partner in partners:
-        # Common interests
-        if partner.interests:
-            partner_interests = set(i.strip().lower() for i in partner.interests.split(','))
+        # Common interests — cross-language via normalized
+        partner_interests = _norm_set(partner, 'interests')
+        if partner_interests:
             common = user_interests & partner_interests
-            partner.common_interests = ', '.join(common) if common else None
+            if not common:  # fallback: substring match
+                for ui in user_interests:
+                    for pi in partner_interests:
+                        if ui and pi and len(ui) >= 3 and (ui in pi or pi in ui):
+                            common.add(pi)
+            partner.common_interests = ', '.join(sorted(common)) if common else None
         else:
             partner.common_interests = None
-            
-        # Common skills
-        if partner.skills:
-            partner_skills = set(s.strip().lower() for s in partner.skills.split(','))
+
+        # Common skills — cross-language via normalized
+        partner_skills = _norm_set(partner, 'skills')
+        if partner_skills:
             common_skills = user_skills & partner_skills
-            partner.common_skills = ', '.join(common_skills) if common_skills else None
+            if not common_skills:
+                for us in user_skills:
+                    for ps in partner_skills:
+                        if us and ps and len(us) >= 3 and (us in ps or ps in us):
+                            common_skills.add(ps)
+            partner.common_skills = ', '.join(sorted(common_skills)) if common_skills else None
         else:
             partner.common_skills = None
-            
-        # Common goals
-        if partner.goals:
-            partner_goals = set(g.strip().lower() for g in partner.goals.split(','))
+
+        # Common goals — cross-language via normalized
+        partner_goals = _norm_set(partner, 'goals')
+        if partner_goals:
             common_goals = user_goals & partner_goals
-            partner.common_goals = ', '.join(common_goals) if common_goals else None
+            if not common_goals:
+                for ug in user_goals:
+                    for pg in partner_goals:
+                        if ug and pg and len(ug) >= 3 and (ug in pg or pg in ug):
+                            common_goals.add(pg)
+            partner.common_goals = ', '.join(sorted(common_goals)) if common_goals else None
         else:
             partner.common_goals = None
         

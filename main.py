@@ -1452,25 +1452,20 @@ async def dashboard_handler(request):
         finally:
             session_db.close()
 
+        # Reuse all_partners from the first block (already fetched above — avoid double DB scan)
         try:
-            # Get user to convert telegram_id to database user.id
-            session_db = Session()
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
+            partners = all_partners
+        except NameError:
+            try:
+                session_db = Session()
+                user_tmp = session_db.query(User).filter_by(telegram_id=user_id).first()
+                partners = get_partners_list(user_id=user_tmp.id) if user_tmp else []
                 session_db.close()
-                return web.json_response({'error': 'User not found'}, status=404)
-            
-            partners = get_partners_list(user_id=user.id)
-            session_db.close()
-
-            # Контакты доступны всем (оплата токенами)
-            # Ограничение: макс 20 контактов (already limited in get_partners_list)
-
-        except Exception as e:
-            logger.error(f"Error getting partners: {e}", exc_info=True)
-            partners = []
-            delegating_to_me = []
-            delegating_by_me = []
+            except Exception as e:
+                logger.error(f"Error getting partners: {e}", exc_info=True)
+                partners = []
+                delegating_to_me = []
+                delegating_by_me = []
 
         # Add common interests, skills, goals and recommendation reason
         # Uses normalized (English) fields for cross-language matching with fallback to originals
