@@ -99,20 +99,21 @@ If balance is low — warn and suggest /buy."""
             FIELD_LABELS = {
                 'city': 'City', 'company': 'Company', 'position': 'Position',
                 'goals': 'Goals', 'skills': 'Skills', 'interests': 'Interests',
-                'telegram_channel': 'TG channel'
+                'telegram_channel': 'TG channel', 'status_text': 'Status', 'bio': 'Bio'
             }
         else:
             FIELD_LABELS = {
                 'city': 'Город', 'company': 'Компания', 'position': 'Должность',
                 'goals': 'Цели', 'skills': 'Навыки', 'interests': 'Интересы',
-                'telegram_channel': 'TG-канал'
+                'telegram_channel': 'TG-канал', 'status_text': 'Статус', 'bio': 'О себе'
             }
         filled_parts = []
         empty_fields = []
+        _optional_fields = ('telegram_channel', 'status_text', 'bio')  # необязательные
         for k, label in FIELD_LABELS.items():
             if profile_data.get(k):
                 filled_parts.append(f"{label}: {profile_data[k]}")
-            elif k != 'telegram_channel':  # telegram_channel необязателен
+            elif k not in _optional_fields:
                 empty_fields.append(label)
         if filled_parts:
             header = "USER PROFILE (already known, DON'T re-ask):" if lang == 'en' else "ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (уже известно, НЕ переспрашивай):"

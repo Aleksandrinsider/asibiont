@@ -1100,7 +1100,7 @@ class HybridAutonomousAgent:
             weather_info = news_info = None
             if profile:
                 for field in ('city', 'company', 'position', 'goals', 'skills',
-                              'interests', 'birthdate'):
+                              'interests', 'birthdate', 'status_text', 'bio'):
                     val = getattr(profile, field, None)
                     if val:
                         profile_data[field] = val
@@ -3199,13 +3199,8 @@ def _build_user_context_sync(user_db_id: int) -> str:
             identity_parts.append(f'из «{profile.company}»')
         if profile.city:
             identity_parts.append(f'г. {profile.city}')
-        if profile.bio:
-            identity_parts.append(f'О себе: {profile.bio[:150]}')
-        if profile.skills:
-            identity_parts.append(f'Навыки: {profile.skills[:100]}')
-        if profile.interests:
-            identity_parts.append(f'Интересы: {profile.interests[:100]}')
-        if profile.current_plans:
+            if profile.status_text:
+                identity_parts.append(f'Статус: {profile.status_text}')
             identity_parts.append(f'Сейчас: {profile.current_plans[:100]}')
         if profile.content_strategy:
             identity_parts.append(f'Контент-стратегия: {profile.content_strategy[:100]}')
