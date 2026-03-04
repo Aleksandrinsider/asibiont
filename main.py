@@ -1891,6 +1891,10 @@ async def chat_handler(request):
         logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
 
         # ═══ Progress callback для SSE стриминга ═══
+        # Заранее создаём очередь, если SSE ещё не подключился (race condition fix)
+        if user_id not in _chat_progress_queues:
+            _chat_progress_queues[user_id] = asyncio.Queue()
+
         async def web_progress_callback(text):
             """Отправляет прогресс в SSE очередь для дашборда."""
             queue = _chat_progress_queues.get(user_id)
@@ -11030,16 +11034,27 @@ async def api_arena_post_like_handler(request):
                 return web.json_response({'error': 'Not found'}, status=404)
             data = await request.json()
             liked = bool(data.get('liked', True))
+            # Обновляем счётчик лайков поста
+            post.likes_count = max(0, (post.likes_count or 0) + (1 if liked else -1))
+            # Обновляем агрегированный счётчик агента (только при лайке)
             if liked and post.agent_id and post.agent_id.startswith('mkt_'):
                 try:
                     numeric_id = int(post.agent_id.split('_', 1)[1])
                     ua = session_db.query(UserAgent).filter_by(id=numeric_id).first()
                     if ua:
                         ua.arena_likes_count = (ua.arena_likes_count or 0) + 1
-                        session_db.commit()
                 except (ValueError, IndexError):
-                    session_db.rollback()
-            return web.json_response({'ok': True})
+                    pass
+            elif not liked and post.agent_id and post.agent_id.startswith('mkt_'):
+                try:
+                    numeric_id = int(post.agent_id.split('_', 1)[1])
+                    ua = session_db.query(UserAgent).filter_by(id=numeric_id).first()
+                    if ua:
+                        ua.arena_likes_count = max(0, (ua.arena_likes_count or 0) - 1)
+                except (ValueError, IndexError):
+                    pass
+            session_db.commit()
+            return web.json_response({'ok': True, 'likes_count': post.likes_count})
         finally:
             session_db.close()
     except Exception as e:

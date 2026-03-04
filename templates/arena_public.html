@@ -236,17 +236,14 @@
         const btn = document.getElementById(postId + '-like');
         const cnt = document.getElementById(postId + '-lcnt');
         if (!btn || !cnt) return;
-        const savedCount = _pubLikesCounts[serverId] || 0;
         const isLiked = _pubLikedServerIds.has(serverId);
-        if (savedCount > 0 || isLiked) {
-            _pubLikes[postId] = {liked: isLiked, count: savedCount};
-            const svgEl = btn.querySelector('svg');
-            const svgPath = svgEl ? svgEl.querySelector('path') : null;
-            if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
-            if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
-            if (isLiked) btn.style.color = '#374151';
-            cnt.textContent = savedCount;
-        }
+        // Счёт уже выставлен с сервера, только обновляем визуал кнопки
+        _pubLikes[postId] = {liked: isLiked, count: parseInt(cnt.textContent, 10) || 0};
+        const svgEl = btn.querySelector('svg');
+        const svgPath = svgEl ? svgEl.querySelector('path') : null;
+        if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
+        if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
+        if (isLiked) btn.style.color = '#374151';
     }
     const _pubPageSize = 15;
 
@@ -441,7 +438,7 @@
                                 onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                 onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="${_HEART_OUTLINE}"></path></svg>
-                                <span id="${postId}-lcnt">0</span>
+                                <span id="${postId}-lcnt">${msg.likes_count || 0}</span>
                             </button>
                         </div>
                     </div>
@@ -462,26 +459,33 @@
         const btn = document.getElementById(postId + '-like');
         const cnt = document.getElementById(postId + '-lcnt');
         if (!btn || !cnt) return;
-        const serverId = btn.closest('[data-server-id]').dataset.serverId;
+        const serverId = btn.closest('[data-server-id]') && btn.closest('[data-server-id]').dataset.serverId;
         if (!serverId) return;
         const wasLiked = _pubLikedServerIds.has(serverId);
-        const currentCount = _pubLikesCounts[serverId] || 0;
-        if (wasLiked) {
-            _pubLikedServerIds.delete(serverId);
-            _pubLikesCounts[serverId] = Math.max(0, currentCount - 1);
-        } else {
+        const currentCount = parseInt(cnt.textContent, 10) || 0;
+        const nowLiked = !wasLiked;
+        if (nowLiked) {
             _pubLikedServerIds.add(serverId);
-            _pubLikesCounts[serverId] = currentCount + 1;
+        } else {
+            _pubLikedServerIds.delete(serverId);
         }
         _pubSaveLikedServerIds(_pubLikedServerIds);
-        _pubSaveLikesCounts(_pubLikesCounts);
-        const nowLiked = _pubLikedServerIds.has(serverId);
         const svgEl = btn.querySelector('svg');
         const svgPath = svgEl ? svgEl.querySelector('path') : null;
         if (svgPath) svgPath.setAttribute('d', nowLiked ? _HEART_FILLED : _HEART_OUTLINE);
         if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
         btn.style.color = nowLiked ? '#374151' : '';
-        cnt.textContent = _pubLikesCounts[serverId] || 0;
+        cnt.textContent = Math.max(0, currentCount + (nowLiked ? 1 : -1));
+        // Синхронизируем серверный счёт
+        fetch('/api/arena/post/' + encodeURIComponent(serverId) + '/like', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({liked: nowLiked})
+        }).then(r => r.json()).then(data => {
+            if (data && typeof data.likes_count === 'number') {
+                cnt.textContent = data.likes_count;
+            }
+        }).catch(() => {});
     }
 
     const _pubTranslateCache = {};

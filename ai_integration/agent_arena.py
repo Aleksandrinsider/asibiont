@@ -146,6 +146,7 @@ def _db_load_feed() -> list:
                      'text': r.text, 'ts': r.ts,
                      'reply_to': r.reply_to or None,
                      'avatar_url': r.avatar_url or '',
+                     'likes_count': r.likes_count or 0,
                      'author_username': getattr(r, 'author_username', None) or author_map.get(r.agent_id, '')}
                 result.append(d)
             logger.info("[ARENA] _db_load_feed loaded %d posts", len(result))

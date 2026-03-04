@@ -28,8 +28,8 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
         ).first()
         if not agent:
             return None
-        # Для публичных агентов требуем статус active
-        if not agent.is_private and agent.status != 'active':
+        # Для публичных агентов требуем статус active или paused (paused-агенты также видны в маркете и могут быть активированы)
+        if not agent.is_private and agent.status not in ('active', 'paused'):
             return None
         tools = json.loads(agent.tools_allowed or '[]')
         kb_raw = json.loads(agent.knowledge_base or '[]')

@@ -5582,7 +5582,7 @@ except Exception as e:
                                     onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#374151'"
                                     onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0'">
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="${_HEART_OUTLINE}"></path></svg>
-                                    <span id="${postId}-lcnt">0</span>
+                                    <span id="${postId}-lcnt">${msg.likes_count || 0}</span>
                                 </button>
                             </div>
                         </div>
@@ -5634,24 +5634,23 @@ except Exception as e:
             const btn = document.getElementById(postId + '-like');
             const cnt = document.getElementById(postId + '-lcnt');
             if (!btn || !cnt) return;
-            const savedCount = _likesCounts[serverId] || 0;
             const isLiked = _likedServerIds.has(serverId);
-            if (savedCount > 0 || isLiked) {
-                _arenaLikes[postId] = {liked: isLiked, count: savedCount};
-                const svgEl = btn.querySelector('svg');
-                const svgPath = svgEl ? svgEl.querySelector('path') : null;
-                if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
-                if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
-                if (isLiked) btn.style.color = '#374151';
-                cnt.textContent = savedCount;
-            }
+            // Берём счёт из DOM (уже выставлен с сервера), 
+            // обновляем только цвет/форму кнопки по состоянию из localStorage
+            const serverCount = parseInt(cnt.textContent, 10) || 0;
+            _arenaLikes[postId] = {liked: isLiked, count: serverCount};
+            const svgEl = btn.querySelector('svg');
+            const svgPath = svgEl ? svgEl.querySelector('path') : null;
+            if (svgPath) svgPath.setAttribute('d', isLiked ? _HEART_FILLED : _HEART_OUTLINE);
+            if (svgEl) { svgEl.removeAttribute('fill'); svgEl.setAttribute('fill', 'currentColor'); }
+            if (isLiked) btn.style.color = '#374151';
         }
 
         function arenaToggleLike(postId, serverId) {
             const btn = document.getElementById(postId + '-like');
             const cnt = document.getElementById(postId + '-lcnt');
             if (!btn || !cnt) return;
-            _arenaLikes[postId] = _arenaLikes[postId] || {liked: false, count: 0};
+            _arenaLikes[postId] = _arenaLikes[postId] || {liked: false, count: parseInt(cnt.textContent, 10) || 0};
             const wasLiked = _arenaLikes[postId].liked;
             _arenaLikes[postId].liked = !wasLiked;
             _arenaLikes[postId].count += wasLiked ? -1 : 1;
@@ -5668,15 +5667,18 @@ except Exception as e:
             btn.style.color = '#374151';
             cnt.textContent = Math.max(0, _arenaLikes[postId].count);
             if (serverId) {
-                _likesCounts[serverId] = Math.max(0, _arenaLikes[postId].count);
-                _saveLikesCounts(_likesCounts);
-            }
-            if (serverId && nowLiked) {
+                // Синхронизируем серверный счёт (и лайк, и анлайк)
                 fetch('/api/arena/post/' + encodeURIComponent(serverId) + '/like', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     credentials: 'include',
-                    body: JSON.stringify({liked: true})
+                    body: JSON.stringify({liked: nowLiked})
+                }).then(r => r.json()).then(data => {
+                    // Обновляем счёт из достоверного серверного значения
+                    if (data && typeof data.likes_count === 'number') {
+                        cnt.textContent = data.likes_count;
+                        _arenaLikes[postId].count = data.likes_count;
+                    }
                 }).catch(() => {});
             }
         }

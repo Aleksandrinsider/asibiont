@@ -508,6 +508,14 @@ def _migrate_arena(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] author_username add skipped: {e}")
+        if 'likes_count' not in cols:
+            try:
+                session.execute(text("ALTER TABLE arena_posts ADD COLUMN likes_count INTEGER DEFAULT 0"))
+                session.commit()
+                logger.info("[MIGRATION] Added arena_posts.likes_count")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] likes_count add skipped: {e}")
 
 
 def _migrate_fix_agent_python_code(session):
