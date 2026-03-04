@@ -3394,13 +3394,34 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     if not _agents:
         return
 
-    # Cooldown: агент не вклинивается чаще раза в 8 минут
-    _now_ts = __import__('time').time()
-    _cooldown_key = '_chime_ts'
-    for _a in _agents:
-        _last = _a.get(_cooldown_key, 0)
-        if _now_ts - _last < 480:  # 8 мин
-            _agents = [x for x in _agents if x is not _a]
+    # Cooldown: агент не вклинивается чаще раза в 8 минут — проверяем по DB (in-memory dict не работал,
+    # т.к. load_agent_personality каждый раз возвращает новый объект)
+    import datetime as _dt_ch
+    _chime_cutoff = _dt_ch.datetime.utcnow() - _dt_ch.timedelta(minutes=8)
+    try:
+        _cs = _Db()
+        try:
+            _recent_chimes = _cs.query(_Itr).filter(
+                _Itr.user_id == user_db_id,
+                _Itr.message_type == 'ai',
+                _Itr.created_at >= _chime_cutoff,
+            ).all()
+            _recently_chimed: set = set()
+            import json as _cj
+            for _rc in _recent_chimes:
+                try:
+                    _rd = _cj.loads(_rc.content or '')
+                    if '__agent' in _rd:
+                        _aid = _rd['__agent'].get('id')
+                        if _aid:
+                            _recently_chimed.add(int(_aid))
+                except Exception:
+                    pass
+        finally:
+            _cs.close()
+        _agents = [a for a in _agents if a.get('id') not in _recently_chimed]
+    except Exception:
+        pass
 
     if not _agents:
         return
@@ -3414,9 +3435,6 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         _scored.append((_score, _a))
     _scored.sort(key=lambda x: x[0], reverse=True)
     _agent = _scored[0][1] if _scored[0][0] > 0 else _rnd.choice(_agents)
-
-    # Ставим cooldown сразу
-    _agent[_cooldown_key] = _now_ts
 
     # Строим универсальный контекст пользователя + возможностей агента
     _user_ctx = _build_user_context_sync(user_db_id)
@@ -3460,9 +3478,11 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         f"В чате только что написали:\n"
         f"[Пользователь]: {user_message[:200]}\n"
         f"[ASI]: {asi_response[:300]}\n\n"
-        "Ты — коллега ASI. Прочитал этот обмен и хочешь добавить что-то ценное со своей стороны.\n"
-        "Можешь: предложить конкретный ресурс/инструмент из своей области, взять задачу на себя "
-        "(если у тебя есть нужная интеграция), добавить экспертное мнение.\n"
+        "Ты — коллега ASI. Прочитал этот разговор и хочешь добавить короткую реплику со своей стороны.\n"
+        "ВАЖНО: ты только ЧИТАЕШЬ разговор — НЕ делай вид, что запустил скрипт, проверил почту, "
+        "получил данные или выполнил задачу. Ты комментируешь, а не действуешь.\n"
+        "Можно: добавить экспертное мнение из своей области, упомянуть что можешь помочь если пользователь обратится.\n"
+        "НЕ выдумывай данные (письма, новости, задачи) — только то, что реально в этом разговоре.\n"
         "Учитывай кто этот пользователь и чем он занимается — отвечай релевантно его контексту.\n"
         "1-2 предложения. Живо, без официоза. Если нечего добавить — ответь пустой строкой."
     )
@@ -3598,7 +3618,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             loop2 = asyncio.get_event_loop()
             stdout2, _stderr2 = await loop2.run_in_executor(None, _run_script)
             if stdout2:
-                script_context = f"\n\n[Данные от твоего скрипта/интеграции]:\n{stdout2[:2000]}"
+                script_context = (
+                    f"\n\n[Данные от скрипта/интеграции — перескажи СВОИМИ СЛОВАМИ в ответе, "
+                    f"не копируй raw-текст дословно, сформулируй как живой человек]:\n{stdout2[:2000]}"
+                )
                 system_prompt += script_context
             elif _stderr2 and 'timeout' not in _stderr2:
                 logger.debug("[DIRECTOR-EXEC] script stderr for %s: %s", agent.get('name'), _stderr2[:150])
