@@ -4775,11 +4775,15 @@ class AnchorEngine:
                 # Помечаем якоря как responded
                 try:
                     ids = json.loads(recent_log.anchor_ids)
-                    for aid in ids:
-                        anchor = session.query(Anchor).filter_by(id=aid).first()
-                        if anchor:
-                            anchor.user_reaction = 'responded'
-                            anchor.reaction_at = now_utc
+                    if ids:
+                        # Batch-load anchors (avoid N+1)
+                        _resp_anchors = session.query(Anchor).filter(Anchor.id.in_(ids)).all()
+                        _resp_anchor_map = {a.id: a for a in _resp_anchors}
+                        for aid in ids:
+                            anchor = _resp_anchor_map.get(aid)
+                            if anchor:
+                                anchor.user_reaction = 'responded'
+                                anchor.reaction_at = now_utc
                 except Exception:
                     pass
 
@@ -4804,12 +4808,27 @@ class AnchorEngine:
                 AnchorDeliveryLog.created_at < cutoff
             ).all()
 
+            # Batch-load all anchor IDs across all unresolved logs (avoid N+1)
+            _all_aids: set = set()
+            _log_ids_map: dict = {}
             for log in unresolved:
                 log.user_responded = False
                 try:
                     ids = json.loads(log.anchor_ids)
-                    for aid in ids:
-                        anchor = session.query(Anchor).filter_by(id=aid).first()
+                    _log_ids_map[log.id] = ids
+                    _all_aids.update(ids)
+                except Exception:
+                    pass
+
+            _ignored_anchor_map = {}
+            if _all_aids:
+                _ignored_anchors = session.query(Anchor).filter(Anchor.id.in_(list(_all_aids))).all()
+                _ignored_anchor_map = {a.id: a for a in _ignored_anchors}
+
+            for log in unresolved:
+                try:
+                    for aid in _log_ids_map.get(log.id, []):
+                        anchor = _ignored_anchor_map.get(aid)
                         if anchor and not anchor.user_reaction:
                             anchor.user_reaction = 'ignored'
                             anchor.reaction_at = now_utc

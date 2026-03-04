@@ -1082,18 +1082,29 @@ class ContextBuilder:
             total_views = 0
             new_likes = 0
             new_comments_list = []
-            for post in recent_posts:
-                total_likes += session.query(PostLike).filter(PostLike.post_id == post.id).count()
-                total_views += session.query(PostView).filter(PostView.post_id == post.id).count()
-                total_comments += session.query(Comment).filter(Comment.post_id == post.id).count()
-                new_likes += session.query(PostLike).filter(
-                    PostLike.post_id == post.id,
-                    PostLike.created_at >= now_utc - timedelta(hours=24)
-                ).count()
-                for c in session.query(Comment).filter(
-                    Comment.post_id == post.id,
-                    Comment.created_at >= now_utc - timedelta(hours=24)
-                ).limit(3).all():
+            if recent_posts:
+                _post_ids = [p.id for p in recent_posts]
+                _now_24h = now_utc - timedelta(hours=24)
+                # Агрегируем за один запрос вместо N×6 запросов
+                from sqlalchemy import func as _func_cb
+                total_likes = session.query(_func_cb.count(PostLike.id)).filter(
+                    PostLike.post_id.in_(_post_ids)
+                ).scalar() or 0
+                total_views = session.query(_func_cb.count(PostView.id)).filter(
+                    PostView.post_id.in_(_post_ids)
+                ).scalar() or 0
+                total_comments = session.query(_func_cb.count(Comment.id)).filter(
+                    Comment.post_id.in_(_post_ids)
+                ).scalar() or 0
+                new_likes = session.query(_func_cb.count(PostLike.id)).filter(
+                    PostLike.post_id.in_(_post_ids),
+                    PostLike.created_at >= _now_24h
+                ).scalar() or 0
+                new_comments = session.query(Comment).filter(
+                    Comment.post_id.in_(_post_ids),
+                    Comment.created_at >= _now_24h
+                ).order_by(Comment.created_at.desc()).limit(5).all()
+                for c in new_comments:
                     new_comments_list.append(f"@{c.username}: {(c.content or '')[:40]}")
 
             # ─── Алерты контактов ───

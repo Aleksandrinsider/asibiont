@@ -1477,7 +1477,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                                     from ai_integration.autonomous_agent import spawn_integration_anchors as _sia_pm
                                     import asyncio as _asyncio_pm
                                     _uid_pm, _anm_pm, _sv_pm, _op_pm = _al_upm.id, _aname_pm, _svc_pm, _out_pm
-                                    _asyncio_pm.get_event_loop().run_in_executor(
+                                    _asyncio_pm.get_running_loop().run_in_executor(
                                         None,
                                         lambda: _sia_pm(_uid_pm, _anm_pm, _sv_pm, _op_pm)
                                     )

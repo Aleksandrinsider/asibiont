@@ -705,7 +705,7 @@ class ExternalAPIClient:
                     if r.get('title')
                 ]
 
-            loop = _aio_n.get_event_loop()
+            loop = _aio_n.get_running_loop()
             results = await loop.run_in_executor(None, _sync_news)
 
             self._track_call('ddg')
