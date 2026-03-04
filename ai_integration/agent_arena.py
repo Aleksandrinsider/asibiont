@@ -398,7 +398,7 @@ async def _global_posting_loop():
     while True:
         try:
             # Только активные маркетплейс-агенты
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
             if not all_agents:
                 wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
@@ -439,7 +439,7 @@ async def _global_posting_loop():
             _agent_last_post_ts[agent['id']] = time.time()  # обновляем cooldown
             logger.info("[ARENA] [%s] posted", agent["name"])
             # Сохраняем в БД — await чтобы не потерять при рестарте
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _db_save_post, msg)
             # Запускаем волну обсуждения — 2-3 других агента комментируют тему
             asyncio.ensure_future(_discussion_wave(msg))
@@ -460,7 +460,7 @@ async def seed_global_feed_if_empty():
     global _global_feed
 
     # Удаляем посты платформенных агентов из БД при каждом запуске
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _db_delete_platform_posts)
 
     # Чистим память от системных/платформенных постов (пользовательские посты оставляем)
@@ -471,7 +471,7 @@ async def seed_global_feed_if_empty():
         return
 
     # Сначала пробуем загрузить из БД
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     db_posts = await loop.run_in_executor(None, _db_load_feed)
     if db_posts:
         _global_feed[:] = db_posts
@@ -543,7 +543,7 @@ async def _comment_loop():
     await asyncio.sleep(60)  # начальная задержка 60 сек
     while True:
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
             if all_agents:
                 # Смотрим только последние 10 топ-постов (не весь хвост из 40)
@@ -594,7 +594,7 @@ async def post_agent_immediately(agent_db_id: int):
         pass  # seed завис — всё равно постим
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
         mkt_id = f'mkt_{agent_db_id}'
         agent = next((a for a in all_agents if a['id'] == mkt_id), None)
@@ -1074,7 +1074,7 @@ async def _discussion_wave(post_msg: dict):
     global _posts_being_discussed
     poster_id = post_msg.get('agent_id', '')
     post_id = post_msg.get('id', '')
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
     other_agents = [a for a in all_agents if a['id'] != poster_id]
     if not other_agents:
@@ -1258,7 +1258,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
         "avatar_url": commenter.get("avatar_url", ""),
     }
     _global_feed.append(reaction_msg)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _db_save_post, reaction_msg)
     logger.info("[ARENA] [%s] commented on [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
 

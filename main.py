@@ -486,7 +486,7 @@ async def send_email(to: str, subject: str, body: str):
             raise RuntimeError('; '.join(smtp_errors))
         
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _smtp_send)
             logger.info(f"Email sent via SMTP to {to}")
             return
@@ -7794,7 +7794,7 @@ async def sse_activities_handler(request):
 
         poll_interval = 5   # seconds between DB polls
         hb_interval = 30    # seconds between heartbeats
-        last_hb = asyncio.get_event_loop().time()
+        last_hb = asyncio.get_running_loop().time()
 
         while True:
             try:
@@ -7816,10 +7816,10 @@ async def sse_activities_handler(request):
                             } for a in new_acts
                         ]})
                         await response.write(f'data: {payload}\n\n'.encode())
-                        last_hb = asyncio.get_event_loop().time()
-                    elif asyncio.get_event_loop().time() - last_hb >= hb_interval:
+                        last_hb = asyncio.get_running_loop().time()
+                    elif asyncio.get_running_loop().time() - last_hb >= hb_interval:
                         await response.write(b': heartbeat\n\n')
-                        last_hb = asyncio.get_event_loop().time()
+                        last_hb = asyncio.get_running_loop().time()
             except (ConnectionResetError, asyncio.CancelledError):
                 break
             except Exception as _e:
@@ -10508,7 +10508,7 @@ async def api_arena_comment_handler(request):
                     'avatar_url': avatar_url,
                 }
                 _af.append(user_msg)
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, _dsp, user_msg)
             except Exception as _upe:
                 logger.warning(f"[ARENA] user comment persistence error: {_upe}")
@@ -10532,7 +10532,7 @@ async def api_arena_comment_handler(request):
                     'avatar_url': '',
                 }
                 _af.append(reply_msg)
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, _dsp, reply_msg)
                 reply['_reply_id'] = reply_msg['id']  # чтобы JS мог пометить как rendered
             except Exception as _pe:
@@ -10767,7 +10767,7 @@ async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
         _gf.append(msg)
         if len(_gf) > 200:
             _gf[:] = _gf[-200:]
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.run_in_executor(None, _db_save_post, msg)
         logger.info(f"[ARENA] intro post published for agent mkt_{agent_id}")
     except Exception as e:
@@ -11148,7 +11148,7 @@ async def api_arena_user_post_handler(request):
             'avatar_url': data.get('avatar_url') or '',
         }
         _gf.append(msg)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _dsp, msg)
         # Запускаем волну обсуждения: агенты прокомментируют пост пользователя
         try:
@@ -11174,7 +11174,7 @@ async def api_arena_force_post_handler(request):
             _load_marketplace_agents, _generate_agent_reply, _global_feed, _db_save_post
         )
         import time as _time
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         agents = await loop.run_in_executor(None, _load_marketplace_agents)
         if not agents:
             return web.json_response({'error': 'Нет активных агентов маркетплейса. Создайте агента сначала.'}, status=404)
@@ -11238,7 +11238,7 @@ async def api_arena_clear_all_handler(request):
             except Exception as e:
                 logger.error(f'[ARENA] DB delete error: {e}')
                 return 0
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         deleted = await loop.run_in_executor(None, _delete_all_posts)
         # Очищаем in-memory ленту
         _arena_mod._global_feed.clear()

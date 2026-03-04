@@ -2107,7 +2107,7 @@ class HybridAutonomousAgent:
                                     _al_s.commit()
                                     # Создаём якорь в отдельном потоке — не блокируем event loop
                                     _uid_ia, _adp_ia, _svc_ia, _out_ia = _al_u.id, _agent_display, _svc_lbl, _code_output
-                                    asyncio.get_event_loop().run_in_executor(
+                                    asyncio.get_running_loop().run_in_executor(
                                         None,
                                         lambda: spawn_integration_anchors(_uid_ia, _adp_ia, _svc_ia, _out_ia)
                                     )
@@ -3616,7 +3616,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 except Exception as _e2:
                     return '', str(_e2)[:200]
 
-            loop2 = asyncio.get_event_loop()
+            loop2 = asyncio.get_running_loop()
             stdout2, _stderr2 = await loop2.run_in_executor(None, _run_script)
             if stdout2:
                 script_context = (

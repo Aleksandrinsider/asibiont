@@ -249,7 +249,7 @@ class OfficeEngine:
                 wrapped = _wrap_agent_code(py_code)
                 agent_env = _build_agent_env(agent.user_api_keys or '')
 
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 stdout, stderr = await loop.run_in_executor(
                     None, _exec_agent_script_sync, wrapped, agent_env
                 )
@@ -278,7 +278,7 @@ class OfficeEngine:
             if stdout:
                 service_label = (agent.specialization or agent.name or 'Agent').strip()
                 try:
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     await loop.run_in_executor(
                         None,
                         spawn_integration_anchors,
@@ -301,7 +301,7 @@ class OfficeEngine:
                             user.id,
                         )
                     if report:
-                        loop = asyncio.get_event_loop()
+                        loop = asyncio.get_running_loop()
                         await loop.run_in_executor(
                             None,
                             _save_chat_message_sync,
@@ -397,7 +397,7 @@ class OfficeEngine:
 
         # Сохраняем реакцию ASI в чат (от имени ASI, без аватарки агента)
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None,
                 _save_chat_message_sync,
@@ -455,7 +455,7 @@ class OfficeEngine:
         _user_ctx = ''
         if user_db_id and _build_user_context_sync:
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 _user_ctx = await loop.run_in_executor(None, _build_user_context_sync, user_db_id)
             except Exception:
                 pass
@@ -549,7 +549,7 @@ class OfficeEngine:
         _user_ctx = ''
         if user_db_id and _build_user_context_sync:
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 _user_ctx = await loop.run_in_executor(None, _build_user_context_sync, user_db_id)
             except Exception:
                 pass
@@ -606,7 +606,7 @@ class OfficeEngine:
         await asyncio.sleep(random.randint(10, 30))
 
         # Читаем последние 5 сообщений — включая отчёт агента и реакцию ASI
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         history = await loop.run_in_executor(
             None, self._load_recent_chat_sync, user.id, 5
         )
