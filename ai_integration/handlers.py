@@ -6771,11 +6771,24 @@ async def get_posts(user_id: int, limit: int = 5, session=None):
             return "У тебя пока нет постов в ленте. Хочешь, напишу пост от твоего имени?"
         
         result_lines = [f"📋 Твои посты ({len(posts)} из последних):\n"]
-        
+
+        # Aggregate likes/views/comments per post (avoid N+1 ×3 per post)
+        from sqlalchemy import func as _func_gp
+        _post_ids_gp = [p.id for p in posts]
+        _likes_map = dict(session.query(PostLike.post_id, _func_gp.count(PostLike.id)).filter(
+            PostLike.post_id.in_(_post_ids_gp)
+        ).group_by(PostLike.post_id).all())
+        _views_map = dict(session.query(PostView.post_id, _func_gp.count(PostView.id)).filter(
+            PostView.post_id.in_(_post_ids_gp)
+        ).group_by(PostView.post_id).all())
+        _coms_map = dict(session.query(Comment.post_id, _func_gp.count(Comment.id)).filter(
+            Comment.post_id.in_(_post_ids_gp)
+        ).group_by(Comment.post_id).all())
+
         for post in posts:
-            likes_count = session.query(PostLike).filter_by(post_id=post.id).count()
-            views_count = session.query(PostView).filter_by(post_id=post.id).count()
-            comments_count = session.query(Comment).filter_by(post_id=post.id).count()
+            likes_count = _likes_map.get(post.id, 0)
+            views_count = _views_map.get(post.id, 0)
+            comments_count = _coms_map.get(post.id, 0)
             
             preview = post.content[:60] + '...' if len(post.content) > 60 else post.content
             # Формат даты

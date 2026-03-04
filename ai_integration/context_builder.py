@@ -554,20 +554,27 @@ class ContextBuilder:
                 if active_campaigns:
                     import pytz as _pytz_cc
                     from datetime import timezone as _tz_cc
+                    from sqlalchemy import func as _func_cc
                     _user_tz_cc = _pytz_cc.timezone(user.timezone or 'Europe/Moscow')
                     _user_now_cc = datetime.now(_user_tz_cc)
                     _today_start_cc = _user_now_cc.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_cc.utc)
+                    _camp_ids = [c.id for c in active_campaigns]
+                    # Batch: pending leads per campaign
+                    _pending_rows = session.query(_EO.campaign_id, _func_cc.count(_EO.id)).filter(
+                        _EO.campaign_id.in_(_camp_ids), _EO.status == 'draft'
+                    ).group_by(_EO.campaign_id).all()
+                    _pending_map = dict(_pending_rows)
+                    # Batch: sent today per campaign
+                    _sent_today_rows = session.query(_EO.campaign_id, _func_cc.count(_EO.id)).filter(
+                        _EO.campaign_id.in_(_camp_ids),
+                        _EO.sent_at >= _today_start_cc,
+                        _EO.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                    ).group_by(_EO.campaign_id).all()
+                    _sent_today_map = dict(_sent_today_rows)
                     camp_lines = []
                     for c in active_campaigns:
-                        pending_leads = session.query(_EO).filter(
-                            _EO.campaign_id == c.id,
-                            _EO.status == 'draft',
-                        ).count()
-                        _sent_today_c = session.query(_EO).filter(
-                            _EO.campaign_id == c.id,
-                            _EO.sent_at >= _today_start_cc,
-                            _EO.status.in_(['sent', 'delivered', 'opened', 'replied']),
-                        ).count()
+                        pending_leads = _pending_map.get(c.id, 0)
+                        _sent_today_c = _sent_today_map.get(c.id, 0)
                         _dlimit = c.daily_limit or 50
                         _is_active_c = c.status in ('active', 'running')
                         if c.status == 'paused':
