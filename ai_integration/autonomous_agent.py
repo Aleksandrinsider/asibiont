@@ -3987,10 +3987,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                 _ag = _find_agent(_t.get('agent_name', ''))
                 if not _ag or _ag['name'] in called_agents:
                     continue
-                _dm = _t.get('director_message', '')
-                if _dm:
-                    _save_interaction_for_director(user_id, _dm)
-                    await asyncio.sleep(0.05)
+                # director_message НЕ сохраняем отдельно — уже есть director_intro на весь раунд
                 called_agents.add(_ag['name'])
                 _valid.append((_ag, _t.get('agent_task') or user_message))
             if not _valid:
