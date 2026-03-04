@@ -3841,47 +3841,72 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     agents_block = "\n".join(agents_context_lines)
 
-    # ── Шаг 1: ASI принимает решение с учётом якорной памяти ──────────────────
-    _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
-    decision_raw = await _quick_ai_call_raw([{
-        "role": "user",
-        "content": (
-            f"Ты — ASI Biont, директор офиса. Твоя команда агентов (у каждого указаны интеграции — что он реально умеет):\n{agents_block}\n\n"
-            f"Пользователь написал: «{user_message}»{_ctx_hint}{_history_block}\n\n"
-            "ПРАВИЛА ВЫБОРА ДЕЙСТВИЯ:\n"
-            "- self — только для приветствий, прощаний, личных вопросов о тебе как ASI. В ответе упомяни что агенты команды могут помочь.\n"
-            "- delegate — если запрос МОЖНО выполнить через интеграции ОДНОГО агента (почта, RSS, HTTP, браузер и т.д.).\n"
-            "- multi_delegate — если запрос требует данных из НЕСКОЛЬКИХ агентов с разными интеграциями одновременно.\n\n"
-            "⚡ Смотри на ИНТЕГРАЦИИ каждого агента (поле 'Может:'). Делегируй тому, чьи интеграции подходят под задачу.\n"
-            "director_message — живое прямое обращение к агенту: '404, глянь RSS — что нового по теме X?' НЕ пиши 'ASI поручает'.\n\n"
-            "Ответь ТОЛЬКО JSON без ```:\n"
-            '{"action": "self", "team_hint": "что из команды могло бы помочь (1 предложение)"}\n'
-            "или\n"
-            '{"action": "delegate", "agent_name": "точное имя", '
-            '"agent_task": "задача в 1 предложение", "director_message": "прямое обращение к агенту в чате"}\n'
-            "или\n"
-            '{"action": "multi_delegate", "director_intro": "вступительное сообщение ASI в чат", '
-            '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение к агенту"}, ...]}'
-        ),
-    }], max_tokens=350)
+    # ── Вспомогательная функция поиска агента по имени ────────────────────────
+    def _find_agent(name: str):
+        if not name:
+            return None
+        return next(
+            (a for a in _agents if a['name'].lower() == name.lower()),
+            next((a for a in _agents if name.lower() in a['name'].lower()), None),
+        )
 
+    # ── Вспомогательная функция сохранения результата агента ──────────────────
+    async def _run_agent_task(ag, task):
+        resp = await _exec_agent_for_director(ag, task, user_id)
+        if isinstance(resp, Exception) or not resp:
+            resp = "Данных нет."
+        _ac = _json.dumps({
+            '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': ag.get('avatar_url', '')},
+            'text': resp,
+        }, ensure_ascii=False)
+        _save_interaction_for_director(user_id, _ac)
+        await asyncio.sleep(0.05)
+        if user_db_id:
+            _save_agent_delegation_anchor(
+                user_db_id=user_db_id,
+                agent_id=ag['id'],
+                agent_name=ag['name'],
+                task=task,
+                result_summary=str(resp)[:400],
+                cooldown_hours=0.5,
+            )
+        return str(resp)[:500]
+
+    # ── Начальное решение ASI ──────────────────────────────────────────────────
+    _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
+    _decision_prompt = (
+        f"Ты — ASI Biont, директор офиса. Твоя команда агентов (у каждого указаны интеграции — что он реально умеет):\n{agents_block}\n\n"
+        f"Пользователь написал: «{user_message}»{_ctx_hint}{_history_block}\n\n"
+        "ПРАВИЛА ВЫБОРА ДЕЙСТВИЯ:\n"
+        "- self — только для приветствий, прощаний, личных вопросов о тебе как ASI. В ответе упомяни что агенты команды могут помочь.\n"
+        "- delegate — если запрос МОЖНО выполнить через интеграции ОДНОГО агента (почта, RSS, HTTP, браузер и т.д.).\n"
+        "- multi_delegate — если запрос требует данных из НЕСКОЛЬКИХ агентов с разными интеграциями одновременно.\n\n"
+        "⚡ Смотри на ИНТЕГРАЦИИ каждого агента (поле 'Может:'). Делегируй тому, чьи интеграции подходят под задачу.\n"
+        "director_message — живое прямое обращение к агенту: '404, глянь RSS — что нового по теме X?' НЕ пиши 'ASI поручает'.\n\n"
+        "Ответь ТОЛЬКО JSON без ```:\n"
+        '{"action": "self", "team_hint": "что из команды могло бы помочь (1 предложение)"}\n'
+        "или\n"
+        '{"action": "delegate", "agent_name": "точное имя", '
+        '"agent_task": "задача в 1 предложение", "director_message": "прямое обращение к агенту в чате"}\n'
+        "или\n"
+        '{"action": "multi_delegate", "director_intro": "вступительное сообщение ASI в чат", '
+        '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение к агенту"}, ...]}'
+    )
+
+    decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=350)
     if not decision_raw:
         return None
 
-    _jstr = decision_raw
     _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw)
-    if _jm:
-        _jstr = _jm.group(1)
     try:
-        decision = _json.loads(_jstr)
+        decision = _json.loads(_jm.group(1) if _jm else decision_raw)
     except Exception:
         return None
 
     action = decision.get('action', 'self')
 
-    # ── self: ASI отвечает сам, но с контекстом команды ─────────────────────
-    if action == 'self' or (action not in ('delegate', 'use_cache', 'multi_delegate')):
-        # Для всех случаев — ASI отвечает сам, но знает о команде
+    # ── self: ASI отвечает сам, но знает о команде ────────────────────────────
+    if action == 'self' or (action not in ('delegate', 'multi_delegate')):
         _team_hint = decision.get('team_hint', '')
         _agents_short = ', '.join(a['name'] for a in _agents) if _agents else 'нет агентов'
         _self_resp = await _quick_ai_call_raw([{
@@ -3896,162 +3921,105 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         }], max_tokens=600)
         return _self_resp or None
 
-    def _find_agent(name: str):
-        if not name:
-            return None
-        return next(
-            (a for a in _agents if a['name'].lower() == name.lower()),
-            next((a for a in _agents if name.lower() in a['name'].lower()), None),
-        )
+    # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
+    MAX_ROUNDS = 3
+    all_results: list = []   # [(agent_name, task, result)]
+    called_agents: set = set()
 
-    # ── use_cache: отвечаем из якорного кэша, не запускаем агента ─────────────
-    if action == 'use_cache':
-        _agent = _find_agent(decision.get('agent_name', ''))
-        if not _agent:
-            return None
-        anchors = agent_anchor_map.get(_agent['name'], [])
-        if not anchors:
-            return None  # нет кэша → обычный поток
-        last = anchors[0]
-        cached = last['data'].get('result_summary', '')
-        age_str = f"{last['age_min'] // 60}ч {last['age_min'] % 60}мин"
-        cache_response = await _quick_ai_call_raw([{
-            "role": "user",
-            "content": (
-                f"Пользователь спросил: «{user_message}»\n"
-                f"Агент {_agent['name']} работал {age_str} назад.\n"
-                f"Результат из кэша: {cached}\n\n"
-                "Ответь пользователю опираясь на этот кэш. Укажи что данные из недавней сессии агента. "
-                "Если кэш не отвечает на вопрос — скажи что скоро агент обновит данные. "
-                "Говори от ASI Biont."
-            ),
-        }], max_tokens=400)
-        logger.info("[DIRECTOR] use_cache for %s (%s ago)", _agent['name'], age_str)
-        return cache_response or f"{_agent['name']} проверял это {age_str} назад: {cached[:300]}"
+    for _round in range(MAX_ROUNDS):
+        if _round > 0:
+            # ASI видит уже полученные результаты и решает — вызвать ещё или финализировать
+            _so_far = "\n\n".join(f"{n} (задача: {t}): {r}" for n, t, r in all_results)
+            _remaining = [a for a in _agents if a['name'] not in called_agents]
+            if not _remaining:
+                break
+            _remaining_block = "\n".join(
+                f"- {a['name']}: Может: {', '.join(_parse_agent_integrations(a.get('user_api_keys',''), a.get('python_code',''), a.get('tools_allowed',''), a.get('search_scope','')))}"
+                for a in _remaining
+            )
+            _reeval_raw = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Ты — ASI Biont. Пользователь спросил: «{user_message}»\n\n"
+                    f"Агенты уже ответили:\n{_so_far[:1000]}\n\n"
+                    f"Ещё не вызванные агенты:\n{_remaining_block}\n\n"
+                    "Нужно ли вызвать ещё кого-то чтобы ПОЛНЕЕ ответить на вопрос? "
+                    "Ответь ТОЛЬКО JSON без ```:\n"
+                    '{"action": "finalize"}\n'
+                    "или\n"
+                    '{"action": "delegate", "agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение"}\n'
+                    "или\n"
+                    '{"action": "multi_delegate", "director_intro": "вступление", "tasks": [{"agent_name": "...", "agent_task": "...", "director_message": "..."}]}'
+                ),
+            }], max_tokens=250)
+            if not _reeval_raw:
+                break
+            _jm2 = re.search(r'```(?:json)?\s*([\s\S]*?)```', _reeval_raw)
+            try:
+                decision = _json.loads(_jm2.group(1) if _jm2 else _reeval_raw)
+            except Exception:
+                break
+            action = decision.get('action', 'finalize')
+            if action not in ('delegate', 'multi_delegate'):
+                break  # finalize → выходим из цикла
 
-    # ── multi_delegate: запускаем несколько агентов параллельно ──────────────
-    if action == 'multi_delegate':
-        tasks_cfg = decision.get('tasks') or []
-        director_intro = decision.get('director_intro', '')
-
-        # Сообщение-вступление от ASI в чат
-        if director_intro:
-            _save_interaction_for_director(user_id, director_intro)
-            await asyncio.sleep(0.05)
-
-        # Для каждой задачи: найти агента, written директорское обращение в чат
-        valid_tasks = []
-        for _t in tasks_cfg:
-            _tagent = _find_agent(_t.get('agent_name', ''))
-            if not _tagent:
-                continue
-            _dm = _t.get('director_message', '')
+        # Выполняем текущее решение
+        if action == 'delegate':
+            _ag = _find_agent(decision.get('agent_name', ''))
+            if not _ag or _ag['name'] in called_agents:
+                break
+            _dm = decision.get('director_message', '')
             if _dm:
-                # Сохраняем прямое обращение ASI к агенту как видимое сообщение в чате
                 _save_interaction_for_director(user_id, _dm)
                 await asyncio.sleep(0.05)
-            valid_tasks.append((_tagent, _t.get('agent_task') or user_message))
+            called_agents.add(_ag['name'])
+            _task = decision.get('agent_task') or user_message
+            _resp = await _run_agent_task(_ag, _task)
+            all_results.append((_ag['name'], _task, _resp))
 
-        if not valid_tasks:
-            return None  # нет валидных агентов → обычный поток
+        elif action == 'multi_delegate':
+            _intro = decision.get('director_intro', '')
+            if _intro:
+                _save_interaction_for_director(user_id, _intro)
+                await asyncio.sleep(0.05)
+            _valid = []
+            for _t in (decision.get('tasks') or []):
+                _ag = _find_agent(_t.get('agent_name', ''))
+                if not _ag or _ag['name'] in called_agents:
+                    continue
+                _dm = _t.get('director_message', '')
+                if _dm:
+                    _save_interaction_for_director(user_id, _dm)
+                    await asyncio.sleep(0.05)
+                called_agents.add(_ag['name'])
+                _valid.append((_ag, _t.get('agent_task') or user_message))
+            if not _valid:
+                break
+            _resps = await asyncio.gather(
+                *[_run_agent_task(ag, task) for ag, task in _valid],
+                return_exceptions=True,
+            )
+            for (ag, task), resp in zip(_valid, _resps):
+                if isinstance(resp, Exception):
+                    resp = "Данных нет."
+                all_results.append((ag['name'], task, str(resp)[:500]))
 
-        # Запускаем агентов параллельно
-        _results = await asyncio.gather(
-            *[_exec_agent_for_director(ag, task, user_id) for ag, task in valid_tasks],
-            return_exceptions=True,
-        )
-
-        # Сохраняем ответ каждого агента в чат + якоря
-        agents_summary_parts = []
-        for (ag, task), resp in zip(valid_tasks, _results):
-            if isinstance(resp, Exception) or not resp:
-                resp = "Данных нет."
-            _ac = _json.dumps({
-                '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': ag.get('avatar_url', '')},
-                'text': resp,
-            }, ensure_ascii=False)
-            _save_interaction_for_director(user_id, _ac)
-            await asyncio.sleep(0.05)
-            if user_db_id:
-                _save_agent_delegation_anchor(
-                    user_db_id=user_db_id,
-                    agent_id=ag['id'],
-                    agent_name=ag['name'],
-                    task=task,
-                    result_summary=str(resp)[:400],
-                    cooldown_hours=0.5,
-                )
-            agents_summary_parts.append(f"{ag['name']}: {str(resp)[:500]}")
-
-        # ASI синтезирует всё
-        combined = "\n\n".join(agents_summary_parts)
-        final_response = await _quick_ai_call_raw([{
-            "role": "user",
-            "content": (
-                f"Пользователь спросил: «{user_message}»\n"
-                f"Твои агенты выполнили задачи и ответили:\n\n{combined[:1200]}\n\n"
-                "Синтезируй ключевые выводы для пользователя. Что важно, что требует внимания, "
-                "какой следующий шаг. 3-5 предложений. Говори от ASI Biont. "
-                "Заверши одним коротким вопросом — уточни у пользователя: стоит ли продолжить, нужно ли принять решение, или есть следующее действие."
-            ),
-        }], max_tokens=500)
-        return final_response or "Команда отработала. Проверь ответы агентов выше."
-
-    # ── delegate: запускаем одного агента ─────────────────────────────────────
-    _agent = _find_agent(decision.get('agent_name', ''))
-    if not _agent:
+    # ── Финальный синтез ASI ──────────────────────────────────────────────────
+    if not all_results:
         return None
-    agent_task = decision.get('agent_task') or user_message
-    director_msg = decision.get('director_message', '')
 
-    # Шаг 2: прямое обращение ASI к агенту — видимое в чате
-    if director_msg:
-        _save_interaction_for_director(user_id, director_msg)
-        await asyncio.sleep(0.1)
-
-    # Шаг 3: агент выполняет задачу через хелпер
-    agent_response = await _exec_agent_for_director(_agent, agent_task, user_id)
-
-    # Шаг 4: сохраняем ответ агента в чат
-    agent_content = _json.dumps({
-        '__agent': {
-            'name': _agent.get('name', ''),
-            'id': _agent.get('id'),
-            'avatar_url': _agent.get('avatar_url', ''),
-        },
-        'text': agent_response,
-    }, ensure_ascii=False)
-    _save_interaction_for_director(user_id, agent_content)
-    await asyncio.sleep(0.1)
-
-    # Шаг 4б: сохраняем якорь делегирования (cooldown 2ч + кэш результата)
-    if user_db_id:
-        _save_agent_delegation_anchor(
-            user_db_id=user_db_id,
-            agent_id=_agent['id'],
-            agent_name=_agent['name'],
-            task=agent_task,
-            result_summary=agent_response[:400],
-            cooldown_hours=0.5,
-        )
-
-    # Шаг 5: ASI подводит итог
+    combined = "\n\n".join(f"{n}: {r}" for n, t, r in all_results)
     final_response = await _quick_ai_call_raw([{
         "role": "user",
         "content": (
             f"Пользователь спросил: «{user_message}»\n"
-            f"Ты делегировал задачу агенту {_agent['name']}.\n"
-            f"Агент ответил: «{agent_response[:700]}»\n\n"
-            "Дай краткий итог пользователю. Резюмируй ключевые результаты. "
-            "Если нужны следующие шаги — предложи. Говори от ASI Biont. "
-            "Заверши одним коротким вопросом — уточни у пользователя: стоит ли продолжить работу по этой теме, нужно ли принять решение, или есть конкретное действие."
+            f"Агенты команды выполнили задачи:\n\n{combined[:1500]}\n\n"
+            "Синтезируй ключевые выводы для пользователя. Что важно, что требует внимания, "
+            "какой следующий шаг. 3-5 предложений. Говори от ASI Biont. "
+            "Заверши одним коротким вопросом — уточни у пользователя: стоит ли продолжить, нужно ли принять решение, или есть следующее действие."
         ),
-    }], max_tokens=400)
-
-    if not final_response:
-        final_response = f"Итог: {_agent['name']} выполнил задачу."
-
-    return final_response
+    }], max_tokens=500)
+    return final_response or "Команда отработала. Проверь ответы агентов выше."
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None,
