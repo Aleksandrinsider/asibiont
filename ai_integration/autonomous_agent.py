@@ -4063,6 +4063,10 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             pass
 
         # Первый агент задан в решении
+        _first_dm = decision.get('director_message', '')
+        if _first_dm:
+            _save_interaction_for_director(user_id, _first_dm)
+            await asyncio.sleep(0.05)
         _next_agent_name = decision.get('first_agent_name', '')
         _next_agent_task = decision.get('first_agent_task') or user_message
 
@@ -4081,7 +4085,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             _adp_ctx_parts.append(f"МИССИЯ: {_mission_brief}")
             if _adp_results:
                 _prev_block = "РЕЗУЛЬТАТЫ ПРЕДЫДУЩИХ АГЕНТОВ:\n" + "\n\n".join(
-                    f"[{_n}]: {_r}" for _n, _t, _r in _adp_results
+                    f"[{_n}]: {_r[:600]}{'...' if len(_r) > 600 else ''}" for _n, _t, _r in _adp_results
                 )
                 _adp_ctx_parts.append(_prev_block)
             _adp_ctx = '\n\n'.join(_adp_ctx_parts)
@@ -4095,26 +4099,34 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             )
 
             _resp = await _run_agent_task(_ag, _agent_task_with_signal, extra_context=_adp_ctx)
-            _adp_results.append((_ag['name'], _next_agent_task, _resp))
+            # Вырезаем служебный сигнал агента из хранимого результата (чистый текст для пользователя)
+            _resp_clean = re.sub(r'\n?ПЕРЕДАЮ:\s*[^\n]*', '', _resp).strip() if _resp else _resp
+            _adp_results.append((_ag['name'], _next_agent_task, _resp_clean))
 
-            # Роутинговый вызов: ASI решает кого вызвать следующим
+            # Определяем остаток агентов после этого шага
             _remaining_agents = [
                 a for a in _agents
                 if a.get('name') not in {n for n, _, _ in _adp_results}
             ]
+
+            # На последнем шаге или если агентов не осталось — роутинговый вызов не нужен
+            if _adp_step >= MAX_ADAPTIVE_STEPS - 1 or not _remaining_agents:
+                break
+
             _remaining_block = "\n".join(
                 f"- {a['name']}: {a.get('description','')[:80]}" for a in _remaining_agents[:8]
-            ) if _remaining_agents else "(все агенты использованы)"
+            )
 
             _results_so_far = "\n\n".join(
                 f"[{n}] задача: {t[:100]}\nрезультат: {r[:300]}" for n, t, r in _adp_results
             )
+            # Для сигнала используем оригинальный _resp (с ПЕРЕДАЮ) если он был
+            _signal_text = _resp[-400:] if _resp else '(нет сигнала)'
             _routing_prompt = (
                 f"Миссия: {_mission_brief}\n\n"
                 f"Запрос пользователя: «{user_message}»\n\n"
                 f"Агенты уже поработали:\n{_results_so_far}\n\n"
-                f"Сигнал последнего агента (что он рекомендует проверить дальше):\n"
-                f"{_resp[-300:] if _resp else '(нет сигнала)'}\n\n"
+                f"Сигнал последнего агента:\n{_signal_text}\n\n"
                 f"Доступные агенты (не задействованные):\n{_remaining_block}\n\n"
                 "Реши: миссия выполнена — или нужен ещё один агент?\n"
                 "Если выполнена → {\"action\": \"finalize\"}\n"
@@ -4131,7 +4143,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             except Exception:
                 _routing = {}
 
-            if _routing.get('action') == 'finalize' or not _remaining_agents:
+            if _routing.get('action') == 'finalize':
                 break
 
             if _routing.get('action') == 'next':
