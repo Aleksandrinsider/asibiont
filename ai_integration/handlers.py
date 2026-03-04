@@ -2669,6 +2669,28 @@ def get_partners_list(user_id=None, session=None):
             session.close()
         return []
 
+    # Предзагружаем цели текущего пользователя и всех партнёров ДО цикла — избегаем N+1
+    try:
+        _user_goals_for_filter = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status.in_(['active', 'in_progress'])
+        ).all()
+    except Exception:
+        _user_goals_for_filter = []
+
+    try:
+        _profile_ids = [p.user_id for p in all_profiles]
+        _bulk_partner_goals = session.query(Goal).filter(
+            Goal.user_id.in_(_profile_ids),
+            Goal.status.in_(['active', 'in_progress'])
+        ).all()
+        # Индекс: user_id → list[Goal]
+        _partner_goals_index: dict = {}
+        for _bg in _bulk_partner_goals:
+            _partner_goals_index.setdefault(_bg.user_id, []).append(_bg)
+    except Exception:
+        _partner_goals_index = {}
+
     # Filter only those with matches
     # Helper: get normalized field value or fallback to original (defined once, not inside the loop)
     def _norm(obj, field):
@@ -2825,14 +2847,8 @@ def get_partners_list(user_id=None, session=None):
         # Check structured Goals from Goal table
         if not has_match:
             try:
-                user_goals_db = session.query(Goal).filter(
-                    Goal.user_id == user.id,
-                    Goal.status.in_(['active', 'in_progress'])
-                ).all()
-                partner_goals_db = session.query(Goal).filter(
-                    Goal.user_id == profile.user_id,
-                    Goal.status.in_(['active', 'in_progress'])
-                ).all()
+                user_goals_db = _user_goals_for_filter
+                partner_goals_db = _partner_goals_index.get(profile.user_id, [])
                 if user_goals_db and partner_goals_db:
                     # Match by category
                     user_goal_categories = set(g.category.lower().strip() for g in user_goals_db if g.category)
@@ -2948,6 +2964,21 @@ def get_partners_list(user_id=None, session=None):
 
     _u_sort_cities = _city_variants_set(user_profile)
 
+    # Предзагружаем цели всех партнёров ОДНИМ запросом вместо N запросов внутри sort_key
+    _partners_goal_cats: dict = {}
+    if _sort_user_goal_cats:
+        try:
+            _partner_ids = [p.user_id for p in partners]
+            _all_partner_goals = session.query(Goal).filter(
+                Goal.user_id.in_(_partner_ids),
+                Goal.status.in_(['active', 'in_progress'])
+            ).all()
+            for _pg in _all_partner_goals:
+                if _pg.category:
+                    _partners_goal_cats.setdefault(_pg.user_id, set()).add(_pg.category.lower().strip())
+        except Exception as _e:
+            logger.debug(f"Failed to pre-fetch partner goal categories: {_e}")
+
     def sort_key(p):
         relevance_score = 0
 
@@ -2966,16 +2997,10 @@ def get_partners_list(user_id=None, session=None):
         if p_goals:
             relevance_score += len(_u_sort_goals & p_goals) * 4
 
-        # Бонус за совпадение структурированных целей (Goal table) — цели юзера уже загружены выше
-        try:
-            if _sort_user_goal_cats:
-                partner_goals_db = session.query(Goal).filter(
-                    Goal.user_id == p.user_id, Goal.status.in_(['active', 'in_progress'])
-                ).all()
-                p_cats = set(g.category.lower().strip() for g in partner_goals_db if g.category)
-                relevance_score += len(_sort_user_goal_cats & p_cats) * 5
-        except Exception as e:
-            logger.debug(f"Failed to compare goal categories: {e}")
+        # Бонус за совпадение структурированных целей (Goal table) — предзагружено выше
+        if _sort_user_goal_cats and _partners_goal_cats:
+            p_cats = _partners_goal_cats.get(p.user_id, set())
+            relevance_score += len(_sort_user_goal_cats & p_cats) * 5
 
         # Бонус за тот же город (cross-language, user cities pre-computed)
         city_bonus = 1 if _u_sort_cities & _city_variants_set(p) else 0
@@ -3064,17 +3089,15 @@ def get_partners_list(user_id=None, session=None):
         logger.debug(f"[PARTNERS] LTM enrichment error: {e}")
     
     # ENRICHMENT: Добавляем ключевые слова из структурированных целей (Goal table)
+    # Используем _sort_user_goals, уже загруженный выше — без повторного запроса к БД
     try:
-        user_goals_db = session.query(Goal).filter(
-            Goal.user_id == user.id, Goal.status.in_(['active', 'in_progress'])
-        ).all()
-        for g in user_goals_db:
+        for g in _sort_user_goals:
             if g.title:
                 user_task_keywords.update(w.lower() for w in g.title.split() if len(w) >= 4)
             if g.category:
                 user_task_keywords.add(g.category.lower().strip())
-        if user_goals_db:
-            logger.info(f"[PARTNERS] Added {len(user_goals_db)} goal keywords")
+        if _sort_user_goals:
+            logger.info(f"[PARTNERS] Added {len(_sort_user_goals)} goal keywords")
     except Exception as e:
         logger.debug(f"Failed to extract goal keywords: {e}")
     
