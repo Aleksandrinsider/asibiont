@@ -2259,6 +2259,16 @@ class HybridAutonomousAgent:
                 # AI вызвал tools → добавляем assistant message в цепочку
                 messages.append(msg)
 
+                # Показываем «думаю вслух» — частичный текст AI до вызова инструментов
+                if content.strip() and _cb:
+                    try:
+                        _preview = content.strip()[:200]
+                        if len(content.strip()) > 200:
+                            _preview += '...'
+                        await _cb(_preview)
+                    except Exception:
+                        pass
+
                 # ── Pass 1: валидация (последовательно — dedup/limits — shared state) ──
                 _ready_calls = []   # (tc_item, name, args, reason)
                 _counted = 0

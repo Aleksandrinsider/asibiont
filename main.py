@@ -1933,48 +1933,57 @@ async def chat_handler(request):
             if queue:
                 await queue.put({'type': 'progress', 'text': text})
 
-        session_db = Session()
+        response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
+        ai_result = {'agent_info': None}
         try:
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
-            # Запоминаем user.id ДО вызова AI — после него сессия может быть в состоянии expunged
-            user_db_id = user.id if user else None
-
-            # Сохраняем сообщение пользователя ДО вызова AI
-            save_context_to_db(user_id, message, None)
-
-            # Get AI response с progress_callback
+            session_db = Session()
             try:
-                ai_result = await chat_with_ai(
-                    message, context, user_id, file_content,
-                    db_session=session_db,
-                    progress_callback=web_progress_callback,
-                    web_context=True
-                )
-                response = ai_result['response']
-                logger.info("AI response: %s...", response[:100])
-            except Exception as e:
-                logger.error(f"Error getting AI response: {e}", exc_info=True)
-                response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
+                user = session_db.query(User).filter_by(telegram_id=user_id).first()
+                # Запоминаем user.id ДО вызова AI — после него сессия может быть в состоянии expunged
+                user_db_id = user.id if user else None
 
-            # Save agent response to Interaction table
-            if user_db_id:
-                agent_response_timestamp = datetime.now(dt_timezone.utc)
-                interaction_agent = Interaction(
-                    user_id=user_db_id,
-                    message_type='ai',
-                    content=response,
-                    created_at=agent_response_timestamp
-                )
-                session_db.add(interaction_agent)
-                session_db.commit()
-                logger.info("Saved AI response to database")
+                # Сохраняем сообщение пользователя ДО вызова AI
+                save_context_to_db(user_id, message, None)
+
+                # Get AI response с progress_callback (таймаут 100с — UI не зависает)
+                try:
+                    ai_result = await asyncio.wait_for(
+                        chat_with_ai(
+                            message, context, user_id, file_content,
+                            db_session=session_db,
+                            progress_callback=web_progress_callback,
+                            web_context=True
+                        ),
+                        timeout=100
+                    )
+                    response = ai_result['response']
+                    logger.info("AI response: %s...", response[:100])
+                except asyncio.TimeoutError:
+                    logger.warning(f"[CHAT] AI timeout (>100s) for user {user_id}")
+                    response = "Думаю слишком долго... Попробуй ещё раз или переформулируй запрос."
+                except Exception as e:
+                    logger.error(f"Error getting AI response: {e}", exc_info=True)
+                    response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
+
+                # Save agent response to Interaction table
+                if user_db_id:
+                    agent_response_timestamp = datetime.now(dt_timezone.utc)
+                    interaction_agent = Interaction(
+                        user_id=user_db_id,
+                        message_type='ai',
+                        content=response,
+                        created_at=agent_response_timestamp
+                    )
+                    session_db.add(interaction_agent)
+                    session_db.commit()
+                    logger.info("Saved AI response to database")
+            finally:
+                session_db.close()
         finally:
-            session_db.close()
-
-        # Сигнализируем SSE что ответ готов
-        queue = _chat_progress_queues.get(user_id)
-        if queue:
-            await queue.put({'type': 'done'})
+            # Сигнализируем SSE что ответ готов — ВСЕГДА, даже при исключении
+            queue = _chat_progress_queues.get(user_id)
+            if queue:
+                await queue.put({'type': 'done'})
 
         # ── Авто-пуш ответа ASI в TG + Discord (если подключены) ──
         if response and not response.startswith('Произошла ошибка'):
