@@ -3874,6 +3874,35 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             )
         return str(resp)[:500]
 
+    # ── Прямое обращение к агенту по имени (без LLM-решения) ────────────────────
+    # Если сообщение начинается с имени агента — сразу ему делегируем
+    _direct_agent = None
+    _msg_lower = user_message.lower().strip()
+    for _a in _agents:
+        _aname = _a['name'].lower()
+        # "Кристина, ..." / "Кристина ..." / "@Кристина" / просто имя
+        if (_msg_lower.startswith(_aname + ',') or
+                _msg_lower.startswith(_aname + ' ') or
+                _msg_lower.startswith('@' + _aname) or
+                _msg_lower == _aname):
+            _direct_agent = _a
+            break
+
+    if _direct_agent:
+        _agent_ctx = _history_block.strip()
+        _resp = await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
+        all_results = [(_direct_agent['name'], user_message, _resp)]
+        combined = _resp
+        final_response = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Пользователь обратился напрямую к {_direct_agent['name']}. "
+                f"Ответ агента:\n\n{combined[:1500]}\n\n"
+                "Ответь пользователю от ASI Biont — живо, своими словами, без шаблонных фраз."
+            ),
+        }], max_tokens=400)
+        return final_response or _resp
+
     # ── Начальное решение ASI ──────────────────────────────────────────────────
     _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
     _decision_prompt = (
@@ -4008,10 +4037,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         "role": "user",
         "content": (
             f"Пользователь спросил: «{user_message}»\n"
-            f"Агенты команды выполнили задачи:\n\n{combined[:1500]}\n\n"
-            "Синтезируй ключевые выводы для пользователя. Что важно, что требует внимания, "
-            "какой следующий шаг. 3-5 предложений. Говори от ASI Biont. "
-            "Заверши одним коротким вопросом — уточни у пользователя: стоит ли продолжить, нужно ли принять решение, или есть следующее действие."
+            f"Агенты команды ответили:\n\n{combined[:1500]}\n\n"
+            "Ответь пользователю как ASI Biont — живо, по существу, без шаблонных формулировок. "
+            "Говори своими словами, опираясь на то что принесли агенты."
         ),
     }], max_tokens=500)
     return final_response or "Команда отработала. Проверь ответы агентов выше."
