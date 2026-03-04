@@ -2714,9 +2714,24 @@ def get_partners_list(user_id=None, session=None):
     _u_company = _norm(user_profile, 'company')
     _u_cities = _city_variants(user_profile)
 
+    # Константные множества для семантического расширения совпадений интересов
+    _sport_keywords = {'спорт', 'бег', 'пробежка', 'йога', 'фитнес', 'тренировка', 'велоспорт', 'плавание',
+                       'футбол', 'баскетбол', 'теннис', 'волейбол', 'хоккей', 'кроссфит', 'гимнастика',
+                       'марафон', 'триатлон', 'бадминтон', 'сквош', 'гольф', 'бильярд', 'пилатес'}
+    _business_keywords = {'бизнес', 'стартап', 'предпринимательство', 'инвестиции', 'маркетинг',
+                          'продажи', 'финансы', 'управление', 'менеджмент', 'e-commerce'}
+
+    # Предзагружаем все User-объекты для профилей ОДНИМ запросом (избегаем N+1 в цикле фильтрации)
+    try:
+        _profile_user_ids = [p.user_id for p in all_profiles]
+        _bulk_users = session.query(User).filter(User.id.in_(_profile_user_ids)).all()
+        _user_by_id: dict = {u.id: u for u in _bulk_users}
+    except Exception:
+        _user_by_id = {}
+
     partners = []
     for profile in all_profiles:
-        profile_user = session.query(User).filter_by(id=profile.user_id).first()
+        profile_user = _user_by_id.get(profile.user_id) or session.query(User).filter_by(id=profile.user_id).first()
         if not profile_user or not profile_user.username:
             continue
 
@@ -2771,12 +2786,9 @@ def get_partners_list(user_id=None, session=None):
             # Стоп-слова которые игнорируем при частичном совпадении
             stop_words = _stop_words
             
-            # Семантические группы для расширения совпадений
-            sport_keywords = {'спорт', 'бег', 'пробежка', 'йога', 'фитнес', 'тренировка', 'велоспорт', 'плавание', 
-                            'футбол', 'баскетбол', 'теннис', 'волейбол', 'хоккей', 'кроссфит', 'гимнастика',
-                            'марафон', 'триатлон', 'бадминтон', 'сквош', 'гольф', 'бильярд', 'пилатес'}
-            business_keywords = {'бизнес', 'стартап', 'предпринимательство', 'инвестиции', 'маркетинг', 
-                               'продажи', 'финансы', 'управление', 'менеджмент', 'e-commerce'}
+            # Семантические группы для расширения совпадений (вынесены за пределы цикла как _sport_keywords / _business_keywords)
+            sport_keywords = _sport_keywords
+            business_keywords = _business_keywords
             
             # Точное совпадение интересов
             if user_interests & profile_interests:
@@ -3016,7 +3028,7 @@ def get_partners_list(user_id=None, session=None):
     # Логируем результаты для анализа
     top_partners = partners[:5]  # Показываем топ-5 для логирования
     for i, p in enumerate(top_partners):
-        partner_user = session.query(User).filter_by(id=p.user_id).first()
+        partner_user = _user_by_id.get(p.user_id)
         if partner_user:
             logger.info(f"[PARTNERS] Top {i+1}: @{partner_user.username} (city: {p.city}, relevance: calculated in sort_key)")
 
@@ -3203,7 +3215,7 @@ def get_partners_list(user_id=None, session=None):
                     logger.debug(f"[PARTNERS] user_id={partner.user_id} task relevance: {task_interest_match}")
             
             # Проверяем совпадение задач партнера с задачами пользователя (схожие активности)
-            partner_user = session.query(User).filter_by(id=partner.user_id).first()
+            partner_user = _user_by_id.get(partner.user_id) or session.query(User).filter_by(id=partner.user_id).first()
             if partner_user:
                 partner_tasks = session.query(Task).filter(
                     Task.user_id == partner_user.id,
