@@ -527,10 +527,7 @@ def _migrate_arena(session, inspector):
 
 
 def _migrate_fix_agent_python_code(session):
-    # Патч python_code у агентов: 3 бага в старых шаблонах
-    # 1. IMAP login: PASS → PASS.replace(' ', '')
-    # 2. CDATA regex: экранирование скобок
-    # 3. RSS link regex: пропущен \s backslash
+    """Патч python_code агентов: 3 бага в старых шаблонах (IMAP, CDATA regex, RSS link regex)."""
     try:
         from models import UserAgent
         agents = session.query(UserAgent).filter(
