@@ -4155,6 +4155,7 @@ class AnchorEngine:
                         f"STRICT QUALITY RULES:\n"
                         f"- Subject: 3-7 words, specific to THIS person, no spam words (free, amazing, opportunity)\n"
                         f"- Length: 120-200 words, 4-5 short paragraphs. NOT shorter — too short looks lazy.\n"
+                        f"- PARAGRAPH BREAKS: separate every paragraph with a blank line (\\n\\n) in the body field. No HTML, no markdown.\n"
                         f"- STRUCTURE (follow this order):\n"
                         f"  1. RESEARCH HOOK (1-2 sent): show you studied their company/project. "
                         f"Mention a SPECIFIC product, feature, article, metric, or achievement. "
@@ -4272,7 +4273,8 @@ class AnchorEngine:
                     f"Days since sent: {days_since}\n"
                     f"Language: {lang_hint}\n\n"
                     f"Return ONLY a JSON object: {{\"body\": \"...\"}}\n"
-                    f"Rules: short, add new value, don't repeat original, be polite, no pressure."
+                    f"Rules: short (60-100 words), 2-3 paragraphs, add new value, don't repeat original, be polite, no pressure.\n"
+                    f"PARAGRAPH BREAKS: separate every paragraph with a blank line (\\n\\n) in the body field. Plain text only."
                 )
 
                 try:
