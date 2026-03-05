@@ -2018,7 +2018,9 @@
                     // Add history messages
                     if (data.interactions) {
                         data.interactions.forEach((interaction, index) => {
-
+                            // Mark ID as displayed BEFORE calling addMessage so that
+                            // the subsequent intermediateMessages sync does not re-show them
+                            displayedMessageIds.add(interaction.id);
                             addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
                         });
                     }
@@ -2220,8 +2222,16 @@
                                     if (!displayedMessageIds.has(i.id)) {
                                         if (i.message_type === 'ai') {
                                             // Пропускаем финальный синтез — он будет показан отдельно
-                                            const iText = normalize(i.content || '');
-                                            if (iText !== finalText) {
+                                            // Если content — JSON с __agent, сравниваем по вложенному text
+                                            const iRaw = i.content || '';
+                                            let iTextForCmp = normalize(iRaw);
+                                            if (iRaw.trim().startsWith('{')) {
+                                                try {
+                                                    const _ip = JSON.parse(iRaw);
+                                                    if (_ip.__agent && _ip.text) iTextForCmp = normalize(_ip.text);
+                                                } catch(e) {}
+                                            }
+                                            if (iTextForCmp !== finalText) {
                                                 intermediateMessages.push(i);
                                             }
                                         }

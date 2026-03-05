@@ -1968,10 +1968,24 @@ async def chat_handler(request):
                 # Save agent response to Interaction table (skip empty — agents already saved their own messages)
                 if user_db_id and response and response.strip():
                     agent_response_timestamp = datetime.now(dt_timezone.utc)
+                    # Wrap with __agent JSON so agent name/avatar survives page reload
+                    _ai_saved_agent_info = ai_result.get('agent_info')
+                    if _ai_saved_agent_info and _ai_saved_agent_info.get('name'):
+                        import json as _json_chat
+                        _save_content = _json_chat.dumps({
+                            '__agent': {
+                                'name': _ai_saved_agent_info['name'],
+                                'id': _ai_saved_agent_info.get('id'),
+                                'avatar_url': _ai_saved_agent_info.get('avatar_url', ''),
+                            },
+                            'text': response,
+                        }, ensure_ascii=False)
+                    else:
+                        _save_content = response
                     interaction_agent = Interaction(
                         user_id=user_db_id,
                         message_type='ai',
-                        content=response,
+                        content=_save_content,
                         created_at=agent_response_timestamp
                     )
                     session_db.add(interaction_agent)
