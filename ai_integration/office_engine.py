@@ -76,9 +76,10 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
     """Создаёт Task-делегирование от пользователя к агенту (agent:<name>).
     Агент автоматически принимает — delegation_status='accepted'.
     Дедупликация: не создаём если уже есть активная задача с тем же заголовком.
+    Логирует «Задача поставлена» в AgentActivityLog.
     """
     try:
-        from models import Session as _Db, Task as _Task
+        from models import Session as _Db, Task as _Task, AgentActivityLog as _AAL
         _s = _Db()
         try:
             _dup = _s.query(_Task).filter(
@@ -89,7 +90,7 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
             ).first()
             if _dup:
                 return
-            _s.add(_Task(
+            new_task = _Task(
                 user_id=user_id,
                 title=task_title[:200],
                 delegated_by=user_id,
@@ -97,6 +98,18 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
                 delegation_status='accepted',
                 status='in_progress',
                 delegation_details=f'agent_id:{agent_id}',
+            )
+            _s.add(new_task)
+            _s.flush()  # получаем new_task.id
+            # Логируем ключевое событие: задача поставлена агенту
+            _s.add(_AAL(
+                user_id=user_id,
+                activity_type='delegation',
+                title=f'Задача поставлена: {agent_name}',
+                content=task_title[:500],
+                target=f'agent:{agent_name}',
+                status='accepted',
+                ref_id=new_task.id,
             ))
             _s.commit()
             logger.debug('[OFFICE] agent delegation task created: user=%d agent=%s "%s"', user_id, agent_name, task_title[:60])
@@ -104,6 +117,40 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
             _s.close()
     except Exception as e:
         logger.debug('[OFFICE] agent delegation create error: %s', e)
+
+
+def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str, task_title: str):
+    """Закрывает последнюю активную задачу агента (delegation_status→completed, status→done)
+    и логирует «Задача выполнена» в AgentActivityLog.
+    """
+    try:
+        from models import Session as _Db, Task as _Task, AgentActivityLog as _AAL
+        _s = _Db()
+        try:
+            _task = _s.query(_Task).filter(
+                _Task.user_id == user_id,
+                _Task.delegated_to_username == f'agent:{agent_name}',
+                _Task.delegation_status.in_(['pending', 'accepted']),
+            ).order_by(_Task.id.desc()).first()
+            if _task:
+                _task.delegation_status = 'completed'
+                _task.status = 'done'
+            # Логируем ключевое событие: задача выполнена
+            _s.add(_AAL(
+                user_id=user_id,
+                activity_type='delegation',
+                title=f'Задача выполнена: {agent_name}',
+                content=task_title[:500],
+                target=f'agent:{agent_name}',
+                status='completed',
+                ref_id=_task.id if _task else agent_id,
+            ))
+            _s.commit()
+            logger.debug('[OFFICE] agent task completed: user=%d agent=%s', user_id, agent_name)
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug('[OFFICE] agent task complete error: %s', e)
 
 
 import re as _re
@@ -155,15 +202,18 @@ def _auto_extract_email_contacts_sync(user_id: int, stdout: str, agent_name: str
         logger.debug('[OFFICE] email contact extract error: %s', e)
 
 
-def _log_agent_activity_sync(user_id: int, agent_name: str, agent_id: int, title: str, content: str):
-    """Пишет запись в AgentActivityLog — отображается в разделе Activities дашборда (SSE-поток)."""
+def _log_agent_activity_sync(user_id: int, agent_name: str, agent_id: int, title: str, content: str,
+                             activity_type: str = 'other'):
+    """Пишет произвольную запись в AgentActivityLog (SSE-поток дашборда).
+    Для ключевых событий используйте activity_type='delegation'.
+    """
     try:
         from models import Session as _Db, AgentActivityLog as _AAL
         _s = _Db()
         try:
             _s.add(_AAL(
                 user_id=user_id,
-                activity_type='other',
+                activity_type=activity_type,
                 title=title[:295],
                 content=content[:2000],
                 target=agent_name,
@@ -171,7 +221,7 @@ def _log_agent_activity_sync(user_id: int, agent_name: str, agent_id: int, title
                 ref_id=agent_id,
             ))
             _s.commit()
-            logger.debug('[OFFICE] activity log saved: user=%d agent=%s', user_id, agent_name)
+            logger.debug('[OFFICE] activity log saved: user=%d agent=%s type=%s', user_id, agent_name, activity_type)
         finally:
             _s.close()
     except Exception as e:
@@ -442,18 +492,17 @@ class OfficeEngine:
                             )
                         except Exception as _ee:
                             logger.debug("[OFFICE-L1] [%s] email extract error: %s", agent.name, _ee)
-                        # Логируем в AgentActivityLog → dashboard Activities feed
+                        # Закрываем задачу и логируем «Задача выполнена» → dashboard Activities
                         try:
-                            _act_title_raw = (report.splitlines()[0].strip()[:120] if report else f'{agent.name}: мониторинг')
-                            _act_title = f'{agent.name}: {_act_title_raw}'
+                            _complete_title = (report.splitlines()[0].strip()[:200]
+                                               if report else f'{agent.name}: работа завершена')
                             await loop.run_in_executor(
                                 None,
-                                _log_agent_activity_sync,
-                                user.id, agent.name or 'Агент', agent.id,
-                                _act_title, report[:2000],
+                                _auto_complete_agent_task_sync,
+                                user.id, agent.id, agent.name or 'Агент', _complete_title,
                             )
                         except Exception as _le:
-                            logger.debug("[OFFICE-L1] [%s] activity log error: %s", agent.name, _le)
+                            logger.debug("[OFFICE-L1] [%s] task complete error: %s", agent.name, _le)
                         # ASI реагирует на находку агента — предлагает действие
                         try:
                             await self._asi_react_to_agent_output(agent, user, stdout)
