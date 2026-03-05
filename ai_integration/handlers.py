@@ -1582,8 +1582,42 @@ def delegate_task(
                 try:
                     import asyncio as _aio
                     from .autonomous_agent import _exec_agent_for_director as _exec_dir
+                    from .autonomous_agent import _save_interaction_for_director as _save_ifd
+                    import json as _json_ag
+
+                    async def _run_and_report(agent_dict, task_text, uid, agent_name, tg_id):
+                        try:
+                            result = await _exec_dir(agent_dict, task_text, uid)
+                            if not result or not result.strip():
+                                return
+                            # Сохраняем в историю диалога (отображается на дашборде)
+                            _ac = _json_ag.dumps({
+                                '__agent': {
+                                    'name': agent_dict.get('name', agent_name),
+                                    'id': agent_dict.get('id'),
+                                    'avatar_url': agent_dict.get('avatar_url', ''),
+                                },
+                                'text': result,
+                            }, ensure_ascii=False)
+                            _save_ifd(uid, _ac)
+                            # Отправляем в Telegram
+                            try:
+                                from main import bot as _bot
+                                if _bot and tg_id:
+                                    await _bot.send_message(
+                                        tg_id,
+                                        f"📋 {agent_name}: {result[:1500]}",
+                                    )
+                            except Exception as _te:
+                                logger.debug(f"[DELEGATE] tg send error: {_te}")
+                        except Exception as _re:
+                            logger.warning(f"[DELEGATE] agent run error: {_re}")
+
                     _aio.ensure_future(
-                        _exec_dir(_agent_dict, _agent_task_text, user_id)
+                        _run_and_report(
+                            _agent_dict, _agent_task_text, user_id,
+                            _agent_recipient.name, delegator.telegram_id,
+                        )
                     )
                 except Exception as _async_err:
                     logger.warning(f"[DELEGATE] async schedule error: {_async_err}")
