@@ -3655,6 +3655,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Ты — агент в команде ASI Biont. Действуй от своего имени, выполняй поручение директора "
         "используя доступные инструменты. Отвечай кратко и по делу. Без списков и заголовков.\n"
         "НИКАКИХ звёздочек (*улыбается*, *думает*, *открывает базу* и т.п.) — только текст, никакой ролевой игры.\n\n"
+        "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ: если часть задачи требует специализации другого агента команды, "
+        "вызови инструмент delegate_to_agent(agent_name: str, task: str). "
+        "Используй его только когда действительно нужна другая экспертиза — не злоупотребляй.\n\n"
+        "ЕСЛИ ЗАСТРЯЛ: когда для выполнения задачи нужно решение, доступ или подтверждение от пользователя — "
+        "начни ПЕРВУЮ строку ответа с 'BLOCKED: <краткая причина>'. Это немедленно уведомит пользователя.\n\n"
         f"ТВОЯ РОЛЬ:\n{_persona}"
     )
     if dialog_context:
@@ -3662,6 +3667,28 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"\n\n[КОНТЕКСТ — профиль пользователя, его email-контакты, цели, история диалога. "
             f"Используй чтобы понимать КТО пользователь, КОМУ он пишет, ЧТО ищет]:\n{dialog_context}"
         )
+
+    # Авто-загрузка контекста пользователя если не передан извне (агент узнаёт цели/бизнес)
+    if not dialog_context and _build_user_context_sync:
+        try:
+            from models import Session as _Sess_uc, User as _UCtx
+            _s_uc = _Sess_uc()
+            try:
+                _u_uc = _s_uc.query(_UCtx).filter_by(telegram_id=user_id).first()
+                if _u_uc:
+                    _uc_loop = asyncio.get_running_loop()
+                    _ucontext = await _uc_loop.run_in_executor(
+                        None, _build_user_context_sync, _u_uc.id
+                    )
+                    if _ucontext:
+                        system_prompt += (
+                            "\n\n[КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ — цели, бизнес, история диалога. "
+                            f"Используй чтобы работа агента была релевантна его задачам]:\n{_ucontext[:600]}"
+                        )
+            finally:
+                _s_uc.close()
+        except Exception:
+            pass
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
     script_context = ""
@@ -3748,6 +3775,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     ]
     _use_tools = bool(_allowed_tools)  # tool loop только если есть разрешённые инструменты
 
+    # Очередь субделегирований: агент может попросить другого агента через паттерн DELEGATE[имя]: задача
+    _pending_subdelegations: list[dict] = []
+    _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
+
     for _iter in range(3):
         _resp = await _agent_inst.call_ai(
             _messages,
@@ -3761,8 +3792,24 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _tool_calls = _msg.get('tool_calls') or []
 
         if not _tool_calls:
-            # Агент ответил текстом — возвращаем
-            return _content or "Задачу выполнил."
+            # Агент ответил текстом — парсим паттерн DELEGATE[Имя]: задача
+            if _content:
+                import re as _re_sub
+                for _m in _re_sub.finditer(
+                    r'DELEGATE\[([^\]]+)\]:\s*(.+?)(?=DELEGATE\[|$)',
+                    _content, _re_sub.DOTALL | _re_sub.IGNORECASE,
+                ):
+                    _aname = _m.group(1).strip()
+                    _atask = _m.group(2).strip()[:400]
+                    if _aname and _atask:
+                        _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
+                # Убираем DELEGATE-строки из финального текста
+                _content = _re_sub.sub(
+                    r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _content,
+                ).strip()
+            # Сохраняем результат и выходим из цикла — субделегирования обработаются ниже
+            _early_text = _content or "Задачу выполнил."
+            break
 
         # Агент вызвал инструменты — выполняем
         _messages.append(_msg)
@@ -3773,8 +3820,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             except Exception:
                 _targs = {}
 
+            # ── Специальный инструмент: агент делегирует другому агенту ──────────────────
+            if _tname == 'delegate_to_agent':
+                _sub_agent_name = _targs.get('agent_name', '')
+                _sub_task = _targs.get('task', _targs.get('message', ''))
+                if _sub_agent_name and _sub_task:
+                    _pending_subdelegations.append({'agent_name': _sub_agent_name, 'task': _sub_task})
+                    _tc_result = json.dumps(
+                        {'status': 'queued', 'agent': _sub_agent_name,
+                         'message': f'Задача передана агенту {_sub_agent_name}'},
+                        ensure_ascii=False,
+                    )
+                else:
+                    _tc_result = json.dumps({'error': 'agent_name and task are required'}, ensure_ascii=False)
+            # ── Обычные инструменты ───────────────────────────────────────────────────────────
             # Проверяем доступность инструмента
-            if _allowed_tools and _tname not in _allowed_tools:
+            elif _allowed_tools and _tname not in _allowed_tools:
                 _tc_result = json.dumps({"error": f"tool {_tname} not in tools_allowed"}, ensure_ascii=False)
             else:
                 try:
@@ -3794,9 +3855,120 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
 
-    # Если израсходовали все итерации — финальный ответ без tools
-    _final = await _quick_ai_call_raw(_messages, max_tokens=400)
-    return _final or "Задачу выполнил."
+    # Если агент ответил текстом без tool calls — пропускаем финальный AI-вызов
+    if _early_text is not None:
+        _final_text = _early_text
+    else:
+        # Если израсходовали все итерации — финальный ответ без tools
+        _final = await _quick_ai_call_raw(_messages, max_tokens=400)
+        _final_raw = _final or ''
+        # Парсим DELEGATE из финального ответа
+        if _final_raw:
+            import re as _re_fin
+            for _m in _re_fin.finditer(
+                r'DELEGATE\[([^\]]+)\]:\s*(.+?)(?=DELEGATE\[|$)',
+                _final_raw, _re_fin.DOTALL | _re_fin.IGNORECASE,
+            ):
+                _aname = _m.group(1).strip()
+                _atask = _m.group(2).strip()[:400]
+                if _aname and _atask:
+                    _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
+            _final_text = _re_fin.sub(
+                r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _final_raw,
+            ).strip() or 'Задачу выполнил.'
+        else:
+            _final_text = 'Задачу выполнил.'
+
+    # Детектируем BLOCKED-маркер в финальном ответе агента
+    if _final_text and _final_text.lower().startswith('blocked:'):
+        try:
+            from models import Session as _BDb, AgentActivityLog as _BAct
+            _b_s = _BDb()
+            try:
+                _b_s.add(_BAct(
+                    user_id=user_id,
+                    activity_type='task_blocked',
+                    title=f"{agent['name']}: нужно решение",
+                    content=_final_text[:600],
+                    target=f"agent:{agent['name']}",
+                    status='new',
+                ))
+                _b_s.commit()
+            finally:
+                _b_s.close()
+        except Exception as _be:
+            logger.debug('[BLOCKED] director exec save error: %s', _be)
+
+    # ── Выполняем очередь субделегирований агента первым агентом ────────────────────
+    if _pending_subdelegations:
+        try:
+            from models import Session as _SubDb, UserAgent as _SubUA, User as _SubUser
+            _sub_s = _SubDb()
+            try:
+                # Загружаем всех агентов пользователя
+                _sub_user = _sub_s.query(_SubUser).filter_by(telegram_id=user_id).first()
+                _sub_db_id = _sub_user.id if _sub_user else None
+                _all_agents_db = []
+                if _sub_db_id:
+                    _all_agents_db = (
+                        _sub_s.query(_SubUA)
+                        .filter(_SubUA.author_id == _sub_db_id, _SubUA.status == 'active')
+                        .limit(10)
+                        .all()
+                    )
+            finally:
+                _sub_s.close()
+
+            _sub_results = []
+            for _sd in _pending_subdelegations:
+                _sd_name = _sd['agent_name']
+                _sd_task = _sd['task']
+                # Ищем агента по имени
+                _sd_agent_db = next(
+                    (a for a in _all_agents_db if a.name.lower() == _sd_name.lower()
+                     or _sd_name.lower() in a.name.lower()),
+                    None,
+                )
+                if not _sd_agent_db:
+                    logger.debug("[SUBDELEGATE] agent '%s' not found", _sd_name)
+                    continue
+                _sd_data = {
+                    'id': _sd_agent_db.id, 'name': _sd_agent_db.name,
+                    'job_title': _sd_agent_db.job_title or '',
+                    'specialization': _sd_agent_db.specialization or '',
+                    'description': _sd_agent_db.description or '',
+                    'personality': _sd_agent_db.personality or '',
+                    'python_code': _sd_agent_db.python_code or '',
+                    'user_api_keys': _sd_agent_db.user_api_keys or '',
+                    'tools_allowed': _sd_agent_db.tools_allowed or '',
+                    'search_scope': _sd_agent_db.search_scope or '',
+                    'avatar_url': _sd_agent_db.avatar_url or '',
+                    'tools': [],
+                }
+                _sub_ctx = (
+                    f"Задача от коллеги {agent['name']}:\n{_sd_task}\n\n"
+                    f"Контекст (что уже сделал {agent['name']}):\n{_final_text[:400]}"
+                )
+                logger.info("[SUBDELEGATE] %s → %s: %s", agent['name'], _sd_name, _sd_task[:60])
+                _sub_resp = await _exec_agent_for_director(_sd_data, _sub_ctx, user_id)
+                if _sub_resp:
+                    _sub_results.append(f"[{_sd_name}]: {_sub_resp[:300]}")
+                    # Сохраняем память субделегированного агента
+                    try:
+                        from ai_integration.office_engine import _save_agent_outcome_memory_sync as _smem
+                        if _sub_db_id:
+                            _smem(_sub_db_id, _sd_name,
+                                  f'задача от {agent["name"]}',
+                                  _sub_resp[:400], True)
+                    except Exception:
+                        pass
+
+            if _sub_results:
+                _final_text = _final_text + '\n\n' + '\n'.join(_sub_results)
+        except Exception as _sub_err:
+            logger.debug("[SUBDELEGATE] error: %s", _sub_err)
+
+    return _final_text
 
 
 # Слова-сигналы что пользователь хочет действие, а не разговор
@@ -4037,15 +4209,19 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         _save_interaction_for_director(user_id, _ac)
         await asyncio.sleep(0.05)
         if user_db_id:
+            _task_lc = (task or '').lower()
+            _cooldown = 2.0 if any(
+                w in _task_lc for w in ('анализ', 'исследов', 'отчёт', 'отчет', 'research', 'report', 'strategy', 'стратег')
+            ) else 0.5
             _save_agent_delegation_anchor(
                 user_db_id=user_db_id,
                 agent_id=ag['id'],
                 agent_name=ag['name'],
                 task=task,
-                result_summary=str(resp)[:400],
-                cooldown_hours=0.5,
+                result_summary=str(resp)[:600],
+                cooldown_hours=_cooldown,
             )
-        return str(resp)[:500]
+        return str(resp)[:800]
 
     # ── Прямое обращение к агенту по имени (без LLM-решения) ────────────────────
     # Если сообщение начинается с имени агента — сразу ему делегируем
@@ -4074,33 +4250,65 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
     # ── Начальное решение ASI ──────────────────────────────────────────────────
     _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
+
+    # Строим компактный список агентов: имя | должность | специализация | умеет
+    _agent_caps_lines = []
+    for _ac_a in _agents:
+        _ac_intg = []
+        try:
+            _ac_intg = _parse_agent_integrations(
+                _ac_a.get('user_api_keys') or '',
+                _ac_a.get('python_code') or '',
+                _ac_a.get('tools_allowed') or '',
+                _ac_a.get('search_scope') or '',
+            )
+        except Exception:
+            pass
+        if not _ac_intg:
+            _ac_intg = _infer_capabilities_from_role(
+                _ac_a.get('job_title') or '',
+                _ac_a.get('specialization') or '',
+                _ac_a.get('description') or '',
+            )
+        _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
+        _ac_desc = (_ac_a.get('description') or '')[:120]
+        _agent_caps_lines.append(
+            f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
+            f" | {_ac_a.get('specialization','')}"
+            f"\n  Умеет: {_ac_caps}"
+            + (f"\n  О себе: {_ac_desc}" if _ac_desc else "")
+        )
+    _caps_block = "\n".join(_agent_caps_lines)
+
     _decision_prompt = (
-        f"Ты — ASI Biont, директор офиса. Твоя команда агентов (у каждого указаны интеграции — что он реально умеет):\n{agents_block}\n\n"
-        f"Пользователь написал: «{user_message}»{_ctx_hint}{_history_block}\n\n"
-        "ПРАВИЛА ВЫБОРА ДЕЙСТВИЯ:\n"
-        "- self — ТОЛЬКО для: приветствий, прощаний, личных вопросов о тебе как ASI, мелких уточнений без задачи.\n"
-        "- delegate — ОДИН агент выполняет задачу. Используй для: составить список, исследовать, написать текст, предложить план, найти площадки/контакты, маркетинг, анализ, советы, стратегия. Агент справляется с любым мыслительным и исследовательским трудом — интеграция не обязательна.\n"
-        "- multi_delegate — данные нужны от НЕСКОЛЬКИХ агентов НЕЗАВИСИМО (можно параллельно).\n"
-        "- adaptive — ТОЛЬКО для явно сложных/стратегических задач (исследование+план+действие, анализ+продвижение и т.п.). "
-        "ASI выбирает ПЕРВОГО агента — затем после каждого результата решает КОГО вызвать следующим на основе реального вывода. "
-        "НЕ используй для простых вопросов и одиночных действий — только когда задача требует последовательной цепочки разных специалистов.\n\n"
-        "⚠️ Если задача — написать, исследовать, составить список, спланировать, проанализировать → ВСЕГДА delegate или adaptive, НИКОГДА self.\n"
-        "⚡ Смотри на ИНТЕГРАЦИИ агентов (поле 'Может:'). Есть подходящая интеграция — делегируй ему. Нет — выбирай по специализации (Маркетолог, Аналитик, Разработчик и т.д.).\n"
-        "director_message — живое прямое обращение к агенту: 'Маркетолог, составь список площадок для поиска тестеров AI-продуктов.' НЕ пиши 'ASI поручает'.\n\n"
+        f"Ты — ASI Biont, директор офиса. Тебе нужно принять решение: выполнить запрос самому или отдать агенту.\n\n"
+        f"ЗАПРОС ПОЛЬЗОВАТЕЛЯ:\n«{user_message}»\n\n"
+        f"ПРОФИЛИ АГЕНТОВ КОМАНДЫ:\n{_caps_block}\n"
+        f"{_ctx_hint}{_history_block}\n\n"
+        "ЛОГИКА ПРИНЯТИЯ РЕШЕНИЯ (думай по шагам, но выводи только JSON):\n\n"
+        "1. Пойми, что РЕАЛЬНО нужно пользователю: чего он хочет достичь? Это разовый вопрос или работа?\n"
+        "2. Оцени каждого агента: совпадают ли его умения (Умеет:) и специализация с потребностью?\n"
+        "3. Выбери action:\n"
+        "   • self — только если: (а) запрос чисто информационный/технический (добавить задачу, узнать статус, ответить на вопрос о боте) И (б) НИ ОДИН агент не добавляет ценности своими специфическими умениями.\n"
+        "   • delegate — если хотя бы один агент может выполнить задачу лучше/глубже/конкретнее, чем ты сам: исследование, поиск, анализ, стратегия, тексты, работа с API, любая предметная экспертиза.\n"
+        "   • multi_delegate — задача распадается на части, каждую может взять РАЗНЫЙ агент параллельно.\n"
+        "   • adaptive — многошаговая миссия: вывод первого агента питает задачу второго (например: исследование → план → контент).\n\n"
+        "ВЫБОР АГЕНТА: смотри на поле «Умеет:» и специализацию. Ищи точное совпадение с нуждой. Если несколько подходят — выбери самого профильного.\n"
+        "director_message — живое обращение к агенту от лица директора, как колллеге: 'Маша, нам нужны первые 10 бета-тестеров, можешь подготовить список площадок и шаблон сообщения?' НЕ пиши «ASI поручает» или формальные фразы.\n\n"
         "Ответь ТОЛЬКО JSON без ```:\n"
-        '{"action": "self", "team_hint": "что из команды могло бы помочь (1 предложение)"}\n'
+        '{"action": "self", "team_hint": "какой агент мог бы помочь в следующий раз (1 предл.)"}\n'
         "или\n"
-        '{"action": "delegate", "agent_name": "точное имя", '
-        '"agent_task": "задача в 1 предложение", "director_message": "прямое обращение к агенту в чате"}\n'
+        '{"action": "delegate", "agent_name": "точное имя агента", '
+        '"agent_task": "конкретная задача агенту в 1–2 предложения", "director_message": "живое обращение к агенту"}\n'
         "или\n"
-        '{"action": "multi_delegate", "director_intro": "вступление ASI", '
-        '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение к агенту"}, ...]}\n'
+        '{"action": "multi_delegate", "director_intro": "что ASI говорит пользователю перед раздачей задач", '
+        '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "обращение к агенту"}, ...]}\n'
         "или\n"
-        '{"action": "adaptive", "director_intro": "вступление ASI в чат — что будем делать", '
-        '"mission_brief": "цель миссии в 1 предложении", '
+        '{"action": "adaptive", "director_intro": "что ASI говорит пользователю — план действий", '
+        '"mission_brief": "цель миссии одним предложением", '
         '"first_agent_name": "точное имя первого агента", '
         '"first_agent_task": "задача первого агента", '
-        '"director_message": "прямое обращение к первому агенту"}'
+        '"director_message": "живое обращение к первому агенту"}'
     )
 
     decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=350)
@@ -4177,7 +4385,8 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                 f"{_next_agent_task}\n\n"
                 + ("ВАЖНО: используй и развивай результаты предыдущих агентов из контекста. "
                    "Не повторяй то что они уже сделали — иди дальше.\n\n" if _adp_results else "")
-                + "В конце своего ответа добавь строку: ПЕРЕДАЮ: [что ещё нужно проверить или кому передать задачу]"
+                + ("В конце своего ответа добавь строку: ПЕРЕДАЮ: [что ещё нужно сделать или кому передать задачу]"
+                   if _adp_step < MAX_ADAPTIVE_STEPS - 1 else "")
             )
 
             _resp = await _run_agent_task(_ag, _agent_task_with_signal, extra_context=_adp_ctx)
@@ -4314,7 +4523,10 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             _ag = _find_agent(decision.get('agent_name', ''))
             if not _ag or _ag['name'] in called_agents:
                 break
-            # director_message НЕ сохраняем — агент отвечает сразу, без предварительного пузырька ASI
+            _dm = decision.get('director_message', '')
+            if _dm:
+                _save_interaction_for_director(user_id, _dm)
+                await asyncio.sleep(0.05)
             called_agents.add(_ag['name'])
             _task = decision.get('agent_task') or user_message
             _resp = await _run_agent_task(_ag, _task, extra_context=_agent_ctx)
@@ -4330,7 +4542,9 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                 _ag = _find_agent(_t.get('agent_name', ''))
                 if not _ag or _ag['name'] in called_agents:
                     continue
-                # director_message НЕ сохраняем отдельно — уже есть director_intro на весь раунд
+                _tdm = _t.get('director_message', '')
+                if _tdm:
+                    _save_interaction_for_director(user_id, _tdm)
                 called_agents.add(_ag['name'])
                 _valid.append((_ag, _t.get('agent_task') or user_message))
             if not _valid:
@@ -4342,7 +4556,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             for (ag, task), resp in zip(_valid, _resps):
                 if isinstance(resp, Exception):
                     resp = "Данных нет."
-                all_results.append((ag['name'], task, str(resp)[:500]))
+                all_results.append((ag['name'], task, str(resp)[:800]))
 
     # ── Финальный синтез ASI ──────────────────────────────────────────────────
     if not all_results:
@@ -4353,12 +4567,12 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         "role": "user",
         "content": (
             f"Пользователь спросил: «{user_message}»\n"
-            f"Агенты команды ответили:\n\n{combined[:1500]}\n\n"
+            f"Агенты команды ответили:\n\n{combined[:3000]}\n\n"
             "Ответь пользователю как ASI Biont — живо, по существу, без шаблонных формулировок. "
             "Без markdown, без списков, без заголовков — пиши как в мессенджере. "
             "Говори своими словами, опираясь на то что принесли агенты."
         ),
-    }], max_tokens=500)
+    }], max_tokens=700)
     return final_response or "Команда отработала. Проверь ответы агентов выше."
 
 

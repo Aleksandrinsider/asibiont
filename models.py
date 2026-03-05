@@ -881,6 +881,12 @@ class UserAgent(Base):
     rating_sum = Column(Integer, default=0)
     rating_count = Column(Integer, default=0)
 
+    # Частота автономных запусков python_code (L1 Office Engine).
+    # Пользователь задаёт при создании/редактировании агента.
+    # Допустимые значения: 15, 30, 60, 120, 240, 480, 1440 минут.
+    # None / 0 — использовать глобальный дефолт (60 мин).
+    run_interval_minutes = Column(Integer, default=60, nullable=True)
+
     # Время последнего запуска python_code в фоновом OfficeEngine — персистится в БД,
     # чтобы после рестарта не перезапускать скрипты раньше интервала.
     last_office_run_at = Column(DateTime, nullable=True)

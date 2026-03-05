@@ -34,9 +34,78 @@ except Exception:  # циклический импорт или ещё не за
 logger = logging.getLogger(__name__)
 
 # ── Интервалы ────────────────────────────────────────────────────────────────
-MONITOR_INTERVAL_SEC = (25 * 60, 45 * 60)   # 25-45 мин между прогонами скриптов
+MONITOR_INTERVAL_SEC = (25 * 60, 45 * 60)   # legacy, сохранён для совместимости
+L1_TICK_SEC = 15 * 60                        # тик планировщика L1: каждые 15 мин проверяем due-агентов
+L1_DEFAULT_INTERVAL_SEC = 60 * 60           # дефолтный интервал агента если run_interval_minutes не задан
 OFFICE_INTERVAL_SEC  = (2 * 3600, 4 * 3600) # 2-4 ч между координаторскими сессиями
 SCRIPT_TIMEOUT_SEC   = 18                    # таймаут на один скрипт агента
+
+
+# ── Telegram bot reference (инъектируется из main.py) ───────────────────────
+
+_tg_bot = None  # aiogram Bot, задаётся через set_tg_bot()
+
+
+def set_tg_bot(b):
+    """Инжектирует ссылку на aiogram Bot, чтобы OfficeEngine мог слать сообщения в Telegram."""
+    global _tg_bot
+    _tg_bot = b
+
+
+async def _send_tg(telegram_id, text: str):
+    """Отправляет одно сообщение пользователю в Telegram. Тихо падает при ошибке."""
+    if not _tg_bot or not telegram_id:
+        return
+    try:
+        await _tg_bot.send_message(chat_id=telegram_id, text=text[:4000])
+    except Exception as _e:
+        logger.debug('[TG_SEND] error: %s', _e)
+
+
+def _is_user_night(user) -> bool:
+    """True если сейчас ночные часы для пользователя (22:00 – 10:00 по его TZ).
+    Fallback: Europe/Moscow.
+    """
+    try:
+        import pytz as _pytz
+        _tz_str = getattr(user, 'timezone', None) or 'Europe/Moscow'
+        _tz = _pytz.timezone(_tz_str)
+        _user_now = datetime.now(timezone.utc).astimezone(_tz)
+        return _user_now.hour >= 22 or _user_now.hour < 10
+    except Exception:
+        return False
+
+
+def _save_office_anchor_sync(user_id: int, agent_name: str, text: str):
+    """Создаёт agent_office_update Anchor — AnchorEngine сам решит когда доставить в TG:
+    учитывает ночные часы, cooldown, батчинг группы 'integration'.
+    Cooldown: один якорь на агента в час (дедупликация по source).
+    """
+    try:
+        from models import Session as _Db, Anchor as _An, AnchorPriority as _AP
+        _now = datetime.now(timezone.utc)
+        _src = f'office-report:{agent_name}:{_now.strftime("%Y-%m-%d-%H")}'
+        _s = _Db()
+        try:
+            if _s.query(_An).filter_by(user_id=user_id, source=_src).first():
+                return  # уже есть в пределах часа
+            _s.add(_An(
+                user_id=user_id,
+                anchor_type='agent_office_update',
+                source=_src,
+                topic=f'{agent_name}: {text[:80]}',
+                priority=_AP.MEDIUM,
+                data=json.dumps({'agent': agent_name, 'report': text[:500]}, ensure_ascii=False),
+                triggered_at=_now,
+                expires_at=_now + timedelta(hours=8),
+                cooldown_hours=1,
+                batch_group='integration',
+            ))
+            _s.commit()
+        finally:
+            _s.close()
+    except Exception as _e:
+        logger.debug('[OFFICE] office_anchor create error: %s', _e)
 
 
 # ── Сохранение сообщения агента в историю чата ──────────────────────────────
@@ -275,6 +344,132 @@ def _build_agent_env(user_api_keys: str) -> dict:
     return env
 
 
+# ── Долгосрочная память агентов ─────────────────────────────────────────────
+
+def _save_agent_outcome_memory_sync(
+    user_id: int,
+    agent_name: str,
+    task: str,
+    result: str,
+    success: bool = True,
+):
+    """Сохраняет итог работы агента в AgentActivityLog как 'outcome_memory'.
+    Агент учитывает эту историю при следующих задачах — не повторяет провалы.
+    """
+    try:
+        from models import Session as _Db, AgentActivityLog
+        _s = _Db()
+        try:
+            _s.add(AgentActivityLog(
+                user_id=user_id,
+                activity_type='outcome_memory',
+                title=f'{agent_name}: {task[:120]}',
+                content=result[:800],
+                target=f'agent:{agent_name}',
+                status='completed' if success else 'failed',
+            ))
+            _s.commit()
+        finally:
+            _s.close()
+    except Exception as _e:
+        logger.debug('[MEMORY] save error: %s', _e)
+
+
+def _save_inbox_reply_sync(user_id: int, agent_name: str, stdout: str):
+    """Детектирует входящие письма в stdout IMAP-агента и сохраняет в AgentActivityLog.
+    AnchorEngine подберёт запись и создаст CRITICAL-якорь agent_inbox_reply.
+    """
+    if not stdout:
+        return
+    # Признак: stdout содержит реальные письма (шаблоны Gmail/Yandex/Mail.ru)
+    has_from = 'От:' in stdout
+    has_subj = 'Тема:' in stdout
+    if not (has_from and has_subj):
+        return
+    # Считаем количество писем (каждое письмо имеет "От:")
+    reply_count = stdout.count('От:')
+    try:
+        from models import Session as _Db, AgentActivityLog
+        _s = _Db()
+        try:
+            _s.add(AgentActivityLog(
+                user_id=user_id,
+                activity_type='inbox_reply',
+                title=f'{agent_name}: {reply_count} входящих',
+                content=stdout[:800],
+                target=f'agent:{agent_name}',
+                status='new',
+            ))
+            _s.commit()
+        finally:
+            _s.close()
+    except Exception as _e:
+        logger.debug('[INBOX] save error: %s', _e)
+
+
+def _save_task_blocked_sync(user_id: int, agent_name: str, report: str):
+    """Детектирует маркер BLOCKED в отчёте агента и сохраняет в AgentActivityLog.
+    AnchorEngine создаст HIGH-якорь agent_task_blocked.
+    AI-агент выводит BLOCKED: <причина> когда ему нужно решение человека.
+    """
+    if not report:
+        return
+    _lower = report.lower()
+    _blocked_markers = [
+        'blocked:', 'нужно ваше решение', 'нужна ваша помощь',
+        'требует вашего подтверждения', 'нужен доступ', 'нужно разрешение',
+        'нужно ваше подтверждение', 'жду вашего решения',
+    ]
+    if not any(m in _lower for m in _blocked_markers):
+        return
+    try:
+        from models import Session as _Db, AgentActivityLog
+        _s = _Db()
+        try:
+            _s.add(AgentActivityLog(
+                user_id=user_id,
+                activity_type='task_blocked',
+                title=f'{agent_name}: нужно решение',
+                content=report[:600],
+                target=f'agent:{agent_name}',
+                status='new',
+            ))
+            _s.commit()
+        finally:
+            _s.close()
+    except Exception as _e:
+        logger.debug('[BLOCKED] save error: %s', _e)
+
+
+def _load_agent_outcome_memory_sync(user_id: int, agent_name: str, limit: int = 5) -> str:
+    """Загружает последние N итогов работы агента.
+    Возвращает текстовый блок для системного промпта.
+    """
+    try:
+        from models import Session as _Db, AgentActivityLog
+        _s = _Db()
+        try:
+            rows = (
+                _s.query(AgentActivityLog)
+                .filter_by(user_id=user_id, target=f'agent:{agent_name}', activity_type='outcome_memory')
+                .order_by(AgentActivityLog.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            if not rows:
+                return ''
+            lines = []
+            for r in reversed(rows):
+                status_mark = '✓' if r.status == 'completed' else '✗'
+                lines.append(f'{status_mark} {r.title[:100]}: {(r.content or "")[:200]}')
+            return 'ИСТОРИЯ ПРЕДЫДУЩИХ ЗАДАЧ АГЕНТА:\n' + '\n'.join(lines)
+        finally:
+            _s.close()
+    except Exception as _e:
+        logger.debug('[MEMORY] load error: %s', _e)
+        return ''
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 class OfficeEngine:
     """
@@ -302,7 +497,9 @@ class OfficeEngine:
     # ─── Уровень 1: мониторинг скриптов ──────────────────────────────────────
 
     async def _level1_monitor_loop(self):
-        """Запускает python_code всех активных агентов каждые 25-45 мин."""
+        """Тикает каждые 15 мин и запускает агентов, у которых истёк их индивидуальный run_interval_minutes.
+        Каждый агент работает со своей частотой (15 мин / 30 мин / 1 ч / 12 ч / 1 день).
+        """
         await asyncio.sleep(30)  # минимальный прогрев сервера
         # Умная стартовая задержка: не запускаем агентов сразу после деплоя,
         # если они уже запускались недавно — ждём оставшееся время до следующего цикла.
@@ -324,11 +521,11 @@ class OfficeEngine:
                 if _last_ts.tzinfo is None:
                     _last_ts = _last_ts.replace(tzinfo=_tz.utc)
                 _elapsed = (datetime.now(timezone.utc) - _last_ts).total_seconds()
-                _min_interval = MONITOR_INTERVAL_SEC[0]  # 25 мин
+                _min_interval = L1_TICK_SEC  # ждём минимум один тик (15 мин)
                 if _elapsed < _min_interval:
                     _remaining = _min_interval - _elapsed
                     logger.info(
-                        "[OFFICE-L1] Last agent run %.0f min ago — waiting %.0f min before first run",
+                        "[OFFICE-L1] Last agent run %.0f min ago — waiting %.0f min before first tick",
                         _elapsed / 60, _remaining / 60,
                     )
                     await asyncio.sleep(_remaining)
@@ -344,9 +541,8 @@ class OfficeEngine:
                 await self._run_all_agent_scripts()
             except Exception as e:
                 logger.error("[OFFICE-L1] loop error: %s", e)
-            wait = random.randint(*MONITOR_INTERVAL_SEC)
-            logger.info("[OFFICE-L1] next run in %.0f min", wait / 60)
-            await asyncio.sleep(wait)
+            logger.info("[OFFICE-L1] next tick in %.0f min", L1_TICK_SEC / 60)
+            await asyncio.sleep(L1_TICK_SEC)
 
     async def _run_all_agent_scripts(self):
         """Грузит всех активных агентов с python_code и запускает их в пакетах."""
@@ -385,18 +581,19 @@ class OfficeEngine:
         if not py_code:
             return
 
-        # Персистентный cooldown: пропускаем агента если он запускался < MONITOR_INTERVAL_SEC[0] назад.
-        # Защищает от лавины отчётов сразу после рестарта деплоя.
+        # Per-agent cooldown: каждый агент имеет свой интервал run_interval_minutes.
+        # L1 тикает каждые 15 мин и проверяет, пора ли конкретному агенту запускаться.
+        _agent_interval_sec = (agent.run_interval_minutes or 0) * 60 or L1_DEFAULT_INTERVAL_SEC
         if agent.last_office_run_at is not None:
             try:
                 _last = agent.last_office_run_at
                 if _last.tzinfo is None:
                     _last = _last.replace(tzinfo=timezone.utc)
                 _elapsed = (datetime.now(timezone.utc) - _last).total_seconds()
-                if _elapsed < MONITOR_INTERVAL_SEC[0]:
+                if _elapsed < _agent_interval_sec:
                     logger.debug(
-                        "[OFFICE-L1] [%s] skipped (ran %.0f min ago, cooldown %.0f min)",
-                        agent.name, _elapsed / 60, MONITOR_INTERVAL_SEC[0] / 60,
+                        "[OFFICE-L1] [%s] skipped (ran %.0f min ago, interval %.0f min)",
+                        agent.name, _elapsed / 60, _agent_interval_sec / 60,
                     )
                     return
             except Exception:
@@ -472,6 +669,14 @@ class OfficeEngine:
                             False,  # internal=False: отчёт агента виден в чате
                         )
                         logger.info("[OFFICE-L1] [%s] report saved (visible) for user %d", agent.name, user.id)
+                        # Anchor → AnchorEngine доставит в TG с учётом ночного времени и cooldown
+                        try:
+                            await loop.run_in_executor(
+                                None, _save_office_anchor_sync,
+                                user.id, agent.name or 'Агент', report,
+                            )
+                        except Exception:
+                            pass
                         # Создаём задачу-делегирование в дашборд (видна как делегирование агенту)
                         try:
                             _task_title = (report.splitlines()[0].strip()[:120]
@@ -503,11 +708,47 @@ class OfficeEngine:
                             )
                         except Exception as _le:
                             logger.debug("[OFFICE-L1] [%s] task complete error: %s", agent.name, _le)
-                        # ASI реагирует на находку агента — предлагает действие
+                        # ASI реагирует + broadcast только не ночью (по TZ пользователя)
+                        if not _is_user_night(user):
+                            try:
+                                await self._asi_react_to_agent_output(agent, user, stdout)
+                            except Exception as _re:
+                                logger.debug("[OFFICE-L1] [%s] ASI reaction error: %s", agent.name, _re)
+                        else:
+                            logger.debug("[OFFICE-L1] [%s] night hours — ASI reaction skipped", agent.name)
+                        # Сохраняем итог в долгосрочную память агента
                         try:
-                            await self._asi_react_to_agent_output(agent, user, stdout)
-                        except Exception as _re:
-                            logger.debug("[OFFICE-L1] [%s] ASI reaction error: %s", agent.name, _re)
+                            loop = asyncio.get_running_loop()
+                            await loop.run_in_executor(
+                                None,
+                                _save_agent_outcome_memory_sync,
+                                user.id, agent.name or 'Агент', 'фоновый мониторинг',
+                                report[:400], True,
+                            )
+                        except Exception:
+                            pass
+                        # Детектируем входящие письма в stdout (IMAP agents)
+                        try:
+                            await loop.run_in_executor(
+                                None, _save_inbox_reply_sync,
+                                user.id, agent.name or 'Агент', stdout,
+                            )
+                        except Exception:
+                            pass
+                        # Детектируем BLOCKED-маркер в отчёте агента
+                        try:
+                            await loop.run_in_executor(
+                                None, _save_task_blocked_sync,
+                                user.id, agent.name or 'Агент', report,
+                            )
+                        except Exception:
+                            pass
+                        # Межагентная шина: только не ночью
+                        if not _is_user_night(user):
+                            try:
+                                await self._broadcast_to_peer_agents(user, agent, stdout)
+                            except Exception as _be:
+                                logger.debug("[OFFICE-L1] [%s] broadcast error: %s", agent.name, _be)
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] report/reaction error: %s", agent.name, e)
 
@@ -519,6 +760,158 @@ class OfficeEngine:
 
             elif stderr and 'timeout' not in stderr:
                 logger.debug("[OFFICE-L1] [%s] stderr: %s", agent.name, stderr[:150])
+
+    async def _broadcast_to_peer_agents(self, user, source_agent, output: str):
+        """Межагентная шина событий: результат агента А → запуск смежных агентов Б, В.
+
+        Ищет других агентов у пользователя, чья специализация/описание пересекается
+        с ключевыми словами из вывода. Запускает их с контекстом находки первого агента.
+        Cooldown: не более 1 трансляции на пару агентов в 2 часа.
+        """
+        try:
+            from models import Session as _Db, UserAgent as _UA, Anchor as _Anch, AnchorPriority
+            from ai_integration.autonomous_agent import _exec_agent_for_director
+            _s = _Db()
+            try:
+                _peers = (
+                    _s.query(_UA)
+                    .filter(
+                        _UA.author_id == user.id,
+                        _UA.status == 'active',
+                        _UA.id != source_agent.id,
+                    )
+                    .limit(8)
+                    .all()
+                )
+                if not _peers:
+                    return
+
+                # Ключевые слова из вывода (простое извлечение)
+                _output_words = set(w.lower() for w in output.split() if len(w) > 4)
+
+                _candidates = []
+                for _p in _peers:
+                    # Проверяем cooldown для этой пары агентов
+                    _pair_key = f'broadcast:{source_agent.id}:{_p.id}'
+                    _since = datetime.now(timezone.utc) - timedelta(hours=2)
+                    _dup = (
+                        _s.query(_Anch)
+                        .filter(
+                            _Anch.user_id == user.id,
+                            _Anch.anchor_type == 'agent_broadcast',
+                            _Anch.source == _pair_key,
+                            _Anch.triggered_at >= _since,
+                        )
+                        .first()
+                    )
+                    if _dup:
+                        continue
+
+                    # Проверяем пересечение ключевых слов
+                    _peer_text = f"{_p.specialization or ''} {_p.description or ''} {_p.job_title or ''}".lower()
+                    _peer_words = set(w for w in _peer_text.split() if len(w) > 4)
+                    _overlap = _output_words & _peer_words
+                    if len(_overlap) >= 2 or any(kw in _peer_text for kw in
+                            ['маркетинг', 'аналит', 'продаж', 'email', 'research',
+                             'контент', 'клиент', 'партнер', 'finance', 'финанс']):
+                        _peer_data = {
+                            'id': _p.id, 'name': _p.name,
+                            'job_title': _p.job_title or '',
+                            'specialization': _p.specialization or '',
+                            'description': _p.description or '',
+                            'personality': _p.personality or '',
+                            'python_code': _p.python_code or '',
+                            'user_api_keys': _p.user_api_keys or '',
+                            'tools_allowed': _p.tools_allowed or '',
+                            'search_scope': _p.search_scope or '',
+                            'avatar_url': _p.avatar_url or '',
+                            'tools': [],
+                        }
+                        _candidates.append((_p, _peer_data, _pair_key))
+
+                # Максимум 2 смежных агента за раз (антиспам)
+                _candidates = _candidates[:2]
+            finally:
+                _s.close()
+        except Exception as _e:
+            logger.debug('[BROADCAST] load peers error: %s', _e)
+            return
+
+        if not _candidates:
+            return
+
+        # Формируем задачу для смежных агентов
+        _ctx = (
+            f"Коллега {source_agent.name} только что нашёл следующее и передаёт тебе:\n"
+            f"{output[:600]}\n\n"
+            "Проанализируй это с точки зрения своей специализации. "
+            "Есть ли что-то важное для пользователя именно с твоей стороны?"
+        )
+
+        for _p_model, _p_data, _pair_key in _candidates:
+            try:
+                logger.info("[BROADCAST] %s → %s", source_agent.name, _p_model.name)
+                # Запускаем с памятью агента для контекста
+                _mem = _load_agent_outcome_memory_sync(user.id, _p_model.name)
+                _full_ctx = (f"{_mem}\n\n{_ctx}" if _mem else _ctx)
+
+                _result = await _exec_agent_for_director(
+                    _p_data, _full_ctx, user.telegram_id,
+                )
+                if _result and _result.strip():
+                    loop = asyncio.get_running_loop()
+                    # Пишем в чат от имени смежного агента
+                    await loop.run_in_executor(
+                        None,
+                        _save_chat_message_sync,
+                        user.id, _p_model.name, _p_model.id,
+                        _p_model.avatar_url or '', _result[:500], False,
+                    )
+                    # Anchor → AnchorEngine доставит ответ смежного агента в TG
+                    try:
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(
+                            None, _save_office_anchor_sync,
+                            user.id, _p_model.name, _result,
+                        )
+                    except Exception:
+                        pass
+                    # Сохраняем память
+                    await loop.run_in_executor(
+                        None,
+                        _save_agent_outcome_memory_sync,
+                        user.id, _p_model.name,
+                        f'реакция на находку {source_agent.name}',
+                        _result[:400], True,
+                    )
+                    logger.info("[BROADCAST] %s responded (%d chars)", _p_model.name, len(_result))
+
+                # Записываем cooldown якорь
+                try:
+                    from models import Session as _Db2, Anchor as _Anch2, AnchorPriority as _AP
+                    _s2 = _Db2()
+                    try:
+                        _now = datetime.now(timezone.utc)
+                        _s2.add(_Anch2(
+                            user_id=user.id,
+                            anchor_type='agent_broadcast',
+                            source=_pair_key,
+                            topic=f'Трансляция: {source_agent.name} → {_p_model.name}',
+                            priority=_AP.LOW,
+                            data=json.dumps({'source': source_agent.name, 'peer': _p_model.name},
+                                            ensure_ascii=False),
+                            triggered_at=_now,
+                            expires_at=_now + timedelta(hours=2),
+                            cooldown_hours=2,
+                            batch_group='office',
+                        ))
+                        _s2.commit()
+                    finally:
+                        _s2.close()
+                except Exception:
+                    pass
+            except Exception as _pe:
+                logger.debug('[BROADCAST] peer %s error: %s', _p_model.name, _pe)
 
     async def _asi_react_to_agent_output(self, agent, user, output: str):
         """ASI анализирует что нашёл агент и предлагает конкретное действие в чат.
@@ -1010,23 +1403,97 @@ class OfficeEngine:
 
             # Определяем агента из плана формата «Имя агента: действие»
             _matched_agent = None
+            _task_part = plan  # задача для агента
             for _akey, _ainfo in agents_info.items():
                 _plan_start = plan.lower().split(':')[0].strip()
                 if _plan_start == _akey or _plan_start.startswith(_akey):
                     _matched_agent = _ainfo
+                    # Задача — всё после «Имя:»
+                    _colon_pos = plan.find(':')
+                    if _colon_pos != -1:
+                        _task_part = plan[_colon_pos + 1:].strip()
                     break
             if _matched_agent is None and agents_info:
                 _matched_agent = next(iter(agents_info.values()))
 
-            # Пишем план в чат от имени ASI (L2)
+            # ── АВТОНОМНОЕ ВЫПОЛНЕНИЕ агентом (не уведомление — реальная работа) ──
+            _exec_result = None
+            if _matched_agent:
+                try:
+                    from ai_integration.autonomous_agent import _exec_agent_for_director
+                    from models import Session as _DbExec
+                    # Загружаем полные данные агента
+                    _s_exec = _DbExec()
+                    try:
+                        from models import UserAgent as _UAExec
+                        _dba = _s_exec.query(_UAExec).filter_by(id=_matched_agent['id']).first()
+                        if _dba:
+                            import json as _jex
+                            _agent_data = {
+                                'id': _dba.id, 'name': _dba.name,
+                                'job_title': _dba.job_title or '',
+                                'specialization': _dba.specialization or '',
+                                'description': _dba.description or '',
+                                'personality': _dba.personality or '',
+                                'python_code': _dba.python_code or '',
+                                'user_api_keys': _dba.user_api_keys or '',
+                                'tools_allowed': _dba.tools_allowed or '',
+                                'search_scope': _dba.search_scope or '',
+                                'avatar_url': _dba.avatar_url or '',
+                                'tools': _jex.loads(_dba.tools_allowed or '[]'),
+                            }
+                            # Добавляем историю агента к задаче
+                            _mem = _load_agent_outcome_memory_sync(user_id, _dba.name)
+                            _task_with_ctx = (
+                                f"{_task_part}\n\n{_mem}" if _mem else _task_part
+                            )
+                    finally:
+                        _s_exec.close()
+                    if _dba:
+                        # Получаем telegram_id пользователя для выполнения
+                        _s_utg = _DbExec()
+                        try:
+                            from models import User as _UExec
+                            _utg = _s_utg.query(_UExec).filter_by(id=user_id).first()
+                            _tg_id = _utg.telegram_id if _utg else None
+                        finally:
+                            _s_utg.close()
+                        if _tg_id:
+                            # Запускаем агента — результат идёт через agent_office_update якорь
+                            _exec_result = await _exec_agent_for_director(
+                                _agent_data, _task_with_ctx, _tg_id,
+                            )
+                            logger.info(
+                                "[OFFICE-L2] user %d: %s executed task autonomously (%d chars)",
+                                user_id, _matched_agent['name'],
+                                len(_exec_result or ''),
+                            )
+                            # Сохраняем итог в долгосрочную память
+                            _save_agent_outcome_memory_sync(
+                                user_id, _matched_agent['name'], _task_part,
+                                (_exec_result or '')[:400], bool(_exec_result),
+                            )
+                except Exception as _ex_e:
+                    logger.debug("[OFFICE-L2] autonomous exec error for user %d: %s", user_id, _ex_e)
+
+            # Пишем результат в чат (от имени агента, если выполнил — иначе план от ASI)
             try:
-                _save_chat_message_sync(
-                    user_id=user_id,
-                    agent_name='ASI Biont',
-                    agent_id=0,
-                    avatar_url='',
-                    text=plan,  # без emoji-префикса 📋
-                )
+                if _exec_result and _matched_agent:
+                    _save_chat_message_sync(
+                        user_id=user_id,
+                        agent_name=_matched_agent['name'],
+                        agent_id=_matched_agent['id'],
+                        avatar_url=_matched_agent.get('avatar_url', ''),
+                        text=_exec_result[:600],
+                    )
+                else:
+                    _save_chat_message_sync(
+                        user_id=user_id,
+                        agent_name='ASI Biont',
+                        agent_id=0,
+                        avatar_url='',
+                        text=plan,
+                    )
             except Exception as e:
                 logger.debug("[OFFICE-L2] chat save error for user %d: %s", user_id, e)
 

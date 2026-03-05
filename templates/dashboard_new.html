@@ -3169,12 +3169,12 @@ else:
                     import re as _re
                     import html as _html_ent
                     def _strip_html(s):
-                    s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
-                    s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
-                    s = _re.sub(r'<[^>]+>', ' ', s)
-                    s = _html_ent.unescape(s)
-                    s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
-                    return _re.sub(r'\s+', ' ', s).strip()
+                        s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
+                        s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
+                        s = _re.sub(r'<[^>]+>', ' ', s)
+                        s = _html_ent.unescape(s)
+                        s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
+                        return _re.sub(r'\s+', ' ', s).strip()
                     body = ''
                     if msg.is_multipart():
                         _html_fb = ''
@@ -3272,12 +3272,12 @@ else:
                     import re as _re
                     import html as _html_ent
                     def _strip_html(s):
-                    s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
-                    s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
-                    s = _re.sub(r'<[^>]+>', ' ', s)
-                    s = _html_ent.unescape(s)
-                    s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
-                    return _re.sub(r'\s+', ' ', s).strip()
+                        s = _re.sub(r'<style[^>]*>.*?</style>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
+                        s = _re.sub(r'<script[^>]*>.*?<\/script>', ' ', s, flags=_re.DOTALL|_re.IGNORECASE)
+                        s = _re.sub(r'<[^>]+>', ' ', s)
+                        s = _html_ent.unescape(s)
+                        s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
+                        return _re.sub(r'\s+', ' ', s).strip()
                     body = ''
                     if msg.is_multipart():
                         _html_fb = ''
@@ -6198,6 +6198,8 @@ except Exception as e:
                 'delegation_accepted': t('act-deleg-accepted'), 'delegation_rejected': t('act-deleg-rejected'),
                 'integration': t('act-integration'),
                 'run_agent_action': t('act-run-action'),
+                'inbox_reply': t('act-inbox-reply'),
+                'task_blocked': t('act-task-blocked'),
             };
         }
 
@@ -14591,7 +14593,7 @@ except Exception as e:
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
       'act-email':'Email','act-delegation':'Делегирование','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Кампания делегирования','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология','act-integration':'Интеграция','act-run-action':'Действие агента',
       'act-task-added':'Задача создана','act-task-completed':'Задача выполнена','act-goal-created':'Цель создана','act-goal-updated':'Цель обновлена','act-goal-completed':'Цель достигнута','act-goal-deleted':'Цель удалена','act-profile-updated':'Профиль',
-      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена',
+      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Агент застрял',
       'cc-title':'Контент-кампания','cc-goal':'Цель:','cc-topics':'Темы:','cc-freq':'Частота:','cc-last':'Посл. пост:','cc-posts':'п.','cc-freq-daily':'Ежедн.','cc-freq-weekly':'Еженед.','cc-del-confirm':'Удалить контент-кампанию?','plat-feed':'Лента',
       'dc-title':'Кампания делегирования','dc-audience':'Аудитория:','dc-sent':'Отпр.','dc-accepted':'Прин.','dc-del-confirm':'Удалить кампанию делегирования?',
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
@@ -14857,7 +14859,7 @@ except Exception as e:
       'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
       'act-email':'Email','act-delegation':'Delegation','act-post-feed':'Feed post','act-post-tg':'Telegram post','act-post-discord':'Discord post','act-content-campaign':'Content campaign','act-deleg-campaign':'Delegation campaign','act-other':'Other','act-bg-research':'Research','act-bg-research-ready':'Research ready','agent-activity-title':'Timeline','act-integration':'Integration','act-run-action':'Agent action',
       'act-task-added':'Task created','act-task-completed':'Task completed','act-goal-created':'Goal created','act-goal-updated':'Goal updated','act-goal-completed':'Goal achieved','act-goal-deleted':'Goal deleted','act-profile-updated':'Profile',
-      'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected',
+      'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected','act-inbox-reply':'Incoming emails','act-task-blocked':'Agent blocked',
       'cc-title':'Content campaign','cc-goal':'Goal:','cc-topics':'Topics:','cc-freq':'Frequency:','cc-last':'Last post:','cc-posts':'p.','cc-freq-daily':'Daily','cc-freq-weekly':'Weekly','cc-del-confirm':'Delete content campaign?','plat-feed':'Feed',
       'dc-title':'Delegation campaign','dc-audience':'Audience:','dc-sent':'Sent','dc-accepted':'Accepted','dc-del-confirm':'Delete delegation campaign?',
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',

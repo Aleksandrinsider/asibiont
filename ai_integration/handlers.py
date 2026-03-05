@@ -11888,7 +11888,7 @@ async def start_content_campaign(
     topics: str = None,
     tone: str = 'professional',
     frequency: str = 'daily',
-    post_time: str = '12:00',
+    post_time: str | None = None,
     max_posts: int = 0,
     user_id: int = None,
     session=None,
@@ -11912,6 +11912,9 @@ async def start_content_campaign(
 
         if not name or not goal:
             return "❌ Укажи название и цель кампании"
+
+        if not post_time:
+            return "❌ Время публикации не указано. Спроси пользователя: в какое время публиковать (например, '09:00', '18:00', '21:00'). Не используй 12:00 по умолчанию — пользователь должен указать время явно."
 
         if platforms is None:
             platforms = ['feed']
@@ -11952,9 +11955,9 @@ async def start_content_campaign(
         try:
             h, m = map(int, post_time.split(':'))
             if h < 0 or h > 23 or m < 0 or m > 59:
-                post_time = '12:00'
+                return "❌ Невалидное время. Спроси пользователя удобное время для публикации (HH:MM)."
         except (ValueError, AttributeError):
-            post_time = '12:00'
+            return "❌ Время должно быть в формате HH:MM (09:00, 18:00, 21:30). Спроси пользователя какое время удобно."
 
         import json as _json_cc
         campaign = ContentCampaign(

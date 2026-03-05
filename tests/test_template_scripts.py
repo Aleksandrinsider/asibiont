@@ -14,6 +14,9 @@ import subprocess
 import textwrap
 import time
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 # ──────────────────────────────────────────────
 # Путь к HTML
 # ──────────────────────────────────────────────
@@ -201,7 +204,7 @@ def main() -> None:
             continue
 
         is_public = svc_key in PUBLIC_SVCS
-        print(f"  {'🌐 ' if is_public else ''}Тест: {color(label, BOLD)} ...", end="", flush=True)
+        print(f"  {'[pub] ' if is_public else ''}Тест: {color(label, BOLD)} ...", end="", flush=True)
         t0 = time.time()
         svc_timeout = SVC_TIMEOUTS.get(svc_key, TIMEOUT)
         ok, report = run_script(code, env_vars, timeout=svc_timeout)

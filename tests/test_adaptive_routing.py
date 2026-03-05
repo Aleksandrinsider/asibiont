@@ -383,16 +383,17 @@ asyncio.run(s8())
 # ═══════════════════════════════════════════════════════════════════════════════
 # ИТОГ
 # ═══════════════════════════════════════════════════════════════════════════════
-print("\n" + "━" * 55)
-total  = len(results)
-passed = sum(1 for _, ok in results if ok)
-failed = total - passed
-clr    = "\033[92m" if failed == 0 else "\033[91m"
-print(f"{clr}Результат: {passed}/{total} прошло, {failed} упало\033[0m")
-if failed:
-    print("\nУпавшие:")
-    for label, ok in results:
-        if not ok:
-            print(f"  {ER} {label}")
-print()
-sys.exit(0 if failed == 0 else 1)
+if __name__ == "__main__":
+    print("\n" + "━" * 55)
+    total  = len(results)
+    passed = sum(1 for _, ok in results if ok)
+    failed = total - passed
+    clr    = "\033[92m" if failed == 0 else "\033[91m"
+    print(f"{clr}Результат: {passed}/{total} прошло, {failed} упало\033[0m")
+    if failed:
+        print("\nУпавшие:")
+        for label, ok in results:
+            if not ok:
+                print(f"  {ER} {label}")
+    print()
+    sys.exit(0 if failed == 0 else 1)

@@ -477,6 +477,14 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] last_office_run_at add skipped: {e}")
+        if 'run_interval_minutes' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN run_interval_minutes INTEGER DEFAULT 60"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.run_interval_minutes")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] run_interval_minutes add skipped: {e}")
 
 
 def _migrate_arena(session, inspector):

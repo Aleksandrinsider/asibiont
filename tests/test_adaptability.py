@@ -398,22 +398,23 @@ else:
 # ══════════════════════════════════════════════════════════════════════════════
 # ИТОГ
 # ══════════════════════════════════════════════════════════════════════════════
-_session.close()
-try:
-    os.remove("test_adaptability.db")
-except Exception:
-    pass
+if __name__ == "__main__":
+    _session.close()
+    try:
+        os.remove("test_adaptability.db")
+    except Exception:
+        pass
 
-passed = sum(1 for _, ok in results if ok)
-failed = len(results) - passed
+    passed = sum(1 for _, ok in results if ok)
+    failed = len(results) - passed
 
-print(f"\n{'='*60}")
-print(f"  ИТОГ: {passed}/{len(results)} passed  |  {failed} failed")
-if failed:
-    print(f"\n  ❌ ПРОВАЛЕНО:")
-    for label, ok in results:
-        if not ok:
-            print(f"    • {label}")
-print(f"{'='*60}\n")
+    print(f"\n{'='*60}")
+    print(f"  ИТОГ: {passed}/{len(results)} passed  |  {failed} failed")
+    if failed:
+        print(f"\n  ❌ ПРОВАЛЕНО:")
+        for label, ok in results:
+            if not ok:
+                print(f"    • {label}")
+    print(f"{'='*60}\n")
 
-os._exit(0 if failed == 0 else 1)
+    os._exit(0 if failed == 0 else 1)

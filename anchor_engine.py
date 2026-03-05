@@ -90,6 +90,17 @@ ALWAYS_DELIVER_TYPES = {
     'email_reply_received',      # Входящий ответ на email-кампанию — критически важно
     'payment_failed',            # Неудачная попытка пополнить токены
     'background_research_ready', # Фоновое исследование завершено — пользователь ждёт результат
+    'agent_inbox_reply',         # Агент-почтовик нашёл новые входящие письма
+    'agent_task_blocked',        # Агент застрял — нужно решение пользователя
+}
+
+# Якоря, которые дополнительно ЗАПУСКАЮТ агента (event-driven dispatch)
+# Ключ: тип якоря → шаблон задачи (плейсхолдеры: {goal}, {progress}, {task})
+_AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
+    'goal_stagnation':    "Цель '{goal}' застряла на {progress}%. Проанализируй причины и предложи 2-3 конкретных действия чтобы сдвинуться с места. Используй свои интеграции.",
+    'goal_decomposition': "Разбей цель '{goal}' на конкретные задачи на ближайшую неделю и создай их в системе.",
+    'goal_deadline':      "До дедлайна цели '{goal}' остаётся мало времени. Определи что можно сделать прямо сейчас и действуй.",
+    'task_stale':         "Задача '{task}' давно не обновлялась. Проверь её статус, ускори или предложи делегировать.",
 }
 
 # Группы батчинга
@@ -151,6 +162,9 @@ BATCH_GROUPS = {
     'agent_delegation': 'office',          # Итог делегирования субагенту
     # Кастомные якоря из UserAgent.custom_anchors
     'custom_anchor': 'integration',        # Пользовательский триггер агента
+    # Новые офисные якоря
+    'agent_inbox_reply': 'office',         # Агент нашёл новые входящие письма (IMAP)
+    'agent_task_blocked': 'office',        # Агент застрял, нужно решение пользователя
 }
 
 
@@ -478,6 +492,11 @@ class AnchorEngine:
             session.add_all(new_anchors)
             session.commit()
             logger.info(f"[ANCHOR] User {user_id}: created {len(new_anchors)} new anchors")
+            # 1b. EVENT DISPATCH — новые goal-якоря запускают нужных агентов в фоне
+            if not is_night:
+                asyncio.ensure_future(
+                    self._dispatch_agents_for_new_anchors(user, new_anchors)
+                )
 
         # 2. EVALUATE — собрать доставляемые якоря
         deliverable = session.query(Anchor).filter(
@@ -708,6 +727,140 @@ class AnchorEngine:
                 session.rollback()
 
     # ═══════════════════════════════════════════════════════
+    # EVENT-DRIVEN AGENT DISPATCH
+    # ═══════════════════════════════════════════════════════
+
+    async def _dispatch_agents_for_new_anchors(self, user, new_anchors: list):
+        """
+        Event-driven: когда AnchorEngine создаёт signal-якорь (goal_stagnation,
+        goal_deadline, task_stale и т.д.), мы сразу находим подходящего агента
+        и запускаем его — не ждём следующего цикла L2 координатора.
+
+        Это заменяет «polling каждые 2-4ч» реакцией на конкретное событие.
+        Fire-and-forget: не блокирует основной цикл доставки якорей.
+        """
+        trigger_anchors = [a for a in new_anchors if a.anchor_type in _AGENT_DISPATCH_TRIGGERS]
+        if not trigger_anchors:
+            return
+
+        try:
+            from models import Session as _Db, UserAgent as _UA, AgentActivityLog as _AAL
+            from ai_integration.autonomous_agent import _exec_agent_for_director
+
+            _s = _Db()
+            try:
+                agents = (
+                    _s.query(_UA)
+                    .filter_by(author_id=user.id, status='active')
+                    .limit(10).all()
+                )
+                if not agents:
+                    return
+
+                for anchor in trigger_anchors:
+                    # Guard: не повторяем dispatch для того же источника чаще раза в 4ч
+                    recent_dispatch = (
+                        _s.query(_AAL)
+                        .filter(
+                            _AAL.user_id == user.id,
+                            _AAL.activity_type == 'agent_event_dispatch',
+                            _AAL.target == anchor.source,
+                            _AAL.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
+                        )
+                        .first()
+                    )
+                    if recent_dispatch:
+                        continue
+
+                    # Строим задачу из шаблона
+                    try:
+                        data = anchor.data or {}
+                        task_text = _AGENT_DISPATCH_TRIGGERS[anchor.anchor_type].format(
+                            goal=data.get('title', anchor.topic or 'без названия'),
+                            progress=data.get('progress', 0),
+                            task=data.get('title', anchor.topic or 'без названия'),
+                        )
+                    except Exception:
+                        task_text = anchor.topic or anchor.anchor_type
+
+                    # Выбираем агента: ищем ключевые слова в specialization/description
+                    ANALYTIC_KW = {'аналит', 'strateg', 'страте', 'research', 'исследо', 'план'}
+                    TASK_KW = {'задач', 'task', 'todo', 'plan', 'план', 'organiz'}
+                    kw_set = ANALYTIC_KW if anchor.anchor_type in ('goal_stagnation', 'goal_decomposition', 'goal_deadline') else TASK_KW
+                    chosen = None
+                    for ag in agents:
+                        spec = ((ag.specialization or '') + ' ' + (ag.description or '')).lower()
+                        if any(k in spec for k in kw_set):
+                            chosen = ag
+                            break
+                    if chosen is None:
+                        chosen = agents[0]  # fallback
+
+                    # Логируем dispatch (cooldown guard)
+                    _s.add(_AAL(
+                        user_id=user.id,
+                        activity_type='agent_event_dispatch',
+                        title=f'[dispatch] {chosen.name} ← {anchor.anchor_type}',
+                        content=task_text[:500],
+                        target=anchor.source,
+                        status='in_progress',
+                        ref_id=chosen.id,
+                    ))
+                    _s.commit()
+
+                    # Собираем agent_data
+                    import json as _jd
+                    agent_data = {
+                        'id': chosen.id,
+                        'name': chosen.name,
+                        'job_title': chosen.job_title or '',
+                        'specialization': chosen.specialization or '',
+                        'description': chosen.description or '',
+                        'personality': chosen.personality or '',
+                        'python_code': chosen.python_code or '',
+                        'user_api_keys': chosen.user_api_keys or '',
+                        'tools_allowed': chosen.tools_allowed or '',
+                        'search_scope': chosen.search_scope or '',
+                        'avatar_url': chosen.avatar_url or '',
+                        'tools': _jd.loads(chosen.tools_allowed or '[]'),
+                    }
+
+                    # Запускаем агента асинхронно (не ждём результата здесь)
+                    try:
+                        result = await _exec_agent_for_director(
+                            agent_data, task_text, user.telegram_id,
+                        )
+                        # Обновляем лог: выполнено
+                        _s2 = _Db()
+                        try:
+                            _log = (
+                                _s2.query(_AAL)
+                                .filter_by(
+                                    user_id=user.id,
+                                    activity_type='agent_event_dispatch',
+                                    target=anchor.source,
+                                )
+                                .order_by(_AAL.id.desc()).first()
+                            )
+                            if _log:
+                                _log.status = 'completed'
+                                _log.result = (result or '')[:400]
+                            _s2.commit()
+                        finally:
+                            _s2.close()
+
+                        logger.info(
+                            "[ANCHOR-DISPATCH] user %d: %s triggered by %s → %d chars",
+                            user.id, chosen.name, anchor.anchor_type, len(result or ''),
+                        )
+                    except Exception as _exec_e:
+                        logger.debug("[ANCHOR-DISPATCH] exec error: %s", _exec_e)
+            finally:
+                _s.close()
+        except Exception as e:
+            logger.debug("[ANCHOR-DISPATCH] dispatch error for user %d: %s", user.id, e)
+
+    # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
     # ═══════════════════════════════════════════════════════
 
@@ -805,6 +958,12 @@ class AnchorEngine:
 
         # --- КАСТОМНЫЕ ЯКОРЯ АГЕНТОВ (UserAgent.custom_anchors) ---
         anchors.extend(self._scan_custom_anchors(user, session, user_tz, user_now, now_utc))
+
+        # --- ВХОДЯЩИЕ ПИСЬМА АГЕНТОВ (IMAP) ---
+        anchors.extend(self._scan_agent_inbox_replies(user, session, now_utc))
+
+        # --- ЗАБЛОКИРОВАННЫЕ АГЕНТЫ (нужно решение пользователя) ---
+        anchors.extend(self._scan_agent_task_blocked(user, session, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         anchors = await self._enrich_anchors_with_ddg(anchors, profile)
@@ -4533,6 +4692,8 @@ class AnchorEngine:
                 "ПРАВИЛА ДЛЯ ЯКОРЯ ИНТЕГРАЦИИ:",
                 "— integration_alert: скрипт агента вернул данные (Gmail, Ozon, RSS, CRM и др.). В data: snippet (вывод скрипта), signal (ключевое слово если есть), service_label. Прочитай snippet и САМИ РЕШИ имеет ли это ценность для пользователя прямо сейчас. CRITICAL/HIGH = пиши обязательно: один факт + один вопрос/действие. MEDIUM = пиши если есть конкретная новость (новое письмо, изменение статуса, достиженение/падение показателя). LOW = SKIP если рутина (пустой инбокс, список без изменений, технический вывод). НЕ пересказывай snippet — вычлени суть в 1-2 фразах.",
                 "— agent_office_update: офисный координатор назначил конкретное действие агенту по целям пользователя. В data: plan (строка формата '[Имя агента]: [действие]'), agent_count, goal_count. Сообщи кратко — что конкретно предлагает сделать агент и к какой цели это относится. Спроси: 'Запустить?' или 'Дать команду агенту?'. Не пиши 'координатор запланировал' — пиши живо, как будто агент сам хочет взяться за дело.",
+                "— agent_inbox_reply: КРИТИЧНО! Агент-почтовик нашёл новые входящие письма в inbox. В data: agent_name, reply_count, preview (краткая выжимка From/Subject). Напиши что агент {agent_name} обнаружил новые письма. Покажи preview. Спроси: хочет ли пользователь чтобы агент ответил на наиболее важные?",
+                "— agent_task_blocked: МАЙОР! Агент застрял — ему нужно решение, доступ или подтверждение от пользователя. В data: agent_name, reason (первая строка с BLOCKED), full_context. Напиши что {agent_name} не может двигаться дальше без участия. Объясни причину и чётко спроси что нужно: 'Дать доступ?', 'Подтвердить?', 'Изменить направление?' — конкретный вопрос на основе reason.",
                 "— НЕ НАЧИНАЙ С ПРИВЕТСТВИЯ: никаких 'Привет!', 'Здравствуй!', 'Доброе утро!' и т.п. Сразу по делу — с факта, вопроса или наблюдения. Ты не здороваешься каждый раз, ты уже рядом.",
                 "— ОДНА ТЕМА НА СООБЩЕНИЕ: выбери самый важный якорь и ФОКУСИРУЙСЯ на нём. НЕ пытайся охватить всё: если есть просроченная задача + пустой профиль + предложение — пиши ТОЛЬКО про просроченную задачу. Остальное — в следующий раз. Сообщение которое пытается решить 3 проблемы сразу = мусор.",
                 "— Сначала данные (через инструменты), потом выводы. Не наоборот.",
@@ -4578,6 +4739,24 @@ class AnchorEngine:
                                 f"   Данные [{_sl}]: {_sn[:400]}"
                                 + (f" (сигнал: {_sig})" if _sig else '')
                             )
+                # Для agent_inbox_reply и agent_task_blocked передаём preview/reason
+                OFFICE_DATA_TYPES = {'agent_inbox_reply', 'agent_task_blocked'}
+                if ad.get('type') in OFFICE_DATA_TYPES and ad.get('data'):
+                    d = ad['data']
+                    if ad['type'] == 'agent_inbox_reply':
+                        _pv = d.get('preview', '')
+                        _rc = d.get('reply_count', '')
+                        if _pv:
+                            prompt_parts.append(f"   Агент: {d.get('agent_name','')}, писем: {_rc}")
+                            prompt_parts.append(f"   Preview: {_pv[:200]}")
+                    elif ad['type'] == 'agent_task_blocked':
+                        _reason = d.get('reason', '')
+                        _ctx = d.get('full_context', '')
+                        if _reason:
+                            prompt_parts.append(f"   Агент: {d.get('agent_name','')}")
+                            prompt_parts.append(f"   Причина: {_reason[:200]}")
+                            if _ctx and len(_ctx) > len(_reason):
+                                prompt_parts.append(f"   Контекст: {_ctx[:300]}")
             # Для email-якорей передаём полные данные — AI нужны outreach_id, reply_text, campaign_goal
                 if ad.get('type') in EMAIL_DATA_TYPES and ad.get('data'):
                     data = ad['data']
@@ -5075,6 +5254,113 @@ class AnchorEngine:
                     ))
         except Exception as e:
             logger.debug(f'[ANCHOR] custom_anchors scan error: {e}')
+        return anchors
+
+    def _scan_agent_inbox_replies(self, user, session, now_utc) -> list:
+        """Создаёт CRITICAL-якорь когда агент-почтовик нашёл новые входящие письма.
+        Источник: AgentActivityLog(activity_type='inbox_reply', status='new').
+        После создания якоря помечаем записи статусом 'anchored' во избежание повторов.
+        """
+        anchors = []
+        try:
+            from models import AgentActivityLog
+            since = now_utc - timedelta(hours=4)
+            recs = session.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type == 'inbox_reply',
+                AgentActivityLog.status == 'new',
+                AgentActivityLog.created_at >= since,
+            ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
+
+            for rec in recs:
+                agent_name = (rec.target or 'агент').replace('agent:', '')
+                reply_count = (rec.title or '').split(':')[1].strip() if ':' in (rec.title or '') else ''
+                # Кратко первые 2 письма из stdout для превью
+                _preview = ''
+                _stdout = rec.content or ''
+                _lines = [l.strip() for l in _stdout.splitlines() if l.strip()]
+                _from_lines = [l for l in _lines if l.startswith('От:') or l.startswith('Тема:')]
+                _preview = ' | '.join(_from_lines[:4])[:200]
+
+                source_key = f'inbox_reply:{rec.id}'
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='agent_inbox_reply',
+                    source=source_key,
+                    topic=_t(user,
+                        f'{agent_name}: новые входящие ({reply_count})',
+                        f'{agent_name}: new inbox messages ({reply_count})'),
+                    priority=AnchorPriority.CRITICAL,
+                    data=json.dumps({
+                        'agent_name': agent_name,
+                        'reply_count': reply_count,
+                        'preview': _preview,
+                        'log_id': rec.id,
+                    }, ensure_ascii=False),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=6),
+                    cooldown_hours=0,
+                    batch_group='office',
+                ))
+                # Помечаем как обработанный чтобы не создавать дубли
+                rec.status = 'anchored'
+            if recs:
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+        except Exception as e:
+            logger.debug(f'[ANCHOR] agent_inbox_replies scan error: {e}')
+        return anchors
+
+    def _scan_agent_task_blocked(self, user, session, now_utc) -> list:
+        """Создаёт HIGH-якорь когда агент сигнализирует BLOCKED — нужно решение пользователя.
+        Источник: AgentActivityLog(activity_type='task_blocked', status='new').
+        """
+        anchors = []
+        try:
+            from models import AgentActivityLog
+            since = now_utc - timedelta(hours=8)
+            recs = session.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type == 'task_blocked',
+                AgentActivityLog.status == 'new',
+                AgentActivityLog.created_at >= since,
+            ).order_by(AgentActivityLog.created_at.desc()).limit(5).all()
+
+            for rec in recs:
+                agent_name = (rec.target or 'агент').replace('agent:', '')
+                # Первая строка ответа агента = причина блокировки
+                _reason = (rec.content or '').splitlines()[0][:200] if rec.content else ''
+
+                source_key = f'task_blocked:{rec.id}'
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='agent_task_blocked',
+                    source=source_key,
+                    topic=_t(user,
+                        f'{agent_name} застрял — нужно ваше решение',
+                        f'{agent_name} is blocked — needs your decision'),
+                    priority=AnchorPriority.HIGH,
+                    data=json.dumps({
+                        'agent_name': agent_name,
+                        'reason': _reason,
+                        'full_context': (rec.content or '')[:400],
+                        'log_id': rec.id,
+                    }, ensure_ascii=False),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=12),
+                    cooldown_hours=2,
+                    batch_group='office',
+                ))
+                rec.status = 'anchored'
+            if recs:
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+        except Exception as e:
+            logger.debug(f'[ANCHOR] agent_task_blocked scan error: {e}')
         return anchors
 
     # CLEANUP

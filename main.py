@@ -11926,8 +11926,11 @@ if __name__ == "__main__":
 
                 # Start Living Office Engine — L1 мониторинг скриптов + L2 координатор
                 try:
-                    from ai_integration.office_engine import start_office_engine
+                    from ai_integration.office_engine import start_office_engine, set_tg_bot as _set_office_tg_bot
                     start_office_engine()
+                    if bot:
+                        _set_office_tg_bot(bot)
+                        logger.info("[OFFICE] TG bot injected into OfficeEngine")
                     logger.info("[OFFICE] Living Office Engine started")
                 except Exception as _oe_err:
                     logger.warning(f"[OFFICE] Failed to start OfficeEngine: {_oe_err}")
