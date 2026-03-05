@@ -12026,7 +12026,9 @@ except Exception as e:
                     } else {
                         html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     }
-                    html += `<p style="margin: 4px 0 0 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
+                    if (partner.contact_info && partner.contact_info !== 'null') {
+                        html += `<p style="margin: 4px 0 0 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
+                    }
                     
                     // Рекомендация под ником — по центру
                     if (partner.average_rating > 0) {
@@ -12598,26 +12600,28 @@ except Exception as e:
                             
                             data.partners.forEach(partner => {
                                 const username = partner.contact_info;
-                                if (!username) return; // Skip partners without contact_info
+                                // Use user_id as fallback key when username is absent
+                                const dedupKey = username || (partner.user_id ? 'uid_' + partner.user_id : null);
+                                if (!dedupKey) return; // Skip only if truly no identifier
                                 
                                 // Delegation контакты сохраняем отдельно, всегда
                                 if (partner.type === 'delegating_to_me' || partner.type === 'delegating_by_me') {
-                                    const key = username + '_' + partner.type;
+                                    const key = dedupKey + '_' + partner.type;
                                     // Устанавливаем is_favorite для delegation контактов
                                     partner.is_favorite = favoriteContacts.includes(username);
                                     delegationContacts[key] = partner;
                                     return; // Не добавляем в uniquePartners
                                 }
                                 
-                                if (!uniquePartners[username]) {
-                                    uniquePartners[username] = partner;
+                                if (!uniquePartners[dedupKey]) {
+                                    uniquePartners[dedupKey] = partner;
                                     // Проверяем избранное из кэша, а не из типа партнера
                                     if (favoriteContacts.includes(username) || partner.type === 'favorite') {
-                                        uniquePartners[username].is_favorite = true;
+                                        uniquePartners[dedupKey].is_favorite = true;
                                     }
                                 } else {
                                     // Если пользователь уже есть, комбинируем типы
-                                    const existing = uniquePartners[username];
+                                    const existing = uniquePartners[dedupKey];
                                     
                                     // Сохраняем флаг избранного если контакт в favoriteContacts или тип - favorite
                                     if (favoriteContacts.includes(username) || partner.type === 'favorite') {
@@ -12628,10 +12632,10 @@ except Exception as e:
                                     if (existing.type === 'recommended' && partner.type !== 'recommended') {
                                         // Оставляем recommended, если есть
                                     } else if (existing.type !== 'recommended' && partner.type === 'recommended') {
-                                        uniquePartners[username] = partner;
+                                        uniquePartners[dedupKey] = partner;
                                         // Восстанавливаем флаг избранного
                                         if (existing.is_favorite || favoriteContacts.includes(username)) {
-                                            uniquePartners[username].is_favorite = true;
+                                            uniquePartners[dedupKey].is_favorite = true;
                                         }
                                     }
                                 }
@@ -12686,21 +12690,22 @@ except Exception as e:
                                         discord_id: partner.discord_id || null
                                     };
                                 }
-                                const telegramUrl = 'https://t.me/' + partner.contact_info;
-                                const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                const telegramUrl = partner.contact_info ? ('https://t.me/' + partner.contact_info) : null;
+                                const contactInfoEscaped = (partner.contact_info || '').replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                 
-                                if (partner.type === 'recommended' && partner.contact_info) {
+                                if (partner.type === 'recommended') {
                                     // Добавляем класс contact-favorite если контакт в избранном
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
                                     html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
-                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? '@' : '?');
                                     const canAccess = partner.can_access !== false;
-                                    const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
+                                    const _pUserId = partner.user_id ? partner.user_id : null;
+                                    const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true, ${_pUserId})"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
-                                    const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                    const contactInfoHtml = (partner.contact_info || '').replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     
                                     if (partner.photo_url) {
-                                        const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
+                                        const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info || _pUserId);
                                         const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
                                         html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
@@ -12718,7 +12723,11 @@ except Exception as e:
                                         if (partner.first_name) {
                                             html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
                                         }
-                                        html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
+                                        if (partner.contact_info) {
+                                            html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\', true, ' + (_pUserId || 'null') + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
+                                        } else if (_pUserId) {
+                                            html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'\', true, ' + _pUserId + ')" style="' + nameStyle + '">' + (partner.first_name || 'Пользователь') + '</span>';
+                                        }
                                         html += '</div>';
                                     }
                                     

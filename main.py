@@ -3459,6 +3459,7 @@ async def api_partners_handler(request):
                     partners_data.append(
                         {
                             'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
+                            'user_id': partner_user.id if partner_user else None,
                             'telegram_id': partner_user.telegram_id if partner_user else None,
                             'photo_url': photo_url,
                             'first_name': partner_user.first_name,
