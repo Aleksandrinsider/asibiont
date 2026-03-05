@@ -120,7 +120,7 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
 
 
 def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str, task_title: str):
-    """Закрывает последнюю активную задачу агента (delegation_status→completed, status→done)
+    """Закрывает последнюю активную задачу агента (delegation_status→completed, status→completed)
     и логирует «Задача выполнена» в AgentActivityLog.
     """
     try:
@@ -134,7 +134,7 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
             ).order_by(_Task.id.desc()).first()
             if _task:
                 _task.delegation_status = 'completed'
-                _task.status = 'done'
+                _task.status = 'completed'
             # Логируем ключевое событие: задача выполнена
             _s.add(_AAL(
                 user_id=user_id,
