@@ -801,6 +801,57 @@ class ContextBuilder:
             if alert_hints:
                 hints.extend(alert_hints[:2])
 
+            # ═══ ПОДКЛЮЧЁННЫЕ ПОЧТОВЫЕ ЯЩИКИ ═══
+            try:
+                _email_accounts = []
+                # Gmail OAuth (высший приоритет)
+                if getattr(user, 'google_oauth_token', None):
+                    import json as _jsn_ea
+                    try:
+                        _go = _jsn_ea.loads(user.google_oauth_token)
+                        _go_email = _go.get('email', '')
+                        if _go_email:
+                            _email_accounts.append(f'Gmail OAuth ({_go_email})')
+                    except Exception:
+                        _email_accounts.append('Gmail OAuth (подключён)')
+                # Почта через агентов (SMTP/Resend ключи)
+                from models import UserAgent as _UA_email
+                _email_agents = session.query(_UA_email).filter(
+                    _UA_email.author_id == user.id,
+                    _UA_email.status != 'disabled',
+                    _UA_email.user_api_keys != None,
+                    _UA_email.user_api_keys != '',
+                ).all()
+                _email_seen = set()
+                for _ea in _email_agents:
+                    _env_ea: dict = {}
+                    for _ln in (_ea.user_api_keys or '').splitlines():
+                        _ln = _ln.strip()
+                        if '=' in _ln and not _ln.startswith('#'):
+                            _k, _, _v = _ln.partition('=')
+                            _env_ea[_k.strip().upper()] = _v.strip()
+                    for _prefix, _label in [
+                        ('GMAIL_USER', 'Gmail (пароль приложения)'),
+                        ('YANDEX_USER', 'Яндекс Почта'),
+                        ('MAILRU_USER', 'Mail.ru'),
+                    ]:
+                        _addr = _env_ea.get(_prefix, '')
+                        _has_pass = bool(_env_ea.get(_prefix.replace('USER', 'PASS'), ''))
+                        if _addr and _addr not in _email_seen and (_has_pass or _prefix == 'GMAIL_USER'):
+                            _email_seen.add(_addr)
+                            _email_accounts.append(f'{_label}: {_addr} [агент: {_ea.name}]')
+                    if _env_ea.get('RESEND_API_KEY') and _env_ea.get('RESEND_API_KEY') not in _email_seen:
+                        _email_seen.add(_env_ea['RESEND_API_KEY'])
+                        _re_from = _env_ea.get('RESEND_FROM', _env_ea.get('SENDER_EMAIL', _env_ea.get('FROM_EMAIL', '')))
+                        _re_suffix = f' через {_re_from}' if _re_from else ''
+                        _email_accounts.append(f'Resend API [агент: {_ea.name}]{_re_suffix}')
+                if _email_accounts:
+                    hints.append('ПОДКЛЮЧЁННАЯ ПОЧТА (используй в send_email/negotiate_by_email):\n' + '\n'.join(f'  ✓ {a}' for a in _email_accounts))
+                else:
+                    hints.append('ПОЧТА: ни одного почтового ящика не подключено — send_email будет отправлять через платформенный Resend (no-reply). Чтобы отправлять со своей почты — предложи подключить Gmail/Яндекс/Mail.ru.')
+            except Exception as _eae:
+                logger.debug(f'[EMAIL_ACCTS_CTX] {_eae}')
+
             # ═══ КОМАНДА АГЕНТОВ: ASI видит кто есть и что умеет ═══
             try:
                 from models import UserAgent as _UA_ctx
@@ -808,7 +859,7 @@ class ContextBuilder:
                     session.query(_UA_ctx)
                     .filter(_UA_ctx.author_id == user.id, _UA_ctx.status.in_(['active', 'paused']))
                     .order_by(_UA_ctx.id.asc())
-                    .limit(8)
+                    .limit(15)  # увеличен лимит: агент видит всю команду
                     .all()
                 )
                 if _team:
@@ -821,8 +872,10 @@ class ContextBuilder:
                         'SLACK': 'Slack', 'GITHUB': 'GitHub', 'TRELLO': 'Trello',
                         'BINANCE': 'Binance', 'BYBIT': 'Bybit', 'STRIPE': 'Stripe',
                         'OPENAI': 'OpenAI', 'ANTHROPIC': 'Claude',
+                        'YANDEX_USER': 'Яндекс Почта', 'MAILRU_USER': 'Mail.ru',
+                        'GMAIL_USER': 'Gmail', 'RESEND_API_KEY': 'Resend',
                     }
-                    _agent_summaries = []
+                    _agent_lines = []
                     for _ta in _team:
                         _intg = set()
                         for _kl in (_ta.user_api_keys or '').splitlines():
@@ -839,19 +892,40 @@ class ContextBuilder:
                         if 'yandex' in _code: _intg.add('Яндекс почта')
                         if 'mail.ru' in _code: _intg.add('Mail.ru')
                         if 'feedparser' in _code or ('rss' in _code and 'import' in _code): _intg.add('RSS')
-                        if 'imaplib' in _code and not _intg: _intg.add('IMAP почта')
+                        if 'imaplib' in _code and not _intg: _intg.add('IMAP')
+                        if 'requests' in _code or 'httpx' in _code or 'aiohttp' in _code: _intg.add('HTTPзапросы')
+                        if 'binance' in _code or 'bybit' in _code: _intg.add('крипто')
 
-                        _spec = _ta.specialization or _ta.job_title or ''
-                        _intg_str = ', '.join(sorted(_intg)[:3]) if _intg else (_spec or 'агент')
-                        _agent_summaries.append(f"{_ta.name} [{_intg_str}]")
+                        _intg_str = ', '.join(sorted(_intg)[:5]) if _intg else ''
+                        _role = _ta.job_title or _ta.specialization or ''
+                        _status_badge = '⏸' if _ta.status == 'paused' else '▶'
+                        _has_code = '🔄фон' if _ta.python_code and _ta.python_code.strip() else ''
+                        _has_scope = f' |скоп: {_ta.search_scope[:40]}' if _ta.search_scope else ''
+                        _tools = ''
+                        if _ta.tools_allowed:
+                            try:
+                                import json as _ta_json
+                                _tool_list = _ta_json.loads(_ta.tools_allowed)
+                                if _tool_list:
+                                    _tools = f' |инстр: {", ".join(_tool_list[:4])}'
+                            except Exception:
+                                pass
+                        _parts = []
+                        if _role: _parts.append(_role)
+                        if _intg_str: _parts.append(_intg_str)
+                        _detail = ' | '.join(_parts)
+                        _agent_lines.append(
+                            f"  {_status_badge} {_ta.name}{' — ' + _detail if _detail else ''}"
+                            f"{_has_code}{_has_scope}{_tools}"
+                        )
 
-                    _status = "активны" if len(_team) > 1 else "активен"
+                    _n = len(_team)
                     hints.append(
-                        f"КОМАНДА АГЕНТОВ ({len(_team)} {_status}): {', '.join(_agent_summaries)} — "
-                        f"при задачах с интеграциями предлагай их помощь; обратиться: «{_team[0].name}, ...» или «@{_team[0].name} ...»"
+                        f"КОМАНДА АГЕНТОВ ({_n}): обращайсь 'Агент, ...' или '@имя'\n" +
+                        "\n".join(_agent_lines)
                     )
             except Exception as _ae:
-                logger.debug(f"[PROACTIVE] agents load error: {_ae}")
+                logger.debug(f"[PROACTIVE] agents load error: {_ae})")
 
             # ═══ ПОХОЖИЕ ПОЛЬЗОВАТЕЛИ И ВОЗМОЖНЫЕ КОЛЛАБОРАЦИИ ═══
             similar_hints = self._find_similar_users(user, profile, session, user_tz)

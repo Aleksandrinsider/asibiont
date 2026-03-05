@@ -110,6 +110,13 @@ If balance is low — warn and suggest /buy."""
         filled_parts = []
         empty_fields = []
         _optional_fields = ('telegram_channel', 'status_text', 'bio')  # необязательные
+        # Добавляем Email/Phone рядом с основными полями (user.email / user.phone, если пассированы)
+        if profile_data.get('email'):
+            FIELD_LABELS['email'] = 'Email' if lang != 'en' else 'Email'
+            _optional_fields = _optional_fields + ('email',)  # type: ignore
+        if profile_data.get('phone'):
+            FIELD_LABELS['phone'] = 'Телефон' if lang != 'en' else 'Phone'
+            _optional_fields = _optional_fields + ('phone',)  # type: ignore
         for k, label in FIELD_LABELS.items():
             if profile_data.get(k):
                 filled_parts.append(f"{label}: {profile_data[k]}")

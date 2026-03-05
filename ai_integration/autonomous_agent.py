@@ -1109,6 +1109,11 @@ class HybridAutonomousAgent:
                     weather_info, news_info = await self._get_weather_news_cached(profile.city)
             if user.telegram_channel:
                 profile_data['telegram_channel'] = user.telegram_channel
+            # Email и телефон пользователя — нужны агенту для подписей и контактов
+            if user.email:
+                profile_data['email'] = user.email
+            if getattr(user, 'phone', None):
+                profile_data['phone'] = user.phone
 
             # Задачи пользователя (для CognitiveEngine strategy)
             tasks_data = []
