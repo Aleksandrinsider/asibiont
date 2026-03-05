@@ -1695,17 +1695,7 @@
                     </div>
                 </div>
 
-                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E7EB;">
-                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Gmail <span style="font-size: 11px; color: #059669; font-weight: 400;" data-i18n="gmail-for-send">(для отправки писем AI агентами)</span></label>
-                    {% if gmail_linked %}
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">
-                        <span>{{ gmail_email }}</span>
-                        <a href="#" onclick="disconnectGmail(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none;" data-i18n="unlink">отвязать</a>
-                    </div>
-                    {% else %}
-                    <a href="/oauth/gmail" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-gmail">Подключить Gmail</a>
-                    {% endif %}
-                </div>
+                {# Gmail OAuth — доступно через настройку агентов (сервис Gmail в форме создания агента) #}
 
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip" title="Пропустить" data-i18n-title="skip">Пропустить</button>
@@ -1721,6 +1711,8 @@
 
         // Version: 2026-01-14 fix overlay errors - timestamp: 1768857743
         const userTokenBalance = {{ token_balance or 0 }};
+        const _gmailLinked = {{ 'true' if gmail_linked else 'false' }};
+        const _gmailEmail = {{ gmail_email | tojson }};
 
         // Функция для создания значка (оставлено для совместимости)
         function createTierBadge(tier) {
@@ -4900,6 +4892,15 @@ except Exception as e:
             const tmpl = _MPA_SVC[svc];
             if (fieldsEl) {
                 let h = '<div style="display:flex;flex-direction:column;gap:7px;">';
+                // Gmail OAuth block
+                if (svc === 'gmail') {
+                    if (_gmailLinked) {
+                        h += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid #BBF7D0;border-radius:6px;font-size:12px;color:#374151;background:#F0FDF4;"><span>✅ Gmail подключён: <b>${_gmailEmail}</b></span><a href="#" onclick="disconnectGmail();return false;" style="color:#6C727F;font-size:12px;text-decoration:none;">отключить</a></div>`;
+                    } else {
+                        h += `<a href="/oauth/gmail" style="display:block;padding:9px 12px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;color:#374151;background:#F6F8FA;text-decoration:none;text-align:center;font-weight:500;">Подключить Gmail через Google OAuth →</a>`;
+                    }
+                    h += `<div style="font-size:11px;color:#9CA3AF;text-align:center;margin:2px 0;">— или введите пароль приложения вручную —</div>`;
+                }
                 for (const f of tmpl.fields) {
                     h += `<div><div style="font-size:12px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
                 }
