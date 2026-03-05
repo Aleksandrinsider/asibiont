@@ -1868,6 +1868,10 @@
                 return;
             }
 
+            // Агентские под-отчёты скрыты из чата — они внутренние (agent_report)
+            // ASI сам усвоил их контекст и говорит своим голосом
+            if (sender === 'agent_report') return;
+
             // Авто-разбор JSON-сообщений от офисного движка
             // Формат: {"__agent": {name, id, avatar_url}, "text": "..."}
             if (typeof text === 'string' && text.trim().startsWith('{')) {

@@ -41,8 +41,11 @@ SCRIPT_TIMEOUT_SEC   = 18                    # таймаут на один ск
 
 # ── Сохранение сообщения агента в историю чата ──────────────────────────────
 
-def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar_url: str, text: str):
-    """Сохраняет сообщение агента напрямую в Interaction — появится в чате как обычное AI-сообщение."""
+def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar_url: str, text: str, internal: bool = False):
+    """Сохраняет сообщение агента в Interaction.
+    internal=True  → message_type='agent_report' (скрыто из чата, только для внутреннего контекста).
+    internal=False → message_type='ai' (показывается в чате как реплика ASI).
+    """
     try:
         import json as _json
         from models import Session as _Db, Interaction
@@ -58,7 +61,7 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
         try:
             _s.add(Interaction(
                 user_id=user_id,
-                message_type='ai',
+                message_type='agent_report' if internal else 'ai',
                 content=content,
             ))
             _s.commit()
@@ -310,14 +313,7 @@ class OfficeEngine:
                             agent.id,
                             agent.avatar_url or '',
                             report,
-                        )
-                except Exception as e:
-                    logger.debug("[OFFICE-L1] [%s] chat save error: %s", agent.name, e)
-
-                # ASI проактивно анализирует находку и предлагает действие
-                try:
-                    await self._asi_react_to_agent_output(agent, user, stdout)
-                except Exception as e:
+                        True,  # internal=True: агентский отчёт скрыт из чата
                     logger.debug("[OFFICE-L1] [%s] ASI reaction error: %s", agent.name, e)
 
                 # Агент отвечает на реакцию ASI — создаём диалог
@@ -405,7 +401,7 @@ class OfficeEngine:
                 'ASI Biont',
                 0,
                 '',
-                f"🧠 {reaction}",
+                reaction,  # без emoji-префикса 🧠
             )
             logger.info("[OFFICE-L1] ASI reacted to %s output for user %d", agent.name, user.id)
         except Exception as e:
@@ -639,6 +635,7 @@ class OfficeEngine:
                 agent.id,
                 agent.avatar_url or '',
                 reply,
+                True,  # internal=True: followup агента скрыт из чата
             )
             logger.info("[OFFICE-L1] [%s] dialogue reply saved for user %d", agent.name, user.id)
         except Exception as e:
@@ -823,14 +820,14 @@ class OfficeEngine:
             if _matched_agent is None and agents_info:
                 _matched_agent = next(iter(agents_info.values()))
 
-            # Пишем план прямо в чат как сообщение агента (L2)
+            # Пишем план в чат от имени ASI (L2)
             try:
                 _save_chat_message_sync(
                     user_id=user_id,
-                    agent_name=_matched_agent['name'] if _matched_agent else 'АСИ',
-                    agent_id=_matched_agent['id'] if _matched_agent else 0,
-                    avatar_url=_matched_agent['avatar_url'] if _matched_agent else '',
-                    text=f"📋 {plan}",
+                    agent_name='ASI Biont',
+                    agent_id=0,
+                    avatar_url='',
+                    text=plan,  # без emoji-префикса 📋
                 )
             except Exception as e:
                 logger.debug("[OFFICE-L2] chat save error for user %d: %s", user_id, e)
