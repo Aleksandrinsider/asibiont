@@ -927,6 +927,44 @@ class ContextBuilder:
             except Exception as _ae:
                 logger.debug(f"[PROACTIVE] agents load error: {_ae})")
 
+            # ═══ СВЕЖИЕ ОТЧЁТЫ АГЕНТОВ (последние 24ч) ═══
+            # agent_report скрыты из чата, но ASI должен их знать — чтобы говорить осознанно
+            try:
+                from models import Interaction as _ItrRep
+                _rep_since = datetime.now(timezone.utc) - timedelta(hours=24)
+                _reports = (
+                    session.query(_ItrRep)
+                    .filter(
+                        _ItrRep.user_id == user.id,
+                        _ItrRep.message_type == 'agent_report',
+                        _ItrRep.created_at >= _rep_since,
+                    )
+                    .order_by(_ItrRep.created_at.desc())
+                    .limit(8)
+                    .all()
+                )
+                if _reports:
+                    _rep_lines = []
+                    for _r in reversed(_reports):
+                        try:
+                            import json as _rj
+                            _rd = _rj.loads(_r.content or '{}')
+                            _rname = _rd.get('__agent', {}).get('name', 'Агент') if isinstance(_rd, dict) else 'Агент'
+                            _rtext = _rd.get('text', '') if isinstance(_rd, dict) else str(_rd)
+                            if _rtext:
+                                _ts = _r.created_at.strftime('%H:%M') if _r.created_at else ''
+                                _rep_lines.append(f"  [{_rname}{' ' + _ts if _ts else ''}]: {_rtext[:200]}")
+                        except Exception:
+                            pass
+                    if _rep_lines:
+                        hints.append(
+                            "ОТЧЁТЫ АГЕНТОВ (последние 24ч):\n" +
+                            "\n".join(_rep_lines) +
+                            "\n(это внутренние данные — упоминай только если релевантно теме разговора)"
+                        )
+            except Exception as _re:
+                logger.debug(f"[PROACTIVE] agent_reports load error: {_re}")
+
             # ═══ ПОХОЖИЕ ПОЛЬЗОВАТЕЛИ И ВОЗМОЖНЫЕ КОЛЛАБОРАЦИИ ═══
             similar_hints = self._find_similar_users(user, profile, session, user_tz)
             if similar_hints:
