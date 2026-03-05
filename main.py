@@ -8811,17 +8811,29 @@ async def api_agent_team_pulse_handler(request):
                 ag = session_db.query(_UAP).filter_by(id=aid).first()
                 if not ag:
                     continue
+                # Агенты теперь пишут как message_type='ai' с __agent JSON
                 q = (
                     session_db.query(_ItrP)
                     .filter(
                         _ItrP.user_id == user_id,
-                        _ItrP.message_type == 'agent_report',
+                        _ItrP.message_type == 'ai',
                         _ItrP.created_at >= cutoff,
                     )
                 )
                 if ag.name:
-                    q = q.filter(_ItrP.content.contains(ag.name))
-                last_rep = q.order_by(_ItrP.created_at.desc()).first()
+                    q = q.filter(_ItrP.content.contains(f'"name": "{ag.name}"'))
+                candidates = q.order_by(_ItrP.created_at.desc()).limit(5).all()
+                last_rep = None
+                for _c in candidates:
+                    try:
+                        import json as _cj
+                        _cd = _cj.loads(_c.content or '{}')
+                        _cn = _cd.get('__agent', {}).get('name', '') if isinstance(_cd, dict) else ''
+                        if _cn and _cn not in ('ASI Biont', 'ASI'):
+                            last_rep = _c
+                            break
+                    except Exception:
+                        pass
                 ran_recently = False
                 last_report_at = None
                 last_report_text = None

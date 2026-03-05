@@ -294,7 +294,7 @@ class OfficeEngine:
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] anchor error: %s", agent.name, e)
 
-                # Пишем отчёт агента — AI превращает raw stdout в живое сообщение (как в арене)
+                # Пишем отчёт агента — виден в чате с аватаркой агента
                 try:
                     async with self._ai_sem:
                         report = await self._format_agent_report(
@@ -313,10 +313,18 @@ class OfficeEngine:
                             agent.id,
                             agent.avatar_url or '',
                             report,
-                        True,  # internal=True: агентский отчёт скрыт из чата
-                    logger.debug("[OFFICE-L1] [%s] ASI reaction error: %s", agent.name, e)
+                            False,  # internal=False: отчёт агента виден в чате
+                        )
+                        logger.info("[OFFICE-L1] [%s] report saved (visible) for user %d", agent.name, user.id)
+                        # ASI реагирует на находку агента — предлагает действие
+                        try:
+                            await self._asi_react_to_agent_output(agent, user, stdout)
+                        except Exception as _re:
+                            logger.debug("[OFFICE-L1] [%s] ASI reaction error: %s", agent.name, _re)
+                except Exception as e:
+                    logger.debug("[OFFICE-L1] [%s] report/reaction error: %s", agent.name, e)
 
-                # Агент отвечает на реакцию ASI — создаём диалог
+                # Агент отвечает на реакцию ASI — замыкает командный диалог
                 try:
                     await self._post_agent_followup(agent, user)
                 except Exception as e:
@@ -635,9 +643,9 @@ class OfficeEngine:
                 agent.id,
                 agent.avatar_url or '',
                 reply,
-                True,  # internal=True: followup агента скрыт из чата
+                False,  # internal=False: ответ агента виден в чате
             )
-            logger.info("[OFFICE-L1] [%s] dialogue reply saved for user %d", agent.name, user.id)
+            logger.info("[OFFICE-L1] [%s] dialogue reply saved (visible) for user %d", agent.name, user.id)
         except Exception as e:
             logger.debug("[OFFICE-L1] [%s] followup save error: %s", agent.name, e)
 

@@ -928,21 +928,33 @@ class ContextBuilder:
                 logger.debug(f"[PROACTIVE] agents load error: {_ae})")
 
             # ═══ СВЕЖИЕ ОТЧЁТЫ АГЕНТОВ (последние 24ч) ═══
-            # agent_report скрыты из чата, но ASI должен их знать — чтобы говорить осознанно
+            # Агенты сохраняются как message_type='ai' с __agent JSON — ASI читает их как внутренний контекст
             try:
                 from models import Interaction as _ItrRep
                 _rep_since = datetime.now(timezone.utc) - timedelta(hours=24)
-                _reports = (
+                _candidates = (
                     session.query(_ItrRep)
                     .filter(
                         _ItrRep.user_id == user.id,
-                        _ItrRep.message_type == 'agent_report',
+                        _ItrRep.message_type == 'ai',
+                        _ItrRep.content.contains('"__agent"'),
                         _ItrRep.created_at >= _rep_since,
                     )
                     .order_by(_ItrRep.created_at.desc())
-                    .limit(8)
+                    .limit(20)
                     .all()
                 )
+                _reports = []
+                for _r in _candidates:
+                    try:
+                        import json as _rj
+                        _rd = _rj.loads(_r.content or '{}')
+                        _rname = _rd.get('__agent', {}).get('name', '') if isinstance(_rd, dict) else ''
+                        if _rname and _rname not in ('ASI Biont', 'ASI'):
+                            _reports.append(_r)
+                    except Exception:
+                        pass
+                _reports = _reports[:8]
                 if _reports:
                     _rep_lines = []
                     for _r in reversed(_reports):
