@@ -1615,7 +1615,7 @@ def delegate_task(
                             try:
                                 from .autonomous_agent import chat_with_ai as _chat_fn
                                 _trigger = (
-                                    f"[Агент {agent_name} выполнил задачу и прислал отчёт]\n\n"
+                                    f"[Агент {agent_name} выполнил задачу и прислал отчёт — НЕ СОЗДАВАЙ ЗАДАЧИ И НЕ ДЕЛЕГИРУЙ, только прокомментируй как директор]\n\n"
                                     f"{result[:1200]}"
                                 )
                                 _asi_reply = await _chat_fn(message=_trigger, user_id=uid)
