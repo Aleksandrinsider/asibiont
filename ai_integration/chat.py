@@ -444,9 +444,9 @@ def _msg_type_instructions(lang, ctx, rotation_hash):
     message_types.append({'type': 'delegation_status', 'instruction': instr})
 
     if ctx.get('news') or ctx.get('long_term_data', {}).get('interests'):
-        instr = ('Suggest an idea for a channel post. Research the trend via tools (research_topic, get_news_trends). Show the result and suggest: "Here\'s a topic for a post — shall I write and publish it?"'
+        instr = ('Search a trending topic via research_topic and get_news_trends relevant to the user\'s niche. Tell them what you found and ask if they want to turn it into a post.'
                  if L == 'en' else
-                 'Предложи идею для поста в канал. Исследуй тренд через инструменты (research_topic, get_news_trends). Покажи результат и предложи: "Вот тема для поста — написать и опубликовать?"')
+                 'Найди актуальную тему через research_topic и get_news_trends по нише пользователя. Сообщи что нашёл и спроси хочет ли сделать из этого пост.')
         message_types.append({'type': 'content_idea', 'instruction': instr})
 
     profile_obj = ctx.get('profile')
@@ -462,9 +462,9 @@ def _msg_type_instructions(lang, ctx, rotation_hash):
 
     if ctx.get('goals'):
         goal = ctx['goals'][rotation_hash % len(ctx['goals'])]
-        instr = (f'CONTENT FOR GOAL. User\'s goal: "{goal.title}" ({goal.progress_percentage}%). Come up with a channel post that ADVANCES this goal: attracts partners, clients, or attention. Research the topic (research_topic). Show the idea and suggest: "Here\'s a post. It will help with the goal — shall I publish it?"'
+        instr = (f'GOAL CONTENT. User goal: "{goal.title}" ({goal.progress_percentage}%). Research the topic (research_topic) and find an angle — news, trend, case study — that connects to this goal. Share the insight and ask the user how they want to use it.'
                  if L == 'en' else
-                 f'КОНТЕНТ ДЛЯ ЦЕЛИ. Цель пользователя: "{goal.title}" ({goal.progress_percentage}%). Придумай пост для канала, который ПРОДВИНЕТ эту цель: привлечёт партнёров, клиентов, или внимание. Исследуй тему (research_topic). Покажи идею и предложи: "Вот пост. Он поможет с целью — опубликовать?"')
+                 f'КОНТЕНТ ДЛЯ ЦЕЛИ. Цель: "{goal.title}" ({goal.progress_percentage}%). Исследуй тему (research_topic) и найди угол — новость, тренд, пример — который связан с этой целью. Поделись находкой и спроси пользователя как хочет это использовать.')
         message_types.append({'type': 'goal_content', 'instruction': instr})
 
     return message_types
@@ -1271,7 +1271,9 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
     # === РОТАЦИЯ ТИПОВ СООБЩЕНИЙ ===
     import hashlib
     uid = ctx['user'].telegram_id if ctx.get('user') else 0
-    rotation_seed = f"{ctx['user_now'].strftime('%Y-%m-%d-%H')}_{uid}"
+    # Обогащаем семя количеством взаимодействий — каждая сессия получает другой тип
+    _ic = getattr(ctx.get('profile'), 'interaction_count', 0) or 0
+    rotation_seed = f"{ctx['user_now'].strftime('%Y-%m-%d-%H')}_{uid}_{_ic % 31}"
     rotation_hash = int(hashlib.md5(rotation_seed.encode()).hexdigest(), 16)
     
     # Доступные типы сообщений — собираем через bilingual helper
