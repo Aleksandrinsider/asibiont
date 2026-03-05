@@ -146,7 +146,11 @@ _T = {
     'sit_rules': {
         'ru': """
 Стиль ответа — точно такой же как в обычном чате: живой, разговорный, без формальностей. Человек не должен чувствовать, что это системное сообщение.
-ФОРМАТ: 300-500 символов, сплошной текст, никаких списков и заголовков. Конкретика. Не перечисляй функции. Не выдумывай данные.
+ФОРМАТ: 300–500 символов, сплошной текст, 2–3 абзаца, одинарные переносы между ними (не \\n\\n).
+ЗАПРЕЩЕНО: списки (• – – 1.), нумерация, заголовки (##), звёздочки для жирного, двойные переносы строк.
+ЗАПРЕЩЕНО начинать с: 'Привет', 'Добрый', 'Утро [день]', 'Сегодня [день]', 'Вечер вторника', 'Отличное время', 'Прекрасный день'.
+Первое слово — существительное (факт, имя, название Так)
+или глагол действия (Что-то происходит...). Эмодзи 1–2 внутри текста, НЕ в начале строк.
 
 ⚠️ ПРАВИЛО ВЕРИФИКАЦИИ: упоминай задачи/цели ТОЛЬКО если получил их из инструментов (list_tasks, list_goals).
 НЕ бери задачи/цели/посты из памяти или истории — они могут быть удалены.
@@ -154,7 +158,10 @@ _T = {
 🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском языке.""",
         'en': """
 Style: exactly like a regular chat reply — alive, conversational, no formality. User must not feel it's a system message.
-FORMAT: 300-500 characters, flowing text, no lists or headers. Be specific. Don't list features. Don't invent data.
+FORMAT: 300–500 characters, flowing text, 2–3 paragraphs separated by single newlines (not \\n\\n).
+FORBIDDEN: bullet lists (• – – 1.), numbered lists, headers (##), bold markers (**), double newlines.
+FORBIDDEN to start with: 'Hi', 'Good morning', 'Monday morning is great for...', 'Today is a good day', any weekday/time-of-day opener.
+First word must be a noun (a fact, name, concept) or an action verb. Emoji: 1–2 inline, NOT at start of lines.
 
 ⚠️ VERIFICATION RULE: mention tasks/goals ONLY if you got them from tools (list_tasks, list_goals).
 Do NOT take tasks/goals/posts from memory or history — they may have been deleted.
@@ -605,7 +612,11 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
                 f"Tone: {tone}. Escalation: {escalation_level}/3.\n"
                 "Think: can you HELP solve this task, not just remind?\n"
                 "Use find_relevant_contacts_for_task to check if someone in their network does similar activity — if so, mention it.\n"
-                "Ask about status."
+                "Ask about status.\n"
+                "STYLE (STRICT): write like a real friend in chat, 300–500 characters, flowing text. "
+                "FORBIDDEN: bullet lists (\u2022 - 1.), headers (##), double newlines, greetings ('Hi!', 'Good morning'). "
+                "FORBIDDEN to start with 'Reminder about task' — first word must be task name or action verb. "
+                "Emoji: 1–2 inline, NOT at start of lines."
             )
         else:
             escalation_tones = {
@@ -635,7 +646,11 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
                 f"Тон: {tone}. Эскалация: {escalation_level}/3.\n"
                 "Подумай: можешь ли ты ПОМОЧЬ решить эту задачу, а не просто напомнить?\n"
                 "Используй find_relevant_contacts_for_task чтобы проверить, есть ли кто-то из сети кто тоже занимается похожей активностью — и если да, упомяни это.\n"
-                "Спроси о статусе."
+                "Спроси о статусе.\n"
+                "СТИЛЬ (КРИТИЧНО): пиши как живой друг в мессенджере, 300–500 символов, сплошной текст. "
+                "ЗАПРЕЩЕНО: списки (• - 1.), заголовки (##), двойные переносы, приветствия ('Привет!', 'Добрый день'). "
+                "ЗАПРЕЩЕНО начинать с 'Напоминание о задаче' — первое слово должно быть сутью задачи или глаголом действия. "
+                "Эмодзи 1–2 внутри текста, НЕ в начале строк."
                 + _reminder_svc_hint
             )
 
@@ -669,15 +684,17 @@ async def generate_result_check(user_id, task_title):
 
         if lang == 'en':
             instruction = (
-                f"Task \"{task_title}\" marked as completed. "
-                "Congratulate briefly and positively (1-2 sentences). "
-                "Don't ask additional questions."
+                f"Task \"{task_title}\" just got done. "
+                "React like a real friend \u2014 lively, in character, 1-2 sentences max 200 chars. "
+                "FORBIDDEN to start with 'Congratulations!' \u2014 find your own reaction. "
+                "FORBIDDEN: lists, headers, double newlines. No follow-up questions."
             )
         else:
             instruction = (
-                f"Задача «{task_title}» отмечена как выполненная. "
-                "Поздравь с завершением кратко и позитивно (1-2 предложения). "
-                "Не задавай дополнительных вопросов."
+                f"\u0417\u0430\u0434\u0430\u0447\u0430 \u00ab{task_title}\u00bb \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0430. "
+                "\u041e\u0442\u0440\u0435\u0430\u0433\u0438\u0440\u0443\u0439 \u0436\u0438\u0432\u043e \u2014 \u043a\u0430\u043a \u0436\u0438\u0432\u043e\u0439 \u0434\u0440\u0443\u0433, \u0441 \u0445\u0430\u0440\u0430\u043a\u0442\u0435\u0440\u043e\u043c, 1\u20132 \u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u044f \u043c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 200 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432. "
+                "\u0417\u0410\u041f\u0420\u0415\u0429\u0415\u041d\u041e \u043d\u0430\u0447\u0438\u043d\u0430\u0442\u044c \u0441 '\u041f\u043e\u0437\u0434\u0440\u0430\u0432\u043b\u044f\u044e!' \u2014 \u043f\u0440\u0438\u0434\u0443\u043c\u0430\u0439 \u0441\u0432\u043e\u044e \u0440\u0435\u0430\u043a\u0446\u0438\u044e. "
+                "\u0417\u0410\u041f\u0420\u0415\u0429\u0415\u041d\u041e: \u0441\u043f\u0438\u0441\u043a\u0438, \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u0438, \u0434\u0432\u043e\u0439\u043d\u044b\u0435 \u043f\u0435\u0440\u0435\u043d\u043e\u0441\u044b. \u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0445 \u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432 \u043d\u0435 \u0437\u0430\u0434\u0430\u0432\u0430\u0439."
             )
 
         result = await agent.generate_system_message(
