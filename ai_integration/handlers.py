@@ -11355,6 +11355,10 @@ async def send_email(
                 'subject': subject,
                 'text': body,
             }
+            try:
+                _gmail_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+            except Exception:
+                pass
             if _gmail_reply_to and '@' in _gmail_reply_to:
                 _gmail_json['reply_to'] = [_gmail_reply_to]
             try:
@@ -11488,11 +11492,16 @@ async def send_email(
 
                 def _smtp_send_personal():
                     import ssl as _ssl
-                    msg = _MIMEMultipart()
+                    msg = _MIMEMultipart('alternative')
                     msg['From'] = f"{sender_name} <{_smtp_user}>"
                     msg['To'] = to_clean
                     msg['Subject'] = subject
                     msg.attach(_MIMEText(body, 'plain', 'utf-8'))
+                    try:
+                        _html_smtp = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+                        msg.attach(_MIMEText(_html_smtp, 'html', 'utf-8'))
+                    except Exception:
+                        pass
                     _ssl_ctx = _ssl.create_default_context()
                     # STARTTLS (порт 587) — работает на Railway.
                     # Порт 465 (SMTP_SSL) блокируется хостингом на уровне сети.
