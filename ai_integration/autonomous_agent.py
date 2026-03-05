@@ -3978,7 +3978,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if _sub_db_id:
                     _all_agents_db = (
                         _sub_s.query(_SubUA)
-                        .filter(_SubUA.author_id == _sub_db_id, _SubUA.status == 'active')
+                        .filter(_SubUA.author_id == _sub_db_id, _SubUA.status.in_(['active', 'paused']))
                         .limit(10)
                         .all()
                     )
