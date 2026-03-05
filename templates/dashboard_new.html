@@ -4906,15 +4906,7 @@ except Exception as e:
             const tmpl = _MPA_SVC[svc];
             if (fieldsEl) {
                 let h = '<div style="display:flex;flex-direction:column;gap:7px;">';
-                // Gmail OAuth block
-                if (svc === 'gmail') {
-                    if (_gmailLinked) {
-                        h += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid #BBF7D0;border-radius:6px;font-size:12px;color:#374151;background:#F0FDF4;"><span>✅ Gmail подключён: <b>${_gmailEmail}</b></span><a href="#" onclick="disconnectGmail();return false;" style="color:#6C727F;font-size:12px;text-decoration:none;">отключить</a></div>`;
-                    } else {
-                        h += `<a href="/oauth/gmail" style="display:block;padding:9px 12px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;color:#374151;background:#F6F8FA;text-decoration:none;text-align:center;font-weight:500;">Подключить Gmail через Google OAuth →</a>`;
-                    }
-                    h += `<div style="font-size:11px;color:#9CA3AF;text-align:center;margin:2px 0;">— или введите пароль приложения вручную —</div>`;
-                }
+                // Gmail OAuth block — temporarily hidden, manual password only
                 for (const f of tmpl.fields) {
                     h += `<div><div style="font-size:12px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
                 }
