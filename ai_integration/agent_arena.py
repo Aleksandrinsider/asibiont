@@ -779,26 +779,57 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
     # Тема берётся из personal_topic агента — не из заготовок
 
-    _top_free = False  # 40% агент пишет от себя, не реагируя на чужие слова
+    # ─── Режим записи топ-поста ──────────────────────────────────────────────────
+    # initiative  (40% если есть code_output): агент пишет исходя из реальных данных своей интеграции
+    # debate      (25%): агент оспаривает конкретный тезис
+    # free        (20%): делится своей мыслью без обращения к другим
+    # react       (остальное): реагирует на конкретные слова собеседников
+    _r = random.random()
+    _initiative_mode = bool(code_output) and _r < 0.40
+    _debate_mode = not _initiative_mode and _r < 0.65  # ~25% of remaining probability
+    _top_free = not _initiative_mode and not _debate_mode and _r < 0.80  # ~20%
+    # else: react mode
+
     if history_text.strip():
-        # Исключаем посты самого агента из «recent_topics» — чтобы не обращался к себе
+        # Исключаем посты самого агента из «чужих тем» — чтобы не обращался к себе
         other_posts = [p for p in top_posts[-5:] if p.get('agent_id') != agent['id']]
         recent_topics = "\n".join(
             f"[{p['agent_name']}]: \"{p['text'][:120]}\"" for p in other_posts[-3:]
         ) if other_posts else ""
         if lang == 'en':
             if recent_topics:
-                _top_free = random.random() < 0.4
-                user_content = (
-                    f"{code_context}"
-                    f"{personal_hint}"
-                    f"What's been said:\n{recent_topics}\n\n"
-                    + (
+                if _initiative_mode:
+                    user_content = (
+                        f"{code_context}"
+                        f"{personal_hint}"
+                        f"What's been said:\n{recent_topics}\n\n"
+                        "You have fresh real data from your integration above. Use a SPECIFIC fact or number from it "
+                        "to start a new discussion — or challenge something said above with this data. "
+                        "Don't be abstract: cite the actual data point."
+                    )
+                elif _debate_mode and recent_topics:
+                    user_content = (
+                        f"{personal_hint}"
+                        f"What's been said:\n{recent_topics}\n\n"
+                        f"{code_context}"
+                        "First, think: what specific claim here do you DISAGREE with, based on your expertise?\n"
+                        "Pick ONE claim. Challenge it directly — name the person, quote their idea, explain why it's wrong or oversimplified "
+                        "from your professional perspective. Keep it sharp, not aggressive. One or two sentences."
+                    )
+                elif _top_free:
+                    user_content = (
+                        f"{code_context}"
+                        f"{personal_hint}"
+                        f"What's been said:\n{recent_topics}\n\n"
                         "Share your own thought on any of these topics — from YOUR area of expertise. You don't have to address anyone directly."
-                        if _top_free else
+                    )
+                else:
+                    user_content = (
+                        f"{code_context}"
+                        f"{personal_hint}"
+                        f"What's been said:\n{recent_topics}\n\n"
                         "Pick one person and react to their EXACT words — quote or reference what they said. Address them by name. Draw on YOUR specialization."
                     )
-                )
             else:
                 user_content = (
                     f"{code_context}"
@@ -807,17 +838,38 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 )
         else:
             if recent_topics:
-                _top_free = random.random() < 0.4
-                user_content = (
-                    f"{code_context}"
-                    f"{personal_hint}"
-                    f"В чате написали:\n{recent_topics}\n\n"
-                    + (
+                if _initiative_mode:
+                    user_content = (
+                        f"{code_context}"
+                        f"{personal_hint}"
+                        f"В чате написали:\n{recent_topics}\n\n"
+                        "У тебя есть свежие реальные данные из своей интеграции (выше). Используй КОНКРЕТНЫЙ факт или цифру из них "
+                        "чтобы поднять новую тему или поспорить с тем, что говорили выше. "
+                        "Не абстрагируй: назови сам данные."
+                    )
+                elif _debate_mode and recent_topics:
+                    user_content = (
+                        f"{personal_hint}"
+                        f"В чате написали:\n{recent_topics}\n\n"
+                        f"{code_context}"
+                        "Подумай: с каким конкретным утверждением выше ты НЕ СОГЛАСЕН, исходя из своей экспертизы?\n"
+                        "Выбери ОДНО утверждение. Оспорь его напрямую — назови человека, точно сошлись на его/её слова, объясни почему это неточно или упрощённо "
+                        "с точки зрения твоей профессии. Чётко, но без агрессии. Одно-два предложения."
+                    )
+                elif _top_free:
+                    user_content = (
+                        f"{code_context}"
+                        f"{personal_hint}"
+                        f"В чате написали:\n{recent_topics}\n\n"
                         "Выскажи своё мнение по любой из этих тем — опираясь на СВОЮ экспертизу и специализацию. Не обязательно обращаться к кому-то конкретно."
-                        if _top_free else
+                    )
+                else:
+                    user_content = (
+                        f"{code_context}"
+                        f"{personal_hint}"
+                        f"В чате написали:\n{recent_topics}\n\n"
                         "Выбери одного человека и реагируй на его/её конкретные слова — процитируй или сошлись на то, что именно там сказано. Обратись по имени. Используй знания из СВОЕЙ области."
                     )
-                )
             else:
                 user_content = (
                     f"{code_context}"
@@ -1045,10 +1097,37 @@ async def _post_comment(post_msg: dict, commenter: dict):
 
     base_system = commenter["system_prompt"].strip()
     lang_c = _detect_lang_agent(commenter)
-    _free_mode = random.random() < 0.35  # 35% — агент пишет своё, без обращения
+
+    # ─── Режим комментария ─────────────────────────────────────────────────────
+    # debate   (30%): агент оспаривает конкретное утверждение из поста
+    # resolve  (15%): если в треде уже есть комменты — ищет общую точку / синтез
+    # free     (20%): делится своим знанием без прямой адресации
+    # react    (остальное): отвечает на пост напрямую
+    _rc = random.random()
+    _debate_mode = _rc < 0.30
+    _resolve_mode = not _debate_mode and bool(existing_comments) and _rc < 0.45
+    _free_mode = not _debate_mode and not _resolve_mode and _rc < 0.65
+    # else: react mode
+
     if lang_c == 'en':
         _lang_directive_c = "\n\nWrite in English only. Plain chat text, no asterisks or stage directions."
-        if _free_mode:
+        if _debate_mode:
+            _thinking_c = (
+                f"You're in a chat thread. {post_msg.get('agent_name', 'Someone')} made a specific claim above.\n"
+                "TASK: Find the WEAKEST or most oversimplified point in what they said.\n"
+                "Challenge it directly: name the person, quote their specific idea (not a paraphrase), "
+                "and explain why it's wrong or incomplete from YOUR professional perspective.\n"
+                "Keep it civil but sharp. This is a debate, not a fight.\n"
+                "One or two sentences. No vague hedging — take a clear position."
+            )
+        elif _resolve_mode:
+            _thinking_c = (
+                "There are multiple views in this thread. Your job: find what's ACTUALLY true in each, "
+                "synthesize them, and state the most accurate picture based on YOUR expertise.\n"
+                "Don't just agree with everyone — cut through the noise and give the sharpest synthesis.\n"
+                "One or two sentences. Be direct."
+            )
+        elif _free_mode:
             _thinking_c = (
                 "You're in a group chat thread. Share your OWN take on the topic — you don't have to address anyone directly.\n"
                 "Say what YOU think about it. An opinion, a counterpoint, something from your experience.\n"
@@ -1068,7 +1147,22 @@ async def _post_comment(post_msg: dict, commenter: dict):
             "\n\nФОРМАТ: обычное сообщение в чате. "
             "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов, заголовков. Просто текст."
         )
-        if _free_mode:
+        if _debate_mode:
+            _thinking_c = (
+                f"Ты читаешь пост {post_msg.get('agent_name', 'собеседника')}. Найди в нём СЛАБОЕ или слишком упрощённое утверждение.\n"
+                "ЗАДАЧА: оспорь его напрямую — назови человека, процитируй его/её КОНКРЕТНУЮ идею (не пересказ), "
+                "и объясни почему это неточно или неполно с точки зрения твоей экспертизы.\n"
+                "Чётко, но цивильно. Это дискуссия, не конфликт.\n"
+                "Одно-два предложения. Не тяни одеяло — займи чёткую позицию."
+            )
+        elif _resolve_mode:
+            _thinking_c = (
+                "В треде уже есть несколько точек зрения. Твоя задача: найди что ВЕРНО в каждой точке зрения, "
+                "синтезируй их и сформулируй самую точную картину исходя из СВОЕЙ экспертизы.\n"
+                "Не просто соглашайся со всеми — прорежь шум и дай точный синтез.\n"
+                "Одно-два предложения. Будь прямым."
+            )
+        elif _free_mode:
             _thinking_c = (
                 "Ты в треде в групповом чате. Выскажи своё мнение по теме — не обязательно обращаться к кому-то напрямую.\n"
                 "Скажи, что думаешь ты сам(а): своя позиция, контраргумент, что-то из своего опыта.\n"
@@ -1090,20 +1184,47 @@ async def _post_comment(post_msg: dict, commenter: dict):
     )
 
     author_name = post_msg.get('agent_name', 'этот человек')
-    if _free_mode:
+    if _free_mode or _resolve_mode:
         if lang_c == 'en':
+            _resolve_hint = (
+                f"Thread already has {len(existing_comments)} comment(s). Synthesize what's been said."
+                if _resolve_mode else ""
+            )
             user_content = (
                 f"{personal_hint}"
                 f"{thread_context}"
                 f"Topic being discussed: \"{post_text}\"\n\n"
-                f"Share your own take on this topic. You don't have to address anyone directly."
+                + (_resolve_hint if _resolve_hint else
+                   "Share your own take on this topic. You don't have to address anyone directly.")
+            )
+        else:
+            _resolve_hint = (
+                f"В треде уже {len(existing_comments)} комментария. Попробуй синтезировать то, что уже сказано."
+                if _resolve_mode else ""
+            )
+            user_content = (
+                f"{personal_hint}"
+                f"{thread_context}"
+                f"Тема обсуждения: «{post_text}»\n\n"
+                + (_resolve_hint if _resolve_hint else
+                   f"Выскажи своё мнение по этой теме. Не обязательно обращаться к {author_name} напрямую.")
+            )
+    elif _debate_mode:
+        if lang_c == 'en':
+            user_content = (
+                f"{personal_hint}"
+                f"{thread_context}"
+                f"{author_name} said: \"{post_text}\"\n\n"
+                f"Find the weakest or most oversimplified claim in what {author_name} said. "
+                "Challenge it directly with YOUR expertise. Name them, quote the specific idea, explain why it's wrong or incomplete."
             )
         else:
             user_content = (
                 f"{personal_hint}"
                 f"{thread_context}"
-                f"Тема обсуждения: «{post_text}»\n\n"
-                f"Выскажи своё мнение по этой теме. Не обязательно обращаться к {author_name} напрямую."
+                f"{author_name} написал(а): «{post_text}»\n\n"
+                f"Найди слабое или слишком упрощённое утверждение в словах {author_name}. "
+                "Оспорь его напрямую со своей экспертизы: назови человека, процитируй конкретную идею, объясни почему неточно."
             )
     elif lang_c == 'en':
         user_content = (
