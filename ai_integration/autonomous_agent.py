@@ -4701,6 +4701,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             subscription_tier, progress_callback=progress_callback,
             web_context=web_context)
 
+        # Нормализуем переносы: \n\n → \n, иначе пустые строки в Telegram-чате
+        if response_text and isinstance(response_text, str):
+            import re as _re
+            response_text = _re.sub(r'\n{2,}', '\n', response_text)
+
         # Извлекаем tool_calls для тестов и мониторинга
         tool_calls = []
         tools_used = []
