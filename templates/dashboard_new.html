@@ -2057,21 +2057,10 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
-        // Ensure pulse keyframes are injected once
-        (function() {
-            if (!document.getElementById('agent-pulse-style')) {
-                const _s = document.createElement('style');
-                _s.id = 'agent-pulse-style';
-                _s.textContent = '@keyframes agentPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.55)}}';
-                document.head.appendChild(_s);
-            }
-        })();
-
         function updateActiveAgentsBar() {
             const bar = document.getElementById('active-agents-bar');
             if (!bar) return;
             const agents = window._activeAgentsData || [];
-            const pulseMap = window._agentPulseMap || {};  // id → {ran_recently, last_report_text, last_report_at}
             if (!agents.length) {
                 // Нет агентов — показываем ASI Biont
                 bar.style.display = 'flex';
@@ -2091,44 +2080,11 @@
                 const init = ag.name ? ag.name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase() : 'AI';
                 const av = ag.avatar_url ? `<img src="${escapeHtml(ag.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1.5px solid #D1D9E0;"><div style="display:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">${init}</div>` :
                     `<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#068487,#04a8b3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:1.5px solid #D1D9E0;">${init}</div>`;
-                const pulse = pulseMap[ag.id];
-                const ranRecently = pulse && pulse.ran_recently;
-                const pulseDot = ranRecently
-                    ? `<span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;animation:agentPulse 2s ease-in-out infinite;flex-shrink:0;" title="Работал недавно"></span>`
-                    : '';
-                let tooltipTitle = ag.job_title ? `${escapeHtml(ag.name)} — ${escapeHtml(ag.job_title)}` : escapeHtml(ag.name);
-                if (ranRecently && pulse.last_report_text) {
-                    tooltipTitle += `: ${escapeHtml(pulse.last_report_text)}`;
-                }
-                html += `<div style="display:flex;align-items:center;gap:4px;padding:2px 6px 2px 3px;background:#F6F8FA;border:1px solid ${ranRecently ? '#bbf7d0' : '#E8ECEF'};border-radius:20px;position:relative;" title="${tooltipTitle}">${av}<span style="font-size:12px;color:#374151;font-weight:500;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(ag.name)}</span>${pulseDot}</div>`;
+                const title = ag.job_title ? `${escapeHtml(ag.name)} \u2014 ${escapeHtml(ag.job_title)}` : escapeHtml(ag.name);
+                html += `<div style="display:flex;align-items:center;gap:4px;padding:2px 6px 2px 3px;background:#F6F8FA;border:1px solid #E8ECEF;border-radius:20px;" title="${title}">${av}<span style="font-size:12px;color:#374151;font-weight:500;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(ag.name)}</span></div>`;
             }
             bar.innerHTML = html;
         }
-
-        async function fetchAgentPulse() {
-            try {
-                const resp = await fetch('/api/agent_team_pulse', {credentials: 'same-origin'});
-                if (!resp.ok) return;
-                const data = await resp.json();
-                if (!data.agents) return;
-                const map = {};
-                for (const a of data.agents) {
-                    map[a.id] = {
-                        ran_recently: a.ran_recently,
-                        last_report_at: a.last_report_at,
-                        last_report_text: a.last_report_text,
-                    };
-                }
-                window._agentPulseMap = map;
-                updateActiveAgentsBar();
-            } catch(e) { /* silent */ }
-        }
-
-        // Poll pulse every 90 seconds, start after short delay
-        setTimeout(function() {
-            fetchAgentPulse();
-            setInterval(fetchAgentPulse, 90000);
-        }, 3000);
 
         function hideTypingIndicator() {
             const typingDiv = document.getElementById('typing-indicator');
