@@ -4163,6 +4163,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _sub_err:
             logger.debug("[SUBDELEGATE] error: %s", _sub_err)
 
+    # Очищаем DSML-теги и технические артефакты перед возвратом
+    try:
+        from .utils import clean_technical_details as _ctd_exec
+        _final_text = _ctd_exec(_final_text or '').strip() or 'Задачу выполнил.'
+    except Exception:
+        pass
     return _final_text
 
 

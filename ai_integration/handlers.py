@@ -66,6 +66,21 @@ def _validate_email_domain(email: str) -> tuple:
         return True, None  # On any unexpected error, don't block sending
 
 
+def _text_to_email_html(text: str) -> str:
+    """Конвертирует plain-text тело письма в HTML с сохранением абзацев.
+    \n\n → <p>, \n → <br>. Параграфы не слипаются в один блок.
+    """
+    import html as _html_mod
+    safe = _html_mod.escape(text)
+    # Разбиваем на параграфы по двойному переносу
+    paragraphs = safe.split('\n\n')
+    html_parts = []
+    for p in paragraphs:
+        p_html = p.replace('\n', '<br>')
+        html_parts.append(f'<p style="margin: 0 0 12px 0;">{p_html}</p>')
+    return ''.join(html_parts)
+
+
 def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '') -> str:
     """Общий HTML-шаблон для email с unsubscribe footer.
 
@@ -1548,6 +1563,7 @@ def delegate_task(
                     'user_api_keys': _agent_recipient.user_api_keys or '',
                     'tools_allowed': _agent_recipient.tools_allowed or '',
                     'search_scope': _agent_recipient.search_scope or '',
+                    'avatar_url': _agent_recipient.avatar_url or '',
                     'tools': _tools_parsed,
                 }
                 _agent_task_text = (
@@ -1587,9 +1603,28 @@ def delegate_task(
 
                     async def _run_and_report(agent_dict, task_text, uid, agent_name, tg_id):
                         try:
+                            # Показываем пользователю текст поручения ПЕРЕД тем как агент начнёт
+                            _assign_preview = _json_ag.dumps({
+                                '__agent': {
+                                    'name': agent_dict.get('name', agent_name),
+                                    'id': agent_dict.get('id'),
+                                    'avatar_url': agent_dict.get('avatar_url', ''),
+                                },
+                                'text': f'📋 Получил поручение: {task_text[:300]}',
+                            }, ensure_ascii=False)
+                            _save_ifd(uid, _assign_preview)
+
                             result = await _exec_dir(agent_dict, task_text, uid)
                             if not result or not result.strip():
                                 return
+
+                            # Очищаем DSML-теги из ответа агента
+                            try:
+                                from .utils import clean_technical_details as _ctd_r
+                                result = _ctd_r(result).strip() or result
+                            except Exception:
+                                pass
+
                             # Сохраняем в историю диалога (отображается на дашборде)
                             _ac = _json_ag.dumps({
                                 '__agent': {
@@ -11110,10 +11145,20 @@ async def _send_via_gmail_api(
         return False
 
     async def _do_send():
-        msg = _MimeGapi(body, 'plain', 'utf-8')
+        from email.mime.multipart import MIMEMultipart as _MimeMp
+        # Multipart alternative: plain + HTML
+        msg = _MimeMp('alternative')
         msg['From'] = f"{sender_name} <{gmail_email}>"
         msg['To'] = to
         msg['Subject'] = subject
+        msg.attach(_MimeGapi(body, 'plain', 'utf-8'))
+        try:
+            _body_html = _text_to_email_html(body)
+            _full_html = _build_email_html(_body_html, sender_name=sender_name)
+            from email.mime.text import MIMEText as _MHTml
+            msg.attach(_MHTml(_full_html, 'html', 'utf-8'))
+        except Exception:
+            pass  # plain-text fallback
         raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
         async with _ah_gapi.ClientSession() as _hgm:
             _resp = await _hgm.post(
@@ -11546,6 +11591,7 @@ async def send_email(
                             'to': [to_clean],
                             'subject': subject,
                             'text': body,
+                            'html': _build_email_html(_text_to_email_html(body), sender_name=sender_name),
                             'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
                         },
                         timeout=_aiohttp.ClientTimeout(total=15),
