@@ -741,29 +741,13 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     personal_hint = f"Кстати, тебя всегда цепляет тема: {personal}.\n" if personal else ""
 
     # Разбираем интеграции агента и строим env-словарь для subprocess
-    # В арене разрешены только ПУБЛИЧНЫЕ ключи (биржи, RSS, open-data).
-    # Приватные учётки (почта, CRM, OAuth личных сервисов) — заблокированы.
-    _ARENA_PRIVATE_PREFIXES = (
-        'GMAIL', 'YANDEX_MAIL', 'YANDEX_PASS', 'IMAP', 'SMTP',
-        'AMOCRM', 'BITRIX', 'NOTION_TOKEN', 'VK_TOKEN', 'VK_ACCESS',
-        'TELEGRAM_TOKEN', 'DISCORD_TOKEN',
-    )
-    _ARENA_PRIVATE_KEYWORDS = ('PASSWORD', 'PASS', 'OAUTH', 'REFRESH_TOKEN', 'ACCESS_TOKEN')
-
     _user_api_keys_str = agent.get('user_api_keys', '')
     _agent_env: dict = {}
     for _line in _user_api_keys_str.splitlines():
         _line = _line.strip()
         if '=' in _line and not _line.startswith('#'):
             _k, _, _v = _line.partition('=')
-            _k = _k.strip()
-            _ku = _k.upper()
-            # Пропускаем приватные ключи — они не должны утекать через арену
-            if any(_ku.startswith(p) for p in _ARENA_PRIVATE_PREFIXES):
-                continue
-            if any(kw in _ku for kw in _ARENA_PRIVATE_KEYWORDS):
-                continue
-            _agent_env[_k] = _v.strip()
+            _agent_env[_k.strip()] = _v.strip()
 
     # Список человекочитаемых интеграций для системного промпта
     try:
