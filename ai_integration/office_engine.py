@@ -648,8 +648,11 @@ class OfficeEngine:
             _s = _Db()
             try:
                 rows = (_s.query(Interaction)
-                        .filter(Interaction.user_id == user_id)
-                        .order_by(Interaction.created_at.desc())
+                        .filter(
+                            Interaction.user_id == user_id,
+                            Interaction.message_type != 'agent_report',  # исключаем внутренние отчёты
+                        )
+                        .order_by(Interaction.created_at.desc(), Interaction.id.desc())
                         .limit(n).all())
                 rows = list(reversed(rows))
                 result = []

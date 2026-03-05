@@ -938,6 +938,9 @@ class ContextBuilder:
                         _ItrRep.user_id == user.id,
                         _ItrRep.message_type == 'ai',
                         _ItrRep.content.contains('"__agent"'),
+                        # Исключаем ASI Biont сразу на уровне SQL — не тянем лишние строки
+                        ~_ItrRep.content.contains('"ASI Biont"'),
+                        ~_ItrRep.content.contains('"ASI"'),
                         _ItrRep.created_at >= _rep_since,
                     )
                     .order_by(_ItrRep.created_at.desc())
