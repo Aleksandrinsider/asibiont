@@ -594,3 +594,7 @@ def run_migrations():
         raise
     finally:
         session.close()
+
+
+if __name__ == '__main__':
+    run_migrations()

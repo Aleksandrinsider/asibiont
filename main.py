@@ -8899,6 +8899,39 @@ async def api_agent_team_pulse_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_office_run_once_handler(request):
+    """POST /api/office/run_once — форсированный одиночный прогон агентов.
+    Сбрасывает cooldown → запускает скрипты → якоря/сообщения появляются живьём.
+    """
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        from models import UserAgent as _UAr, User as _Ur
+        from ai_integration.office_engine import get_office_engine
+        session_db = Session()
+        try:
+            user_obj = session_db.query(_Ur).filter_by(telegram_id=user_id).first()
+            if not user_obj:
+                return web.json_response({'error': 'User not found'}, status=404)
+            # Сброс cooldown только для агентов этого пользователя
+            cnt = session_db.query(_UAr).filter(
+                _UAr.author_id == user_obj.id,
+                _UAr.status == 'active',
+            ).update({'last_office_run_at': None}, synchronize_session=False)
+            session_db.commit()
+        finally:
+            session_db.close()
+        # Запускаем в background — не блокируем HTTP ответ
+        engine = get_office_engine()
+        asyncio.ensure_future(engine._run_all_agent_scripts())
+        return web.json_response({'started': True, 'agents_reset': cnt})
+    except Exception as e:
+        logger.error(f"api_office_run_once: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def telegram_unlink_handler(request):
     """Отвязывает Telegram от текущего пользователя"""
     try:
@@ -11605,6 +11638,7 @@ app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)
 app.router.add_get('/api/agent_team_pulse', api_agent_team_pulse_handler)
+app.router.add_post('/api/office/run_once', api_office_run_once_handler)
 app.router.add_post('/api/set_language', api_set_language_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)

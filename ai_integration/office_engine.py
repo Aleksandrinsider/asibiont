@@ -1086,3 +1086,70 @@ def start_office_engine():
 
     asyncio.ensure_future(_supervisor())
     logger.info("[OFFICE] Living Office Engine scheduled")
+
+
+# ─── Ручной запуск одного цикла: python -m ai_integration.office_engine --once ──
+
+async def _run_once_live():
+    """Один боевой прогон office engine с выводом в stdout.
+    Сбрасывает cooldown всех агентов → запускает скрипты прямо сейчас.
+    """
+    import logging as _lg
+    _lg.basicConfig(
+        level=_lg.INFO,
+        format='%(asctime)s [%(name)s] %(message)s',
+        datefmt='%H:%M:%S',
+    )
+    # Verbose режим для office_engine
+    _lg.getLogger('ai_integration.office_engine').setLevel(_lg.DEBUG)
+
+    # Сбрасываем cooldown всех агентов пользователя — чтобы не ждать 25 мин
+    try:
+        from models import Session as _Db, UserAgent as _UA
+        _s = _Db()
+        try:
+            _s.query(_UA).filter(_UA.status == 'active').update(
+                {'last_office_run_at': None}, synchronize_session=False
+            )
+            _s.commit()
+            cnt = _s.query(_UA).filter(_UA.status == 'active').count()
+            print(f'\n[ОДИНОЧНЫЙ ПРОГОН] Агентов к запуску: {cnt}')
+        finally:
+            _s.close()
+    except Exception as e:
+        print(f'[WARN] cooldown reset: {e}')
+
+    engine = OfficeEngine()
+    await engine._run_all_agent_scripts()
+
+    # Итоги: что было записано в БД за этот прогон
+    try:
+        from models import Session as _Db2, Interaction, Task, EmailContact, AgentActivityLog
+        _s2 = _Db2()
+        try:
+            import datetime as _dt
+            _since = _dt.datetime.utcnow() - _dt.timedelta(minutes=5)
+            new_msgs   = _s2.query(Interaction).filter(Interaction.created_at >= _since).count()
+            new_tasks  = _s2.query(Task).filter(
+                Task.delegated_to_username.like('agent:%'),
+                Task.created_at >= _since
+            ).count()
+            new_emails = _s2.query(EmailContact).filter(EmailContact.created_at >= _since).count()
+            new_acts   = _s2.query(AgentActivityLog).filter(AgentActivityLog.created_at >= _since).count()
+            print(f'\n[ИТОГИ] сообщений в чат: {new_msgs} | делегирований: {new_tasks} '
+                  f'| email-контактов: {new_emails} | activity log: {new_acts}')
+        finally:
+            _s2.close()
+    except Exception as e:
+        print(f'[WARN] summary error: {e}')
+
+
+if __name__ == '__main__':
+    import sys as _sys
+    if '--once' in _sys.argv:
+        import os as _os
+        _os.environ.setdefault('LOCAL', '1')
+        _os.environ.setdefault('BOT_TOKEN', 'dummy')
+        asyncio.run(_run_once_live())
+    else:
+        print('Usage: python -m ai_integration.office_engine --once')

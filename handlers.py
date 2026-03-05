@@ -1317,7 +1317,47 @@ async def dashboard_handler(message: Message):
     )
 
 
-# Business logic functions for command handlers
+@router.message(Command("run_agents"))
+async def run_agents_handler(message: Message):
+    """Форсирует одиночный прогон агентов пользователя: сбрасывает cooldown и запускает скрипты."""
+    user_id = message.from_user.id
+    lang = get_user_lang(user_id)
+    session = Session()
+    try:
+        from models import UserAgent as _UAh
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            msg = "Please register first by sending /start" if lang == 'en' else "Сначала зарегистрируйтесь, отправив /start"
+            await message.bot.send_message(message.chat.id, msg)
+            return
+        cnt = session.query(_UAh).filter(
+            _UAh.author_id == user.id,
+            _UAh.status == 'active',
+        ).update({'last_office_run_at': None}, synchronize_session=False)
+        session.commit()
+        if cnt == 0:
+            msg = "No active agents found." if lang == 'en' else "Активных агентов не найдено. Создайте агентов в дашборде."
+            await message.bot.send_message(message.chat.id, msg)
+            return
+    finally:
+        session.close()
+    # Запускаем в background
+    try:
+        from ai_integration.office_engine import get_office_engine
+        engine = get_office_engine()
+        asyncio.ensure_future(engine._run_all_agent_scripts())
+        msg = (
+            f"✅ {cnt} agent(s) launched! Results will appear in chat within 1–2 minutes."
+            if lang == 'en'
+            else f"⚡ Запущено агентов: {cnt}. Результаты появятся в чате через 1–2 минуты."
+        )
+    except Exception as e:
+        logging.error(f"run_agents_handler: {e}")
+        msg = "Failed to start agents." if lang == 'en' else "Не удалось запустить агентов."
+    await message.bot.send_message(message.chat.id, msg)
+
+
+
 
 
 def delegate_task(task_title, executor_username, deadline=None, description=None, delegator_id=None, session=None):
