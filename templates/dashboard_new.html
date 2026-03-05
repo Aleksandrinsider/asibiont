@@ -1695,19 +1695,17 @@
                     </div>
                 </div>
 
-                {# Gmail OAuth2 — временно скрыто, приложение на проверке Google
                 <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E7EB;">
-                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Gmail <span style="font-size: 11px; color: #059669; font-weight: 400;">(для отправки писем AI агентами)</span></label>
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Gmail <span style="font-size: 11px; color: #059669; font-weight: 400;" data-i18n="gmail-for-send">(для отправки писем AI агентами)</span></label>
                     {% if gmail_linked %}
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">
                         <span>{{ gmail_email }}</span>
-                        <a href="/api/oauth/gmail/disconnect" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none;">отключить</a>
+                        <a href="#" onclick="disconnectGmail(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none;" data-i18n="unlink">отвязать</a>
                     </div>
                     {% else %}
-                    <a href="/oauth/gmail" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;">Подключить Gmail</a>
+                    <a href="/oauth/gmail" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-gmail">Подключить Gmail</a>
                     {% endif %}
                 </div>
-                #}
 
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip" title="Пропустить" data-i18n-title="skip">Пропустить</button>
@@ -14496,6 +14494,8 @@ except Exception as e:
 
       'link-discord':'Привязать',
       'link-telegram':'Привязать',
+      'link-gmail':'Подключить Gmail',
+      'gmail-for-send':'(для отправки писем AI агентами)',
       'unlink':'отвязать',
       'unlink-discord-confirm':'Отвязать Discord аккаунт?',
       'unlink-telegram-confirm':'Отвязать Telegram аккаунт?',
@@ -14760,6 +14760,8 @@ except Exception as e:
       'referral-desc':'20% tokens from each top-up',
       'link-discord':'Link',
       'link-telegram':'Link',
+      'link-gmail':'Connect Gmail',
+      'gmail-for-send':'(for sending emails via AI agents)',
       'unlink':'unlink',
       'unlink-discord-confirm':'Unlink Discord account?',
       'unlink-telegram-confirm':'Unlink Telegram account?',
