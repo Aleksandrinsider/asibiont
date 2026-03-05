@@ -8792,6 +8792,61 @@ async def api_profile_handler(request):
         session_db.close()
 
 
+async def api_agent_team_pulse_handler(request):
+    """Возвращает статус последней активности каждого агента (agent_report за 24ч)"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        import datetime as _dt_pulse
+        from models import Interaction as _ItrP, UserAgent as _UAP
+        from ai_integration.user_agents import get_user_active_agents as _gaas_pulse
+        session_db = Session()
+        try:
+            cutoff = (_dt_pulse.datetime.utcnow() - _dt_pulse.timedelta(hours=24))
+            agent_ids = _gaas_pulse(user_id)
+            result = []
+            for aid in agent_ids:
+                ag = session_db.query(_UAP).filter_by(id=aid).first()
+                if not ag:
+                    continue
+                q = (
+                    session_db.query(_ItrP)
+                    .filter(
+                        _ItrP.user_id == user_id,
+                        _ItrP.message_type == 'agent_report',
+                        _ItrP.created_at >= cutoff,
+                    )
+                )
+                if ag.name:
+                    q = q.filter(_ItrP.content.contains(ag.name))
+                last_rep = q.order_by(_ItrP.created_at.desc()).first()
+                ran_recently = False
+                last_report_at = None
+                last_report_text = None
+                if last_rep:
+                    ts = last_rep.created_at  # naive UTC
+                    ran_recently = (_dt_pulse.datetime.utcnow() - ts).total_seconds() < 7200
+                    last_report_at = ts.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    last_report_text = (last_rep.content or '')[:120]
+                result.append({
+                    'id': ag.id,
+                    'name': ag.name or '',
+                    'avatar_url': ag.avatar_url or '',
+                    'job_title': ag.job_title or '',
+                    'ran_recently': ran_recently,
+                    'last_report_at': last_report_at,
+                    'last_report_text': last_report_text,
+                })
+            return web.json_response({'agents': result})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"agent_team_pulse error: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def telegram_unlink_handler(request):
     """Отвязывает Telegram от текущего пользователя"""
     try:
@@ -11497,6 +11552,7 @@ app.router.add_post('/api/notes/{note_id}/translate', translate_note_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)
+app.router.add_get('/api/agent_team_pulse', api_agent_team_pulse_handler)
 app.router.add_post('/api/set_language', api_set_language_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
