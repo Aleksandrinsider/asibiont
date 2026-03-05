@@ -106,6 +106,78 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
         logger.debug('[OFFICE] agent delegation create error: %s', e)
 
 
+import re as _re
+_EMAIL_RE = _re.compile(r'[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z0-9.\-]{2,}')
+_GENERIC_DOMAINS = {'noreply', 'no-reply', 'donotreply', 'mailer', 'support', 'info',
+                    'admin', 'webmaster', 'postmaster', 'sales', 'hello', 'contact'}
+
+
+def _auto_extract_email_contacts_sync(user_id: int, stdout: str, agent_name: str):
+    """Парсит stdout агента на email-адреса и сохраняет новые в EmailContact.
+    Пропускает родовые/безличные адреса (info@, noreply@ и т.д.).
+    Лимит: 5 адресов за один прогон, чтобы не засорять справочник.
+    """
+    try:
+        emails_found = _EMAIL_RE.findall(stdout)
+        if not emails_found:
+            return
+        from models import Session as _Db, EmailContact as _EC, User as _U
+        _s = _Db()
+        try:
+            _user = _s.query(_U).filter_by(id=user_id).first()
+            if not _user:
+                return
+            saved = 0
+            seen: set = set()
+            for raw in emails_found:
+                email = raw.lower().strip('.')
+                if email in seen or saved >= 5:
+                    break
+                seen.add(email)
+                local = email.split('@')[0]
+                if local in _GENERIC_DOMAINS or any(g in local for g in _GENERIC_DOMAINS):
+                    continue
+                _dup = _s.query(_EC).filter_by(user_id=_user.id, email=email).first()
+                if _dup:
+                    continue
+                _s.add(_EC(
+                    user_id=_user.id,
+                    email=email,
+                    source=f'agent:{agent_name}',
+                ))
+                saved += 1
+            if saved:
+                _s.commit()
+                logger.debug('[OFFICE] email contacts extracted: user=%d saved=%d', user_id, saved)
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug('[OFFICE] email contact extract error: %s', e)
+
+
+def _log_agent_activity_sync(user_id: int, agent_name: str, agent_id: int, title: str, content: str):
+    """Пишет запись в AgentActivityLog — отображается в разделе Activities дашборда (SSE-поток)."""
+    try:
+        from models import Session as _Db, AgentActivityLog as _AAL
+        _s = _Db()
+        try:
+            _s.add(_AAL(
+                user_id=user_id,
+                activity_type='other',
+                title=title[:295],
+                content=content[:2000],
+                target=agent_name,
+                status='completed',
+                ref_id=agent_id,
+            ))
+            _s.commit()
+            logger.debug('[OFFICE] activity log saved: user=%d agent=%s', user_id, agent_name)
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug('[OFFICE] activity log save error: %s', e)
+
+
 # ── Изолированный запуск скрипта ─────────────────────────────────────────────
 
 def _exec_agent_script_sync(code: str, env: dict | None = None) -> tuple:
@@ -361,6 +433,27 @@ class OfficeEngine:
                             )
                         except Exception as _de:
                             logger.debug("[OFFICE-L1] [%s] delegation create error: %s", agent.name, _de)
+                        # Парсим email-контакты из stdout → EmailContact
+                        try:
+                            await loop.run_in_executor(
+                                None,
+                                _auto_extract_email_contacts_sync,
+                                user.id, stdout, agent.name or 'Агент',
+                            )
+                        except Exception as _ee:
+                            logger.debug("[OFFICE-L1] [%s] email extract error: %s", agent.name, _ee)
+                        # Логируем в AgentActivityLog → dashboard Activities feed
+                        try:
+                            _act_title_raw = (report.splitlines()[0].strip()[:120] if report else f'{agent.name}: мониторинг')
+                            _act_title = f'{agent.name}: {_act_title_raw}'
+                            await loop.run_in_executor(
+                                None,
+                                _log_agent_activity_sync,
+                                user.id, agent.name or 'Агент', agent.id,
+                                _act_title, report[:2000],
+                            )
+                        except Exception as _le:
+                            logger.debug("[OFFICE-L1] [%s] activity log error: %s", agent.name, _le)
                         # ASI реагирует на находку агента — предлагает действие
                         try:
                             await self._asi_react_to_agent_output(agent, user, stdout)
