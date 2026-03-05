@@ -71,6 +71,25 @@ with TestSession() as s:
             description="Нужны реальные люди которые попробуют продукт",
             status="active",
         ))
+        # Тестовые субагенты — без них КОМАНДА АГЕНТОВ в контексте пуста
+        s.add(models.UserAgent(
+            author_id=user.id,
+            name="Кристина",
+            slug="test-kristina",
+            job_title="Маркетолог и SMM-специалист",
+            description="Занимается маркетингом, поиском аудитории, написанием постов и публикациями в соцсетях",
+            status="active",
+            integrations='["telegram", "email"]',
+        ))
+        s.add(models.UserAgent(
+            author_id=user.id,
+            name="Марк",
+            slug="test-mark",
+            job_title="Аналитик и исследователь",
+            description="Проводит исследования рынка, анализирует данные, ищет информацию и готовит отчёты",
+            status="active",
+            integrations='["web_search", "email"]',
+        ))
         s.commit()
 
 # ── Вспомогательный AI-вызов (генерируем сообщение пользователя) ─────────────
