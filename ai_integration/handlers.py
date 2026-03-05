@@ -10024,6 +10024,10 @@ async def reply_to_outreach_email(
             _rt_gm_r = _matched.get('reply_to') or _matched.get('email_user') or sender_addr
             _gm_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
                           'to': [to_clean], 'subject': subject, 'text': reply_body}
+            try:
+                _gm_r_json['html'] = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
+            except Exception:
+                pass
             if _rt_gm_r and '@' in _rt_gm_r:
                 _gm_r_json['reply_to'] = [_rt_gm_r]
             try:
@@ -10053,11 +10057,16 @@ async def reply_to_outreach_email(
             _smtp_pass = _matched['email_pass'].replace(' ', '')
 
             def _do_smtp():
-                msg = _MMsmtp()
+                msg = _MMsmtp('alternative')
                 msg['From'] = f"{sender_name} <{_smtp_user}>"
                 msg['To'] = to_clean
                 msg['Subject'] = subject
                 msg.attach(_MimeSmtp(reply_body, 'plain', 'utf-8'))
+                try:
+                    _reply_html = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
+                    msg.attach(_MimeSmtp(_reply_html, 'html', 'utf-8'))
+                except Exception:
+                    pass
                 _ctx = _ssl_smtp.create_default_context()
                 with _smtplib.SMTP(_smtp_host, _smtp_port, timeout=30) as s:
                     s.ehlo(); s.starttls(context=_ctx); s.ehlo()
@@ -10081,7 +10090,8 @@ async def reply_to_outreach_email(
                         'https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_urk}', 'Content-Type': 'application/json'},
                         json={'from': f"{sender_name} <{_uf}>", 'to': [to_clean],
-                              'subject': subject, 'text': reply_body},
+                              'subject': subject, 'text': reply_body,
+                              'html': _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)},
                         timeout=_aiohttp.ClientTimeout(total=15),
                     )
                     rd = await resp.json()
@@ -10101,6 +10111,10 @@ async def reply_to_outreach_email(
                 async with _aiohttp.ClientSession() as http:
                     _fb_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
                                   'to': [to_clean], 'subject': subject, 'text': reply_body}
+                    try:
+                        _fb_r_json['html'] = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
+                    except Exception:
+                        pass
                     if sender_addr and '@' in sender_addr:
                         _fb_r_json['reply_to'] = [sender_addr]
                     resp = await http.post(
@@ -10619,6 +10633,10 @@ async def send_follow_up_email(
             _rt_gm_f = _matched.get('reply_to') or _matched.get('email_user') or sender_addr
             _gm_f_json = {'from': f"{sender_name} <outreach@asibiont.com>",
                           'to': [to_clean], 'subject': subject, 'text': body}
+            try:
+                _gm_f_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+            except Exception:
+                pass
             if _rt_gm_f and '@' in _rt_gm_f:
                 _gm_f_json['reply_to'] = [_rt_gm_f]
             try:
@@ -10644,10 +10662,15 @@ async def send_follow_up_email(
             _su2 = _matched['email_user']; _spw2 = _matched['email_pass'].replace(' ', '')
 
             def _do_smtp2():
-                msg2 = _MMsmtp2()
+                msg2 = _MMsmtp2('alternative')
                 msg2['From'] = f"{sender_name} <{_su2}>"
                 msg2['To'] = to_clean; msg2['Subject'] = subject
                 msg2.attach(_MimeSmtp2(body, 'plain', 'utf-8'))
+                try:
+                    _fu_html = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+                    msg2.attach(_MimeSmtp2(_fu_html, 'html', 'utf-8'))
+                except Exception:
+                    pass
                 _ctx2 = _ssl2.create_default_context()
                 with _smtplib2.SMTP(_sh2, _sp2, timeout=30) as s2:
                     s2.ehlo(); s2.starttls(context=_ctx2); s2.ehlo()
@@ -10668,7 +10691,9 @@ async def send_follow_up_email(
                     resp2 = await http2.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_urk2}', 'Content-Type': 'application/json'},
                         json={'from': f"{sender_name} <{_uf2}>", 'to': [to_clean], 'subject': subject,
-                              'text': body, 'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}},
+                              'text': body,
+                              'html': _build_email_html(_text_to_email_html(body), sender_name=sender_name),
+                              'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}},
                         timeout=_aiohttp.ClientTimeout(total=15))
                     rd2 = await resp2.json()
                     if resp2.status not in (200, 201):
@@ -10686,6 +10711,10 @@ async def send_follow_up_email(
                     _fbu_json = {'from': f"{sender_name} <outreach@asibiont.com>",
                                  'to': [to_clean], 'subject': subject, 'text': body,
                                  'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}}
+                    try:
+                        _fbu_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+                    except Exception:
+                        pass
                     if sender_addr and '@' in sender_addr:
                         _fbu_json['reply_to'] = [sender_addr]
                     resp = await http.post('https://api.resend.com/emails',
