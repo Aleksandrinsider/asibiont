@@ -10870,6 +10870,15 @@ async def api_marketplace_agent_status_handler(request):
                 return web.json_response({'error': 'Not found'}, status=404)
             agent.status = new_status
             session_db.commit()
+            # Синхронизируем с активными агентами в памяти пользователя (для @mention роутинга)
+            try:
+                from ai_integration.user_agents import set_user_active_agent as _sua_st, remove_user_active_agent as _rua_st
+                if new_status in ('active', 'paused'):
+                    _sua_st(user_id, agent.id)
+                else:  # disabled
+                    _rua_st(user_id, agent.id)
+            except Exception as _sue:
+                logger.debug(f"[AGENT_STATUS] sync active agent error: {_sue}")
             # Если агент активирован — сразу постим в арену (не ждём следующего цикла)
             if new_status == 'active':
                 try:

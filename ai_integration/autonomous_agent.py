@@ -1922,7 +1922,7 @@ class HybridAutonomousAgent:
                 _all_active_ids = get_user_active_agents(user_id)
 
                 if _mention_match:
-                    # Явный @mention — ищем только среди активных, ошибка если не найден
+                    # Явный @mention — ищем среди активных агентов
                     _mention_name = _mention_match.group(1).lower()
                     for _cid in _all_active_ids:
                         _cdata = load_agent_personality(_cid)
@@ -1935,13 +1935,41 @@ class HybridAutonomousAgent:
                                 pass
                             logger.info(f"[AGENT] @mention routed to '{_cdata['name']}' (id={_cid})")
                             break
+                    # Fallback: ищем среди собственных офисных агентов пользователя (status active/paused)
+                    if _active_agent_id is None:
+                        try:
+                            from models import UserAgent as _UA_m, User as _U_m, Session as _S_m
+                            _s_fb = _S_m()
+                            try:
+                                _u_fb = _s_fb.query(_U_m).filter_by(telegram_id=user_id).first()
+                                if _u_fb:
+                                    _own = _s_fb.query(_UA_m).filter(
+                                        _UA_m.author_id == _u_fb.id,
+                                        _UA_m.status.in_(['active', 'paused']),
+                                    ).all()
+                                    for _oa in _own:
+                                        if _oa.name and _oa.name.lower() == _mention_name:
+                                            _active_agent_id = _oa.id
+                                            _stripped_prefix_end = _mention_match.end()
+                                            # Добавляем в активные чтобы следующий раз нашёлся сразу
+                                            try:
+                                                set_user_focused_agent(user_id, _oa.id)
+                                            except Exception:
+                                                pass
+                                            logger.info(f"[AGENT] @mention own-agent '{_oa.name}' (id={_oa.id})")
+                                            break
+                            finally:
+                                _s_fb.close()
+                        except Exception as _fb_e:
+                            logger.debug(f"[AGENT] own-agent fallback error: {_fb_e}")
                     if _active_agent_id is None:
                         _mention_not_found = True
                 else:
                     # Имя без @ — ищем совпадение с началом сообщения (тихий роутинг)
                     _first_word = _re_agent.match(r'(\w+)\b', _msg_stripped)
-                    if _first_word and _all_active_ids:
+                    if _first_word:
                         _fw = _first_word.group(1).lower()
+                        # Сначала в подписках маркетплейса
                         for _cid in _all_active_ids:
                             _cdata = load_agent_personality(_cid)
                             if _cdata and _cdata['name'].lower() == _fw:
@@ -1953,6 +1981,32 @@ class HybridAutonomousAgent:
                                     pass
                                 logger.info(f"[AGENT] name-prefix routed to '{_cdata['name']}' (id={_cid})")
                                 break
+                        # Fallback: собственные офисные агенты
+                        if _active_agent_id is None:
+                            try:
+                                from models import UserAgent as _UA_np, User as _U_np, Session as _S_np
+                                _s_np = _S_np()
+                                try:
+                                    _u_np = _s_np.query(_U_np).filter_by(telegram_id=user_id).first()
+                                    if _u_np:
+                                        _own_np = _s_np.query(_UA_np).filter(
+                                            _UA_np.author_id == _u_np.id,
+                                            _UA_np.status.in_(['active', 'paused']),
+                                        ).all()
+                                        for _oa_np in _own_np:
+                                            if _oa_np.name and _oa_np.name.lower() == _fw:
+                                                _active_agent_id = _oa_np.id
+                                                _stripped_prefix_end = _first_word.end()
+                                                try:
+                                                    set_user_focused_agent(user_id, _oa_np.id)
+                                                except Exception:
+                                                    pass
+                                                logger.info(f"[AGENT] name-prefix own-agent '{_oa_np.name}' (id={_oa_np.id})")
+                                                break
+                                finally:
+                                    _s_np.close()
+                            except Exception as _np_e:
+                                logger.debug(f"[AGENT] name-prefix own-agent fallback error: {_np_e}")
 
                 # Субагенты встревают ТОЛЬКО при явном вызове:
                 # 1. Пользователь написал @имя или имя-префикс (обработано выше)
