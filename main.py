@@ -10429,6 +10429,20 @@ async def api_agents_activity_handler(request):
             agents_with_posts = {p.agent_id for p in arena_rows}
             likes_total = sum((a.arena_likes_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts)
             views_total = sum((a.arena_views_count or 0) for a in agents if f'mkt_{a.id}' in agents_with_posts)
+            # Статистика задач, созданных агентами за 30 дней
+            agent_ids = [a.id for a in agents]
+            goals_completed = tasks_completed = tasks_deleted = tasks_total = 0
+            if agent_ids:
+                from models import Task as _TaskModel
+                agent_tasks = session_db.query(_TaskModel).filter(
+                    _TaskModel.created_by_agent_id.in_(agent_ids),
+                    _TaskModel.created_at >= since
+                ).all()
+                tasks_total = len(agent_tasks)
+                tasks_completed = sum(1 for t in agent_tasks if t.status == 'completed')
+                tasks_deleted = sum(1 for t in agent_tasks if t.status in ('cancelled', 'deleted'))
+                goals_completed = sum(1 for t in agent_tasks if t.status == 'completed' and t.goal_id)
+            activity_index = round(tasks_completed / tasks_total * 100) if tasks_total > 0 else 0
             stats = {
                 'posts_feed': posts_count,
                 'likes': likes_total,
@@ -10436,6 +10450,10 @@ async def api_agents_activity_handler(request):
                 'comments': comments_count,
                 'total': len(arena_rows),
                 'agents_count': len(agents_data),
+                'goals_completed': goals_completed,
+                'tasks_completed': tasks_completed,
+                'tasks_deleted': tasks_deleted,
+                'activity_index': activity_index,
             }
             return web.json_response({'agents': agents_data, 'events': [], 'stats': stats})
         finally:

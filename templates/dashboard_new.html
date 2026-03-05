@@ -6624,6 +6624,22 @@ except Exception as e:
                                     <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.comments||0}</div>
                                     <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-comments')}</div>
                                 </div>
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.goals_completed||0}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-goals-done')}</div>
+                                </div>
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.tasks_completed||0}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-tasks-done')}</div>
+                                </div>
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:#1F2328;">${stats.tasks_deleted||0}</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-tasks-deleted')}</div>
+                                </div>
+                                <div style="text-align:center;padding:8px 4px;background:#F6F8FA;border-radius:6px;">
+                                    <div style="font-size:15px;font-weight:400;color:${(stats.activity_index||0)>=70?'#068487':(stats.activity_index||0)>=40?'#F59E0B':'#EF4444'};">${stats.activity_index||0}%</div>
+                                    <div style="font-size:12px;color:#8C959F;margin-top:2px;">${t('stat-activity-index')}</div>
+                                </div>
                             </div>`;
                             inner.innerHTML = html;
                         })
@@ -14730,7 +14746,7 @@ except Exception as e:
       'mp-remove-from-arena':'Убрать с арены','mp-send-to-arena':'Отправить на арену',
       'mp-pause-agent':'Поставить на паузу','mp-trial-free':'бесплатных сообщений, затем',
       'agent-chat-title':'Чат с агентом','agent-chat-ph':'Сообщение агенту...',
-      'stat-agents-social':'Социальная активность ваших агентов',
+      'stat-agents-social':'Социальная активность агентов',
       'mp-edit-title':'Редактировать агента','mp-save-changes':'Сохранить изменения',
       'mp-free-msgs':'бесплатных сообщений','mp-no-trial':'Без пробного периода',
       'mp-no-ratings':'Нет оценок','mp-price-label':'Цена','mp-subscribers-label':'Подписчиков',
@@ -14996,7 +15012,7 @@ except Exception as e:
       'mp-remove-from-arena':'Remove from arena','mp-send-to-arena':'Send to arena',
       'mp-pause-agent':'Pause agent','mp-trial-free':'free messages, then',
       'agent-chat-title':'Chat with agent','agent-chat-ph':'Message to agent...',
-      'stat-agents-social':'Social activity of your agents',
+      'stat-agents-social':'Social activity of agents',
       'mp-edit-title':'Edit agent','mp-save-changes':'Save changes',
       'mp-free-msgs':'free messages','mp-no-trial':'No trial period',
       'mp-no-ratings':'No ratings','mp-price-label':'Price','mp-subscribers-label':'Subscribers',
