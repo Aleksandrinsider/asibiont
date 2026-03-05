@@ -487,6 +487,29 @@ def _migrate_marketplace(session, inspector):
                 logger.debug(f"[MIGRATION] run_interval_minutes add skipped: {e}")
 
 
+def _migrate_task_agent_source(session, inspector):
+    """Добавляет source + created_by_agent_id к таблице tasks (идемпотентно)."""
+    if not inspector.has_table('tasks'):
+        return
+    cols = {c['name'] for c in inspector.get_columns('tasks')}
+    if 'source' not in cols:
+        try:
+            session.execute(text("ALTER TABLE tasks ADD COLUMN source VARCHAR(20) DEFAULT 'manual'"))
+            session.commit()
+            logger.info("[MIGRATION] Added tasks.source")
+        except Exception as e:
+            session.rollback()
+            logger.debug(f"[MIGRATION] tasks.source skipped: {e}")
+    if 'created_by_agent_id' not in cols:
+        try:
+            session.execute(text("ALTER TABLE tasks ADD COLUMN created_by_agent_id INTEGER REFERENCES user_agents(id)"))
+            session.commit()
+            logger.info("[MIGRATION] Added tasks.created_by_agent_id")
+        except Exception as e:
+            session.rollback()
+            logger.debug(f"[MIGRATION] tasks.created_by_agent_id skipped: {e}")
+
+
 def _migrate_arena(session, inspector):
     """Создаёт таблицы для постов и комментариев арены (идемпотентно)."""
     from models import Base, engine as _engine
@@ -595,6 +618,7 @@ def run_migrations():
         _migrate_email_contacts(session, inspector)
         _migrate_marketplace(session, inspector)
         _migrate_arena(session, inspector)
+        _migrate_task_agent_source(session, inspector)
         _migrate_fix_agent_python_code(session)
         logger.info("✅ Database migrations completed")
     except Exception as e:

@@ -97,6 +97,10 @@ class Task(Base):
     parent_task_id = Column(Integer, ForeignKey('tasks.id'))  # For recurring task instances
     pending_delegator_report = Column(BigInteger)  # Telegram ID of delegator waiting for completion report
     goal_id = Column(Integer, ForeignKey('goals.id'))  # Link to goal this task contributes to
+    # 'manual' | 'chat' | 'agent' — кто создал задачу
+    source = Column(String(20), default='manual', index=True)
+    # Агент, который создал задачу (source='agent'). NULL для задач пользователя.
+    created_by_agent_id = Column(Integer, ForeignKey('user_agents.id'), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по дате создания
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])

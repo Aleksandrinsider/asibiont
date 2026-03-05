@@ -413,7 +413,7 @@ async def check_time_conflicts(reminder_time, user_id=None, session=None):
             session.close()
         return f"Ошибка при проверке времени: {str(e)}"
 
-async def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1, goal_title=None):
+async def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1, goal_title=None, created_by_agent_id=None):
     """Add a new task"""
     logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}, is_recurring={is_recurring} (type: {type(is_recurring)}), recurrence_pattern={recurrence_pattern}, recurrence_interval={recurrence_interval}")
     
@@ -490,8 +490,10 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         return _t(user_id, 'task_no_time')
     
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
-
-    # Привязка к цели по названию (нечёткий поиск по словам)
+    # Помечаем источник: задача создана агентом или пользователем
+    if created_by_agent_id:
+        task.source = 'agent'
+        task.created_by_agent_id = created_by_agent_id
     if goal_title:
         try:
             from models import Goal
@@ -2293,7 +2295,16 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         if include_completed:
             active_tasks_query = base_query.order_by(Task.created_at.desc()).limit(MAX_TASKS_TO_LOAD)
         else:
-            active_tasks_query = base_query.filter(Task.status.notin_(['completed', 'cancelled', 'deleted'])).limit(MAX_TASKS_TO_LOAD)
+            # Пользовательские задачи: исключаем завершённые и агентские
+            active_tasks_query = base_query.filter(
+                Task.status.notin_(['completed', 'cancelled', 'deleted']),
+                Task.source != 'agent',
+            ).limit(MAX_TASKS_TO_LOAD)
+            # Агентские активные задачи — отдельно
+            agent_tasks_query = base_query.filter(
+                Task.status.notin_(['completed', 'cancelled', 'deleted']),
+                Task.source == 'agent',
+            ).order_by(Task.created_at.desc()).limit(20)
         
         # Получаем делегированные задачи отдельно
         if user.username and user.username.strip():
@@ -2305,7 +2316,13 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
             delegated_tasks = []
         
         # Объединяем результаты
+        agent_tasks_in_progress = []
         my_active_tasks = active_tasks_query.all()
+        if not include_completed:
+            try:
+                agent_tasks_in_progress = agent_tasks_query.all()
+            except Exception:
+                agent_tasks_in_progress = []
         all_active_tasks = my_active_tasks + delegated_tasks
         
         # Базовый список задач для дальнейшей обработки
@@ -2575,6 +2592,27 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                 last_titles = [t.title for t in today_completed[:3]]
                 result += f" Завершено сегодня: {len(today_completed)} "
                 result += f"({', '.join(last_titles)})."
+
+        # Блок задач агентов — показываем только если есть активные
+        if agent_tasks_in_progress:
+            agent_names: dict = {}
+            try:
+                from models import UserAgent as _UA
+                for at in agent_tasks_in_progress:
+                    if at.created_by_agent_id and at.created_by_agent_id not in agent_names:
+                        ag = session.query(_UA).filter_by(id=at.created_by_agent_id).first()
+                        agent_names[at.created_by_agent_id] = ag.name if ag else '?'
+            except Exception:
+                pass
+            result += f" Агенты ведут {len(agent_tasks_in_progress)} задач: "
+            for i, at in enumerate(agent_tasks_in_progress[:5]):
+                aname = agent_names.get(at.created_by_agent_id, 'Агент')
+                result += f"🤖 {aname}: {at.title}"
+                if i < len(agent_tasks_in_progress[:5]) - 1:
+                    result += "; "
+            if len(agent_tasks_in_progress) > 5:
+                result += f" ...ещё {len(agent_tasks_in_progress) - 5}"
+            result += "."
 
         logger.info(f"[LIST_TASKS] Returning {len(active_tasks)} active tasks for user {user_id}")
         return result.strip()
