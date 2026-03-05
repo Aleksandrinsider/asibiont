@@ -1502,7 +1502,98 @@ def delegate_task(
         
         # Делегирование доступно всем пользователям (оплата токенами)
         logger.info(f"[DELEGATE] User {user_id} delegating task")
-        
+
+        # ── Ранняя проверка: получатель — суб-агент пользователя (UserAgent) ──────
+        # Если delegated_to_username указывает на имя/slug одного из агентов владельца —
+        # выполняем задачу через агента напрямую, без создания pending-задачи.
+        _recip_check = delegated_to_username.replace("@", "").lower().strip()
+        try:
+            from models import UserAgent as _UA_chk, AgentSubscription as _AS_chk
+            import json as _jj
+            _agent_recipient = (
+                session.query(_UA_chk)
+                .filter(
+                    _UA_chk.status.in_(['active', 'paused', 'published']),
+                    (
+                        (_UA_chk.author_id == delegator.id) |
+                        (_UA_chk.id.in_(
+                            session.query(_AS_chk.agent_id).filter(
+                                _AS_chk.user_id == delegator.id
+                            )
+                        ))
+                    )
+                )
+                .filter(
+                    _UA_chk.slug.ilike(_recip_check) |
+                    _UA_chk.name.ilike(f'%{_recip_check}%')
+                )
+                .first()
+            )
+            if _agent_recipient:
+                logger.info(f"[DELEGATE] Sub-agent found: {_agent_recipient.name} (id={_agent_recipient.id})")
+                # Строим dict-объект агента для _exec_agent_for_director
+                _tools_parsed = []
+                try:
+                    _tools_parsed = _jj.loads(_agent_recipient.tools_allowed or '[]')
+                except Exception:
+                    pass
+                _agent_dict = {
+                    'id': _agent_recipient.id,
+                    'name': _agent_recipient.name or 'Агент',
+                    'job_title': _agent_recipient.job_title or '',
+                    'specialization': _agent_recipient.specialization or '',
+                    'description': _agent_recipient.description or '',
+                    'personality': _agent_recipient.personality or '',
+                    'python_code': _agent_recipient.python_code or '',
+                    'user_api_keys': _agent_recipient.user_api_keys or '',
+                    'tools_allowed': _agent_recipient.tools_allowed or '',
+                    'search_scope': _agent_recipient.search_scope or '',
+                    'tools': _tools_parsed,
+                }
+                _agent_task_text = (
+                    f"{title}\n{description}".strip() if description else title
+                )
+                if delegation_details:
+                    _agent_task_text += f"\n\nДетали: {delegation_details}"
+                if reminder_time:
+                    _agent_task_text += f"\n\nДедлайн: {reminder_time}"
+                # Логируем передачу задачи агенту
+                try:
+                    from models import AgentActivityLog as _AAL_d
+                    _log = _AAL_d(
+                        user_id=delegator.id,
+                        activity_type='delegation',
+                        title=title,
+                        content=description[:500] if description else None,
+                        target=_agent_recipient.name,
+                        status='in_progress',
+                        result=(f'Задача передана агенту. Дедлайн: {reminder_time}'
+                                if reminder_time else 'Задача передана агенту.'),
+                    )
+                    session.add(_log)
+                    session.commit()
+                except Exception as _log_err:
+                    logger.warning(f"[DELEGATE] activity log error: {_log_err}")
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                # Запускаем агента асинхронно в работающем event loop aiogram
+                try:
+                    import asyncio as _aio
+                    from .autonomous_agent import _exec_agent_for_director as _exec_dir
+                    _aio.ensure_future(
+                        _exec_dir(_agent_dict, _agent_task_text, user_id)
+                    )
+                except Exception as _async_err:
+                    logger.warning(f"[DELEGATE] async schedule error: {_async_err}")
+                return (
+                    f"✅ Задача «{title}» передана агенту {_agent_recipient.name}. "
+                    f"Он уже приступил к выполнению."
+                )
+        except Exception as _ua_err:
+            logger.warning(f"[DELEGATE] sub-agent lookup error: {_ua_err}")
+
         # Validate reminder_time
         if not reminder_time:
             return "Для делегирования задачи требуется точная дата и время дедлайна. Пожалуйста, уточните: на какое точное время и дату поставить дедлайн? (Например: '2026-01-10 15:00' или 'завтра в 14:30')"
@@ -1525,7 +1616,10 @@ def delegate_task(
         recipient = session.query(User).filter(User.username.ilike(recipient_username)).first()
 
         if not recipient:
-            return f"Пользователь @{recipient_username} не найден в системе. Убедитесь, что он зарегистрирован в боте."
+            return (
+                f"Пользователь @{recipient_username} не найден в системе. "
+                f"Убедитесь, что он зарегистрирован в боте, или укажите имя одного из ваших активных агентов."
+            )
 
         # Check if recipient has blocked the delegator
         from models import UserProfile
