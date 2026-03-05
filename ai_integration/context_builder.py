@@ -927,6 +927,86 @@ class ContextBuilder:
             except Exception as _ae:
                 logger.debug(f"[PROACTIVE] agents load error: {_ae})")
 
+            # ═══ МАТЧИНГ: ЦЕЛИ ↔ АГЕНТЫ ═══
+            # Подсвечивает какой агент может помочь с какой целью
+            try:
+                import json as _mj
+                _active_goals = [g for g in all_goals if g.status == 'active']
+                if _team and _active_goals:
+                    _TOOL_LABELS = {
+                        'research_topic': 'исследование', 'web_search': 'веб-поиск',
+                        'add_task': 'задачи', 'create_post': 'посты',
+                        'send_email': 'email', 'find_relevant_contacts_for_task': 'поиск контактов',
+                        'start_content_campaign': 'контент-кампания',
+                        'start_delegation_campaign': 'аутрич',
+                        'publish_to_telegram': 'TG посты', 'publish_to_discord': 'Discord посты',
+                    }
+                    _matches = []
+                    for _g in _active_goals[:5]:
+                        _goal_lc = (_g.title + ' ' + (_g.description or '')).lower()
+                        _best = []
+                        for _ta in _team:
+                            if _ta.status != 'active':
+                                continue
+                            # Собираем текст возможностей агента
+                            _caps_parts = []
+                            # tools_allowed
+                            try:
+                                _tlist = _mj.loads(_ta.tools_allowed or '[]')
+                                _tool_names = [_TOOL_LABELS.get(t, t) for t in _tlist[:4]]
+                                if _tool_names:
+                                    _caps_parts.append(', '.join(_tool_names))
+                            except Exception:
+                                pass
+                            # Интеграции из user_api_keys
+                            _kls_upper = (_ta.user_api_keys or '').upper()
+                            _code_lc = (_ta.python_code or '').lower()
+                            _intg_caps = []
+                            if 'GITHUB' in _kls_upper or 'github' in _code_lc:
+                                _intg_caps.append('GitHub')
+                            if 'GMAIL' in _kls_upper or 'YANDEX_MAIL' in _kls_upper or 'MAILRU' in _kls_upper:
+                                _intg_caps.append('почта')
+                            if 'TELEGRAM' in _kls_upper or 'publish_to_telegram' in (_ta.tools_allowed or ''):
+                                _intg_caps.append('Telegram')
+                            if 'DISCORD' in _kls_upper or 'discord' in _code_lc:
+                                _intg_caps.append('Discord')
+                            if 'OPENAI' in _kls_upper or 'ANTHROPIC' in _kls_upper:
+                                _intg_caps.append('AI-API')
+                            if _intg_caps:
+                                _caps_parts.extend(_intg_caps)
+                            # search_scope как тематика агента
+                            if _ta.search_scope:
+                                _caps_parts.append(f'тема: {_ta.search_scope[:35]}')
+                            # Специализация агента
+                            _agent_desc_lc = ' '.join(filter(None, [
+                                _ta.name or '', _ta.description or '',
+                                _ta.specialization or '', _ta.job_title or '',
+                                _ta.search_scope or '',
+                            ])).lower()
+                            # Релевантность: совпадение слов из цели в описании агента
+                            _goal_words = [w for w in _goal_lc.split() if len(w) > 3]
+                            _score = sum(1 for w in _goal_words if w in _agent_desc_lc)
+                            # Бонус за наличие специфических инструментов
+                            if _intg_caps:
+                                _score += 1
+                            if _score > 0 or _caps_parts:
+                                _cap_str = ', '.join(dict.fromkeys(_caps_parts))[:80]
+                                _best.append((_score, _ta.name, _cap_str))
+                        if _best:
+                            _best.sort(key=lambda x: -x[0])
+                            _agent_strs = [
+                                f"{nm}{(' (' + cap + ')' if cap else '')}"
+                                for _, nm, cap in _best[:2]
+                            ]
+                            _matches.append(f"  «{_g.title}» → {', '.join(_agent_strs)}")
+                    if _matches:
+                        hints.append(
+                            "МАТЧИНГ ЦЕЛЬ\u2192АГЕНТ (поручи конкретному агенту — у него есть нужные инструменты):\n"
+                            + "\n".join(_matches)
+                        )
+            except Exception as _me:
+                logger.debug(f"[MATCH_CTX] goal-agent matching error: {_me}")
+
             # ═══ СВЕЖИЕ ОТЧЁТЫ АГЕНТОВ (последние 24ч) ═══
             # Агенты сохраняются как message_type='ai' с __agent JSON — ASI читает их как внутренний контекст
             try:
