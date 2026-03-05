@@ -2559,9 +2559,43 @@ class HybridAutonomousAgent:
         if len(self.execution_history) > 50:
             self.execution_history = self.execution_history[-50:]
 
-        # === Ответ в историю диалога ===
+        # === Ответ в историю диалога (с краткой аннотацией вызванных тулов) ===
         from .conversation_history import save_message_to_history
-        save_message_to_history(user_id, "assistant", response)
+        _history_response = response
+        if tools_used:
+            # Строим компактный лог: имя тула + ключевые аргументы для важных инструментов
+            _tool_parts = []
+            for _r in execution_results:
+                if not _r.get('success'):
+                    continue
+                _tname = _r.get('tool', '')
+                _tres = _r.get('result', {})
+                if isinstance(_tres, str):
+                    try:
+                        import json as _j; _tres = _j.loads(_tres)
+                    except Exception:
+                        _tres = {}
+                if _tname == 'add_task':
+                    _title = _tres.get('title') or (_tres.get('task', {}) or {}).get('title', '')
+                    _tool_parts.append(f"add_task({repr(_title[:40])})" if _title else "add_task")
+                elif _tname == 'delegate_task':
+                    _title = _tres.get('title', '')
+                    _exec = _tres.get('executor', '') or _tres.get('executor_username', '')
+                    _tool_parts.append(f"delegate_task({repr(_title[:30])} → {_exec})" if _title else "delegate_task")
+                elif _tname == 'send_email':
+                    _to = _tres.get('to', '') or _tres.get('recipient', '')
+                    _tool_parts.append(f"send_email(→{_to[:30]})" if _to else "send_email")
+                elif _tname == 'send_message_to_user':
+                    _to = _tres.get('to', '') or _tres.get('username', '')
+                    _tool_parts.append(f"send_message(→{_to[:30]})" if _to else "send_message_to_user")
+                elif _tname in ('research_topic', 'web_search'):
+                    _tool_parts.append(_tname)
+                else:
+                    _tool_parts.append(_tname)
+            if _tool_parts:
+                _tool_annotation = f"[Действия: {', '.join(_tool_parts)}]\n"
+                _history_response = _tool_annotation + response
+        save_message_to_history(user_id, "assistant", _history_response)
 
         # === Обучение на успешных паттернах ===
         if entry['success'] and tools_used:
