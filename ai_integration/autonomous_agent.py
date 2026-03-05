@@ -3256,6 +3256,14 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
     if search_scope and search_scope.strip():
         found.add(f'Поиск: {search_scope.strip()[:60]}')
 
+    # 5. Если tools_allowed пустой → агент универсальный, все инструменты платформы доступны
+    try:
+        _tj = (tools_allowed or '').strip()
+        if not _tj or _tj == '[]':
+            found.add('все инструменты платформы')
+    except Exception:
+        pass
+
     return sorted(found)
 
 
@@ -3718,9 +3726,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         f"{agent.get('description', '')} Отвечай от имени {agent['name']}."
     )
     system_prompt = (
-        "Ты — агент в команде ASI Biont. Действуй от своего имени, выполняй поручение директора "
-        "используя доступные инструменты. Отвечай кратко и по делу. Без списков и заголовков.\n"
-        "НИКАКИХ звёздочек (*улыбается*, *думает*, *открывает базу* и т.п.) — только текст, никакой ролевой игры.\n\n"
+        "Ты — агент в команде ASI Biont. Действуй от своего имени, выполняй поручение пользователя.\n"
+        "У тебя есть доступ ко всем инструментам платформы: задачи и напоминания, поиск в интернете, "
+        "исследования, email, публикации, делегирование, анализ данных и многое другое. "
+        "Выбирай те инструменты которые реально нужны для задачи — не ограничивай себя только текстом.\n"
+        "Отвечай кратко и по делу. Без markdown, без заголовков, без звёздочек (*улыбается* и т.п.) — только живой текст.\n\n"
         "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ: если часть задачи требует специализации другого агента команды, "
         "вызови инструмент delegate_to_agent(agent_name: str, task: str). "
         "Используй его только когда действительно нужна другая экспертиза — не злоупотребляй.\n\n"
@@ -3839,7 +3849,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
     ]
-    _use_tools = bool(_allowed_tools)  # tool loop только если есть разрешённые инструменты
+    # Если tools_allowed пустой → агент универсальный: работает со всеми инструментами платформы
+    # (аналогично поведению при прямом @mention агента в process_request)
+    # _exclude_for_agent уже None при пустом _allowed_tools → exclusions нет → все tools доступны
+    _use_tools = True
 
     # Очередь субделегирований: агент может попросить другого агента через паттерн DELEGATE[имя]: задача
     _pending_subdelegations: list[dict] = []
