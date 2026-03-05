@@ -1414,6 +1414,46 @@ async def dashboard_handler(request):
                                 'task_count': task_count
                             })
 
+                # Задачи, делегированные агентам команды (agent:Name format)
+                try:
+                    from models import UserAgent as _UAp
+                    agent_deleg_tasks = session_db.query(Task).filter(
+                        Task.delegated_by == user.id,
+                        Task.delegated_to_username.like('agent:%'),
+                        Task.delegation_status.in_(['pending', 'accepted']),
+                        Task.status != 'deleted',
+                        Task.status != 'rejected',
+                    ).order_by(Task.created_at.desc()).limit(20).all()
+
+                    # Группируем по агенту
+                    _agent_map: dict = {}
+                    for _at in agent_deleg_tasks:
+                        _akey = _at.delegated_to_username  # e.g. 'agent:Кристина'
+                        if _akey not in _agent_map:
+                            _agent_map[_akey] = []
+                        _agent_map[_akey].append(_at)
+
+                    for _akey, _atasks in _agent_map.items():
+                        _aname = _akey.replace('agent:', '')
+                        _ag_rec = session_db.query(_UAp).filter_by(author_id=user.id, name=_aname).first()
+                        _titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in _atasks[:3]]
+                        delegating_by_me.append({
+                            'id': f'agent:{_aname}',
+                            'username': _akey,
+                            'first_name': _aname,
+                            'is_agent': True,
+                            'agent_avatar': _ag_rec.avatar_url if _ag_rec else '',
+                            'agent_job_title': _ag_rec.job_title if _ag_rec else '',
+                            'reason': 'агент команды',
+                            'tasks': _titles,
+                            'task_count': len(_atasks),
+                            'task_id': _atasks[0].id,
+                            'task_status': _atasks[0].status or 'in_progress',
+                            'contact_info': _akey,
+                        })
+                except Exception as _ae:
+                    logger.debug("Error loading agent delegation tasks: %s", _ae)
+
                 # Добавляем рекомендованные контакты для всех пользователей
                 # Получаем се рекомеоаые контакты
                 all_partners = get_partners_list(user.id, session_db)

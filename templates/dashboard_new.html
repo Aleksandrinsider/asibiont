@@ -13091,7 +13091,44 @@ except Exception as e:
                                     html += '</li>';
                                 } else if (partner.type === 'delegating_by_me') {
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">'; 
+                                    html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
+
+                                    if (partner.is_agent) {
+                                        // ── Карточка агента (delegating_by_me: is_agent=true) ──────────
+                                        const agAvatar = partner.agent_avatar;
+                                        const agName = partner.first_name || '';
+                                        const agJobTitle = partner.agent_job_title || '';
+                                        const agTaskCount = partner.task_count || 0;
+                                        const agTasks = partner.tasks || [];
+                                        const statusLabel = partner.task_status === 'completed' ? t('task-done') || 'Выполнено' : (t('in-progress') || 'В работе');
+                                        const statusColor = partner.task_status === 'completed' ? '#068487' : '#1F6FEB';
+
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;">';
+                                        if (agAvatar) {
+                                            html += '<img src="' + agAvatar + '" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #BEF0F0;" />';
+                                            html += '<div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #068487, #1F6FEB); display: none; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 24px; border: 2px solid #BEF0F0;">' + agName.charAt(0).toUpperCase() + '</div>';
+                                        } else {
+                                            html += '<div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #068487, #1F6FEB); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 24px; border: 2px solid #BEF0F0;">' + agName.charAt(0).toUpperCase() + '</div>';
+                                        }
+                                        html += '</div>';
+
+                                        html += '<div style="flex: 1;">';
+                                        html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
+                                        html += '<span style="font-size: 13px; color: #1F2328; font-weight: 600;">' + agName + '</span>';
+                                        html += '<span style="font-size: 11px; color: #fff; background: #068487; border-radius: 4px; padding: 1px 6px;">Агент</span>';
+                                        html += '</div>';
+                                        if (agJobTitle) {
+                                            html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #6C727F;">' + agJobTitle + '</span></div>';
+                                        }
+                                        html += '<div style="margin-top: 3px;"><span style="font-size: 13px; color: ' + statusColor + ';">' + pluralizeTasks(agTaskCount) + ' · ' + statusLabel + '</span></div>';
+                                        if (agTasks.length) {
+                                            html += '<div style="margin-top: 4px;"><span class="task-meta" style="color: #374151;">' + agTasks.join(', ') + '</span></div>';
+                                        }
+                                        html += '</div>';
+                                        html += '</li>';
+                                        return;  // skip actions block below
+                                    }
+
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';

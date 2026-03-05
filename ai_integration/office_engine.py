@@ -72,6 +72,40 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
         logger.debug('[OFFICE] chat msg save error: %s', e)
 
 
+def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, task_title: str):
+    """Создаёт Task-делегирование от пользователя к агенту (agent:<name>).
+    Агент автоматически принимает — delegation_status='accepted'.
+    Дедупликация: не создаём если уже есть активная задача с тем же заголовком.
+    """
+    try:
+        from models import Session as _Db, Task as _Task
+        _s = _Db()
+        try:
+            _dup = _s.query(_Task).filter(
+                _Task.user_id == user_id,
+                _Task.delegated_to_username == f'agent:{agent_name}',
+                _Task.delegation_status.in_(['pending', 'accepted']),
+                _Task.title.ilike(f'%{task_title[:40]}%'),
+            ).first()
+            if _dup:
+                return
+            _s.add(_Task(
+                user_id=user_id,
+                title=task_title[:200],
+                delegated_by=user_id,
+                delegated_to_username=f'agent:{agent_name}',
+                delegation_status='accepted',
+                status='in_progress',
+                delegation_details=f'agent_id:{agent_id}',
+            ))
+            _s.commit()
+            logger.debug('[OFFICE] agent delegation task created: user=%d agent=%s "%s"', user_id, agent_name, task_title[:60])
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.debug('[OFFICE] agent delegation create error: %s', e)
+
+
 # ── Изолированный запуск скрипта ─────────────────────────────────────────────
 
 def _exec_agent_script_sync(code: str, env: dict | None = None) -> tuple:
@@ -316,6 +350,17 @@ class OfficeEngine:
                             False,  # internal=False: отчёт агента виден в чате
                         )
                         logger.info("[OFFICE-L1] [%s] report saved (visible) for user %d", agent.name, user.id)
+                        # Создаём задачу-делегирование в дашборд (видна как делегирование агенту)
+                        try:
+                            _task_title = (report.splitlines()[0].strip()[:120]
+                                           if report else f'{agent.name}: мониторинг')
+                            await loop.run_in_executor(
+                                None,
+                                _auto_delegate_to_agent_sync,
+                                user.id, agent.id, agent.name, _task_title,
+                            )
+                        except Exception as _de:
+                            logger.debug("[OFFICE-L1] [%s] delegation create error: %s", agent.name, _de)
                         # ASI реагирует на находку агента — предлагает действие
                         try:
                             await self._asi_react_to_agent_output(agent, user, stdout)
