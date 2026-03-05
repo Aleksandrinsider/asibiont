@@ -9728,8 +9728,19 @@ async def reply_to_outreach_email(
 
         _send_error = None
 
-        if _matched and _matched.get('type') in ('gmail_oauth', 'gmail_server'):
-            # ── Gmail: серверный Resend + Reply-To ────────────────────────────
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            # ── Gmail OAuth: прямая отправка через Gmail API ─────────────────
+            _ok_r, _res_r = await _send_via_gmail_api(
+                _matched['token_data'], to_clean, subject, reply_body,
+                sender_name, user, session,
+            )
+            if _ok_r:
+                logger.info(f'[EMAIL_REPLY] Sent via Gmail API from {_res_r} to {to_clean}')
+            else:
+                _send_error = _res_r
+
+        elif _matched and _matched.get('type') == 'gmail_server':
+            # ── Gmail (пароль приложения): серверный Resend + Reply-To ────────
             from config import RESEND_API_KEY as _rk_gm_r
             _rt_gm_r = _matched.get('reply_to') or _matched.get('email_user') or sender_addr
             _gm_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
@@ -10312,8 +10323,19 @@ async def send_follow_up_email(
 
         _send_error = None
 
-        if _matched and _matched.get('type') in ('gmail_oauth', 'gmail_server'):
-            # ── Gmail: серверный Resend + Reply-To ────────────────────────────
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            # ── Gmail OAuth: прямая отправка через Gmail API ─────────────────
+            _ok_f, _res_f = await _send_via_gmail_api(
+                _matched['token_data'], to_clean, subject, body,
+                sender_name, user, session,
+            )
+            if _ok_f:
+                logger.info(f'[EMAIL_FOLLOWUP] Sent via Gmail API from {_res_f} to {to_clean}')
+            else:
+                _send_error = _res_f
+
+        elif _matched and _matched.get('type') == 'gmail_server':
+            # ── Gmail (пароль приложения): серверный Resend + Reply-To ────────
             from config import RESEND_API_KEY as _rk_gm_f
             _rt_gm_f = _matched.get('reply_to') or _matched.get('email_user') or sender_addr
             _gm_f_json = {'from': f"{sender_name} <outreach@asibiont.com>",
@@ -10784,6 +10806,99 @@ def _get_user_email_integrations(user, session) -> list:
         return []
 
 
+async def _send_via_gmail_api(
+    token_data: dict,
+    to: str,
+    subject: str,
+    body: str,
+    sender_name: str,
+    user,
+    session,
+) -> tuple:
+    """Отправить письмо напрямую через Gmail API v1.
+
+    Автоматически рефрешит access_token при истечении (401).
+    Возвращает: (success: bool, result: str)
+      success=True  → result = gmail_email пользователя
+      success=False → result = текст ошибки
+    """
+    import base64 as _b64
+    import json as _jsn_gapi
+    import datetime as _dt_gapi
+    from email.mime.text import MIMEText as _MimeGapi
+    import aiohttp as _ah_gapi
+    from config import GOOGLE_CLIENT_ID as _GCI_gapi, GOOGLE_CLIENT_SECRET as _GCS_gapi
+
+    gmail_email = token_data.get('email', '')
+    access_token = token_data.get('access_token', '')
+    refresh_token = token_data.get('refresh_token', '')
+
+    async def _refresh():
+        nonlocal access_token
+        if not refresh_token or not _GCI_gapi or not _GCS_gapi:
+            return False
+        try:
+            async with _ah_gapi.ClientSession() as _hrf:
+                _r = await _hrf.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'client_id': _GCI_gapi,
+                        'client_secret': _GCS_gapi,
+                        'refresh_token': refresh_token,
+                        'grant_type': 'refresh_token',
+                    },
+                    timeout=_ah_gapi.ClientTimeout(total=10),
+                )
+                _rd = await _r.json()
+                if 'access_token' in _rd:
+                    access_token = _rd['access_token']
+                    new_tok = dict(token_data)
+                    new_tok['access_token'] = access_token
+                    new_tok['saved_at'] = _dt_gapi.datetime.utcnow().isoformat()
+                    user.google_oauth_token = _jsn_gapi.dumps(new_tok)
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return True
+        except Exception as _re_err:
+            logger.warning(f'[GMAIL_API] Token refresh error: {_re_err}')
+        return False
+
+    async def _do_send():
+        msg = _MimeGapi(body, 'plain', 'utf-8')
+        msg['From'] = f"{sender_name} <{gmail_email}>"
+        msg['To'] = to
+        msg['Subject'] = subject
+        raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+        async with _ah_gapi.ClientSession() as _hgm:
+            _resp = await _hgm.post(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Content-Type': 'application/json',
+                },
+                json={'raw': raw},
+                timeout=_ah_gapi.ClientTimeout(total=20),
+            )
+            return _resp.status, await _resp.json()
+
+    try:
+        status, data = await _do_send()
+        if status == 401:
+            refreshed = await _refresh()
+            if not refreshed:
+                return False, "Gmail OAuth токен истёк. Переподключи Gmail в настройках агента."
+            status, data = await _do_send()
+        if status in (200, 201):
+            logger.info(f'[GMAIL_API] Sent from {gmail_email} to {to}')
+            return True, gmail_email
+        err = data.get('error', {}).get('message', str(data))
+        return False, f"Gmail API error {status}: {err}"
+    except Exception as _ge:
+        return False, f"Gmail API exception: {_ge}"
+
+
 async def send_email(
     to: str = None,
     subject: str = None,
@@ -10876,8 +10991,69 @@ async def send_email(
         # Нормализация адресата
         to_clean = to.strip().lower()
 
-        # ── Gmail: серверный Resend + Reply-To (SMTP заблокирован Railway, OAuth на проверке) ──
-        if _chosen_integration.get('type') in ('gmail_oauth', 'gmail_server'):
+        # ── Gmail OAuth: прямая отправка через Gmail API ──────────────────────
+        if _chosen_integration.get('type') == 'gmail_oauth':
+            _goa_ok, _goa_result = await _send_via_gmail_api(
+                _chosen_integration['token_data'], to_clean, subject, body,
+                sender_name, user, session,
+            )
+            if not _goa_ok:
+                return f"❌ Ошибка отправки (Gmail OAuth): {_goa_result}"
+            _gmail_from = _goa_result  # email пользователя
+            try:
+                from models import EmailOutreach as _EO_log_g
+                from models import EmailCampaign as _EC_log_g
+                import datetime as _dt_mod_g
+                _now_g = _dt_mod_g.datetime.now(_dt_mod_g.timezone.utc)
+                _camp_g = session.query(_EC_log_g).filter_by(
+                    user_id=user.id, status='personal', sender_email=_gmail_from,
+                ).first()
+                if not _camp_g:
+                    _camp_g = _EC_log_g(
+                        user_id=user.id, name='Личная почта (Gmail OAuth)',
+                        goal='', target_audience='', offer='',
+                        sender_name=sender_name, sender_email=_gmail_from,
+                        status='personal', daily_limit=50, max_emails=0,
+                        emails_sent=0, emails_replied=0,
+                    )
+                    session.add(_camp_g)
+                    session.flush()
+                _eo_g = session.query(_EO_log_g).filter_by(
+                    campaign_id=_camp_g.id, recipient_email=to_clean,
+                ).first()
+                if _eo_g:
+                    _eo_g.subject = subject; _eo_g.body = body
+                    _eo_g.status = 'sent'; _eo_g.sent_at = _now_g
+                else:
+                    session.add(_EO_log_g(
+                        campaign_id=_camp_g.id, user_id=user.id,
+                        recipient_email=to_clean, subject=subject, body=body,
+                        sender_email=_gmail_from, status='sent', sent_at=_now_g,
+                    ))
+                    _camp_g.emails_sent = (_camp_g.emails_sent or 0) + 1
+                session.commit()
+            except Exception as _log_err_goa:
+                logger.warning(f'[SEND_EMAIL] Campaign log (gmail_oauth) error: {_log_err_goa}')
+                try: session.rollback()
+                except Exception: pass
+            try:
+                from models import AgentActivityLog as _AAL_goa
+                session.add(_AAL_goa(
+                    user_id=user.id, activity_type='email',
+                    title=f"Email → {to_clean}",
+                    content=f"Тема: {subject}\n\n{body[:500]}",
+                    target=to_clean, status='sent',
+                ))
+                session.commit()
+            except Exception as _aal_goa_e:
+                logger.warning(f'[SEND_EMAIL] Activity log (gmail_oauth) error: {_aal_goa_e}')
+                try: session.rollback()
+                except Exception: pass
+            return f"✅ Письмо отправлено с {_gmail_from} на {to_clean} через Gmail"
+
+        # ── Gmail server (пароль приложения) → серверный Resend + Reply-To ───
+        # (SMTP Gmail заблокирован Railway; пользователь не привязал OAuth)
+        if _chosen_integration.get('type') == 'gmail_server':
             from config import RESEND_API_KEY as _srv_rk
             if not _srv_rk:
                 return "❌ Серверный Resend не настроен (RESEND_API_KEY)."
