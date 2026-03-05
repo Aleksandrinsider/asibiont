@@ -3414,12 +3414,45 @@ async def api_partners_handler(request):
                     reasons.append('общие интересы')
                 if p.common_goals:
                     reasons.append('общие цели')
+                _CITY_ALIASES_LOCAL = {
+                    'пермь': 'perm', 'perm': 'пермь',
+                    'москва': 'moscow', 'moscow': 'москва',
+                    'санкт-петербург': 'saint petersburg', 'saint petersburg': 'санкт-петербург',
+                    'санкт петербург': 'saint petersburg', 'питер': 'saint petersburg',
+                    'екатеринбург': 'yekaterinburg', 'yekaterinburg': 'екатеринбург',
+                    'новосибирск': 'novosibirsk', 'novosibirsk': 'новосибирск',
+                    'казань': 'kazan', 'kazan': 'казань',
+                    'нижний новгород': 'nizhny novgorod', 'nizhny novgorod': 'нижний новгород',
+                    'уфа': 'ufa', 'ufa': 'уфа',
+                    'самара': 'samara', 'samara': 'самара',
+                    'омск': 'omsk', 'omsk': 'омск',
+                    'челябинск': 'chelyabinsk', 'chelyabinsk': 'челябинск',
+                    'ростов-на-дону': 'rostov-on-don', 'rostov-on-don': 'ростов-на-дону',
+                    'красноярск': 'krasnoyarsk', 'krasnoyarsk': 'красноярск',
+                    'воронеж': 'voronezh', 'voronezh': 'воронеж',
+                    'волгоград': 'volgograd', 'volgograd': 'волгоград',
+                    'краснодар': 'krasnodar', 'krasnodar': 'краснодар',
+                    'саратов': 'saratov', 'saratov': 'саратов',
+                    'тюмень': 'tyumen', 'tyumen': 'тюмень',
+                    'тольятти': 'tolyatti', 'tolyatti': 'тольятти',
+                    'ижевск': 'izhevsk', 'izhevsk': 'ижевск',
+                    'барнаул': 'barnaul', 'barnaul': 'барнаул',
+                    'ульяновск': 'ulyanovsk', 'ulyanovsk': 'ульяновск',
+                    'хабаровск': 'khabarovsk', 'khabarovsk': 'хабаровск',
+                    'оренбург': 'orenburg', 'orenburg': 'оренбург',
+                    'владивосток': 'vladivostok', 'vladivostok': 'владивосток',
+                    'ярославль': 'yaroslavl', 'yaroslavl': 'ярославль',
+                    'пермский край': 'perm krai', 'perm krai': 'пермский край',
+                }
                 def _city_vars_b(obj):
                     vs = set()
                     for attr in ('city_normalized', 'city_normalized_ru', 'city'):
                         v = (getattr(obj, attr, None) or '').strip().lower()
                         if v:
                             vs.add(v)
+                            alias = _CITY_ALIASES_LOCAL.get(v)
+                            if alias:
+                                vs.add(alias)
                     return vs
                 if _city_vars_b(profile) & _city_vars_b(p):
                     reasons.append('из вашего города')

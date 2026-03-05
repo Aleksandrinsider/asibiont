@@ -2587,6 +2587,55 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
 
 # Function removed
 
+# Cross-language RU↔EN city name synonyms for matching users across language variants
+_CITY_ALIASES: dict = {
+    'пермь': 'perm', 'perm': 'пермь',
+    'москва': 'moscow', 'moscow': 'москва',
+    'санкт-петербург': 'saint petersburg', 'saint petersburg': 'санкт-петербург',
+    'санкт петербург': 'saint petersburg', 'питер': 'saint petersburg', 'спб': 'saint petersburg',
+    'екатеринбург': 'yekaterinburg', 'yekaterinburg': 'екатеринбург', 'ekaterinburg': 'екатеринбург',
+    'новосибирск': 'novosibirsk', 'novosibirsk': 'новосибирск',
+    'казань': 'kazan', 'kazan': 'казань',
+    'нижний новгород': 'nizhny novgorod', 'nizhny novgorod': 'нижний новгород',
+    'уфа': 'ufa', 'ufa': 'уфа',
+    'самара': 'samara', 'samara': 'самара',
+    'омск': 'omsk', 'omsk': 'омск',
+    'челябинск': 'chelyabinsk', 'chelyabinsk': 'челябинск',
+    'ростов-на-дону': 'rostov-on-don', 'rostov-on-don': 'ростов-на-дону', 'rostov on don': 'ростов-на-дону',
+    'красноярск': 'krasnoyarsk', 'krasnoyarsk': 'красноярск',
+    'воронеж': 'voronezh', 'voronezh': 'воронеж',
+    'волгоград': 'volgograd', 'volgograd': 'волгоград',
+    'краснодар': 'krasnodar', 'krasnodar': 'краснодар',
+    'саратов': 'saratov', 'saratov': 'саратов',
+    'тюмень': 'tyumen', 'tyumen': 'тюмень',
+    'тольятти': 'tolyatti', 'tolyatti': 'тольятти',
+    'ижевск': 'izhevsk', 'izhevsk': 'ижевск',
+    'барнаул': 'barnaul', 'barnaul': 'барнаул',
+    'ульяновск': 'ulyanovsk', 'ulyanovsk': 'ульяновск',
+    'хабаровск': 'khabarovsk', 'khabarovsk': 'хабаровск',
+    'новокузнецк': 'novokuznetsk', 'novokuznetsk': 'новокузнецк',
+    'оренбург': 'orenburg', 'orenburg': 'оренбург',
+    'липецк': 'lipetsk', 'lipetsk': 'липецк',
+    'пенза': 'penza', 'penza': 'пенза',
+    'киров': 'kirov', 'kirov': 'киров',
+    'чебоксары': 'cheboksary', 'cheboksary': 'чебоксары',
+    'тула': 'tula', 'tula': 'тула',
+    'калининград': 'kaliningrad', 'kaliningrad': 'калининград',
+    'курск': 'kursk', 'kursk': 'курск',
+    'брянск': 'bryansk', 'bryansk': 'брянск',
+    'иркутск': 'irkutsk', 'irkutsk': 'иркутск',
+    'магнитогорск': 'magnitogorsk', 'magnitogorsk': 'магнитогорск',
+    'владивосток': 'vladivostok', 'vladivostok': 'владивосток',
+    'нижний тагил': 'nizhny tagil', 'nizhny tagil': 'нижний тагил',
+    'ярославль': 'yaroslavl', 'yaroslavl': 'ярославль',
+    'астрахань': 'astrakhan', 'astrakhan': 'астрахань',
+    'набережные челны': 'naberezhnye chelny', 'naberezhnye chelny': 'набережные челны',
+    'томск': 'tomsk', 'tomsk': 'томск',
+    'рязань': 'ryazan', 'ryazan': 'рязань',
+    'балашиха': 'balashikha', 'balashikha': 'балашиха',
+    'пермский край': 'perm krai', 'perm krai': 'пермский край',
+}
+
 def get_partners_list(user_id=None, session=None):
     """Return list of all users with profiles (except self and those with existing delegation)"""
     logger.info(f"[PARTNERS] get_partners_list called for user_id: {user_id}")
@@ -2713,6 +2762,10 @@ def get_partners_list(user_id=None, session=None):
             v = (getattr(obj, attr, None) or '').strip().lower()
             if v:
                 variants.add(v)
+                # Add cross-language alias so 'пермь' ↔ 'perm' always match
+                alias = _CITY_ALIASES.get(v)
+                if alias:
+                    variants.add(alias)
         return variants
 
     _u_skills = _norm(user_profile, 'skills')
@@ -2982,6 +3035,9 @@ def get_partners_list(user_id=None, session=None):
             v = (getattr(obj, attr, None) or '').strip().lower()
             if v:
                 vs.add(v)
+                alias = _CITY_ALIASES.get(v)
+                if alias:
+                    vs.add(alias)
         return vs
 
     _u_sort_cities = _city_variants_set(user_profile)
