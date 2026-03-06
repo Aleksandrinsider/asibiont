@@ -1060,6 +1060,38 @@ class ContextBuilder:
             except Exception as _re:
                 logger.debug(f"[PROACTIVE] agent_reports load error: {_re}")
 
+            # ═══ ПОСЛЕДНИЕ ДАННЫЕ АГЕНТОВ (inbox, интеграции) ═══
+            try:
+                from models import AgentActivityLog as _AAL_ctx
+                _aal_since = datetime.now(timezone.utc) - timedelta(hours=12)
+                _aal_recs = (
+                    session.query(_AAL_ctx)
+                    .filter(
+                        _AAL_ctx.user_id == user.id,
+                        _AAL_ctx.activity_type.in_(['inbox_reply', 'script_run']),
+                        _AAL_ctx.created_at >= _aal_since,
+                    )
+                    .order_by(_AAL_ctx.created_at.desc())
+                    .limit(5)
+                    .all()
+                )
+                if _aal_recs:
+                    _aal_lines = []
+                    for _ar in reversed(_aal_recs):
+                        _aname = (_ar.target or '').replace('agent:', '')
+                        _ts_ar = _ar.created_at.strftime('%H:%M') if _ar.created_at else ''
+                        _content_preview = (_ar.content or '')[:300]
+                        if _content_preview:
+                            _aal_lines.append(f"  [{_aname} {_ts_ar}] {_content_preview}")
+                    if _aal_lines:
+                        hints.append(
+                            "ДАННЫЕ АГЕНТОВ (inbox/интеграции за 12ч):\n" +
+                            "\n".join(_aal_lines) +
+                            "\n(используй для ответов на вопросы пользователя о результатах агентов)"
+                        )
+            except Exception as _aal_e:
+                logger.debug(f"[PROACTIVE] agent activity log error: {_aal_e}")
+
             # ═══ ПОХОЖИЕ ПОЛЬЗОВАТЕЛИ И ВОЗМОЖНЫЕ КОЛЛАБОРАЦИИ ═══
             similar_hints = self._find_similar_users(user, profile, session, user_tz)
             if similar_hints:

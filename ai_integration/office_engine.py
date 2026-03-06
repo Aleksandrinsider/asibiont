@@ -231,8 +231,14 @@ _GENERIC_DOMAINS = {'noreply', 'no-reply', 'donotreply', 'mailer', 'support', 'i
 def _auto_extract_email_contacts_sync(user_id: int, stdout: str, agent_name: str):
     """Парсит stdout агента на email-адреса и сохраняет новые в EmailContact.
     Пропускает родовые/безличные адреса (info@, noreply@ и т.д.).
-    Лимит: 5 адресов за один прогон, чтобы не засорять справочник.
+    Сохраняет ТОЛЬКО если контекст указывает на активную переписку:
+    ключевые слова: ответ, reply, новое письмо, входящие, responded.
     """
+    # Проверяем признаки реальной переписки, а не просто упоминания email
+    _REPLY_MARKERS = ('ответ', 'reply', 'replied', 'responded', 'новое письмо', 'входящ', 'incoming', 'от:', 'from:')
+    _stdout_lc = stdout.lower()
+    if not any(m in _stdout_lc for m in _REPLY_MARKERS):
+        return  # Просто сканирование / упоминание — не создаём контакт
     try:
         emails_found = _EMAIL_RE.findall(stdout)
         if not emails_found:

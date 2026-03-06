@@ -4978,11 +4978,45 @@ class AnchorEngine:
                     except Exception:
                         pass
 
+            # Определяем, связаны ли якоря с конкретным агентом
+            AGENT_ANCHOR_TYPES = {'agent_inbox_reply', 'agent_task_blocked', 'agent_office_update', 'integration_alert'}
+            _agent_name = None
+            for anchor in anchors:
+                if anchor.anchor_type in AGENT_ANCHOR_TYPES and anchor.data:
+                    try:
+                        _ad = json.loads(anchor.data) if isinstance(anchor.data, str) else anchor.data
+                        _agent_name = _ad.get('agent_name') or _ad.get('agent')
+                        if _agent_name:
+                            break
+                    except Exception:
+                        pass
+
+            # Оборачиваем контент в __agent JSON, если есть агент
+            interaction_content = message
+            if _agent_name:
+                try:
+                    from models import UserAgent
+                    _ua = session.query(UserAgent).filter(
+                        UserAgent.user_id == user.id,
+                        UserAgent.name == _agent_name,
+                    ).first()
+                    if _ua:
+                        interaction_content = json.dumps({
+                            '__agent': {
+                                'name': _ua.name,
+                                'id': _ua.id,
+                                'avatar_url': _ua.avatar_url or '',
+                            },
+                            'text': message,
+                        }, ensure_ascii=False)
+                except Exception:
+                    pass
+
             # Создаём запись в interactions (для совместимости с anti-spam логикой)
             interaction = Interaction(
                 user_id=user.id,
                 message_type='proactive',
-                content=message
+                content=interaction_content
             )
             session.add(interaction)
 

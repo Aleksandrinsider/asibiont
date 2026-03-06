@@ -10468,33 +10468,8 @@ async def add_email_leads(
             )
             session.add(outreach)
 
-            # ── Автосохранение в справочник контактов (EmailContact) ──
-            try:
-                from models import EmailContact
-                ec_existing = session.query(EmailContact).filter_by(
-                    user_id=user.id, email=email
-                ).first()
-                if ec_existing:
-                    # Обновляем если есть новые данные
-                    if lead.get('name') and not ec_existing.name:
-                        ec_existing.name = lead['name']
-                    if lead.get('company') and not ec_existing.company:
-                        ec_existing.company = lead['company']
-                    if lead.get('context') and not ec_existing.notes:
-                        ec_existing.notes = lead['context']
-                else:
-                    ec = EmailContact(
-                        user_id=user.id,
-                        email=email,
-                        name=(lead.get('name') or '').strip() or None,
-                        company=(lead.get('company') or '').strip() or None,
-                        notes=(lead.get('context') or '').strip() or None,
-                        source='campaign',
-                        status='new',
-                    )
-                    session.add(ec)
-            except Exception as _ec_err:
-                logger.warning(f"[EMAIL_LEADS] Failed to save EmailContact for {email}: {_ec_err}")
+            # Контакт НЕ создаём при добавлении лида — только при реальной переписке
+            # (когда контакт ответил на письмо или идёт диалог)
 
             added += 1
         session.commit()
@@ -11866,31 +11841,8 @@ async def send_email(
                 _eo_saved = _eo_new
             session.commit()
             logger.info(f"[SEND_EMAIL] Outreach saved for {to_clean} (campaign #{campaign.id})")
-            # --- Автоматически создаём EmailContact если его ещё нет ---
-            try:
-                from models import EmailContact as _EmailContact
-                existing_contact = session.query(_EmailContact).filter_by(
-                    user_id=user.id, email=to_clean
-                ).first()
-                if not existing_contact and not _is_generic_email(to_clean):
-                    # Пытаемся извлечь имя из адреса (например «Иван Иванов <ivan@example.com>»)
-                    _contact_name = None
-                    if to and '<' in str(to):
-                        import re as _re_c
-                        _nm = _re_c.match(r'^(.+?)\s*<', str(to))
-                        if _nm:
-                            _contact_name = _nm.group(1).strip().strip('"\'')
-                    new_contact = _EmailContact(
-                        user_id=user.id,
-                        email=to_clean,
-                        name=_contact_name,
-                        source='outreach',
-                    )
-                    session.add(new_contact)
-                    session.commit()
-                    logger.info(f"[SEND_EMAIL] EmailContact auto-created for {to_clean}")
-            except Exception as _ce:
-                logger.warning(f"[SEND_EMAIL] Failed to auto-create contact: {_ce}")
+            # Контакт НЕ создаём при отправке — только при реальной переписке
+            # (reply_to_outreach_email, negotiate_by_email) или вручную.
         except Exception as _e:
             logger.warning(f"[SEND_EMAIL] Failed to save outreach record: {_e}")
             session.rollback()

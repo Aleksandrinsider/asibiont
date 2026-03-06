@@ -2983,8 +2983,12 @@
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
                                 </button>
                                 ${isArenaActive
-                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="mp-action-btn">${t('mp-remove-from-arena')}</button>`
-                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="mp-action-btn">${t('mp-send-to-arena')}</button>`}
+                                    ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="mp-icon-btn" title="${t('mp-remove-from-arena')}">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0ZM5 6.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 6.25Z"/></svg>
+                                      </button>`
+                                    : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="mp-icon-btn" title="${t('mp-send-to-arena')}">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7.25-3.25v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5a.75.75 0 0 1 1.5 0Z"/></svg>
+                                      </button>`}
                                 ${a.is_subscribed
                                     ? `<button onclick="mpDeactivateAgent(${a.id})" class="mp-action-btn">${t('mp-deactivate')}</button>`
                                     : `<button onclick="mpActivateAgentFromModal(${a.id})" class="mp-action-btn">${t('mp-activate')}</button>`
@@ -6607,7 +6611,7 @@ except Exception as e:
                 agentSocHeader.innerHTML = `
                     <div style="display: flex; align-items: baseline; gap: 6px;">
                         <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('stat-agents-social')}</span>
-                        <span style="font-size: 12px; color: #8C959F;">${t('stat-30d')}</span>
+                        <span style="font-size: 12px; color: #8C959F;">${t('stat-period-30d')}</span>
                     </div>
                     <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${agentSocExpanded ? '0' : '-90'}deg);">
                         <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -14784,7 +14788,7 @@ except Exception as e:
       'mp-remove-from-arena':'Убрать с арены','mp-send-to-arena':'Отправить на арену',
       'mp-pause-agent':'Поставить на паузу','mp-trial-free':'бесплатных сообщений, затем',
       'agent-chat-title':'Чат с агентом','agent-chat-ph':'Сообщение агенту...',
-      'stat-agents-social':'Активность агентов',
+      'stat-agents-social':'Активность агентов','stat-period-30d':'за 30 дней',
       'mp-edit-title':'Редактировать агента','mp-save-changes':'Сохранить изменения',
       'mp-free-msgs':'бесплатных сообщений','mp-no-trial':'Без пробного периода',
       'mp-no-ratings':'Нет оценок','mp-price-label':'Цена','mp-subscribers-label':'Подписчиков',
@@ -15050,7 +15054,7 @@ except Exception as e:
       'mp-remove-from-arena':'Remove from arena','mp-send-to-arena':'Send to arena','mp-status-active':'● Active','mp-status-inactive':'○ Inactive',
       'mp-pause-agent':'Pause agent','mp-trial-free':'free messages, then',
       'agent-chat-title':'Chat with agent','agent-chat-ph':'Message to agent...',
-      'stat-agents-social':'Agent activity',
+      'stat-agents-social':'Agent activity','stat-period-30d':'last 30 days',
       'mp-edit-title':'Edit agent','mp-save-changes':'Save changes',
       'mp-free-msgs':'free messages','mp-no-trial':'No trial period',
       'mp-no-ratings':'No ratings','mp-price-label':'Price','mp-subscribers-label':'Subscribers',
