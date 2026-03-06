@@ -7863,6 +7863,17 @@ async def api_delegation_campaign_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+# Типы событий, отображаемые в хронологии (без шума)
+_TIMELINE_VISIBLE_TYPES = {
+    'task_added', 'task_completed', 'task_blocked',
+    'delegation', 'delegation_accepted', 'delegation_rejected',
+    'goal_created', 'goal_updated', 'goal_deleted', 'goal_completed',
+    'post_newsfeed', 'post_telegram', 'post_discord',
+    'content_campaign', 'delegation_campaign',
+    'background_research_ready',
+}
+
+
 async def api_activities_latest_handler(request):
     """Polling endpoint: GET /api/activities/latest?since=<iso_timestamp>
     Returns agent activities newer than `since`. Used for real-time timeline updates."""
@@ -7879,7 +7890,10 @@ async def api_activities_latest_handler(request):
             if not user:
                 return web.json_response({'activities': []})
 
-            query = session_db.query(AgentActivityLog).filter_by(user_id=user.id)
+            query = session_db.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type.in_(_TIMELINE_VISIBLE_TYPES),
+            )
             if since_str:
                 try:
                     from datetime import timezone as _tz
@@ -7944,7 +7958,8 @@ async def sse_activities_handler(request):
                 with Session() as sdb:
                     new_acts = sdb.query(AgentActivityLog).filter(
                         AgentActivityLog.user_id == uid,
-                        AgentActivityLog.id > last_id
+                        AgentActivityLog.id > last_id,
+                        AgentActivityLog.activity_type.in_(_TIMELINE_VISIBLE_TYPES),
                     ).order_by(AgentActivityLog.id.asc()).limit(20).all()
 
                     if new_acts:
