@@ -3084,11 +3084,11 @@ def get_partners_list(user_id=None, session=None):
     partners = []
     for profile in all_profiles:
         profile_user = _user_by_id.get(profile.user_id) or session.query(User).filter_by(id=profile.user_id).first()
-        if not profile_user or not profile_user.username:
+        if not profile_user:
             continue
 
         # Skip users already in delegation (delegated_usernames set built above)
-        if profile_user.username.lower() in delegated_usernames:
+        if profile_user.username and profile_user.username.lower() in delegated_usernames:
             continue
 
         has_match = False
@@ -3289,10 +3289,10 @@ def get_partners_list(user_id=None, session=None):
                 match_reasons.append("blocked contact")
 
         if has_match:
-            logger.info(f"[PARTNERS] Match found: @{profile_user.username} - {', '.join(match_reasons)}")
+            logger.info(f"[PARTNERS] Match found: @{profile_user.username or profile_user.first_name or profile_user.id} - {', '.join(match_reasons)}")
             partners.append(profile)
         else:
-            logger.debug(f"[PARTNERS] No match: @{profile_user.username}")
+            logger.debug(f"[PARTNERS] No match: @{profile_user.username or profile_user.first_name or profile_user.id}")
 
     logger.info(f"[PARTNERS] Total partners found: {len(partners)}")
 
