@@ -3586,6 +3586,8 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
         _s = _Db()
         try:
             now = _dt.datetime.now(_dt.timezone.utc)
+            # expires_at минимум 1ч — чтобы AnchorEngine успел увидеть якорь
+            _effective_expires = max(cooldown_hours, 1.0)
             _s.add(_Anch(
                 user_id=user_db_id,
                 anchor_type='agent_delegation',
@@ -3599,8 +3601,8 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
                     'result_summary': result_summary[:500],
                 }, ensure_ascii=False),
                 triggered_at=now,
-                # expires через cooldown — после этого агент снова «свободен»
-                expires_at=now + _dt.timedelta(hours=cooldown_hours),
+                # expires через max(cooldown, 1ч) — агент снова «свободен» после этого
+                expires_at=now + _dt.timedelta(hours=_effective_expires),
                 cooldown_hours=cooldown_hours,
                 batch_group='office',
             ))
@@ -3618,13 +3620,13 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     После ответа ASI один из агентов пользователя может вклиниться в разговор.
     Как в арене: читает последний обмен, реагирует со своей экспертизой.
     Вызывается как фоновая задача — не блокирует основной ответ.
-    Вероятность: 55% на каждое сообщение. Cooldown 8 мин на агента.
+    Вероятность: 30% на каждое сообщение. Cooldown 8 мин на агента.
     """
     import random as _rnd
     import json as _json
 
     # Вероятностный фильтр — не на каждое сообщение
-    if _rnd.random() > 0.55:
+    if _rnd.random() > 0.30:
         return
 
     # Проверяем баланс до задержки: если токенов нет — не включаемся
@@ -3709,7 +3711,8 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     _scored = []
     for _a in _agents:
         _spec = (_a.get('specialization') or _a.get('description') or '').lower()
-        _score = sum(1 for w in _spec.split() if len(w) > 4 and w in _topic)
+        # Используем word boundary проверку вместо подстроки
+        _score = sum(1 for w in _spec.split() if len(w) > 4 and re.search(rf'\b{re.escape(w)}', _topic))
         _scored.append((_score, _a))
     _scored.sort(key=lambda x: x[0], reverse=True)
     _agent = _scored[0][1] if _scored[0][0] > 0 else _rnd.choice(_agents)

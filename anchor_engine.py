@@ -196,14 +196,30 @@ class AnchorEngine:
     async def start(self):
         """Запуск бесконечного цикла сканирования"""
         self.running = True
+        self._cycle_counter = 0
         logger.info(f"[ANCHOR] 🚀 Starting scan loop (every {SCAN_INTERVAL_MINUTES}min)")
         while self.running:
             try:
                 import time as _time
                 cycle_start = _time.monotonic()
-                logger.info(f"[ANCHOR] 🔄 Starting scan cycle")
+                self._cycle_counter += 1
+                logger.info(f"[ANCHOR] 🔄 Starting scan cycle #{self._cycle_counter}")
                 await self._scan_all_users()
                 cycle_duration = _time.monotonic() - cycle_start
+
+                # Периодическое обслуживание: mark_ignored каждые ~12 циклов (~60 мин),
+                # cleanup каждые ~144 цикла (~12 часов)
+                if self._cycle_counter % 12 == 0:
+                    try:
+                        await self.mark_ignored_deliveries()
+                    except Exception as _mie:
+                        logger.debug(f"[ANCHOR] mark_ignored error: {_mie}")
+                if self._cycle_counter % 144 == 0:
+                    try:
+                        await self.cleanup_old_anchors()
+                    except Exception as _coe:
+                        logger.debug(f"[ANCHOR] cleanup error: {_coe}")
+
                 # Adaptive sleep: если цикл занял долго, спим меньше
                 target_interval = SCAN_INTERVAL_MINUTES * 60
                 sleep_time = max(60, target_interval - cycle_duration)  # минимум 1 мин
@@ -784,8 +800,8 @@ class AnchorEngine:
                         task_text = anchor.topic or anchor.anchor_type
 
                     # Выбираем агента: ищем ключевые слова в specialization/description
-                    ANALYTIC_KW = {'аналит', 'strateg', 'страте', 'research', 'исследо', 'план'}
-                    TASK_KW = {'задач', 'task', 'todo', 'plan', 'план', 'organiz'}
+                    ANALYTIC_KW = {'аналит', 'strateg', 'страте', 'research', 'исследо', 'план', 'маркет', 'консульт', 'советник', 'analyz', 'report', 'отчёт', 'отчет'}
+                    TASK_KW = {'задач', 'task', 'todo', 'plan', 'план', 'organiz', 'менедж', 'координ', 'ассист', 'manage', 'секретар', 'помощн'}
                     kw_set = ANALYTIC_KW if anchor.anchor_type in ('goal_stagnation', 'goal_decomposition', 'goal_deadline') else TASK_KW
                     chosen = None
                     for ag in agents:
