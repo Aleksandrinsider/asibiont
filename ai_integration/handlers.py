@@ -1529,243 +1529,256 @@ def delegate_task(
         try:
             from models import UserAgent as _UA_chk, AgentSubscription as _AS_chk
             import json as _jj
-            _agent_recipient = (
-                session.query(_UA_chk)
-                .filter(
-                    _UA_chk.status.in_(['active', 'paused', 'published']),
-                    (
-                        (_UA_chk.author_id == delegator.id) |
-                        (_UA_chk.id.in_(
-                            session.query(_AS_chk.agent_id).filter(
-                                _AS_chk.user_id == delegator.id
-                            )
-                        ))
+            import re as _ren
+            import asyncio as _aio
+            from .autonomous_agent import _exec_agent_for_director as _exec_dir
+            from .autonomous_agent import _save_interaction_for_director as _save_ifd
+            import json as _json_ag
+
+            # Поддержка нескольких имён: "Кристина и Марк", "Кристина, Марк" → ['кристина', 'марк']
+            _name_parts = [p.strip() for p in _ren.split(r'\s+и\s+|\s+and\s+|,\s*|;\s*', _recip_check) if p.strip() and len(p.strip()) > 1]
+            if not _name_parts:
+                _name_parts = [_recip_check]
+
+            _subscribed_ids = session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id)
+            _found_agents = []
+            _used_ag_ids: set = set()
+            for _np in _name_parts:
+                _ag = (
+                    session.query(_UA_chk)
+                    .filter(
+                        _UA_chk.status.in_(['active', 'paused', 'published']),
+                        ((_UA_chk.author_id == delegator.id) | (_UA_chk.id.in_(_subscribed_ids)))
                     )
+                    .filter(_UA_chk.slug.ilike(_np) | _UA_chk.name.ilike(f'%{_np}%'))
+                    .first()
                 )
-                .filter(
-                    _UA_chk.slug.ilike(_recip_check) |
-                    _UA_chk.name.ilike(f'%{_recip_check}%')
-                )
-                .first()
-            )
-            if _agent_recipient:
-                logger.info(f"[DELEGATE] Sub-agent found: {_agent_recipient.name} (id={_agent_recipient.id})")
-                # Строим dict-объект агента для _exec_agent_for_director
-                _tools_parsed = []
-                try:
-                    _tools_parsed = _jj.loads(_agent_recipient.tools_allowed or '[]')
-                except Exception:
-                    pass
-                _agent_dict = {
-                    'id': _agent_recipient.id,
-                    'name': _agent_recipient.name or 'Агент',
-                    'job_title': _agent_recipient.job_title or '',
-                    'specialization': _agent_recipient.specialization or '',
-                    'description': _agent_recipient.description or '',
-                    'personality': _agent_recipient.personality or '',
-                    'python_code': _agent_recipient.python_code or '',
-                    'user_api_keys': _agent_recipient.user_api_keys or '',
-                    'tools_allowed': _agent_recipient.tools_allowed or '',
-                    'search_scope': _agent_recipient.search_scope or '',
-                    'avatar_url': _agent_recipient.avatar_url or '',
-                    'tools': _tools_parsed,
-                }
-                _agent_task_text = (
-                    f"{title}\n{description}".strip() if description else title
-                )
+                if _ag and _ag.id not in _used_ag_ids:
+                    _found_agents.append(_ag)
+                    _used_ag_ids.add(_ag.id)
+
+            if _found_agents:
+                _agent_task_text = (f"{title}\n{description}".strip() if description else title)
                 if delegation_details:
                     _agent_task_text += f"\n\nДетали: {delegation_details}"
                 if reminder_time:
                     _agent_task_text += f"\n\nДедлайн: {reminder_time}"
-                # Логируем передачу задачи агенту
-                try:
-                    from models import AgentActivityLog as _AAL_d
-                    _log = _AAL_d(
-                        user_id=delegator.id,
-                        activity_type='delegation',
-                        title=title,
-                        content=description[:500] if description else None,
-                        target=_agent_recipient.name,
-                        status='in_progress',
-                        result=(f'Задача передана агенту. Дедлайн: {reminder_time}'
-                                if reminder_time else 'Задача передана агенту.'),
-                    )
-                    session.add(_log)
-                    session.commit()
-                except Exception as _log_err:
-                    logger.warning(f"[DELEGATE] activity log error: {_log_err}")
+
+                async def _run_and_report(agent_dict, task_text, uid, agent_name, tg_id, task_id=None):
                     try:
-                        session.rollback()
-                    except Exception:
-                        pass
-                # Создаём Task-поручение агенту — видно в списке задач пользователя
-                _agent_task_id = None
-                try:
-                    _agent_task_obj = Task(
-                        user_id=delegator.id,
-                        title=title,
-                        description=encrypt_data(description) if description else None,
-                        status='delegated',
-                        delegated_to_username=_agent_recipient.name,
-                        delegation_status='agent_assigned',
-                        delegation_details=delegation_details or '',
-                        source='agent',
-                        created_by_agent_id=_agent_recipient.id,
-                    )
-                    if reminder_time:
-                        try:
-                            _agent_task_obj.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                        except ValueError:
-                            pass
-                    session.add(_agent_task_obj)
-                    session.commit()
-                    _agent_task_id = _agent_task_obj.id
-                    logger.info(f"[DELEGATE] Agent task created id={_agent_task_id} for agent {_agent_recipient.name}")
-                except Exception as _task_err:
-                    logger.warning(f"[DELEGATE] agent task create error: {_task_err}")
-                    try:
-                        session.rollback()
-                    except Exception:
-                        pass
-                # Запускаем агента асинхронно в работающем event loop aiogram
-                try:
-                    import asyncio as _aio
-                    from .autonomous_agent import _exec_agent_for_director as _exec_dir
-                    from .autonomous_agent import _save_interaction_for_director as _save_ifd
-                    import json as _json_ag
+                        # Показываем пользователю текст поручения ПЕРЕД тем как агент начнёт
+                        _assign_preview = _json_ag.dumps({
+                            '__agent': {
+                                'name': agent_dict.get('name', agent_name),
+                                'id': agent_dict.get('id'),
+                                'avatar_url': agent_dict.get('avatar_url', ''),
+                            },
+                            'text': f'📋 Получил поручение: {task_text[:300]}',
+                        }, ensure_ascii=False)
+                        _save_ifd(uid, _assign_preview)
 
-                    async def _run_and_report(agent_dict, task_text, uid, agent_name, tg_id, task_id=None):
-                        try:
-                            # Показываем пользователю текст поручения ПЕРЕД тем как агент начнёт
-                            _assign_preview = _json_ag.dumps({
-                                '__agent': {
-                                    'name': agent_dict.get('name', agent_name),
-                                    'id': agent_dict.get('id'),
-                                    'avatar_url': agent_dict.get('avatar_url', ''),
-                                },
-                                'text': f'📋 Получил поручение: {task_text[:300]}',
-                            }, ensure_ascii=False)
-                            _save_ifd(uid, _assign_preview)
-
-                            result = await _exec_dir(agent_dict, task_text, uid)
-                            if not result or not result.strip():
-                                # Агент вернул пустой ответ — отмечаем поручение как требующее доработки
-                                if task_id:
-                                    try:
-                                        from models import Session as _Sess_nr, Task as _Task_nr
-                                        _snr = _Sess_nr()
-                                        try:
-                                            _snr.query(_Task_nr).filter_by(id=task_id).update(
-                                                {'delegation_status': 'needs_rework', 'status': 'pending'},
-                                                synchronize_session=False
-                                            )
-                                            _snr.commit()
-                                        finally:
-                                            _snr.close()
-                                    except Exception as _nre:
-                                        logger.debug(f"[DELEGATE] needs_rework update error: {_nre}")
-                                return
-
-                            # Очищаем DSML-теги из ответа агента
-                            try:
-                                from .utils import clean_technical_details as _ctd_r
-                                result = _ctd_r(result).strip() or result
-                            except Exception:
-                                pass
-
-                            # Сохраняем в историю диалога (отображается на дашборде)
-                            _ac = _json_ag.dumps({
-                                '__agent': {
-                                    'name': agent_dict.get('name', agent_name),
-                                    'id': agent_dict.get('id'),
-                                    'avatar_url': agent_dict.get('avatar_url', ''),
-                                },
-                                'text': result,
-                            }, ensure_ascii=False)
-                            _save_ifd(uid, _ac)
-
-                            # Закрываем Task-поручение как выполненное
+                        result = await _exec_dir(agent_dict, task_text, uid)
+                        if not result or not result.strip():
                             if task_id:
                                 try:
-                                    from models import Session as _Sess_tc, Task as _Task_tc
-                                    from datetime import datetime as _dt_tc, timezone as _tz_tc
-                                    _stc = _Sess_tc()
+                                    from models import Session as _Sess_nr, Task as _Task_nr
+                                    _snr = _Sess_nr()
                                     try:
-                                        _stc.query(_Task_tc).filter_by(id=task_id).update(
-                                            {
-                                                'status': 'completed',
-                                                'delegation_status': 'agent_completed',
-                                                'actual_completion_time': _dt_tc.now(_tz_tc.utc),
-                                                'completion_notes': encrypt_data(result[:500]),
-                                            },
+                                        _snr.query(_Task_nr).filter_by(id=task_id).update(
+                                            {'delegation_status': 'needs_rework', 'status': 'pending'},
                                             synchronize_session=False
                                         )
-                                        _stc.commit()
+                                        _snr.commit()
                                     finally:
-                                        _stc.close()
-                                except Exception as _tce:
-                                    logger.debug(f"[DELEGATE] task close error: {_tce}")
+                                        _snr.close()
+                                except Exception as _nre:
+                                    logger.debug(f"[DELEGATE] needs_rework update error: {_nre}")
+                            return
 
-                            # Отправляем отчёт субагента в Telegram
-                            _bot = None
+                        # Очищаем DSML-теги из ответа агента
+                        try:
+                            from .utils import clean_technical_details as _ctd_r
+                            result = _ctd_r(result).strip() or result
+                        except Exception:
+                            pass
+
+                        # Сохраняем в историю диалога (отображается на дашборде)
+                        _ac = _json_ag.dumps({
+                            '__agent': {
+                                'name': agent_dict.get('name', agent_name),
+                                'id': agent_dict.get('id'),
+                                'avatar_url': agent_dict.get('avatar_url', ''),
+                            },
+                            'text': result,
+                        }, ensure_ascii=False)
+                        _save_ifd(uid, _ac)
+
+                        # Закрываем Task-поручение как выполненное
+                        if task_id:
                             try:
-                                from main import bot as _bot
-                                if _bot and tg_id:
-                                    await _bot.send_message(
-                                        tg_id,
-                                        f"📋 {agent_name}: {result[:1500]}",
-                                    )
-                            except Exception as _te:
-                                logger.debug(f"[DELEGATE] tg send error: {_te}")
-
-                            # ASI читает отчёт и может дать новое поручение другому агенту.
-                            # add_task/update_task/complete_task запрещены — только delegate_task.
-                            # Анти-рекурсия: если ASI-обзор уже активен для этого user — пропускаем.
-                            if uid not in _ASI_REPORT_REVIEW_ACTIVE:
-                                _ASI_REPORT_REVIEW_ACTIVE.add(uid)
+                                from models import Session as _Sess_tc, Task as _Task_tc
+                                from datetime import datetime as _dt_tc, timezone as _tz_tc
+                                _stc = _Sess_tc()
                                 try:
-                                    from .autonomous_agent import chat_with_ai as _chat_fn
-                                    _trigger = (
-                                        f"[AGENT_REPORT] Агент «{agent_name}» выполнил задачу и прислал отчёт.\n"
-                                        f"ПРАВИЛА: НЕ СОЗДАВАЙ ЗАДАЧИ ПОЛЬЗОВАТЕЛЮ. "
-                                        f"НЕ ДЕЛЕГИРУЙ ОБРАТНО АГЕНТУ «{agent_name}» — он только что отчитался. "
-                                        f"Если логично — дай поручение ДРУГОМУ агенту. Иначе ничего не делай.\n\n"
-                                        f"{result[:1200]}"
+                                    _stc.query(_Task_tc).filter_by(id=task_id).update(
+                                        {
+                                            'status': 'completed',
+                                            'delegation_status': 'agent_completed',
+                                            'actual_completion_time': _dt_tc.now(_tz_tc.utc),
+                                            'completion_notes': encrypt_data(result[:500]),
+                                        },
+                                        synchronize_session=False
                                     )
-                                    _asi_reply = await _chat_fn(
-                                        message=_trigger,
-                                        user_id=uid,
-                                        exclude_tools={'add_task', 'update_task', 'complete_task'},
-                                    )
-                                    # Показываем текстовый ответ ASI ТОЛЬКО если он что-то реально делегировал
-                                    if _asi_reply:
-                                        _used = (_asi_reply.get('tools_used', []) if isinstance(_asi_reply, dict) else [])
-                                        if 'delegate_task' in _used:
-                                            _asi_text = (
-                                                _asi_reply.get('response', '') if isinstance(_asi_reply, dict) else ''
-                                            ).strip()
-                                            if _asi_text and _bot and tg_id:
-                                                await _bot.send_message(tg_id, f"📎 {_asi_text[:800]}")
-                                except Exception as _aer:
-                                    logger.debug(f"[DELEGATE] asi follow-up error: {_aer}")
+                                    _stc.commit()
                                 finally:
-                                    _ASI_REPORT_REVIEW_ACTIVE.discard(uid)
-                        except Exception as _re:
-                            logger.warning(f"[DELEGATE] agent run error: {_re}")
+                                    _stc.close()
+                            except Exception as _tce:
+                                logger.debug(f"[DELEGATE] task close error: {_tce}")
 
-                    _aio.ensure_future(
-                        _run_and_report(
-                            _agent_dict, _agent_task_text, user_id,
-                            _agent_recipient.name, delegator.telegram_id,
-                            task_id=_agent_task_id,
+                        # Отправляем отчёт субагента в Telegram
+                        _bot_r = None
+                        try:
+                            from main import bot as _bot_r
+                            if _bot_r and tg_id:
+                                await _bot_r.send_message(
+                                    tg_id,
+                                    f"📋 {agent_name}: {result[:1500]}",
+                                )
+                        except Exception as _te:
+                            logger.debug(f"[DELEGATE] tg send error: {_te}")
+
+                        # ASI читает отчёт и может дать новое поручение другому агенту.
+                        if uid not in _ASI_REPORT_REVIEW_ACTIVE:
+                            _ASI_REPORT_REVIEW_ACTIVE.add(uid)
+                            try:
+                                from .autonomous_agent import chat_with_ai as _chat_fn
+                                _trigger = (
+                                    f"[AGENT_REPORT] Агент «{agent_name}» выполнил задачу и прислал отчёт.\n"
+                                    f"ПРАВИЛА: НЕ СОЗДАВАЙ ЗАДАЧИ ПОЛЬЗОВАТЕЛЮ. "
+                                    f"НЕ ДЕЛЕГИРУЙ ОБРАТНО АГЕНТУ «{agent_name}» — он только что отчитался. "
+                                    f"Если логично — дай поручение ДРУГОМУ агенту. Иначе ничего не делай.\n\n"
+                                    f"{result[:1200]}"
+                                )
+                                _asi_reply = await _chat_fn(
+                                    message=_trigger,
+                                    user_id=uid,
+                                    exclude_tools={'add_task', 'update_task', 'complete_task'},
+                                )
+                                if _asi_reply:
+                                    _used = (_asi_reply.get('tools_used', []) if isinstance(_asi_reply, dict) else [])
+                                    if 'delegate_task' in _used:
+                                        _asi_text = (
+                                            _asi_reply.get('response', '') if isinstance(_asi_reply, dict) else ''
+                                        ).strip()
+                                        if _asi_text and _bot_r and tg_id:
+                                            await _bot_r.send_message(tg_id, f"📎 {_asi_text[:800]}")
+                            except Exception as _aer:
+                                logger.debug(f"[DELEGATE] asi follow-up error: {_aer}")
+                            finally:
+                                _ASI_REPORT_REVIEW_ACTIVE.discard(uid)
+                    except Exception as _re:
+                        logger.warning(f"[DELEGATE] agent run error: {_re}")
+
+                _success_names = []
+                for _agent_recipient in _found_agents:
+                    logger.info(f"[DELEGATE] Sub-agent: {_agent_recipient.name} (id={_agent_recipient.id})")
+                    _tools_parsed = []
+                    try:
+                        _tools_parsed = _jj.loads(_agent_recipient.tools_allowed or '[]')
+                    except Exception:
+                        pass
+                    _agent_dict = {
+                        'id': _agent_recipient.id,
+                        'name': _agent_recipient.name or 'Агент',
+                        'job_title': _agent_recipient.job_title or '',
+                        'specialization': _agent_recipient.specialization or '',
+                        'description': _agent_recipient.description or '',
+                        'personality': _agent_recipient.personality or '',
+                        'python_code': _agent_recipient.python_code or '',
+                        'user_api_keys': _agent_recipient.user_api_keys or '',
+                        'tools_allowed': _agent_recipient.tools_allowed or '',
+                        'search_scope': _agent_recipient.search_scope or '',
+                        'avatar_url': _agent_recipient.avatar_url or '',
+                        'tools': _tools_parsed,
+                    }
+                    # Логируем передачу задачи агенту
+                    try:
+                        from models import AgentActivityLog as _AAL_d
+                        _log = _AAL_d(
+                            user_id=delegator.id,
+                            activity_type='delegation',
+                            title=title,
+                            content=description[:500] if description else None,
+                            target=_agent_recipient.name,
+                            status='in_progress',
+                            result=(f'Задача передана агенту. Дедлайн: {reminder_time}'
+                                    if reminder_time else 'Задача передана агенту.'),
                         )
+                        session.add(_log)
+                        session.commit()
+                    except Exception as _log_err:
+                        logger.warning(f"[DELEGATE] activity log error: {_log_err}")
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                    # Создаём Task-поручение агенту
+                    _agent_task_id = None
+                    try:
+                        _agent_task_obj = Task(
+                            user_id=delegator.id,
+                            title=title,
+                            description=encrypt_data(description) if description else None,
+                            status='delegated',
+                            delegated_to_username=_agent_recipient.name,
+                            delegation_status='agent_assigned',
+                            delegation_details=delegation_details or '',
+                            source='agent',
+                            created_by_agent_id=_agent_recipient.id,
+                        )
+                        if reminder_time:
+                            try:
+                                _agent_task_obj.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                            except ValueError:
+                                pass
+                        session.add(_agent_task_obj)
+                        session.commit()
+                        _agent_task_id = _agent_task_obj.id
+                        logger.info(f"[DELEGATE] Agent task created id={_agent_task_id} for {_agent_recipient.name}")
+                    except Exception as _task_err:
+                        logger.warning(f"[DELEGATE] agent task create error: {_task_err}")
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                    # Запускаем агента асинхронно
+                    try:
+                        _loop = _aio.get_event_loop()
+                        _loop.create_task(
+                            _run_and_report(
+                                _agent_dict, _agent_task_text, user_id,
+                                _agent_recipient.name, delegator.telegram_id,
+                                task_id=_agent_task_id,
+                            )
+                        )
+                    except Exception as _async_err:
+                        logger.warning(f"[DELEGATE] async schedule error: {_async_err}")
+                    _success_names.append(_agent_recipient.name)
+
+                try:
+                    session.close()
+                except Exception:
+                    pass
+                if len(_success_names) == 1:
+                    return (
+                        f"✅ Задача «{title}» передана агенту {_success_names[0]}. "
+                        f"Он уже приступил к выполнению."
                     )
-                except Exception as _async_err:
-                    logger.warning(f"[DELEGATE] async schedule error: {_async_err}")
-                return (
-                    f"✅ Задача «{title}» передана агенту {_agent_recipient.name}. "
-                    f"Он уже приступил к выполнению."
-                )
+                else:
+                    return (
+                        f"✅ Задача «{title}» передана агентам: {', '.join(_success_names)}. "
+                        f"Они уже приступили к выполнению."
+                    )
         except Exception as _ua_err:
             logger.warning(f"[DELEGATE] sub-agent lookup error: {_ua_err}")
 
