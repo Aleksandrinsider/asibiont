@@ -499,7 +499,7 @@ class OfficeEngine:
             _s = _Db()
             try:
                 _last_run = _s.query(_UA.last_office_run_at).filter(
-                    _UA.status == 'active',
+                    _UA.status.in_(['active', 'paused']),
                     _UA.python_code.isnot(None),
                     _UA.last_office_run_at.isnot(None),
                 ).order_by(_UA.last_office_run_at.desc()).first()
@@ -545,7 +545,7 @@ class OfficeEngine:
                     s.query(UserAgent, UserModel)
                     .join(UserModel, UserModel.id == UserAgent.author_id)
                     .filter(
-                        UserAgent.status == 'active',
+                        UserAgent.status.in_(['active', 'paused']),
                         UserAgent.python_code.isnot(None),
                         UserModel.telegram_id.isnot(None),
                     )
@@ -849,11 +849,11 @@ async def _run_once_live():
         from models import Session as _Db, UserAgent as _UA
         _s = _Db()
         try:
-            _s.query(_UA).filter(_UA.status == 'active').update(
+            _s.query(_UA).filter(_UA.status.in_(['active', 'paused'])).update(
                 {'last_office_run_at': None}, synchronize_session=False
             )
             _s.commit()
-            cnt = _s.query(_UA).filter(_UA.status == 'active').count()
+            cnt = _s.query(_UA).filter(_UA.status.in_(['active', 'paused'])).count()
             print(f'\n[ОДИНОЧНЫЙ ПРОГОН] Агентов к запуску: {cnt}')
         finally:
             _s.close()

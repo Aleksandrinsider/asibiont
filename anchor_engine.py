@@ -5234,7 +5234,7 @@ class AnchorEngine:
             from models import UserAgent
             agents = session.query(UserAgent).filter(
                 UserAgent.author_id == user.id,
-                UserAgent.status == 'active',
+                UserAgent.status.in_(['active', 'paused']),
                 UserAgent.custom_anchors.isnot(None),
             ).all()
 
@@ -5505,7 +5505,7 @@ class AnchorEngine:
             from models import UserAgent, AgentActivityLog
             agents = session.query(UserAgent).filter(
                 UserAgent.author_id == user.id,
-                UserAgent.status == 'active',
+                UserAgent.status.in_(['active', 'paused']),
                 UserAgent.python_code.isnot(None),
             ).all()
             since = now_utc - timedelta(hours=24)
