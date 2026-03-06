@@ -1635,7 +1635,7 @@ async def delegate_task(
                                 'id': _agent_recipient.id,
                                 'avatar_url': _agent_dict.get('avatar_url', ''),
                             },
-                            'text': f'📋 Получил поручение: {_agent_task_text[:300]}',
+                            'text': f'Получил поручение: {_agent_task_text[:300]}',
                         }, ensure_ascii=False))
                     except Exception:
                         pass
@@ -1691,7 +1691,7 @@ async def delegate_task(
                                     'id': _agent_recipient.id,
                                     'avatar_url': _agent_dict.get('avatar_url', ''),
                                 },
-                                'text': f'⚠️ Первый результат недостаточный, дорабатываю...',
+                                'text': f'Первый результат недостаточный, дорабатываю...',
                             }, ensure_ascii=False))
                         except Exception:
                             pass
@@ -12560,17 +12560,17 @@ async def start_delegation_campaign(
         session.commit()
 
         result = (
-            f"✅ Кампания делегирования «{name}» запущена! (#{campaign.id})\n\n"
-            f"🎯 Цель: {goal[:150]}\n"
-            f"👥 Аудитория: {target_audience[:150]}\n"
-            f"📊 Макс. делегирований: {max_delegations}\n"
-            f"⏰ Лимит в день: {daily_limit}\n"
-            f"📅 Дедлайн задач: {default_deadline_hours}ч\n"
+            f"Кампания делегирования «{name}» запущена (#{campaign.id})\n\n"
+            f"Цель: {goal[:150]}\n"
+            f"Аудитория: {target_audience[:150]}\n"
+            f"Макс. делегирований: {max_delegations}\n"
+            f"Лимит в день: {daily_limit}\n"
+            f"Дедлайн задач: {default_deadline_hours}ч\n"
         )
         if task_template:
-            result += f"📋 Шаблон: {task_template[:100]}\n"
+            result += f"Шаблон: {task_template[:100]}\n"
         if offer:
-            result += f"🎁 Мотивация: {offer[:100]}\n"
+            result += f"Мотивация: {offer[:100]}\n"
 
         result += "\nАгент будет автономно находить подходящих исполнителей и делегировать задачи."
 
@@ -12634,7 +12634,7 @@ async def manage_delegation_campaign(
             ).order_by(DelegationCampaign.created_at.desc()).first()
 
         if not campaign:
-            return "❌ Кампания делегирования не найдена. Создай новую с помощью start_delegation_campaign."
+            return "Кампания делегирования не найдена. Создай новую с помощью start_delegation_campaign."
 
         if action == 'pause':
             if campaign.status == 'paused':

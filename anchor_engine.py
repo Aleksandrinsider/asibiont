@@ -4048,9 +4048,9 @@ class AnchorEngine:
                 from handlers import bot
                 await bot.send_message(
                     user.telegram_id,
-                    f"🤝 <b>Кампания «{campaign.name}»</b>\n"
+                    f"<b>Кампания «{campaign.name}»</b>\n"
                     f"Делегировано @{candidate.username}: {task_title[:100]}\n"
-                    f"📊 Отправлено {campaign.delegations_sent}"
+                    f"Отправлено {campaign.delegations_sent}"
                     f"{f'/{campaign.max_delegations}' if campaign.max_delegations else ''}",
                     parse_mode='HTML',
                 )
