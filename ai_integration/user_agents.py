@@ -291,6 +291,7 @@ def get_user_active_agents(user_id: int, session=None) -> list:
     """
     Возвращает список всех активированных agent_id для данного пользователя.
     Список упорядочен: focused — первый.
+    Автоматически очищает ids агентов без реальной подписки.
     """
     close = False
     if session is None:
@@ -304,6 +305,23 @@ def get_user_active_agents(user_id: int, session=None) -> list:
         legacy = mem.get('active_agent_id')
         if legacy and legacy not in ids:
             ids.insert(0, legacy)
+
+        # Фильтруем: оставляем только агентов с реальной подпиской ИЛИ собственных
+        if ids:
+            try:
+                from models import AgentSubscription as _AS_f, UserAgent as _UA_f, User as _U_f
+                _user = session.query(_U_f).filter_by(telegram_id=user_id).first()
+                if _user:
+                    _sub_ids = {r.agent_id for r in session.query(_AS_f).filter_by(user_id=_user.id).all()}
+                    _own_ids = {r.id for r in session.query(_UA_f).filter_by(author_id=_user.id).all()}
+                    _valid = [i for i in ids if i in _sub_ids or i in _own_ids]
+                    if _valid != ids:
+                        mem['active_agent_ids'] = _valid
+                        _save_mem(user_id, mem, session)
+                        ids = _valid
+            except Exception:
+                pass
+
         # focused — в начало
         focused = mem.get('focused_agent_id')
         if focused and focused in ids and ids[0] != focused:
