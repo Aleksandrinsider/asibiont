@@ -143,35 +143,24 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
 
 
 def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, task_title: str):
-    """Создаёт Task-делегирование от пользователя к агенту (agent:<name>).
-    Агент автоматически принимает — delegation_status='accepted'.
-    Дедупликация: не создаём если уже есть активная задача с тем же заголовком.
-    Логирует «Задача поставлена» в AgentActivityLog.
+    """Логирует поручение агенту в AgentActivityLog (без создания Task).
+    Дедупликация: не создаём дубль если уже есть идентичная запись за 2ч.
     """
     try:
-        from models import Session as _Db, Task as _Task, AgentActivityLog as _AAL
+        from models import Session as _Db, AgentActivityLog as _AAL
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         _s = _Db()
         try:
-            _dup = _s.query(_Task).filter(
-                _Task.user_id == user_id,
-                _Task.delegated_to_username == f'agent:{agent_name}',
-                _Task.delegation_status.in_(['pending', 'accepted']),
-                _Task.title.ilike(f'%{task_title[:40]}%'),
+            _cutoff = _dt.now(_tz.utc) - _td(hours=2)
+            _dup = _s.query(_AAL).filter(
+                _AAL.user_id == user_id,
+                _AAL.target == f'agent:{agent_name}',
+                _AAL.activity_type == 'delegation',
+                _AAL.status == 'accepted',
+                _AAL.created_at >= _cutoff,
             ).first()
-            if _dup:
+            if _dup and task_title[:40].lower() in (_dup.title or '').lower():
                 return
-            new_task = _Task(
-                user_id=user_id,
-                title=task_title[:200],
-                delegated_by=user_id,
-                delegated_to_username=f'agent:{agent_name}',
-                delegation_status='accepted',
-                status='in_progress',
-                delegation_details=f'agent_id:{agent_id}',
-            )
-            _s.add(new_task)
-            _s.flush()  # получаем new_task.id
-            # Логируем ключевое событие: задача поставлена агенту
             _s.add(_AAL(
                 user_id=user_id,
                 activity_type='delegation',
@@ -179,33 +168,21 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
                 content=task_title[:500],
                 target=f'agent:{agent_name}',
                 status='accepted',
-                ref_id=new_task.id,
             ))
             _s.commit()
-            logger.debug('[OFFICE] agent delegation task created: user=%d agent=%s "%s"', user_id, agent_name, task_title[:60])
+            logger.debug('[OFFICE] agent delegation logged: user=%d agent=%s "%s"', user_id, agent_name, task_title[:60])
         finally:
             _s.close()
     except Exception as e:
-        logger.debug('[OFFICE] agent delegation create error: %s', e)
+        logger.debug('[OFFICE] agent delegation log error: %s', e)
 
 
 def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str, task_title: str):
-    """Закрывает последнюю активную задачу агента (delegation_status→completed, status→completed)
-    и логирует «Задача выполнена» в AgentActivityLog.
-    """
+    """Логирует завершение работы агента в AgentActivityLog."""
     try:
-        from models import Session as _Db, Task as _Task, AgentActivityLog as _AAL
+        from models import Session as _Db, AgentActivityLog as _AAL
         _s = _Db()
         try:
-            _task = _s.query(_Task).filter(
-                _Task.user_id == user_id,
-                _Task.delegated_to_username == f'agent:{agent_name}',
-                _Task.delegation_status.in_(['pending', 'accepted']),
-            ).order_by(_Task.id.desc()).first()
-            if _task:
-                _task.delegation_status = 'completed'
-                _task.status = 'completed'
-            # Логируем ключевое событие: задача выполнена
             _s.add(_AAL(
                 user_id=user_id,
                 activity_type='delegation',
@@ -213,7 +190,6 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
                 content=task_title[:500],
                 target=f'agent:{agent_name}',
                 status='completed',
-                ref_id=_task.id if _task else agent_id,
             ))
             _s.commit()
             logger.debug('[OFFICE] agent task completed: user=%d agent=%s', user_id, agent_name)

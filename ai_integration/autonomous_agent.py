@@ -4556,29 +4556,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         except Exception:
             pass
 
-        # Создаём Task-поручение (для трекинга и UI)
+        # Агентские поручения логируются только в AgentActivityLog (не в Task)
         _task_id = None
-        if user_db_id:
-            try:
-                from models import Session as _TDb, Task as _TTask
-                _ts = _TDb()
-                try:
-                    _t_obj = _TTask(
-                        user_id=user_db_id,
-                        title=task[:200],
-                        status='delegated',
-                        delegated_to_username=ag.get('name', 'Агент'),
-                        delegation_status='agent_assigned',
-                        source='agent',
-                        created_by_agent_id=ag.get('id'),
-                    )
-                    _ts.add(_t_obj)
-                    _ts.commit()
-                    _task_id = _t_obj.id
-                finally:
-                    _ts.close()
-            except Exception as _te:
-                logger.debug("[DIRECTOR] task create error: %s", _te)
 
         try:
             resp = await asyncio.wait_for(
@@ -4603,20 +4582,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _save_interaction_for_director(user_id, _ac)
         await asyncio.sleep(0.05)
 
-        # Закрываем Task + создаём AgentActivityLog
+        # Логируем в AgentActivityLog (без создания Task)
         if user_db_id:
             try:
                 from models import Session as _TDb2, AgentActivityLog as _AAL2
-                from datetime import datetime as _dt2, timezone as _tz2
                 _ts2 = _TDb2()
                 try:
-                    if _task_id:
-                        from models import Task as _TTask2
-                        _ts2.query(_TTask2).filter_by(id=_task_id).update(
-                            {'status': 'completed', 'delegation_status': 'agent_completed',
-                             'actual_completion_time': _dt2.now(_tz2.utc)},
-                            synchronize_session=False
-                        )
                     _ts2.add(_AAL2(
                         user_id=user_db_id,
                         activity_type='delegation',
@@ -4624,7 +4595,6 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         content=str(resp)[:500],
                         target=ag.get('name', 'Агент'),
                         status='completed',
-                        ref_id=_task_id,
                     ))
                     _ts2.commit()
                 finally:

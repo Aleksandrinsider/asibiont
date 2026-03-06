@@ -1624,35 +1624,8 @@ async def delegate_task(
                         except Exception:
                             pass
 
-                    # Создаём Task-поручение агенту
+                    # Агентские поручения — только AgentActivityLog, без Task
                     _agent_task_id = None
-                    try:
-                        _agent_task_obj = Task(
-                            user_id=delegator.id,
-                            title=title,
-                            description=encrypt_data(description) if description else None,
-                            status='delegated',
-                            delegated_to_username=_agent_name,
-                            delegation_status='agent_assigned',
-                            delegation_details=delegation_details or '',
-                            source='agent',
-                            created_by_agent_id=_agent_recipient.id,
-                        )
-                        if reminder_time:
-                            try:
-                                _agent_task_obj.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                            except ValueError:
-                                pass
-                        session.add(_agent_task_obj)
-                        session.commit()
-                        _agent_task_id = _agent_task_obj.id
-                        logger.info(f"[DELEGATE] Agent task created id={_agent_task_id} for {_agent_name}")
-                    except Exception as _task_err:
-                        logger.warning(f"[DELEGATE] agent task create error: {_task_err}")
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
 
                     # Записываем «Получил поручение» в чат
                     try:
@@ -1684,19 +1657,6 @@ async def delegate_task(
                         _result = None
 
                     if not _result or not _result.strip():
-                        # Агент не смог — помечаем задачу
-                        if _agent_task_id:
-                            try:
-                                session.query(Task).filter_by(id=_agent_task_id).update(
-                                    {'delegation_status': 'needs_rework', 'status': 'pending'},
-                                    synchronize_session=False
-                                )
-                                session.commit()
-                            except Exception:
-                                try:
-                                    session.rollback()
-                                except Exception:
-                                    pass
                         _results_parts.append(f"[{_agent_name}]: не удалось выполнить задачу — нужна доработка")
                         continue
 
@@ -1769,27 +1729,7 @@ async def delegate_task(
                     except Exception:
                         pass
 
-                    # Закрываем Task-поручение как выполненное
-                    if _agent_task_id:
-                        try:
-                            session.query(Task).filter_by(id=_agent_task_id).update(
-                                {
-                                    'status': 'completed',
-                                    'delegation_status': 'agent_completed',
-                                    'actual_completion_time': datetime.now(timezone.utc),
-                                    'completion_notes': encrypt_data(_result[:500]),
-                                },
-                                synchronize_session=False
-                            )
-                            session.commit()
-                        except Exception as _tce:
-                            logger.debug(f"[DELEGATE] task close error: {_tce}")
-                            try:
-                                session.rollback()
-                            except Exception:
-                                pass
-
-                    # Логируем завершение
+                    # Логируем завершение в AgentActivityLog
                     try:
                         session.add(_AAL_d(
                             user_id=delegator.id,
@@ -1798,7 +1738,6 @@ async def delegate_task(
                             content=_result[:500],
                             target=_agent_name,
                             status='completed',
-                            ref_id=_agent_task_id,
                         ))
                         session.commit()
                     except Exception:
@@ -2364,46 +2303,7 @@ def get_delegation_progress(user_id, session=None):
 
                 report.append("")
 
-        # 🤖 Задачи, делегированные АГЕНТАМ (source='agent' или delegation_status agent_*)
-        agent_tasks = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.source == 'agent'
-        ).order_by(Task.created_at.desc()).limit(10).all()
-
-        if agent_tasks:
-            report.append("🤖 ПОРУЧЕНИЯ АГЕНТАМ:")
-            for task in agent_tasks:
-                a_status_emoji = {
-                    'agent_assigned': '⚙️',
-                    'agent_completed': '✅',
-                    'completed': '✅',
-                    'pending': '⏳',
-                }.get(task.delegation_status, '❓')
-                a_status_text = {
-                    'agent_assigned': 'агент работает',
-                    'agent_completed': 'агент выполнил',
-                    'completed': 'завершено',
-                    'pending': 'ожидает',
-                }.get(task.delegation_status, task.delegation_status or task.status)
-
-                agent_name = task.delegated_to_username or 'агент'
-                report.append(f"{a_status_emoji} '{task.title}' → {agent_name}")
-                report.append(f"   Статус: {a_status_text}")
-
-                if task.completion_notes:
-                    try:
-                        from models import decrypt_data
-                        note = decrypt_data(task.completion_notes)
-                    except Exception:
-                        note = task.completion_notes
-                    report.append(f"   Результат: {str(note)[:100]}")
-
-                if task.actual_completion_time:
-                    report.append(f"   Завершено: {task.actual_completion_time.strftime('%d.%m.%Y %H:%M')}")
-
-                report.append("")
-
-        if not delegated_by_user and not delegated_to_user and not agent_tasks:
+        if not delegated_by_user and not delegated_to_user:
             report.append("У вас нет делегированных задач.")
 
         if should_close:
@@ -2656,16 +2556,10 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         if include_completed:
             active_tasks_query = base_query.order_by(Task.created_at.desc()).limit(MAX_TASKS_TO_LOAD)
         else:
-            # Пользовательские задачи: исключаем завершённые и агентские
+            # Пользовательские задачи: исключаем завершённые
             active_tasks_query = base_query.filter(
                 Task.status.notin_(['completed', 'cancelled', 'deleted']),
-                Task.source != 'agent',
             ).limit(MAX_TASKS_TO_LOAD)
-            # Агентские активные задачи — отдельно
-            agent_tasks_query = base_query.filter(
-                Task.status.notin_(['completed', 'cancelled', 'deleted']),
-                Task.source == 'agent',
-            ).order_by(Task.created_at.desc()).limit(20)
         
         # Получаем делегированные задачи отдельно
         if user.username and user.username.strip():
@@ -2677,13 +2571,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
             delegated_tasks = []
         
         # Объединяем результаты
-        agent_tasks_in_progress = []
         my_active_tasks = active_tasks_query.all()
-        if not include_completed:
-            try:
-                agent_tasks_in_progress = agent_tasks_query.all()
-            except Exception:
-                agent_tasks_in_progress = []
         all_active_tasks = my_active_tasks + delegated_tasks
         
         # Базовый список задач для дальнейшей обработки
@@ -2960,26 +2848,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                 result += f" Завершено сегодня: {len(today_completed)} "
                 result += f"({', '.join(last_titles)})."
 
-        # Блок задач агентов — показываем только если есть активные
-        if agent_tasks_in_progress:
-            agent_names: dict = {}
-            try:
-                from models import UserAgent as _UA
-                for at in agent_tasks_in_progress:
-                    if at.created_by_agent_id and at.created_by_agent_id not in agent_names:
-                        ag = session.query(_UA).filter_by(id=at.created_by_agent_id).first()
-                        agent_names[at.created_by_agent_id] = ag.name if ag else '?'
-            except Exception:
-                pass
-            result += f" Агенты ведут {len(agent_tasks_in_progress)} задач: "
-            for i, at in enumerate(agent_tasks_in_progress[:5]):
-                aname = agent_names.get(at.created_by_agent_id, 'Агент')
-                result += f"🤖 {aname}: {at.title}"
-                if i < len(agent_tasks_in_progress[:5]) - 1:
-                    result += "; "
-            if len(agent_tasks_in_progress) > 5:
-                result += f" ...ещё {len(agent_tasks_in_progress) - 5}"
-            result += "."
+
 
         logger.info(f"[LIST_TASKS] Returning {len(active_tasks)} active tasks for user {user_id}")
         return result.strip()
