@@ -306,15 +306,16 @@ def get_user_active_agents(user_id: int, session=None) -> list:
         if legacy and legacy not in ids:
             ids.insert(0, legacy)
 
-        # Фильтруем: оставляем только агентов с реальной подпиской ИЛИ собственных
+        # Фильтруем: оставляем только агентов у которых есть AgentSubscription
+        # (и собственные, и чужие активируются через /api/marketplace/agents/{id}/activate,
+        #  который всегда создаёт AgentSubscription — это единственный источник правды)
         if ids:
             try:
-                from models import AgentSubscription as _AS_f, UserAgent as _UA_f, User as _U_f
+                from models import AgentSubscription as _AS_f, User as _U_f
                 _user = session.query(_U_f).filter_by(telegram_id=user_id).first()
                 if _user:
                     _sub_ids = {r.agent_id for r in session.query(_AS_f).filter_by(user_id=_user.id).all()}
-                    _own_ids = {r.id for r in session.query(_UA_f).filter_by(author_id=_user.id).all()}
-                    _valid = [i for i in ids if i in _sub_ids or i in _own_ids]
+                    _valid = [i for i in ids if i in _sub_ids]
                     if _valid != ids:
                         mem['active_agent_ids'] = _valid
                         _save_mem(user_id, mem, session)
