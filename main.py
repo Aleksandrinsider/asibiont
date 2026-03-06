@@ -3863,71 +3863,66 @@ async def api_partners_handler(request):
             try:
                 favorite_data = json.loads(profile.favorite_contacts)
                 for item in favorite_data:
-                    favorite_username = None
-                    # Определить username по ID или использовать прямую
+                    favorite_user = None
+                    # Определить пользователя по ID или username
                     if isinstance(item, int):
-                        # Это user_id
-                        fav_user = session_db.query(User).filter_by(id=item).first()
-                        if fav_user:
-                            favorite_username = fav_user.username
-                    elif isinstance(item, str):
+                        # Это user_id (DB id)
+                        favorite_user = session_db.query(User).filter_by(id=item).first()
+                    elif isinstance(item, str) and item.strip():
                         # Это username
-                        favorite_username = item
+                        clean_fav = item.replace('@', '').strip()
+                        if clean_fav:
+                            favorite_user = session_db.query(User).filter(
+                                or_(
+                                    User.username == item,
+                                    User.username == clean_fav
+                                )
+                            ).first()
                     
-                    if not favorite_username:
+                    if not favorite_user or favorite_user.id == user.id:
                         continue
                     
-                    # Check if already in partners_data
-                    if not any(p.get('contact_info') == favorite_username for p in partners_data):
-                        # Find user by username
-                        favorite_user = session_db.query(User).filter(
-                            or_(
-                                User.username == favorite_username,
-                                User.username == favorite_username.replace('@', '')
-                            )
-                        ).first()
-                        if favorite_user:
-                            favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
+                    # Check if already in partners_data (by user_id to avoid duplicates)
+                    if any(p.get('user_id') == favorite_user.id for p in partners_data):
+                        continue
+                    
+                    favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
 
-                            # Тарифы убраны — все контакты доступны
-                            can_access = True
-                            required_tier = None
+                    # Use safe proxy URL for avatar (no bot token leak)
+                    photo_url = safe_avatar_url(favorite_user.telegram_id) if favorite_user.telegram_id else None
+                    if favorite_user.telegram_id and 'bot' in request.app:
+                        try:
+                            updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id, force_refresh=True)
+                            if updated_avatar and updated_avatar != favorite_user.photo_url:
+                                favorite_user.photo_url = updated_avatar
+                                session_db.commit()
+                        except Exception as e:
+                            logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
 
-                            # Use safe proxy URL for avatar (no bot token leak)
-                            photo_url = safe_avatar_url(favorite_user.telegram_id) if favorite_user.telegram_id else None
-                            if favorite_user.telegram_id and 'bot' in request.app:
-                                try:
-                                    updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id, force_refresh=True)
-                                    if updated_avatar and updated_avatar != favorite_user.photo_url:
-                                        favorite_user.photo_url = updated_avatar
-                                        session_db.commit()
-                                except Exception as e:
-                                    logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
-
-                            partners_data.append({
-                                'contact_info': favorite_user.username,
-                                'telegram_id': favorite_user.telegram_id,
-                                'photo_url': photo_url,
-                                'can_access': can_access,
-                                'required_tier': required_tier,
-                                'subscription_tier': 'tokens',  # Токенная модель
-                                'first_name': favorite_user.first_name,
-                                'position': _pick_field(favorite_profile, 'position'),
-                                'interests': _pick_field(favorite_profile, 'interests'),
-                                'city': _pick_field(favorite_profile, 'city'),
-                                'company': _pick_field(favorite_profile, 'company'),
-                                'common_interests': None,  # Will be calculated later if needed
-                                'common_skills': None,
-                                'common_goals': None,
-                                'common_tasks': None,
-                                'average_rating': favorite_profile.average_rating if favorite_profile else 0,
-                                'rating_count': favorite_profile.rating_count if favorite_profile else 0,
-                                'platform': favorite_user.platform if favorite_user else 'telegram',
-                                'discord_id': str(favorite_user.discord_id) if (favorite_user and favorite_user.discord_id) else None,
-                                'reason': 'избраый контакт',
-                                'task_count': 0,
-                                'type': 'favorite'
-                            })
+                    partners_data.append({
+                        'contact_info': favorite_user.username,
+                        'user_id': favorite_user.id,
+                        'telegram_id': favorite_user.telegram_id,
+                        'photo_url': photo_url,
+                        'can_access': True,
+                        'subscription_tier': 'tokens',
+                        'first_name': favorite_user.first_name,
+                        'position': _pick_field(favorite_profile, 'position'),
+                        'interests': _pick_field(favorite_profile, 'interests'),
+                        'city': _pick_field(favorite_profile, 'city'),
+                        'company': _pick_field(favorite_profile, 'company'),
+                        'common_interests': None,
+                        'common_skills': None,
+                        'common_goals': None,
+                        'common_tasks': None,
+                        'average_rating': favorite_profile.average_rating if favorite_profile else 0,
+                        'rating_count': favorite_profile.rating_count if favorite_profile else 0,
+                        'platform': favorite_user.platform if favorite_user else 'telegram',
+                        'discord_id': str(favorite_user.discord_id) if (favorite_user and favorite_user.discord_id) else None,
+                        'reason': 'избранный контакт',
+                        'task_count': 0,
+                        'type': 'favorite'
+                    })
             except json.JSONDecodeError:
                 pass
 
@@ -3968,17 +3963,17 @@ async def api_partners_handler(request):
 
         # Добаить флаг is_favorite для сех контакто
         favorite_usernames = set()
+        favorite_user_ids = set()
         if profile and profile.favorite_contacts:
             try:
                 favorite_data = json.loads(profile.favorite_contacts)
                 for item in favorite_data:
                     if isinstance(item, int):
-                        # Это user_id
+                        favorite_user_ids.add(item)
                         fav_user = session_db.query(User).filter_by(id=item).first()
                         if fav_user and fav_user.username:
                             favorite_usernames.add(fav_user.username.replace('@', '').lower())
                     elif isinstance(item, str):
-                        # Это username
                         favorite_usernames.add(item.replace('@', '').lower())
             except json.JSONDecodeError:
                 pass
@@ -3986,10 +3981,12 @@ async def api_partners_handler(request):
         # Устаить флаг is_favorite для сех контакто
         for partner in partners_data:
             contact_info = partner.get('contact_info')
-            if contact_info is None:
-                contact_info = ''
-            contact_username = contact_info.replace('@', '').lower()
-            partner['is_favorite'] = contact_username in favorite_usernames
+            contact_username = (contact_info or '').replace('@', '').lower()
+            partner_uid = partner.get('user_id')
+            partner['is_favorite'] = (
+                (contact_username and contact_username in favorite_usernames) or
+                (partner_uid and partner_uid in favorite_user_ids)
+            )
 
         # Добавить my_rating — оценку текущего пользователя для каждого контакта
         my_ratings_map = {}
@@ -4695,8 +4692,20 @@ async def api_favorite_contacts_handler(request):
                 if not isinstance(favorites, list):
                     return web.json_response({'error': 'Favorites must be a list'}, status=400)
 
-                # Convert all favorites to strings (handle both strings and integers)
-                favorites = [str(f) for f in favorites]
+                # Preserve types: int for user_id, str for username. Deduplicate.
+                seen = set()
+                deduped = []
+                for f in favorites:
+                    if isinstance(f, int) or (isinstance(f, float) and f == int(f)):
+                        key = int(f)
+                    elif isinstance(f, str) and f.strip():
+                        key = f.strip()
+                    else:
+                        continue
+                    if key not in seen:
+                        seen.add(key)
+                        deduped.append(key)
+                favorites = deduped
 
                 profile.favorite_contacts = json.dumps(favorites)
                 session_db.commit()

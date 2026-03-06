@@ -9271,6 +9271,14 @@ except Exception as e:
             }
         }, 1000);
 
+        // Универсальная проверка: контакт в избранном? (по username ИЛИ user_id)
+        function _isFavContact(partner, favList) {
+            if (!favList) favList = cachedFavorites || [];
+            if (partner.contact_info && favList.includes(partner.contact_info)) return true;
+            if (partner.user_id && favList.includes(partner.user_id)) return true;
+            return false;
+        }
+
         async function isFavoriteContact(username) {
             if (cachedFavorites === null) {
                 cachedFavorites = await getFavoriteContactsFromServer();
@@ -9278,18 +9286,22 @@ except Exception as e:
             return cachedFavorites.includes(username);
         }
 
-        async function toggleFavoriteContact(username) {
+        async function toggleFavoriteContact(username, userId) {
             // Убираем экранирование, которое было добавлено для HTML атрибута
-            const cleanUsername = username.replace(/\\'/g, "'").replace(/\\`/g, "`").replace(/&quot;/g, '"');
+            const cleanUsername = username ? username.replace(/\\'/g, "'").replace(/\\`/g, "`").replace(/&quot;/g, '"') : '';
+            // Определяем ключ: username если есть, иначе user_id (число)
+            const favKey = cleanUsername || (userId ? parseInt(userId) : null);
+            if (!favKey) return;
             let favorites = await getFavoriteContactsFromServer();
-            const index = favorites.indexOf(cleanUsername);
+            const index = favorites.indexOf(favKey);
             
             if (index > -1) {
                 // Remove from favorites
                 favorites.splice(index, 1);
             } else {
-                // Add to favorites
-                favorites.push(cleanUsername);
+                // Add to favorites (проверяем дубли по user_id/username)
+                // Не добавляем если тот же пользователь уже есть под другим ключом
+                favorites.push(favKey);
             }
             
             const success = await saveFavoriteContactsToServer(favorites);
@@ -9757,7 +9769,7 @@ except Exception as e:
             
             let html = '<div style="display: grid; gap: 6px;">';
             contacts.forEach(contact => {
-                const isFavorite = favoriteContacts.includes(contact.username);
+                const isFavorite = favoriteContacts.includes(contact.username) || (contact.user_id && favoriteContacts.includes(contact.user_id));
                 const photoUrl = contact.photo_url;
                 const rating = contact.average_rating || 0;
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
@@ -10426,7 +10438,7 @@ except Exception as e:
             let filteredContacts = Object.values(uniqueContacts);
             if (currentContactFilter === 'favorite') {
                 filteredContacts = filteredContacts.filter(contact => {
-                    const isFavorite = cachedFavorites && cachedFavorites.includes(contact.username);
+                    const isFavorite = cachedFavorites && (cachedFavorites.includes(contact.username) || (contact.userId && cachedFavorites.includes(contact.userId)));
                     return isFavorite;
                 });
             } else if (currentContactFilter !== 'all') {
@@ -12674,7 +12686,7 @@ except Exception as e:
                                 if (partner.type === 'delegating_to_me' || partner.type === 'delegating_by_me') {
                                     const key = dedupKey + '_' + partner.type;
                                     // Устанавливаем is_favorite для delegation контактов
-                                    partner.is_favorite = favoriteContacts.includes(username);
+                                    partner.is_favorite = _isFavContact(partner, favoriteContacts);
                                     delegationContacts[key] = partner;
                                     return; // Не добавляем в uniquePartners
                                 }
@@ -12682,7 +12694,7 @@ except Exception as e:
                                 if (!uniquePartners[dedupKey]) {
                                     uniquePartners[dedupKey] = partner;
                                     // Проверяем избранное из кэша, а не из типа партнера
-                                    if (favoriteContacts.includes(username) || partner.type === 'favorite') {
+                                    if (_isFavContact(partner, favoriteContacts) || partner.type === 'favorite') {
                                         uniquePartners[dedupKey].is_favorite = true;
                                     }
                                 } else {
@@ -12690,7 +12702,7 @@ except Exception as e:
                                     const existing = uniquePartners[dedupKey];
                                     
                                     // Сохраняем флаг избранного если контакт в favoriteContacts или тип - favorite
-                                    if (favoriteContacts.includes(username) || partner.type === 'favorite') {
+                                    if (_isFavContact(partner, favoriteContacts) || partner.type === 'favorite') {
                                         existing.is_favorite = true;
                                     }
                                     
@@ -12716,18 +12728,23 @@ except Exception as e:
                             
                             // Добавляем избранные контакты, которых нет в списке от сервера
                             // Это важно, чтобы избранные не пропадали при изменении интересов
-                            favoriteContacts.forEach(username => {
-                                if (!uniquePartners[username] && !blockedContacts.includes(username)) {
-                                    // Создаем минимальный объект для избранного контакта
-                                    uniquePartners[username] = {
-                                        contact_info: username,
-                                        type: 'favorite',
-                                        is_favorite: true,
-                                        first_name: '',
-                                        photo_url: null,
-                                        can_access: true
-                                    };
-                                }
+                            favoriteContacts.forEach(favItem => {
+                                // favItem может быть string (username) или int (user_id)
+                                const isId = typeof favItem === 'number';
+                                const dedupKey = isId ? 'uid_' + favItem : favItem;
+                                if (!dedupKey || dedupKey === 'uid_0') return;
+                                if (uniquePartners[dedupKey]) return; // уже есть
+                                if (!isId && blockedContacts.includes(favItem)) return;
+                                // Создаем минимальный объект для избранного контакта
+                                uniquePartners[dedupKey] = {
+                                    contact_info: isId ? null : favItem,
+                                    user_id: isId ? favItem : null,
+                                    type: 'favorite',
+                                    is_favorite: true,
+                                    first_name: '',
+                                    photo_url: null,
+                                    can_access: true
+                                };
                             });
                             
                             // Применяем my_ratings ко ВСЕМ контактам (включая клиентские favorites)
@@ -12840,13 +12857,13 @@ except Exception as e:
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 4px; flex-shrink: 0;">';
-                                    const isFavorite = favoriteContacts.includes(partner.contact_info);
+                                    const isFavorite = _isFavContact(partner, favoriteContacts);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                         : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
                                     const heartColor = isFavorite ? 'color: #068487;' : '';
                                     const favoriteTitle = isFavorite ? t('remove-fav') : t('add-fav');
-                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
+                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\',' + (partner.user_id || 'null') + ')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
                                     html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + t('send-message') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg></button>';
@@ -12929,13 +12946,13 @@ except Exception as e:
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 4px; flex-shrink: 0;">';
-                                    const isFavorite = favoriteContacts.includes(partner.contact_info);
+                                    const isFavorite = _isFavContact(partner, favoriteContacts);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                         : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
                                     const heartColor = isFavorite ? 'color: #068487;' : '';
                                     const favoriteTitle = isFavorite ? t('remove-fav') : t('add-fav');
-                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
+                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\',' + (partner.user_id || 'null') + ')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
                                     html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + t('send-message') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg></button>';
@@ -13120,13 +13137,13 @@ except Exception as e:
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 4px; flex-shrink: 0;">';
-                                    const isFavorite = favoriteContacts.includes(partner.contact_info);
+                                    const isFavorite = _isFavContact(partner, favoriteContacts);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                         : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
                                     const heartColor = isFavorite ? 'color: #068487;' : '';
                                     const favoriteTitle = isFavorite ? t('remove-fav') : t('add-fav');
-                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
+                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\',' + (partner.user_id || 'null') + ')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
                                     html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + t('send-message') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg></button>';
@@ -13248,13 +13265,13 @@ except Exception as e:
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: 32px 32px; gap: 4px; margin-right: 4px; flex-shrink: 0;">';
-                                    const isFavorite = favoriteContacts.includes(partner.contact_info);
+                                    const isFavorite = _isFavContact(partner, favoriteContacts);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                         : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
                                     const heartColor = isFavorite ? 'color: #068487;' : '';
                                     const favoriteTitle = isFavorite ? t('remove-fav') : t('add-fav');
-                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
+                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\',' + (partner.user_id || 'null') + ')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; ' + heartColor + '" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
                                     html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" style="padding: 8px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px;" onmouseover="this.style.background=\'#F6F8FA\'; this.style.borderColor=\'#1F2328\';" onmouseout="this.style.background=\'#FFFFFF\'; this.style.borderColor=\'#D1D9E0\';" title="' + t('send-message') + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/></svg></button>';
