@@ -7050,17 +7050,18 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
             session.close()
 
 
-async def create_post(content: str, user_id: int, session=None, force: bool = False):
+async def create_post(content: str, user_id: int, session=None, force: bool = False, image_url: str = None):
     """
-    📝 ПУБЛИКАЦИЯ ПОСТА В ЛЕНТУ НОВОСТЕЙ
+    📝 ПУБЛИКАЦИЯ ПОСТА В БЛОГ
     
-    Создаёт пост от имени пользователя в общую ленту новостей,
-    которую видят все пользователи платформы.
+    Создаёт пост от имени пользователя в блог платформы,
+    который видят все пользователи.
     
     Args:
         content: Текст поста
         user_id: Telegram ID пользователя
         session: DB сессия
+        image_url: URL картинки (Unsplash или иной)
     """
     close_session = False
     if session is None:
@@ -7092,6 +7093,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             user_id=user.id,
             username=user.username or user.first_name or f"user_{user.telegram_id}",
             content=content.strip(),
+            image_url=(image_url.strip() if image_url and image_url.strip() else None),
             created_at=dt.datetime.now(dt.timezone.utc)
         )
         
@@ -7099,8 +7101,47 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         session.commit()
         
         post_preview = content[:80] + '...' if len(content) > 80 else content
-        logger.info(f"[CREATE_POST] User {user_id} published post #{post.id}: '{post_preview}'")
-        return f"✅ Пост #{post.id} опубликован в ленту новостей!\n\n«{post_preview}»\n\nСсылка на ленту: https://asibiont.com/dashboard"
+        has_img = bool(post.image_url)
+        logger.info(f"[CREATE_POST] User {user_id} published post #{post.id}: '{post_preview}' image={has_img}")
+
+        # ── Кросс-постинг в TG и Discord с той же картинкой ──
+        cross_notes = []
+        try:
+            if getattr(user, 'telegram_channel', None):
+                _tg_result = await publish_to_telegram(
+                    content=content.strip(),
+                    image_url=post.image_url,
+                    user_id=user_id,
+                    session=session,
+                    force=True,
+                )
+                if '✅' in str(_tg_result):
+                    cross_notes.append("📢 TG-канал")
+                else:
+                    cross_notes.append(f"⚠️ TG: {str(_tg_result)[:80]}")
+        except Exception as _tge:
+            logger.warning(f"[CREATE_POST] TG cross-post error: {_tge}")
+        try:
+            if getattr(user, 'discord_webhook', None):
+                _dc_result = await publish_to_discord(
+                    content=content.strip(),
+                    image_url=post.image_url,
+                    user_id=user_id,
+                    session=session,
+                    force=True,
+                )
+                if '✅' in str(_dc_result):
+                    cross_notes.append("🎮 Discord")
+                else:
+                    cross_notes.append(f"⚠️ Discord: {str(_dc_result)[:80]}")
+        except Exception as _dce:
+            logger.warning(f"[CREATE_POST] Discord cross-post error: {_dce}")
+
+        cross_line = (" + " + " + ".join(cross_notes)) if cross_notes else ""
+        return (
+            f"✅ Пост #{post.id} опубликован в блог{cross_line}!{' 🖼' if has_img else ''}\n\n"
+            f"«{post_preview}»\n\nСсылка на блог: https://asibiont.com/dashboard"
+        )
         
     except Exception as e:
         logger.error(f"[CREATE_POST] Error: {e}", exc_info=True)
