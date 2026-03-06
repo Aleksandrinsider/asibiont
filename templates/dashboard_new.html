@@ -2984,10 +2984,10 @@
                                 </button>
                                 ${isArenaActive
                                     ? `<button onclick="mpAgentSetStatus(${a.id},'paused')" class="mp-icon-btn" title="${t('mp-remove-from-arena')}">
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0ZM5.5 5.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75Zm4.25.75a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 1.5 0v-3.5Z"/></svg>
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>
                                       </button>`
                                     : `<button onclick="mpAgentSetStatus(${a.id},'active')" class="mp-icon-btn" title="${t('mp-send-to-arena')}">
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.02-1.97a.75.75 0 0 1 .77-.05l4.5 2.5a.75.75 0 0 1 0 1.32l-4.5 2.5A.75.75 0 0 1 5 11.72V4.28a.75.75 0 0 1 .27-.58Z"/></svg>
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4 2.5a.75.75 0 0 1 1.15-.63l8.5 5.5a.75.75 0 0 1 0 1.26l-8.5 5.5A.75.75 0 0 1 4 13.5v-11Z"/></svg>
                                       </button>`}
                                 ${a.is_subscribed
                                     ? `<button onclick="mpDeactivateAgent(${a.id})" class="mp-action-btn">${t('mp-deactivate')}</button>`
