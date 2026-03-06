@@ -479,7 +479,7 @@ class ExternalAPIClient:
             import asyncio as _aio
 
             def _sync_search():
-                with DDGS(timeout=15) as ddgs:
+                with DDGS(timeout=10) as ddgs:
                     raw = list(ddgs.text(query, region=region, max_results=num))
                     return [{
                         'title': r.get('title', ''),
@@ -491,8 +491,8 @@ class ExternalAPIClient:
             sem = self._get_ddg_semaphore()
 
             # Retry с экспоненциальным backoff при rate limit
-            max_retries = 3
-            base_delay = 3.0  # секунды
+            max_retries = 2
+            base_delay = 2.0  # секунды
             for attempt in range(max_retries):
                 async with sem:
                     # Выдерживаем минимальный интервал между запросами
@@ -505,7 +505,7 @@ class ExternalAPIClient:
                     try:
                         results = await _aio.wait_for(
                             loop.run_in_executor(None, _sync_search),
-                            timeout=25.0
+                            timeout=12.0
                         )
                         self._track_call('ddg')
                         await self.cache.set('ddg', cache_params, results, cache_ttl)
@@ -513,7 +513,7 @@ class ExternalAPIClient:
                         _clr_err('ddg')
                         return results
                     except _aio.TimeoutError:
-                        logger.warning(f"[DDG] Search timeout (25s) for: {query[:50]}")
+                        logger.warning(f"[DDG] Search timeout (12s) for: {query[:50]}")
                         if attempt < max_retries - 1:
                             await _aio.sleep(base_delay * (2 ** attempt))
                             continue
@@ -872,7 +872,7 @@ class ExternalAPIClient:
         
         # Адаптивный тайм-аут: больше токенов = больше времени
         if timeout is None:
-            timeout = 60 if max_tokens > 1000 else 30
+            timeout = 60 if max_tokens > 1000 else (15 if max_tokens <= 300 else 25)
         
         req_timeout = aiohttp.ClientTimeout(total=timeout, connect=5)
         session = await self._get_session()

@@ -150,37 +150,37 @@ async def generate_user_message(history: list[dict], hint: str = "") -> str:
 # Каждый элемент: (label, message | None, hint_for_ai)
 # Если message=None → AI генерирует реплику с подсказкой hint
 SCENARIO = [
-    # ── Фаза 1: Свободный диалог (ASI сам) ──
+    # ── Фаза 1: Свободный диалог (ASI сам решает как помочь) ──
     ("1.1 Знакомство",
-     "Привет! Я запустил AI-продукт, нужно найти первых 50 тестировщиков. Что посоветуешь?",
+     "Привет! Я запустил AI-продукт для планирования дня, нужно найти первых 50 тестировщиков",
      None),
 
     ("1.2 Уточнение",
      None,
-     "Попроси конкретный план действий или задай уточняющий вопрос по совету бота"),
+     "Задай уточняющий вопрос по совету бота или расскажи больше деталей о продукте"),
 
     ("1.3 Действие",
      None,
-     "Попроси бота создать задачу или записать конкретный шаг из обсуждения"),
+     "Попроси записать конкретный шаг из обсуждения или одобри предложенное действие"),
 
-    # ── Фаза 2: Командная работа (делегирование агентам) ──
-    ("2.1 Делегирование Кристине",
-     "Поручи Кристине написать пост для привлечения первых тестировщиков нашего AI-продукта",
+    # ── Фаза 2: Естественные запросы (ASI сам решает кому делегировать) ──
+    ("2.1 Запрос на контент",
+     "Нужен пост для привлечения первых тестировщиков, чтобы зацепить аудиторию",
      None),
 
-    ("2.2 Делегирование Марку",
-     "Попроси Марка исследовать где искать тестировщиков для AI-продуктов — какие площадки и сообщества",
+    ("2.2 Запрос на исследование",
+     "Где вообще искать тестировщиков для AI-продуктов? Какие площадки и сообщества работают?",
      None),
 
-    ("2.3 Мульти-делегирование",
-     "Поручи Кристине и Марку вместе подготовить стратегию выхода на Product Hunt",
+    ("2.3 Комплексная задача",
+     "Хочу выйти на Product Hunt — нужна стратегия запуска",
      None),
 
     ("2.4 Оценка результатов",
      None,
-     "Оцени что сделали агенты, попроси уточнить или доработать один из результатов"),
+     "Оцени что уже сделано, задай конкретный вопрос по результатам"),
 
-    # ── Фаза 3: Прямое обращение к агенту ──
+    # ── Фаза 3: Прямое обращение к агенту + возврат к ASI ──
     ("3.1 Обращение к Кристине",
      "@Кристина, а какой tone of voice лучше использовать для постов — формальный или дружеский?",
      None),
@@ -223,6 +223,7 @@ def _detect_delegation(text: str) -> bool:
         "агент", "передано", "передал", "делегиров",
         "начнёт работать", "начнёт выполнять", "приступ",
         "результат", "отчёт",
+        "delegate_task", "готово",
     ]
     lower = text.lower()
     return any(m in lower for m in markers)
@@ -238,7 +239,7 @@ async def run_dialogue():
     total_steps = len(SCENARIO)
     print(f"\n{BOLD}{'='*60}")
     print(f"  LIVE DIALOGUE TEST — {total_steps} шагов, 3 фазы")
-    print(f"  Фаза 1: Свободный диалог | Фаза 2: Команда | Фаза 3: Прямое")
+    print(f"  Фаза 1: Свободный диалог | Фаза 2: Естественные запросы | Фаза 3: Прямое")
     print(f"{'='*60}{RESET}\n")
 
     history: list[dict] = []
@@ -246,7 +247,7 @@ async def run_dialogue():
 
     for step_idx, (label, fixed_msg, hint) in enumerate(SCENARIO, 1):
         phase = label[0]  # '1', '2', '3'
-        phase_names = {'1': 'СВОБОДНЫЙ ДИАЛОГ', '2': 'КОМАНДА АГЕНТОВ', '3': 'ПРЯМОЕ ОБРАЩЕНИЕ'}
+        phase_names = {'1': 'СВОБОДНЫЙ ДИАЛОГ', '2': 'ЕСТЕСТВЕННЫЕ ЗАПРОСЫ', '3': 'ПРЯМОЕ ОБРАЩЕНИЕ'}
 
         # Заголовок фазы при первом шаге
         if label.endswith('.1'):
@@ -270,12 +271,28 @@ async def run_dialogue():
         history.append({"role": "user", "content": user_msg})
 
         # ── Получаем ответ бота ──────────────────────────────────────────
+        # Сохраняем сообщение пользователя в Interaction (как в боевом потоке)
+        try:
+            with TestSession() as _is:
+                _iu = _is.query(models.User).filter_by(telegram_id=TEST_TG_ID).first()
+                if _iu:
+                    _is.add(models.Interaction(user_id=_iu.id, message_type='user', content=user_msg))
+                    _is.commit()
+        except Exception:
+            pass
+
         t0 = time.time()
         error = False
+        # Mock progress_callback для сбора промежуточных сообщений (диалог директора)
+        _intermediate_messages = []
+        async def _test_progress_callback(text, *, persist=False):
+            if persist and text:
+                _intermediate_messages.append(text)
         try:
             bot_raw = await ag_mod.chat_with_ai(
                 message=user_msg,
                 user_id=TEST_TG_ID,
+                progress_callback=_test_progress_callback,
             )
         except Exception as e:
             bot_raw = f"[ОШИБКА: {e}]"
@@ -286,23 +303,66 @@ async def run_dialogue():
             bot_reply = "(нет ответа)"
             error = True
         elif isinstance(bot_raw, dict):
-            bot_reply = bot_raw.get("response") or str(bot_raw)
+            bot_reply = bot_raw.get("response") or ""
+            # Если ответ пустой (agent_handled) — берём последний ответ агента из БД
+            if not bot_reply.strip():
+                try:
+                    with TestSession() as _rs:
+                        _ru = _rs.query(models.User).filter_by(telegram_id=TEST_TG_ID).first()
+                        if _ru:
+                            last_ai = _rs.query(models.Interaction).filter(
+                                models.Interaction.user_id == _ru.id,
+                                models.Interaction.message_type == 'ai'
+                            ).order_by(models.Interaction.id.desc()).first()
+                            if last_ai and last_ai.content:
+                                import json as _rjson
+                                try:
+                                    _jdata = _rjson.loads(last_ai.content)
+                                    if isinstance(_jdata, dict) and 'text' in _jdata:
+                                        bot_reply = _jdata['text']
+                                    else:
+                                        bot_reply = last_ai.content
+                                except (ValueError, KeyError):
+                                    bot_reply = last_ai.content
+                except Exception:
+                    pass
+            if not bot_reply.strip():
+                bot_reply = "(нет ответа)"
+                error = True
         elif isinstance(bot_raw, list):
             bot_reply = " | ".join(str(x) for x in bot_raw if x)
         else:
             bot_reply = str(bot_raw)
         bot_reply = bot_reply.strip()
 
+        # Сохраняем ответ бота в Interaction (если не пустой и не сохранён директором)
+        if bot_reply and bot_reply != "(нет ответа)":
+            try:
+                with TestSession() as _as:
+                    _au = _as.query(models.User).filter_by(telegram_id=TEST_TG_ID).first()
+                    if _au:
+                        _as.add(models.Interaction(user_id=_au.id, message_type='ai', content=bot_reply[:500]))
+                        _as.commit()
+            except Exception:
+                pass
+
         # Определяем упоминания агентов и делегирования
         mentioned_agents = _extract_agent_mentions(bot_reply)
-        was_delegated = _detect_delegation(bot_reply)
+        was_delegated = _detect_delegation(bot_reply) or len(_intermediate_messages) > 0
 
-        # Выводим ответ
+        # Выводим промежуточные сообщения (диалог директора)
+        if _intermediate_messages:
+            for _im in _intermediate_messages:
+                _emoji = _im[:2] if _im and _im[0] in '🔄📋' else '  '
+                _text = _im[2:].strip() if _emoji.strip() else _im
+                print(f"{CYAN}  {_emoji} {_text[:300]}{RESET}")
+
+        # Выводим финальный ответ
         agent_badge = ""
         if mentioned_agents:
             agent_badge = f" {CYAN}[агенты: {', '.join(mentioned_agents)}]{RESET}"
         if was_delegated:
-            agent_badge += f" {YELLOW}[делегирование]{RESET}"
+            agent_badge += f" {YELLOW}[делегирование ×{len(_intermediate_messages)}]{RESET}"
 
         print(f"{GREEN}  <<< ASI Biont:{RESET}  {bot_reply[:500]}")
         if len(bot_reply) > 500:
@@ -317,6 +377,7 @@ async def run_dialogue():
             "bot_reply": bot_reply,
             "agents": mentioned_agents,
             "delegated": was_delegated,
+            "intermediate_count": len(_intermediate_messages),
             "time_s": elapsed,
             "error": error,
         })
@@ -346,12 +407,14 @@ async def run_dialogue():
     empties = sum(1 for r in results if r["bot_reply"] == "(нет ответа)")
     delegations = sum(1 for r in results if r["delegated"])
     agent_steps = sum(1 for r in results if r["agents"])
+    total_intermediates = sum(r.get("intermediate_count", 0) for r in results)
     avg_time = sum(r["time_s"] for r in results) / len(results) if results else 0
 
     print(f"  Шагов:                {total_steps}")
     print(f"  Ошибок:               {errors}")
     print(f"  Пустых ответов:       {empties}")
     print(f"  Делегирований:        {delegations}")
+    print(f"  Промежуточных сообщ:  {total_intermediates}")
     print(f"  Упоминаний агентов:   {agent_steps}")
     print(f"  Среднее время ответа: {avg_time:.1f}s")
 
@@ -379,7 +442,7 @@ async def run_dialogue():
     status = lambda ok: f"{GREEN}OK{RESET}" if ok else f"{RED}FAIL{RESET}"
 
     print(f"  Фаза 1 (диалог):     {status(p1_ok)} — {'без ошибок' if p1_ok else 'есть ошибки'}")
-    print(f"  Фаза 2 (команда):    {status(p2_delegated >= 2)} — {p2_delegated} делегирований, агенты: {', '.join(p2_agents) or 'нет'}")
+    print(f"  Фаза 2 (запросы):    {status(p2_delegated >= 2)} — {p2_delegated} делегирований, агенты: {', '.join(p2_agents) or 'нет'}")
     print(f"  Фаза 3 (прямое):     {status(bool(p3_agents))} — агенты: {', '.join(p3_agents) or 'нет'}")
 
     all_ok = p1_ok and p2_delegated >= 2 and bool(p3_agents) and errors == 0

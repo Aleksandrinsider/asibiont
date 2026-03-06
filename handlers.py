@@ -952,10 +952,16 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         # Храним ID последнего прогресс-сообщения для обновления
         _progress_state = {'last_msg_id': None}
         
-        async def progress_callback(text):
-            """Отправляет или обновляет прогресс-сообщение в Telegram"""
+        async def progress_callback(text, *, persist=False):
+            """Отправляет или обновляет прогресс-сообщение в Telegram.
+            persist=True — отправить как отдельное постоянное сообщение (для диалога директора).
+            """
             display_text = text or ('Processing...' if lang == 'en' else 'Обрабатываю...')
             try:
+                if persist:
+                    # Директорский диалог: отправляем новое сообщение, НЕ удаляем
+                    await bot.send_message(chat_id, display_text)
+                    return
                 if _progress_state['last_msg_id']:
                     # Обновляем существующее сообщение (не спамим чат)
                     try:

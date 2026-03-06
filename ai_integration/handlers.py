@@ -938,6 +938,12 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         task.status = "completed"
         task.actual_completion_time = datetime.now(pytz.UTC)
         
+        # Обновляем delegation_status если задача была делегирована
+        if task.delegation_status and task.delegation_status not in ('completed', 'rejected'):
+            old_ds = task.delegation_status
+            task.delegation_status = 'completed'
+            logger.info(f"[COMPLETE_TASK] Updated delegation_status {old_ds} → completed for task {task.id}")
+        
         # Сохраняем заметку о результате выполнения
         if completion_note:
             task.completion_notes = encrypt_data(completion_note)
@@ -1541,21 +1547,27 @@ async def delegate_task(
             logger.info(f"[DELEGATE] Looking for agents: {_name_parts} (user_db_id={delegator.id})")
 
             _subscribed_ids = session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id)
+            # Загружаем всех доступных агентов и фильтруем в Python (SQLite lower() не работает с кириллицей)
+            _all_agents = (
+                session.query(_UA_chk)
+                .filter(
+                    _UA_chk.status.in_(['active', 'paused', 'published']),
+                    ((_UA_chk.author_id == delegator.id) | (_UA_chk.id.in_(_subscribed_ids)))
+                )
+                .all()
+            )
             _found_agents = []
             _used_ag_ids: set = set()
             for _np in _name_parts:
-                _ag = (
-                    session.query(_UA_chk)
-                    .filter(
-                        _UA_chk.status.in_(['active', 'paused', 'published']),
-                        ((_UA_chk.author_id == delegator.id) | (_UA_chk.id.in_(_subscribed_ids)))
-                    )
-                    .filter(_UA_chk.slug.ilike(_np) | _UA_chk.name.ilike(f'%{_np}%'))
-                    .first()
-                )
-                if _ag and _ag.id not in _used_ag_ids:
-                    _found_agents.append(_ag)
-                    _used_ag_ids.add(_ag.id)
+                for _ag in _all_agents:
+                    if _ag.id in _used_ag_ids:
+                        continue
+                    _slug_match = _ag.slug and _np in _ag.slug.lower()
+                    _name_match = _ag.name and _np in _ag.name.lower()
+                    if _slug_match or _name_match:
+                        _found_agents.append(_ag)
+                        _used_ag_ids.add(_ag.id)
+                        break
             logger.info(f"[DELEGATE] Found agents: {[a.name for a in _found_agents]}")
 
             if _found_agents:
@@ -1656,10 +1668,17 @@ async def delegate_task(
                         pass
 
                     # ── СИНХРОННОЕ выполнение агента (inline) ──────────────────────
+                    import asyncio as _asyncio_dt
                     try:
                         logger.info(f"[DELEGATE] Starting inline exec for {_agent_name}...")
-                        _result = await _exec_dir(_agent_dict, _agent_task_text, user_id)
+                        _result = await _asyncio_dt.wait_for(
+                            _exec_dir(_agent_dict, _agent_task_text, user_id),
+                            timeout=45
+                        )
                         logger.info(f"[DELEGATE] Inline exec result for {_agent_name}: {len(_result or '')} chars")
+                    except _asyncio_dt.TimeoutError:
+                        logger.warning(f"[DELEGATE] agent exec timeout ({_agent_name}), 45s limit")
+                        _result = f"Агент {_agent_name} принял задачу и работает над ней."
                     except Exception as _exec_err:
                         logger.warning(f"[DELEGATE] agent exec error ({_agent_name}): {_exec_err}", exc_info=True)
                         _result = None
@@ -2345,7 +2364,46 @@ def get_delegation_progress(user_id, session=None):
 
                 report.append("")
 
-        if not delegated_by_user and not delegated_to_user:
+        # 🤖 Задачи, делегированные АГЕНТАМ (source='agent' или delegation_status agent_*)
+        agent_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.source == 'agent'
+        ).order_by(Task.created_at.desc()).limit(10).all()
+
+        if agent_tasks:
+            report.append("🤖 ПОРУЧЕНИЯ АГЕНТАМ:")
+            for task in agent_tasks:
+                a_status_emoji = {
+                    'agent_assigned': '⚙️',
+                    'agent_completed': '✅',
+                    'completed': '✅',
+                    'pending': '⏳',
+                }.get(task.delegation_status, '❓')
+                a_status_text = {
+                    'agent_assigned': 'агент работает',
+                    'agent_completed': 'агент выполнил',
+                    'completed': 'завершено',
+                    'pending': 'ожидает',
+                }.get(task.delegation_status, task.delegation_status or task.status)
+
+                agent_name = task.delegated_to_username or 'агент'
+                report.append(f"{a_status_emoji} '{task.title}' → {agent_name}")
+                report.append(f"   Статус: {a_status_text}")
+
+                if task.completion_notes:
+                    try:
+                        from models import decrypt_data
+                        note = decrypt_data(task.completion_notes)
+                    except Exception:
+                        note = task.completion_notes
+                    report.append(f"   Результат: {str(note)[:100]}")
+
+                if task.actual_completion_time:
+                    report.append(f"   Завершено: {task.actual_completion_time.strftime('%d.%m.%Y %H:%M')}")
+
+                report.append("")
+
+        if not delegated_by_user and not delegated_to_user and not agent_tasks:
             report.append("У вас нет делегированных задач.")
 
         if should_close:

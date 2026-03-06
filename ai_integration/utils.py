@@ -208,8 +208,17 @@ def parse_time_to_datetime(time_text, user_id):
         target_dt = datetime.combine(target_date, target_time)
         target_dt = user_tz.localize(target_dt)
         return target_dt.strftime("%Y-%m-%d %H:%M")
-    # Проверяем просто "в HH:MM"
+    # Проверяем просто "в HH:MM" или "HH:MM"
     simple_time_match = re.search(r"(?:в\s+)?(\d{1,2}):(\d{2})", time_text)
+    if simple_time_match:
+        hour = int(simple_time_match.group(1))
+        minute = int(simple_time_match.group(2))
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            target_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            # Если указанное время уже прошло сегодня — ставим на завтра
+            if target_dt <= now:
+                target_dt += timedelta(days=1)
+            return target_dt.strftime("%Y-%m-%d %H:%M")
     return None
 
 

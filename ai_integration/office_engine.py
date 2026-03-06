@@ -38,7 +38,8 @@ MONITOR_INTERVAL_SEC = (25 * 60, 45 * 60)   # legacy, сохранён для с
 L1_TICK_SEC = 15 * 60                        # тик планировщика L1: каждые 15 мин проверяем due-агентов
 L1_DEFAULT_INTERVAL_SEC = 60 * 60           # дефолтный интервал агента если run_interval_minutes не задан
 OFFICE_INTERVAL_SEC  = (2 * 3600, 4 * 3600) # 2-4 ч между координаторскими сессиями
-SCRIPT_TIMEOUT_SEC   = 18                    # таймаут на один скрипт агента
+from config import API_TIMEOUT_SCRIPT
+SCRIPT_TIMEOUT_SEC   = API_TIMEOUT_SCRIPT    # таймаут на один скрипт агента
 
 
 # ── Telegram bot reference (инъектируется из main.py) ───────────────────────
@@ -490,7 +491,8 @@ class OfficeEngine:
 
     async def start(self):
         self.running = True
-        logger.info("[OFFICE] Living Office Engine started (L1 monitor only)")
+        logger.info("[OFFICE] Living Office Engine started (L1 + L2)")
+        asyncio.create_task(self._level2_coordinator_loop())
         await self._level1_monitor_loop()
 
     async def _level1_monitor_loop(self):
@@ -505,7 +507,7 @@ class OfficeEngine:
             _s = _Db()
             try:
                 _last_run = _s.query(_UA.last_office_run_at).filter(
-                    _UA.status.in_(['active', 'paused']),
+                    _UA.status == 'active',
                     _UA.python_code.isnot(None),
                     _UA.last_office_run_at.isnot(None),
                 ).order_by(_UA.last_office_run_at.desc()).first()
@@ -551,7 +553,7 @@ class OfficeEngine:
                     s.query(UserAgent, UserModel)
                     .join(UserModel, UserModel.id == UserAgent.author_id)
                     .filter(
-                        UserAgent.status.in_(['active', 'paused']),
+                        UserAgent.status == 'active',
                         UserAgent.python_code.isnot(None),
                         UserModel.telegram_id.isnot(None),
                     )
@@ -797,6 +799,261 @@ class OfficeEngine:
         return fallback[:300] if fallback else ""
 
     # ─── Диалог: агент отвечает на реакцию ASI ──────────────────────────────
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Level 2 — Координатор: АСИ смотрит на цели пользователя и назначает задачи агентам
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    async def _level2_coordinator_loop(self):
+        """Каждые 2-4 часа ASI смотрит цели каждого пользователя,
+        сопоставляет с возможностями агентов и назначает конкретные задачи."""
+        await asyncio.sleep(300)  # 5 мин прогрев
+        while self.running:
+            try:
+                await self._run_coordinator_cycle()
+            except Exception as e:
+                logger.error("[OFFICE-L2] cycle error: %s", e)
+            _interval = random.randint(OFFICE_INTERVAL_SEC[0], OFFICE_INTERVAL_SEC[1])
+            logger.info("[OFFICE-L2] next cycle in %.0f hours", _interval / 3600)
+            await asyncio.sleep(_interval)
+
+    async def _run_coordinator_cycle(self):
+        """Один цикл L2: находит пользователей с активными целями + агентами."""
+        from models import (
+            Session as Db, User as UserModel, UserProfile,
+            Goal, UserAgent, AgentSubscription, AgentActivityLog,
+        )
+        s = Db()
+        try:
+            # Находим пользователей с auto_delegation_enabled + активными целями
+            users_with_goals = []
+            profiles = (
+                s.query(UserProfile)
+                .filter(UserProfile.auto_delegation_enabled == True)
+                .limit(50)
+                .all()
+            )
+            for prof in profiles:
+                user = s.query(UserModel).filter_by(id=prof.user_id).first()
+                if not user or not user.telegram_id:
+                    continue
+                if _is_user_night(user):
+                    continue
+                goals = (
+                    s.query(Goal)
+                    .filter_by(user_id=prof.user_id, status='active')
+                    .limit(5)
+                    .all()
+                )
+                if not goals:
+                    continue
+                # Агенты с подпиской
+                sub_ids = [
+                    row.agent_id for row in
+                    s.query(AgentSubscription)
+                    .filter_by(user_id=prof.user_id, is_active=True)
+                    .all()
+                ]
+                agents = (
+                    s.query(UserAgent)
+                    .filter(
+                        UserAgent.id.in_(sub_ids) if sub_ids else UserAgent.author_id == prof.user_id,
+                        UserAgent.status.in_(['active', 'paused']),
+                    )
+                    .limit(10)
+                    .all()
+                ) if sub_ids else (
+                    s.query(UserAgent)
+                    .filter(UserAgent.author_id == prof.user_id, UserAgent.status.in_(['active', 'paused']))
+                    .limit(10)
+                    .all()
+                )
+                if not agents:
+                    continue
+                # Cooldown: не было ли L2-координации за последние 2 часа?
+                from models import Anchor
+                _now = datetime.now(timezone.utc)
+                recent = (
+                    s.query(Anchor)
+                    .filter(
+                        Anchor.user_id == prof.user_id,
+                        Anchor.anchor_type == 'agent_office_update',
+                        Anchor.source.like('l2-coord:%'),
+                        Anchor.created_at >= _now - timedelta(hours=2),
+                    )
+                    .first()
+                )
+                if recent:
+                    continue
+                users_with_goals.append({
+                    'user': user,
+                    'user_db_id': prof.user_id,
+                    'goals': [(g.id, g.title, g.progress_percentage, g.target_date) for g in goals],
+                    'agents': [(a.id, a.name, a.specialization, a.description) for a in agents],
+                })
+        finally:
+            s.close()
+
+        if not users_with_goals:
+            logger.info("[OFFICE-L2] no eligible users")
+            return
+
+        logger.info("[OFFICE-L2] processing %d users", len(users_with_goals))
+        for entry in users_with_goals:
+            try:
+                await self._coordinate_user_goals(entry)
+            except Exception as e:
+                logger.warning("[OFFICE-L2] user %d error: %s", entry['user_db_id'], e)
+            await asyncio.sleep(3)
+
+    async def _coordinate_user_goals(self, entry: dict):
+        """ASI анализирует цели и назначает задачу одному агенту."""
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        import aiohttp
+
+        user = entry['user']
+        user_db_id = entry['user_db_id']
+        goals = entry['goals']
+        agents = entry['agents']
+
+        goals_text = "\n".join(
+            f"- {title} [{progress or 0}%]"
+            + (f" (дедлайн {target_date.strftime('%d.%m.%Y')})" if target_date else "")
+            for gid, title, progress, target_date in goals
+        )
+        agents_text = "\n".join(
+            f"- {name} ({spec or 'специалист'}): {(desc or '')[:100]}"
+            for aid, name, spec, desc in agents
+        )
+
+        # Загрузим недавнюю активность чтобы не дублировать
+        from models import Session as Db, AgentActivityLog
+        s = Db()
+        try:
+            _now = datetime.now(timezone.utc)
+            recent_acts = (
+                s.query(AgentActivityLog)
+                .filter(
+                    AgentActivityLog.user_id == user_db_id,
+                    AgentActivityLog.created_at >= _now - timedelta(hours=6),
+                )
+                .order_by(AgentActivityLog.created_at.desc())
+                .limit(8)
+                .all()
+            )
+            activity_text = "\n".join(
+                f"- {a.target}: {a.title[:60]} ({a.status})"
+                for a in recent_acts
+            ) if recent_acts else "(нет недавней активности)"
+        finally:
+            s.close()
+
+        prompt = (
+            "Ты — ASI-координатор. Проанализируй цели пользователя и его агентов.\n"
+            "Если есть конкретное действие, которое агент может сделать прямо сейчас "
+            "для продвижения цели — назначь его. Если всё в порядке — скажи wait.\n\n"
+            f"ЦЕЛИ:\n{goals_text}\n\n"
+            f"АГЕНТЫ:\n{agents_text}\n\n"
+            f"АКТИВНОСТЬ ЗА 6Ч:\n{activity_text}\n\n"
+            "Ответь JSON (без ```):\n"
+            '{"action": "delegate", "agent_name": "имя", "task": "конкретная задача", "goal": "для какой цели"}\n'
+            'или {"action": "wait", "reason": "почему"}\n'
+            "Не повторяй то, что уже делалось за 6ч. Ответь ТОЛЬКО JSON."
+        )
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                    json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
+                          "max_tokens": 200, "temperature": 0.3},
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning("[OFFICE-L2] API error: %d", resp.status)
+                        return
+                    data = await resp.json()
+                    answer = data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.warning("[OFFICE-L2] AI call error: %s", e)
+            return
+
+        import json as _json
+        import re as _re
+        _jm = _re.search(r'\{[\s\S]*\}', answer)
+        try:
+            plan = _json.loads(_jm.group(0) if _jm else answer)
+        except Exception:
+            logger.debug("[OFFICE-L2] JSON parse failed: %s", answer[:100])
+            return
+
+        action = plan.get('action', 'wait')
+        if action == 'wait':
+            logger.info("[OFFICE-L2] user=%d: wait — %s", user_db_id, plan.get('reason', '')[:60])
+            return
+
+        if action != 'delegate':
+            return
+
+        agent_name = plan.get('agent_name', '')
+        task = plan.get('task', '')
+        goal_text = plan.get('goal', '')
+        if not agent_name or not task:
+            return
+
+        # Находим агента
+        agent_match = next(
+            (a for a in agents if a[1] and a[1].lower() == agent_name.lower()),
+            next((a for a in agents if a[1] and agent_name.lower() in a[1].lower()), None)
+        )
+        if not agent_match:
+            logger.debug("[OFFICE-L2] agent not found: %s", agent_name)
+            return
+
+        agent_id, agent_name_db, agent_spec, agent_desc = agent_match
+
+        # Создаём задачу-делегирование + якорь + лог
+        _auto_delegate_to_agent_sync(user_db_id, agent_id, agent_name_db, task[:200])
+
+        # Якорь координации (cooldown 2ч)
+        _now = datetime.now(timezone.utc)
+        _save_office_anchor_sync(
+            user_db_id, agent_name_db,
+            f"L2: поручил «{task[:80]}» для цели «{goal_text[:60]}»"
+        )
+
+        # Дополнительный якорь для cooldown-проверки L2
+        from models import Session as Db2, Anchor, AnchorPriority
+        s2 = Db2()
+        try:
+            s2.add(Anchor(
+                user_id=user_db_id,
+                anchor_type='agent_office_update',
+                source=f'l2-coord:{_now.strftime("%Y-%m-%d-%H")}',
+                topic=f'L2: {agent_name_db} → {task[:60]}',
+                priority=AnchorPriority.LOW,
+                data=_json.dumps(plan, ensure_ascii=False),
+                triggered_at=_now,
+                expires_at=_now + timedelta(hours=8),
+                cooldown_hours=2,
+                batch_group='integration',
+            ))
+            s2.commit()
+        except Exception:
+            s2.rollback()
+        finally:
+            s2.close()
+
+        # Логируем
+        _log_agent_activity_sync(
+            user_db_id, agent_name_db, agent_id,
+            f'L2 координация: {task[:120]}',
+            f'Цель: {goal_text}. Задача: {task}',
+            activity_type='delegation',
+        )
+
+        logger.info("[OFFICE-L2] user=%d: delegated to %s: %s", user_db_id, agent_name_db, task[:60])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

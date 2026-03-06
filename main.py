@@ -11853,6 +11853,7 @@ async def start_auto_post_service(app):
     except Exception as e:
         logger.warning(f"Auto-post service startup error: {e}")
 
+
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)

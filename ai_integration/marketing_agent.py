@@ -198,9 +198,40 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         }
         config = depth_config.get(depth, depth_config['full'])
         
+        # Загружаем профиль пользователя для адаптивного контекста
+        _user_context_str = ""
+        if user_id:
+            try:
+                from models import User as _RU, UserProfile as _RUP
+                _r_session = session
+                _r_close = False
+                if _r_session is None:
+                    from models import Session as _RS
+                    _r_session = _RS()
+                    _r_close = True
+                _r_user = _r_session.query(_RU).filter_by(telegram_id=user_id).first()
+                if _r_user:
+                    _r_profile = _r_session.query(_RUP).filter_by(user_id=_r_user.id).first()
+                    if _r_profile:
+                        _ctx_parts = []
+                        if _r_profile.goals:
+                            _ctx_parts.append(f"Цели: {_r_profile.goals[:150]}")
+                        if _r_profile.interests:
+                            _ctx_parts.append(f"Интересы: {_r_profile.interests[:150]}")
+                        if _r_profile.skills:
+                            _ctx_parts.append(f"Навыки: {_r_profile.skills[:100]}")
+                        if _r_profile.bio:
+                            _ctx_parts.append(f"Профиль: {_r_profile.bio[:100]}")
+                        if _ctx_parts:
+                            _user_context_str = "\nКОНТЕКСТ ПОЛЬЗОВАТЕЛЯ: " + "; ".join(_ctx_parts) + "\nУчитывай цели и интересы пользователя при анализе — делай выводы релевантными для него.\n"
+                if _r_close:
+                    _r_session.close()
+            except Exception as _uce:
+                logger.warning(f"[RESEARCH] Failed to load user context: {_uce}")
+
         # Поиск + AI-анализ через единый клиент
         prompt = f"""Комплексный анализ темы: "{{query}}"
-
+{_user_context_str}
 ДАННЫЕ:
 {{context}}
 
@@ -221,6 +252,7 @@ async def research_topic(query, depth="full", user_id=None, session=None):
 - Извлекай КОНКРЕТНЫЕ данные, цифры, названия, даты из источников. Не пиши общие фразы вроде "растущий рынок" — пиши "рынок $X в 2024, рост Y%".
 - В "sources" указывай РЕАЛЬНЫЕ URL-адреса из предоставленных данных."""
 
+        _research_timeout = 20.0 if depth == 'basic' else 30.0
         try:
             result = await asyncio.wait_for(
                 api.search_and_analyze(
@@ -230,10 +262,10 @@ async def research_topic(query, depth="full", user_id=None, session=None):
                     max_tokens=config['max_tokens'],
                     cache_ttl=config['cache_ttl']
                 ),
-                timeout=40.0
+                timeout=_research_timeout
             )
         except asyncio.TimeoutError:
-            logger.warning(f"[RESEARCH] search_and_analyze timeout (40s) for '{query}'")
+            logger.warning(f"[RESEARCH] search_and_analyze timeout ({_research_timeout}s) for '{query}'")
             return {
                 'success': False,
                 'error': 'timeout',

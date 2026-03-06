@@ -453,6 +453,7 @@ class Anchor(Base):
     __table_args__ = (
         Index('ix_anchors_user_delivered', 'user_id', 'delivered_at'),  # deliverable lookup
         Index('ix_anchors_user_type_delivered', 'user_id', 'anchor_type', 'delivered_at'),  # cooldown check
+        Index('ix_anchors_user_type_source', 'user_id', 'anchor_type', 'source'),  # dedup check
     )
 
     def is_expired(self):
@@ -822,6 +823,7 @@ class AgentActivityLog(Base):
 
     __table_args__ = (
         Index('ix_agent_activity_user_type', 'user_id', 'activity_type'),
+        Index('ix_agent_activity_user_created', 'user_id', 'created_at'),
     )
 
 

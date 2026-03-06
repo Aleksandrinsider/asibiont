@@ -198,6 +198,9 @@ class AnchorEngine:
         self.running = True
         self._cycle_counter = 0
         logger.info(f"[ANCHOR] 🚀 Starting scan loop (every {SCAN_INTERVAL_MINUTES}min)")
+        # Стартовая задержка: даём серверу прогреться перед первым сканированием.
+        # Это предотвращает лавину якорей / уведомлений сразу после деплоя.
+        await asyncio.sleep(120)
         while self.running:
             try:
                 import time as _time
@@ -544,17 +547,25 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ после is_deliverable() — 0 ready (expired/suppressed)")
             return
 
-        # ── STALENESS CHECK: задача могла быть выполнена/удалена после создания якоря ──
+        # ── STALENESS CHECK: задача/цель могла быть выполнена/удалена после создания якоря ──
         task_anchor_types = {'task_overdue', 'task_deadline_soon', 'task_stale', 'task_reminder', 'task_result_check'}
+        goal_anchor_types = {'goal_stagnation', 'goal_progress', 'goal_deadline', 'goal_decomposition'}
         # Batch-load all referenced tasks (avoid N+1 per anchor)
         _stale_tids = []
+        _stale_gids = []
         for _sa in ready:
             if _sa.anchor_type in task_anchor_types and _sa.source and _sa.source.startswith('task:'):
                 try:
                     _stale_tids.append(int(_sa.source.split(':')[1]))
                 except (ValueError, IndexError):
                     pass
+            elif _sa.anchor_type in goal_anchor_types and _sa.source and _sa.source.startswith('goal:'):
+                try:
+                    _stale_gids.append(int(_sa.source.split(':')[1]))
+                except (ValueError, IndexError):
+                    pass
         _src_task_by_id = {t.id: t for t in session.query(Task).filter(Task.id.in_(_stale_tids)).all()} if _stale_tids else {}
+        _src_goal_by_id = {g.id: g for g in session.query(Goal).filter(Goal.id.in_(_stale_gids)).all()} if _stale_gids else {}
         stale_ids = []
         for a in ready:
             if a.anchor_type in task_anchor_types and a.source and a.source.startswith('task:'):
@@ -565,6 +576,15 @@ class AnchorEngine:
                 src_task = _src_task_by_id.get(tid)
                 if not src_task or src_task.status in ('completed', 'deleted', 'cancelled'):
                     a.delivered_at = datetime.now(timezone.utc)  # auto-expire
+                    stale_ids.append(a.id)
+            elif a.anchor_type in goal_anchor_types and a.source and a.source.startswith('goal:'):
+                try:
+                    gid = int(a.source.split(':')[1])
+                except (ValueError, IndexError):
+                    continue
+                src_goal = _src_goal_by_id.get(gid)
+                if not src_goal or src_goal.status in ('completed', 'paused', 'cancelled', 'deleted'):
+                    a.delivered_at = datetime.now(timezone.utc)
                     stale_ids.append(a.id)
         if stale_ids:
             session.commit()
@@ -2328,22 +2348,25 @@ class AnchorEngine:
             # Получаем уже привлечённых (чтобы не повторяться)
             already_usernames = _dc_delegated_by_camp.get(campaign.id, set())
 
-            # Ищем пользователей по interests/skills/bio
+            # Ищем пользователей по interests/skills/bio/goals/city/position
             from sqlalchemy import or_
-            keywords = [w.strip().lower() for w in target_desc.replace(',', ' ').replace(';', ' ').split() if len(w.strip()) > 3][:10]
+            keywords = [w.strip().lower() for w in target_desc.replace(',', ' ').replace(';', ' ').split() if len(w.strip()) > 2][:15]
 
             candidates = []
             if keywords:
                 filters = []
-                for kw in keywords[:5]:
+                for kw in keywords[:8]:
                     filters.append(UserProfile.interests.ilike(f'%{kw}%'))
                     filters.append(UserProfile.skills.ilike(f'%{kw}%'))
                     filters.append(UserProfile.bio.ilike(f'%{kw}%'))
+                    filters.append(UserProfile.goals.ilike(f'%{kw}%'))
+                    filters.append(UserProfile.city.ilike(f'%{kw}%'))
+                    filters.append(UserProfile.position.ilike(f'%{kw}%'))
 
                 profiles = session.query(UserProfile).join(User).filter(
                     User.id != user.id,
                     or_(*filters),
-                ).limit(20).all()
+                ).limit(30).all()
 
                 # Pre-fetch all profile users (batch, avoid N+1)
                 if profiles:
@@ -2361,7 +2384,7 @@ class AnchorEngine:
                         continue
                     # Скоринг
                     score = 0
-                    profile_text = f"{(p.interests or '').lower()} {(p.skills or '').lower()} {(p.bio or '').lower()}"
+                    profile_text = f"{(p.interests or '').lower()} {(p.skills or '').lower()} {(p.bio or '').lower()} {(p.goals or '').lower()} {(p.city or '').lower()} {(p.position or '').lower()}"
                     for kw in keywords:
                         if kw in profile_text:
                             score += 1
@@ -2371,7 +2394,24 @@ class AnchorEngine:
                 candidates.sort(key=lambda x: -x[1])
 
             if not candidates:
-                logger.debug(f"[ANCHOR] Delegation campaign #{campaign.id}: no candidates found")
+                # Fallback: если по ключевым словам никого не нашли — берём любого
+                # активного пользователя, которому ещё не делегировали в этой кампании
+                try:
+                    fallback_users = session.query(User).filter(
+                        User.id != user.id,
+                        User.username.isnot(None),
+                        User.telegram_id.isnot(None),
+                    ).limit(20).all()
+                    for fu in fallback_users:
+                        if fu.username and fu.username.lower() not in already_usernames:
+                            candidates.append((fu, 0))
+                    if candidates:
+                        logger.info(f"[ANCHOR] Delegation campaign #{campaign.id}: no keyword match, using fallback candidates ({len(candidates)})")
+                except Exception as _fb_e:
+                    logger.debug(f"[ANCHOR] Delegation campaign #{campaign.id} fallback error: {_fb_e}")
+
+            if not candidates:
+                logger.info(f"[ANCHOR] Delegation campaign #{campaign.id} «{campaign.name}»: no candidates found (target: {target_desc[:100]})")
                 continue
 
             # Берём лучшего кандидата
@@ -5268,7 +5308,7 @@ class AnchorEngine:
             from models import UserAgent
             agents = session.query(UserAgent).filter(
                 UserAgent.author_id == user.id,
-                UserAgent.status.in_(['active', 'paused']),
+                UserAgent.status == 'active',
                 UserAgent.custom_anchors.isnot(None),
             ).all()
 
