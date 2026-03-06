@@ -5232,7 +5232,13 @@ class AnchorEngine:
                     topic = entry.get('topic') or f'Агент {agent.name}: кастомный якорь'
                     anchor_type = entry.get('anchor_type') or 'custom_anchor'
                     priority_str = str(entry.get('priority', 'MEDIUM')).upper()
-                    cooldown_h = float(entry.get('cooldown_hours', 20))
+                    # Cooldown соответствует настройке частоты агента (run_interval_minutes).
+                    # Пользователь задаёт интервал при создании агента — он же задаёт
+                    # частоту отчётов. Значение из custom_anchors является fallback.
+                    if agent.run_interval_minutes and agent.run_interval_minutes > 0:
+                        cooldown_h = agent.run_interval_minutes / 60.0
+                    else:
+                        cooldown_h = float(entry.get('cooldown_hours', 20))
                     schedule_time = entry.get('schedule_time')  # "HH:MM"
 
                     # Проверяем расписание: окно ±29 мин от schedule_time

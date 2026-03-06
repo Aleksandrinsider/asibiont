@@ -19,6 +19,10 @@ from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY
 
 logger = logging.getLogger(__name__)
 
+# Множество user_id для которых сейчас активен ASI-обзор отчёта агента.
+# Предотвращает бесконечную рекурсию: отчёт → ASI → делегирование → отчёт → ...
+_ASI_REPORT_REVIEW_ACTIVE: set = set()
+
 # ── Email validation cache ──
 _mx_cache = {}  # domain → (has_mx: bool, timestamp)
 
@@ -1594,6 +1598,35 @@ def delegate_task(
                         session.rollback()
                     except Exception:
                         pass
+                # Создаём Task-поручение агенту — видно в списке задач пользователя
+                _agent_task_id = None
+                try:
+                    _agent_task_obj = Task(
+                        user_id=delegator.id,
+                        title=title,
+                        description=encrypt_data(description) if description else None,
+                        status='delegated',
+                        delegated_to_username=_agent_recipient.name,
+                        delegation_status='agent_assigned',
+                        delegation_details=delegation_details or '',
+                        source='agent',
+                        created_by_agent_id=_agent_recipient.id,
+                    )
+                    if reminder_time:
+                        try:
+                            _agent_task_obj.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                        except ValueError:
+                            pass
+                    session.add(_agent_task_obj)
+                    session.commit()
+                    _agent_task_id = _agent_task_obj.id
+                    logger.info(f"[DELEGATE] Agent task created id={_agent_task_id} for agent {_agent_recipient.name}")
+                except Exception as _task_err:
+                    logger.warning(f"[DELEGATE] agent task create error: {_task_err}")
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
                 # Запускаем агента асинхронно в работающем event loop aiogram
                 try:
                     import asyncio as _aio
@@ -1601,7 +1634,7 @@ def delegate_task(
                     from .autonomous_agent import _save_interaction_for_director as _save_ifd
                     import json as _json_ag
 
-                    async def _run_and_report(agent_dict, task_text, uid, agent_name, tg_id):
+                    async def _run_and_report(agent_dict, task_text, uid, agent_name, tg_id, task_id=None):
                         try:
                             # Показываем пользователю текст поручения ПЕРЕД тем как агент начнёт
                             _assign_preview = _json_ag.dumps({
@@ -1616,6 +1649,21 @@ def delegate_task(
 
                             result = await _exec_dir(agent_dict, task_text, uid)
                             if not result or not result.strip():
+                                # Агент вернул пустой ответ — отмечаем поручение как требующее доработки
+                                if task_id:
+                                    try:
+                                        from models import Session as _Sess_nr, Task as _Task_nr
+                                        _snr = _Sess_nr()
+                                        try:
+                                            _snr.query(_Task_nr).filter_by(id=task_id).update(
+                                                {'delegation_status': 'needs_rework', 'status': 'pending'},
+                                                synchronize_session=False
+                                            )
+                                            _snr.commit()
+                                        finally:
+                                            _snr.close()
+                                    except Exception as _nre:
+                                        logger.debug(f"[DELEGATE] needs_rework update error: {_nre}")
                                 return
 
                             # Очищаем DSML-теги из ответа агента
@@ -1635,6 +1683,29 @@ def delegate_task(
                                 'text': result,
                             }, ensure_ascii=False)
                             _save_ifd(uid, _ac)
+
+                            # Закрываем Task-поручение как выполненное
+                            if task_id:
+                                try:
+                                    from models import Session as _Sess_tc, Task as _Task_tc
+                                    from datetime import datetime as _dt_tc, timezone as _tz_tc
+                                    _stc = _Sess_tc()
+                                    try:
+                                        _stc.query(_Task_tc).filter_by(id=task_id).update(
+                                            {
+                                                'status': 'completed',
+                                                'delegation_status': 'agent_completed',
+                                                'actual_completion_time': _dt_tc.now(_tz_tc.utc),
+                                                'completion_notes': encrypt_data(result[:500]),
+                                            },
+                                            synchronize_session=False
+                                        )
+                                        _stc.commit()
+                                    finally:
+                                        _stc.close()
+                                except Exception as _tce:
+                                    logger.debug(f"[DELEGATE] task close error: {_tce}")
+
                             # Отправляем отчёт субагента в Telegram
                             _bot = None
                             try:
@@ -1646,10 +1717,39 @@ def delegate_task(
                                     )
                             except Exception as _te:
                                 logger.debug(f"[DELEGATE] tg send error: {_te}")
-                            # ASI не комментирует каждый отчёт агента автоматически:
-                            # это создавало дублирующий пересказ и ошибочное создание задач
-                            # из содержимого report-а. Пользователь видит отчёт агента
-                            # напрямую — этого достаточно.
+
+                            # ASI читает отчёт и может дать новое поручение другому агенту.
+                            # add_task/update_task/complete_task запрещены — только delegate_task.
+                            # Анти-рекурсия: если ASI-обзор уже активен для этого user — пропускаем.
+                            if uid not in _ASI_REPORT_REVIEW_ACTIVE:
+                                _ASI_REPORT_REVIEW_ACTIVE.add(uid)
+                                try:
+                                    from .autonomous_agent import chat_with_ai as _chat_fn
+                                    _trigger = (
+                                        f"[AGENT_REPORT] Агент «{agent_name}» выполнил задачу и прислал отчёт.\n"
+                                        f"ПРАВИЛА: НЕ СОЗДАВАЙ ЗАДАЧИ ПОЛЬЗОВАТЕЛЮ. "
+                                        f"НЕ ДЕЛЕГИРУЙ ОБРАТНО АГЕНТУ «{agent_name}» — он только что отчитался. "
+                                        f"Если логично — дай поручение ДРУГОМУ агенту. Иначе ничего не делай.\n\n"
+                                        f"{result[:1200]}"
+                                    )
+                                    _asi_reply = await _chat_fn(
+                                        message=_trigger,
+                                        user_id=uid,
+                                        exclude_tools={'add_task', 'update_task', 'complete_task'},
+                                    )
+                                    # Показываем текстовый ответ ASI ТОЛЬКО если он что-то реально делегировал
+                                    if _asi_reply:
+                                        _used = (_asi_reply.get('tools_used', []) if isinstance(_asi_reply, dict) else [])
+                                        if 'delegate_task' in _used:
+                                            _asi_text = (
+                                                _asi_reply.get('response', '') if isinstance(_asi_reply, dict) else ''
+                                            ).strip()
+                                            if _asi_text and _bot and tg_id:
+                                                await _bot.send_message(tg_id, f"📎 {_asi_text[:800]}")
+                                except Exception as _aer:
+                                    logger.debug(f"[DELEGATE] asi follow-up error: {_aer}")
+                                finally:
+                                    _ASI_REPORT_REVIEW_ACTIVE.discard(uid)
                         except Exception as _re:
                             logger.warning(f"[DELEGATE] agent run error: {_re}")
 
@@ -1657,6 +1757,7 @@ def delegate_task(
                         _run_and_report(
                             _agent_dict, _agent_task_text, user_id,
                             _agent_recipient.name, delegator.telegram_id,
+                            task_id=_agent_task_id,
                         )
                     )
                 except Exception as _async_err:
@@ -2737,6 +2838,12 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                     delegation_status_text = " принято"
                 elif task.delegation_status == "rejected":
                     delegation_status_text = " отклонено"
+                elif task.delegation_status == "agent_assigned":
+                    delegation_status_text = " выполняет агент"
+                elif task.delegation_status == "agent_completed":
+                    delegation_status_text = " выполнено агентом"
+                elif task.delegation_status == "needs_rework":
+                    delegation_status_text = " требует доработки"
                 
                 result += f"'{task.title}' от {delegator_info}{delegation_status_text}"
                 if i < len(delegated_to_me[:3]) - 1:

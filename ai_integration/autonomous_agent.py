@@ -1769,7 +1769,8 @@ class HybridAutonomousAgent:
 
     async def process_request(self, user_message, user_id, context=None,
                               session=None, subscription_tier=None,
-                              progress_callback=None, web_context: bool = False):
+                              progress_callback=None, web_context: bool = False,
+                              exclude_tools: set = None):
         """
         Адаптивный tool calling loop:
         1. Собираем контекст (1 запрос к БД)
@@ -2261,6 +2262,9 @@ class HybridAutonomousAgent:
 
             # Smart tool filtering — reduce tokens sent to API
             tools_to_exclude = self._select_tools_for_message(user_message)
+            # Дополнительные запрещённые инструменты от вызывающего кода (напр. при обзоре отчита агента)
+            if exclude_tools:
+                tools_to_exclude = tools_to_exclude | set(exclude_tools)
             # run_agent_action доступен только когда активен агент со скриптом
             _cur_agent = self._active_agent_data.get(user_id)
             if not _cur_agent or not _cur_agent.get('python_code', '').strip():
@@ -4779,7 +4783,8 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                        db_session=None, message_type=None, subscription_tier=None,
-                       progress_callback=None, web_context: bool = False):
+                       progress_callback=None, web_context: bool = False,
+                       exclude_tools: set = None):
     """Главная точка входа. Совместима со всеми вызовами в проекте."""
     logger.info(f"[AGENT] START user={user_id} msg='{str(message)[:50]}...'")
 
@@ -4821,7 +4826,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         response_text = await agent.process_request(
             message, user_id, context, db_session,
             subscription_tier, progress_callback=progress_callback,
-            web_context=web_context)
+            web_context=web_context, exclude_tools=exclude_tools)
 
         # Нормализуем переносы: \n\n → \n, иначе пустые строки в Telegram-чате
         if response_text and isinstance(response_text, str):
