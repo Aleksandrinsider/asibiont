@@ -2992,7 +2992,21 @@
                     body: JSON.stringify({status})
                 });
                 const data = await r.json();
-                if (data.success) { mpLoadMy(); mpShowStatus(t('mp-status-updated'), '#ECFDF5', '#059669'); }
+                if (data.success) {
+                    mpLoadMy();
+                    mpShowStatus(t('mp-status-updated'), '#ECFDF5', '#059669');
+                    // Если агент ставится на паузу — убираем его из бара активных агентов
+                    if (status === 'paused') {
+                        // Удаляем из памяти на сервере
+                        fetch('/api/marketplace/agents/' + id + '/activate', {method: 'DELETE'}).catch(() => {});
+                        // Удаляем локально
+                        if (window._activeAgentData && window._activeAgentData.id === id) window._activeAgentData = null;
+                        if (window._activeAgentsData) window._activeAgentsData = window._activeAgentsData.filter(a => a.id !== id);
+                        updateActiveAgentsBar();
+                        lastProfileUpdate = 0;
+                        setTimeout(() => updateProfile(), 300);
+                    }
+                }
                 else mpShowStatus(data.error || t('err-word'), '#FEF2F2', '#DC2626');
             } catch(e) { mpShowStatus(t('err-prefix') + ' ' + (e?.message || String(e) || t('err-word')), '#FEF2F2', '#DC2626'); }
         }
@@ -12262,6 +12276,9 @@ except Exception as e:
                     if (_mpAgentsCache[agentId]) _mpAgentsCache[agentId].is_subscribed = false;
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
+                    // Принудительно синхронизируем бар с сервером (сбрасываем lastProfileUpdate чтобы разрешить вызов)
+                    lastProfileUpdate = 0;
+                    setTimeout(() => updateProfile(), 300);
                 } else {
                     showNotification(data.error || 'Ошибка деактивации', 'error');
                 }

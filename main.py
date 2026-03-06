@@ -8812,7 +8812,7 @@ async def api_profile_handler(request):
             _agents_list = []
             for _aid in _all_aids:
                 _ag = session_db.query(_UA_p).filter_by(id=_aid).first()
-                if _ag:
+                if _ag and _ag.status != 'disabled':
                     _agents_list.append({
                         'id': _ag.id,
                         'name': _ag.name or '',
@@ -10875,9 +10875,9 @@ async def api_marketplace_agent_status_handler(request):
             # Синхронизируем с активными агентами в памяти пользователя (для @mention роутинга)
             try:
                 from ai_integration.user_agents import set_user_active_agent as _sua_st, remove_user_active_agent as _rua_st
-                if new_status in ('active', 'paused'):
+                if new_status == 'active':
                     _sua_st(user_id, agent.id)
-                else:  # disabled
+                else:  # paused или disabled — убираем из активных
                     _rua_st(user_id, agent.id)
             except Exception as _sue:
                 logger.debug(f"[AGENT_STATUS] sync active agent error: {_sue}")
