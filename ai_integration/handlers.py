@@ -1646,27 +1646,10 @@ def delegate_task(
                                     )
                             except Exception as _te:
                                 logger.debug(f"[DELEGATE] tg send error: {_te}")
-                            # ASI читает отчёт и отвечает прямо в чате
-                            try:
-                                from .autonomous_agent import chat_with_ai as _chat_fn
-                                _trigger = (
-                                    f"[Агент {agent_name} выполнил задачу и прислал отчёт — НЕ СОЗДАВАЙ ЗАДАЧИ И НЕ ДЕЛЕГИРУЙ, только прокомментируй как директор]\n\n"
-                                    f"{result[:1200]}"
-                                )
-                                _asi_reply = await _chat_fn(message=_trigger, user_id=uid)
-                                if _asi_reply:
-                                    _asi_text = (
-                                        _asi_reply.get('response', str(_asi_reply))
-                                        if isinstance(_asi_reply, dict)
-                                        else str(_asi_reply)
-                                    ).strip()
-                                    if _asi_text:
-                                        # Сохраняем ответ ASI в историю
-                                        _save_ifd(uid, _asi_text)
-                                        if _bot and tg_id:
-                                            await _bot.send_message(tg_id, _asi_text[:1500])
-                            except Exception as _reply_err:
-                                logger.debug(f"[DELEGATE] asi reply error: {_reply_err}")
+                            # ASI не комментирует каждый отчёт агента автоматически:
+                            # это создавало дублирующий пересказ и ошибочное создание задач
+                            # из содержимого report-а. Пользователь видит отчёт агента
+                            # напрямую — этого достаточно.
                         except Exception as _re:
                             logger.warning(f"[DELEGATE] agent run error: {_re}")
 

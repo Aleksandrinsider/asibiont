@@ -3149,15 +3149,22 @@ class AnchorEngine:
     # ═══════════════════════════════════════════════════════
 
     def _apply_cooldowns(self, anchors: list, user, session) -> list:
-        """Фильтрует якоря по cooldown — один батч-запрос вместо N отдельных"""
+        """Фильтрует якоря по cooldown — один батч-запрос вместо N отдельных.
+
+        Cooldown проверяется по source (точный ключ якоря) — это позволяет
+        каждому агенту/источнику иметь независимый cooldown. Если source не
+        совпадает ни с одной записью, используется fallback по anchor_type
+        (для якорей без уникального source).
+        """
         now_utc = datetime.now(timezone.utc)
         result = []
 
-        # Один запрос: все недавние доставки этого пользователя по типам
+        # Один запрос: все недавние доставки этого пользователя
         # Берём max cooldown из списка якорей чтобы покрыть все 
         max_cooldown = max((a.cooldown_hours if a.cooldown_hours is not None and a.cooldown_hours > 0 else PRIORITY_COOLDOWN.get(a.priority, 4)) for a in anchors) if anchors else 8
         recent_deliveries = session.query(
             Anchor.anchor_type,
+            Anchor.source,
             Anchor.delivered_at
         ).filter(
             Anchor.user_id == user.id,
@@ -3165,20 +3172,36 @@ class AnchorEngine:
             Anchor.delivered_at >= now_utc - timedelta(hours=max_cooldown)
         ).all()
 
-        # Индексируем: тип → последняя доставка
-        last_delivery_by_type = {}
-        for atype, delivered_at in recent_deliveries:
+        # Индексируем по source (точный ключ) и по anchor_type (fallback)
+        last_delivery_by_source: dict = {}
+        last_delivery_by_type: dict = {}
+        for atype, asource, delivered_at in recent_deliveries:
+            if asource and (asource not in last_delivery_by_source or delivered_at > last_delivery_by_source[asource]):
+                last_delivery_by_source[asource] = delivered_at
             if atype not in last_delivery_by_type or delivered_at > last_delivery_by_type[atype]:
                 last_delivery_by_type[atype] = delivered_at
 
         for anchor in anchors:
             cooldown_h = anchor.cooldown_hours if anchor.cooldown_hours is not None and anchor.cooldown_hours > 0 else PRIORITY_COOLDOWN.get(anchor.priority, 4)
-            last_delivered = last_delivery_by_type.get(anchor.anchor_type)
+
+            # Приоритет: per-source cooldown → per-type fallback
+            # Якоря агентов (source=agent:{id}:custom:{entry}) получают независимый cooldown
+            if anchor.source and anchor.source in last_delivery_by_source:
+                last_delivered = last_delivery_by_source[anchor.source]
+            else:
+                # Для якорей без уникального source — используем type-based cooldown
+                # НО только для типов, которые НЕ являются кастомными агентными якорями
+                if anchor.source and anchor.source.startswith('agent:'):
+                    # Агентный якорь — cooldown сбросился (нет записи по этому source) → пропускаем
+                    last_delivered = None
+                else:
+                    last_delivered = last_delivery_by_type.get(anchor.anchor_type)
+
             if last_delivered:
                 if last_delivered.tzinfo is None:
                     last_delivered = last_delivered.replace(tzinfo=timezone.utc)
                 if last_delivered >= now_utc - timedelta(hours=cooldown_h):
-                    logger.debug(f"[ANCHOR] Cooldown: {anchor.anchor_type} (last delivered {last_delivered})")
+                    logger.debug(f"[ANCHOR] Cooldown: {anchor.anchor_type} source={anchor.source} (last delivered {last_delivered})")
                     continue
 
             result.append(anchor)
