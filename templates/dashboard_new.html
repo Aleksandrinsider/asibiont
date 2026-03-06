@@ -1268,6 +1268,7 @@
                             <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
                                 <option value="all" selected data-i18n="tf-all">Все</option>
                                 <option value="my" data-i18n="tf-my">Личные</option>
+                                <option value="agent" data-i18n="tf-agent">Поручения агентам</option>
                                 <option value="assigned-to-me" data-i18n="tf-to-me">Поручили мне</option>
                                 <option value="assigned-by-me" data-i18n="tf-by-me">Поручил я</option>
                                 <option value="overdue" data-i18n="tf-overdue">Просрочено</option>
@@ -10250,6 +10251,9 @@ except Exception as e:
             } else if (currentTaskFilter === 'assigned-by-me') {
                 // Назначенные мной - задачи делегированные другим, незавершенные, неотклоненные
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.status !== 'cancelled' && t.delegated_by_me === true);
+            } else if (currentTaskFilter === 'agent') {
+                // Поручения агентам - задачи созданные ASI для субагентов
+                filteredTasks = allTasksFromServer.filter(t => t.source === 'agent');
             } else if (currentTaskFilter === 'overdue') {
                 // С отставанием - просроченные задачи (неотклоненные)
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true && t.status !== 'rejected' && t.status !== 'cancelled');
@@ -10674,6 +10678,17 @@ except Exception as e:
             }
             
             html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + escapeHtml(cleanTitle) + '</div>';
+            
+            // Бейдж агента — если задача создана для суб-агента
+            if (task.source === 'agent' && task.agent_name) {
+                html += '<div style="margin-top: 2px;"><span style="font-size: 11px; color: #068487; background: #E6F7F8; padding: 1px 6px; border-radius: 4px;">🤖 ' + escapeHtml(task.agent_name) + '</span>';
+                if (task.delegation_status === 'agent_completed') {
+                    html += ' <span style="font-size: 11px; color: #22863A;">✓</span>';
+                } else if (task.delegation_status === 'needs_rework') {
+                    html += ' <span style="font-size: 11px; color: #D73A49;">⟳</span>';
+                }
+                html += '</div>';
+            }
             
             // Если есть делегирование, показываем отдельной строкой
             if (delegationInfo) {
@@ -14562,7 +14577,7 @@ except Exception as e:
       'reply':'Ответ','reply-btn':'Ответить','reply-prompt':'Введите ответ:','reply-sent':'Ответ отправлен',
       'new-message':'Новое сообщение','compose-username':'Введите @username получателя:','compose-text':'Введите сообщение:',
       'send-msg-title':'Отправить сообщение','reply-title':'Ответить','recipient-label':'Получатель','message-label':'Сообщение','send-btn':'Отправить','msg-deleted':'Сообщение удалено',
-      'tf-all':'Все','tf-my':'Личные','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
+      'tf-all':'Все','tf-my':'Личные','tf-agent':'Поручения агентам','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
 
       'back':'Назад',
       'search-contacts':'Поиск',
@@ -14829,7 +14844,7 @@ except Exception as e:
       'reply':'Reply','reply-btn':'Reply','reply-prompt':'Enter reply:','reply-sent':'Reply sent',
       'new-message':'New message','compose-username':'Enter recipient @username:','compose-text':'Enter message:',
       'send-msg-title':'Send message','reply-title':'Reply','recipient-label':'Recipient','message-label':'Message','send-btn':'Send','msg-deleted':'Message deleted',
-      'tf-all':'All','tf-my':'Personal','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
+      'tf-all':'All','tf-my':'Personal','tf-agent':'Agent tasks','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
 
       'back':'Back',
       'search-contacts':'Search',

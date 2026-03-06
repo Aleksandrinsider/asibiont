@@ -1771,6 +1771,8 @@ async def dashboard_handler(request):
                 'delegated_by': _delegator_cache.get(task.delegated_by),
                 'delegated_by_username': _delegator_cache.get(task.delegated_by),
                 'delegated_by_me': task.delegated_by == user.id if task.delegated_by else False,
+                'source': getattr(task, 'source', 'manual') or 'manual',
+                'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
             }
             tasks_dict.append(task_dict)
@@ -6674,10 +6676,12 @@ async def api_tasks_handler(request):
                 'is_delegated': task.delegated_to_username is not None,
                 'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
                 'delegated_to': task.delegated_to_username,
-                'delegated_to_username': task.delegated_to_username,  # Дублируем для удобста
-                'delegated_by': None,  # Будет устале же
-                'delegated_by_username': None,  # Username того кто поручил
-                'delegated_by_me': task.delegated_by == user.id,  # True если я делегироал эту задачу
+                'delegated_to_username': task.delegated_to_username,
+                'delegated_by': None,
+                'delegated_by_username': None,
+                'delegated_by_me': task.delegated_by == user.id,
+                'source': getattr(task, 'source', 'manual') or 'manual',
+                'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
             }
             
