@@ -4729,36 +4729,52 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         return _adp_final or "Миссия выполнена. Смотри ответы агентов выше."
 
     # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
-    MAX_ROUNDS = 3
+    MAX_ROUNDS = 4
     all_results: list = []   # [(agent_name, task, result)]
     called_agents: set = set()
+    _rework_count: dict = {}  # agent_name → сколько раз доработка (макс 1)
 
     for _round in range(MAX_ROUNDS):
         if _round > 0:
-            # ASI видит уже полученные результаты и решает — вызвать ещё или финализировать
+            # ASI видит уже полученные результаты и решает — вызвать ещё, доработать или финализировать
             _so_far = "\n\n".join(f"{n} (задача: {t}): {r}" for n, t, r in all_results)
             _remaining = [a for a in _agents if a['name'] not in called_agents]
-            if not _remaining:
-                break
             _remaining_block = "\n".join(
                 f"- {a['name']}: Может: {', '.join(_parse_agent_integrations(a.get('user_api_keys',''), a.get('python_code',''), a.get('tools_allowed',''), a.get('search_scope','')))}"
                 for a in _remaining
-            )
+            ) if _remaining else "(все агенты уже работали)"
+            # Список агентов которых можно отправить на доработку (не более 1 раза)
+            _reworkable = [n for n, _, _ in all_results if _rework_count.get(n, 0) < 1]
+            _rework_hint = ""
+            if _reworkable:
+                _rework_hint = (
+                    "\n   • rework — результат агента неполный, некачественный или не по теме. "
+                    "Отправить ЭТОГО ЖЕ агента на доработку с конкретным уточнением что исправить.\n"
+                    '{"action": "rework", "agent_name": "имя агента который уже работал", '
+                    '"rework_feedback": "что именно доработать — конкретно", '
+                    '"director_message": "живое обращение к агенту с просьбой исправить"}\n'
+                )
             _reeval_raw = await _quick_ai_call_raw([{
                 "role": "user",
                 "content": (
-                    f"Ты — ASI Biont. Пользователь спросил: «{user_message}»\n\n"
-                    f"Агенты уже ответили:\n{_so_far[:1000]}\n\n"
+                    f"Ты — ASI Biont, директор. Пользователь спросил: «{user_message}»\n\n"
+                    f"Агенты уже ответили:\n{_so_far[:1500]}\n\n"
                     f"Ещё не вызванные агенты:\n{_remaining_block}\n\n"
-                    "Нужно ли вызвать ещё кого-то чтобы ПОЛНЕЕ ответить на вопрос? "
-                    "Ответь ТОЛЬКО JSON без ```:\n"
+                    "ОЦЕНИ результаты критически:\n"
+                    "- Ответ по теме? Содержит конкретику или пустые фразы?\n"
+                    "- Задача выполнена полностью или частично?\n"
+                    "- Нужно доработать, привлечь другого агента, или достаточно?\n\n"
+                    "Выбери действие. Ответь ТОЛЬКО JSON без ```:\n"
                     '{"action": "finalize"}\n'
                     "или\n"
-                    '{"action": "delegate", "agent_name": "точное имя", "agent_task": "задача", "director_message": "прямое обращение"}\n'
+                    '{"action": "delegate", "agent_name": "точное имя", '
+                    '"agent_task": "задача", "director_message": "обращение к агенту"}\n'
+                    + _rework_hint +
                     "или\n"
-                    '{"action": "multi_delegate", "director_intro": "вступление", "tasks": [{"agent_name": "...", "agent_task": "...", "director_message": "..."}]}'
+                    '{"action": "multi_delegate", "director_intro": "вступление", '
+                    '"tasks": [{"agent_name": "...", "agent_task": "...", "director_message": "..."}]}'
                 ),
-            }], max_tokens=250)
+            }], max_tokens=300)
             if not _reeval_raw:
                 break
             _jm2 = re.search(r'```(?:json)?\s*([\s\S]*?)```', _reeval_raw)
@@ -4767,7 +4783,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             except Exception:
                 break
             action = decision.get('action', 'finalize')
-            if action not in ('delegate', 'multi_delegate'):
+            if action not in ('delegate', 'multi_delegate', 'rework'):
                 break  # finalize → выходим из цикла
 
         # Строим контекст диалога для агентов: профиль пользователя + история + предыдущие результаты
@@ -4781,6 +4797,33 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                 f"{_n}: {_r[:300]}" for _n, _t2, _r in all_results
             ))
         _agent_ctx = '\n\n'.join(_agent_ctx_parts)
+
+        # ── rework: отправить того же агента на доработку ──────────────────
+        if action == 'rework':
+            _rw_name = decision.get('agent_name', '')
+            _ag = _find_agent(_rw_name)
+            if not _ag or _rework_count.get(_ag['name'], 0) >= 1:
+                break  # макс 1 доработка на агента
+            _rw_feedback = decision.get('rework_feedback', '')
+            _dm = decision.get('director_message', '')
+            if _dm:
+                _save_interaction_for_director(user_id, _dm)
+                await asyncio.sleep(0.05)
+            # Находим предыдущий результат этого агента
+            _prev_result = ''
+            for _pn, _pt, _pr in all_results:
+                if _pn == _ag['name']:
+                    _prev_result = _pr
+            # Формируем задачу на доработку
+            _rework_task = (
+                f"ДОРАБОТКА: {_rw_feedback}\n\n"
+                f"Твой предыдущий результат:\n{_prev_result[:800]}\n\n"
+                f"Исправь и дополни его с учётом замечаний."
+            )
+            _rework_count[_ag['name']] = _rework_count.get(_ag['name'], 0) + 1
+            _resp = await _run_agent_task(_ag, _rework_task, extra_context=_agent_ctx)
+            all_results.append((_ag['name'] + ' (доработка)', _rework_task, _resp))
+            continue
 
         # Выполняем текущее решение
         if action == 'delegate':

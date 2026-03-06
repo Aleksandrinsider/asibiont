@@ -1678,8 +1678,57 @@ async def delegate_task(
                                     session.rollback()
                                 except Exception:
                                     pass
-                        _results_parts.append(f"[{_agent_name}]: не удалось выполнить задачу")
+                        _results_parts.append(f"[{_agent_name}]: не удалось выполнить задачу — нужна доработка")
                         continue
+
+                    # ── Критическая оценка результата ASI-директором ──────────
+                    # Если результат слишком короткий или пустой по смыслу — доработка
+                    _needs_rework = False
+                    if len(_result.strip()) < 40:
+                        _needs_rework = True
+                    else:
+                        try:
+                            from .autonomous_agent import _quick_ai_call_raw as _qac_eval
+                            _eval_raw = await _qac_eval([{
+                                "role": "user",
+                                "content": (
+                                    f"Задача агенту: «{_agent_task_text[:300]}»\n\n"
+                                    f"Результат агента:\n{_result[:800]}\n\n"
+                                    "Оцени: результат по теме и содержит конкретику? "
+                                    "Ответь ОДНИМ словом: OK или REWORK"
+                                ),
+                            }], max_tokens=10)
+                            if _eval_raw and 'REWORK' in (_eval_raw or '').upper():
+                                _needs_rework = True
+                        except Exception:
+                            pass
+
+                    if _needs_rework:
+                        # Отправляем на доработку — 1 попытка
+                        try:
+                            _save_ifd(user_id, _json_ag.dumps({
+                                '__agent': {
+                                    'name': _agent_name,
+                                    'id': _agent_recipient.id,
+                                    'avatar_url': _agent_dict.get('avatar_url', ''),
+                                },
+                                'text': f'⚠️ Первый результат недостаточный, дорабатываю...',
+                            }, ensure_ascii=False))
+                        except Exception:
+                            pass
+
+                        _rework_task = (
+                            f"ДОРАБОТКА: твой предыдущий ответ был недостаточно конкретным или не по теме.\n\n"
+                            f"Задача: {_agent_task_text[:400]}\n\n"
+                            f"Твой предыдущий ответ:\n{_result[:600]}\n\n"
+                            f"Исправь: дай конкретный, развёрнутый ответ по существу задачи."
+                        )
+                        try:
+                            _result2 = await _exec_dir(_agent_dict, _rework_task, user_id)
+                            if _result2 and _result2.strip() and len(_result2.strip()) > len(_result.strip()):
+                                _result = _result2
+                        except Exception:
+                            pass
 
                     # Очищаем DSML-теги из ответа
                     try:
