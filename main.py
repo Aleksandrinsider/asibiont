@@ -10129,7 +10129,7 @@ async def api_marketplace_publish_agent_handler(request):
             agent.user_api_keys = (data.get('user_api_keys') or '').strip()
 
             # Частота проактивных уведомлений
-            _notify_freq = int(data.get('notification_frequency') or 0)
+            _notify_freq = float(data.get('notification_frequency') or 0)
             if _notify_freq > 0:
                 import json as _jf
                 agent.custom_anchors = _jf.dumps([{
@@ -10138,8 +10138,10 @@ async def api_marketplace_publish_agent_handler(request):
                     'priority': 'MEDIUM',
                     'cooldown_hours': _notify_freq,
                 }], ensure_ascii=False)
+                agent.run_interval_minutes = max(1, round(_notify_freq * 60))
             else:
                 agent.custom_anchors = None
+                agent.run_interval_minutes = None
 
             # Python-код агента (выполняется перед генерацией ответа)
             _py_code_raw = (data.get('python_code') or '').strip()
@@ -10500,7 +10502,7 @@ async def api_marketplace_my_handler(request):
                     lst = _j.loads(custom_anchors_json or '[]')
                     for e in lst:
                         if e.get('id') == 'auto-notify':
-                            return int(e.get('cooldown_hours', 0))
+                            return float(e.get('cooldown_hours', 0))
                 except Exception:
                     pass
                 return 0

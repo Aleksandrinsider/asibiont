@@ -5417,6 +5417,8 @@ except Exception as e:
                         <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">${t('mpa-notify-freq-desc')}</div>
                         <select id="mpa-notify-freq" style="width:100%;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:13px;color:#374151;background:white;outline:none;">
                             <option value="0">${t('mpa-notify-never')}</option>
+                            <option value="0.25">15 ${t('minutes-short')}</option>
+                            <option value="0.5">30 ${t('minutes-short')}</option>
                             <option value="1">1 ${t('hours-short')}</option>
                             <option value="2">2 ${t('hours-short')}</option>
                             <option value="4">4 ${t('hours-short')}</option>
@@ -5495,7 +5497,7 @@ except Exception as e:
                 user_api_keys: _v('mpa-apikeys'),
                 is_private: _c('mpa-private'),
                 python_code: _v('mpa-pycode'),
-                notification_frequency: parseInt(_v('mpa-notify-freq')) || 0,
+                notification_frequency: parseFloat(_v('mpa-notify-freq')) || 0,
             };
             if (_mpEditAgentId) data.id = _mpEditAgentId;
             if (!data.name) { mpShowStatus(t('mpa-err-name'), '#FEF2F2', '#DC2626'); return; }
