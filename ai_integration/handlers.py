@@ -3,7 +3,7 @@
 import logging
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import requests
 import aiohttp
@@ -1538,6 +1538,7 @@ async def delegate_task(
             _name_parts = [p.strip() for p in _ren.split(r'\s+и\s+|\s+and\s+|,\s*|;\s*', _recip_check) if p.strip() and len(p.strip()) > 1]
             if not _name_parts:
                 _name_parts = [_recip_check]
+            logger.info(f"[DELEGATE] Looking for agents: {_name_parts} (user_db_id={delegator.id})")
 
             _subscribed_ids = session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id)
             _found_agents = []
@@ -1555,6 +1556,7 @@ async def delegate_task(
                 if _ag and _ag.id not in _used_ag_ids:
                     _found_agents.append(_ag)
                     _used_ag_ids.add(_ag.id)
+            logger.info(f"[DELEGATE] Found agents: {[a.name for a in _found_agents]}")
 
             if _found_agents:
                 _agent_task_text = (f"{title}\n{description}".strip() if description else title)
@@ -1655,9 +1657,11 @@ async def delegate_task(
 
                     # ── СИНХРОННОЕ выполнение агента (inline) ──────────────────────
                     try:
+                        logger.info(f"[DELEGATE] Starting inline exec for {_agent_name}...")
                         _result = await _exec_dir(_agent_dict, _agent_task_text, user_id)
+                        logger.info(f"[DELEGATE] Inline exec result for {_agent_name}: {len(_result or '')} chars")
                     except Exception as _exec_err:
-                        logger.warning(f"[DELEGATE] agent exec error: {_exec_err}")
+                        logger.warning(f"[DELEGATE] agent exec error ({_agent_name}): {_exec_err}", exc_info=True)
                         _result = None
 
                     if not _result or not _result.strip():
