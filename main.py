@@ -75,6 +75,10 @@ def normalize_city(city):
     if not city:
         return None
     city = city.lower().strip()
+    # Strip common prefixes/suffixes
+    import re as _re_nc
+    city = _re_nc.sub(r'^(город\s+|г\.?\s*|city\s+of\s+)', '', city)
+    city = _re_nc.sub(r'[,;].*$', '', city).strip()
     # RU → EN mapping
     city_map = {
         'москва': 'moscow',

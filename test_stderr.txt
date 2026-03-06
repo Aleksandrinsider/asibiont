@@ -1,0 +1,4 @@
+[ADD_TASK] No reminder_time provided for task 'Тест без времени'
+[ADD_TASK] REMINDER_SERVICE not initialized, cannot schedule reminder for task 1
+[ADD_TASK] REMINDER_SERVICE not initialized, cannot schedule reminder for task 2
+[EDIT_TASK] Cannot reschedule reminder: REMINDER_SERVICE=None, reminder_time=2026-12-26 12:00:00+00:00

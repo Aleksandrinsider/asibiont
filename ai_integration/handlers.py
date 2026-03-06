@@ -2910,6 +2910,17 @@ _CITY_ALIASES: dict = {
     'пермский край': 'perm krai', 'perm krai': 'пермский край',
 }
 
+import re as _re_city
+
+def _clean_city_name(raw: str) -> str:
+    """Strip common prefixes/suffixes from city name: 'г. Пермь' → 'пермь', 'Perm, Russia' → 'perm'"""
+    s = raw.strip().lower()
+    # Remove prefixes
+    s = _re_city.sub(r'^(город\s+|г\.?\s*|city\s+of\s+)', '', s)
+    # Remove suffixes
+    s = _re_city.sub(r'[,;].*$', '', s).strip()
+    return s
+
 def get_partners_list(user_id=None, session=None):
     """Return list of all users with profiles (except self and those with existing delegation)"""
     logger.info(f"[PARTNERS] get_partners_list called for user_id: {user_id}")
@@ -3035,11 +3046,18 @@ def get_partners_list(user_id=None, session=None):
         for attr in ('city_normalized', 'city_normalized_ru', 'city'):
             v = (getattr(obj, attr, None) or '').strip().lower()
             if v:
-                variants.add(v)
-                # Add cross-language alias so 'пермь' ↔ 'perm' always match
-                alias = _CITY_ALIASES.get(v)
-                if alias:
-                    variants.add(alias)
+                # Очищаем от типовых префиксов/суффиксов
+                cleaned = _clean_city_name(v)
+                if cleaned:
+                    variants.add(cleaned)
+                    alias = _CITY_ALIASES.get(cleaned)
+                    if alias:
+                        variants.add(alias)
+                # Также пробуем сырое значение в алиасах
+                alias_raw = _CITY_ALIASES.get(v)
+                if alias_raw:
+                    variants.add(v)
+                    variants.add(alias_raw)
         return variants
 
     _u_skills = _norm(user_profile, 'skills')
@@ -3308,8 +3326,10 @@ def get_partners_list(user_id=None, session=None):
         for attr in ('city_normalized', 'city_normalized_ru', 'city'):
             v = (getattr(obj, attr, None) or '').strip().lower()
             if v:
-                vs.add(v)
-                alias = _CITY_ALIASES.get(v)
+                cleaned = _clean_city_name(v)
+                if cleaned:
+                    vs.add(cleaned)
+                    alias = _CITY_ALIASES.get(cleaned)
                 if alias:
                     vs.add(alias)
         return vs
@@ -6224,6 +6244,7 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         # Простые поля (заменяются всегда)
         if city is not None:
             profile.city = city
+            profile.city_normalized = _clean_city_name(city)
             updates.append(f"город: {city}")
             # Обновляем timezone на основе города
             tz = CITY_TIMEZONE_MAP.get(city.lower())
