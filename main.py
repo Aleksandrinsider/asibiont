@@ -1973,11 +1973,13 @@ async def chat_handler(request):
         if user_id not in _chat_progress_queues:
             _chat_progress_queues[user_id] = asyncio.Queue()
 
-        async def web_progress_callback(text):
-            """Отправляет прогресс в SSE очередь для дашборда."""
+        async def web_progress_callback(text, persist=False):
+            """Отправляет прогресс в SSE очередь для дашборда.
+            persist=True: сообщение также сохраняется как Interaction (для диалога агентов).
+            """
             queue = _chat_progress_queues.get(user_id)
             if queue:
-                await queue.put({'type': 'progress', 'text': text})
+                await queue.put({'type': 'progress', 'text': text, 'persist': persist})
 
         response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
         ai_result = {'agent_info': None}

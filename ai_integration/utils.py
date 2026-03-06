@@ -326,6 +326,29 @@ def clean_technical_details(text):
     )
     if before != text:
         pass
+    # Удаляем НАЗВАНИЯ инструментов как plain text (без скобок) — AI иногда упоминает их в тексте
+    _ALL_TOOL_NAMES = (
+        r'research_topic|start_delegation_campaign|start_content_campaign|'
+        r'delegate_task|add_task|complete_task|delete_task|list_tasks|'
+        r'web_search|quick_topic_search|find_relevant_contacts_for_task|'
+        r'create_post|publish_to_telegram|publish_to_discord|generate_image|'
+        r'send_email|send_outreach_email|send_message_to_user|run_agent_action|'
+        r'set_reminder|create_goal|update_goal|list_goals|delete_goal|'
+        r'get_delegation_progress|negotiate_by_email|manage_content_campaign|'
+        r'manage_delegation_campaign|schedule_background_task|'
+        r'find_and_message_relevant_users|reply_to_outreach_email|'
+        r'send_follow_up_email|set_contact_alert|find_partners|'
+        r'get_news_trends|analyze_situation_and_suggest_tasks|'
+        r'update_goal_progress|complete_goal|edit_task|get_task_details|'
+        r'check_time_conflicts|cancel_delegation|get_weather_info|'
+        r'research_and_plan|analyze_group_opportunities|'
+        r'generate_marketing_content|get_message_status|reschedule_task|'
+        r'restore_task|accept_delegated_task|reject_delegated_task|'
+        r'update_profile|set_content_strategy|edit_post|get_posts|delete_post|'
+        r'list_marketplace|save_email_contact|list_email_contacts|get_system_status|'
+        r'get_incoming_messages|reply_to_user_message|update_user_memory'
+    )
+    text = re.sub(r'\b(?:' + _ALL_TOOL_NAMES + r')\b', '', text, flags=re.IGNORECASE)
     # Удаляем оставшиеся ТЕХНИЧЕСКИЕ вызовы функций (только snake_case с минимум 2 частями)
     # НЕ трогаем обычный текст вроде "Python (язык)" или "AI (artificial intelligence)"
     before = text

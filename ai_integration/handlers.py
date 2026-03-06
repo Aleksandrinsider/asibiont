@@ -4048,17 +4048,17 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         except Exception as _e:
             logger.warning(f"[CREATE_GOAL] Activity log failed: {_e}")
 
-        result = f"🎯 Цель создана: **{goal.title}**"
+        result = f"Цель создана: {goal.title}"
         if goal.metric_target and goal.metric_unit:
-            result += f"\n📊 Метрика: 0/{int(goal.metric_target)} {goal.metric_unit}"
+            result += f"\nМетрика: 0/{int(goal.metric_target)} {goal.metric_unit}"
         if goal.category:
-            result += f"\n📂 Категория: {goal.category}"
+            result += f"\nКатегория: {goal.category}"
         if goal.priority and goal.priority != 'medium':
-            result += f"\n⚡ Приоритет: {goal.priority}"
+            result += f"\nПриоритет: {goal.priority}"
         if parsed_date:
-            result += f"\n📅 Дедлайн: {parsed_date.strftime('%d.%m.%Y')}"
+            result += f"\nДедлайн: {parsed_date.strftime('%d.%m.%Y')}"
         if goal.success_criteria:
-            result += f"\n✅ Критерии: {goal.success_criteria}"
+            result += f"\nКритерии: {goal.success_criteria}"
         result += f"\n\nТеперь можешь привязывать задачи к этой цели — так ты увидишь прогресс!"
         
         return result
@@ -4259,10 +4259,10 @@ def list_goals(status_filter=None, user_id=None, session=None):
                 return "У тебя нет завершённых целей."
             return "У тебя пока нет целей. Расскажи о своих планах — помогу сформулировать и отслеживать!"
         
-        priority_emoji = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🟢'}
-        status_emoji = {'active': '🎯', 'completed': '✅', 'paused': '⏸️', 'cancelled': '❌'}
+        priority_label = {'critical': '[!]', 'high': '[высокий]', 'medium': '', 'low': '[низкий]'}
+        status_label = {'active': '', 'completed': '[выполнена]', 'paused': '[пауза]', 'cancelled': '[отменена]'}
         
-        result = "🎯 **Твои цели:**\n\n"
+        result = "Твои цели:\n\n"
 
         # Batch-load all linked tasks for all goals (avoid N+1)
         _gl_goal_ids = [g.id for g in goals]
@@ -4275,11 +4275,11 @@ def list_goals(status_filter=None, user_id=None, session=None):
                 _gl_tasks_by_goal.setdefault(_glt.goal_id, []).append(_glt)
 
         for g in goals:
-            emoji = status_emoji.get(g.status, '🎯')
-            pri = priority_emoji.get(g.priority, '')
+            status_lbl = status_label.get(g.status, '')
+            pri = priority_label.get(g.priority, '')
             progress_bar = _progress_bar(g.progress_percentage)
             
-            result += f"{emoji} **{g.title}** {pri}\n"
+            result += f"{g.title} {status_lbl} {pri}\n".replace('  ', ' ').strip() + '\n'
             result += f"   {progress_bar} {g.progress_percentage}%"
             
             if g.category:
@@ -4288,11 +4288,11 @@ def list_goals(status_filter=None, user_id=None, session=None):
                 days = g.days_until_target()
                 if days is not None:
                     if days < 0:
-                        result += f" | ⚠️ просрочено на {abs(days)} дн."
+                        result += f" | просрочено на {abs(days)} дн."
                     elif days == 0:
-                        result += f" | 🔥 дедлайн сегодня!"
+                        result += f" | дедлайн сегодня"
                     elif days <= 7:
-                        result += f" | ⏳ {days} дн. осталось"
+                        result += f" | {days} дн. осталось"
                     else:
                         result += f" | до {g.target_date.strftime('%d.%m.%Y')}"
             

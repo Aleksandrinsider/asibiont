@@ -4542,9 +4542,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
     # ── Вспомогательная функция сохранения результата агента ──────────────────
     async def _run_agent_task(ag, task, extra_context: str = "", director_message: str = ""):
-        # Отправляем живое обращение директора к агенту (без эмодзи-префикса — как в мессенджере)
+        # Отправляем живое обращение директора к агенту и сохраняем в DB
         if director_message:
             await _send_visible(director_message)
+            # Сохраняем обращение директора в Interaction для видимости на дашборде
+            _save_interaction_for_director(user_id, director_message)
             await asyncio.sleep(0.3)
 
         # Списываем токены за запуск агента директором
@@ -5099,6 +5101,19 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 logger.warning("[DIRECTOR] empty synthesis — falling through to process_request")
                 _director_response = None
             else:
+                # Очищаем технические детали из ответа директора
+                try:
+                    from .utils import clean_technical_details as _ctd_dir
+                    _cleaned_dir = _ctd_dir(_director_response)
+                    if _cleaned_dir and _cleaned_dir.strip():
+                        _director_response = _cleaned_dir
+                except Exception:
+                    pass
+                import re as _re_dir
+                # Удаляем эмодзи
+                _director_response = _re_dir.sub(r'[\U0001F000-\U0001FFFF]|[\u2600-\u27BF]|[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]', '', _director_response)
+                _director_response = _re_dir.sub(r'\n{2,}', '\n', _director_response)
+                _director_response = _re_dir.sub(r'  +', ' ', _director_response).strip()
                 # Промежуточные Interaction уже сохранены
                 return {
                     'response': _director_response,
@@ -5112,10 +5127,47 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             subscription_tier, progress_callback=progress_callback,
             web_context=web_context, exclude_tools=exclude_tools)
 
-        # Нормализуем переносы: \n\n → \n, иначе пустые строки в Telegram-чате
+        # Очищаем технические детали, названия инструментов и эмодзи из ответа
         if response_text and isinstance(response_text, str):
+            try:
+                from .utils import clean_technical_details as _ctd_final
+                _cleaned = _ctd_final(response_text)
+                if _cleaned and _cleaned.strip():
+                    response_text = _cleaned
+            except Exception:
+                pass
             import re as _re
+            # Удаляем оставшиеся snake_case tool names (word_word pattern) из текста
+            response_text = _re.sub(
+                r'\b(?:research_topic|start_delegation_campaign|start_content_campaign|'
+                r'delegate_task|add_task|complete_task|delete_task|list_tasks|'
+                r'web_search|quick_topic_search|find_relevant_contacts_for_task|'
+                r'create_post|publish_to_telegram|publish_to_discord|generate_image|'
+                r'send_email|send_outreach_email|send_message_to_user|run_agent_action|'
+                r'set_reminder|create_goal|update_goal|list_goals|delete_goal|'
+                r'get_delegation_progress|negotiate_by_email|manage_content_campaign|'
+                r'manage_delegation_campaign|schedule_background_task|'
+                r'find_and_message_relevant_users|reply_to_outreach_email|'
+                r'send_follow_up_email|set_contact_alert|find_partners|'
+                r'get_news_trends|analyze_situation_and_suggest_tasks|'
+                r'update_goal_progress|complete_goal|edit_task|get_task_details|'
+                r'check_time_conflicts|cancel_delegation|get_weather_info|'
+                r'research_and_plan|analyze_group_opportunities|'
+                r'generate_marketing_content|get_message_status|reschedule_task|'
+                r'restore_task|accept_delegated_task|reject_delegated_task|'
+                r'update_profile|set_content_strategy|edit_post|get_posts|delete_post|'
+                r'list_marketplace|save_email_contact|list_email_contacts|get_system_status|'
+                r'get_incoming_messages|reply_to_user_message)\b',
+                '', response_text
+            )
+            # Удаляем конструкции "через <tool_name>" оставшиеся
+            response_text = _re.sub(r'\s+через\s+(?=[А-Яа-я])', ' через ', response_text)
+            # Удаляем все эмодзи из финального ответа
+            response_text = _re.sub(r'[\U0001F000-\U0001FFFF]|[\u2600-\u27BF]|[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]', '', response_text)
+            # Нормализуем переносы: \n\n → \n, иначе пустые строки в Telegram-чате
             response_text = _re.sub(r'\n{2,}', '\n', response_text)
+            # Убираем двойные пробелы от удалённых элементов
+            response_text = _re.sub(r'  +', ' ', response_text).strip()
 
         # Извлекаем tool_calls для тестов и мониторинга
         tool_calls = []
