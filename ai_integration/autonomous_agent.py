@@ -4531,12 +4531,17 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
             )
         _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
         _ac_desc = (_ac_a.get('description') or '')[:120]
-        _agent_caps_lines.append(
+        _ac_tools = (_ac_a.get('tools_allowed') or '').strip()
+        _line = (
             f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
             f" | {_ac_a.get('specialization','')}"
             f"\n  Умеет: {_ac_caps}"
-            + (f"\n  О себе: {_ac_desc}" if _ac_desc else "")
         )
+        if _ac_tools:
+            _line += f"\n  Инструменты: {_ac_tools[:120]}"
+        if _ac_desc:
+            _line += f"\n  О себе: {_ac_desc}"
+        _agent_caps_lines.append(_line)
     _caps_block = "\n".join(_agent_caps_lines)
 
     _decision_prompt = (

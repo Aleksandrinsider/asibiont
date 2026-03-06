@@ -1001,7 +1001,7 @@ class ContextBuilder:
                             _matches.append(f"  «{_g.title}» → {', '.join(_agent_strs)}")
                     if _matches:
                         hints.append(
-                            "МАТЧИНГ ЦЕЛЬ\u2192АГЕНТ (поручи конкретному агенту — у него есть нужные инструменты):\n"
+                            "МАТЧИНГ ЦЕЛЬ\u2192АГЕНТ (агенты с подходящими возможностями):\n"
                             + "\n".join(_matches)
                         )
             except Exception as _me:
