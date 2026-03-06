@@ -966,6 +966,12 @@ class AnchorEngine:
         # --- СБОИ СКРИПТОВ АГЕНТОВ (сломанные ключи/интеграции) ---
         anchors.extend(self._scan_agent_script_failures(user, session, now_utc))
 
+        # --- АГЕНТЫ БЕЗ РЕЗУЛЬТАТОВ (скрипт работает, но stdout пуст N раз подряд) ---
+        anchors.extend(self._scan_agent_silent(user, session, now_utc))
+
+        # --- СТАГНАЦИЯ КАМПАНИЙ (email/контент/делегирование — активна, но 0 активности 3+ дня) ---
+        anchors.extend(self._scan_campaign_stagnation(user, session, now_utc))
+
         # --- ЭКСТРЕМАЛЬНАЯ ПОГОДА ---
         anchors.extend(await self._scan_weather_extreme(user, profile, now_utc))
 
@@ -5488,6 +5494,135 @@ class AnchorEngine:
                 ))
         except Exception as e:
             logger.debug(f'[ANCHOR] agent_script_failures scan error: {e}')
+        return anchors
+
+    def _scan_agent_silent(self, user, session, now_utc) -> list:
+        """Создаёт MEDIUM-якорь если агент со скриптом запускался 5+ раз за 24ч,
+        но ни разу не отдал данных (stdout пустой). Значит интеграция тихо сломана.
+        """
+        anchors = []
+        try:
+            from models import UserAgent, AgentActivityLog
+            agents = session.query(UserAgent).filter(
+                UserAgent.author_id == user.id,
+                UserAgent.status == 'active',
+                UserAgent.python_code.isnot(None),
+            ).all()
+            since = now_utc - timedelta(hours=24)
+            for agent in agents:
+                # Считаем запуски L1 (integration activity) за сутки
+                runs = session.query(AgentActivityLog).filter(
+                    AgentActivityLog.user_id == user.id,
+                    AgentActivityLog.ref_id == agent.id,
+                    AgentActivityLog.activity_type == 'integration',
+                    AgentActivityLog.created_at >= since,
+                ).all()
+                if len(runs) < 5:
+                    continue
+                # Все со статусом completed но без содержательного result?
+                non_empty = [r for r in runs if r.result and len(r.result.strip()) > 20]
+                if non_empty:
+                    continue  # есть хотя бы один результат — всё ок
+                source_key = f'agent_silent:{agent.id}:{now_utc.strftime("%Y-%m-%d")}'
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='agent_script_failed',
+                    source=source_key,
+                    topic=_t(user,
+                        f'Агент «{agent.name}» работает, но уже сутки не получает данные ({len(runs)} запусков)',
+                        f'Agent «{agent.name}» running but no data for 24h ({len(runs)} runs)'),
+                    priority=AnchorPriority.MEDIUM,
+                    data=json.dumps({
+                        'agent': agent.name, 'agent_id': agent.id,
+                        'runs_24h': len(runs), 'non_empty': 0,
+                    }, ensure_ascii=False),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=18),
+                    cooldown_hours=20,
+                    batch_group='system',
+                ))
+        except Exception as e:
+            logger.debug(f'[ANCHOR] agent_silent scan error: {e}')
+        return anchors
+
+    def _scan_campaign_stagnation(self, user, session, now_utc) -> list:
+        """Создаёт якорь если активная кампания (email/контент/делегирование) не имеет
+        активности 3+ дня — пользователь может не знать что кампания «зависла».
+        """
+        anchors = []
+        try:
+            # Email campaigns — активна, но 0 отправок за 3 дня
+            stale_cutoff = now_utc - timedelta(days=3)
+            campaigns = session.query(EmailCampaign).filter(
+                EmailCampaign.user_id == user.id,
+                EmailCampaign.status == 'active',
+            ).all()
+            for c in campaigns:
+                recent_sends = session.query(EmailOutreach).filter(
+                    EmailOutreach.campaign_id == c.id,
+                    EmailOutreach.status.in_(['sent', 'replied']),
+                    EmailOutreach.sent_at >= stale_cutoff,
+                ).count()
+                if recent_sends > 0:
+                    continue
+                source_key = f'camp_stale:{c.id}:{now_utc.strftime("%Y-%m-%d")}'
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='email_campaign_report',
+                    source=source_key,
+                    topic=_t(user,
+                        f'⚠️ Email-кампания «{c.name}» без активности {3}+ дня — проверь контакты и настройки',
+                        f'⚠️ Email campaign «{c.name}» stale for {3}+ days — check leads and settings'),
+                    priority=AnchorPriority.MEDIUM,
+                    data=json.dumps({
+                        'campaign_id': c.id, 'campaign_name': c.name,
+                        'total_sent': c.emails_sent or 0,
+                        'total_replied': c.emails_replied or 0,
+                        'stale_days': 3,
+                    }, ensure_ascii=False),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=48),
+                    cooldown_hours=24,
+                    batch_group='email',
+                ))
+
+            # Content campaigns — активна, но last_published_at > 3 дня назад
+            content_campaigns = session.query(ContentCampaign).filter(
+                ContentCampaign.user_id == user.id,
+                ContentCampaign.status == 'active',
+            ).all()
+            for cc in content_campaigns:
+                last_pub = cc.last_post_at
+                if last_pub and last_pub.tzinfo is None:
+                    last_pub = last_pub.replace(tzinfo=timezone.utc)
+                if last_pub and last_pub >= stale_cutoff:
+                    continue  # публиковалось недавно
+                if not last_pub and cc.created_at:
+                    cr = cc.created_at
+                    if cr.tzinfo is None:
+                        cr = cr.replace(tzinfo=timezone.utc)
+                    if cr >= stale_cutoff:
+                        continue  # создана недавно, ещё не время
+                source_key = f'content_stale:{cc.id}:{now_utc.strftime("%Y-%m-%d")}'
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='content_campaign_publish',
+                    source=source_key,
+                    topic=_t(user,
+                        f'⚠️ Контент-кампания «{cc.name}» не публикуется 3+ дня',
+                        f'⚠️ Content campaign «{cc.name}» no posts for 3+ days'),
+                    priority=AnchorPriority.LOW,
+                    data=json.dumps({
+                        'campaign_id': cc.id, 'campaign_name': cc.name,
+                        'stale_days': 3,
+                    }, ensure_ascii=False),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=48),
+                    cooldown_hours=24,
+                    batch_group='content',
+                ))
+        except Exception as e:
+            logger.debug(f'[ANCHOR] campaign_stagnation scan error: {e}')
         return anchors
 
     async def _scan_weather_extreme(self, user, profile, now_utc) -> list:

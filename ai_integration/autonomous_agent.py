@@ -3852,7 +3852,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Ты — агент в команде ASI Biont. Действуй от своего имени, выполняй поручение пользователя.\n"
         "У тебя есть доступ ко всем инструментам платформы: задачи и напоминания, поиск в интернете, "
         "исследования, email, публикации, делегирование, анализ данных и многое другое. "
-        "Выбирай те инструменты которые реально нужны для задачи — не ограничивай себя только текстом.\n"
+        "Выбирай те инструменты которые реально нужны для задачи — не ограничивай себя только текстом.\n\n"
+        "СЛОЖНЫЕ СЦЕНАРИИ: ты можешь выполнять многошаговые задачи. Например:\n"
+        "1. Найти людей через research_topic / web_search → сохранить контакты save_email_contact\n"
+        "2. Запустить email-кампанию start_email_campaign или отправить письма send_email / negotiate_by_email\n"
+        "3. Создать задачи add_task для отслеживания прогресса\n"
+        "4. Опубликовать результаты create_post / publish_to_telegram\n"
+        "5. Делегировать часть работы коллеге delegate_to_agent\n"
+        "Не останавливайся на одном шаге — если задача требует цепочки действий, пройди все шаги.\n\n"
         "Отвечай кратко и по делу. Без markdown, без заголовков, без звёздочек (*улыбается* и т.п.) — только живой текст.\n\n"
         "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ: если часть задачи требует специализации другого агента команды, "
         "вызови инструмент delegate_to_agent(agent_name: str, task: str). "
@@ -3981,7 +3988,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _pending_subdelegations: list[dict] = []
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
-    for _iter in range(3):
+    for _iter in range(5):
         _resp = await _agent_inst.call_ai(
             _messages,
             use_tools=_use_tools,
@@ -4732,10 +4739,10 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         return _adp_final or "Миссия выполнена. Смотри ответы агентов выше."
 
     # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
-    MAX_ROUNDS = 4
+    MAX_ROUNDS = 5
     all_results: list = []   # [(agent_name, task, result)]
     called_agents: set = set()
-    _rework_count: dict = {}  # agent_name → сколько раз доработка (макс 1)
+    _rework_count: dict = {}  # agent_name → сколько раз доработка (макс 2)
 
     for _round in range(MAX_ROUNDS):
         if _round > 0:
@@ -4747,7 +4754,7 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
                 for a in _remaining
             ) if _remaining else "(все агенты уже работали)"
             # Список агентов которых можно отправить на доработку (не более 1 раза)
-            _reworkable = [n for n, _, _ in all_results if _rework_count.get(n, 0) < 1]
+            _reworkable = [n for n, _, _ in all_results if _rework_count.get(n, 0) < 2]
             _rework_hint = ""
             if _reworkable:
                 _rework_hint = (
@@ -4805,8 +4812,8 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         if action == 'rework':
             _rw_name = decision.get('agent_name', '')
             _ag = _find_agent(_rw_name)
-            if not _ag or _rework_count.get(_ag['name'], 0) >= 1:
-                break  # макс 1 доработка на агента
+            if not _ag or _rework_count.get(_ag['name'], 0) >= 2:
+                break  # макс 2 доработки на агента
             _rw_feedback = decision.get('rework_feedback', '')
             _dm = decision.get('director_message', '')
             if _dm:
@@ -4877,12 +4884,13 @@ async def _office_director_chat(user_message: str, user_id: int) -> str | None:
         "role": "user",
         "content": (
             f"Пользователь спросил: «{user_message}»\n"
-            f"Агенты команды ответили:\n\n{combined[:3000]}\n\n"
+            f"Агенты команды ответили:\n\n{combined[:4000]}\n\n"
             "Ответь пользователю как ASI Biont — живо, по существу, без шаблонных формулировок. "
             "Без markdown, без списков, без заголовков — пиши как в мессенджере. "
-            "Говори своими словами, опираясь на то что принесли агенты."
+            "Говори своими словами, опираясь на то что принесли агенты. "
+            "Если агенты запустили кампании, отправили письма, создали задачи — обязательно упомяни конкретные действия и результаты."
         ),
-    }], max_tokens=700)
+    }], max_tokens=800)
     return final_response or "Команда отработала. Проверь ответы агентов выше."
 
 
