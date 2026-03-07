@@ -3518,7 +3518,7 @@ def _build_user_context_sync(user_db_id: int) -> str:
     """
     try:
         import json as _j
-        from models import Session as _Db, User as _U, UserProfile as _UP, Goal as _G, UserAgent as _UA, EmailContact as _EC
+        from models import Session as _Db, User as _U, UserProfile as _UP, Goal as _G, UserAgent as _UA, EmailContact as _EC, Task as _T
         _s = _Db()
         try:
             user = _s.query(_U).filter_by(id=user_db_id).first()
@@ -3534,6 +3534,10 @@ def _build_user_context_sync(user_db_id: int) -> str:
                         .filter_by(user_id=user_db_id)
                         .order_by(_EC.created_at.desc())
                         .limit(30).all())
+            tasks = (_s.query(_T)
+                     .filter(_T.user_id == user_db_id, _T.status.in_(['pending', 'in_progress']))
+                     .order_by(_T.due_date.asc().nullslast())
+                     .limit(10).all())
         finally:
             _s.close()
     except Exception as _ctx_err:
@@ -3613,6 +3617,29 @@ def _build_user_context_sync(user_db_id: int) -> str:
                 line += f' — {c.notes[:80]}'
             contact_lines.append(line)
         parts.append('EMAIL-КОНТАКТЫ ПОЛЬЗОВАТЕЛЯ:\n' + '\n'.join(contact_lines))
+
+    # --- Активные задачи пользователя ---
+    if tasks:
+        task_lines = []
+        for t in tasks:
+            line = f'• {t.title}'
+            if t.status == 'in_progress':
+                line += ' [в работе]'
+            if t.due_date:
+                line += f' до {t.due_date.strftime("%d.%m.%Y %H:%M")}'
+            if t.delegated_to_username:
+                line += f' → делегировано {t.delegated_to_username}'
+                if t.delegation_status:
+                    line += f' ({t.delegation_status})'
+            if t.created_by_agent_id:
+                line += ' (создано агентом)'
+            if t.goal_id:
+                # найдём цель по id в уже загруженных
+                linked_goal = next((g for g in goals if g.id == t.goal_id), None)
+                if linked_goal:
+                    line += f' → цель: {linked_goal.title[:50]}'
+            task_lines.append(line)
+        parts.append('АКТИВНЫЕ ЗАДАЧИ:\n' + '\n'.join(task_lines))
 
     return '\n\n'.join(parts)
 
@@ -4707,7 +4734,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "ЛОГИКА ПРИНЯТИЯ РЕШЕНИЯ (думай по шагам, но выводи только JSON):\n\n"
         "1. Пойми, что РЕАЛЬНО нужно пользователю: чего он хочет достичь? Это разовый вопрос или работа?\n"
         "2. Оцени каждого агента: совпадают ли его умения (Умеет:) и специализация с потребностью?\n"
-        "3. Выбери action:\n"
+        "3. Связь с целями и задачами: если в КОНТЕКСТЕ есть ЦЕЛИ или АКТИВНЫЕ ЗАДАЧИ пользователя — "
+        "проверь, ПРОДВИГАЕТ ли запрос одну из целей или связан с активной задачей. "
+        "Если да → ОБЯЗАТЕЛЬНО используй delegate/adaptive/multi_delegate, НЕ self. "
+        "Агенты помогут продвинуть цель или выполнить задачу эффективнее.\n"
+        "4. Выбери action:\n"
         "   ВАЖНО: для СТРАТЕГИЧЕСКИХ задач (поиск людей, тестировщиков, клиентов, продвижение, маркетинг, "
         "аутрич, кампания, исследование рынка, создание контента, стратегия) — ВСЕГДА выбирай delegate, "
         "multi_delegate или adaptive. НИКОГДА self для таких задач. У тебя есть команда — используй её.\n"
@@ -4716,7 +4747,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "   • delegate — если хотя бы один агент может выполнить задачу: исследование, поиск, анализ, стратегия, тексты.\n"
         "   • multi_delegate — задача распадается на части, каждую может взять РАЗНЫЙ агент параллельно.\n"
         "   • adaptive — многошаговая миссия: вывод первого агента питает задачу второго (исследование -> план -> контент). "
-        "ПРЕДПОЧИТАЙ adaptive для задач типа 'найди тестировщиков', 'привлеки пользователей', 'запусти кампанию'.\n\n"
+        "ПРЕДПОЧИТАЙ adaptive для задач типа 'найди тестировщиков', 'привлеки пользователей', 'запусти кампанию'.\n"
+        "   EMAIL И ПЕРЕПИСКА: если пользователь просит проверить почту, отправить письмо, ответить на сообщение, "
+        "управлять перепиской — используй delegate/adaptive с агентом у которого есть email-интеграция (IMAP/SMTP). "
+        "Цепочка для email: проверить входящие → проанализировать → составить ответ → отправить. "
+        "НИКОГДА не отправляй пользователя 'проверить самому' если есть агент с email-доступом.\n\n"
         "ВЫБОР АГЕНТА: смотри на поле «Умеет:» и специализацию. Ищи совпадение с нуждой. "
         "Если ни один агент идеально не подходит — ВСЁ РАВНО делегируй ближайшему по специализации. "
         "Агенты универсальны — они могут исследовать, писать тексты, анализировать.\n"
@@ -4742,14 +4777,52 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     )
 
     # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
-    # Для ВСЕХ остальных сообщений — LLM сам решает делегировать или нет (без ключевых слов)
+    # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
     _ml = user_message.strip()
     _ml_lower = _ml.lower()
     _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
                         'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
     _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
     if _is_trivial:
-        return None  # ASI ответит сам через process_request
+        # Проверяем активную миссию перед bypass
+        _has_active_mission = False
+        _mission_context = ''
+        try:
+            _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
+            for _ma in _mission_anchors:
+                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
+                    _has_active_mission = True
+                    _md = _ma.get('data', {})
+                    _mission_context = _md.get('result_summary') or _md.get('task', '')
+                    break
+        except Exception:
+            pass
+
+        if not _has_active_mission:
+            return None  # Нет активной миссии — ASI ответит сам через process_request
+
+        # Есть активная миссия — "да"/"давай" = продолжить
+        # Подменяем запрос чтобы LLM понял контекст
+        _affirmative = _ml_lower.rstrip('!., ') in ('да', 'ок', 'окей', 'ладно', 'хорошо', 'давай')
+        if _affirmative and _mission_context:
+            # Переформулируем для директора: "Пользователь подтвердил — продолжай миссию"
+            _decision_prompt = (
+                f"Ты — ASI Biont, директор офиса. Пользователь подтвердил продолжение миссии.\n\n"
+                f"АКТИВНАЯ МИССИЯ: {_mission_context[:300]}\n\n"
+                f"Пользователь ответил: «{user_message}»\n\n"
+                f"ПРОФИЛИ АГЕНТОВ КОМАНДЫ:\n{_caps_block}\n"
+                f"{_ctx_hint}{_history_block}\n\n"
+                "Пользователь хочет ПРОДОЛЖИТЬ. Выбери следующее действие — delegate, adaptive или multi_delegate.\n"
+                "НЕ выбирай self — пользователь явно хочет продолжения работы агентов.\n\n"
+                "Ответь ТОЛЬКО JSON без ```:\n"
+                '{"action": "delegate", "agent_name": "точное имя агента", '
+                '"agent_task": "задача", "director_message": "обращение к агенту"}\n'
+                "или\n"
+                '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
+                '"first_agent_name": "имя", "first_agent_task": "задача", "director_message": "обращение"}'
+            )
+        elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
+            return None  # Отмена — сброс миссии
 
     decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250)
     if not decision_raw:
@@ -4859,11 +4932,14 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             _signal_text = _resp[-400:] if _resp else '(нет сигнала)'
             _routing_prompt = (
                 f"Миссия: {_mission_brief}\n\n"
-                f"Запрос пользователя: «{user_message}»\n\n"
+                f"Запрос пользователя: «{user_message}»\n"
+                f"{_ctx_hint}\n\n"
                 f"Агенты уже поработали:\n{_results_so_far}\n\n"
                 f"Сигнал последнего агента:\n{_signal_text}\n\n"
                 f"Доступные агенты (не задействованные):\n{_remaining_block}\n\n"
                 "Реши: миссия выполнена — или нужен ещё один агент?\n"
+                "Учитывай цели и задачи пользователя — выбирай агента, чья специализация лучше всего "
+                "продвигает цель или завершает задачу.\n"
                 "Если выполнена → {\"action\": \"finalize\"}\n"
                 "Если нужен ещё агент → {\"action\": \"next\", \"agent_name\": \"точное имя\", "
                 "\"agent_task\": \"что сделать (1 предложение)\", \"director_message\": \"прямое обращение\"}\n"
