@@ -3998,7 +3998,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Если задача требует цепочки действий — пройди все шаги, не останавливайся на одном.\n\n"
 
         "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ: если часть задачи требует специализации другого агента команды, "
-        "вызови delegate_to_agent(agent_name, task). Только когда реально нужна другая экспертиза.\n\n"
+        "используй delegate_task(title, delegated_to_username=имя_агента). Только когда реально нужна другая экспертиза.\n\n"
 
         "ЕСЛИ ЗАСТРЯЛ: начни ПЕРВУЮ строку с 'BLOCKED: <причина>'. Это уведомит пользователя.\n\n"
 
@@ -4041,6 +4041,44 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             pass
     elif dialog_context:
         logger.debug("[DIRECTOR-EXEC] context already passed (%d chars), skipping DB reload", len(dialog_context))
+
+    # ── Шаг 0.5: Агент узнаёт о команде коллег и своих инструментах ───────────
+    try:
+        from models import Session as _Sess_team, UserAgent as _UA_team
+        _s_team = _Sess_team()
+        try:
+            # Находим автора агента (владельца) для загрузки команды
+            _author_id_for_team = agent.get('author_id')
+            if not _author_id_for_team:
+                from models import User as _U_team
+                _u_team = _s_team.query(_U_team).filter_by(telegram_id=user_id).first()
+                if _u_team:
+                    _author_id_for_team = _u_team.id
+            if _author_id_for_team:
+                _teammates = (
+                    _s_team.query(_UA_team)
+                    .filter(
+                        _UA_team.author_id == _author_id_for_team,
+                        _UA_team.status.in_(['active', 'paused']),
+                        _UA_team.id != agent.get('id'),
+                    )
+                    .order_by(_UA_team.id.asc())
+                    .limit(10)
+                    .all()
+                )
+                if _teammates:
+                    _team_lines = []
+                    for _tm in _teammates:
+                        _role = _tm.job_title or _tm.specialization or ''
+                        _team_lines.append(f"  • {_tm.name}{' — ' + _role if _role else ''}")
+                    system_prompt += (
+                        "\n\nКОМАНДА КОЛЛЕГ (можешь делегировать через delegate_task):\n"
+                        + "\n".join(_team_lines)
+                    )
+        finally:
+            _s_team.close()
+    except Exception as _te_team:
+        logger.debug('[DIRECTOR-EXEC] team load for agent: %s', _te_team)
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
     script_context = ""
@@ -4148,7 +4186,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'поиск', 'тренд')):
             _inferred_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
         # Задачи всегда доступны
-        _inferred_tools.update({'add_task', 'delegate_to_agent'})
+        _inferred_tools.update({'add_task', 'delegate_task'})
         if _inferred_tools:
             try:
                 from .tools import get_available_tools as _gat3
@@ -4159,6 +4197,37 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 pass
 
     # ── Шаг 3: Tool-calling loop (макс 3 итерации) ────────────────────────────
+    # Инжектируем список доступных инструментов в промпт агента
+    try:
+        from .tools import get_available_tools as _gat_aware
+        _all_tools_info = _gat_aware()
+        _TOOL_LABELS = {
+            'add_task': 'создать задачу', 'complete_task': 'закрыть задачу',
+            'edit_task': 'изменить задачу', 'delete_task': 'удалить задачу',
+            'list_tasks': 'список задач', 'create_goal': 'создать цель',
+            'list_goals': 'список целей', 'delegate_task': 'поручить агенту/человеку',
+            'research_topic': 'исследование темы', 'web_search': 'веб-поиск',
+            'send_email': 'отправить email', 'negotiate_by_email': 'переговоры по email',
+            'create_post': 'создать пост', 'publish_to_telegram': 'пост в TG',
+            'publish_to_discord': 'пост в Discord', 'generate_image': 'генерация картинки',
+            'start_content_campaign': 'автопостинг', 'find_relevant_contacts_for_task': 'поиск контактов',
+            'update_profile': 'обновить профиль', 'run_agent_action': 'внешнее действие',
+        }
+        if _exclude_for_agent:
+            _my_tools = [t['function']['name'] for t in _all_tools_info
+                         if t['function']['name'] not in _exclude_for_agent]
+        else:
+            _my_tools = [t['function']['name'] for t in _all_tools_info]
+        if _my_tools:
+            _labeled = [f"{n} ({_TOOL_LABELS[n]})" if n in _TOOL_LABELS else n for n in _my_tools[:15]]
+            system_prompt = system_prompt.replace(
+                "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
+                "исследования, email, публикации, делегирование и многое другое. ",
+                "ТВОИ ИНСТРУМЕНТЫ: " + ", ".join(_labeled) + ". ",
+            )
+    except Exception:
+        pass
+
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
     # (execution_history, счётчики, лимиты у каждого агента свои)
     _agent_inst = HybridAutonomousAgent()
@@ -4232,13 +4301,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             except Exception:
                 _targs = {}
 
-            # ── Специальный инструмент: агент делегирует другому агенту ──────────────────
+            # ── Специальный инструмент: агент пытается вызвать несуществующий delegate_to_agent ──
             if _tname == 'delegate_to_agent':
-                # Субделегирование отключено — директор сам управляет агентами
-                _tc_result = json.dumps(
-                    {'status': 'skipped', 'message': 'Делегирование другим агентам через директора. Выполни задачу сам.'},
-                    ensure_ascii=False,
-                )
+                # Перенаправляем на реальный delegate_task
+                _tname = 'delegate_task'
+                if 'agent_name' in _targs and 'delegated_to_username' not in _targs:
+                    _targs['delegated_to_username'] = _targs.pop('agent_name')
+                if 'task' in _targs and 'title' not in _targs:
+                    _targs['title'] = _targs.pop('task')
             # ── Обычные инструменты ───────────────────────────────────────────────────────────
             # Проверяем доступность инструмента
             elif _allowed_tools and _tname not in _allowed_tools:
