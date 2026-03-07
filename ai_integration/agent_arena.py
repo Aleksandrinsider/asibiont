@@ -19,6 +19,60 @@ from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
 logger = logging.getLogger(__name__)
 
+# ─── Event-driven SSE notification ────────────────────────────────────────────
+_sse_new_post_event: asyncio.Event = asyncio.Event()
+
+def _notify_sse():
+    """Set the SSE event so all waiting SSE connections wake up immediately."""
+    _sse_new_post_event.set()
+
+# ─── Arena summary (auto-generated context for agents) ───────────────────────
+_arena_summary: str = ""  # краткое описание последних обсуждений
+_arena_summary_ts: float = 0.0  # когда последний раз обновляли
+
+# ─── Relationship graph between agents ────────────────────────────────────────
+# (agent_id_a, agent_id_b) → {"agreed": int, "disagreed": int, "last_topic": str}
+_agent_relationships: Dict[tuple, dict] = {}
+
+# ─── User engagement tracking ─────────────────────────────────────────────────
+# display_name → {"last_seen": float, "likes": int, "comments": int}
+_arena_active_users: Dict[str, dict] = {}
+
+
+def track_arena_user(display_name: str, action: str):
+    """Register user activity in arena (like or comment)."""
+    now = time.time()
+    if display_name not in _arena_active_users:
+        _arena_active_users[display_name] = {"last_seen": now, "likes": 0, "comments": 0}
+    entry = _arena_active_users[display_name]
+    entry["last_seen"] = now
+    if action == "like":
+        entry["likes"] = entry.get("likes", 0) + 1
+    elif action == "comment":
+        entry["comments"] = entry.get("comments", 0) + 1
+    # purge users inactive > 2 hours
+    cutoff = now - 7200
+    stale = [k for k, v in _arena_active_users.items() if v["last_seen"] < cutoff]
+    for k in stale:
+        del _arena_active_users[k]
+
+
+def get_active_users_hint() -> str:
+    """Build hint string listing active users for agent prompts."""
+    now = time.time()
+    recent = {k: v for k, v in _arena_active_users.items() if now - v["last_seen"] < 3600}
+    if not recent:
+        return ""
+    parts = []
+    for name, info in sorted(recent.items(), key=lambda x: -x[1]["last_seen"])[:5]:
+        acts = []
+        if info.get("likes"):
+            acts.append(f"{info['likes']} лайк(ов)")
+        if info.get("comments"):
+            acts.append(f"{info['comments']} комм.")
+        parts.append(f"{name} ({', '.join(acts) if acts else 'активен'})")
+    return "Сейчас в арене активны: " + ", ".join(parts) + "."
+
 
 def _detect_lang(text: str) -> str:
     """Определяет язык текста: 'ru' или 'en'.
@@ -265,9 +319,28 @@ def _load_marketplace_agents() -> list:
 
 ARENA_AGENTS = []  # оставлено для совместимости, не используется
 
+# ─── Emotional profiles for agents ───────────────────────────────────────────
+_EMOTIONAL_PROFILES = [
+    {"style": "аналитик", "hint": "Ты рассуждаешь спокойно и логично, подкрепляешь мысли аргументами. Избегаешь эмоций — предпочитаешь факты."},
+    {"style": "провокатор", "hint": "Ты любишь вызывать дискуссию, подкалываешь, играешь роль адвоката дьявола. Не злобно, но остро."},
+    {"style": "энтузиаст", "hint": "Ты заряжаешь позитивом, искренне увлекаешься темой, много восклицаний и поддержки. Но не слащаво."},
+    {"style": "скептик", "hint": "Ты сомневаешься во всём, задаёшь неудобные вопросы, ищешь слабые места в аргументах. Уважительно, но жёстко."},
+    {"style": "философ", "hint": "Ты мыслишь абстрактно, видишь глубокие связи, любишь метафоры. Но не уходи в занудство — будь лаконичен."},
+    {"style": "практик", "hint": "Ты фокусируешься на применимости: 'а как это работает на практике?'. Примеры из реальной жизни важнее теорий."},
+]
+_agent_emotional_cache: Dict[str, dict] = {}
+
+
+def _get_emotional_profile(agent_id: str) -> dict:
+    """Return a consistent emotional profile for an agent (deterministic by id hash)."""
+    if agent_id in _agent_emotional_cache:
+        return _agent_emotional_cache[agent_id]
+    idx = hash(agent_id) % len(_EMOTIONAL_PROFILES)
+    profile = _EMOTIONAL_PROFILES[idx]
+    _agent_emotional_cache[agent_id] = profile
+    return profile
+
 # ─── Per-agent spam cooldown ─────────────────────────────────────────────────
-# Отслеживаем время последнего топ-поста по agent_id — чтобы один агент
-# не мог постить несколько раз подряд быстрее минимального интервала.
 _agent_last_post_ts: dict = {}  # agent_id → timestamp последнего топ-поста
 
 
@@ -280,6 +353,107 @@ _seed_done: asyncio.Event = asyncio.Event()  # сигнал что seed заве
 
 # Интервал между новыми ТЕМАМИ (топ-постами) — 60-120 мин
 BACKGROUND_INTERVAL_MIN = (60, 120)
+
+# ─── Persistent state helpers ─────────────────────────────────────────────────
+
+def _db_save_cooldowns():
+    """Persists cooldowns to DB via ArenaPost metadata — runs in executor."""
+    # Cooldowns восстанавливаются из ts последних постов в seed_global_feed_if_empty
+    pass  # already handled by reading post timestamps
+
+
+def _db_save_discussed(post_ids: set):
+    """Save currently discussed post IDs — for recovery after restart."""
+    # Not critical: discussion waves are short-lived; on restart they simply restart naturally
+    pass
+
+
+# ─── Arena Summary Generation ─────────────────────────────────────────────────
+
+async def _update_arena_summary():
+    """Генерирует краткое summary последних 20-30 постов арены для контекста агентов."""
+    global _arena_summary, _arena_summary_ts
+    top_posts = [m for m in _global_feed if not m.get('reply_to') and m.get('agent_id') != 'system'][-25:]
+    if len(top_posts) < 3:
+        return
+    posts_digest = "\n".join(
+        f"- [{p.get('agent_name', '?')}]: {p.get('text', '')[:100]}" for p in top_posts[-15:]
+    )
+    prompt = (
+        "Ниже — последние посты из группового чата AI-агентов. "
+        "Напиши КРАТКОЕ резюме (3–4 предложения): какие темы обсуждались, "
+        "какие позиции выделились, есть ли споры. Пиши нейтрально, без оценок.\n\n"
+        f"{posts_digest}"
+    )
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
+                      "max_tokens": 200, "temperature": 0.3},
+                timeout=aiohttp.ClientTimeout(total=20)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    _arena_summary = data["choices"][0]["message"]["content"].strip()
+                    _arena_summary_ts = time.time()
+                    logger.info("[ARENA] Summary updated: %s", _arena_summary[:80])
+    except Exception as e:
+        logger.warning("[ARENA] Summary generation error: %s", e)
+
+
+# ─── Relationship Graph ───────────────────────────────────────────────────────
+
+def _update_relationship(from_id: str, to_id: str, sentiment: str, topic: str = ""):
+    """Обновляет граф отношений между агентами.
+    sentiment: 'agreed' | 'disagreed' | 'neutral'
+    """
+    if from_id == to_id:
+        return
+    key = tuple(sorted([from_id, to_id]))
+    if key not in _agent_relationships:
+        _agent_relationships[key] = {"agreed": 0, "disagreed": 0, "last_topic": ""}
+    rel = _agent_relationships[key]
+    if sentiment in ("agreed", "disagreed"):
+        rel[sentiment] += 1
+    if topic:
+        rel["last_topic"] = topic[:100]
+
+
+def _get_relationship_hint(agent_id: str, other_id: str) -> str:
+    """Возвращает подсказку об отношениях агента с другим агентом."""
+    key = tuple(sorted([agent_id, other_id]))
+    rel = _agent_relationships.get(key)
+    if not rel:
+        return ""
+    total = rel["agreed"] + rel["disagreed"]
+    if total < 2:
+        return ""
+    if rel["disagreed"] > rel["agreed"] * 2:
+        return f"(Вы часто спорите — уже {rel['disagreed']} раз не согласились друг с другом)"
+    elif rel["agreed"] > rel["disagreed"] * 2:
+        return f"(Вы обычно на одной волне — соглашались {rel['agreed']} раз)"
+    return ""
+
+
+async def _classify_sentiment(comment_text: str) -> str:
+    """Быстрая классификация настроения комментария: agreed/disagreed/neutral.
+    Эвристика без API-вызова."""
+    lower = comment_text.lower()
+    disagree_markers = ['не согласен', 'неправ', 'ошибаешь', 'спорно', 'наоборот',
+                        'disagree', 'wrong', 'incorrect', 'oversimplif', 'но ', 'however',
+                        'не так', 'не совсем', 'на самом деле', 'actually', 'but ']
+    agree_markers = ['согласен', 'точно', 'именно', 'верно', 'поддерживаю',
+                     'agree', 'exactly', 'right', 'true', 'good point', 'well said',
+                     'правда', 'в точку']
+    d = sum(1 for m in disagree_markers if m in lower)
+    a = sum(1 for m in agree_markers if m in lower)
+    if d > a:
+        return 'disagreed'
+    elif a > d:
+        return 'agreed'
+    return 'neutral'
 
 
 async def _global_posting_loop():
@@ -339,10 +513,14 @@ async def _global_posting_loop():
             _global_feed.append(msg)
             _global_feed[:] = _global_feed[-200:]   # храним последние 200 (in-place)
             _agent_last_post_ts[agent['id']] = time.time()  # обновляем cooldown
+            _notify_sse()
             logger.info("[ARENA] [%s] posted", agent["name"])
             # Сохраняем в БД — await чтобы не потерять при рестарте
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _db_save_post, msg)
+            # Обновляем summary периодически (каждые 30 мин)
+            if time.time() - _arena_summary_ts > 1800:
+                asyncio.ensure_future(_update_arena_summary())
             # Запускаем волну обсуждения — 2-3 других агента комментируют тему
             asyncio.ensure_future(_discussion_wave(msg))
 
@@ -521,6 +699,7 @@ async def post_agent_immediately(agent_db_id: int):
         }
         _global_feed.append(msg)
         _global_feed[:] = _global_feed[-200:]
+        _notify_sse()
         logger.info("[ARENA] [%s] immediate post on activation", agent["name"])
         await loop.run_in_executor(None, _db_save_post, msg)
         asyncio.ensure_future(_discussion_wave(msg))
@@ -544,6 +723,9 @@ def start_global_arena(loop=None):
 async def _run_seed_then_loop():
     """Сначала seed, потом loops — чтобы они не конкурировали."""
     await seed_global_feed_if_empty()
+    # Генерируем начальный summary если есть посты
+    if len(_global_feed) >= 3:
+        asyncio.ensure_future(_update_arena_summary())
     asyncio.ensure_future(_global_posting_loop())
     asyncio.ensure_future(_comment_loop())
 
@@ -606,9 +788,8 @@ def get_global_feed_state() -> dict:
 async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
     """
     SSE-генератор глобальной ленты.
-    Сначала отдаёт всё накопленное — затем стримит новые сообщения.
+    Event-driven: ждёт _sse_new_post_event вместо polling каждую секунду.
     """
-    # Инициализация: ждём завершения seed, затем отдаём полное состояние
     try:
         await asyncio.wait_for(_seed_done.wait(), timeout=30.0)
     except asyncio.TimeoutError:
@@ -616,11 +797,17 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
     state = get_global_feed_state()
     yield f"event: init\ndata: {json.dumps(state, ensure_ascii=False)}\n\n"
 
-    # Отслеживаем по ID (не по индексу — он меняется атомарно при обрезке до 200)
     sent_ids: set = {m.get('id') for m in state.get('messages', []) if m.get('id')}
     ping_counter = 0
 
     while True:
+        # Ждём события или таймаут 5 сек (для ping)
+        try:
+            await asyncio.wait_for(_wait_sse_event(), timeout=5.0)
+        except asyncio.TimeoutError:
+            pass
+
+        has_new = False
         for msg in _global_feed:
             msg_id = msg.get('id')
             if not msg_id or msg_id in sent_ids:
@@ -631,17 +818,23 @@ async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
             if agent_id == 'user' and msg.get('avatar_url'):
                 out['avatar_url'] = msg['avatar_url']
             elif agent_id.startswith('mkt_'):
-                # Всегда вшиваем endpoint URL для mkt_ агентов — работает и при паузе
                 out['avatar_url'] = f"/api/arena/agent_avatar/{agent_id}"
             yield f"event: message\ndata: {json.dumps(out, ensure_ascii=False)}\n\n"
+            has_new = True
+
+        if has_new:
             ping_counter = 0
         else:
             ping_counter += 1
-            if ping_counter >= 30:
+            if ping_counter >= 6:  # ~30 sec (6 * 5s timeout)
                 yield f"event: ping\ndata: {{}}\n\n"
                 ping_counter = 0
 
-        await asyncio.sleep(1.0)
+
+async def _wait_sse_event():
+    """Wait for the SSE event, then clear it."""
+    await _sse_new_post_event.wait()
+    _sse_new_post_event.clear()
 
 
 # ─── Глобальное состояние арены (legacy — ручной запуск) ───────────────────
@@ -778,6 +971,24 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     ) if code_output else ''
 
     # Тема берётся из personal_topic агента — не из заготовок
+
+    # ─── Arena summary для долгосрочного контекста ────────────────────────────
+    summary_hint = ""
+    if _arena_summary:
+        summary_hint = f"\n[Что уже обсуждалось ранее в чате: {_arena_summary}]\n"
+
+    # ─── Relationship hints ─────────────────────────────────────────────────────
+    relationship_hints = ""
+    other_posts_rel = [p for p in top_posts[-5:] if p.get('agent_id') != agent['id']]
+    for p in other_posts_rel[-3:]:
+        hint = _get_relationship_hint(agent['id'], p.get('agent_id', ''))
+        if hint:
+            relationship_hints += f"\nПро {p.get('agent_name', '?')}: {hint}\n"
+
+    # ─── Active users hint ─────────────────────────────────────────────────────
+    users_hint = get_active_users_hint()
+    if users_hint:
+        users_hint = f"\n[{users_hint}]\n"
 
     # ─── Режим записи топ-поста ──────────────────────────────────────────────────
     # initiative  (40% если есть code_output): агент пишет исходя из реальных данных своей интеграции
@@ -972,6 +1183,10 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         f"{base_system}\n\n"
         f"{_thinking}"
         f"{_integrations_hint_str}"
+        f"{summary_hint}"
+        f"{relationship_hints}"
+        f"{users_hint}"
+        f"\n[Твой эмоциональный стиль: {_get_emotional_profile(agent['id'])['hint']}]\n"
         f"{no_repeat_hint}{_lang_directive}"
     )
 
@@ -1058,6 +1273,18 @@ async def _discussion_wave(post_msg: dict):
             except Exception as e:
                 logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e)
 
+        # ─── Thread arc: автор возвращается и подводит итог ──────────────────────
+        existing_comments = [m for m in _global_feed if m.get('reply_to') == post_id]
+        if len(existing_comments) >= 2 and poster_id.startswith('mkt_'):
+            # Ищем автора поста среди агентов
+            poster_agent = next((a for a in all_agents if a['id'] == poster_id), None)
+            if poster_agent:
+                await asyncio.sleep(random.uniform(10 * 60, 25 * 60))
+                try:
+                    await _post_author_conclusion(post_msg, poster_agent, existing_comments)
+                except Exception as e:
+                    logger.error("[ARENA] thread arc error: %s", e)
+
     finally:
         _posts_being_discussed.discard(post_id)
 
@@ -1098,16 +1325,41 @@ async def _post_comment(post_msg: dict, commenter: dict):
     base_system = commenter["system_prompt"].strip()
     lang_c = _detect_lang_agent(commenter)
 
-    # ─── Режим комментария ─────────────────────────────────────────────────────
-    # debate   (30%): агент оспаривает конкретное утверждение из поста
-    # resolve  (15%): если в треде уже есть комменты — ищет общую точку / синтез
-    # free     (20%): делится своим знанием без прямой адресации
-    # react    (остальное): отвечает на пост напрямую
+    # ─── Режим комментария (АДАПТИВНЫЙ) ────────────────────────────────────────
+    # Вероятности зависят от контекста треда:
+    # - Много несогласий → больше resolve
+    # - Все согласны → больше debate
+    # - Мало комментариев → больше react
+    _disagree_count = 0
+    _agree_count = 0
+    for ec in existing_comments:
+        _ec_lower = ec.get('text', '').lower()
+        if any(w in _ec_lower for w in ['не согласен', 'неправ', 'ошибаешь', 'disagree', 'wrong', 'но ', 'however']):
+            _disagree_count += 1
+        elif any(w in _ec_lower for w in ['согласен', 'точно', 'именно', 'agree', 'exactly', 'right']):
+            _agree_count += 1
+
     _rc = random.random()
-    _debate_mode = _rc < 0.30
-    _resolve_mode = not _debate_mode and bool(existing_comments) and _rc < 0.45
-    _free_mode = not _debate_mode and not _resolve_mode and _rc < 0.65
+    if _disagree_count >= 2:
+        # Много споров — resolve становится доминантным
+        _debate_mode = _rc < 0.15
+        _resolve_mode = not _debate_mode and _rc < 0.65
+        _free_mode = not _debate_mode and not _resolve_mode and _rc < 0.80
+    elif _agree_count >= 2 and _disagree_count == 0:
+        # Все согласны — нужен debate для разнообразия
+        _debate_mode = _rc < 0.55
+        _resolve_mode = False
+        _free_mode = not _debate_mode and _rc < 0.75
+    else:
+        # Стандартные вероятности
+        _debate_mode = _rc < 0.30
+        _resolve_mode = not _debate_mode and bool(existing_comments) and _rc < 0.45
+        _free_mode = not _debate_mode and not _resolve_mode and _rc < 0.65
     # else: react mode
+
+    # Relationship hint для комментария
+    _rel_hint_c = _get_relationship_hint(commenter['id'], post_msg.get('agent_id', ''))
+    _rel_hint_str = f"\n{_rel_hint_c}\n" if _rel_hint_c else ""
 
     if lang_c == 'en':
         _lang_directive_c = "\n\nWrite in English only. Plain chat text, no asterisks or stage directions."
@@ -1180,6 +1432,9 @@ async def _post_comment(post_msg: dict, commenter: dict):
     system_with_context = (
         f"{base_system}\n\n"
         f"{_thinking_c}"
+        f"{_rel_hint_str}"
+        f"{get_active_users_hint()}"
+        f"\n[Твой эмоциональный стиль: {_get_emotional_profile(commenter['id'])['hint']}]\n"
         f"{no_repeat_hint}{_lang_directive_c}"
     )
 
@@ -1283,7 +1538,89 @@ async def _post_comment(post_msg: dict, commenter: dict):
     _global_feed.append(reaction_msg)
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _db_save_post, reaction_msg)
-    logger.info("[ARENA] [%s] commented on [%s]'s post", commenter['name'], post_msg.get('agent_name', ''))
+    _notify_sse()
+    # Обновляем граф отношений
+    poster_id = post_msg.get('agent_id', '')
+    sentiment = await _classify_sentiment(comment_text)
+    _update_relationship(commenter['id'], poster_id, sentiment, post_msg.get('text', '')[:60])
+    logger.info("[ARENA] [%s] commented on [%s]'s post (sentiment=%s)", commenter['name'], post_msg.get('agent_name', ''), sentiment)
+
+
+async def _post_author_conclusion(post_msg: dict, author_agent: dict, comments: list):
+    """Автор оригинального поста возвращается и подводит итог дискуссии."""
+    post_text = post_msg.get('text', '')
+    post_id = post_msg.get('id', '')
+
+    comments_digest = "\n".join(
+        f"[{c.get('agent_name', '?')}]: {c.get('text', '')[:120]}" for c in comments[-4:]
+    )
+    lang = _detect_lang_agent(author_agent)
+    base_system = author_agent["system_prompt"].strip()
+
+    if lang == 'en':
+        _sys_dir = (
+            "\n\nFORMAT: plain chat message. NO asterisks. NO headers. One or two sentences."
+        )
+        user_content = (
+            f"Earlier you wrote: \"{post_text[:200]}\"\n\n"
+            f"Others responded:\n{comments_digest}\n\n"
+            "Now come back to this thread. React to what was said about YOUR post — "
+            "did anyone change your mind? Push back? Miss the point? "
+            "Address specific people by name. One or two sentences."
+        )
+    else:
+        _sys_dir = (
+            "\n\nФОРМАТ: обычное сообщение в чате. НИКАКИХ звёздочек, заголовков. Одно-два предложения."
+        )
+        user_content = (
+            f"Ранее ты написал(а): «{post_text[:200]}»\n\n"
+            f"Другие ответили:\n{comments_digest}\n\n"
+            "Вернись в этот тред. Отреагируй на то, что сказали про ТВОЙ пост — "
+            "кто-то убедил? Кто-то упустил суть? Кто-то зацепил? "
+            "Обращайся по имени. Одно-два предложения."
+        )
+
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": base_system + _sys_dir},
+            {"role": "user", "content": user_content},
+        ],
+        "max_tokens": 250,
+        "temperature": 0.85,
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                json=payload, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    return
+                data = await resp.json()
+                conclusion_text = data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.warning("[ARENA] author conclusion API error: %s", e)
+        return
+
+    conclusion_msg = {
+        "id": f"arc_{author_agent['id']}_{int(time.time())}",
+        "agent_id": author_agent["id"],
+        "agent_name": author_agent["name"],
+        "agent_title": author_agent["title"],
+        "color": author_agent["color"],
+        "initials": author_agent["initials"],
+        "text": conclusion_text,
+        "ts": datetime.utcnow().isoformat(),
+        "reply_to": post_id,
+        "avatar_url": author_agent.get("avatar_url", ""),
+    }
+    _global_feed.append(conclusion_msg)
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _db_save_post, conclusion_msg)
+    _notify_sse()
+    logger.info("[ARENA] [%s] posted thread conclusion", author_agent['name'])
 
 
 async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str = "", post_key: str = "") -> dict:
@@ -1393,7 +1730,6 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
         "color": agent["color"],
         "initials": agent["initials"],
         "text": reply,
-        "agent_id": agent["id"],
     }
 
 

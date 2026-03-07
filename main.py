@@ -10852,6 +10852,18 @@ async def api_arena_stream_handler(request):
 async def api_arena_comment_handler(request):
     """POST /api/arena/comment — пользователь оставил комментарий, агент отвечает"""
     try:
+        # Auth: опциональная, но ограничиваем rate (5 комментов/мин на IP)
+        client_ip = request.headers.get('X-Forwarded-For', request.remote or '0.0.0.0')
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        _arena_cmt_key = f'{client_ip}:arena_cmt'
+        import time as _t_cmt
+        _now_cmt = _t_cmt.time()
+        _rate_limit_store[_arena_cmt_key] = [ts for ts in _rate_limit_store.get(_arena_cmt_key, []) if _now_cmt - ts < 60]
+        if len(_rate_limit_store[_arena_cmt_key]) >= 5:
+            return web.json_response({'error': 'Too many comments. Try again later.'}, status=429)
+        _rate_limit_store[_arena_cmt_key].append(_now_cmt)
+
         data = await request.json()
         comment_text = (data.get('text') or '').strip()
         post_text = (data.get('context') or '').strip()
@@ -10888,6 +10900,12 @@ async def api_arena_comment_handler(request):
                 _af.append(user_msg)
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, _dsp, user_msg)
+                # SSE notify
+                from ai_integration.agent_arena import _notify_sse as _ns_c
+                _ns_c()
+                # Track user engagement
+                from ai_integration.agent_arena import track_arena_user as _tau_c
+                _tau_c(display_name, 'comment')
             except Exception as _upe:
                 logger.warning(f"[ARENA] user comment persistence error: {_upe}")
 
@@ -10912,7 +10930,10 @@ async def api_arena_comment_handler(request):
                 _af.append(reply_msg)
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, _dsp, reply_msg)
-                reply['_reply_id'] = reply_msg['id']  # чтобы JS мог пометить как rendered
+                reply['_reply_id'] = reply_msg['id']
+                # SSE notify
+                from ai_integration.agent_arena import _notify_sse as _ns_r
+                _ns_r()
             except Exception as _pe:
                 logger.warning(f"[ARENA] reply persistence error: {_pe}")
 
@@ -11420,6 +11441,18 @@ app.router.add_get('/api/arena/agent_avatar/{agent_id}', api_arena_agent_avatar_
 async def api_arena_post_like_handler(request):
     """POST /api/arena/post/{post_key}/like — лайк/анлайк поста, обновляет счётчик у агента"""
     try:
+        # Rate limit: 20 лайков/мин на IP
+        client_ip = request.headers.get('X-Forwarded-For', request.remote or '0.0.0.0')
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        _arena_like_key = f'{client_ip}:arena_like'
+        import time as _t_like
+        _now_like = _t_like.time()
+        _rate_limit_store[_arena_like_key] = [ts for ts in _rate_limit_store.get(_arena_like_key, []) if _now_like - ts < 60]
+        if len(_rate_limit_store[_arena_like_key]) >= 20:
+            return web.json_response({'error': 'Too many likes'}, status=429)
+        _rate_limit_store[_arena_like_key].append(_now_like)
+
         post_key = request.match_info.get('post_key', '')
         session_db = Session()
         try:
@@ -11450,6 +11483,14 @@ async def api_arena_post_like_handler(request):
                     pass
             session_db.commit()
             new_count = post.likes_count
+            # Track user engagement (like)
+            if liked:
+                try:
+                    _like_dn = (data.get('display_name') or client_ip[:16] or 'Аноним').strip()[:50]
+                    from ai_integration.agent_arena import track_arena_user as _tau_l
+                    _tau_l(_like_dn, 'like')
+                except Exception:
+                    pass
             # Синхронизируем in-memory _global_feed чтобы SSE init не отдавал устаревший счётчик
             try:
                 from ai_integration.agent_arena import update_post_likes_in_feed
@@ -11514,6 +11555,18 @@ app.router.add_delete('/api/arena/entry/{post_key}', api_arena_delete_entry_hand
 async def api_arena_user_post_handler(request):
     """POST /api/arena/user-post — пользователь публикует пост в ленту арены"""
     try:
+        # Auth: опциональная, rate limit 3 поста/мин на IP
+        client_ip = request.headers.get('X-Forwarded-For', request.remote or '0.0.0.0')
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        _arena_post_key = f'{client_ip}:arena_post'
+        import time as _t_up
+        _now_up = _t_up.time()
+        _rate_limit_store[_arena_post_key] = [ts for ts in _rate_limit_store.get(_arena_post_key, []) if _now_up - ts < 60]
+        if len(_rate_limit_store[_arena_post_key]) >= 3:
+            return web.json_response({'error': 'Too many posts. Try again later.'}, status=429)
+        _rate_limit_store[_arena_post_key].append(_now_up)
+
         data = await request.json()
         text = (data.get('text') or '').strip()
         if not text:
@@ -11537,6 +11590,9 @@ async def api_arena_user_post_handler(request):
         _gf.append(msg)
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _dsp, msg)
+        # SSE notify
+        from ai_integration.agent_arena import _notify_sse as _ns_up
+        _ns_up()
         # Запускаем волну обсуждения: агенты прокомментируют пост пользователя
         try:
             from ai_integration.agent_arena import _discussion_wave as _dw
