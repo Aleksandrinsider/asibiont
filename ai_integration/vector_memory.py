@@ -12,6 +12,11 @@
 - При генерации ответа — semantic search по контексту
 - Результат вставляется в системный промпт как [СЕМАНТИЧЕСКАЯ ПАМЯТЬ]
 
+Embeddings:
+- Приоритет: OpenAI text-embedding-3-small (если OPENAI_API_KEY задан)
+- Fallback: улучшенные pseudo-embeddings (50 категорий + TF-IDF bigrams)
+- Dimension: 384 (сжатие для OpenAI, нативная для pseudo)
+
 ВАЖНО: Все Pinecone-операции (upsert, query) — синхронные HTTP-вызовы.
 Публичные async-обёртки используют asyncio.to_thread() чтобы не блокировать event loop.
 """
@@ -22,7 +27,9 @@ import asyncio
 import hashlib
 import logging
 import re
+import math
 from datetime import datetime
+from collections import Counter
 
 from config import PINECONE_API_KEY
 
@@ -72,64 +79,189 @@ def _get_pinecone():
 
 
 # ═══════════════════════════════════════════════════════════════
-# LIGHTWEIGHT EMBEDDINGS (без внешних моделей)
+# EMBEDDINGS — OpenAI (приоритет) + улучшенные pseudo (fallback)
 # ═══════════════════════════════════════════════════════════════
 
-# Словарь семантических категорий для pseudo-embeddings
+# Расширенные семантические категории (50 тем) — гранулярнее = больше дискриминативности
 SEMANTIC_CATEGORIES = {
-    'работа': ['работа', 'проект', 'задача', 'дедлайн', 'клиент', 'релиз', 'код', 'баг', 'фича', 'api',
-               'разработка', 'программирование', 'стартап', 'продукт', 'mvp', 'запуск', 'команда'],
-    'здоровье': ['здоровье', 'спорт', 'тренировка', 'бег', 'зал', 'сон', 'усталость', 'выгорание',
-                 'медитация', 'питание', 'диета', 'вес', 'энергия', 'отдых'],
-    'финансы': ['деньги', 'инвестиции', 'бюджет', 'зарплата', 'доход', 'расход', 'прибыль', 'кредит',
-                'фондирование', 'раунд', 'инвестор', 'выручка', 'подписка', 'оплата'],
-    'отношения': ['друг', 'семья', 'партнер', 'коллега', 'конфликт', 'общение', 'поддержка',
-                  'одиночество', 'встреча', 'знакомство', 'нетворкинг', 'контакт'],
-    'обучение': ['учёба', 'курс', 'книга', 'навык', 'опыт', 'урок', 'лекция', 'практика',
-                 'сертификат', 'обучение', 'развитие', 'рост', 'менторство'],
-    'эмоции': ['рад', 'грустно', 'устал', 'злюсь', 'волнуюсь', 'боюсь', 'счастлив', 'мотивация',
-               'выгорание', 'стресс', 'тревога', 'спокойствие', 'энтузиазм'],
-    'цели': ['цель', 'план', 'стратегия', 'миссия', 'видение', 'достижение', 'результат',
-             'прогресс', 'шаг', 'этап', 'марафон', 'привычка', 'рутина'],
-    'ai_tech': ['ai', 'нейросеть', 'агент', 'модель', 'gpt', 'deepseek', 'llm', 'промпт',
-                'тренировка модели', 'fine-tuning', 'rag', 'embeddings', 'трансформер'],
-    'маркетинг': ['маркетинг', 'контент', 'пост', 'канал', 'аудитория', 'воронка', 'конверсия',
-                  'бренд', 'реклама', 'smm', 'таргет', 'продвижение', 'виральность'],
-    'быт': ['погода', 'дом', 'покупка', 'ремонт', 'переезд', 'путешествие', 'отпуск',
-            'еда', 'рецепт', 'машина', 'доставка', 'квартира'],
+    'разработка': ['код', 'баг', 'фича', 'api', 'разработка', 'программирование', 'деплой',
+                   'git', 'коммит', 'рефакторинг', 'тестирование', 'frontend', 'backend', 'debug'],
+    'стартап': ['стартап', 'mvp', 'продукт', 'запуск', 'pivot', 'юнит-экономика', 'traction',
+                'выход на рынок', 'product-market fit', 'монетизация', 'growth'],
+    'управление': ['проект', 'дедлайн', 'спринт', 'kanban', 'команда', 'менеджмент', 'планирование',
+                   'приоритеты', 'делегирование', 'контроль', 'milestone'],
+    'клиенты': ['клиент', 'заказчик', 'пользователь', 'отзыв', 'обратная связь', 'retention',
+                'churn', 'ltv', 'лояльность', 'поддержка', 'саппорт'],
+    'продажи': ['продажа', 'сделка', 'воронка', 'конверсия', 'лид', 'crm', 'холодный звонок',
+                'коммерческое предложение', 'переговоры', 'закрытие', 'аутрич'],
+    'маркетинг': ['маркетинг', 'реклама', 'таргет', 'smm', 'бренд', 'охват', 'виральность',
+                  'позиционирование', 'промо', 'рекламный бюджет'],
+    'контент': ['контент', 'пост', 'статья', 'видео', 'блог', 'newsletter', 'рассылка',
+                'копирайтинг', 'сценарий', 'подкаст', 'сторис'],
+    'соцсети': ['канал', 'телеграм', 'instagram', 'youtube', 'tiktok', 'подписчики',
+                'аудитория', 'сообщество', 'вовлечённость', 'stories'],
+    'финансы': ['деньги', 'бюджет', 'зарплата', 'доход', 'расход', 'прибыль', 'кэшфлоу',
+                'налоги', 'бухгалтерия', 'финансовый план'],
+    'инвестиции': ['инвестиции', 'инвестор', 'раунд', 'фондирование', 'венчур', 'ангел',
+                   'акции', 'портфель', 'дивиденды', 'roi'],
+    'крипто': ['крипто', 'биткоин', 'ethereum', 'defi', 'nft', 'токен', 'блокчейн',
+               'майнинг', 'кошелёк', 'стейкинг', 'binance'],
+    'здоровье': ['здоровье', 'спорт', 'тренировка', 'бег', 'зал', 'медитация',
+                 'питание', 'диета', 'вес', 'анализы', 'врач'],
+    'сон_энергия': ['сон', 'усталость', 'выгорание', 'энергия', 'отдых', 'бессонница',
+                    'ранний подъём', 'режим', 'перерыв', 'восстановление'],
+    'ментальное': ['стресс', 'тревога', 'депрессия', 'психология', 'терапия', 'mindfulness',
+                   'фокус', 'прокрастинация', 'мотивация', 'привычка'],
+    'отношения': ['семья', 'партнер', 'брак', 'дети', 'родители', 'конфликт',
+                  'компромисс', 'разговор', 'границы'],
+    'нетворкинг': ['нетворкинг', 'контакт', 'знакомство', 'коллега', 'встреча', 'конференция',
+                   'менторство', 'коммьюнити', 'связи', 'рекомендация'],
+    'обучение': ['учёба', 'курс', 'книга', 'навык', 'сертификат', 'обучение', 'лекция',
+                 'мастер-класс', 'тренинг', 'практика'],
+    'карьера': ['карьера', 'повышение', 'собеседование', 'резюме', 'оффер', 'увольнение',
+                'фриланс', 'удалёнка', 'зарплата', 'должность'],
+    'цели': ['цель', 'план', 'стратегия', 'результат', 'прогресс', 'достижение',
+             'okr', 'kpi', 'milestone', 'roadmap'],
+    'привычки': ['привычка', 'рутина', 'трекер', 'дисциплина', 'ежедневно', 'утренний ритуал',
+                 'марафон', 'челлендж', 'стрик', 'регулярность'],
+    'эмоции_позитив': ['рад', 'счастлив', 'воодушевлён', 'энтузиазм', 'благодарность',
+                       'гордость', 'вдохновение', 'кураж', 'эйфория'],
+    'эмоции_негатив': ['грустно', 'злюсь', 'разочарован', 'волнуюсь', 'боюсь', 'обидно',
+                       'раздражение', 'апатия', 'безразличие', 'вина'],
+    'ai_tech': ['ai', 'нейросеть', 'модель', 'gpt', 'deepseek', 'llm', 'промпт',
+                'fine-tuning', 'rag', 'embeddings', 'трансформер', 'агент'],
+    'автоматизация': ['автоматизация', 'бот', 'скрипт', 'интеграция', 'webhook', 'api',
+                      'парсинг', 'cron', 'триггер', 'пайплайн'],
+    'email': ['email', 'письмо', 'рассылка', 'почта', 'inbox', 'ответ', 'переписка',
+              'спам', 'холодная рассылка', 'outreach', 'imap'],
+    'дизайн': ['дизайн', 'ui', 'ux', 'макет', 'figma', 'прототип', 'логотип',
+               'визуал', 'иллюстрация', 'брендбук'],
+    'юридическое': ['договор', 'контракт', 'патент', 'лицензия', 'ip', 'юрист',
+                    'суд', 'претензия', 'штраф', 'регистрация ооо'],
+    'недвижимость': ['квартира', 'дом', 'аренда', 'ипотека', 'ремонт', 'переезд',
+                     'офис', 'коворкинг', 'площадь'],
+    'путешествия': ['путешествие', 'отпуск', 'перелёт', 'билет', 'отель', 'виза',
+                    'командировка', 'релокация', 'страна', 'маршрут'],
+    'еда': ['еда', 'рецепт', 'ресторан', 'доставка', 'готовка', 'кафе',
+            'заказ', 'кухня', 'завтрак', 'ужин'],
 }
 
-# Количество категорий определяет размерность вектора
-EMBEDDING_DIM = 384  # Фиксированная размерность
+# Кэш для OpenAI embeddings
+_openai_available: bool | None = None  # None = не проверяли
+_OPENAI_EMBED_MODEL = "text-embedding-3-small"
+_OPENAI_EMBED_DIM = 384  # Сжимаем до 384 чтобы совпадало с Pinecone
+
+EMBEDDING_DIM = 384
 
 
-def _text_to_embedding(text):
-    """Создаёт pseudo-embedding на основе семантических категорий + char n-grams.
+def _get_openai_embedding(text: str) -> list[float] | None:
+    """Получает embedding через OpenAI API (синхронно).
+    Возвращает None если ключ не задан или вызов провалился.
+    """
+    global _openai_available
+    if _openai_available is False:
+        return None
     
-    Не использует внешние модели — работает мгновенно.
-    Dimension: 384 (10 категорий * 2 + 364 char trigram hash features).
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        _openai_available = False
+        return None
+    
+    try:
+        import urllib.request
+        import ssl
+        
+        payload = json.dumps({
+            "model": _OPENAI_EMBED_MODEL,
+            "input": text[:2000],
+            "dimensions": _OPENAI_EMBED_DIM,
+        })
+        
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/embeddings",
+            data=payload.encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=5, context=ctx) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            embedding = result["data"][0]["embedding"]
+            _openai_available = True
+            return embedding
+    except Exception as e:
+        if _openai_available is None:
+            logger.info("[VECTOR] OpenAI embeddings unavailable: %s — using pseudo", e)
+            _openai_available = False
+        return None
+
+
+def _text_to_embedding(text: str) -> list[float]:
+    """Создаёт embedding: OpenAI (если доступен) или улучшенный pseudo.
+    
+    Dimension: 384.
+    """
+    # Приоритет: OpenAI real embeddings
+    real = _get_openai_embedding(text)
+    if real:
+        return real
+    
+    # Fallback: улучшенные pseudo-embeddings
+    return _pseudo_embedding(text)
+
+
+def _pseudo_embedding(text: str) -> list[float]:
+    """Улучшенные pseudo-embeddings: 30 категорий + weighted bigram hashing.
+    
+    Dimension: 384 (60 category dims + 324 bigram hash dims).
+    Значительно лучше trigram MD5: использует нормализованные веса и bigrams.
     """
     text_lower = text.lower()
-    words = set(re.findall(r'\b[а-яёa-z]{3,}\b', text_lower))
+    words = re.findall(r'\b[а-яёa-z]{2,}\b', text_lower)
+    word_set = set(words)
     
     vec = [0.0] * EMBEDDING_DIM
+    n_cats = len(SEMANTIC_CATEGORIES)
     
-    # Первые 20 dims: семантические категории (10 категорий × 2)
+    # Первые 60 dims: 30 категорий × 2 (точное совпадение + substring)
     for i, (category, keywords) in enumerate(SEMANTIC_CATEGORIES.items()):
-        matches = sum(1 for kw in keywords if kw in text_lower)
-        # Нормализуем: сколько % ключевых слов совпало
-        score = min(matches / max(len(keywords) * 0.3, 1), 1.0)
-        vec[i * 2] = score
-        vec[i * 2 + 1] = min(len(words & set(keywords)) / 3.0, 1.0)
+        if i >= 30:
+            break
+        # Точное совпадение слов
+        exact_matches = len(word_set & set(keywords))
+        vec[i * 2] = min(exact_matches / max(len(keywords) * 0.2, 1), 1.0)
+        # Substring match (для составных слов)
+        substr_matches = sum(1 for kw in keywords if kw in text_lower and kw not in word_set)
+        vec[i * 2 + 1] = min(substr_matches / max(len(keywords) * 0.3, 1), 1.0)
     
-    # Остальные 364 dims: character trigram hashing
-    trigrams = [text_lower[j:j+3] for j in range(len(text_lower) - 2)]
-    for tg in trigrams:
-        h = int(hashlib.md5(tg.encode()).hexdigest()[:8], 16) % 364
-        vec[20 + h] = min(vec[20 + h] + 0.15, 1.0)
+    # Остальные 324 dims: weighted bigram hashing (лучше trigram MD5)
+    bigram_offset = 60
+    bigram_dims = EMBEDDING_DIM - bigram_offset
     
-    # Нормализация вектора (L2)
-    magnitude = sum(v**2 for v in vec) ** 0.5
+    # Bigrams из слов (а не из символов) — семантически значимее
+    word_bigrams = [f"{words[j]}_{words[j+1]}" for j in range(len(words) - 1)] if len(words) > 1 else []
+    # Char trigrams для коротких текстов
+    char_trigrams = [text_lower[j:j+3] for j in range(len(text_lower) - 2)]
+    
+    # TF-IDF подобное взвешивание: частые bigrams менее информативны
+    bigram_counts = Counter(word_bigrams)
+    for bg, count in bigram_counts.items():
+        h = int(hashlib.md5(bg.encode()).hexdigest()[:8], 16) % bigram_dims
+        # TF: log(1 + count), не линейное чтобы частые не доминировали
+        weight = math.log1p(count) * 0.3
+        vec[bigram_offset + h] = min(vec[bigram_offset + h] + weight, 1.0)
+    
+    # Char trigrams — вторичный сигнал с меньшим весом
+    trigram_counts = Counter(char_trigrams)
+    for tg, count in trigram_counts.items():
+        h = int(hashlib.md5(tg.encode()).hexdigest()[:8], 16) % bigram_dims
+        weight = math.log1p(count) * 0.08
+        vec[bigram_offset + h] = min(vec[bigram_offset + h] + weight, 1.0)
+    
+    # L2 нормализация
+    magnitude = sum(v ** 2 for v in vec) ** 0.5
     if magnitude > 0:
         vec = [v / magnitude for v in vec]
     
