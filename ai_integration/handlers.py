@@ -1775,7 +1775,12 @@ async def delegate_task(
                         except Exception:
                             pass
 
-                    _results_parts.append(f"[{_agent_name}]: {_result}")
+                    # Возвращаем КРАТКОЕ содержание — полный ответ уже показан через _save_ifd
+                    _summary = _result[:200] + ('...' if len(_result) > 200 else '')
+                    _results_parts.append(
+                        f"[{_agent_name}] выполнил задачу (ответ уже показан пользователю в чате). "
+                        f"Суть ответа: {_summary}"
+                    )
                     logger.info(f"[DELEGATE] {_agent_name} completed inline ({len(_result)} chars)")
 
                 try:
