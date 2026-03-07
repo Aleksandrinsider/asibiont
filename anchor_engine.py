@@ -132,8 +132,6 @@ BATCH_GROUPS = {
     'content_opportunity': 'insights',
     'profile_gap': 'engagement',
     'dialog_followup': 'engagement',
-    'morning_plan': 'daily',
-    'evening_review': 'daily',
     'task_result_check': 'tasks',
     'recurring_task_due': 'tasks',
     'post_opportunity': 'posting',
@@ -1144,9 +1142,6 @@ class AnchorEngine:
         # --- ДИАЛОГ (follow-up из LTM) ---
         anchors.extend(self._scan_dialog_followup(user, session, now_utc))
 
-        # --- УТРО/ВЕЧЕР ---
-        anchors.extend(self._scan_daily_rhythm(user, session, user_now))
-
         # --- РЫНОК/КОНТЕНТ (открыто всем) ---
         anchors.extend(self._scan_premium_insights(user, profile, session, now_utc))
 
@@ -1877,44 +1872,6 @@ class AnchorEngine:
                     cooldown_hours=24,
                     batch_group='engagement',
                 ))
-
-        return anchors
-
-    def _scan_daily_rhythm(self, user, session, user_now) -> list:
-        """Утренний план / вечерний обзор"""
-        anchors = []
-        now_utc = datetime.now(timezone.utc)
-        hour = user_now.hour
-
-        # Утро: 9:00-10:30
-        if 9 <= hour <= 10:
-            anchors.append(Anchor(
-                user_id=user.id,
-                anchor_type='morning_plan',
-                source=f'daily:morning:{user_now.strftime("%Y-%m-%d")}',
-                topic=_t(user, 'Утро — время для обзора дня', 'Morning — time to review the day'),
-                priority=AnchorPriority.MEDIUM,
-                data=json.dumps({'hour': hour, 'date': user_now.strftime('%Y-%m-%d')}),
-                triggered_at=now_utc,
-                expires_at=now_utc + timedelta(hours=3),
-                cooldown_hours=20,
-                batch_group='daily',
-            ))
-
-        # Вечер: 20:00-21:30
-        if 20 <= hour <= 21:
-            anchors.append(Anchor(
-                user_id=user.id,
-                anchor_type='evening_review',
-                source=f'daily:evening:{user_now.strftime("%Y-%m-%d")}',
-                topic=_t(user, 'Вечер — время для подведения итогов', 'Evening — time to wrap up'),
-                priority=AnchorPriority.LOW,
-                data=json.dumps({'hour': hour, 'date': user_now.strftime('%Y-%m-%d')}),
-                triggered_at=now_utc,
-                expires_at=now_utc + timedelta(hours=2),
-                cooldown_hours=20,
-                batch_group='daily',
-            ))
 
         return anchors
 
