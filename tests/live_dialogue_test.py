@@ -387,16 +387,42 @@ async def run_dialogue():
     # ── Проверяем что записалось в БД ─────────────────────────────────────────
     db_stats = {}
     with TestSession() as s:
-        db_stats["tasks"] = s.query(models.Task).filter_by(
-            user_id=s.query(models.User.id).filter_by(telegram_id=TEST_TG_ID).scalar()
-        ).count()
         uid = s.query(models.User.id).filter_by(telegram_id=TEST_TG_ID).scalar()
+        db_stats["tasks"] = s.query(models.Task).filter_by(user_id=uid).count()
         db_stats["interactions"] = s.query(models.Interaction).filter_by(user_id=uid).count()
         try:
             from models import AgentActivityLog
             db_stats["agent_activity"] = s.query(AgentActivityLog).filter_by(user_id=uid).count()
+            # Детализация по типам активности
+            _activities = s.query(AgentActivityLog).filter_by(user_id=uid).all()
+            db_stats["activity_types"] = {}
+            for _a in _activities:
+                _at = getattr(_a, 'activity_type', 'unknown')
+                db_stats["activity_types"][_at] = db_stats["activity_types"].get(_at, 0) + 1
         except Exception:
             db_stats["agent_activity"] = 0
+            db_stats["activity_types"] = {}
+
+        # Проверяем Interaction записи агентов (__agent JSON)
+        _agent_interactions = 0
+        _agent_names_in_db = set()
+        try:
+            _all_ai = s.query(models.Interaction).filter(
+                models.Interaction.user_id == uid,
+                models.Interaction.message_type == 'ai'
+            ).all()
+            for _inter in _all_ai:
+                try:
+                    _jd = json.loads(_inter.content)
+                    if isinstance(_jd, dict) and '__agent' in _jd:
+                        _agent_interactions += 1
+                        _agent_names_in_db.add(_jd['__agent'].get('name', ''))
+                except (ValueError, TypeError, KeyError):
+                    pass
+        except Exception:
+            pass
+        db_stats["agent_interactions"] = _agent_interactions
+        db_stats["agent_names_in_db"] = _agent_names_in_db
 
     # ── Итоги ─────────────────────────────────────────────────────────────────
     print(f"\n{BOLD}{'='*60}")
@@ -409,6 +435,8 @@ async def run_dialogue():
     agent_steps = sum(1 for r in results if r["agents"])
     total_intermediates = sum(r.get("intermediate_count", 0) for r in results)
     avg_time = sum(r["time_s"] for r in results) / len(results) if results else 0
+    max_time = max((r["time_s"] for r in results), default=0)
+    slow_steps = sum(1 for r in results if r["time_s"] > 60)
 
     print(f"  Шагов:                {total_steps}")
     print(f"  Ошибок:               {errors}")
@@ -417,11 +445,17 @@ async def run_dialogue():
     print(f"  Промежуточных сообщ:  {total_intermediates}")
     print(f"  Упоминаний агентов:   {agent_steps}")
     print(f"  Среднее время ответа: {avg_time:.1f}s")
+    print(f"  Макс. время ответа:   {max_time:.1f}s")
+    print(f"  Шаги >60с:            {slow_steps}")
 
     print(f"\n  {BOLD}БД:{RESET}")
     print(f"  Задач создано:        {db_stats['tasks']}")
     print(f"  Сообщений в истории:  {db_stats['interactions']}")
     print(f"  Активность агентов:   {db_stats['agent_activity']}")
+    if db_stats.get("activity_types"):
+        for _atype, _acnt in sorted(db_stats["activity_types"].items()):
+            print(f"    └ {_atype}: {_acnt}")
+    print(f"  Агенты в Interaction: {db_stats['agent_interactions']} записей ({', '.join(db_stats['agent_names_in_db']) or 'нет'})")
 
     # ── Оценка по фазам ──────────────────────────────────────────────────────
     print(f"\n  {BOLD}ОЦЕНКА ПО ФАЗАМ:{RESET}")
@@ -431,6 +465,7 @@ async def run_dialogue():
     phase3 = [r for r in results if r["label"].startswith("3.")]
 
     p1_ok = all(not r["error"] for r in phase1)
+    p1_fast = all(r["time_s"] < 30 for r in phase1)
     p2_delegated = sum(1 for r in phase2 if r["delegated"])
     p2_agents = set()
     for r in phase2:
@@ -439,13 +474,27 @@ async def run_dialogue():
     for r in phase3:
         p3_agents.update(r["agents"])
 
+    # Проверяем что субагенты реально работали (записи в DB)
+    p2_subagent_db = len(db_stats.get("agent_names_in_db", set())) > 0
+
     status = lambda ok: f"{GREEN}OK{RESET}" if ok else f"{RED}FAIL{RESET}"
 
     print(f"  Фаза 1 (диалог):     {status(p1_ok)} — {'без ошибок' if p1_ok else 'есть ошибки'}")
+    print(f"    Скорость (<30с):    {status(p1_fast)} — {', '.join(f'{r[\"time_s\"]:.1f}s' for r in phase1)}")
     print(f"  Фаза 2 (запросы):    {status(p2_delegated >= 2)} — {p2_delegated} делегирований, агенты: {', '.join(p2_agents) or 'нет'}")
+    print(f"    Агенты в БД:        {status(p2_subagent_db)} — {', '.join(db_stats.get('agent_names_in_db', set())) or 'нет записей'}")
     print(f"  Фаза 3 (прямое):     {status(bool(p3_agents))} — агенты: {', '.join(p3_agents) or 'нет'}")
 
-    all_ok = p1_ok and p2_delegated >= 2 and bool(p3_agents) and errors == 0
+    # Проверка тайминга: ни один шаг не должен превышать 120с
+    no_timeout = all(r["time_s"] < 120 for r in results)
+    print(f"\n  {BOLD}ТАЙМИНГ:{RESET}")
+    print(f"  Нет таймаутов (>120с): {status(no_timeout)}")
+    if not no_timeout:
+        for r in results:
+            if r["time_s"] > 120:
+                print(f"    {RED}✗ {r['label']}: {r['time_s']:.1f}s{RESET}")
+
+    all_ok = p1_ok and p2_delegated >= 2 and bool(p3_agents) and errors == 0 and no_timeout
     if all_ok:
         print(f"\n  {GREEN}{BOLD}>>> Все фазы пройдены успешно{RESET}")
     else:
@@ -456,6 +505,8 @@ async def run_dialogue():
             issues.append(f"мало делегирований ({p2_delegated}/2+)")
         if not p3_agents:
             issues.append("прямое обращение не сработало")
+        if not no_timeout:
+            issues.append("есть шаги >120с")
         print(f"\n  {YELLOW}!!! Требует внимания: {'; '.join(issues)}{RESET}")
 
     print()

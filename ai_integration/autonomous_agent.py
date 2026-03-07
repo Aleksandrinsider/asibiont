@@ -4150,7 +4150,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
     _agent_start_time = __import__('time').time()
-    _AGENT_BUDGET = 45  # секунд на всё выполнение агента (согласовано с _run_agent_task timeout)
+    _AGENT_BUDGET = 35  # секунд на всё выполнение агента (согласовано с _run_agent_task timeout)
     _TOOL_TIMEOUT = API_TIMEOUT_NORMAL  # секунд на один инструмент
 
     for _iter in range(2):  # Макс 2 итерации для субагента (скорость)
@@ -4644,10 +4644,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         try:
             resp = await asyncio.wait_for(
                 _exec_agent_for_director(ag, task, user_id, dialog_context=extra_context),
-                timeout=45
+                timeout=35
             )
         except asyncio.TimeoutError:
-            logger.warning("[DIRECTOR] agent exec timeout (%s), 45s limit", ag.get('name'))
+            logger.warning("[DIRECTOR] agent exec timeout (%s), 35s limit", ag.get('name'))
             resp = f"Задача передана {ag.get('name', 'агенту')}, результат будет чуть позже."
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
@@ -4922,8 +4922,19 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _next_agent_task = decision.get('first_agent_task') or user_message
         _next_dm = _first_dm  # director_message для первого агента
 
-        MAX_ADAPTIVE_STEPS = 4
+        MAX_ADAPTIVE_STEPS = 3
+        _CHAIN_BUDGET_S = 90   # бюджет всей цепочки — не копим, а укладываемся
+        _chain_t0 = __import__('time').time()
+        _budget_exceeded = False
         for _adp_step in range(MAX_ADAPTIVE_STEPS):
+            # Проверяем бюджет цепочки: нужно минимум 35с на следующего агента
+            if _adp_step > 0:
+                _elapsed = __import__('time').time() - _chain_t0
+                if _elapsed > _CHAIN_BUDGET_S - 35:
+                    logger.info("[ADAPTIVE] Chain budget exhausted after %d agents (%.0fs), finalizing", _adp_step, _elapsed)
+                    _budget_exceeded = True
+                    break
+
             _ag = _find_agent(_next_agent_name)
             if not _ag:
                 break
@@ -5035,6 +5046,46 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if not _adp_results:
             return None
 
+        # ── Background continuation: если бюджет иссяк, но есть ещё работа ──
+        if _budget_exceeded and _next_agent_name and progress_callback:
+            _bg_remaining = [
+                a for a in _agents
+                if a.get('name') not in {n for n, _, _ in _adp_results}
+            ]
+            if _bg_remaining:
+                async def _bg_chain(_rem_agents, _task, _ctx, _mission, _uid, _cb, _prev):
+                    """Фоновое продолжение цепочки — каждый агент отправляет результат отдельно."""
+                    try:
+                        for _bg_ag in _rem_agents[:2]:
+                            _bg_resp = await _run_agent_task(
+                                _bg_ag, _task, extra_context=_ctx, director_message=''
+                            )
+                            if _bg_resp:
+                                _prev.append((_bg_ag['name'], _task, _bg_resp))
+                        # Фоновый синтез
+                        if len(_prev) > len(_adp_results):
+                            _bg_combined = "\n\n".join(f"{n}: {r[:400]}" for n, _, r in _prev)
+                            _bg_synth = await _quick_ai_call_raw([{
+                                "role": "user",
+                                "content": (
+                                    f"Миссия: {_mission}\n"
+                                    f"Все агенты отработали:\n{_bg_combined[:1200]}\n\n"
+                                    "Кратко скажи что ещё было сделано (1-2 предложения, живой стиль)."
+                                ),
+                            }], max_tokens=200)
+                            if _bg_synth and _cb:
+                                await _cb(_bg_synth.strip(), persist=True)
+                    except Exception as _bg_err:
+                        logger.warning("[ADAPTIVE-BG] background chain error: %s", _bg_err)
+
+                asyncio.create_task(_bg_chain(
+                    _bg_remaining, _next_agent_task,
+                    _adp_ctx if _adp_results else '',
+                    _mission_brief, user_id, progress_callback, list(_adp_results)
+                ))
+                logger.info("[ADAPTIVE] Scheduled background continuation for %d agents",
+                            len(_bg_remaining))
+
         # Финальный синтез ASI
         _adp_combined = "\n\n".join(f"{n}: {r}" for n, _, r in _adp_results)
         _adp_final = await _quick_ai_call_raw([{
@@ -5058,8 +5109,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     all_results: list = []   # [(agent_name, task, result)]
     called_agents: set = set()
     _rework_count: dict = {}  # agent_name → сколько раз доработка (макс 2)
+    _rounds_t0 = __import__('time').time()
+    _ROUNDS_BUDGET_S = 100  # бюджет агентного цикла
 
     for _round in range(MAX_ROUNDS):
+        # Бюджет: нужно ~40с на следующего агента + синтез
+        if _round > 0 and (__import__('time').time() - _rounds_t0) > _ROUNDS_BUDGET_S - 40:
+            logger.info("[DIRECTOR] Rounds budget exhausted after %d rounds (%.0fs)",
+                        _round, __import__('time').time() - _rounds_t0)
+            break
         if _round > 0:
             # ASI видит уже полученные результаты и решает — вызвать ещё, доработать или финализировать
             _so_far = "\n\n".join(f"{n} (задача: {t}): {r}" for n, t, r in all_results)
