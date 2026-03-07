@@ -113,8 +113,6 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     'agent_task_blocked': "Агент заблокирован на задаче '{task}'. Проанализируй причину блокировки и предложи решение.",
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
-    # ── Ежедневное планирование (генерируется _scan_daily_agent_planning) ──
-    'daily_agent_plan':   "{task}",
 }
 
 # Группы батчинга
@@ -825,18 +823,11 @@ class AnchorEngine:
                     # Строим задачу из шаблона
                     try:
                         data = anchor.data or {}
-                        # daily_agent_plan — задача уже готова в data
-                        if anchor.anchor_type == 'daily_agent_plan':
-                            ctx = data.get('context', '')
-                            task_text = (
-                                f"Утреннее планирование. Проанализируй задачи и цели пользователя и выполни самое приоритетное:\n{ctx}"
-                            )[:600]
-                        else:
-                            task_text = _AGENT_DISPATCH_TRIGGERS[anchor.anchor_type].format(
-                                goal=data.get('title', anchor.topic or 'без названия'),
-                                progress=data.get('progress', 0),
-                                task=data.get('title', anchor.topic or 'без названия'),
-                            )
+                        task_text = _AGENT_DISPATCH_TRIGGERS[anchor.anchor_type].format(
+                            goal=data.get('title', anchor.topic or 'без названия'),
+                            progress=data.get('progress', 0),
+                            task=data.get('title', anchor.topic or 'без названия'),
+                        )
                     except Exception:
                         task_text = anchor.topic or anchor.anchor_type
 
@@ -1227,9 +1218,6 @@ class AnchorEngine:
 
         # --- ЗАБЛОКИРОВАННЫЕ АГЕНТЫ (нужно решение пользователя) ---
         anchors.extend(self._scan_agent_task_blocked(user, session, now_utc))
-
-        # --- ЕЖЕДНЕВНОЕ ПЛАНИРОВАНИЕ АГЕНТОВ (утро: ASI распределяет задачи по агентам) ---
-        anchors.extend(self._scan_daily_agent_planning(user, session, user_tz, user_now, now_utc))
 
         # --- FOLLOW-UP РЕЗУЛЬТАТОВ АГЕНТОВ (проверка незакрытых dispatch-задач) ---
         anchors.extend(self._scan_agent_followup(user, session, now_utc))
@@ -5740,107 +5728,6 @@ class AnchorEngine:
             logger.debug(f'[ANCHOR] agent_task_blocked scan error: {e}')
         return anchors
 
-    def _scan_daily_agent_planning(self, user, session, user_tz, user_now, now_utc) -> list:
-        """Утреннее планирование: ASI анализирует задачи/цели пользователя и создаёт
-        dispatch-якоря для каждого агента с конкретным заданием на день.
-
-        Работает 1 раз в день (08:30–10:30 по локальному времени).
-        Только если у пользователя есть агенты и активные задачи/цели.
-        """
-        anchors = []
-        try:
-            hour = user_now.hour
-            if hour < 8 or hour > 10:
-                return anchors
-
-            from models import UserAgent, AgentActivityLog
-
-            # Guard: уже планировали сегодня?
-            today_str = user_now.strftime('%Y-%m-%d')
-            source_key = f'daily_plan:{today_str}'
-            already = session.query(AgentActivityLog).filter(
-                AgentActivityLog.user_id == user.id,
-                AgentActivityLog.activity_type == 'daily_agent_plan',
-                AgentActivityLog.target == source_key,
-            ).first()
-            if already:
-                return anchors
-
-            # Получаем активных агентов
-            agents = session.query(UserAgent).filter_by(
-                author_id=user.id, status='active'
-            ).limit(10).all()
-            if not agents:
-                return anchors
-
-            # Получаем активные задачи и цели
-            tasks = session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status.in_(['pending', 'in_progress']),
-            ).order_by(Task.deadline.asc().nullslast()).limit(15).all()
-
-            goals = session.query(Goal).filter(
-                Goal.user_id == user.id,
-                Goal.status == 'active',
-            ).limit(5).all()
-
-            if not tasks and not goals:
-                return anchors
-
-            # Собираем контекст для AI-планирования
-            task_lines = []
-            for t in tasks:
-                dl = f' (дедлайн: {t.deadline.strftime("%d.%m")})' if t.deadline else ''
-                task_lines.append(f'- [{t.status}] {t.title}{dl}')
-            goal_lines = [f'- {g.title} ({g.progress or 0}%)' for g in goals]
-            agent_lines = [f'- {a.name}: {a.job_title or a.specialization or "универсал"}' for a in agents]
-
-            plan_context = (
-                f"Задачи:\n" + '\n'.join(task_lines[:10]) + '\n'
-                f"Цели:\n" + '\n'.join(goal_lines[:5]) + '\n'
-                f"Агенты:\n" + '\n'.join(agent_lines)
-            )
-
-            # Создаём якорь daily_agent_plan — dispatch подхватит его
-            anchors.append(Anchor(
-                user_id=user.id,
-                anchor_type='daily_agent_plan',
-                source=source_key,
-                topic=_t(user, 'Утреннее планирование: распределение задач по агентам',
-                         'Morning planning: distributing tasks to agents'),
-                priority=AnchorPriority.MEDIUM,
-                data=json.dumps({
-                    'title': 'daily_plan',
-                    'context': plan_context,
-                    'date': today_str,
-                    'agent_count': len(agents),
-                    'task_count': len(tasks),
-                    'goal_count': len(goals),
-                }, ensure_ascii=False),
-                triggered_at=now_utc,
-                expires_at=now_utc + timedelta(hours=6),
-                cooldown_hours=22,
-                batch_group='office',
-            ))
-
-            # Логируем факт планирования (guard от повторов)
-            session.add(AgentActivityLog(
-                user_id=user.id,
-                activity_type='daily_agent_plan',
-                title=f'Daily plan {today_str}: {len(agents)} agents, {len(tasks)} tasks',
-                content=plan_context[:500],
-                target=source_key,
-                status='created',
-            ))
-            try:
-                session.commit()
-            except Exception:
-                session.rollback()
-
-        except Exception as e:
-            logger.debug(f'[ANCHOR] daily_agent_planning scan error: {e}')
-        return anchors
-
     def _scan_agent_followup(self, user, session, now_utc) -> list:
         """Follow-up: проверяет dispatch-задачи, выполненные 2-6 часов назад,
         и создаёт якорь чтобы проверить реальный результат (задача создана? цель обновлена?).
@@ -5879,7 +5766,7 @@ class AnchorEngine:
                 source_key = f'followup:{disp.id}'
                 anchors.append(Anchor(
                     user_id=user.id,
-                    anchor_type='daily_agent_plan',  # reuse trigger
+                    anchor_type='task_stale',
                     source=source_key,
                     topic=_t(user,
                         f'Проверка результата: {agent_name}',
