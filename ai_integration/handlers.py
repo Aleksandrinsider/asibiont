@@ -927,13 +927,13 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
     if not task:
         if close_session:
             session.close()
-        return f"Задача не найдена: {task_title or task_id}"
+        return f"Хм, не нахожу задачу: {task_title or task_id}"
 
     if task:
         if task.status == "completed":
             if close_session:
                 session.close()
-            return f" Задача '{task.title}' уже выполнена"
+            return f" Задача '{task.title}' уже закрыта ✔️"
         
         task.status = "completed"
         task.actual_completion_time = datetime.now(pytz.UTC)
@@ -1103,11 +1103,10 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                 if bot:
                     # Запрашиваем у исполнителя результаты работы
                     result_request = (
-                        f" Расскажи о результатах выполнения задачи:\n"
+                        f" Расскажи, как прошло с задачей:\n"
                         f"'{task.title}'\n\n"
-                        f"Опиши что было сделано, какие результаты достигнуты, "
-                        f"были ли сложности. Это важно для @{delegator.username}, "
-                        f"который поручил тебе эту задачу."
+                        f"Что сделал, какой результат, были ли сложности? "
+                        f"@{delegator.username} ждёт отчёт."
                     )
                     await bot.send_message(chat_id=user.telegram_id, text=result_request)
                     logger.info(f"[COMPLETE_TASK] Requested completion results from user {user.username} for task {task.id}")
@@ -1129,7 +1128,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     session.commit()
                     
                     # Обновляем сообщение для пользователя
-                    result = f" Задача '{task.title}' завершена! Теперь опиши результаты выполнения для @{delegator.username}"
+                    result = f" Задача '{task.title}' закрыта! Расскажи как прошло — @{delegator.username} ждёт отчёт"
                     
             except Exception as e:
                 logger.error(f"[COMPLETE_TASK] Failed to request completion results from executor: {e}")
@@ -1239,7 +1238,7 @@ async def skip_task(task_id=None, task_title=None, reason=None, user_id=None, se
         if profile:
             profile.skipped_tasks = (profile.skipped_tasks or 0) + 1
             session.commit()
-        result = f"Задача '{task.title}' отмечена как пропущенная."
+        result = f"Ладно, '{task.title}' пропускаем"
 
         # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
     else:
@@ -1324,7 +1323,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
             # Recalculate average if needed, but for simplicity, just decrement
             session.commit()
 
-        result = f"Задача '{task.title}' восстановлена в работу."
+        result = f"'{task.title}' вернул в работу — снова в деле!"
 
         # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
     else:
@@ -1485,16 +1484,16 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
                 import traceback
                 traceback.print_exc()
 
-            result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
+            result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}"
 
         except ValueError as e:
             logger.error(f"[RESCHEDULE_TASK] ValueError: {e}")
-            result = f"Ошибка формата времени: {e}. Используйте формат HH:MM или YYYY-MM-DD HH:MM."
+            result = f"Не разобрал время: {e}. Попробуй так: HH:MM или YYYY-MM-DD HH:MM"
         except Exception as e:
             logger.error(f"[RESCHEDULE_TASK] Unexpected error: {e}", exc_info=True)
-            result = f"Ошибка при переносе задачи: {str(e)}"
+            result = f"Не получилось перенести задачу — попробуй ещё раз"
     else:
-        result = f"Задача '{task_title}' не найдена."
+        result = f"Хм, не нахожу '{task_title}'"
 
     if close_session:
         session.close()
@@ -1612,8 +1611,8 @@ async def delegate_task(
                             content=description[:500] if description else None,
                             target=f'agent:{_agent_name}',
                             status='in_progress',
-                            result=(f'Задача передана агенту. Дедлайн: {reminder_time}'
-                                    if reminder_time else 'Задача передана агенту.'),
+                            result=(f'Поручил {_agent_name}. Дедлайн: {reminder_time}'
+                                    if reminder_time else f'Поручил {_agent_name}'),
                         )
                         session.add(_log)
                         session.commit()

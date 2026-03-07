@@ -127,10 +127,10 @@ async def generate_marketing_content(product_name, target_audience, platform, go
                     else:
                         # Fallback: создаем структуру вручную
                         generated = {
-                            "title": "Контент сгенерирован",
+                            "title": "Новый пост",
                             "text": content,
                             "hashtags": ["#маркетинг", "#AI"],
-                            "cta": "Попробуйте прямо сейчас!",
+                            "cta": "Попробуй — это работает",
                             "best_time": "18:00-20:00"
                         }
                     
@@ -145,8 +145,8 @@ async def generate_marketing_content(product_name, target_audience, platform, go
                     logger.error(f"[MARKETING] JSON parse error: {e}")
                     return {
                         "success": True,
-                        "content": {"title": "Пост создан", "text": content},
-                        "message": f"Контент создан:\n\n{content[:200]}..."
+                        "content": {"title": "Новый пост", "text": content},
+                        "message": f"Пост готов:\n\n{content[:200]}..."
                     }
                     
     except Exception as e:
@@ -154,7 +154,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
         return {
             "success": False,
             "error": str(e),
-            "message": f"❌ Ошибка генерации: {str(e)[:100]}"
+            "message": f"Не получилось сгенерировать контент: {str(e)[:100]}"
         }
 
 
@@ -327,7 +327,7 @@ async def research_topic(query, depth="full", user_id=None, session=None):
         return {
             "success": False,
             "error": str(e),
-            "message": f"❌ Ошибка: {str(e)[:100]}"
+            "message": f"Не удалось провести анализ: {str(e)[:100]}"
         }
 
 
@@ -353,7 +353,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         return {
             "success": False,
             "error": "Требуется user_id и session",
-            "message": "❌ Не указан пользователь для публикации"
+            "message": "Не указан пользователь — не могу опубликовать"
         }
     
     # user_id это telegram_id
@@ -362,7 +362,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         return {
             "success": False,
             "error": "User not found",
-            "message": "❌ Пользователь не найден"
+            "message": "Не нахожу пользователя — попробуй /start"
         }
     
     if not user.telegram_channel:
@@ -371,16 +371,16 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         return {
             "success": False,
             "error": "Telegram channel not configured",
-            "message": f"""❌ Telegram канал не настроен.
+            "message": f"""Telegram-канал не настроен.
 
-📋 Как настроить:
-1. Откройте веб-приложение (Dashboard)
-2. Нажмите на свой аватар → Профиль
-3. Укажите ID или @username вашего канала
-4. Добавьте бота @{bot_username} в канал как администратора
-5. Сохраните изменения
+📋 Что сделать:
+1. Открой Dashboard
+2. Нажми на аватар → Профиль
+3. Укажи ID или @username канала
+4. Добавь @{bot_username} как админа канала
+5. Сохрани
 
-После этого можно публиковать посты командой 'опубликуй в канал'"""
+После этого скажи «опубликуй в канал»"""
         }
     
     # Формируем текст поста
@@ -474,33 +474,33 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                     bot_username = TELEGRAM_BOT_USERNAME.replace('@', '')
                     
                     if 'bot is not a member' in error_desc or 'chat not found' in error_desc:
-                        error_desc = f"""Бот не добавлен в канал или не является администратором.
+                        error_desc = f"""Бот не добавлен в канал или не является админом.
 
-📋 Инструкция:
-1. Откройте свой Telegram канал ({channel})
-2. Нажмите на название канала → Администраторы
-3. Нажмите 'Добавить администратора'
-4. Найдите @{bot_username}
-5. Дайте права: 'Публикация сообщений'
-6. Сохраните
+📋 Сделай так:
+1. Открой канал {channel}
+2. Название канала → Администраторы
+3. «Добавить администратора»
+4. Найди @{bot_username}
+5. Дай право «Публикация сообщений»
+6. Сохрани
 
-После этого попробуйте снова: 'опубликуй в канал'"""
+После этого скажи «опубликуй в канал»"""
                     elif 'chat_id' in error_desc:
                         error_desc = f"""Неверный формат ID канала.
 
 ✅ Правильные форматы:
-- Публичный канал: @your_channel
-- Приватный канал: -1001234567890
+- Публичный: @your_channel
+- Приватный: -1001234567890
 
 💡 Как узнать ID приватного канала:
-1. Перешлите любое сообщение из канала боту @userinfobot
+1. Перешли сообщение из канала боту @userinfobot
 2. Он покажет ID в формате -100...
-3. Укажите этот ID в профиле Dashboard"""
+3. Укажи этот ID в профиле Dashboard"""
                     
                     return {
                         "success": False,
                         "error": error_desc,
-                        "message": f"❌ Не удалось опубликовать: {error_desc}"
+                        "message": f"Не получилось опубликовать: {error_desc}"
                     }
                     
     except Exception as e:
@@ -508,5 +508,5 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         return {
             "success": False,
             "error": str(e),
-            "message": f"❌ Ошибка публикации: {str(e)[:100]}"
+            "message": f"Не удалось опубликовать: {str(e)[:100]}"
         }

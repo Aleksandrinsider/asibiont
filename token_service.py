@@ -360,7 +360,7 @@ def get_balance_info(user_id: int, session=None) -> str:
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "User not found." if lang == 'en' else "Пользователь не найден."
+            return "User not found." if lang == 'en' else "Хм, не нахожу твой профиль — отправь /start"
         
         balance = user.token_balance or 0
         spent = user.tokens_spent or 0
@@ -426,8 +426,8 @@ def insufficient_balance_message(user_id: int, action: str, session=None) -> str
             f"Top up: /buy"
         )
     return (
-        f"⚠️ Недостаточно токенов для этого действия.\n\n"
-        f"Нужно: {cost} токенов\n"
-        f"Баланс: {balance} токенов\n\n"
-        f"Пополнить баланс: /buy"
+        f"⚠️ Токенов не хватает\n\n"
+        f"Нужно: {cost}\n"
+        f"Баланс: {balance}\n\n"
+        f"Пополни: /buy"
     )

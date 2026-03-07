@@ -4184,7 +4184,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _pending_subdelegations.append({'agent_name': _sub_agent_name, 'task': _sub_task})
                     _tc_result = json.dumps(
                         {'status': 'queued', 'agent': _sub_agent_name,
-                         'message': f'Задача передана агенту {_sub_agent_name}'},
+                         'message': f'Поручил это {_sub_agent_name} — скоро вернётся с результатом'},
                         ensure_ascii=False,
                     )
                 else:

@@ -151,9 +151,9 @@ def tu(user_id: int, key: str, **kwargs) -> str:
 # СТРОКИ: ОБЩИЕ
 # ═══════════════════════════════════════════════════════
 
-_register('user_not_found', 'Пользователь не найден.', 'User not found.')
-_register('task_not_found', "Задача '{title}' не найдена.", "Task '{title}' not found.")
-_register('task_not_found_generic', 'Задача не найдена.', 'Task not found.')
+_register('user_not_found', 'Хм, не нахожу твой профиль — отправь /start', 'User not found.')
+_register('task_not_found', "Хм, не нахожу задачу '{title}'", "Task '{title}' not found.")
+_register('task_not_found_generic', 'Хм, не нахожу такую задачу', 'Task not found.')
 _register('error_generic', 'Произошла ошибка. Попробуй ещё раз.', 'An error occurred. Please try again.')
 _register('error_no_user_id', 'Ошибка: user_id не указан.', 'Error: user_id not specified.')
 
@@ -174,10 +174,10 @@ _register('task_deleted',
     "Задача '{title}' удалена.",
     "Task '{title}' deleted.")
 _register('task_skipped',
-    "Задача '{title}' пропущена.",
+    "Ладно, '{title}' пропускаем",
     "Task '{title}' skipped.")
 _register('task_restored',
-    "Задача '{title}' восстановлена.",
+    "'{title}' вернул в работу!",
     "Task '{title}' restored.")
 _register('task_updated',
     "TASK_UPDATED: Задача '{title}' обновлена.",
@@ -192,13 +192,13 @@ _register('task_no_time',
     "ВРЕМЯ НЕ УКАЗАНО. Спроси у пользователя: «На какое время поставить напоминание?»",
     "NO TIME SPECIFIED. Ask the user: 'What time should I set the reminder for?'")
 _register('task_title_empty',
-    "ERROR: Название задачи не может быть пустым.",
+    "ERROR: Название задачи не может быть пустым — укажи название.",
     "ERROR: Task title cannot be empty.")
 _register('task_linked_to_goal',
     "Привязана к цели: {goal}",
     "Linked to goal: {goal}")
 _register('no_active_tasks',
-    "Нет активных задач.",
+    "Пока нет активных задач",
     "No active tasks.")
 _register('time_conflict',
     "Конфликт: в {time} уже запланирована задача '{title}'.",
@@ -207,7 +207,7 @@ _register('time_free',
     "Время свободно, можно создавать задачу.",
     "Time slot is free, you can create a task.")
 _register('self_delegation_error',
-    "SELF_DELEGATION_ERROR: Нельзя делегировать задачу самому себе.",
+    "SELF_DELEGATION_ERROR: Нельзя поручить задачу самому себе.",
     "SELF_DELEGATION_ERROR: Cannot delegate a task to yourself.")
 
 # ═══════════════════════════════════════════════════════
@@ -227,7 +227,7 @@ _register('goal_title_required',
     "Укажи название цели.",
     "Please specify a goal title.")
 _register('no_active_goals',
-    "Нет активных целей.",
+    "Пока нет активных целей",
     "No active goals.")
 
 # ═══════════════════════════════════════════════════════
@@ -244,7 +244,7 @@ _register('profile_skills_added',
     "Добавлен навык: {skill}",
     "Skill added: {skill}")
 _register('profile_garbage_rejected',
-    "Отклонено: '{text}' не похоже на навык.",
+    "Хм, '{text}' не похоже на навык",
     "Rejected: '{text}' doesn't look like a skill.")
 
 # ═══════════════════════════════════════════════════════
@@ -272,7 +272,7 @@ _register('no_posts',
 # ═══════════════════════════════════════════════════════
 
 _register('delegation_sent',
-    "Задача '{title}' делегирована @{user}.",
+    "Задача '{title}' поручена @{user}",
     "Task '{title}' delegated to @{user}.")
 _register('delegation_accepted',
     "Задача '{title}' принята.",
@@ -281,7 +281,7 @@ _register('delegation_rejected',
     "Задача '{title}' отклонена.",
     "Task '{title}' rejected.")
 _register('delegation_no_progress',
-    "Нет активных делегированных задач.",
+    "Нет активных поручений",
     "No active delegated tasks.")
 
 # ═══════════════════════════════════════════════════════
@@ -289,7 +289,7 @@ _register('delegation_no_progress',
 # ═══════════════════════════════════════════════════════
 
 _register('tokens_insufficient',
-    "Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy",
+    "Токены закончились. Нужно: {cost}, баланс: {balance}. Пополни: /buy",
     "Insufficient tokens. Need: {cost}, balance: {balance}. Top up: /buy")
 _register('tokens_balance',
     "Баланс: {balance} токенов",
@@ -306,7 +306,7 @@ _register('contact_alert_set',
     "Настроил уведомление: буду следить за {description}.",
     "Alert set: watching for {description}.")
 _register('no_contacts_found',
-    "Подходящих контактов не найдено.",
+    "Подходящих контактов не нашлось",
     "No matching contacts found.")
 _register('contacts_found',
     "Найдено {count} подходящих контактов.",

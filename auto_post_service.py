@@ -304,15 +304,15 @@ def generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks):
     """Generate simple fallback message when AI fails"""
     if completed_tasks:
         if len(completed_tasks) >= 3:
-            return f"Сегодня продуктивный день выдался - закрыл {len(completed_tasks)} задач. Приятно видеть прогресс!"
+            return f"Сегодня закрыл {len(completed_tasks)} задач — день прошёл не зря"
         else:
             raw_desc = decrypt_data(completed_tasks[0].description) if completed_tasks[0].description else completed_tasks[0].title
             task_desc = raw_desc[:50] + "..." if len(raw_desc) > 50 else raw_desc
-            return f"Сегодня справился с '{task_desc}'. Маленькие шаги к большим целям."
+            return f"Разобрался с '{task_desc}' — ещё одно дело с плеч"
     elif pending_tasks:
-        return f"Сегодня в работе {len(pending_tasks)} задач. Шаг за шагом продвигаюсь вперед."
+        return f"В работе {len(pending_tasks)} задач — копаю дальше"
     else:
-        return "Сегодня планирую задачи на завтра. Главное - не терять фокус."
+        return "Раскидываю планы на завтра"
 
 
 async def generate_research_post(user_id, query, analysis, session):

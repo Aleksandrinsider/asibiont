@@ -493,7 +493,7 @@ async def buy_handler(message: Message):
         await message.bot.send_message(message.chat.id, text + "\n" + payment_text)
     except Exception as e:
         logger.error(f"Error creating token payment for user {user_id}: {e}")
-        err_msg = " Payment error. Try again later.\nSupport: @aleksandrinsider" if lang == 'en' else " Ошибка создания платежа. Попробуйте позже.\nПоддержка: @aleksandrinsider"
+        err_msg = " Payment error. Try again later.\nSupport: @aleksandrinsider" if lang == 'en' else " Не удалось создать платёж — попробуй чуть позже.\nПоддержка: @aleksandrinsider"
         await message.bot.send_message(message.chat.id, text + "\n\n" + err_msg)
 
 
@@ -555,7 +555,7 @@ async def chat_handler(message: Message):
     # Rate limit check
     if not _check_tg_rate_limit(user_id):
         lang = get_user_lang(user_id)
-        _rl_msg = "Too many messages. Please wait a moment." if lang == 'en' else "Слишком много сообщений. Пожалуйста, подождите немного."
+        _rl_msg = "Too many messages. Please wait a moment." if lang == 'en' else "Погоди секунду, не успеваю за тобой 😅"
         await message.bot.send_message(message.chat.id, _rl_msg)
         return
 
@@ -612,7 +612,7 @@ async def chat_handler(message: Message):
                                 await process_text_message(user_id, text, message, None)
                                 return
                             else:
-                                err = "Couldn't recognize voice message. Try sending text." if get_user_lang(user_id) == 'en' else "Не удалось распознать голосовое сообщение. Попробуйте отправить текст."
+                                err = "Couldn't recognize voice message. Try sending text." if get_user_lang(user_id) == 'en' else "Не разобрал голосовое — попробуй текстом"
                                 await message.bot.send_message(
                                     message.chat.id, err
                                 )
@@ -622,12 +622,12 @@ async def chat_handler(message: Message):
                             os.unlink(tmp_file_path)
                     else:
                         logger.error(f"[VOICE] Failed to download voice file: {resp.status}")
-                        err = "Error downloading voice message." if get_user_lang(user_id) == 'en' else "Ошибка при скачивании голосового сообщения."
+                        err = "Error downloading voice message." if get_user_lang(user_id) == 'en' else "Не получилось загрузить голосовое — попробуй ещё раз"
                         await message.bot.send_message(message.chat.id, err)
                         return
         except Exception as e:
             logger.error(f"[VOICE] Error processing voice message: {e}", exc_info=True)
-            err = "An error occurred processing the voice message." if get_user_lang(user_id) == 'en' else "Произошла ошибка при обработке голосового сообщения."
+            err = "An error occurred processing the voice message." if get_user_lang(user_id) == 'en' else "Что-то пошло не так с голосовым — попробуй ещё раз"
             await message.bot.send_message(message.chat.id, err)
             return
 
@@ -1027,7 +1027,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         except Exception as e:
             logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)
             try:
-                err_msg = "Sorry, an error occurred while processing your message." if lang == 'en' else "Извините, произошла ошибка при обработке сообщения."
+                err_msg = "Sorry, an error occurred while processing your message." if lang == 'en' else "Что-то пошло не так — попробуй ещё раз"
                 await message.bot.send_message(message.chat.id, err_msg)
             except Exception:
                 logger.error(f"Failed to send error message to user {user_id}")
@@ -1045,7 +1045,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                     if response_text and response_text.strip():
                         interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
                     else:
-                        fallback_content = "Sorry, could not generate a response." if lang == 'en' else "Извините, не удалось сгенерировать ответ."
+                        fallback_content = "Sorry, could not generate a response." if lang == 'en' else "Хм, не получилось сформулировать ответ — попробуй переспросить"
                         interaction = Interaction(
                             user_id=user.id,
                             message_type='ai',
@@ -1169,10 +1169,10 @@ async def process_other_message(user_id, message, state):
                     f" Локация обновлена!\n{response_text}{nearby_text}"
                 )
             else:
-                await message.bot.send_message(message.chat.id, "Пользователь не найден.")
+                await message.bot.send_message(message.chat.id, "Хм, не нахожу твой профиль — отправь /start")
         except Exception as e:
             logger.error(f"[GEO] Error processing location: {e}", exc_info=True)
-            await message.bot.send_message(message.chat.id, "Ошибка при обработке геолокации. Попробуйте позже.")
+            await message.bot.send_message(message.chat.id, "Не удалось обработать геолокацию — попробуй ещё раз")
         finally:
             session.close()
         return
@@ -1272,7 +1272,7 @@ def get_delegation_report(user_id, session=None):
                 report.append("")
 
         if not delegated_by_user and not delegated_to_user:
-            no_tasks = "You have no delegated tasks." if lang == 'en' else "У вас нет делегированных задач."
+            no_tasks = "You have no delegated tasks." if lang == 'en' else "Нет активных делегированных задач"
             report.append(no_tasks)
 
         if should_close:
@@ -1285,7 +1285,7 @@ def get_delegation_report(user_id, session=None):
         logger.error(f"Error getting delegation progress for user {user_id}: {e}")
         if should_close:
             session.close()
-        err_prefix = "Error getting delegation report" if lang == 'en' else "Ошибка при получении отчета о делегировании"
+        err_prefix = "Error getting delegation report" if lang == 'en' else "Не удалось загрузить отчёт по делегированию"
         return f"{err_prefix}: {str(e)}"
 
 
@@ -1300,7 +1300,7 @@ async def dashboard_handler(message: Message):
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        msg = "Please register first by sending /start" if lang == 'en' else "Сначала зарегистрируйтесь, отправив /start"
+        msg = "Please register first by sending /start" if lang == 'en' else "Сначала отправь /start — и всё заработает"
         await message.bot.send_message(message.chat.id, msg)
         session.close()
         return
@@ -1315,7 +1315,7 @@ async def dashboard_handler(message: Message):
         [InlineKeyboardButton(text=btn_text, web_app=WebAppInfo(url=dashboard_url))]
     ])
     
-    dash_label = " Your personal dashboard" if lang == 'en' else " Ваш личный дашборд"
+    dash_label = " Your personal dashboard" if lang == 'en' else " Твой дашборд"
     await message.bot.send_message(
         message.chat.id, 
         f"{dash_label}:\n{dashboard_url}", 
@@ -1333,7 +1333,7 @@ async def run_agents_handler(message: Message):
         from models import UserAgent as _UAh
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            msg = "Please register first by sending /start" if lang == 'en' else "Сначала зарегистрируйтесь, отправив /start"
+            msg = "Please register first by sending /start" if lang == 'en' else "Сначала отправь /start — и всё заработает"
             await message.bot.send_message(message.chat.id, msg)
             return
         cnt = session.query(_UAh).filter(
@@ -1342,7 +1342,7 @@ async def run_agents_handler(message: Message):
         ).update({'last_office_run_at': None}, synchronize_session=False)
         session.commit()
         if cnt == 0:
-            msg = "No active agents found." if lang == 'en' else "Активных агентов не найдено. Создайте агентов в дашборде."
+            msg = "No active agents found." if lang == 'en' else "Активных агентов пока нет — создай в дашборде"
             await message.bot.send_message(message.chat.id, msg)
             return
     finally:
@@ -1355,11 +1355,11 @@ async def run_agents_handler(message: Message):
         msg = (
             f" {cnt} agent(s) launched! Results will appear in chat within 1–2 minutes."
             if lang == 'en'
-            else f" Запущено агентов: {cnt}. Результаты появятся в чате через 1–2 минуты."
+            else f" Запустил {cnt} агент(ов) — результаты появятся через пару минут"
         )
     except Exception as e:
         logging.error(f"run_agents_handler: {e}")
-        msg = "Failed to start agents." if lang == 'en' else "Не удалось запустить агентов."
+        msg = "Failed to start agents." if lang == 'en' else "Не получилось запустить агентов — попробуй ещё раз"
     await message.bot.send_message(message.chat.id, msg)
 
 
@@ -1446,7 +1446,7 @@ def delegate_task(task_title, executor_username, deadline=None, description=None
         session.commit()
 
         # Send notification to executor (skip in test environments)
-        notification_text = f""" Новая делегированная задача
+        notification_text = f""" Новое поручение
 
  {task_title}
  От: Пользователь {delegator_id}
@@ -1454,9 +1454,9 @@ def delegate_task(task_title, executor_username, deadline=None, description=None
 
 {description if description else ''}
 
-Используйте команды:
- /accept_{task.id} - принять задачу
- /reject_{task.id} - отклонить задачу"""
+Прими или отклони:
+ /accept_{task.id} — принять
+ /reject_{task.id} — отклонить"""
 
         try:
             # Schedule async notification
@@ -1465,12 +1465,12 @@ def delegate_task(task_title, executor_username, deadline=None, description=None
             # No event loop running (test environment)
             logger.info(f"Would send notification to executor {executor.username}: {notification_text[:100]}...")
 
-        return f"Задача '{task_title}' успешно делегирована пользователю @{executor_username}"
+        return f"Задача '{task_title}' поручена @{executor_username}"
 
     except Exception as e:
         if session:
             session.rollback()
         logger.error(f"Error delegating task: {e}")
-        return f"Ошибка при делегировании задачи: {str(e)}"
+        return f"Не получилось передать задачу — попробуй ещё раз"
 
 

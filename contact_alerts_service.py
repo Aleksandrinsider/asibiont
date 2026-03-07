@@ -195,7 +195,7 @@ class ContactAlertsService:
 
                 if profile_parts:
                     message += f"\n {' • '.join(profile_parts)}"
-                message += "\n\n Можно написать прямо сейчас!"
+                message += "\n\n Самое время написать!"
 
             await self.bot.send_message(user_telegram_id, message)
             logger.info(f"[CONTACT_ALERTS] Sent alert to {user_telegram_id}: {message[:100]}...")
