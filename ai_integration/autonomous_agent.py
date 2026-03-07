@@ -4405,16 +4405,6 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     import json as _json
     import datetime as _dt
 
-    # ── Быстрый пре-фильтр ДО любых DB-запросов ───────────────────────────
-    _ml = (user_message or '').strip()
-    _ml_lower = _ml.lower().rstrip('!., ')
-    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
-                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
-    _is_trivial = _ml_lower in _trivial_replies
-    # Приветствия, отмены, благодарности → сразу return None (0ms), без загрузки агентов
-    if _is_trivial and _ml_lower in ('привет', 'хай', 'здравствуй', 'пока', 'спасибо'):
-        return None
-
     # ── Загружаем user_db_id + агентов: сессионно-активированные + собственные ─
     user_db_id = None
     _agents = []
@@ -4822,8 +4812,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         '"director_message": "Кристина, подготовь... (имя + повелит. глагол)"}'
     )
 
-    # Подтверждения/отмены: проверяем активную миссию
-    # (приветствия уже отфильтрованы выше — сюда попадают только да/нет/ок/давай/стоп/отмена)
+    # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
+    # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
+    _ml = user_message.strip()
+    _ml_lower = _ml.lower()
+    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
+                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
+    _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
     if _is_trivial:
         _has_active_mission = False
         _mission_context = ''
