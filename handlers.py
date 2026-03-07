@@ -1118,6 +1118,11 @@ async def process_other_message(user_id, message, state):
                     if profile:
                         old_city = profile.city
                         profile.city = city_name
+                        from ai_integration.handlers import _clean_city_name, _CITY_ALIASES
+                        _cleaned = _clean_city_name(city_name)
+                        profile.city_normalized = _cleaned
+                        _ru = _CITY_ALIASES.get(_cleaned, '')
+                        profile.city_normalized_ru = _ru if _ru and any(c in _ru for c in 'абвгдежзиклмнопрстуфхцчшщэюя') else (_cleaned if any(c in _cleaned for c in 'абвгдежзиклмнопрстуфхцчшщэюя') else None)
                         logger.info(f"[GEO] Updated city for user {user_id}: {old_city} → {city_name}")
                     else:
                         profile = UserProfile(user_id=user.id, city=city_name)

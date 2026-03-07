@@ -749,6 +749,11 @@ async def auth_handler(request):
                             session_db.add(profile)
                         else:
                             profile.city = city
+                        from ai_integration.handlers import _clean_city_name, _CITY_ALIASES
+                        _cleaned = _clean_city_name(city)
+                        profile.city_normalized = _cleaned
+                        _ru = _CITY_ALIASES.get(_cleaned, '')
+                        profile.city_normalized_ru = _ru if _ru and any(c in _ru for c in 'абвгдежзиклмнопрстуфхцчшщэюя') else (_cleaned if any(c in _cleaned for c in 'абвгдежзиклмнопрстуфхцчшщэюя') else None)
                         session_db.commit()
                 else:
                     logger.info(f"Found existing user: {user.id}")
@@ -8619,7 +8624,17 @@ async def api_profile_handler(request):
 
                 # Update profile fields (пустые строки удаляют данные)
                 if 'city' in data:
-                    profile.city = data['city'].strip() if data['city'] and data['city'].strip() else None
+                    _new_city = data['city'].strip() if data['city'] and data['city'].strip() else None
+                    profile.city = _new_city
+                    if _new_city:
+                        from ai_integration.handlers import _clean_city_name, _CITY_ALIASES
+                        _cleaned = _clean_city_name(_new_city)
+                        profile.city_normalized = _cleaned
+                        _ru = _CITY_ALIASES.get(_cleaned, '')
+                        profile.city_normalized_ru = _ru if _ru and any(c in _ru for c in 'абвгдежзиклмнопрстуфхцчшщэюя') else (_cleaned if any(c in _cleaned for c in 'абвгдежзиклмнопрстуфхцчшщэюя') else None)
+                    else:
+                        profile.city_normalized = None
+                        profile.city_normalized_ru = None
                 if 'country' in data:
                     profile.country = data['country'].strip() if data['country'] and data['country'].strip() else None
                 if 'birthdate' in data:

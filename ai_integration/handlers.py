@@ -6262,7 +6262,16 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         # Простые поля (заменяются всегда)
         if city is not None:
             profile.city = city
-            profile.city_normalized = _clean_city_name(city)
+            cleaned = _clean_city_name(city)
+            profile.city_normalized = cleaned
+            # Обновляем city_normalized_ru — русский вариант через алиасы
+            ru_variant = _CITY_ALIASES.get(cleaned, '')
+            if ru_variant and any(c in ru_variant for c in 'абвгдежзиклмнопрстуфхцчшщэюя'):
+                profile.city_normalized_ru = ru_variant
+            elif any(c in cleaned for c in 'абвгдежзиклмнопрстуфхцчшщэюя'):
+                profile.city_normalized_ru = cleaned
+            else:
+                profile.city_normalized_ru = None
             updates.append(f"город: {city}")
             # Обновляем timezone на основе города
             tz = CITY_TIMEZONE_MAP.get(city.lower())
