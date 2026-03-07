@@ -1839,14 +1839,21 @@ class HybridAutonomousAgent:
                 emotion = CognitiveEngine.detect_emotion(user_message)
                 intent = CognitiveEngine.classify_intent(user_message)
                 
-                # Семантическая память из Pinecone
+                # Семантическая память из Pinecone (skip для коротких/тривиальных сообщений)
                 memory_context = ""
-                try:
-                    memory_context = await build_memory_context(user_id, user_message, max_chars=1200)
-                    if memory_context:
-                        base_prompt += memory_context
-                except Exception as e:
-                    logger.warning(f"[VECTOR] Memory search failed: {e}")
+                _msg_len = len((user_message or '').strip())
+                if _msg_len >= 12:
+                    try:
+                        memory_context = await asyncio.wait_for(
+                            build_memory_context(user_id, user_message, max_chars=1200),
+                            timeout=8
+                        )
+                        if memory_context:
+                            base_prompt += memory_context
+                    except asyncio.TimeoutError:
+                        logger.warning("[VECTOR] Memory search timeout (>8s), skipping")
+                    except Exception as e:
+                        logger.warning(f"[VECTOR] Memory search failed: {e}")
                 
                 orchestrator = get_orchestrator()
                 user_now = ctx.get('user_now')
@@ -2076,8 +2083,11 @@ class HybridAutonomousAgent:
                 return _err_msg
 
             # Запускаем python_code агента (реалтайм-данные перед ответом)
+            # Skip для тривиальных сообщений — скрипт не нужен для приветствий
+            _trivial_greetings = {'привет', 'хай', 'здравствуй', 'пока', 'спасибо', 'ок', 'окей', 'да', 'нет'}
+            _skip_script = (user_message or '').strip().lower().rstrip('!., ') in _trivial_greetings
             try:
-                if '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
+                if not _skip_script and '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
                     import os as _os_pc
                     import sys as _sys_pc
                     import asyncio as _aio_pc
