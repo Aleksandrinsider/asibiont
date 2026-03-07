@@ -347,8 +347,9 @@ async def run_dialogue():
                 pass
 
         # Определяем упоминания агентов и делегирования
-        mentioned_agents = _extract_agent_mentions(bot_reply)
-        was_delegated = _detect_delegation(bot_reply) or len(_intermediate_messages) > 0
+        _all_text = bot_reply + ' ' + ' '.join(_intermediate_messages)
+        mentioned_agents = _extract_agent_mentions(_all_text)
+        was_delegated = _detect_delegation(_all_text) or len(_intermediate_messages) > 0
 
         # Выводим промежуточные сообщения (диалог директора)
         if _intermediate_messages:
@@ -480,7 +481,8 @@ async def run_dialogue():
     status = lambda ok: f"{GREEN}OK{RESET}" if ok else f"{RED}FAIL{RESET}"
 
     print(f"  Фаза 1 (диалог):     {status(p1_ok)} — {'без ошибок' if p1_ok else 'есть ошибки'}")
-    print(f"    Скорость (<30с):    {status(p1_fast)} — {', '.join(f'{r[\"time_s\"]:.1f}s' for r in phase1)}")
+    _p1_times = ', '.join(f'{r["time_s"]:.1f}s' for r in phase1)
+    print(f"    Скорость (<30с):    {status(p1_fast)} — {_p1_times}")
     print(f"  Фаза 2 (запросы):    {status(p2_delegated >= 2)} — {p2_delegated} делегирований, агенты: {', '.join(p2_agents) or 'нет'}")
     print(f"    Агенты в БД:        {status(p2_subagent_db)} — {', '.join(db_stats.get('agent_names_in_db', set())) or 'нет записей'}")
     print(f"  Фаза 3 (прямое):     {status(bool(p3_agents))} — агенты: {', '.join(p3_agents) or 'нет'}")
