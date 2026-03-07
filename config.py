@@ -121,6 +121,51 @@ if not SESSION_SECRET and not LOCAL:
 if not SESSION_SECRET:
     SESSION_SECRET = "local-dev-secret-key-not-for-production"
 
+# ═══════════════════════════════════════════════════════
+# Шифрование чувствительных данных (Fernet / SESSION_SECRET)
+# ═══════════════════════════════════════════════════════
+import hashlib as _cfg_hashlib
+import base64 as _cfg_b64
+
+_FERNET_KEY = _cfg_b64.urlsafe_b64encode(_cfg_hashlib.sha256(SESSION_SECRET.encode()).digest())
+
+def encrypt_token(plaintext: str) -> str:
+    """Шифрует строку (OAuth токен и т.п.) через Fernet. Возвращает 'enc:...' строку."""
+    if not plaintext:
+        return plaintext
+    try:
+        from cryptography.fernet import Fernet
+        f = Fernet(_FERNET_KEY)
+        return "enc:" + f.encrypt(plaintext.encode("utf-8")).decode("ascii")
+    except ImportError:
+        # cryptography не установлен — fallback XOR-obfuscation (лучше чем plaintext)
+        import json as _j
+        raw = plaintext.encode("utf-8")
+        key = _cfg_hashlib.sha256(SESSION_SECRET.encode()).digest()
+        obf = bytes(b ^ key[i % len(key)] for i, b in enumerate(raw))
+        return "obf:" + _cfg_b64.urlsafe_b64encode(obf).decode("ascii")
+
+def decrypt_token(ciphertext: str) -> str:
+    """Дешифрует строку, зашифрованную encrypt_token. Backwards-compatible с plaintext JSON."""
+    if not ciphertext:
+        return ciphertext
+    if ciphertext.startswith("enc:"):
+        try:
+            from cryptography.fernet import Fernet
+            f = Fernet(_FERNET_KEY)
+            return f.decrypt(ciphertext[4:].encode("ascii")).decode("utf-8")
+        except Exception:
+            return ciphertext  # Если не удалось — возвращаем как есть
+    elif ciphertext.startswith("obf:"):
+        try:
+            raw = _cfg_b64.urlsafe_b64decode(ciphertext[4:])
+            key = _cfg_hashlib.sha256(SESSION_SECRET.encode()).digest()
+            return bytes(b ^ key[i % len(key)] for i, b in enumerate(raw)).decode("utf-8")
+        except Exception:
+            return ciphertext
+    # Plaintext (legacy) — возвращаем as-is
+    return ciphertext
+
 # Web Push (VAPID)
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")

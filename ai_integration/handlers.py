@@ -15,7 +15,7 @@ from .utils import parse_time_to_datetime, generate_unified_recommendations
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
 from . import marketing_agent
-from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY
+from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, encrypt_token, decrypt_token
 
 logger = logging.getLogger(__name__)
 
@@ -3017,7 +3017,7 @@ def get_partners_list(user_id=None, session=None):
     # Примечание: PREMIUM пользователи видят всех
     # LIGHT/STANDARD могут видеть PREMIUM только при наличии совпадений (проверяется ниже)
     
-    all_profiles = profile_query.all()
+    all_profiles = profile_query.limit(500).all()
 
     logger.info(f"[PARTNERS] Found {len(all_profiles)} profiles with data")
 
@@ -11113,7 +11113,7 @@ async def _send_via_gmail_oauth(
             if 'error' in _td:
                 return False, f"Gmail токен истёк, переподключи Gmail в профиле: {_td.get('error_description', _td.get('error'))}"
             _new_access = _td['access_token']
-            user_obj.google_oauth_token = _jsn_go.dumps({**token_data, 'access_token': _new_access})
+            user_obj.google_oauth_token = encrypt_token(_jsn_go.dumps({**token_data, 'access_token': _new_access}))
             try:
                 session_obj.commit()
             except Exception:
@@ -11145,7 +11145,7 @@ def _get_user_email_integrations(user, session) -> list:
         if getattr(user, 'google_oauth_token', None):
             import json as _jsn_go_i
             try:
-                _go_data_i = _jsn_go_i.loads(user.google_oauth_token)
+                _go_data_i = _jsn_go_i.loads(decrypt_token(user.google_oauth_token))
                 _go_email_i = _go_data_i.get('email', '')
                 if _go_email_i and _go_email_i not in seen_emails:
                     seen_emails.add(_go_email_i)
@@ -11278,7 +11278,7 @@ async def _send_via_gmail_api(
                     new_tok = dict(token_data)
                     new_tok['access_token'] = access_token
                     new_tok['saved_at'] = _dt_gapi.datetime.utcnow().isoformat()
-                    user.google_oauth_token = _jsn_gapi.dumps(new_tok)
+                    user.google_oauth_token = encrypt_token(_jsn_gapi.dumps(new_tok))
                     try:
                         session.commit()
                     except Exception:

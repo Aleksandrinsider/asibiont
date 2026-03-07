@@ -808,7 +808,8 @@ class ContextBuilder:
                 if getattr(user, 'google_oauth_token', None):
                     import json as _jsn_ea
                     try:
-                        _go = _jsn_ea.loads(user.google_oauth_token)
+                        from config import decrypt_token as _dec_tok_ea
+                        _go = _jsn_ea.loads(_dec_tok_ea(user.google_oauth_token))
                         _go_email = _go.get('email', '')
                         if _go_email:
                             _email_accounts.append(f'Gmail OAuth ({_go_email})')

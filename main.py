@@ -3,7 +3,7 @@ from reminder_service import ReminderService
 from auto_post_service import run_service as auto_post_run_service
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET, WEBHOOK_SECRET, SENTRY_DSN, ADMIN_TELEGRAM_USERNAME
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET, WEBHOOK_SECRET, SENTRY_DSN, ADMIN_TELEGRAM_USERNAME, encrypt_token, decrypt_token
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
@@ -1868,7 +1868,7 @@ async def dashboard_handler(request):
             'telegram_linked': (user.telegram_id > 0) if user else False,
             'telegram_username': user.username if user and user.telegram_id > 0 else '',
             'gmail_linked': bool(getattr(user, 'google_oauth_token', None)) if user else False,
-            'gmail_email': (lambda t: (json.loads(t).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or '') if user else '',
+            'gmail_email': (lambda t: (json.loads(decrypt_token(t)).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or '') if user else '',
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -2958,11 +2958,13 @@ _rate_limit_store = defaultdict(list)  # ip -> [timestamp, ...]
 _RATE_LIMIT_WINDOW = 60   # секунд
 _RATE_LIMIT_MAX = 200     # запросов в окне (для API) — увеличено, т.к. дашборд опрашивает ~8 эндпоинтов каждые 30сек
 _RATE_LIMIT_AUTH_MAX = 10  # запросов на аутентификацию
+_rate_limit_purge_counter = 0  # счётчик для периодической очистки
 
 
 @web.middleware
 async def rate_limit_middleware(request, handler):
     """Rate limiting для API endpoints"""
+    global _rate_limit_purge_counter
     path = request.path
     
     # Rate limiting только для API и аутентификации
@@ -2978,6 +2980,14 @@ async def rate_limit_middleware(request, handler):
     
     # Очищаем старые записи
     _rate_limit_store[key] = [ts for ts in _rate_limit_store[key] if now - ts < _RATE_LIMIT_WINDOW]
+    
+    # Периодическая очистка stale-ключей (каждые 1000 запросов)
+    _rate_limit_purge_counter += 1
+    if _rate_limit_purge_counter >= 1000:
+        _rate_limit_purge_counter = 0
+        stale_keys = [k for k, v in _rate_limit_store.items() if not v or now - max(v) > _RATE_LIMIT_WINDOW]
+        for k in stale_keys:
+            del _rate_limit_store[k]
     
     max_requests = _RATE_LIMIT_AUTH_MAX if path == '/auth' else _RATE_LIMIT_MAX
     
@@ -8864,7 +8874,7 @@ async def api_profile_handler(request):
             'discord_guild_id': str(user.discord_guild_id) if hasattr(user, 'discord_guild_id') and user.discord_guild_id else None,
             'discord_channel_id': str(user.discord_channel_id) if hasattr(user, 'discord_channel_id') and user.discord_channel_id else None,
             'gmail_linked': bool(getattr(user, 'google_oauth_token', None)),
-            'gmail_email': (lambda t: (json.loads(t).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or ''),
+            'gmail_email': (lambda t: (json.loads(decrypt_token(t)).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or ''),
         }
 
         # Добавляем данные активного агента для аватара в чате (focused/first)
@@ -9150,7 +9160,7 @@ async def gmail_oauth_callback(request):
                     'email': gmail_email,
                     'saved_at': _dt_oa.datetime.utcnow().isoformat(),
                 })
-                user.google_oauth_token = token_json
+                user.google_oauth_token = encrypt_token(token_json)
                 session_db.commit()
                 logger.info(f"✅ Gmail OAuth saved for user {user.id}: {gmail_email}")
         finally:
@@ -9172,7 +9182,7 @@ async def gmail_oauth_status(request):
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
         if user and user.google_oauth_token:
-            td = _jsn.loads(user.google_oauth_token)
+            td = _jsn.loads(decrypt_token(user.google_oauth_token))
             return web.json_response({'connected': True, 'email': td.get('email', '')})
         return web.json_response({'connected': False})
     finally:
