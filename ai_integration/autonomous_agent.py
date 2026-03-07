@@ -4189,7 +4189,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools,
                     tool_choice="auto" if _use_tools else None,
                     exclude_tools=_exclude_for_agent if _use_tools else None,
-                    max_tokens=250,
+                    max_tokens=400 if _tool_was_called else 250,
                     api_timeout=API_TIMEOUT_NORMAL,
                 ),
                 timeout=API_TIMEOUT_SCRIPT,
@@ -4274,7 +4274,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         for _tc_skip in _tool_calls[1:]:
             _messages.append({"role": "tool", "tool_call_id": _tc_skip['id'],
                               "content": '{"status":"skipped"}'})
-
+        # Инструкция синтезировать ответ на основе данных инструмента
+        _messages.append({"role": "user", "content": (
+            "Данные от инструмента получены. Теперь дай ПОЛНЫЙ содержательный ответ "
+            "на основе этих данных. НЕ пиши 'ищу данные' или 'уточняю' — ДАЙТЕ ГОТОВЫЙ РЕЗУЛЬТАТ."
+        )})
     # Если агент ответил текстом без tool calls — пропускаем финальный AI-вызов
     if _early_text is not None:
         _final_text = _early_text
@@ -4593,10 +4597,18 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
 
-        # Rework: если агент ответил фоллбэком — пробуем ещё раз с дополнительной подсказкой
+        # Rework: если агент ответил фоллбэком или промежуточным статусом — пробуем ещё раз
         _resp_lower = str(resp).strip().lower()
         _fallback_phrases = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
-        if _resp_lower in _fallback_phrases:
+        _intermediate_markers = ('использую', 'ищу данные', 'уточняю поиск', 'исследую',
+                                  'начинаю', 'приступаю', 'анализирую', 'подготовлю',
+                                  'первый запрос дал', 'сейчас найду', 'сейчас подготовлю',
+                                  'сейчас проведу', 'понял, алексей', 'понял,',
+                                  'начну с', 'сейчас разработаю', 'сейчас проанализирую')
+        _is_fallback = _resp_lower in _fallback_phrases
+        _is_intermediate = (len(str(resp).strip()) < 200 and
+                            any(m in _resp_lower for m in _intermediate_markers))
+        if _is_fallback or _is_intermediate:
             _rework_task = (
                 f"ДОРАБОТКА. Предыдущий ответ отклонён как пустой.\n"
                 f"Задача: {task}\n"
@@ -4617,10 +4629,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
                         f"Задача: {task}\n"
                         f"Контекст: {(extra_context or '')[:500]}\n\n"
-                        f"Дай конкретный ответ по задаче — идеи, план, рекомендации. "
-                        f"Кратко, 2-3 абзаца, без markdown."
+                        f"СРАЗУ дай готовый результат — конкретные идеи, данные, план, рекомендации. "
+                        f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
+                        f"2-3 абзаца, без markdown."
                     ),
-                }], max_tokens=300)
+                }], max_tokens=500)
                 if _fallback_resp and len(_fallback_resp) > 20:
                     resp = _fallback_resp
 
@@ -4736,8 +4749,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         f"Запрос: «{user_message}»\n\n"
         f"Агенты:\n{_caps_block}\n"
         f"{_ctx_hint}{_history_block}\n\n"
-        "self — простые вопросы/задачи. delegate — работа для агента.\n"
-        "Стратегические задачи (поиск людей, маркетинг, аутрич, контент, email) → delegate, НЕ self.\n"
+        "self — когда можно выполнить инструментами ASI напрямую:\n"
+        "  создать/показать/удалить задачу, создать цель, обновить профиль, список задач, привет/пока, вопрос-ответ\n"
+        "delegate — когда нужна ЭКСПЕРТИЗА агента:\n"
+        "  исследование рынка, анализ данных, написание контента/постов, маркетинговый план, аутрич, стратегия\n"
+        "Если пользователь ЯВНО упоминает имя агента или просит ЕГО сделать — delegate.\n"
         "director_message: имя + повелит. глагол (Кристина, подготовь...).\n"
         "Выбери ОДНОГО наиболее подходящего агента. НЕ несколько.\n\n"
         "JSON без ```:\n"

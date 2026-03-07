@@ -1,11 +1,12 @@
 """
-Живой тест-диалог: 3 фазы — свободный разговор, командная работа с агентами,
-прямое обращение к суб-агентам. AI генерирует реплики "пользователя".
+Живой тест-диалог: 5 фаз — разнообразные запросы для проверки всех возможностей.
 
 Фазы:
-  1. Свободный диалог (3 шага) — общение с ASI, задачи, вопросы
-  2. Командная работа (4 шага) — делегирование Кристине и Марку, оценка результатов
-  3. Прямое обращение (3 шага) — @Кристина напрямую, возврат к ASI
+  1. Задачи и планирование (3 шага) — создание задач, список, управление
+  2. Исследование и аналитика (3 шага) — web search, research, анализ
+  3. Контент и публикации (2 шага) — написание постов, редактура
+  4. Агенты и делегирование (3 шага) — прямое обращение, делегирование, командная работа
+  5. Голосовые запросы и edge-cases (3 шага) — короткие реплики, неясные запросы, итоги
 
 Запуск:
     python tests/live_dialogue_test.py
@@ -150,47 +151,65 @@ async def generate_user_message(history: list[dict], hint: str = "") -> str:
 # Каждый элемент: (label, message | None, hint_for_ai)
 # Если message=None → AI генерирует реплику с подсказкой hint
 SCENARIO = [
-    # ── Фаза 1: Свободный диалог (ASI сам решает как помочь) ──
-    ("1.1 Знакомство",
-     "Привет! Я запустил AI-продукт для планирования дня, нужно найти первых 50 тестировщиков",
+    # ── Фаза 1: Задачи и планирование ──
+    ("1.1 Создание задачи",
+     "Запиши задачу: подготовить презентацию для инвесторов до пятницы",
      None),
 
-    ("1.2 Уточнение",
+    ("1.2 Список задач",
+     "Покажи все мои задачи",
+     None),
+
+    ("1.3 Создание цели",
+     "Создай цель — выйти на 100 платящих клиентов за 3 месяца",
+     None),
+
+    # ── Фаза 2: Исследование и аналитика ──
+    ("2.1 Поиск информации",
+     "Найди информацию о трендах в AI SaaS в 2026 году",
+     None),
+
+    ("2.2 Исследование конкурентов",
+     "Исследуй конкурентов в нише AI-ассистентов для бизнеса — кто лидеры, какие фичи",
+     None),
+
+    ("2.3 Реакция на исследование",
      None,
-     "Задай уточняющий вопрос по совету бота или расскажи больше деталей о продукте"),
+     "Задай уточняющий вопрос по результатам исследования или попроси копнуть глубже в конкретном направлении"),
 
-    ("1.3 Действие",
+    # ── Фаза 3: Контент и публикации ──
+    ("3.1 Написание поста",
+     "Напиши пост для телеграм-канала про то как AI меняет продуктивность стартапов",
+     None),
+
+    ("3.2 Обновление профиля",
+     "Обнови мой профиль — добавь навык 'управление продуктом' и интерес 'нейросети'",
+     None),
+
+    # ── Фаза 4: Агенты и делегирование ──
+    ("4.1 Делегирование Кристине",
+     "Пусть Кристина придумает 5 идей для привлечения пользователей через Instagram",
+     None),
+
+    ("4.2 Прямое обращение к Марку",
+     "@Марк, проанализируй юнит-экономику: средний чек 500р, CAC предполагаю 300р, LTV нужно рассчитать",
+     None),
+
+    ("4.3 Командная задача",
      None,
-     "Попроси записать конкретный шаг из обсуждения или одобри предложенное действие"),
+     "Попроси подвести итоги работы команды агентов или дать им новое общее задание"),
 
-    # ── Фаза 2: Естественные запросы (ASI сам решает кому делегировать) ──
-    ("2.1 Запрос на контент",
-     "Нужен пост для привлечения первых тестировщиков, чтобы зацепить аудиторию",
+    # ── Фаза 5: Edge cases и итоги ──
+    ("5.1 Короткая реплика",
+     "спс",
      None),
 
-    ("2.2 Запрос на исследование",
-     "Где вообще искать тестировщиков для AI-продуктов? Какие площадки и сообщества работают?",
+    ("5.2 Неявный запрос",
+     "Что-то чувствую что мы буксуем, нужно ускориться",
      None),
 
-    ("2.3 Комплексная задача",
-     "Хочу выйти на Product Hunt — нужна стратегия запуска",
-     None),
-
-    ("2.4 Оценка результатов",
-     None,
-     "Оцени что уже сделано, задай конкретный вопрос по результатам"),
-
-    # ── Фаза 3: Прямое обращение к агенту + возврат к ASI ──
-    ("3.1 Обращение к Кристине",
-     "@Кристина, а какой tone of voice лучше использовать для постов — формальный или дружеский?",
-     None),
-
-    ("3.2 Реакция на ответ агента",
-     None,
-     "Отреагируй на ответ Кристины — согласись или попроси другой вариант"),
-
-    ("3.3 Возврат к ASI",
-     "Подведи итоги — что мы сегодня сделали и какой следующий шаг?",
+    ("5.3 Итоги дня",
+     "Подведи итоги — что сделано, какие задачи висят, что делать завтра",
      None),
 ]
 
@@ -238,16 +257,16 @@ async def run_dialogue():
 
     total_steps = len(SCENARIO)
     print(f"\n{BOLD}{'='*60}")
-    print(f"  LIVE DIALOGUE TEST — {total_steps} шагов, 3 фазы")
-    print(f"  Фаза 1: Свободный диалог | Фаза 2: Естественные запросы | Фаза 3: Прямое")
+    print(f"  LIVE DIALOGUE TEST — {total_steps} шагов, 5 фаз")
+    print(f"  1:Задачи | 2:Исследование | 3:Контент | 4:Агенты | 5:Edge")
     print(f"{'='*60}{RESET}\n")
 
     history: list[dict] = []
     results: list[dict] = []       # [{step, label, user_msg, bot_reply, agents, delegated, time_s, error}]
 
     for step_idx, (label, fixed_msg, hint) in enumerate(SCENARIO, 1):
-        phase = label[0]  # '1', '2', '3'
-        phase_names = {'1': 'СВОБОДНЫЙ ДИАЛОГ', '2': 'ЕСТЕСТВЕННЫЕ ЗАПРОСЫ', '3': 'ПРЯМОЕ ОБРАЩЕНИЕ'}
+        phase = label[0]  # '1', '2', '3', '4', '5'
+        phase_names = {'1': 'ЗАДАЧИ И ПЛАНИРОВАНИЕ', '2': 'ИССЛЕДОВАНИЕ И АНАЛИТИКА', '3': 'КОНТЕНТ И ПУБЛИКАЦИИ', '4': 'АГЕНТЫ И ДЕЛЕГИРОВАНИЕ', '5': 'EDGE CASES И ИТОГИ'}
 
         # Заголовок фазы при первом шаге
         if label.endswith('.1'):
@@ -464,28 +483,34 @@ async def run_dialogue():
     phase1 = [r for r in results if r["label"].startswith("1.")]
     phase2 = [r for r in results if r["label"].startswith("2.")]
     phase3 = [r for r in results if r["label"].startswith("3.")]
+    phase4 = [r for r in results if r["label"].startswith("4.")]
+    phase5 = [r for r in results if r["label"].startswith("5.")]
 
     p1_ok = all(not r["error"] for r in phase1)
     p1_fast = all(r["time_s"] < 30 for r in phase1)
-    p2_delegated = sum(1 for r in phase2 if r["delegated"])
-    p2_agents = set()
-    for r in phase2:
-        p2_agents.update(r["agents"])
-    p3_agents = set()
-    for r in phase3:
-        p3_agents.update(r["agents"])
+    p2_ok = all(not r["error"] for r in phase2)
+    p3_ok = all(not r["error"] for r in phase3)
+    p4_delegated = sum(1 for r in phase4 if r["delegated"])
+    p4_agents = set()
+    for r in phase4:
+        p4_agents.update(r["agents"])
+    p5_ok = all(not r["error"] for r in phase5)
 
     # Проверяем что субагенты реально работали (записи в DB)
-    p2_subagent_db = len(db_stats.get("agent_names_in_db", set())) > 0
+    p4_subagent_db = len(db_stats.get("agent_names_in_db", set())) > 0
 
     status = lambda ok: f"{GREEN}OK{RESET}" if ok else f"{RED}FAIL{RESET}"
 
-    print(f"  Фаза 1 (диалог):     {status(p1_ok)} — {'без ошибок' if p1_ok else 'есть ошибки'}")
+    print(f"  Фаза 1 (задачи):     {status(p1_ok)} — {'без ошибок' if p1_ok else 'есть ошибки'}")
     _p1_times = ', '.join(f'{r["time_s"]:.1f}s' for r in phase1)
     print(f"    Скорость (<30с):    {status(p1_fast)} — {_p1_times}")
-    print(f"  Фаза 2 (запросы):    {status(p2_delegated >= 2)} — {p2_delegated} делегирований, агенты: {', '.join(p2_agents) or 'нет'}")
-    print(f"    Агенты в БД:        {status(p2_subagent_db)} — {', '.join(db_stats.get('agent_names_in_db', set())) or 'нет записей'}")
-    print(f"  Фаза 3 (прямое):     {status(bool(p3_agents))} — агенты: {', '.join(p3_agents) or 'нет'}")
+    print(f"  Фаза 2 (исследов.):  {status(p2_ok)} — {'без ошибок' if p2_ok else 'есть ошибки'}")
+    _p2_times = ', '.join(f'{r["time_s"]:.1f}s' for r in phase2)
+    print(f"    Скорость:           {_p2_times}")
+    print(f"  Фаза 3 (контент):    {status(p3_ok)} — {'без ошибок' if p3_ok else 'есть ошибки'}")
+    print(f"  Фаза 4 (агенты):     {status(p4_delegated >= 1)} — {p4_delegated} делегирований, агенты: {', '.join(p4_agents) or 'нет'}")
+    print(f"    Агенты в БД:        {status(p4_subagent_db)} — {', '.join(db_stats.get('agent_names_in_db', set())) or 'нет записей'}")
+    print(f"  Фаза 5 (edge):       {status(p5_ok)} — {'без ошибок' if p5_ok else 'есть ошибки'}")
 
     # Проверка тайминга: ни один шаг не должен превышать 120с
     no_timeout = all(r["time_s"] < 120 for r in results)
@@ -496,17 +521,21 @@ async def run_dialogue():
             if r["time_s"] > 120:
                 print(f"    {RED}✗ {r['label']}: {r['time_s']:.1f}s{RESET}")
 
-    all_ok = p1_ok and p2_delegated >= 2 and bool(p3_agents) and errors == 0 and no_timeout
+    all_ok = p1_ok and p2_ok and p3_ok and p4_delegated >= 1 and p5_ok and errors == 0 and no_timeout
     if all_ok:
         print(f"\n  {GREEN}{BOLD}>>> Все фазы пройдены успешно{RESET}")
     else:
         issues = []
         if not p1_ok:
-            issues.append("ошибки в свободном диалоге")
-        if p2_delegated < 2:
-            issues.append(f"мало делегирований ({p2_delegated}/2+)")
-        if not p3_agents:
-            issues.append("прямое обращение не сработало")
+            issues.append("ошибки в задачах/планировании")
+        if not p2_ok:
+            issues.append("ошибки в исследовании")
+        if not p3_ok:
+            issues.append("ошибки в контенте")
+        if p4_delegated < 1:
+            issues.append(f"мало делегирований ({p4_delegated}/1+)")
+        if not p5_ok:
+            issues.append("ошибки в edge cases")
         if not no_timeout:
             issues.append("есть шаги >120с")
         print(f"\n  {YELLOW}!!! Требует внимания: {'; '.join(issues)}{RESET}")
