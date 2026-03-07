@@ -4574,11 +4574,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
     # ── Вспомогательная функция сохранения результата агента ──────────────────
     async def _run_agent_task(ag, task, extra_context: str = "", director_message: str = ""):
-        # Отправляем живое обращение директора к агенту и сохраняем в DB
+        # Отправляем живое обращение директора к агенту (только через progress_callback)
+        # НЕ сохраняем в Interaction — иначе дашборд покажет дубль серым сообщением
         if director_message:
             await _send_visible(director_message)
-            # Сохраняем обращение директора в Interaction для видимости на дашборде
-            _save_interaction_for_director(user_id, director_message)
             await asyncio.sleep(0.3)
 
         # Списываем токены за запуск агента директором
