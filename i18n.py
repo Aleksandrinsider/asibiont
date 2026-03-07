@@ -100,10 +100,10 @@ def get_user_lang_by_db_id(db_user_id: int, session=None) -> str:
 
 
 def get_lang_badge(lang: str) -> str:
-    """Return a language flag badge for display in contacts."""
+    """Return a language badge for display in contacts."""
     if lang == 'en':
-        return '🇬🇧'
-    return '🇷🇺'
+        return 'EN'
+    return 'RU'
 
 
 STRINGS: dict = {'ru': {}, 'en': {}}
@@ -162,23 +162,23 @@ _register('error_no_user_id', 'Ошибка: user_id не указан.', 'Error
 # ═══════════════════════════════════════════════════════
 
 _register('task_created',
-    "✅ Задача '{title}' создана на {time}.",
-    "✅ Task '{title}' scheduled for {time}.")
+    "Задача '{title}' создана на {time}.",
+    "Task '{title}' scheduled for {time}.")
 _register('task_created_no_time',
-    "✅ Задача '{title}' создана.",
-    "✅ Task '{title}' created.")
+    "Задача '{title}' создана.",
+    "Task '{title}' created.")
 _register('task_completed',
-    "✅ Задача '{title}' завершена!",
-    "✅ Task '{title}' completed!")
+    "Задача '{title}' завершена!",
+    "Task '{title}' completed!")
 _register('task_deleted',
-    "🗑 Задача '{title}' удалена.",
-    "🗑 Task '{title}' deleted.")
+    "Задача '{title}' удалена.",
+    "Task '{title}' deleted.")
 _register('task_skipped',
-    "⏭ Задача '{title}' пропущена.",
-    "⏭ Task '{title}' skipped.")
+    "Задача '{title}' пропущена.",
+    "Task '{title}' skipped.")
 _register('task_restored',
-    "♻️ Задача '{title}' восстановлена.",
-    "♻️ Task '{title}' restored.")
+    "Задача '{title}' восстановлена.",
+    "Task '{title}' restored.")
 _register('task_updated',
     "TASK_UPDATED: Задача '{title}' обновлена.",
     "TASK_UPDATED: Task '{title}' updated.")
@@ -186,26 +186,26 @@ _register('task_updated_with_time',
     "TASK_UPDATED: Задача '{title}' обновлена. Новое время напоминания: {time}.",
     "TASK_UPDATED: Task '{title}' updated. New reminder time: {time}.")
 _register('task_duplicate',
-    "⚠️ Задача '{title}' уже есть в списке.",
-    "⚠️ Task '{title}' already exists.")
+    "Задача '{title}' уже есть в списке.",
+    "Task '{title}' already exists.")
 _register('task_no_time',
-    "⚠️ ВРЕМЯ НЕ УКАЗАНО. Спроси у пользователя: «На какое время поставить напоминание?»",
-    "⚠️ NO TIME SPECIFIED. Ask the user: 'What time should I set the reminder for?'")
+    "ВРЕМЯ НЕ УКАЗАНО. Спроси у пользователя: «На какое время поставить напоминание?»",
+    "NO TIME SPECIFIED. Ask the user: 'What time should I set the reminder for?'")
 _register('task_title_empty',
     "ERROR: Название задачи не может быть пустым.",
     "ERROR: Task title cannot be empty.")
 _register('task_linked_to_goal',
-    "🎯 Привязана к цели: {goal}",
-    "🎯 Linked to goal: {goal}")
+    "Привязана к цели: {goal}",
+    "Linked to goal: {goal}")
 _register('no_active_tasks',
-    "📋 Нет активных задач.",
-    "📋 No active tasks.")
+    "Нет активных задач.",
+    "No active tasks.")
 _register('time_conflict',
-    "⚠️ Конфликт: в {time} уже запланирована задача '{title}'.",
-    "⚠️ Conflict: task '{title}' already scheduled at {time}.")
+    "Конфликт: в {time} уже запланирована задача '{title}'.",
+    "Conflict: task '{title}' already scheduled at {time}.")
 _register('time_free',
-    "✅ Время свободно, можно создавать задачу.",
-    "✅ Time slot is free, you can create a task.")
+    "Время свободно, можно создавать задачу.",
+    "Time slot is free, you can create a task.")
 _register('self_delegation_error',
     "SELF_DELEGATION_ERROR: Нельзя делегировать задачу самому себе.",
     "SELF_DELEGATION_ERROR: Cannot delegate a task to yourself.")
@@ -215,28 +215,28 @@ _register('self_delegation_error',
 # ═══════════════════════════════════════════════════════
 
 _register('goal_created',
-    "🎯 Цель '{title}' создана!",
-    "🎯 Goal '{title}' created!")
+    "Цель '{title}' создана!",
+    "Goal '{title}' created!")
 _register('goal_deleted',
-    "🗑 Цель '{title}' удалена.",
-    "🗑 Goal '{title}' deleted.")
+    "Цель '{title}' удалена.",
+    "Goal '{title}' deleted.")
 _register('goal_updated',
-    "📊 Цель '{title}' обновлена: {progress}%",
-    "📊 Goal '{title}' updated: {progress}%")
+    "Цель '{title}' обновлена: {progress}%",
+    "Goal '{title}' updated: {progress}%")
 _register('goal_title_required',
     "Укажи название цели.",
     "Please specify a goal title.")
 _register('no_active_goals',
-    "🎯 Нет активных целей.",
-    "🎯 No active goals.")
+    "Нет активных целей.",
+    "No active goals.")
 
 # ═══════════════════════════════════════════════════════
 # СТРОКИ: ПРОФИЛЬ
 # ═══════════════════════════════════════════════════════
 
 _register('profile_updated',
-    "✅ Профиль обновлён.",
-    "✅ Profile updated.")
+    "Профиль обновлён.",
+    "Profile updated.")
 _register('profile_no_data',
     "Не передано данных для обновления профиля.",
     "No data provided for profile update.")
@@ -252,34 +252,34 @@ _register('profile_garbage_rejected',
 # ═══════════════════════════════════════════════════════
 
 _register('post_created',
-    "✅ Пост создан!",
-    "✅ Post created!")
+    "Пост создан!",
+    "Post created!")
 _register('post_updated',
-    "✅ Пост #{id} обновлён!",
-    "✅ Post #{id} updated!")
+    "Пост #{id} обновлён!",
+    "Post #{id} updated!")
 _register('post_deleted',
-    "🗑 Пост удалён.",
-    "🗑 Post deleted.")
+    "Пост удалён.",
+    "Post deleted.")
 _register('post_empty',
     "Текст поста не может быть пустым.",
     "Post text cannot be empty.")
 _register('no_posts',
-    "📭 У тебя нет постов.",
-    "📭 You have no posts.")
+    "У тебя нет постов.",
+    "You have no posts.")
 
 # ═══════════════════════════════════════════════════════
 # СТРОКИ: ДЕЛЕГИРОВАНИЕ
 # ═══════════════════════════════════════════════════════
 
 _register('delegation_sent',
-    "📤 Задача '{title}' делегирована @{user}.",
-    "📤 Task '{title}' delegated to @{user}.")
+    "Задача '{title}' делегирована @{user}.",
+    "Task '{title}' delegated to @{user}.")
 _register('delegation_accepted',
-    "✅ Задача '{title}' принята.",
-    "✅ Task '{title}' accepted.")
+    "Задача '{title}' принята.",
+    "Task '{title}' accepted.")
 _register('delegation_rejected',
-    "❌ Задача '{title}' отклонена.",
-    "❌ Task '{title}' rejected.")
+    "Задача '{title}' отклонена.",
+    "Task '{title}' rejected.")
 _register('delegation_no_progress',
     "Нет активных делегированных задач.",
     "No active delegated tasks.")
@@ -292,8 +292,8 @@ _register('tokens_insufficient',
     "Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy",
     "Insufficient tokens. Need: {cost}, balance: {balance}. Top up: /buy")
 _register('tokens_balance',
-    "💰 Баланс: {balance} токенов",
-    "💰 Balance: {balance} tokens")
+    "Баланс: {balance} токенов",
+    "Balance: {balance} tokens")
 _register('subscription_cancelled',
     "Подписка отменена.",
     "Subscription cancelled.")
@@ -303,8 +303,8 @@ _register('subscription_cancelled',
 # ═══════════════════════════════════════════════════════
 
 _register('contact_alert_set',
-    "🔔 Настроил уведомление: буду следить за {description}.",
-    "🔔 Alert set: watching for {description}.")
+    "Настроил уведомление: буду следить за {description}.",
+    "Alert set: watching for {description}.")
 _register('no_contacts_found',
     "Подходящих контактов не найдено.",
     "No matching contacts found.")
@@ -548,35 +548,35 @@ ERROR_RESPONSES = {
 # ═══════════════════════════════════════════════════════
 
 _register('cmd_start',
-    "👋 Привет{name}! Я ASI Biont — твой мыслящий ИИ-партнёр.\n\n"
+    "Привет{name}! Я ASI Biont — твой мыслящий ИИ-партнёр.\n\n"
     "Я помогу тебе управлять задачами, достигать целей и находить нужных людей.\n\n"
-    "Просто напиши мне что тебе нужно, и я помогу! 🚀",
+    "Просто напиши мне что тебе нужно, и я помогу!",
     
-    "👋 Hi{name}! I'm ASI Biont — your thinking AI partner.\n\n"
+    "Hi{name}! I'm ASI Biont — your thinking AI partner.\n\n"
     "I'll help you manage tasks, achieve goals, and find the right people.\n\n"
-    "Just tell me what you need, and I'll help! 🚀")
+    "Just tell me what you need, and I'll help!")
 
 _register('cmd_help',
-    "📖 **Возможности ASI Biont:**\n\n"
-    "💬 Просто пиши — я пойму\n"
-    "📋 Задачи: создание, перенос, завершение\n"
-    "🎯 Цели: постановка и отслеживание\n"
-    "🔍 Исследования: поиск информации\n"
-    "👥 Контакты: поиск нужных людей\n"
-    "📢 Посты: генерация контента\n\n"
+    "**Возможности ASI Biont:**\n\n"
+    "Просто пиши — я пойму\n"
+    "Задачи: создание, перенос, завершение\n"
+    "Цели: постановка и отслеживание\n"
+    "Исследования: поиск информации\n"
+    "Контакты: поиск нужных людей\n"
+    "Посты: генерация контента\n\n"
     "/tasks — мои задачи\n"
     "/goals — мои цели\n"
     "/profile — мой профиль\n"
     "/buy — пополнить токены\n"
     "/lang — сменить язык",
     
-    "📖 **ASI Biont features:**\n\n"
-    "💬 Just write — I'll understand\n"
-    "📋 Tasks: create, reschedule, complete\n"
-    "🎯 Goals: set and track\n"
-    "🔍 Research: find information\n"
-    "👥 Contacts: find the right people\n"
-    "📢 Posts: generate content\n\n"
+    "**ASI Biont features:**\n\n"
+    "Just write — I'll understand\n"
+    "Tasks: create, reschedule, complete\n"
+    "Goals: set and track\n"
+    "Research: find information\n"
+    "Contacts: find the right people\n"
+    "Posts: generate content\n\n"
     "/tasks — my tasks\n"
     "/goals — my goals\n"
     "/profile — my profile\n"
@@ -584,16 +584,16 @@ _register('cmd_help',
     "/lang — change language")
 
 _register('cmd_tasks_empty',
-    "📋 У тебя нет активных задач. Напиши мне что нужно сделать!",
-    "📋 You have no active tasks. Tell me what needs to be done!")
+    "У тебя нет активных задач. Напиши мне что нужно сделать!",
+    "You have no active tasks. Tell me what needs to be done!")
 
 _register('cmd_lang_current',
-    "🌐 Текущий язык: {lang}\n\nСменить: /lang en или /lang ru",
-    "🌐 Current language: {lang}\n\nSwitch: /lang en or /lang ru")
+    "Текущий язык: {lang}\n\nСменить: /lang en или /lang ru",
+    "Current language: {lang}\n\nSwitch: /lang en or /lang ru")
 
 _register('cmd_lang_changed',
-    "✅ Язык изменён на: {lang}",
-    "✅ Language changed to: {lang}")
+    "Язык изменён на: {lang}",
+    "Language changed to: {lang}")
 
 # ═══════════════════════════════════════════════════════
 # СТРОКИ: ВРЕМЯ / ДАТЫ

@@ -2603,8 +2603,8 @@ class AnchorEngine:
                     anchor_type='email_reply_received',
                     source=f'email:{email.id}:reply',
                     topic=_t(user,
-                        f'📩 Ответ от {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — кампания «{campaign.name}»',
-                        f'📩 Reply from {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — campaign «{campaign.name}»'),
+                        f' Ответ от {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — кампания «{campaign.name}»',
+                        f' Reply from {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — campaign «{campaign.name}»'),
                     priority=AnchorPriority.CRITICAL,
                     data=json.dumps({
                         'campaign_id': campaign.id,
@@ -2665,8 +2665,8 @@ class AnchorEngine:
                         anchor_type='email_need_leads',
                         source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}',  # дедупликация по дню
                         topic=_t(user,
-                            f'🔍 Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
-                            f'🔍 Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
+                            f' Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
+                            f' Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
                         priority=AnchorPriority.MEDIUM,
                         data=json.dumps({
                             'campaign_id': campaign.id,
@@ -2695,8 +2695,8 @@ class AnchorEngine:
                     anchor_type='email_campaign_report',
                     source=f'email_campaign:{campaign.id}:report:{now_utc.strftime("%Y-%m-%d")}',
                     topic=_t(user,
-                        f'📊 Отчёт email-кампании «{campaign.name}»: {total_sent} отправлено, {total_replied} ответов, {sent_today} сегодня',
-                        f'📊 Email campaign «{campaign.name}» report: {total_sent} sent, {total_replied} replies, {sent_today} today'),
+                        f' Отчёт email-кампании «{campaign.name}»: {total_sent} отправлено, {total_replied} ответов, {sent_today} сегодня',
+                        f' Email campaign «{campaign.name}» report: {total_sent} sent, {total_replied} replies, {sent_today} today'),
                     priority=AnchorPriority.LOW,
                     data=json.dumps({
                         'campaign_id': campaign.id,
@@ -3715,7 +3715,7 @@ class AnchorEngine:
             if self.bot and published_to:
                 platforms_str = ', '.join(published_to)
                 notify = (
-                    f"📝 Контент-кампания «{campaign.name}» — пост #{campaign.posts_published}:\n\n"
+                    f" Контент-кампания «{campaign.name}» — пост #{campaign.posts_published}:\n\n"
                     f"{post_text[:500]}\n\n"
                     f"Опубликовано: {platforms_str}\n"
                     f"Если нужно поправить — скажи."
@@ -4024,8 +4024,8 @@ class AnchorEngine:
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
                     kb = InlineKeyboardMarkup(inline_keyboard=[
                         [
-                            InlineKeyboardButton(text='✅ Принять', callback_data=f'accept_deleg_{task.id}'),
-                            InlineKeyboardButton(text='❌ Отклонить', callback_data=f'reject_deleg_{task.id}'),
+                            InlineKeyboardButton(text='Принять', callback_data=f'accept_deleg_{task.id}'),
+                            InlineKeyboardButton(text='Отклонить', callback_data=f'reject_deleg_{task.id}'),
                         ]
                     ])
                     await bot.send_message(
@@ -4301,7 +4301,7 @@ class AnchorEngine:
                             close_session=False,
                         )
                         logger.info(f"[ANCHOR] Direct send to {email}: {(result or '')[:100]}")
-                        if result and '✅' in result:
+                        if result and '' in result:
                             sent_count += 1
                         elif result and ('лимит' in result.lower() or 'limit' in result.lower()):
                             logger.info(f"[ANCHOR] Daily limit reached, stopping batch")
@@ -4660,7 +4660,7 @@ class AnchorEngine:
                         ct_time = f" (выполнено {act_local.strftime('%d.%m %H:%M')})"
                     except Exception:
                         pass
-                completed_lines.append(f"✓ {ct.title}{ct_time}")
+                completed_lines.append(f"{ct.title}{ct_time}")
 
             # Пропущенные задачи — AI знает проблемные паттерны
             skipped_tasks = session.query(Task).filter(
@@ -4677,7 +4677,7 @@ class AnchorEngine:
                         reason = f" — {decrypt_data(st.skipped_reason)[:60]}"
                     except Exception:
                         pass
-                skipped_lines.append(f"✗ {st.title}{reason}")
+                skipped_lines.append(f"{st.title}{reason}")
 
             # Общая статистика
             total_tasks = session.query(Task).filter(Task.user_id == user.id).count()
@@ -4866,7 +4866,7 @@ class AnchorEngine:
                 # Для DDG-обогащённых якорей — показываем реальные результаты веб-поиска
                 if ad.get('type') in DDG_ENRICHED_TYPES and ad.get('data'):
                     data = ad['data']
-                    web_keys = {'web_events': '🌐 МЕРОПРИЯТИЯ ИЗ СЕТИ', 'fresh_insights': '📊 СВЕЖИЕ ДАННЫЕ ИЗ СЕТИ', 'content_ideas_from_web': '💡 ИДЕИ ИЗ СЕТИ'}
+                    web_keys = {'web_events': ' МЕРОПРИЯТИЯ ИЗ СЕТИ', 'fresh_insights': ' СВЕЖИЕ ДАННЫЕ ИЗ СЕТИ', 'content_ideas_from_web': ' ИДЕИ ИЗ СЕТИ'}
                     for web_key, label in web_keys.items():
                         items = data.get(web_key, [])
                         if items:
@@ -5645,8 +5645,8 @@ class AnchorEngine:
                     anchor_type='email_campaign_report',
                     source=source_key,
                     topic=_t(user,
-                        f'⚠️ Email-кампания «{c.name}» без активности {3}+ дня — проверь контакты и настройки',
-                        f'⚠️ Email campaign «{c.name}» stale for {3}+ days — check leads and settings'),
+                        f' Email-кампания «{c.name}» без активности {3}+ дня — проверь контакты и настройки',
+                        f' Email campaign «{c.name}» stale for {3}+ days — check leads and settings'),
                     priority=AnchorPriority.MEDIUM,
                     data=json.dumps({
                         'campaign_id': c.id, 'campaign_name': c.name,
@@ -5683,8 +5683,8 @@ class AnchorEngine:
                     anchor_type='content_campaign_publish',
                     source=source_key,
                     topic=_t(user,
-                        f'⚠️ Контент-кампания «{cc.name}» не публикуется 3+ дня',
-                        f'⚠️ Content campaign «{cc.name}» no posts for 3+ days'),
+                        f' Контент-кампания «{cc.name}» не публикуется 3+ дня',
+                        f' Content campaign «{cc.name}» no posts for 3+ days'),
                     priority=AnchorPriority.LOW,
                     data=json.dumps({
                         'campaign_id': cc.id, 'campaign_name': cc.name,

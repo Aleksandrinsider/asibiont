@@ -2230,7 +2230,7 @@ class HybridAutonomousAgent:
                                 _al_s.add(_AAL(
                                     user_id=_al_u.id,
                                     activity_type='integration',
-                                    title=f'❌ {_agent_data.get("name","Агент")}: скрипт не запустился',
+                                    title=f'{_agent_data.get("name","Агент")}: скрипт не запустился',
                                     content=str(_pce)[:800],
                                     target=_svc_lbl,
                                     status='failed',
@@ -2433,24 +2433,24 @@ class HybridAutonomousAgent:
                                         # Показываем результат как сообщение от агента
                                         _result_text = str(_r.get('result', ''))[:300]
                                         if _exec_name and _result_text and len(_result_text) > 20:
-                                            _vis = f"💬 {_exec_name}: {_result_text}"
+                                            _vis = f"{_exec_name}: {_result_text}"
                                         elif _exec_name:
-                                            _vis = f"💬 {_exec_name}: задача выполнена"
+                                            _vis = f"{_exec_name}: задача выполнена"
                                         else:
                                             _vis = None
                                     elif _name == 'research_topic':
                                         _q = _args.get('query', '') or _args.get('topic', '') or ''
-                                        _vis = f"🔍 Исследую: {_q[:80]}" if _q else "🔍 Провожу исследование..."
+                                        _vis = f"Исследую: {_q[:80]}" if _q else "Провожу исследование..."
                                     elif _name == 'create_post':
-                                        _vis = "📝 Создаю пост..."
+                                        _vis = "Создаю пост..."
                                     elif _name == 'get_delegation_progress':
-                                        _vis = "📊 Проверяю статус задач..."
+                                        _vis = "Проверяю статус задач..."
                                     elif _name == 'add_task':
                                         _tsk = _args.get('title', '') or ''
-                                        _vis = f"✅ Записал: {_tsk[:60]}" if _tsk else "✅ Создаю задачу..."
+                                        _vis = f"Записал: {_tsk[:60]}" if _tsk else "Создаю задачу..."
                                     else:
                                         _ag = _args.get('agent_name', '') or ''
-                                        _vis = f"🤖 Запускаю агента {_ag}" if _ag else "🤖 Запускаю агента..."
+                                        _vis = f"Запускаю агента {_ag}" if _ag else "Запускаю агента..."
                                     if _vis:
                                         await _cb(_vis, persist=True)
                                 except TypeError:
@@ -2570,7 +2570,7 @@ class HybridAutonomousAgent:
                     # Недостаточно токенов — сбрасываем агента и сообщаем
                     from .user_agents import set_user_active_agent
                     set_user_active_agent(user_id, None)
-                    final = f"⚠️ {bill_result['error']}\n\nВозвращаюсь в стандартный режим ASI Biont."
+                    final = f"{bill_result['error']}\n\nВозвращаюсь в стандартный режим ASI Biont."
         except Exception as _be:
             logger.warning(f"[BILLING] agent billing error: {_be}")
 
@@ -3122,7 +3122,7 @@ class HybridAutonomousAgent:
                         f"Расскажи, как продвигается — сделал, в процессе или нужно перенести? "
                         f"Если нужна помощь, могу подключиться.")
         elif mode == 'result_check':
-            return "Great, task completed! 👍" if lang == 'en' else "Отлично, задача выполнена! 👍"
+            return "Great, task completed!" if lang == 'en' else "Отлично, задача выполнена!"
         elif mode == 'anchor':
             return None
         elif mode == 'proactive':
@@ -3228,12 +3228,29 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
 def _save_interaction_for_director(telegram_id: int, content: str):
     """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата."""
     try:
+        import re as _re_si
+        # Удаляем все unicode-эмодзи из промежуточных сообщений
+        _clean = _re_si.sub(
+            '['
+            '\U0001F600-\U0001F64F'
+            '\U0001F300-\U0001F5FF'
+            '\U0001F680-\U0001F6FF'
+            '\U0001F1E0-\U0001F1FF'
+            '\U0001F900-\U0001F9FF'
+            '\U0001FA00-\U0001FAFF'
+            '\U00002702-\U000027B0'
+            '\U00002600-\U000026FF'
+            '\U00002B05-\U00002B55'
+            '\U000023E9-\U000023FA'
+            '\U0000FE0F'
+            '\U0000200D'
+            ']+', '', content or '')
         from models import Session as _Db, User as _User, Interaction as _Intr
         _s = _Db()
         try:
             _u = _s.query(_User).filter_by(telegram_id=telegram_id).first()
             if _u:
-                _s.add(_Intr(user_id=_u.id, message_type='ai', content=content))
+                _s.add(_Intr(user_id=_u.id, message_type='ai', content=_clean))
                 _s.commit()
         finally:
             _s.close()
@@ -4904,7 +4921,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "2-3 предложения, живо, без markdown. НЕ пересказывай результаты."
             ),
         }], max_tokens=300)
-        return _adp_final or "Миссия выполнена ☝️"
+        return _adp_final or "Миссия выполнена"
 
     # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
     MAX_ROUNDS = 5

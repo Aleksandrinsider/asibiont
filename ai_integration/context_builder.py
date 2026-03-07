@@ -78,7 +78,7 @@ class ContextBuilder:
                                         except Exception as e:
                                             logger.debug(f"Failed to format task time: {e}")
 
-                                    hints.append(f"🔔 @{username} планирует: {task.title}{time_str}")
+                                    hints.append(f" @{username} планирует: {task.title}{time_str}")
 
                                     # Update last triggered
                                     alert.last_triggered_at = datetime.now(timezone.utc)
@@ -142,7 +142,7 @@ class ContextBuilder:
                                     username = profile_user.username
                                     detail = alert.skill or alert.interest
                                     city_str = f" из {profile.city}" if profile.city else ""
-                                    hints.append(f"👤 Новый специалист: @{username} ({detail}){city_str}")
+                                    hints.append(f" Новый специалист: @{username} ({detail}){city_str}")
 
                                     # Update last triggered
                                     alert.last_triggered_at = datetime.now(timezone.utc)
@@ -250,13 +250,13 @@ class ContextBuilder:
                     d_lines = []
                     for dt in deleg_out:
                         _ds = dt.delegation_status or 'pending'
-                        _ds_map = {'pending': '⏳ждёт', 'accepted': '✅принято', 'rejected': '❌отклонено', 'completed': '✅готово'}
+                        _ds_map = {'pending': 'ждёт', 'accepted': 'принято', 'rejected': 'отклонено', 'completed': 'готово'}
                         _dbl = _ds_map.get(_ds, _ds)
                         _over = ''
                         if dt.reminder_time:
                             _ddt = dt.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_tz)
                             if _ddt < user_now:
-                                _over = ' ⚠️ПРОСРОЧЕНО'
+                                _over = ' ПРОСРОЧЕНО'
                         d_lines.append(f"  {_dbl} @{dt.delegated_to_username}: {dt.title}{_over}")
                     hints.append("ДЕЛЕГИРОВАНО МНОЙ ({}):\n{}".format(len(d_lines), '\n'.join(d_lines)))
 
@@ -274,7 +274,7 @@ class ContextBuilder:
                         d_in_lines = []
                         for dt in deleg_in:
                             _ds = dt.delegation_status or 'pending'
-                            _ds_map = {'pending': '⏳новая', 'accepted': '✅принято', 'rejected': '❌отклонено'}
+                            _ds_map = {'pending': 'новая', 'accepted': 'принято', 'rejected': 'отклонено'}
                             _dbl = _ds_map.get(_ds, _ds)
                             # Находим кто делегировал
                             _from = ''
@@ -428,7 +428,7 @@ class ContextBuilder:
                                 has_real_tg = partner_user.telegram_id and partner_user.telegram_id > 0
                                 platform = getattr(partner_user, 'platform', 'telegram') or 'telegram'
                                 if not has_real_tg or platform in ('discord', 'web'):
-                                    details.append("⚠️ нет Telegram")
+                                    details.append(" нет Telegram")
                                 detail_str = " | ".join(details) if details else "профиль заполнен"
                                 real_contacts.append(f"@{partner_user.username} ({detail_str})")
                 except Exception:
@@ -541,7 +541,7 @@ class ContextBuilder:
                         name = r.recipient_name or r.recipient_email
                         reply_preview = (r.reply_text or '')[:120].replace('\n', ' ')
                         if r.ai_reply_sent_at:
-                            answered_reply_lines.append(f"  ✅ {name} ({r.recipient_email}): [ОТВЕТ УЖЕ ОТПРАВЛЕН {r.ai_reply_sent_at.strftime('%d.%m %H:%M')}]")
+                            answered_reply_lines.append(f" {name} ({r.recipient_email}): [ОТВЕТ УЖЕ ОТПРАВЛЕН {r.ai_reply_sent_at.strftime('%d.%m %H:%M')}]")
                         else:
                             new_reply_lines.append(f"  🆕 {name} ({r.recipient_email}): {reply_preview}")
                     parts = []
@@ -594,17 +594,17 @@ class ContextBuilder:
                         _dlimit = c.daily_limit or 50
                         _is_active_c = c.status in ('active', 'running')
                         if c.status == 'paused':
-                            status_badge = '⏸️ НА ПАУЗЕ'
+                            status_badge = ' НА ПАУЗЕ'
                         elif _is_active_c and _sent_today_c >= _dlimit:
-                            status_badge = f'⏳ ЖДЁТ ЗАВТРА ({_sent_today_c}/{_dlimit})'
+                            status_badge = f' ЖДЁТ ЗАВТРА ({_sent_today_c}/{_dlimit})'
                         elif _is_active_c and pending_leads == 0 and (c.emails_sent or 0) == 0 and _sent_today_c == 0:
-                            status_badge = '🔴 НЕТ ЛИДОВ — НУЖНЫ КОНТАКТЫ'
+                            status_badge = ' НЕТ ЛИДОВ — НУЖНЫ КОНТАКТЫ'
                         elif _is_active_c and pending_leads == 0:
-                            status_badge = f'🔍 ВСЕ ОТПРАВЛЕНЫ ({_sent_today_c}/{_dlimit} сегодня)'
+                            status_badge = f' ВСЕ ОТПРАВЛЕНЫ ({_sent_today_c}/{_dlimit} сегодня)'
                         elif _is_active_c:
                             status_badge = f'🟢 ОТПРАВЛЯЕТ ({pending_leads} черновиков, {_sent_today_c}/{_dlimit} сегодня)'
                         else:
-                            status_badge = f'❓ {c.status}'
+                            status_badge = f' {c.status}'
                         camp_lines.append(f"  {status_badge} id={c.id} «{c.name}» — отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
                     hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ:\n" + "\n".join(camp_lines))
             except Exception as e:
@@ -625,7 +625,7 @@ class ContextBuilder:
                             platforms = ', '.join(_ccj.loads(c.platforms or '["feed"]'))
                         except Exception:
                             platforms = str(c.platforms or 'feed')
-                        badge = '⏸️ НА ПАУЗЕ' if c.status == 'paused' else '🟢 РАБОТАЕТ'
+                        badge = ' НА ПАУЗЕ' if c.status == 'paused' else '🟢 РАБОТАЕТ'
                         cc_lines.append(
                             f"  {badge} id={c.id} «{c.name}» | {platforms} | "
                             f"{c.frequency or '?'}/день в {c.post_time or '?'} | "
@@ -647,7 +647,7 @@ class ContextBuilder:
                 if active_dc:
                     dc_lines = []
                     for d in active_dc:
-                        badge = '⏸️ НА ПАУЗЕ' if d.status == 'paused' else '🟢 РАБОТАЕТ'
+                        badge = ' НА ПАУЗЕ' if d.status == 'paused' else '🟢 РАБОТАЕТ'
                         dc_lines.append(
                             f"  {badge} id={d.id} «{d.name}» | "
                             f"отправлено: {d.delegations_sent or 0}/{d.max_delegations or '∞'} | "
@@ -846,7 +846,7 @@ class ContextBuilder:
                         _re_suffix = f' через {_re_from}' if _re_from else ''
                         _email_accounts.append(f'Resend API [агент: {_ea.name}]{_re_suffix}')
                 if _email_accounts:
-                    hints.append('ПОДКЛЮЧЁННАЯ ПОЧТА (используй в send_email/negotiate_by_email):\n' + '\n'.join(f'  ✓ {a}' for a in _email_accounts))
+                    hints.append('ПОДКЛЮЧЁННАЯ ПОЧТА (используй в send_email/negotiate_by_email):\n' + '\n'.join(f' {a}' for a in _email_accounts))
                 else:
                     hints.append('ПОЧТА: ни одного почтового ящика не подключено — send_email будет отправлять через платформенный Resend (no-reply). Чтобы отправлять со своей почты — предложи подключить Gmail/Яндекс/Mail.ru.')
             except Exception as _eae:
@@ -898,8 +898,8 @@ class ContextBuilder:
 
                         _intg_str = ', '.join(sorted(_intg)[:5]) if _intg else ''
                         _role = _ta.job_title or _ta.specialization or ''
-                        _status_badge = '⏸' if _ta.status == 'paused' else '▶'
-                        _has_code = '🔄фон' if _ta.python_code and _ta.python_code.strip() else ''
+                        _status_badge = '' if _ta.status == 'paused' else '▶'
+                        _has_code = 'фон' if _ta.python_code and _ta.python_code.strip() else ''
                         _has_scope = f' |скоп: {_ta.search_scope[:40]}' if _ta.search_scope else ''
                         _tools = ''
                         if _ta.tools_allowed:
@@ -1557,7 +1557,7 @@ class ContextBuilder:
                             similar_tasks.append(f"  @{task_owner.username}: {t.title}")
 
                 if similar_tasks:
-                    hints.append("🔗 ПОХОЖИЕ ЗАДАЧИ У ДРУГИХ:\n" + "\n".join(similar_tasks[:3]))
+                    hints.append(" ПОХОЖИЕ ЗАДАЧИ У ДРУГИХ:\n" + "\n".join(similar_tasks[:3]))
 
         except Exception as e:
             logger.warning(f"[SIMILAR_USERS] Error: {e}")

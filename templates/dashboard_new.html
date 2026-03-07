@@ -6221,8 +6221,9 @@ except Exception as e:
         }
 
         function _tlStripEmoji(s) {
-            return (s||'').replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]/gu, '')
+            return (s||'').replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE0F}\u{200D}]/gu, '')
                          .replace(/[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]/g, '')
+                         .replace(/[\u23E9-\u23FA\u2B05-\u2B55]/g, '')
                          .replace(/^[\s]+/, '').trim();
         }
 
@@ -6261,9 +6262,10 @@ except Exception as e:
                 rawContent = rawContent.replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi, '');
                 // Удаляем HTML-теги (email headers и прочий HTML)
                 rawContent = rawContent.replace(/<[^>]+>/g, ' ');
-                // Удаляем эмодзи (весь диапазон unicode supplementary plane + misc symbols)
-                rawContent = rawContent.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]/gu, '');
+                // Удаляем эмодзи (весь диапазон unicode supplementary plane + misc symbols + variation selectors)
+                rawContent = rawContent.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE0F}\u{200D}]/gu, '');
                 rawContent = rawContent.replace(/[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]/g, '');
+                rawContent = rawContent.replace(/[\u23E9-\u23FA\u2B05-\u2B55]/g, '');
                 // Удаляем строки, начинающиеся с misc unicode-символов или пустых декораторов
                 rawContent = rawContent.replace(/^[\u2000-\u3300\uFE00-\uFE0F]+\s*/gm, '');
                 // Нормализуем пробелы (сохраняем переносы строк)

@@ -1271,9 +1271,9 @@ class ReminderService:
                     )
 
                     if progress_request:
-                        message = f"📊 {progress_request}\n\nЗадача: {task.title}"
+                        message = f" {progress_request}\n\nЗадача: {task.title}"
                     else:
-                        message = f"🤔 Как продвигается задача '{task.title}'?\n\nОсталось времени: {time_desc}\n\nПожалуйста, обнови статус выполнения."
+                        message = f" Как продвигается задача '{task.title}'?\n\nОсталось времени: {time_desc}\n\nПожалуйста, обнови статус выполнения."
 
                     if self.bot:
                         await self.bot.send_message(
@@ -1285,7 +1285,7 @@ class ReminderService:
                         
                         # Also notify delegator about the progress check
                         try:
-                            delegator_message = f"📋 Отправлен запрос о прогрессе по задаче '{task.title}'\n\nОжидаем ответа от исполнителя."
+                            delegator_message = f" Отправлен запрос о прогрессе по задаче '{task.title}'\n\nОжидаем ответа от исполнителя."
                             await self.bot.send_message(
                                 chat_id=delegator_id,
                                 text=delegator_message

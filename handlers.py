@@ -420,14 +420,14 @@ async def start_handler(message: Message):
     desc = PREMIUM_DESCRIPTION.get(lang, PREMIUM_DESCRIPTION['ru'])
     if is_new_user:
         if lang == 'en':
-            welcome_text = desc + f"\n\n🎁 You've received {FREE_TOKENS_ON_SIGNUP} free tokens! Just write to me."
+            welcome_text = desc + f"\n\n You've received {FREE_TOKENS_ON_SIGNUP} free tokens! Just write to me."
         else:
-            welcome_text = desc + f"\n\n🎁 Тебе начислено {FREE_TOKENS_ON_SIGNUP} бесплатных токенов! Просто напиши мне."
+            welcome_text = desc + f"\n\n Тебе начислено {FREE_TOKENS_ON_SIGNUP} бесплатных токенов! Просто напиши мне."
     else:
         if lang == 'en':
-            welcome_text = desc + f"\n\n💰 Your balance: {balance} tokens"
+            welcome_text = desc + f"\n\n Your balance: {balance} tokens"
         else:
-            welcome_text = desc + f"\n\n💰 Твой баланс: {balance} токенов"
+            welcome_text = desc + f"\n\n Твой баланс: {balance} токенов"
     await message.bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
 
 
@@ -464,12 +464,12 @@ async def buy_handler(message: Message):
     lang = get_user_lang(user_id)
     
     if lang == 'en':
-        text = "📦 Token packages (1 token = 1₽):\n\n"
+        text = " Token packages (1 token = 1₽):\n\n"
         for key, pkg in TOKEN_PACKAGES.items():
             text += f"• {pkg['label']}\n"
         text += "\nChoose a package:"
     else:
-        text = "📦 Пакеты токенов (1 токен = 1₽):\n\n"
+        text = " Пакеты токенов (1 токен = 1₽):\n\n"
         for key, pkg in TOKEN_PACKAGES.items():
             text += f"• {pkg['label']}\n"
         text += "\nВыберите пакет:"
@@ -493,7 +493,7 @@ async def buy_handler(message: Message):
         await message.bot.send_message(message.chat.id, text + "\n" + payment_text)
     except Exception as e:
         logger.error(f"Error creating token payment for user {user_id}: {e}")
-        err_msg = "⚠️ Payment error. Try again later.\nSupport: @aleksandrinsider" if lang == 'en' else "⚠️ Ошибка создания платежа. Попробуйте позже.\nПоддержка: @aleksandrinsider"
+        err_msg = " Payment error. Try again later.\nSupport: @aleksandrinsider" if lang == 'en' else " Ошибка создания платежа. Попробуйте позже.\nПоддержка: @aleksandrinsider"
         await message.bot.send_message(message.chat.id, text + "\n\n" + err_msg)
 
 
@@ -656,7 +656,7 @@ async def chat_handler(message: Message):
 
             # Ограничение: файлы до 5 МБ
             if file_size > 5 * 1024 * 1024:
-                await message.bot.send_message(message.chat.id, "📄 Файл слишком большой (макс 5 МБ). Отправь файл поменьше.")
+                await message.bot.send_message(message.chat.id, " Файл слишком большой (макс 5 МБ). Отправь файл поменьше.")
                 return
 
             # Поддерживаемые форматы для извлечения текста
@@ -1067,9 +1067,9 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             # Показываем детали ошибки для отладки
             short_error = str(e)[:300]
             if lang == 'en':
-                err_text = f"⚠️ Error: {short_error}\n\nPlease try again."
+                err_text = f" Error: {short_error}\n\nPlease try again."
             else:
-                err_text = f"⚠️ Ошибка: {short_error}\n\nПопробуй написать ещё раз."
+                err_text = f" Ошибка: {short_error}\n\nПопробуй написать ещё раз."
             await message.bot.send_message(message.chat.id, err_text)
         except Exception:
             pass
@@ -1128,9 +1128,9 @@ async def process_other_message(user_id, message, state):
                 # 4. Формируем ответ
                 response_parts = []
                 if timezone_str:
-                    response_parts.append(f"🕐 Часовой пояс: {timezone_str}")
+                    response_parts.append(f" Часовой пояс: {timezone_str}")
                 if city_name:
-                    response_parts.append(f"📍 Город: {city_name}")
+                    response_parts.append(f" Город: {city_name}")
                 
                 response_text = "\n".join(response_parts)
                 
@@ -1161,12 +1161,12 @@ async def process_other_message(user_id, message, state):
                                 nearby_lines.append(f"• @{partner_user.username}{detail}")
                         
                         if nearby_lines:
-                            nearby_text = f"\n\n👥 Люди рядом ({city_name}):\n" + "\n".join(nearby_lines)
-                            nearby_text += "\n\n💡 Напиши «найди партнёра для [задача]» — подберу лучших."
+                            nearby_text = f"\n\n Люди рядом ({city_name}):\n" + "\n".join(nearby_lines)
+                            nearby_text += "\n\n Напиши «найди партнёра для [задача]» — подберу лучших."
                 
                 await message.bot.send_message(
                     message.chat.id, 
-                    f"📍 Локация обновлена!\n{response_text}{nearby_text}"
+                    f" Локация обновлена!\n{response_text}{nearby_text}"
                 )
             else:
                 await message.bot.send_message(message.chat.id, "Пользователь не найден.")
@@ -1221,12 +1221,12 @@ def get_delegation_report(user_id, session=None):
         report = []
 
         if delegated_by_user:
-            header_by = "📤 YOUR DELEGATED TASKS:" if lang == 'en' else "📤 ВАШИ ДЕЛЕГИРОВАННЫЕ ЗАДАЧИ:"
+            header_by = " YOUR DELEGATED TASKS:" if lang == 'en' else " ВАШИ ДЕЛЕГИРОВАННЫЕ ЗАДАЧИ:"
             report.append(header_by)
             for task in delegated_by_user[:10]:
                 status_emoji = {
-                    None: "⏳", "pending": "⏳", "accepted": "✅", "rejected": "❌", "completed": "🎉"
-                }.get(task.delegation_status, "❓")
+                    None: "", "pending": "", "accepted": "", "rejected": "", "completed": ""
+                }.get(task.delegation_status, "")
 
                 status_text = status_texts_by.get(lang, status_texts_by['ru']).get(task.delegation_status, unknown_status)
 
@@ -1242,7 +1242,7 @@ def get_delegation_report(user_id, session=None):
                 report.append("")
 
         if delegated_to_user:
-            header_to = "📥 TASKS DELEGATED TO YOU:" if lang == 'en' else "📥 ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:"
+            header_to = " TASKS DELEGATED TO YOU:" if lang == 'en' else " ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:"
             report.append(header_to)
             # Pre-fetch delegators (batch)
             _h_delegator_ids = list({t.delegated_by for t in delegated_to_user[:10] if t.delegated_by})
@@ -1254,8 +1254,8 @@ def get_delegation_report(user_id, session=None):
                 delegator_name = f"@{delegator.username}" if delegator and delegator.username else unknown_lbl
 
                 status_emoji = {
-                    "pending": "⏳", "accepted": "✅", "rejected": "❌", "completed": "🎉"
-                }.get(task.delegation_status, "❓")
+                    "pending": "", "accepted": "", "rejected": "", "completed": ""
+                }.get(task.delegation_status, "")
 
                 from_lbl = "from" if lang == 'en' else "от"
                 status_text = status_texts_to.get(lang, status_texts_to['ru']).get(task.delegation_status, unknown_status)
@@ -1310,12 +1310,12 @@ async def dashboard_handler(message: Message):
     base_url = WEBHOOK_URL.replace("/webhook", "")
     dashboard_url = f"{base_url}/dashboard?telegram_id={user_id}"
     
-    btn_text = "🌐 Open web version" if lang == 'en' else "🌐 Открыть веб-версию"
+    btn_text = " Open web version" if lang == 'en' else " Открыть веб-версию"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=btn_text, web_app=WebAppInfo(url=dashboard_url))]
     ])
     
-    dash_label = "🌐 Your personal dashboard" if lang == 'en' else "🌐 Ваш личный дашборд"
+    dash_label = " Your personal dashboard" if lang == 'en' else " Ваш личный дашборд"
     await message.bot.send_message(
         message.chat.id, 
         f"{dash_label}:\n{dashboard_url}", 
@@ -1353,9 +1353,9 @@ async def run_agents_handler(message: Message):
         engine = get_office_engine()
         asyncio.ensure_future(engine._run_all_agent_scripts())
         msg = (
-            f"✅ {cnt} agent(s) launched! Results will appear in chat within 1–2 minutes."
+            f" {cnt} agent(s) launched! Results will appear in chat within 1–2 minutes."
             if lang == 'en'
-            else f"⚡ Запущено агентов: {cnt}. Результаты появятся в чате через 1–2 минуты."
+            else f" Запущено агентов: {cnt}. Результаты появятся в чате через 1–2 минуты."
         )
     except Exception as e:
         logging.error(f"run_agents_handler: {e}")
@@ -1434,8 +1434,8 @@ def delegate_task(task_title, executor_username, deadline=None, description=None
             ],
             "escalation_levels": [
                 {"level": 1, "delay_hours": 24, "message": "Напоминание: задача ожидает принятия"},
-                {"level": 2, "delay_hours": 48, "message": "⚠️ Задача просрочена! Требуется срочное принятие"},
-                {"level": 3, "delay_hours": 72, "message": "🚨 КРИТИЧНО: Задача не принята в срок! Эскалация руководству"}
+                {"level": 2, "delay_hours": 48, "message": " Задача просрочена! Требуется срочное принятие"},
+                {"level": 3, "delay_hours": 72, "message": " КРИТИЧНО: Задача не принята в срок! Эскалация руководству"}
             ],
             "agent_monitoring": True,
             "notifications_sent": []
@@ -1446,17 +1446,17 @@ def delegate_task(task_title, executor_username, deadline=None, description=None
         session.commit()
 
         # Send notification to executor (skip in test environments)
-        notification_text = f"""🤖 Новая делегированная задача
+        notification_text = f""" Новая делегированная задача
 
-📋 {task_title}
-👤 От: Пользователь {delegator_id}
-⏰ Дедлайн: {deadline_dt.strftime('%d.%m.%Y %H:%M') if deadline_dt else 'Не указан'}
+ {task_title}
+ От: Пользователь {delegator_id}
+ Дедлайн: {deadline_dt.strftime('%d.%m.%Y %H:%M') if deadline_dt else 'Не указан'}
 
 {description if description else ''}
 
 Используйте команды:
-✅ /accept_{task.id} - принять задачу
-❌ /reject_{task.id} - отклонить задачу"""
+ /accept_{task.id} - принять задачу
+ /reject_{task.id} - отклонить задачу"""
 
         try:
             # Schedule async notification

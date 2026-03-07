@@ -422,9 +422,9 @@ async def check_time_conflicts(reminder_time, user_id=None, session=None):
             
         if conflicts:
             conflict_msg, suggested_time = conflicts
-            return f"⚠️ КОНФЛИКТ ВРЕМЕНИ:\n{conflict_msg}\n\n💡 ПРЕДЛАГАЮ: {suggested_time}"
+            return f" КОНФЛИКТ ВРЕМЕНИ:\n{conflict_msg}\n\n ПРЕДЛАГАЮ: {suggested_time}"
         else:
-            return "✅ Время свободно, можно создавать задачу"
+            return " Время свободно, можно создавать задачу"
             
     except Exception as e:
         logger.error(f"Error in async check_time_conflicts: {e}")
@@ -586,7 +586,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
                     logger.warning(f"[ADD_TASK] Could not parse time '{reminder_time}'")
                     if close_session:
                         session.close()
-                    return f"❌ Не удалось распознать время '{reminder_time}'. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
+                    return f" Не удалось распознать время '{reminder_time}'. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
         except Exception as e:
             logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
             import traceback
@@ -594,7 +594,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             session.rollback()
             if close_session:
                 session.close()
-            return f"❌ Ошибка обработки времени '{reminder_time}': {e}. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
+            return f" Ошибка обработки времени '{reminder_time}': {e}. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
         if due_date:
             try:
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
@@ -933,7 +933,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         if task.status == "completed":
             if close_session:
                 session.close()
-            return f"✅ Задача '{task.title}' уже выполнена"
+            return f" Задача '{task.title}' уже выполнена"
         
         task.status = "completed"
         task.actual_completion_time = datetime.now(pytz.UTC)
@@ -1103,7 +1103,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                 if bot:
                     # Запрашиваем у исполнителя результаты работы
                     result_request = (
-                        f"📝 Расскажи о результатах выполнения задачи:\n"
+                        f" Расскажи о результатах выполнения задачи:\n"
                         f"'{task.title}'\n\n"
                         f"Опиши что было сделано, какие результаты достигнуты, "
                         f"были ли сложности. Это важно для @{delegator.username}, "
@@ -1129,7 +1129,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     session.commit()
                     
                     # Обновляем сообщение для пользователя
-                    result = f"✅ Задача '{task.title}' завершена! Теперь опиши результаты выполнения для @{delegator.username}"
+                    result = f" Задача '{task.title}' завершена! Теперь опиши результаты выполнения для @{delegator.username}"
                     
             except Exception as e:
                 logger.error(f"[COMPLETE_TASK] Failed to request completion results from executor: {e}")
@@ -1153,7 +1153,7 @@ async def skip_task(task_id=None, task_title=None, reason=None, user_id=None, se
     if not user:
         if close_session:
             session.close()
-        return "❌ Пользователь не найден"
+        return " Пользователь не найден"
 
     # Find task by ID or title
     if task_id:
@@ -2239,15 +2239,15 @@ def get_delegation_progress(user_id, session=None):
         report = []
 
         if delegated_by_user:
-            report.append("📤 ВАШИ ДЕЛЕГИРОВАННЫЕ ЗАДАЧИ:")
+            report.append(" ВАШИ ДЕЛЕГИРОВАННЫЕ ЗАДАЧИ:")
             for task in delegated_by_user[:10]:  # Ограничим 10 задачами
                 status_emoji = {
-                    None: "⏳",
-                    "pending": "⏳",
-                    "accepted": "✅",
-                    "rejected": "❌",
-                    "completed": "🎉"
-                }.get(task.delegation_status, "❓")
+                    None: "",
+                    "pending": "",
+                    "accepted": "",
+                    "rejected": "",
+                    "completed": ""
+                }.get(task.delegation_status, "")
 
                 status_text = {
                     None: "ожидает принятия",
@@ -2269,7 +2269,7 @@ def get_delegation_progress(user_id, session=None):
                 report.append("")  # Пустая строка между задачами
 
         if delegated_to_user:
-            report.append("📥 ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:")
+            report.append(" ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:")
             # Pre-fetch delegators (batch)
             _dt_delegator_ids = list({t.delegated_by for t in delegated_to_user[:10] if t.delegated_by})
             _dt_delegators = session.query(User).filter(User.id.in_(_dt_delegator_ids)).all()
@@ -2279,11 +2279,11 @@ def get_delegation_progress(user_id, session=None):
                 delegator_name = f"@{delegator.username}" if delegator and delegator.username else "неизвестный"
 
                 status_emoji = {
-                    "pending": "⏳",
-                    "accepted": "✅",
-                    "rejected": "❌",
-                    "completed": "🎉"
-                }.get(task.delegation_status, "❓")
+                    "pending": "",
+                    "accepted": "",
+                    "rejected": "",
+                    "completed": ""
+                }.get(task.delegation_status, "")
 
                 status_text = {
                     "pending": "ожидает вашего решения",
@@ -2609,7 +2609,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         completed_info = f" - выполнено {completed_dt.strftime('%d.%m.%Y %H:%M')}"
                     except Exception as e:
                         logger.warning(f"Failed to process completion time for task {task.id}: {e}")
-                result += f"✓ {task.title}{completed_info}\n"
+                result += f" {task.title}{completed_info}\n"
             
             if len(completed_tasks) > 20:
                 result += f"\n...всего {len(completed_tasks)} выполненных задач"
@@ -2789,7 +2789,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         
         # Показываем задачи без времени — это проблема!
         if no_time_tasks:
-            result += f"⚠️ ЗАДАЧИ БЕЗ ВРЕМЕНИ (нужно установить напоминание!): "
+            result += f" ЗАДАЧИ БЕЗ ВРЕМЕНИ (нужно установить напоминание!): "
             for i, task in enumerate(no_time_tasks):
                 result += f"'{task.title}'"
                 if i < len(no_time_tasks) - 1:
@@ -3798,7 +3798,7 @@ def analyze_group_opportunities(user_id, session):
     # Возвращаем первое найденное предложение
     if partner_activities:
         activity = partner_activities[0]
-        return f"👥 @{activity['username']} {activity['activity']} {activity['time']}. Присоединяйся?"
+        return f" @{activity['username']} {activity['activity']} {activity['time']}. Присоединяйся?"
     
     # Если нет конкретных задач, анализируем goals
     if profile.goals:
@@ -3815,7 +3815,7 @@ def analyze_group_opportunities(user_id, session):
                     common_goals = user_goals & partner_goals
                     if common_goals:
                         goal = list(common_goals)[0]
-                        return f"🎯 @{partner_user.username} тоже хочет '{goal}'. Можете объединиться!"
+                        return f" @{partner_user.username} тоже хочет '{goal}'. Можете объединиться!"
     
     # ГРУППОВОЙ АНАЛИЗ: Находим группы с похожими задачами/целями
     # Собираем все задачи всех пользователей за последние 7 дней
@@ -3906,7 +3906,7 @@ def analyze_group_opportunities(user_id, session):
         count = best_group['count']
         topic = best_group['topic']
         
-        return f"💡 {count} человек работают над задачами связанными с '{topic}' — организовать обсуждение? Участники: {', '.join(usernames)}"
+        return f" {count} человек работают над задачами связанными с '{topic}' — организовать обсуждение? Участники: {', '.join(usernames)}"
     
     return None
 
@@ -3943,7 +3943,7 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         # Проверяем количество активных целей (лимит 20)
         active_goals = session.query(Goal).filter_by(user_id=user.id, status='active').count()
         if active_goals >= 20:
-            return "❌ У тебя уже 20 активных целей. Заверши или отмени старые перед созданием новых."
+            return " У тебя уже 20 активных целей. Заверши или отмени старые перед созданием новых."
         
         # Парсим target_date
         parsed_date = None
@@ -4065,7 +4065,7 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
     
     except Exception as e:
         logger.error(f"Error creating goal for user {user_id}: {e}")
-        return f"❌ Ошибка при создании цели: {str(e)}"
+        return f" Ошибка при создании цели: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -4140,7 +4140,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 if pct >= 100 and matched.status == 'active':
                     matched.status = 'completed'
                     matched.completed_at = datetime.now()
-                    changes.append("статус: завершено! 🎉")
+                    changes.append("статус: завершено! ")
             except (ValueError, TypeError):
                 pass
         elif progress is not None:
@@ -4152,7 +4152,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 if pct == 100 and matched.status == 'active':
                     matched.status = 'completed'
                     matched.completed_at = datetime.now()
-                    changes.append("статус: завершено! 🎉")
+                    changes.append("статус: завершено! ")
             except (ValueError, TypeError):
                 pass
         
@@ -4194,25 +4194,25 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         except Exception as _e:
             logger.warning(f"[UPDATE_GOAL] Activity log failed: {_e}")
 
-        result = f"🎯 **{matched.title}** обновлена:\n"
+        result = f" **{matched.title}** обновлена:\n"
         result += ", ".join(changes)
         if matched.metric_target and matched.metric_unit:
             mc = int(matched.metric_current or 0)
             mt = int(matched.metric_target)
-            result += f"\n📏 {mc}/{mt} {matched.metric_unit} ({matched.progress_percentage}%)"
+            result += f"\n {mc}/{mt} {matched.metric_unit} ({matched.progress_percentage}%)"
         else:
-            result += f"\n📊 Прогресс: {matched.progress_percentage}%"
+            result += f"\n Прогресс: {matched.progress_percentage}%"
         
         # Связанные задачи
         linked_tasks = session.query(Task).filter_by(user_id=user.id, goal_id=matched.id, status='pending').count()
         if linked_tasks:
-            result += f"\n📋 Связанных задач: {linked_tasks}"
+            result += f"\n Связанных задач: {linked_tasks}"
         
         return result
     
     except Exception as e:
         logger.error(f"Error updating goal for user {user_id}: {e}")
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -4309,7 +4309,7 @@ def list_goals(status_filter=None, user_id=None, session=None):
     
     except Exception as e:
         logger.error(f"Error listing goals for user {user_id}: {e}")
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -4373,7 +4373,7 @@ def delete_goal(goal_title=None, user_id=None, session=None):
                 session.commit()
             except Exception as _e:
                 logger.warning(f"[DELETE_GOAL] Activity log failed: {_e}")
-            return f"Удалено целей: {count}. Чистый лист — можно ставить новые! ⚠️ ВНИМАНИЕ: все упоминания целей в текущем контексте и профиле УСТАРЕЛИ. НЕ ссылайся на них, НЕ цитируй, НЕ предлагай вернуть. Целей НОЛЬ."
+            return f"Удалено целей: {count}. Чистый лист — можно ставить новые! ВНИМАНИЕ: все упоминания целей в текущем контексте и профиле УСТАРЕЛИ. НЕ ссылайся на них, НЕ цитируй, НЕ предлагай вернуть. Целей НОЛЬ."
         
         # Поиск конкретной цели
         goals = session.query(Goal).filter(
@@ -4433,7 +4433,7 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             session.commit()
         except Exception as _e:
             logger.warning(f"[DELETE_GOAL] Activity log failed: {_e}")
-        return f"Цель \"{title}\" удалена. ⚠️ Если эта цель упоминается в контексте или профиле — ИГНОРИРУЙ, она удалена."
+        return f"Цель \"{title}\" удалена. Если эта цель упоминается в контексте или профиле — ИГНОРИРУЙ, она удалена."
     
     except Exception as e:
         logger.error(f"Error deleting goal for user {user_id}: {e}")
@@ -4520,7 +4520,7 @@ def update_goal(goal_id=None, title=None, description=None, target_date=None, us
             session.commit()
         except Exception as _e:
             logger.warning(f"[UPDATE_GOAL] Activity log failed: {_e}")
-        return f"🎯 Цель «{goal.title}» обновлена: {', '.join(changes)}"
+        return f" Цель «{goal.title}» обновлена: {', '.join(changes)}"
     except Exception as e:
         logger.error(f"Error in update_goal for user {user_id}: {e}")
         return f"Ошибка: {str(e)}"
@@ -4566,45 +4566,45 @@ def show_profile(user_id=None, session=None):
 
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
-        result = "📋 **Твой профиль:**\n\n"
+        result = " **Твой профиль:**\n\n"
 
         # Основная информация
         if user.username:
-            result += f"👤 Имя: @{user.username}\n"
+            result += f" Имя: @{user.username}\n"
         if user.first_name:
-            result += f"📛 Имя: {user.first_name}\n"
+            result += f" Имя: {user.first_name}\n"
 
         if profile:
             if profile.city:
-                result += f"🏙️ Город: {profile.city}\n"
+                result += f" Город: {profile.city}\n"
             if profile.company:
-                result += f"🏢 Компания: {profile.company}\n"
+                result += f" Компания: {profile.company}\n"
             if profile.position:
-                result += f"👔 Должность: {profile.position}\n"
+                result += f" Должность: {profile.position}\n"
             if profile.interests:
-                result += f"💡 Интересы: {profile.interests}\n"
+                result += f" Интересы: {profile.interests}\n"
             if profile.skills:
-                result += f"🛠️ Навыки: {profile.skills}\n"
+                result += f" Навыки: {profile.skills}\n"
             if profile.goals:
-                result += f"🎯 Цели: {profile.goals}\n"
+                result += f" Цели: {profile.goals}\n"
             if profile.birthdate:
-                result += f"🎂 Дата рождения: {profile.birthdate}\n"
+                result += f" Дата рождения: {profile.birthdate}\n"
         else:
-            result += "\n⚠️ Профиль ещё не заполнен. Расскажи о себе — город, интересы, навыки, цели — и я всё запомню!"
+            result += "\n Профиль ещё не заполнен. Расскажи о себе — город, интересы, навыки, цели — и я всё запомню!"
 
         # Подписка / токены
         token_balance = getattr(user, 'token_balance', 0) or 0
-        result += f"\n💠 Баланс: {token_balance} токенов"
+        result += f"\n Баланс: {token_balance} токенов"
 
         # Timezone
         if user.timezone:
-            result += f"\n🕐 Часовой пояс: {user.timezone}"
+            result += f"\n Часовой пояс: {user.timezone}"
 
         return result
 
     except Exception as e:
         logger.error(f"Ошибка при показе профиля пользователя {user_id}: {e}")
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -4656,7 +4656,7 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
                     asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
                 except Exception:
                     pass
-                return f"✅ Добавлен интерес: {content}"
+                return f" Добавлен интерес: {content}"
             return f"Интерес '{content}' уже есть в профиле."
 
         elif memory_type in ('skill', 'skills'):
@@ -4671,7 +4671,7 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
                     asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
                 except Exception:
                     pass
-                return f"✅ Добавлен навык: {content}"
+                return f" Добавлен навык: {content}"
             return f"Навык '{content}' уже есть в профиле."
 
         elif memory_type in ('goal', 'goals'):
@@ -4686,7 +4686,7 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
                     asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
                 except Exception:
                     pass
-                return f"✅ Добавлена цель: {content}"
+                return f" Добавлена цель: {content}"
             return f"Цель '{content}' уже есть в профиле."
 
         else:
@@ -4696,7 +4696,7 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
 
     except Exception as e:
         logger.error(f"Ошибка при обновлении памяти пользователя {user_id}: {e}")
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -4754,19 +4754,19 @@ def find_partners(user_id=None, session=None):
                 user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
                 profile_skills = set(s.strip().lower() for s in p.skills.split(","))
                 if user_skills & profile_skills:
-                    relevance_indicators.append("⚡ " + ("shared skills" if lang == 'en' else "общие навыки"))
+                    relevance_indicators.append(" " + ("shared skills" if lang == 'en' else "общие навыки"))
 
             if user_profile and user_profile.interests and p.interests:
                 user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
                 profile_interests = set(i.strip().lower() for i in p.interests.split(","))
                 if user_interests & profile_interests:
-                    relevance_indicators.append("🎯 " + ("shared interests" if lang == 'en' else "общие интересы"))
+                    relevance_indicators.append(" " + ("shared interests" if lang == 'en' else "общие интересы"))
 
             if user_profile and user_profile.goals and p.goals:
                 user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
                 profile_goals = set(g.strip().lower() for g in p.goals.split(","))
                 if user_goals & profile_goals:
-                    relevance_indicators.append("🚀 " + ("shared goals" if lang == 'en' else "общие цели"))
+                    relevance_indicators.append(" " + ("shared goals" if lang == 'en' else "общие цели"))
 
             if hasattr(p, "current_plans") and p.current_plans:
                 lbl = "now" if lang == 'en' else "сейчас"
@@ -4794,9 +4794,9 @@ def find_partners(user_id=None, session=None):
 
     if len(partners) > 5:
         if lang == 'en':
-            response += "\n💡 These are the top-5 most relevant contacts. Use the full database for maximum growth!"
+            response += "\n These are the top-5 most relevant contacts. Use the full database for maximum growth!"
         else:
-            response += "\n💡 Это топ-5 самых релевантных контактов. Используй всю базу данных для максимального роста!"
+            response += "\n Это топ-5 самых релевантных контактов. Используй всю базу данных для максимального роста!"
 
     if not partners:
         if lang == 'en':
@@ -4828,7 +4828,7 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     if not user:
         if close_session:
             session.close()
-        return "❌ User not found" if lang == 'en' else "❌ Пользователь не найден"
+        return " User not found" if lang == 'en' else " Пользователь не найден"
     
     # Извлечь ключевые слова из описания задачи
     task_keywords = set()
@@ -4958,17 +4958,17 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         if close_session:
             session.close()
         if lang == 'en':
-            return """❌ No contacts found in the network for this task.
+            return """ No contacts found in the network for this task.
 
-💡 Recommendations:
+ Recommendations:
 • Fill in your profile (interests, skills, goals)
 • Add your city information
 • Describe how you can help others
 
 Once profiles are filled, I'll be able to suggest suitable people for collaboration."""
-        return """❌ В сети пока нет контактов для этой задачи.
+        return """ В сети пока нет контактов для этой задачи.
 
-💡 Рекомендации:
+ Рекомендации:
 • Заполни профиль (интересы, навыки, цели)
 • Добавь информацию о своем городе
 • Опиши, чем можешь помочь другим
@@ -5174,7 +5174,7 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
     result_lines = []
     
     if sorted_contacts:
-        header = "💡 Who can help you:" if lang == 'en' else "💡 Кто может помочь тебе:"
+        header = " Who can help you:" if lang == 'en' else " Кто может помочь тебе:"
         result_lines.append(header)
         top_contacts = sorted_contacts[:min(3, limit)]
         for i, contact in enumerate(top_contacts, 1):
@@ -5189,7 +5189,7 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
     if reverse_matches:
         if result_lines:
             result_lines.append("")
-        header = "🤝 Who you can help:" if lang == 'en' else "🤝 Кому ты можешь помочь:"
+        header = " Who you can help:" if lang == 'en' else " Кому ты можешь помочь:"
         result_lines.append(header)
         for i, contact in enumerate(reverse_matches[:min(3, limit)], 1):
             badge = get_lang_badge(contact.get('lang', 'ru'))
@@ -5203,7 +5203,7 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
     if user_tasks_suggestions:
         if result_lines:
             result_lines.append("")
-        header = "💡 Also for your tasks:" if lang == 'en' else "💡 Также для твоих задач:"
+        header = " Also for your tasks:" if lang == 'en' else " Также для твоих задач:"
         result_lines.append(header)
         for suggestion in user_tasks_suggestions:
             contacts_str = ', '.join(f"@{c}" for c in suggestion['contacts'])
@@ -5407,15 +5407,15 @@ async def generate_delegation_response_notification_async(task_title, response, 
             return
 
         if response == "accepted":
-            message = f"🎉 Отлично! Пользователь @{delegatee_username} принял вашу задачу '{task_title}' и добавил её в свой список задач."
+            message = f" Отлично! Пользователь @{delegatee_username} принял вашу задачу '{task_title}' и добавил её в свой список задач."
         elif response.startswith("rejected"):
             reason = response.replace("rejected", "").strip()
             if reason:
-                message = f"❌ Пользователь @{delegatee_username} отклонил задачу '{task_title}'. Причина: {reason}"
+                message = f" Пользователь @{delegatee_username} отклонил задачу '{task_title}'. Причина: {reason}"
             else:
-                message = f"❌ Пользователь @{delegatee_username} отклонил задачу '{task_title}'."
+                message = f" Пользователь @{delegatee_username} отклонил задачу '{task_title}'."
         else:
-            message = f"📝 Статус задачи '{task_title}' изменён пользователем @{delegatee_username}: {response}"
+            message = f" Статус задачи '{task_title}' изменён пользователем @{delegatee_username}: {response}"
 
         await bot.send_message(delegator_telegram_id, message)
 
@@ -5729,48 +5729,48 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
             # Format detailed task information
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
             
-            details = "📋 Подробная информация о задаче:\n\n"
+            details = " Подробная информация о задаче:\n\n"
             details += f"🆔 ID: {task.id}\n"
-            details += f"📝 Название: {task.title}\n"
+            details += f" Название: {task.title}\n"
             
             if task.description:
-                details += f"📄 Описание: {decrypt_data(task.description)}\n"
+                details += f" Описание: {decrypt_data(task.description)}\n"
             
-            details += f"📊 Статус: {task.status}\n"
+            details += f" Статус: {task.status}\n"
             
             if task.reminder_time:
                 local_time = _utc_to_local(task.reminder_time, user_tz)
-                details += f"⏰ Время напоминания: {local_time.strftime('%d.%m.%Y %H:%M')} ({user_tz.zone})\n"
+                details += f" Время напоминания: {local_time.strftime('%d.%m.%Y %H:%M')} ({user_tz.zone})\n"
             
             if task.due_date:
                 local_due = _utc_to_local(task.due_date, user_tz)
-                details += f"📅 Дедлайн: {local_due.strftime('%d.%m.%Y %H:%M')}\n"
+                details += f" Дедлайн: {local_due.strftime('%d.%m.%Y %H:%M')}\n"
             
             if task.delegated_to_username:
-                details += f"👤 Делегирована: @{task.delegated_to_username}\n"
-                details += f"📋 Статус делегирования: {task.delegation_status or 'Не определён'}\n"
+                details += f" Делегирована: @{task.delegated_to_username}\n"
+                details += f" Статус делегирования: {task.delegation_status or 'Не определён'}\n"
                 if task.delegation_details:
-                    details += f"📋 Детали делегирования: {task.delegation_details}\n"
+                    details += f" Детали делегирования: {task.delegation_details}\n"
             
             if task.completion_notes:
-                details += f"✅ Заметки о выполнении: {decrypt_data(task.completion_notes)}\n"
+                details += f" Заметки о выполнении: {decrypt_data(task.completion_notes)}\n"
             
             if task.actual_completion_time:
                 local_completion = _utc_to_local(task.actual_completion_time, user_tz)
-                details += f"✅ Фактическое время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
+                details += f" Фактическое время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
             
             if task.recommendations:
                 try:
                     import json
                     recs = json.loads(task.recommendations)
                     if recs:
-                        details += "💡 Рекомендации AI:\n"
+                        details += " Рекомендации AI:\n"
                         for i, rec in enumerate(recs[:3], 1):
                             details += f"  {i}. {rec}\n"
                 except Exception as e:
                     logger.warning(f"[TASKDETAILS] Error parsing recommendations: {e}")
             
-            details += f"🕒 Создана: {_utc_to_local(task.created_at, user_tz).strftime('%d.%m.%Y %H:%M')}\n"
+            details += f" Создана: {_utc_to_local(task.created_at, user_tz).strftime('%d.%m.%Y %H:%M')}\n"
             
             if close_session:
                 session.close()
@@ -6420,7 +6420,7 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
 
         result_parts = []
         if added:
-            result_parts.append(f"✅ Добавлено: {', '.join(added)}")
+            result_parts.append(f" Добавлено: {', '.join(added)}")
         if updates:
             result_parts.append(f"Обновлено: {', '.join(updates)}")
         
@@ -6488,26 +6488,26 @@ def smart_update_profile(user_id: int, field: str, value: str, action: str = 'ad
             # Списочные поля
             if action == 'replace':
                 setattr(profile, field, value)
-                result = f"✅ {field_names[field]} заменены: {value}"
+                result = f" {field_names[field]} заменены: {value}"
             elif action == 'merge' and field == 'goals':
                 # Умное объединение только для целей
                 new_value, was_changed, change_desc = _merge_similar_goals(getattr(profile, field), value)
                 if was_changed:
                     setattr(profile, field, new_value)
-                    result = f"✅ {change_desc}"
+                    result = f" {change_desc}"
                 else:
-                    result = f"ℹ️ {field_names[field]} уже актуальны"
+                    result = f"ℹ {field_names[field]} уже актуальны"
             else:  # add
                 new_value, was_added = _add_to_list_field(getattr(profile, field), value)
                 if was_added:
                     setattr(profile, field, new_value)
-                    result = f"✅ Добавлено в {field_names[field]}: {value}"
+                    result = f" Добавлено в {field_names[field]}: {value}"
                 else:
-                    result = f"ℹ️ '{value}' уже есть в {field_names[field]}"
+                    result = f"ℹ '{value}' уже есть в {field_names[field]}"
         else:
             # Простые поля
             setattr(profile, field, value)
-            result = f"✅ {field_names[field]} обновлен: {value}"
+            result = f" {field_names[field]} обновлен: {value}"
             
             # Специальная обработка для города - обновляем timezone
             if field == 'city':
@@ -6599,7 +6599,7 @@ def set_activity_alert(activity_type=None, keywords=None, location=None, frequen
             session.commit()
             
             if enabled:
-                return f"✅ Обновил уведомление об активности '{activity_type}'. Теперь буду автоматически сообщать когда кто-то планирует такую активность!"
+                return f" Обновил уведомление об активности '{activity_type}'. Теперь буду автоматически сообщать когда кто-то планирует такую активность!"
             else:
                 return f"Уведомление об активности '{activity_type}' отключено."
         else:
@@ -6617,7 +6617,7 @@ def set_activity_alert(activity_type=None, keywords=None, location=None, frequen
             
             keywords_str = ', '.join(keywords_list)
             location_str = f" в {location}" if location else ""
-            return f"✅ Настроил автоматическое уведомление! Буду следить за активностями '{activity_type}'{location_str}. Когда кто-то создаст задачу по ключевым словам ({keywords_str}), я естественно упомяну это в нашем следующем диалоге. Никаких навязчивых уведомлений!"
+            return f" Настроил автоматическое уведомление! Буду следить за активностями '{activity_type}'{location_str}. Когда кто-то создаст задачу по ключевым словам ({keywords_str}), я естественно упомяну это в нашем следующем диалоге. Никаких навязчивых уведомлений!"
         
     except Exception as e:
         logger.error(f"[SET_ACTIVITY_ALERT] Error: {e}", exc_info=True)
@@ -6680,7 +6680,7 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
             
             if enabled:
                 filter_str = skill or interest
-                return f"✅ Обновил уведомление о '{filter_str}'. Буду автоматически сообщать когда зарегистрируются подходящие специалисты!"
+                return f" Обновил уведомление о '{filter_str}'. Буду автоматически сообщать когда зарегистрируются подходящие специалисты!"
             else:
                 filter_str = skill or interest
                 return f"Уведомление о '{filter_str}' отключено."
@@ -6708,7 +6708,7 @@ def set_contact_alert(skill=None, interest=None, city=None, position=None, enabl
                 filter_parts.append(f"должность '{position}'")
             
             filter_str = ', '.join(filter_parts)
-            return f"✅ Настроил автоматическое уведомление! Буду следить за новыми пользователями ({filter_str}). Когда кто-то подходящий зарегистрируется или обновит профиль, я естественно упомяну это в нашем следующем диалоге. Никаких навязчивых уведомлений!"
+            return f" Настроил автоматическое уведомление! Буду следить за новыми пользователями ({filter_str}). Когда кто-то подходящий зарегистрируется или обновит профиль, я естественно упомяну это в нашем следующем диалоге. Никаких навязчивых уведомлений!"
         
     except Exception as e:
         logger.error(f"[SET_CONTACT_ALERT] Error: {e}", exc_info=True)
@@ -6759,7 +6759,7 @@ async def set_auto_post_time(post_time, user_id=None, session=None):
         profile.auto_post_time = post_time
         session.commit()
         
-        return f"✅ Время автопостинга установлено на {post_time}! Каждый день в это время я буду автоматически публиковать контент в ваш канал. Следующий пост: завтра в {post_time}."
+        return f" Время автопостинга установлено на {post_time}! Каждый день в это время я буду автоматически публиковать контент в ваш канал. Следующий пост: завтра в {post_time}."
         
     except Exception as e:
         logger.error(f"[SET_AUTO_POST_TIME] Error: {e}", exc_info=True)
@@ -6810,7 +6810,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
 
 async def research_topic(query: str, depth: str = 'full', user_id: int = None, session=None):
     """
-    🔍 ПОИСК И АНАЛИЗ актуальной информации по теме
+     ПОИСК И АНАЛИЗ актуальной информации по теме
     Доступно для ВСЕХ тарифов с одинаковым качеством
 
     Этапы:
@@ -6912,7 +6912,7 @@ async def schedule_background_task(
 
 async def set_content_strategy(strategy: str, user_id: int, session):
     """
-    🎯 СОХРАНИТЬ СТРАТЕГИЮ КОНТЕНТА для автоматического маркетинга
+     СОХРАНИТЬ СТРАТЕГИЮ КОНТЕНТА для автоматического маркетинга
     Требует: STANDARD или PREMIUM подписку
     
     Args:
@@ -6953,11 +6953,11 @@ async def set_content_strategy(strategy: str, user_id: int, session):
         
         channel_info = ''
         if user.telegram_channel:
-            channel_info = f"\n\n📢 Канал: {user.telegram_channel}\n✅ Автопостинг включён"
+            channel_info = f"\n\n Канал: {user.telegram_channel}\n Автопостинг включён"
         else:
-            channel_info = "\n\n⚠️ Telegram-канал не указан. Укажи его в профиле, чтобы посты публиковались автоматически."
+            channel_info = "\n\n Telegram-канал не указан. Укажи его в профиле, чтобы посты публиковались автоматически."
         
-        return f"✅ Стратегия контента сохранена!\n\n{strategy}{channel_info}"
+        return f" Стратегия контента сохранена!\n\n{strategy}{channel_info}"
         
     except Exception as e:
         logger.error(f"[CONTENT_STRATEGY] Error: {e}", exc_info=True)
@@ -6969,7 +6969,7 @@ async def set_content_strategy(strategy: str, user_id: int, session):
 
 async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, session):
     """
-    ⚙️ УПРАВЛЕНИЕ АВТОНОМНЫМИ ФУНКЦИЯМИ
+     УПРАВЛЕНИЕ АВТОНОМНЫМИ ФУНКЦИЯМИ
     Требует: PREMIUM подписку
     
     Args:
@@ -7002,22 +7002,22 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
         
         if feature == 'marketing' or feature == 'all':
             profile.auto_marketing_enabled = enabled
-            status_emoji = "✅" if enabled else "⛔"
+            status_emoji = "" if enabled else ""
             action = "включён" if enabled else "выключен"
             status_parts.append(f"{status_emoji} Автопостинг: {action}")
         
         if feature == 'delegation' or feature == 'all':
             profile.auto_delegation_enabled = enabled
-            status_emoji = "✅" if enabled else "⛔"
+            status_emoji = "" if enabled else ""
             action = "включено" if enabled else "выключено"
             status_parts.append(f"{status_emoji} Автоделегирование: {action}")
         
         session.commit()
         
-        response = "⚙️ Настройки автономных функций обновлены!\n\n" + "\n".join(status_parts)
+        response = " Настройки автономных функций обновлены!\n\n" + "\n".join(status_parts)
         
         if not enabled:
-            response += "\n\n💡 Ты всегда можешь включить обратно используя эту же команду."
+            response += "\n\n Ты всегда можешь включить обратно используя эту же команду."
         
         logger.info(f"[AUTONOMOUS_TOGGLE] ✅ Updated for user {user_id}")
         
@@ -7034,7 +7034,7 @@ async def toggle_autonomous_feature(feature: str, enabled: bool, user_id: int, s
 
 async def create_post(content: str, user_id: int, session=None, force: bool = False, image_url: str = None):
     """
-    📝 ПУБЛИКАЦИЯ ПОСТА В БЛОГ
+     ПУБЛИКАЦИЯ ПОСТА В БЛОГ
     
     Создаёт пост от имени пользователя в блог платформы,
     который видят все пользователи.
@@ -7069,7 +7069,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             Post.created_at >= _today_start_cp,
         ).count()
         if posts_today >= 1 and not force:
-            return "⚠️ Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
+            return " Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
 
         post = Post(
             user_id=user.id,
@@ -7098,9 +7098,9 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     force=True,
                 )
                 if '✅' in str(_tg_result):
-                    cross_notes.append("📢 TG-канал")
+                    cross_notes.append(" TG-канал")
                 else:
-                    cross_notes.append(f"⚠️ TG: {str(_tg_result)[:80]}")
+                    cross_notes.append(f" TG: {str(_tg_result)[:80]}")
         except Exception as _tge:
             logger.warning(f"[CREATE_POST] TG cross-post error: {_tge}")
         try:
@@ -7113,22 +7113,22 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     force=True,
                 )
                 if '✅' in str(_dc_result):
-                    cross_notes.append("🎮 Discord")
+                    cross_notes.append(" Discord")
                 else:
-                    cross_notes.append(f"⚠️ Discord: {str(_dc_result)[:80]}")
+                    cross_notes.append(f" Discord: {str(_dc_result)[:80]}")
         except Exception as _dce:
             logger.warning(f"[CREATE_POST] Discord cross-post error: {_dce}")
 
         cross_line = (" + " + " + ".join(cross_notes)) if cross_notes else ""
         return (
-            f"✅ Пост #{post.id} опубликован в блог{cross_line}!{' 🖼' if has_img else ''}\n\n"
+            f" Пост #{post.id} опубликован в блог{cross_line}!{' ' if has_img else ''}\n\n"
             f"«{post_preview}»\n\nСсылка на блог: https://asibiont.com/dashboard"
         )
         
     except Exception as e:
         logger.error(f"[CREATE_POST] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка публикации поста: {str(e)}"
+        return f" Ошибка публикации поста: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -7136,7 +7136,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
 
 async def edit_post(new_content: str, user_id: int, post_id: int = None, session=None):
     """
-    ✏️ РЕДАКТИРОВАНИЕ ПОСТА В ЛЕНТЕ
+     РЕДАКТИРОВАНИЕ ПОСТА В ЛЕНТЕ
     
     Изменяет текст существующего поста. Если post_id не указан — редактирует последний.
     
@@ -7174,12 +7174,12 @@ async def edit_post(new_content: str, user_id: int, post_id: int = None, session
         
         new_preview = new_content[:80] + '...' if len(new_content) > 80 else new_content
         logger.info(f"[EDIT_POST] User {user_id} edited post #{post.id}")
-        return f"✅ Пост #{post.id} обновлён!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»\n\nСсылка на ленту: https://asibiont.com/dashboard"
+        return f" Пост #{post.id} обновлён!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»\n\nСсылка на ленту: https://asibiont.com/dashboard"
         
     except Exception as e:
         logger.error(f"[EDIT_POST] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка редактирования поста: {str(e)}"
+        return f" Ошибка редактирования поста: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -7187,7 +7187,7 @@ async def edit_post(new_content: str, user_id: int, post_id: int = None, session
 
 async def get_posts(user_id: int, limit: int = 5, session=None):
     """
-    📋 СПИСОК ПОСТОВ ПОЛЬЗОВАТЕЛЯ
+     СПИСОК ПОСТОВ ПОЛЬЗОВАТЕЛЯ
     
     Возвращает посты пользователя с датами, лайками и просмотрами.
     
@@ -7213,7 +7213,7 @@ async def get_posts(user_id: int, limit: int = 5, session=None):
         if not posts:
             return "У тебя пока нет постов в ленте. Хочешь, напишу пост от твоего имени?"
         
-        result_lines = [f"📋 Твои посты ({len(posts)} из последних):\n"]
+        result_lines = [f" Твои посты ({len(posts)} из последних):\n"]
 
         # Aggregate likes/views/comments per post (avoid N+1 ×3 per post)
         from sqlalchemy import func as _func_gp
@@ -7238,7 +7238,7 @@ async def get_posts(user_id: int, limit: int = 5, session=None):
             date_str = post.created_at.strftime('%d.%m.%Y %H:%M') if post.created_at else '?'
             
             result_lines.append(
-                f"#{post.id} ({date_str}) — 👁 {views_count} | ❤ {likes_count} | 💬 {comments_count}\n«{preview}»\n"
+                f"#{post.id} ({date_str}) — {views_count} | {likes_count} | {comments_count}\n«{preview}»\n"
             )
         
         logger.info(f"[GET_POSTS] User {user_id} listed {len(posts)} posts")
@@ -7246,7 +7246,7 @@ async def get_posts(user_id: int, limit: int = 5, session=None):
         
     except Exception as e:
         logger.error(f"[GET_POSTS] Error: {e}", exc_info=True)
-        return f"❌ Ошибка получения постов: {str(e)}"
+        return f" Ошибка получения постов: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -7254,7 +7254,7 @@ async def get_posts(user_id: int, limit: int = 5, session=None):
 
 async def delete_post(user_id: int, post_id: int = None, session=None):
     """
-    🗑 УДАЛЕНИЕ ПОСТА из ленты
+     УДАЛЕНИЕ ПОСТА из ленты
     
     Удаляет пост пользователя. Если post_id не указан — удаляет последний пост.
     
@@ -7298,12 +7298,12 @@ async def delete_post(user_id: int, post_id: int = None, session=None):
         session.commit()
         
         logger.info(f"[DELETE_POST] User {user_id} deleted post #{post_id_deleted}: '{post_preview}'")
-        return f"✅ Пост #{post_id_deleted} удалён: «{post_preview}»"
+        return f" Пост #{post_id_deleted} удалён: «{post_preview}»"
         
     except Exception as e:
         logger.error(f"[DELETE_POST] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка удаления поста: {str(e)}"
+        return f" Ошибка удаления поста: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -7311,7 +7311,7 @@ async def delete_post(user_id: int, post_id: int = None, session=None):
 
 async def publish_to_telegram(content: str, image_url: str = None, user_id: int = None, session=None, force: bool = False):
     """
-    📢 ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
+     ПУБЛИКАЦИЯ В TELEGRAM канал пользователя
     
     Требования:
     - Пользователь должен указать telegram_channel в профиле
@@ -7365,7 +7365,7 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
             if not channel.startswith('@') and not channel.startswith('-'):
                 channel = f"@{channel}"
             return (
-                f"📢 Сегодня пост в {channel} уже был опубликован.\n"
+                f" Сегодня пост в {channel} уже был опубликован.\n"
                 f"Лимит — 1 пост в канал в день, чтобы не спамить подписчиков.\n"
                 f"Следующий пост можно опубликовать завтра."
             )
@@ -7387,10 +7387,10 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         # Проверяем результат публикации
         if isinstance(result, dict):
             if result.get('success'):
-                return result.get('message', '✅ Пост успешно опубликован в Telegram-канал')
+                return result.get('message', ' Пост успешно опубликован в Telegram-канал')
             else:
                 # Публикация не удалась - возвращаем детальное сообщение об ошибке
-                return result.get('message', '❌ Не удалось опубликовать пост в Telegram-канал')
+                return result.get('message', ' Не удалось опубликовать пост в Telegram-канал')
         else:
             return str(result)
         
@@ -7403,7 +7403,7 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
 
 async def quick_topic_search(topic: str, user_id: int = None, session=None):
     """
-    🔍 БЫСТРЫЙ ПОИСК ПО ТЕМЕ (LIGHT+)
+     БЫСТРЫЙ ПОИСК ПО ТЕМЕ (LIGHT+)
     Простой поиск без AI анализа - топ-3 результата с ссылками
     """
     from .api_client import get_api_client
@@ -7423,15 +7423,15 @@ async def quick_topic_search(topic: str, user_id: int = None, session=None):
         
         results = await api.web_search(topic, num=3)
         if not results:
-            return f"🔍 По запросу '{topic}' не найдено результатов"
+            return f" По запросу '{topic}' не найдено результатов"
         
-        result_text = f"🔍 **Быстрый поиск**: {topic}\n\n"
+        result_text = f" **Быстрый поиск**: {topic}\n\n"
         for i, r in enumerate(results, 1):
             result_text += f"{i}. **{r['title']}**\n"
             snippet = r['snippet']
             if snippet:
                 result_text += f"   {snippet[:150]}{'...' if len(snippet) > 150 else ''}\n"
-            result_text += f"   🔗 [Читать далее]({r['link']})\n\n"
+            result_text += f" [Читать далее]({r['link']})\n\n"
         
         # AI анализ для всех тарифов
         try:
@@ -7443,23 +7443,23 @@ async def quick_topic_search(topic: str, user_id: int = None, session=None):
 Сделай краткий практичный вывод в 2-3 предложениях: суть темы, ключевой факт, и что с этим делать. Не пересказывай, а синтезируй."""
             ai_analysis = await api.deepseek_analyze(prompt, system_prompt="Ты эксперт-аналитик. Давай конкретику и практическую пользу.", max_tokens=200)
             if ai_analysis:
-                result_text += f"🤖 **AI анализ**: {ai_analysis}\n\n"
+                result_text += f" **AI анализ**: {ai_analysis}\n\n"
         except Exception as e:
             logger.warning(f"[QUICK_SEARCH] AI analysis failed: {e}")
         
-        result_text += "💡 **Подсказка**: Для более детального анализа используйте функцию research_topic."
+        result_text += " **Подсказка**: Для более детального анализа используйте функцию research_topic."
         return result_text
         
     except Exception as e:
         logger.error(f"Error in quick_topic_search: {e}")
-        return f"❌ Ошибка поиска по теме: {topic}"
+        return f" Ошибка поиска по теме: {topic}"
     finally:
         if close_session:
             session.close()
 
 async def check_topic_relevance(topic: str, user_id: int = None, session=None):
     """
-    📊 ПРОВЕРКА АКТУАЛЬНОСТИ ТЕМЫ (LIGHT+)
+     ПРОВЕРКА АКТУАЛЬНОСТИ ТЕМЫ (LIGHT+)
     AI-анализ: насколько тема актуальна сейчас и стоит ли ей заниматься
     """
     close_session = False
@@ -7482,7 +7482,7 @@ async def check_topic_relevance(topic: str, user_id: int = None, session=None):
         results = await api.web_search(f"{topic} {current_year} тренды актуальность", num=7)
         
         if not results:
-            return f"📊 **Проверка актуальности**: {topic}\n\n❌ Информация по теме не найдена"
+            return f" **Проверка актуальности**: {topic}\n\n Информация по теме не найдена"
         
         # AI-анализ актуальности вместо подсчёта слов
         context = "\n\n".join([
@@ -7506,7 +7506,7 @@ async def check_topic_relevance(topic: str, user_id: int = None, session=None):
             max_tokens=300
         )
         
-        result = f"📊 **Проверка актуальности**: {topic}\n\n"
+        result = f" **Проверка актуальности**: {topic}\n\n"
         if analysis:
             result += f"{analysis}\n\n"
         result += f"Найдено {len(results)} свежих источников по теме."
@@ -7514,14 +7514,14 @@ async def check_topic_relevance(topic: str, user_id: int = None, session=None):
         return result
     except Exception as e:
         logger.error(f"Error in check_topic_relevance: {e}")
-        return f"❌ Ошибка проверки темы: {topic}"
+        return f" Ошибка проверки темы: {topic}"
     finally:
         if close_session:
             session.close()
 
 async def get_news_trends(topic: str = "tech startups AI", period: str = "week", focus: str = "trends", user_id: int = None, session=None):
     """
-    📰 ПОЛУЧЕНИЕ НОВОСТЕЙ И АНАЛИЗ ТРЕНДОВ
+     ПОЛУЧЕНИЕ НОВОСТЕЙ И АНАЛИЗ ТРЕНДОВ
     Использует NewsAPI для поиска новостей + AI для анализа трендов
     """
     from .api_client import get_api_client
@@ -7550,14 +7550,14 @@ async def get_news_trends(topic: str = "tech startups AI", period: str = "week",
     
     except Exception as e:
         logger.error(f"[NEWS_TRENDS] Error: {e}", exc_info=True)
-        return f"❌ Ошибка получения новостей: {str(e)}"
+        return f" Ошибка получения новостей: {str(e)}"
     finally:
         if close_session:
             session.close()
 
 async def research_and_plan(query: str, user_id: int = None, session=None):
     """
-    🔍 КОМПЛЕКСНЫЙ АНАЛИЗ РЫНКА И ПЛАН ДЕЙСТВИЙ (STANDARD+)
+     КОМПЛЕКСНЫЙ АНАЛИЗ РЫНКА И ПЛАН ДЕЙСТВИЙ (STANDARD+)
 
     Проводит глубокое исследование и создает персонализированный план действий
 
@@ -7603,7 +7603,7 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
         all_results = await api.web_multi_search(search_queries, num_per_query=5)
 
         if not all_results:
-            return f"❌ Не удалось найти информацию по запросу '{query}'"
+            return f" Не удалось найти информацию по запросу '{query}'"
 
         # ШАГ 2: AI анализ всех результатов
         context = "\n\n".join([
@@ -7674,26 +7674,26 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
         )
 
         if not analysis:
-            return f"❌ Ошибка AI анализа"
+            return f" Ошибка AI анализа"
 
         # Форматируем ответ
         if isinstance(analysis, dict):
-            result = f"🔍 **АНАЛИЗ: {query.upper()}**\n\n"
+            result = f" **АНАЛИЗ: {query.upper()}**\n\n"
             
             summary = analysis.get('summary') or analysis.get('market_summary', '')
             if summary:
-                result += f"📊 **ОБЗОР**\n{summary}\n\n"
+                result += f" **ОБЗОР**\n{summary}\n\n"
 
             findings = analysis.get('key_findings') or analysis.get('key_trends', [])
             if findings:
-                result += "📝 **КЛЮЧЕВЫЕ ФАКТЫ**\n"
+                result += " **КЛЮЧЕВЫЕ ФАКТЫ**\n"
                 for item in findings[:3]:
                     result += f"• {item}\n"
                 result += "\n"
 
             existing = analysis.get('what_exists') or []
             if existing:
-                result += "🔎 **ЧТО УЖЕ ЕСТЬ**\n"
+                result += " **ЧТО УЖЕ ЕСТЬ**\n"
                 for item in existing[:3]:
                     result += f"• {item}\n"
                 result += "\n"
@@ -7701,33 +7701,33 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
                 comp = analysis['competitor_analysis']
                 players = comp.get('main_players') or comp.get('main_competitors', [])
                 if players:
-                    result += "🔎 **ОСНОВНЫЕ ИГРОКИ**\n"
+                    result += " **ОСНОВНЫЕ ИГРОКИ**\n"
                     for player in players[:3]:
                         result += f"• {player}\n"
                     result += "\n"
 
             opps = analysis.get('gaps_or_opportunities') or analysis.get('opportunities_for_user') or analysis.get('opportunities', [])
             if opps:
-                result += "🚀 **ВОЗМОЖНОСТИ ДЛЯ ТЕБЯ**\n"
+                result += " **ВОЗМОЖНОСТИ ДЛЯ ТЕБЯ**\n"
                 for opp in opps[:3]:
                     result += f"• {opp}\n"
                 result += "\n"
 
             advice = analysis.get('personalized_advice', '')
             if advice:
-                result += f"💡 **ПЕРСОНАЛЬНЫЙ СОВЕТ**\n{advice}\n\n"
+                result += f" **ПЕРСОНАЛЬНЫЙ СОВЕТ**\n{advice}\n\n"
 
             plan = analysis.get('action_plan') or analysis.get('actionable_plan', {})
             if isinstance(plan, dict):
                 steps = plan.get('this_week') or plan.get('immediate_steps', [])
                 if steps:
-                    result += "⚡ **НА ЭТОЙ НЕДЕЛЕ**\n"
+                    result += " **НА ЭТОЙ НЕДЕЛЕ**\n"
                     for step in steps[:3]:
                         result += f"• {step}\n"
                     result += "\n"
                 month = plan.get('this_month') or plan.get('short_term_goals', [])
                 if month:
-                    result += "📅 **НА МЕСЯЦ**\n"
+                    result += " **НА МЕСЯЦ**\n"
                     for goal in month[:2]:
                         result += f"• {goal}\n"
                     result += "\n"
@@ -7736,13 +7736,13 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
             if risks:
                 if isinstance(risks, str):
                     risks = [risks]
-                result += "⚠️ **НЮАНСЫ**\n"
+                result += " **НЮАНСЫ**\n"
                 for risk in risks[:2]:
                     result += f"• {risk}\n"
                 result += "\n"
 
             if analysis.get('recommended_tasks'):
-                result += "📋 **РЕКОМЕНДУЕМЫЕ ЗАДАЧИ**\n"
+                result += " **РЕКОМЕНДУЕМЫЕ ЗАДАЧИ**\n"
                 for task in analysis['recommended_tasks'][:2]:
                     if isinstance(task, dict):
                         result += f"• **{task.get('title', '')}** — {task.get('description', '')}\n"
@@ -7750,16 +7750,16 @@ async def research_and_plan(query: str, user_id: int = None, session=None):
                         result += f"• {task}\n"
                 result += "\n"
 
-            result += f"🔗 Анализ основан на {len(all_results)} актуальных источниках"
+            result += f" Анализ основан на {len(all_results)} актуальных источниках"
 
             return result
         else:
             # Если JSON не распарсился — вернём текстовый ответ
-            return f"🔍 **Анализ: {query}**\n\n{analysis}"
+            return f" **Анализ: {query}**\n\n{analysis}"
 
     except Exception as e:
         logger.error(f"[RESEARCH_PLAN] Error: {e}", exc_info=True)
-        return f"❌ Ошибка комплексного исследования: {str(e)}"
+        return f" Ошибка комплексного исследования: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -7775,7 +7775,7 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
         data = await api.get_weather(city)
         
         if not data:
-            return f"❌ Не удалось получить погоду для города '{city}'"
+            return f" Не удалось получить погоду для города '{city}'"
         
         temp = data['temp']
         feels = data['feels_like']
@@ -7783,7 +7783,7 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
         humidity = data['humidity']
         wind = data['wind_speed']
         
-        result = f"🌤️ **Погода в {data['city_name']}:**\n"
+        result = f" **Погода в {data['city_name']}:**\n"
         result += f"• Температура: {temp:.1f}°C (ощущается как {feels:.1f}°C)\n"
         result += f"• {desc.capitalize()}, влажность {humidity}%, ветер {wind} м/с\n"
         
@@ -7806,13 +7806,13 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
             tips.append("осторожно на дорогах")
         
         if tips:
-            result += f"\n⚠️ {', '.join(tips).capitalize()}\n"
+            result += f"\n {', '.join(tips).capitalize()}\n"
         
         return result
 
     except Exception as e:
         logger.error(f"[WEATHER] Error: {e}")
-        return f"❌ Ошибка получения погоды: {str(e)}"
+        return f" Ошибка получения погоды: {str(e)}"
 
 async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None) -> str:
     """
@@ -7820,7 +7820,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
     Анализирует профиль, контакты, тренды и предлагает персонализированные задачи.
     """
     if not user_id:
-        return "❌ Не указан ID пользователя"
+        return " Не указан ID пользователя"
 
     if session is None:
         session = Session()
@@ -7833,7 +7833,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
         if not user:
             if close_session:
                 session.close()
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         # Получаем профиль пользователя
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -7983,7 +7983,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
                 trends_result = await get_news_trends(
                     topic=primary_interest, user_id=user_id, session=session
                 )
-                if trends_result and "❌" not in trends_result and len(trends_result.strip()) > 10:
+                if trends_result and "" not in trends_result and len(trends_result.strip()) > 10:
                     analysis_data['trends_info'] = trends_result  # Сохраняем конкретную информацию
                     analysis_data['trends_topic'] = primary_interest
                 else:
@@ -8064,9 +8064,9 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
         
         if ai_suggestions:
             if has_active_tasks:
-                result = "💪 **Вижу у тебя есть задачи. Вот что предлагаю:**\n\n"
+                result = " **Вижу у тебя есть задачи. Вот что предлагаю:**\n\n"
             else:
-                result = "🧠 **Вот что можно сделать прямо сейчас:**\n\n"
+                result = " **Вот что можно сделать прямо сейчас:**\n\n"
             
             # Парсим предложения AI
             for line in ai_suggestions.strip().split("\n"):
@@ -8081,7 +8081,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
             result += "\nВыбери что интересно — помогу с деталями!"
         else:
             # Фоллбэк без AI
-            result = "Расскажи, чем занимаешься или что планируешь — помогу разобраться 🤝"
+            result = "Расскажи, чем занимаешься или что планируешь — помогу разобраться "
         
         return result
 
@@ -8089,7 +8089,7 @@ async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None)
         logger.error(f"[SITUATION_ANALYSIS] Error: {e}")
         if close_session:
             session.close()
-        return f"❌ Ошибка анализа ситуации: {str(e)}"
+        return f" Ошибка анализа ситуации: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -8131,7 +8131,7 @@ async def send_message_to_user(
         # Находим отправителя
         sender = session.query(User).filter_by(telegram_id=user_id).first()
         if not sender:
-            return "❌ Пользователь-отправитель не найден"
+            return " Пользователь-отправитель не найден"
         
         sender_profile = session.query(UserProfile).filter_by(user_id=sender.id).first()
         sender_name = sender.first_name or sender.username or "Пользователь"
@@ -8147,10 +8147,10 @@ async def send_message_to_user(
         ).first()
         
         if not recipient:
-            return f"❌ Пользователь @{recipient_clean} не найден в системе. Он должен начать диалог с ботом, чтобы быть доступным."
+            return f" Пользователь @{recipient_clean} не найден в системе. Он должен начать диалог с ботом, чтобы быть доступным."
         
         if recipient.telegram_id == user_id:
-            return "❌ Нельзя отправить сообщение самому себе"
+            return " Нельзя отправить сообщение самому себе"
         
         # Проверяем blocked_contacts
         recipient_profile = session.query(UserProfile).filter_by(user_id=recipient.id).first()
@@ -8158,7 +8158,7 @@ async def send_message_to_user(
             try:
                 blocked = json.loads(recipient_profile.blocked_contacts)
                 if sender_username in blocked or str(user_id) in blocked:
-                    return f"❌ @{recipient_clean} заблокировал входящие сообщения от вас"
+                    return f" @{recipient_clean} заблокировал входящие сообщения от вас"
             except (json.JSONDecodeError, TypeError):
                 pass
         
@@ -8171,7 +8171,7 @@ async def send_message_to_user(
         ).count()
         
         if sent_today >= 3:
-            return f"⚠️ Лимит: максимум 3 сообщения в день одному пользователю. Уже отправлено: {sent_today}"
+            return f" Лимит: максимум 3 сообщения в день одному пользователю. Уже отправлено: {sent_today}"
         
         # Генерируем сообщение через AI
         import asyncio
@@ -8228,8 +8228,8 @@ async def send_message_to_user(
             try:
                 await _send_telegram_message_async(
                     recipient.telegram_id,
-                    f"📩 Сообщение от @{sender_username} ({intent_label}):\n\n{generated_message}\n\n"
-                    f"💬 Чтобы ответить, напиши: «ответь @{sender_username} [твой ответ]»"
+                    f" Сообщение от @{sender_username} ({intent_label}):\n\n{generated_message}\n\n"
+                    f" Чтобы ответить, напиши: «ответь @{sender_username} [твой ответ]»"
                 )
                 msg.status = 'delivered'
                 msg.delivered_at = datetime.utcnow()
@@ -8244,17 +8244,17 @@ async def send_message_to_user(
         # Формируем ответ с учётом способа доставки
         delivery_note = ""
         if not has_real_tg or recipient_platform in ('discord', 'web'):
-            delivery_note = "\n⚠️ У получателя не привязан Telegram — сообщение сохранено в платформе и будет доступно на дашборде."
+            delivery_note = "\n У получателя не привязан Telegram — сообщение сохранено в платформе и будет доступно на дашборде."
         
         return (
-            f"✅ Сообщение отправлено @{recipient_clean}!{delivery_note}\n"
+            f" Сообщение отправлено @{recipient_clean}!{delivery_note}\n"
             f"Цель: {intent_label}\n"
             f"Текст: {generated_message[:200]}{'...' if len(generated_message) > 200 else ''}"
         )
     
     except Exception as e:
         logger.error(f"[SEND_MSG] Error: {e}", exc_info=True)
-        return f"❌ Ошибка отправки: {str(e)}"
+        return f" Ошибка отправки: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -8293,7 +8293,7 @@ async def find_and_message_relevant_users(
     try:
         sender = session.query(User).filter_by(telegram_id=user_id).first()
         if not sender:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
         
         sender_profile = session.query(UserProfile).filter_by(user_id=sender.id).first()
         sender_name = sender.first_name or sender.username or "Пользователь"
@@ -8319,7 +8319,7 @@ async def find_and_message_relevant_users(
                 keywords.add(clean)
         
         if not keywords:
-            return "❌ Не удалось определить ключевые слова из запроса. Опиши подробнее, кого ищешь."
+            return " Не удалось определить ключевые слова из запроса. Опиши подробнее, кого ищешь."
         
         # Собираем кандидатов
         candidates = []
@@ -8420,7 +8420,7 @@ async def find_and_message_relevant_users(
         
         if not top:
             return (
-                f"🔍 Не нашёл подходящих пользователей по запросу: «{purpose}».\n"
+                f" Не нашёл подходящих пользователей по запросу: «{purpose}».\n"
                 "Пока мало людей с такими интересами. Попробуй расширить поиск или подожди — "
                 "я уведомлю когда появится подходящий человек (contact_alert)."
             )
@@ -8434,7 +8434,7 @@ async def find_and_message_relevant_users(
         
         remaining = max(0, 50 - total_sent_today)
         if remaining == 0:
-            return "⚠️ Дневной лимит исходящих сообщений (50) исчерпан. Попробуй завтра."
+            return " Дневной лимит исходящих сообщений (50) исчерпан. Попробуй завтра."
         
         top = top[:remaining]
         
@@ -8479,26 +8479,26 @@ async def find_and_message_relevant_users(
             try:
                 await _send_telegram_message_async(
                     recipient.telegram_id,
-                    f"🤝 Вам написал @{sender_username} — у вас общее ({reasons_str}):\n\n"
+                    f" Вам написал @{sender_username} — у вас общее ({reasons_str}):\n\n"
                     f"{generated}\n\n"
-                    f"💬 Ответить: «ответь @{sender_username} [текст]»"
+                    f" Ответить: «ответь @{sender_username} [текст]»"
                 )
                 msg.status = 'delivered'
                 msg.delivered_at = datetime.utcnow()
                 session.commit()
-                sent_results.append(f"✅ @{recipient.username or recipient_name} — {reasons_str}")
+                sent_results.append(f" @{recipient.username or recipient_name} — {reasons_str}")
             except Exception as e:
                 logger.error(f"[FIND_MSG] Delivery to {recipient.telegram_id} failed: {e}")
-                sent_results.append(f"⏳ @{recipient.username or recipient_name} — сохранено, доставлю позже")
+                sent_results.append(f" @{recipient.username or recipient_name} — сохранено, доставлю позже")
         
-        result = f"🔍 Найдено совпадений: {len(candidates)} | Отправлено: {len(sent_results)}\n\n"
+        result = f" Найдено совпадений: {len(candidates)} | Отправлено: {len(sent_results)}\n\n"
         result += '\n'.join(sent_results)
         
         return result
     
     except Exception as e:
         logger.error(f"[FIND_MSG] Error: {e}", exc_info=True)
-        return f"❌ Ошибка поиска/отправки: {str(e)}"
+        return f" Ошибка поиска/отправки: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -8531,7 +8531,7 @@ async def reply_to_user_message(
     try:
         replier = session.query(User).filter_by(telegram_id=user_id).first()
         if not replier:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
         
         recipient_clean = recipient_username.lstrip('@').strip()
         original_sender = session.query(User).filter(
@@ -8542,7 +8542,7 @@ async def reply_to_user_message(
         ).first()
         
         if not original_sender:
-            return f"❌ Пользователь @{recipient_clean} не найден"
+            return f" Пользователь @{recipient_clean} не найден"
         
         # Находим последнее входящее сообщение от этого пользователя
         last_msg = session.query(UserMessage).filter(
@@ -8587,8 +8587,8 @@ async def reply_to_user_message(
             context_line = f"\nНа ваше: {last_msg.message_text[:100]}..." if last_msg else ""
             await _send_telegram_message_async(
                 original_sender.telegram_id,
-                f"💬 Ответ от @{replier_username}:{context_line}\n\n{reply_text}\n\n"
-                f"📝 Чтобы продолжить диалог, напиши: «напиши @{replier_username} ...»"
+                f" Ответ от @{replier_username}:{context_line}\n\n{reply_text}\n\n"
+                f" Чтобы продолжить диалог, напиши: «напиши @{replier_username} ...»"
             )
             reply_msg.status = 'delivered'
             reply_msg.delivered_at = datetime.utcnow()
@@ -8596,11 +8596,11 @@ async def reply_to_user_message(
         except Exception as e:
             logger.error(f"[REPLY_MSG] Delivery failed: {e}")
         
-        return f"✅ Ответ отправлен @{recipient_clean}. Они могут продолжить диалог через меня."
+        return f" Ответ отправлен @{recipient_clean}. Они могут продолжить диалог через меня."
     
     except Exception as e:
         logger.error(f"[REPLY_MSG] Error: {e}", exc_info=True)
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -8719,7 +8719,7 @@ def get_incoming_messages(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
         
         query = session.query(UserMessage).filter(
             UserMessage.recipient_id == user.id
@@ -8734,8 +8734,8 @@ def get_incoming_messages(
         
         if not messages:
             if status_filter == "unread":
-                return "📭 Нет новых сообщений"
-            return "📭 Нет сообщений"
+                return " Нет новых сообщений"
+            return " Нет сообщений"
         
         # Pre-fetch senders (batch)
         if messages:
@@ -8751,12 +8751,12 @@ def get_incoming_messages(
             sender_name = f"@{sender.username}" if sender and sender.username else "Пользователь"
             
             intent_labels = {
-                'meeting': '📅 встреча',
-                'collaboration': '🤝 сотрудничество', 
-                'idea': '💡 идея',
-                'project_invite': '🚀 приглашение в проект',
-                'question': '❓ вопрос',
-                'reply': '💬 ответ'
+                'meeting': ' встреча',
+                'collaboration': ' сотрудничество', 
+                'idea': ' идея',
+                'project_invite': ' приглашение в проект',
+                'question': ' вопрос',
+                'reply': ' ответ'
             }
             intent_str = intent_labels.get(msg.intent, msg.intent or '')
             
@@ -8783,11 +8783,11 @@ def get_incoming_messages(
         
         session.commit()
         
-        return f"📬 Входящие ({len(messages)}):\n\n" + "\n\n".join(result_lines)
+        return f" Входящие ({len(messages)}):\n\n" + "\n\n".join(result_lines)
     
     except Exception as e:
         logger.error(f"[INBOX] Error: {e}", exc_info=True)
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -8816,7 +8816,7 @@ def get_message_status(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
         
         # Последние 10 отправленных
         messages = session.query(UserMessage).filter(
@@ -8824,7 +8824,7 @@ def get_message_status(
         ).order_by(UserMessage.created_at.desc()).limit(10).all()
         
         if not messages:
-            return "📭 Нет отправленных сообщений"
+            return " Нет отправленных сообщений"
         
         # Pre-fetch recipients (batch)
         if messages:
@@ -8864,11 +8864,11 @@ def get_message_status(
                     time_ago = f"{delta.seconds // 60}мин назад"
             
             status_map = {
-                'sent': '📤 Отправлено',
-                'delivered': '📬 Доставлено',
-                'read': '👁 Прочитано',
-                'replied': '✅ Ответил',
-                'declined': '❌ Отклонено'
+                'sent': ' Отправлено',
+                'delivered': ' Доставлено',
+                'read': ' Прочитано',
+                'replied': ' Ответил',
+                'declined': ' Отклонено'
             }
             status_str = status_map.get(msg.status, msg.status)
             
@@ -8885,7 +8885,7 @@ def get_message_status(
                     None
                 )
                 if reply_msg:
-                    line += f"\n  💬 Ответ: {reply_msg.message_text[:100]}{'...' if len(reply_msg.message_text) > 100 else ''}"
+                    line += f"\n Ответ: {reply_msg.message_text[:100]}{'...' if len(reply_msg.message_text) > 100 else ''}"
                     msg.status = 'replied'
                     msg.reply_text = reply_msg.message_text
                     msg.replied_at = reply_msg.created_at
@@ -8894,11 +8894,11 @@ def get_message_status(
         
         session.commit()
         
-        return f"📊 Отправленные сообщения ({len(messages)}):\n\n" + "\n\n".join(result_lines)
+        return f" Отправленные сообщения ({len(messages)}):\n\n" + "\n\n".join(result_lines)
     
     except Exception as e:
         logger.error(f"[MSG_STATUS] Error: {e}", exc_info=True)
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -9602,7 +9602,7 @@ async def start_email_campaign(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
@@ -9632,8 +9632,8 @@ async def start_email_campaign(
                 session.commit()
                 lang = getattr(user, 'language_code', 'ru') or 'ru'
                 if lang == 'en':
-                    return f"📧 Campaign #{ex.id} «{ex.name}» already exists and is active! Updated daily_limit to {ex.daily_limit}. Leads will be found automatically."
-                return f"📧 Кампания #{ex.id} «{ex.name}» уже существует и активна! Обновил daily_limit до {ex.daily_limit}. Лиды будут найдены автоматически."
+                    return f" Campaign #{ex.id} «{ex.name}» already exists and is active! Updated daily_limit to {ex.daily_limit}. Leads will be found automatically."
+                return f" Кампания #{ex.id} «{ex.name}» уже существует и активна! Обновил daily_limit до {ex.daily_limit}. Лиды будут найдены автоматически."
 
         campaign = EmailCampaign(
             user_id=user.id,
@@ -9672,17 +9672,17 @@ async def start_email_campaign(
         if is_outreach_campaign:
             # Сценарий 3 — привлечение
             if lang == 'en':
-                base = f"📧 Campaign #{campaign.id} «{name}» created!"
+                base = f" Campaign #{campaign.id} «{name}» created!"
                 if auto_leads_count > 0:
-                    base += f"\n🔍 Found {auto_leads_count} contacts — first emails will be sent automatically."
+                    base += f"\n Found {auto_leads_count} contacts — first emails will be sent automatically."
                 else:
-                    base += "\n⚠️ No contacts found automatically. Search for people via web_search, then add_email_leads."
+                    base += "\n No contacts found automatically. Search for people via web_search, then add_email_leads."
             else:
-                base = f"📧 Кампания #{campaign.id} «{name}» создана!"
+                base = f" Кампания #{campaign.id} «{name}» создана!"
                 if auto_leads_count > 0:
-                    base += f"\n🔍 Найдено {auto_leads_count} контактов — первые письма будут отправлены автоматически."
+                    base += f"\n Найдено {auto_leads_count} контактов — первые письма будут отправлены автоматически."
                 else:
-                    base += "\n⚠️ Автопоиск не нашёл контактов. Найди людей через web_search, затем add_email_leads."
+                    base += "\n Автопоиск не нашёл контактов. Найди людей через web_search, затем add_email_leads."
             if auto_leads_msg:
                 base += f"\n{auto_leads_msg}"
             return base
@@ -9690,17 +9690,17 @@ async def start_email_campaign(
             # Сценарий 2 — переговоры (конкретный контакт)
             if lang == 'en':
                 return (
-                    f"📧 Campaign #{campaign.id} «{name}» created.\n"
+                    f" Campaign #{campaign.id} «{name}» created.\n"
                     f"Now add the contact via add_email_leads and send the first email via send_outreach_email."
                 )
             return (
-                f"📧 Кампания #{campaign.id} «{name}» создана.\n"
+                f" Кампания #{campaign.id} «{name}» создана.\n"
                 f"Теперь добавь контакт через add_email_leads и отправь первое письмо через send_outreach_email."
             )
     except Exception as e:
         logger.error(f"[EMAIL_CAMPAIGN] Error creating campaign: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка создания кампании: {str(e)}"
+        return f" Ошибка создания кампании: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -9731,7 +9731,7 @@ async def update_email_campaign(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         # Найти кампанию
         campaign = None
@@ -9746,7 +9746,7 @@ async def update_email_campaign(
             ).order_by(EmailCampaign.created_at.desc()).first()
 
         if not campaign:
-            return "❌ Кампания не найдена. Укажи campaign_id или создай новую (start_email_campaign)."
+            return " Кампания не найдена. Укажи campaign_id или создай новую (start_email_campaign)."
 
         changes = []
         if name is not None:
@@ -9775,7 +9775,7 @@ async def update_email_campaign(
             changes.append(f"статус: {status}")
 
         if not changes:
-            return f"ℹ️ Кампания #{campaign.id} «{campaign.name}» — нечего обновлять. Укажи параметры для изменения."
+            return f"ℹ Кампания #{campaign.id} «{campaign.name}» — нечего обновлять. Укажи параметры для изменения."
 
         session.commit()
 
@@ -9783,23 +9783,23 @@ async def update_email_campaign(
         changes_str = ', '.join(changes)
         if lang == 'en':
             return (
-                f"✅ Campaign #{campaign.id} «{campaign.name}» updated:\n"
+                f" Campaign #{campaign.id} «{campaign.name}» updated:\n"
                 f"{changes_str}\n\n"
-                f"📨 Current: {campaign.daily_limit}/day, "
+                f" Current: {campaign.daily_limit}/day, "
                 f"{'unlimited' if not campaign.max_emails or campaign.max_emails == 0 else f'max {campaign.max_emails}'} total, "
                 f"status: {campaign.status}"
             )
         return (
-            f"✅ Кампания #{campaign.id} «{campaign.name}» обновлена:\n"
+            f" Кампания #{campaign.id} «{campaign.name}» обновлена:\n"
             f"{changes_str}\n\n"
-            f"📨 Текущие параметры: {campaign.daily_limit} писем/день, "
+            f" Текущие параметры: {campaign.daily_limit} писем/день, "
             f"{'безлимитно' if not campaign.max_emails or campaign.max_emails == 0 else f'макс. {campaign.max_emails}'} всего, "
             f"статус: {campaign.status}"
         )
     except Exception as e:
         logger.error(f"[EMAIL_CAMPAIGN] Error updating campaign: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка обновления кампании: {str(e)}"
+        return f" Ошибка обновления кампании: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -9829,10 +9829,10 @@ async def send_outreach_email(
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         if not RESEND_API_KEY:
-            return "❌ Resend API не настроен. Установите RESEND_API_KEY."
+            return " Resend API не настроен. Установите RESEND_API_KEY."
 
         # Найти кампанию
         campaign = None
@@ -9847,13 +9847,13 @@ async def send_outreach_email(
             ).order_by(EmailCampaign.created_at.desc()).first()
 
         if not campaign:
-            return "❌ Нет активной email-кампании. Сначала создай кампанию (start_email_campaign)."
+            return " Нет активной email-кампании. Сначала создай кампанию (start_email_campaign)."
 
         # Проверка лимитов (max_emails=0 означает безлимитно)
         if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
             campaign.status = 'completed'
             session.commit()
-            return f"⚠️ Кампания #{campaign.id} достигла лимита ({campaign.max_emails} писем). Статус: completed."
+            return f" Кампания #{campaign.id} достигла лимита ({campaign.max_emails} писем). Статус: completed."
 
         # Дневной лимит — считаем «сегодня» по таймзоне пользователя
         from datetime import datetime as dt, timezone as tz
@@ -9868,7 +9868,7 @@ async def send_outreach_email(
             EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
         ).count()
         if sent_today >= campaign.daily_limit:
-            return f"⚠️ Дневной лимит ({campaign.daily_limit} писем) исчерпан. Попробуй завтра."
+            return f" Дневной лимит ({campaign.daily_limit} писем) исчерпан. Попробуй завтра."
 
         # Глобальный дневной лимит: не более 50 УНИКАЛЬНЫХ получателей на пользователя в сутки
         GLOBAL_DAILY_LIMIT = 50
@@ -9887,7 +9887,7 @@ async def send_outreach_email(
             EmailOutreach.sent_at >= today_start,
         ).first()
         if is_new_recipient_today and global_recipients_today >= GLOBAL_DAILY_LIMIT:
-            return f"⚠️ Достигнут лимит: сегодня уже написали {global_recipients_today} новым получателям (макс {GLOBAL_DAILY_LIMIT}/день). Продолжим завтра."
+            return f" Достигнут лимит: сегодня уже написали {global_recipients_today} новым получателям (макс {GLOBAL_DAILY_LIMIT}/день). Продолжим завтра."
 
         # Проверка дубликата (не слать дважды одному recipient в одной кампании)
         # FOR UPDATE блокирует строку чтобы параллельный процесс не отправил то же письмо
@@ -9903,7 +9903,7 @@ async def send_outreach_email(
                 recipient_email=recipient_email,
             ).first()
         if existing and existing.status != 'draft':
-            return f"⚠️ Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}."
+            return f" Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}."
 
         # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
         # 1. Не слать тому, кому уже отправляли из другой кампании последние 30 дней
@@ -9918,7 +9918,7 @@ async def send_outreach_email(
         if cross_existing:
             other_camp = session.query(EmailCampaign).filter_by(id=cross_existing.campaign_id).first()
             other_name = other_camp.name if other_camp else f'#{cross_existing.campaign_id}'
-            return f"⚠️ {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}). Повторная отправка заблокирована (cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней)."
+            return f" {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}). Повторная отправка заблокирована (cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней)."
 
         # 2. Не слать тому, кто ранее пожаловался (complained) или bounced
         bad_status = session.query(EmailOutreach).filter(
@@ -9927,15 +9927,15 @@ async def send_outreach_email(
             EmailOutreach.status.in_(['bounced', 'failed']),
         ).first()
         if bad_status:
-            return f"⚠️ {recipient_email} ранее вернул bounced/failed (статус: {bad_status.status}). Отправка заблокирована."
+            return f" {recipient_email} ранее вернул bounced/failed (статус: {bad_status.status}). Отправка заблокирована."
 
         if not subject or not body:
-            return "❌ Нужны subject и body письма."
+            return " Нужны subject и body письма."
 
         # MX-проверка домена получателя
         mx_valid, mx_err = _validate_email_domain(recipient_email)
         if not mx_valid:
-            return f"❌ {mx_err}"
+            return f" {mx_err}"
 
         # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
         import aiohttp as _aiohttp
@@ -9979,10 +9979,10 @@ async def send_outreach_email(
                         _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
                     except Exception:
                         pass
-                    return f"❌ Ошибка Resend API: {err}"
+                    return f" Ошибка Resend API: {err}"
         except Exception as e:
             logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
-            return f"❌ Ошибка отправки: {str(e)}"
+            return f" Ошибка отправки: {str(e)}"
 
         # Anti-spam задержка между письмами (10 сек)
         import asyncio as _asyncio_delay
@@ -10038,13 +10038,13 @@ async def send_outreach_email(
         name_str = f" ({recipient_name})" if recipient_name else ""
         _max_label = campaign.max_emails if campaign.max_emails and campaign.max_emails > 0 else '∞'
         if lang == 'en':
-            return f"✅ Email sent to {recipient_email}{name_str}\nSubject: {subject}\nCampaign #{campaign.id} — {campaign.emails_sent}/{_max_label} sent"
-        return f"✅ Письмо отправлено: {recipient_email}{name_str}\nТема: {subject}\nКампания #{campaign.id} — {campaign.emails_sent}/{_max_label} отправлено"
+            return f" Email sent to {recipient_email}{name_str}\nSubject: {subject}\nCampaign #{campaign.id} — {campaign.emails_sent}/{_max_label} sent"
+        return f" Письмо отправлено: {recipient_email}{name_str}\nТема: {subject}\nКампания #{campaign.id} — {campaign.emails_sent}/{_max_label} отправлено"
 
     except Exception as e:
         logger.error(f"[EMAIL_OUTREACH] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -10071,7 +10071,7 @@ async def reply_to_outreach_email(
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         # Найти письмо
         outreach = None
@@ -10085,19 +10085,19 @@ async def reply_to_outreach_email(
             ).order_by(EmailOutreach.reply_at.desc()).first()
 
         if not outreach:
-            return "❌ Не найдено письмо для ответа."
+            return " Не найдено письмо для ответа."
 
         campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
         if not campaign:
-            return "❌ Кампания не найдена."
+            return " Кампания не найдена."
 
         if not reply_body:
-            return "❌ Нужен текст ответа (reply_body)."
+            return " Нужен текст ответа (reply_body)."
 
         # MX-проверка (на всякий — получатель мог сменить домен)
         mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
         if not mx_valid:
-            return f"❌ {mx_err}"
+            return f" {mx_err}"
 
         subject = f"Re: {outreach.subject}" if outreach.subject else "Re: Your inquiry"
         to_clean = outreach.recipient_email.strip().lower()
@@ -10219,7 +10219,7 @@ async def reply_to_outreach_email(
         if _matched is None or _send_error:
             from config import RESEND_API_KEY
             if not RESEND_API_KEY:
-                return f"❌ Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
+                return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
             try:
                 async with _aiohttp.ClientSession() as http:
                     _fb_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
@@ -10240,10 +10240,10 @@ async def reply_to_outreach_email(
                     if resp.status not in (200, 201):
                         err = resp_data.get('message', str(resp_data))
                         prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
-                        return f"❌ Ошибка Resend API: {err}{prev_err}"
+                        return f" Ошибка Resend API: {err}{prev_err}"
                     logger.info(f'[EMAIL_REPLY] Sent via platform Resend (Reply-To: {sender_addr}) to {to_clean}')
             except Exception as e:
-                return f"❌ Ошибка отправки: {_send_error or str(e)}"
+                return f" Ошибка отправки: {_send_error or str(e)}"
 
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
@@ -10266,11 +10266,11 @@ async def reply_to_outreach_email(
 
         session.commit()
 
-        return f"✅ Ответ отправлен на {outreach.recipient_email}\nТема: {subject}"
+        return f" Ответ отправлен на {outreach.recipient_email}\nТема: {subject}"
     except Exception as e:
         logger.error(f"[EMAIL_REPLY] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -10294,7 +10294,7 @@ async def add_email_leads(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         campaign = None
         if campaign_id:
@@ -10306,7 +10306,7 @@ async def add_email_leads(
                 user_id=user.id, status='active'
             ).order_by(EmailCampaign.created_at.desc()).first()
         if not campaign:
-            return "❌ Нет активной кампании."
+            return " Нет активной кампании."
 
         # Парсим leads
         parsed = []
@@ -10354,7 +10354,7 @@ async def add_email_leads(
                         parsed.append({'email': email_addr})
 
         if not parsed:
-            return "❌ Не удалось распарсить email-адреса. Укажи JSON или через запятую."
+            return " Не удалось распарсить email-адреса. Укажи JSON или через запятую."
 
         # ── ФИЛЬТР: generic-адреса компаний (info@, contact@, etc.) ──
         GENERIC_PREFIXES = {
@@ -10440,7 +10440,7 @@ async def add_email_leads(
             except Exception as _trigger_err:
                 logger.warning(f"[EMAIL_LEADS] Failed to trigger anchor engine: {_trigger_err}")
 
-        parts = [f"✅ Добавлено {added} email-адресов в кампанию #{campaign.id}"]
+        parts = [f" Добавлено {added} email-адресов в кампанию #{campaign.id}"]
         if skipped:
             parts.append(f"пропущено {skipped} дублей/cooldown")
         if skipped_generic:
@@ -10449,7 +10449,7 @@ async def add_email_leads(
     except Exception as e:
         logger.error(f"[EMAIL_LEADS] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -10468,7 +10468,7 @@ def get_email_campaign_status(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         campaigns = []
         if campaign_id:
@@ -10483,7 +10483,7 @@ def get_email_campaign_status(
             ).order_by(EmailCampaign.created_at.desc()).limit(5).all()
 
         if not campaigns:
-            return "📭 Нет email-кампаний. Создай кампанию: «запусти email-кампанию для привлечения клиентов»."
+            return " Нет email-кампаний. Создай кампанию: «запусти email-кампанию для привлечения клиентов»."
 
         result = []
         import pytz as _pytz_cs
@@ -10526,36 +10526,36 @@ def get_email_campaign_status(
             # Умный подстатус
             is_active = c.status in ('active', 'running')
             if c.status == 'paused':
-                status_emoji = '⏸️'
+                status_emoji = ''
                 status_text = 'На паузе'
             elif c.status == 'completed':
-                status_emoji = '✅'
+                status_emoji = ''
                 status_text = 'Завершена'
             elif c.status == 'cancelled':
-                status_emoji = '❌'
+                status_emoji = ''
                 status_text = 'Отменена'
             elif is_active and sent_today >= daily_limit:
-                status_emoji = '⏳'
+                status_emoji = ''
                 status_text = f'Ждёт завтра (лимит {daily_limit}/день исчерпан)'
             elif is_active and draft == 0 and (c.emails_sent or 0) == 0 and sent_today == 0:
-                status_emoji = '🔴'
+                status_emoji = ''
                 status_text = 'Нет лидов — нужны контакты (add_email_leads)'
             elif is_active and draft == 0 and ((c.emails_sent or 0) > 0 or sent_today > 0):
-                status_emoji = '🔍'
+                status_emoji = ''
                 status_text = 'Все отправлены, ищет новые контакты'
             elif is_active:
                 status_emoji = '🟢'
                 status_text = f'Отправляет ({draft} черновиков готово)'
             else:
-                status_emoji = '❓'
+                status_emoji = ''
                 status_text = c.status or 'неизвестно'
 
             block = (
                 f"{status_emoji} Кампания #{c.id}: «{c.name}»\n"
-                f"📊 Статус: {status_text}\n"
-                f"📧 Всего: {len(emails)} | Черновики: {draft} | Отправлено: {sent + delivered}\n"
-                f"💬 Ответов: {replied} | Ошибки: {bounced}\n"
-                f"📨 Сегодня: {sent_today}/{daily_limit} | Всего: {c.emails_sent or 0}{f'/{c.max_emails}' if c.max_emails and c.max_emails > 0 else '/∞'}"
+                f" Статус: {status_text}\n"
+                f" Всего: {len(emails)} | Черновики: {draft} | Отправлено: {sent + delivered}\n"
+                f" Ответов: {replied} | Ошибки: {bounced}\n"
+                f" Сегодня: {sent_today}/{daily_limit} | Всего: {c.emails_sent or 0}{f'/{c.max_emails}' if c.max_emails and c.max_emails > 0 else '/∞'}"
             )
             if replied > 0:
                 recent_replies = [e for e in emails if e.status == 'replied' and e.reply_text]
@@ -10566,7 +10566,7 @@ def get_email_campaign_status(
         return "\n\n".join(result)
     except Exception as e:
         logger.error(f"[EMAIL_STATUS] Error: {e}", exc_info=True)
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -10586,7 +10586,7 @@ async def pause_email_campaign(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         campaign = None
         if campaign_id:
@@ -10599,26 +10599,26 @@ async def pause_email_campaign(
             ).order_by(EmailCampaign.created_at.desc()).first()
 
         if not campaign:
-            return "❌ Кампания не найдена."
+            return " Кампания не найдена."
 
         if action == 'pause':
             campaign.status = 'paused'
             session.commit()
-            return f"⏸️ Кампания #{campaign.id} «{campaign.name}» поставлена на паузу."
+            return f" Кампания #{campaign.id} «{campaign.name}» поставлена на паузу."
         elif action == 'resume':
             campaign.status = 'active'
             session.commit()
-            return f"▶️ Кампания #{campaign.id} «{campaign.name}» возобновлена."
+            return f"▶ Кампания #{campaign.id} «{campaign.name}» возобновлена."
         elif action == 'cancel':
             campaign.status = 'cancelled'
             session.commit()
-            return f"❌ Кампания #{campaign.id} «{campaign.name}» отменена."
+            return f" Кампания #{campaign.id} «{campaign.name}» отменена."
         else:
-            return f"❌ Неизвестное действие: {action}. Допустимо: pause, resume, cancel."
+            return f" Неизвестное действие: {action}. Допустимо: pause, resume, cancel."
     except Exception as e:
         logger.error(f"[EMAIL_PAUSE] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -10647,7 +10647,7 @@ async def send_follow_up_email(
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         # Найти письмо
         outreach = None
@@ -10663,28 +10663,28 @@ async def send_follow_up_email(
             ).order_by(EmailOutreach.sent_at.desc()).first()
 
         if not outreach:
-            return "❌ Не найдено письмо для follow-up."
+            return " Не найдено письмо для follow-up."
 
         campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
         if not campaign:
-            return "❌ Кампания не найдена."
+            return " Кампания не найдена."
 
         max_follow_ups = campaign.max_follow_ups or 2
         # Если контакт ответил (replied) — follow-up без ограничений (продолжаем диалог)
         if outreach.status != 'replied' and outreach.follow_up_count >= max_follow_ups:
-            return f"⚠️ Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}. Контакт не отвечает."
+            return f" Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}. Контакт не отвечает."
 
         # Follow-up — к уже существующему получателю, глобальный лимит не применяется
 
         if not subject:
             subject = f"Re: {outreach.subject}" if outreach.subject else "Following up"
         if not body:
-            return "❌ Нужен текст follow-up (body)."
+            return " Нужен текст follow-up (body)."
 
         # MX-проверка
         mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
         if not mx_valid:
-            return f"❌ {mx_err}"
+            return f" {mx_err}"
 
         # ── Выбор канала отправки: SMTP пользователя → user Resend → platform Resend ──
         sender_name = campaign.sender_name or ''
@@ -10793,7 +10793,7 @@ async def send_follow_up_email(
         if _matched is None or _send_error:
             from config import RESEND_API_KEY
             if not RESEND_API_KEY:
-                return f"❌ Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
+                return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
             try:
                 async with _aiohttp.ClientSession() as http:
                     _fbu_json = {'from': f"{sender_name} <outreach@asibiont.com>",
@@ -10813,9 +10813,9 @@ async def send_follow_up_email(
                     if resp.status not in (200, 201):
                         err = resp_data.get('message', str(resp_data))
                         prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
-                        return f"❌ Ошибка Resend API: {err}{prev_err}"
+                        return f" Ошибка Resend API: {err}{prev_err}"
             except Exception as e:
-                return f"❌ Ошибка отправки: {_send_error or str(e)}"
+                return f" Ошибка отправки: {_send_error or str(e)}"
 
         # Anti-spam задержка (10 сек)
         import asyncio as _asyncio_delay
@@ -10846,11 +10846,11 @@ async def send_follow_up_email(
 
         session.commit()
 
-        return f"✅ Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
+        return f" Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
     except Exception as e:
         logger.error(f"[EMAIL_FOLLOWUP] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -10891,20 +10891,20 @@ async def negotiate_by_email(
         from datetime import datetime as dt, timezone as tz
 
         if not contact_email or '@' not in contact_email:
-            return "❌ Укажи email контакта (contact_email)."
+            return " Укажи email контакта (contact_email)."
         if not goal:
-            return "❌ Укажи цель переговоров (goal)."
+            return " Укажи цель переговоров (goal)."
         if not opening_message:
-            return "❌ Нужен текст открывающего письма (opening_message)."
+            return " Нужен текст открывающего письма (opening_message)."
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден."
+            return " Пользователь не найден."
 
         # MX-проверка
         mx_valid, mx_err = _validate_email_domain(contact_email.strip().lower())
         if not mx_valid:
-            return f"❌ {mx_err}"
+            return f" {mx_err}"
 
         # ── Определяем имя и адрес отправителя ──────────────────────────────
         _integrations = _get_user_email_integrations(user, session)
@@ -10918,13 +10918,13 @@ async def negotiate_by_email(
                         break
                 if not _chosen:
                     _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _integrations)
-                    return f"❌ Аккаунт '{from_account}' не найден. Доступные: {_list}"
+                    return f" Аккаунт '{from_account}' не найден. Доступные: {_list}"
             else:
                 _chosen = _integrations[0]
 
         if not _chosen:
             return (
-                "❌ Не настроена почтовая интеграция. Добавь в ключи агента:\n"
+                " Не настроена почтовая интеграция. Добавь в ключи агента:\n"
                 "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
                 "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
                 "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
@@ -10979,7 +10979,7 @@ async def negotiate_by_email(
             close_session=False,
         )
 
-        if '✅' in (send_result or ''):
+        if '' in (send_result or ''):
             # Помечаем outreach как отправленный
             outreach.status = 'sent'
             outreach.sent_at = dt.now(tz.utc)
@@ -11004,23 +11004,23 @@ async def negotiate_by_email(
 
             session.commit()
             return (
-                f"✅ Переговоры начаты!\n"
-                f"📧 Кому: {contact_email}{' (' + contact_name + ')' if contact_name else ''}\n"
-                f"📌 Цель: {goal}\n"
-                f"📨 Тема: {_subject}\n"
-                f"📁 Кампания #{campaign.id} (активна — агент отслеживает ответы)\n\n"
+                f" Переговоры начаты!\n"
+                f" Кому: {contact_email}{' (' + contact_name + ')' if contact_name else ''}\n"
+                f" Цель: {goal}\n"
+                f" Тема: {_subject}\n"
+                f" Кампания #{campaign.id} (активна — агент отслеживает ответы)\n\n"
                 f"Когда {contact_email} ответит — агент автоматически продолжит диалог "
                 f"через якорь email_reply_received."
             )
         else:
             # Отправка не удалась — удаляем пустую кампанию
             session.rollback()
-            return f"❌ Не удалось отправить первое письмо: {send_result}"
+            return f" Не удалось отправить первое письмо: {send_result}"
 
     except Exception as e:
         logger.error(f"[NEGOTIATE_EMAIL] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -11330,15 +11330,15 @@ async def send_email(
         import aiohttp as _aiohttp
 
         if not to:
-            return "❌ Укажи email получателя (to)."
+            return " Укажи email получателя (to)."
         if not subject:
-            return "❌ Укажи тему письма (subject)."
+            return " Укажи тему письма (subject)."
         if not body:
-            return "❌ Нужен текст письма (body)."
+            return " Нужен текст письма (body)."
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден."
+            return " Пользователь не найден."
 
         # ── Проверяем почтовые интеграции пользователя ──────────────────────
         _email_integrations = _get_user_email_integrations(user, session)
@@ -11357,7 +11357,7 @@ async def send_email(
                         break
                 if not _chosen_integration:
                     _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _email_integrations)
-                    return f"❌ Аккаунт '{from_account}' не найден среди подключённых почт. Доступные: {_list}"
+                    return f" Аккаунт '{from_account}' не найден среди подключённых почт. Доступные: {_list}"
             else:
                 # Несколько интеграций — Gmail OAuth в приоритете, затем SMTP
                 _oauth_integrations = [i for i in _email_integrations if i.get('type') == 'gmail_oauth']
@@ -11381,7 +11381,7 @@ async def send_email(
 
         if not _chosen_integration:
             return (
-                "❌ Не настроена почтовая интеграция. "
+                " Не настроена почтовая интеграция. "
                 "Добавь в настройках агента одно из:\n"
                 "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
                 "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
@@ -11404,7 +11404,7 @@ async def send_email(
                 sender_name, user, session,
             )
             if not _goa_ok:
-                return f"❌ Ошибка отправки (Gmail OAuth): {_goa_result}"
+                return f" Ошибка отправки (Gmail OAuth): {_goa_result}"
             _gmail_from = _goa_result  # email пользователя
             try:
                 from models import EmailOutreach as _EO_log_g
@@ -11455,14 +11455,14 @@ async def send_email(
                 logger.warning(f'[SEND_EMAIL] Activity log (gmail_oauth) error: {_aal_goa_e}')
                 try: session.rollback()
                 except Exception: pass
-            return f"✅ Письмо отправлено с {_gmail_from} на {to_clean} через Gmail"
+            return f" Письмо отправлено с {_gmail_from} на {to_clean} через Gmail"
 
         # ── Gmail server (пароль приложения) → серверный Resend + Reply-To ───
         # (SMTP Gmail заблокирован Railway; пользователь не привязал OAuth)
         if _chosen_integration.get('type') == 'gmail_server':
             from config import RESEND_API_KEY as _srv_rk
             if not _srv_rk:
-                return "❌ Серверный Resend не настроен (RESEND_API_KEY)."
+                return " Серверный Resend не настроен (RESEND_API_KEY)."
             _gmail_reply_to = (_chosen_integration.get('reply_to')
                                or _chosen_integration.get('email_user', '')
                                or (user.first_name or ''))
@@ -11488,9 +11488,9 @@ async def send_email(
                     )
                     _gm_data = await _gm_resp.json()
                     if _gm_resp.status not in (200, 201):
-                        return f"❌ Ошибка отправки (Gmail через сервер): {_gm_data.get('message', str(_gm_data))}"
+                        return f" Ошибка отправки (Gmail через сервер): {_gm_data.get('message', str(_gm_data))}"
             except Exception as _gm_e:
-                return f"❌ Ошибка отправки (Gmail): {_gm_e}"
+                return f" Ошибка отправки (Gmail): {_gm_e}"
             logger.info(f'[SEND_EMAIL] Sent via server Resend (Gmail Reply-To: {_gmail_reply_to}) to {to_clean}')
             try:
                 from models import EmailOutreach as _EO_log_g
@@ -11556,12 +11556,12 @@ async def send_email(
                 except Exception:
                     pass
             _reply_hint = f" (ответы придут на {_gmail_reply_to})" if _gmail_reply_to and '@' in _gmail_reply_to else ''
-            return f"✅ Письмо отправлено на {to_clean} (Gmail){_reply_hint}"
+            return f" Письмо отправлено на {to_clean} (Gmail){_reply_hint}"
 
         # Для Resend: проверяем что from-адрес задан и валиден
         if _chosen_integration.get('type') == 'resend' and '@' not in (sender_email or ''):
             return (
-                "❌ Для Resend не задан адрес отправителя.\n"
+                " Для Resend не задан адрес отправителя.\n"
                 "Добавь в настройках агента: RESEND_FROM=noreply@твой-домен.com\n"
                 "(домен должен быть верифицирован в Resend dashboard)"
             )
@@ -11572,7 +11572,7 @@ async def send_email(
         # MX-проверка домена
         mx_valid, mx_err = _validate_email_domain(to_clean)
         if not mx_valid:
-            return f"❌ {mx_err}"
+            return f" {mx_err}"
 
         # Простой дневной лимит для прямых писем: 50 отправок/день
         from models import EmailOutreach as _EO_check
@@ -11586,7 +11586,7 @@ async def send_email(
             _EO_check.sent_at >= _today_start,
         ).scalar() or 0
         if _sent_today >= 50:
-            return f"⚠️ Достигнут дневной лимит: {_sent_today} писем отправлено сегодня (макс. 50). Продолжим завтра."
+            return f" Достигнут дневной лимит: {_sent_today} писем отправлено сегодня (макс. 50). Продолжим завтра."
 
 
         from config import WEB_APP_URL
@@ -11645,7 +11645,7 @@ async def send_email(
                     # Gmail: 535 = неверный app password — это не сетевая ошибка, сразу возвращаем
                     if '535' in _smtp_msg or 'Username and Password not accepted' in _smtp_msg:
                         return (
-                            f"❌ Gmail не принял пароль. Нужен App Password, а не обычный пароль.\n"
+                            f" Gmail не принял пароль. Нужен App Password, а не обычный пароль.\n"
                             f"Зайди в Google Account → Security → App Passwords → создай пароль для 'Mail'.\n"
                             f"Вставь его в настройки агента: GMAIL_PASS=xxxx xxxx xxxx xxxx"
                         )
@@ -11687,12 +11687,12 @@ async def send_email(
                                     # не возвращаем ошибку — письмо дошло
                                 else:
                                     _fb_err = _fb_data.get('message', str(_fb_data))
-                                    return f"❌ Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n❌ Резервный Resend тоже не сработал: {_fb_err}"
+                                    return f" Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n Резервный Resend тоже не сработал: {_fb_err}"
                         except Exception as _fb_exc:
-                            return f"❌ Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n❌ Резервный Resend тоже не сработал: {_fb_exc}"
+                            return f" Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n Резервный Resend тоже не сработал: {_fb_exc}"
                     else:
                         return (
-                            f"❌ Не удалось отправить через {_from_label} (SMTP): {_smtp_net_err}\n\n"
+                            f" Не удалось отправить через {_from_label} (SMTP): {_smtp_net_err}\n\n"
                             f"Варианты решения:\n"
                             f"• Gmail: убедись, что GMAIL_PASS — это App Password (не обычный пароль)\n"
                             f"• Добавь Resend-интеграцию: RESEND_API_KEY=re_... и RESEND_FROM=noreply@домен.com"
@@ -11725,11 +11725,11 @@ async def send_email(
                     resp_data = await resp.json()
                     if resp.status not in (200, 201):
                         err = resp_data.get('message', str(resp_data))
-                        return f"❌ Ошибка Resend API: {err}"
+                        return f" Ошибка Resend API: {err}"
                     resend_id = resp_data.get('id', '')
                     logger.info(f'[SEND_EMAIL] Sent via user Resend from {sender_email} to {to_clean}')
         except Exception as e:
-            return f"❌ Ошибка отправки: {str(e)}"
+            return f" Ошибка отправки: {str(e)}"
 
         # Anti-spam задержка (только для Resend, не для личного SMTP)
         if _chosen_integration and _chosen_integration.get('type') == 'resend':
@@ -11819,12 +11819,12 @@ async def send_email(
         _from_info = f' (от {sender_email})' if _chosen_integration else ''
         if lang == 'en':
             _from_en = f' from {sender_email}' if _chosen_integration else ''
-            return f"✅ Email sent to {to_clean}{_from_en}\nSubject: {subject}"
-        return f"✅ Email отправлен на {to_clean}{_from_info}\nТема: {subject}"
+            return f" Email sent to {to_clean}{_from_en}\nSubject: {subject}"
+        return f" Email отправлен на {to_clean}{_from_info}\nТема: {subject}"
     except Exception as e:
         logger.error(f"[SEND_EMAIL] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -11849,15 +11849,15 @@ async def save_email_contact(
         from models import User, EmailContact
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         email_clean = (email or '').strip().lower()
         if not email_clean or '@' not in email_clean:
-            return "❌ Некорректный email"
+            return " Некорректный email"
 
         # Блокируем generic/корпоративные адреса
         if _is_generic_email(email_clean):
-            return f"⚠️ {email_clean} — это корпоративный/generic адрес. Сохраняй только личные email конкретных людей."
+            return f" {email_clean} — это корпоративный/generic адрес. Сохраняй только личные email конкретных людей."
 
         # Check duplicate
         existing = session.query(EmailContact).filter_by(
@@ -11874,7 +11874,7 @@ async def save_email_contact(
             if notes:
                 existing.notes = notes.strip()
             session.commit()
-            return f"📇 Контакт {email_clean} обновлён"
+            return f" Контакт {email_clean} обновлён"
 
         contact = EmailContact(
             user_id=user.id,
@@ -11887,11 +11887,11 @@ async def save_email_contact(
         )
         session.add(contact)
         session.commit()
-        return f"📇 Контакт сохранён: {email_clean}" + (f" ({name.strip()})" if name else "")
+        return f" Контакт сохранён: {email_clean}" + (f" ({name.strip()})" if name else "")
     except Exception as e:
         logger.error(f"[SAVE_EMAIL_CONTACT] Error: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -11911,7 +11911,7 @@ async def list_email_contacts(
         from models import User, EmailContact
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         query = session.query(EmailContact).filter_by(user_id=user.id)
         if status_filter and status_filter != 'all':
@@ -11919,16 +11919,16 @@ async def list_email_contacts(
         contacts = query.order_by(EmailContact.created_at.desc()).limit(100).all()
 
         if not contacts:
-            return "📇 Справочник контактов пуст. Добавь через save_email_contact или на дашборде → Контакты."
+            return " Справочник контактов пуст. Добавь через save_email_contact или на дашборде → Контакты."
 
-        lines = [f"📇 Email-контакты ({len(contacts)}):"]
+        lines = [f" Email-контакты ({len(contacts)}):"]
         for c in contacts:
             parts = [c.email]
             if c.name:
                 parts.append(c.name)
             if c.company:
                 parts.append(c.company)
-            status_emoji = {'new': '🆕', 'contacted': '📨', 'replied': '💬', 'interested': '⭐', 'bounced': '❌', 'unsubscribed': '🚫'}.get(c.status, '➖')
+            status_emoji = {'new': '🆕', 'contacted': '', 'replied': '', 'interested': '', 'bounced': '', 'unsubscribed': ''}.get(c.status, '')
             line = f"{status_emoji} {' — '.join(parts)}"
             if c.notes:
                 line += f" ({c.notes[:50]})"
@@ -11936,7 +11936,7 @@ async def list_email_contacts(
         return "\n".join(lines)
     except Exception as e:
         logger.error(f"[LIST_EMAIL_CONTACTS] Error: {e}", exc_info=True)
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -11950,7 +11950,7 @@ async def publish_to_discord(
     close_session: bool = True,
     force: bool = False,
 ):
-    """📢 ПУБЛИКАЦИЯ В DISCORD канал пользователя через webhook.
+    """ ПУБЛИКАЦИЯ В DISCORD канал пользователя через webhook.
     Требования: discord_webhook должен быть указан в профиле (Настройки → Discord).
     """
     if not session:
@@ -11959,11 +11959,11 @@ async def publish_to_discord(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         if not user.discord_webhook:
             return (
-                "❌ Discord webhook не настроен.\n"
+                " Discord webhook не настроен.\n"
                 "Чтобы публиковать в Discord канал:\n"
                 "1. Открой нужный канал в Discord → Настройки канала → Интеграции → Webhooks\n"
                 "2. Создай webhook и скопируй URL\n"
@@ -11972,7 +11972,7 @@ async def publish_to_discord(
             )
 
         if not user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
-            return "❌ Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
+            return " Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
 
         # Лимит: 1 пост в Discord в день (можно обойти force=True если пользователь явно просит)
         if not force:
@@ -11989,7 +11989,7 @@ async def publish_to_discord(
                     _AAL.status == 'published',
                 ).count()
                 if _discord_today >= 1:
-                    return "⚠️ Сегодня пост в Discord уже опубликован (лимит — 1 в день). Следующий можно завтра."
+                    return " Сегодня пост в Discord уже опубликован (лимит — 1 в день). Следующий можно завтра."
             except Exception as _lim_e:
                 logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
 
@@ -12026,13 +12026,13 @@ async def publish_to_discord(
                     logger.warning(f"[DISCORD] Failed to log: {_le}")
                 server = getattr(user, 'discord_server_name', None) or 'Discord канал'
                 img_note = " с изображением" if image_url else ""
-                return f"✅ Пост опубликован{img_note} в {server}"
+                return f" Пост опубликован{img_note} в {server}"
             else:
                 err = await resp.text()
-                return f"❌ Ошибка Discord webhook: {resp.status} — {err[:200]}"
+                return f" Ошибка Discord webhook: {resp.status} — {err[:200]}"
     except Exception as e:
         logger.error(f"[PUBLISH_DISCORD] Error: {e}", exc_info=True)
-        return f"❌ Ошибка публикации в Discord: {str(e)}"
+        return f" Ошибка публикации в Discord: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12054,11 +12054,11 @@ async def generate_image(
     try:
         from config import REPLICATE_API_TOKEN, TELEGRAM_TOKEN
         if not REPLICATE_API_TOKEN:
-            return "❌ Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в переменные окружения."
+            return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в переменные окружения."
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден."
+            return " Пользователь не найден."
 
         # Строим полный промпт (всегда на английском для лучшего качества)
         full_prompt = prompt
@@ -12096,7 +12096,7 @@ async def generate_image(
 
             if resp.status not in (200, 201):
                 err = data.get("detail", str(data))
-                return f"❌ Ошибка Replicate: {err}"
+                return f" Ошибка Replicate: {err}"
 
             output = data.get("output")
             prediction_id = data.get("id")
@@ -12117,10 +12117,10 @@ async def generate_image(
                         break
                     elif status in ("failed", "canceled"):
                         err = poll_data.get("error", "Unknown error")
-                        return f"❌ Генерация не удалась: {err}"
+                        return f" Генерация не удалась: {err}"
 
             if not output:
-                return "❌ Изображение не сгенерировано (таймаут)."
+                return " Изображение не сгенерировано (таймаут)."
 
             # output — URL или список URL
             image_url = output[0] if isinstance(output, list) else output
@@ -12140,16 +12140,16 @@ async def generate_image(
 
         if send_to_telegram and send_data.get("ok"):
             # Telegram получил фото — возвращаем без URL чтобы не было дублирования
-            result_msg = f"✅ Изображение отправлено!"
+            result_msg = f" Изображение отправлено!"
         else:
             # Web-контекст или Telegram не принял — возвращаем markdown-изображение для рендеринга
-            result_msg = f"🎨 Готово!\n\n![изображение]({image_url})"
+            result_msg = f" Готово!\n\n![изображение]({image_url})"
 
         return result_msg
 
     except Exception as e:
         logger.error(f"[GENERATE_IMAGE] Error: {e}", exc_info=True)
-        return f"❌ Ошибка генерации изображения: {str(e)}"
+        return f" Ошибка генерации изображения: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12245,13 +12245,13 @@ async def start_content_campaign(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         if not name or not goal:
-            return "❌ Укажи название и цель кампании"
+            return " Укажи название и цель кампании"
 
         if not post_time:
-            return "❌ Время публикации не указано. Спроси пользователя: в какое время публиковать (например, '09:00', '18:00', '21:00'). Не используй 12:00 по умолчанию — пользователь должен указать время явно."
+            return " Время публикации не указано. Спроси пользователя: в какое время публиковать (например, '09:00', '18:00', '21:00'). Не используй 12:00 по умолчанию — пользователь должен указать время явно."
 
         if platforms is None:
             platforms = ['feed']
@@ -12265,9 +12265,9 @@ async def start_content_campaign(
         # Проверяем наличие каналов для выбранных площадок
         warnings = []
         if 'telegram' in platforms and not user.telegram_channel:
-            warnings.append("⚠️ Telegram-канал не настроен — посты в TG публиковаться не будут. Укажи канал командой /settings.")
+            warnings.append(" Telegram-канал не настроен — посты в TG публиковаться не будут. Укажи канал командой /settings.")
         if 'discord' in platforms and not getattr(user, 'discord_webhook', None):
-            warnings.append("⚠️ Discord webhook не настроен — посты в Discord публиковаться не будут. Настрой в дашборде.")
+            warnings.append(" Discord webhook не настроен — посты в Discord публиковаться не будут. Настрой в дашборде.")
 
         # Проверяем дубликаты (активная кампания с похожим названием)
         from models import ContentCampaign
@@ -12277,11 +12277,11 @@ async def start_content_campaign(
         ).all()
         for ex in existing:
             if ex.name and name.lower() in ex.name.lower():
-                return f"⚠️ Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_content_campaign чтобы обновить."
+                return f" Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_content_campaign чтобы обновить."
 
         # Лимит активных кампаний
         if len(existing) >= 5:
-            return "❌ Максимум 5 активных контент-кампаний. Заверши или отмени старые."
+            return " Максимум 5 активных контент-кампаний. Заверши или отмени старые."
 
         # Валидация частоты
         valid_freq = {'daily', 'every_2_days', 'every_3_days', 'weekly'}
@@ -12292,9 +12292,9 @@ async def start_content_campaign(
         try:
             h, m = map(int, post_time.split(':'))
             if h < 0 or h > 23 or m < 0 or m > 59:
-                return "❌ Невалидное время. Спроси пользователя удобное время для публикации (HH:MM)."
+                return " Невалидное время. Спроси пользователя удобное время для публикации (HH:MM)."
         except (ValueError, AttributeError):
-            return "❌ Время должно быть в формате HH:MM (09:00, 18:00, 21:30). Спроси пользователя какое время удобно."
+            return " Время должно быть в формате HH:MM (09:00, 18:00, 21:30). Спроси пользователя какое время удобно."
 
         import json as _json_cc
         campaign = ContentCampaign(
@@ -12329,17 +12329,17 @@ async def start_content_campaign(
         platforms_str = ', '.join(platforms_ru.get(p, p) for p in platforms)
 
         result = (
-            f"✅ Контент-кампания «{name}» запущена! (#{campaign.id})\n\n"
-            f"📋 Площадки: {platforms_str}\n"
-            f"⏰ Частота: {freq_map.get(frequency, frequency)} в {post_time}\n"
-            f"🎯 Цель: {goal[:150]}\n"
+            f" Контент-кампания «{name}» запущена! (#{campaign.id})\n\n"
+            f" Площадки: {platforms_str}\n"
+            f" Частота: {freq_map.get(frequency, frequency)} в {post_time}\n"
+            f" Цель: {goal[:150]}\n"
         )
         if topics:
-            result += f"📌 Темы: {topics[:150]}\n"
+            result += f" Темы: {topics[:150]}\n"
         if max_posts and max_posts > 0:
-            result += f"📊 Всего постов: {max_posts}\n"
+            result += f" Всего постов: {max_posts}\n"
         else:
-            result += "📊 Без ограничения по количеству\n"
+            result += " Без ограничения по количеству\n"
 
         result += "\nАгент будет автономно генерировать и публиковать посты по расписанию."
 
@@ -12369,7 +12369,7 @@ async def start_content_campaign(
     except Exception as e:
         logger.error(f"[CONTENT_CAMPAIGN] Error creating: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка создания кампании: {str(e)}"
+        return f" Ошибка создания кампании: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12391,7 +12391,7 @@ async def manage_content_campaign(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         from models import ContentCampaign
 
@@ -12408,32 +12408,32 @@ async def manage_content_campaign(
             ).order_by(ContentCampaign.created_at.desc()).first()
 
         if not campaign:
-            return "❌ Контент-кампания не найдена. Создай новую с помощью start_content_campaign."
+            return " Контент-кампания не найдена. Создай новую с помощью start_content_campaign."
 
         if action == 'pause':
             if campaign.status == 'paused':
-                return f"⏸️ Кампания «{campaign.name}» уже на паузе."
+                return f" Кампания «{campaign.name}» уже на паузе."
             campaign.status = 'paused'
             session.commit()
-            return f"⏸️ Кампания «{campaign.name}» (#{campaign.id}) поставлена на паузу. Публикация остановлена."
+            return f" Кампания «{campaign.name}» (#{campaign.id}) поставлена на паузу. Публикация остановлена."
 
         elif action == 'resume':
             if campaign.status == 'active':
-                return f"▶️ Кампания «{campaign.name}» уже активна."
+                return f"▶ Кампания «{campaign.name}» уже активна."
             if campaign.status in ('completed', 'cancelled'):
-                return f"❌ Кампания «{campaign.name}» завершена/отменена. Создай новую."
+                return f" Кампания «{campaign.name}» завершена/отменена. Создай новую."
             campaign.status = 'active'
             session.commit()
-            return f"▶️ Кампания «{campaign.name}» (#{campaign.id}) возобновлена! Публикация продолжится по расписанию."
+            return f"▶ Кампания «{campaign.name}» (#{campaign.id}) возобновлена! Публикация продолжится по расписанию."
 
         elif action == 'cancel':
             campaign.status = 'cancelled'
             session.commit()
-            return f"🗑️ Кампания «{campaign.name}» (#{campaign.id}) отменена. Опубликовано {campaign.posts_published or 0} постов."
+            return f" Кампания «{campaign.name}» (#{campaign.id}) отменена. Опубликовано {campaign.posts_published or 0} постов."
 
         elif action == 'update':
             if not updates:
-                return "❌ Укажи параметры для обновления (updates)."
+                return " Укажи параметры для обновления (updates)."
 
             import json as _json_upd
             changed = []
@@ -12469,18 +12469,18 @@ async def manage_content_campaign(
                     changed.append(f"площадки → {', '.join(new_p)}")
 
             if not changed:
-                return "⚠️ Нет распознанных параметров для обновления."
+                return " Нет распознанных параметров для обновления."
 
             session.commit()
-            return f"✅ Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f"  • {c}" for c in changed)
+            return f" Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f" • {c}" for c in changed)
 
         else:
-            return f"❌ Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
+            return f" Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
 
     except Exception as e:
         logger.error(f"[CONTENT_CAMPAIGN] Error managing: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12519,10 +12519,10 @@ async def start_delegation_campaign(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         if not name or not goal or not target_audience:
-            return "❌ Укажи название, цель и целевую аудиторию кампании"
+            return " Укажи название, цель и целевую аудиторию кампании"
 
         # Проверяем дубликаты
         from models import DelegationCampaign
@@ -12532,11 +12532,11 @@ async def start_delegation_campaign(
         ).all()
         for ex in existing:
             if ex.name and name.lower() in ex.name.lower():
-                return f"⚠️ Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign чтобы обновить."
+                return f" Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign чтобы обновить."
 
         # Лимит активных кампаний
         if len(existing) >= 5:
-            return "❌ Максимум 5 активных кампаний делегирования. Заверши или отмени старые."
+            return " Максимум 5 активных кампаний делегирования. Заверши или отмени старые."
 
         campaign = DelegationCampaign(
             user_id=user.id,
@@ -12597,7 +12597,7 @@ async def start_delegation_campaign(
     except Exception as e:
         logger.error(f"[DELEGATION_CAMPAIGN] Error creating: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка создания кампании: {str(e)}"
+        return f" Ошибка создания кампании: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12619,7 +12619,7 @@ async def manage_delegation_campaign(
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "❌ Пользователь не найден"
+            return " Пользователь не найден"
 
         from models import DelegationCampaign
 
@@ -12638,36 +12638,36 @@ async def manage_delegation_campaign(
 
         if action == 'pause':
             if campaign.status == 'paused':
-                return f"⏸️ Кампания «{campaign.name}» уже на паузе."
+                return f" Кампания «{campaign.name}» уже на паузе."
             campaign.status = 'paused'
             session.commit()
             return (
-                f"⏸️ Кампания «{campaign.name}» (#{campaign.id}) на паузе.\n"
-                f"📊 Отправлено: {campaign.delegations_sent or 0}, принято: {campaign.delegations_accepted or 0}"
+                f" Кампания «{campaign.name}» (#{campaign.id}) на паузе.\n"
+                f" Отправлено: {campaign.delegations_sent or 0}, принято: {campaign.delegations_accepted or 0}"
             )
 
         elif action == 'resume':
             if campaign.status == 'active':
-                return f"▶️ Кампания «{campaign.name}» уже активна."
+                return f"▶ Кампания «{campaign.name}» уже активна."
             if campaign.status in ('completed', 'cancelled'):
-                return f"❌ Кампания «{campaign.name}» завершена/отменена. Создай новую."
+                return f" Кампания «{campaign.name}» завершена/отменена. Создай новую."
             campaign.status = 'active'
             session.commit()
-            return f"▶️ Кампания «{campaign.name}» (#{campaign.id}) возобновлена!"
+            return f"▶ Кампания «{campaign.name}» (#{campaign.id}) возобновлена!"
 
         elif action == 'cancel':
             campaign.status = 'cancelled'
             session.commit()
             return (
-                f"🗑️ Кампания «{campaign.name}» (#{campaign.id}) отменена.\n"
-                f"📊 Итого: отправлено {campaign.delegations_sent or 0}, "
+                f" Кампания «{campaign.name}» (#{campaign.id}) отменена.\n"
+                f" Итого: отправлено {campaign.delegations_sent or 0}, "
                 f"принято {campaign.delegations_accepted or 0}, "
                 f"завершено {campaign.delegations_completed or 0}"
             )
 
         elif action == 'update':
             if not updates:
-                return "❌ Укажи параметры для обновления (updates)."
+                return " Укажи параметры для обновления (updates)."
 
             changed = []
             if 'name' in updates:
@@ -12699,18 +12699,18 @@ async def manage_delegation_campaign(
                 changed.append(f"дедлайн → {campaign.default_deadline_hours}ч")
 
             if not changed:
-                return "⚠️ Нет распознанных параметров для обновления."
+                return " Нет распознанных параметров для обновления."
 
             session.commit()
-            return f"✅ Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f"  • {c}" for c in changed)
+            return f" Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f" • {c}" for c in changed)
 
         else:
-            return f"❌ Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
+            return f" Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
 
     except Exception as e:
         logger.error(f"[DELEGATION_CAMPAIGN] Error managing: {e}", exc_info=True)
         session.rollback()
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12738,7 +12738,7 @@ async def list_marketplace(category: str = None, search: str = None,
 
         if item_type == 'scripts':
             if _UserScript is None:
-                return "🛒 Раздел скриптов временно недоступен."
+                return " Раздел скриптов временно недоступен."
             q = session.query(_UserScript).filter_by(status='active')
             if category:
                 q = q.filter(_UserScript.category == category)
@@ -12746,8 +12746,8 @@ async def list_marketplace(category: str = None, search: str = None,
                 q = q.filter(_UserScript.name.ilike(f'%{search}%'))
             items = q.order_by(_UserScript.installs_count.desc()).limit(10).all()
             if not items:
-                return "🛒 Скриптов пока нет. Будьте первым — создайте скрипт!"
-            lines = ["🛒 **Маркетплейс скриптов:**\n"]
+                return " Скриптов пока нет. Будьте первым — создайте скрипт!"
+            lines = [" **Маркетплейс скриптов:**\n"]
             for s in items:
                 lines.append(f"• **{s.name}** (#{s.id}) — {s.price_per_run} токенов/запуск | {s.installs_count} установок\n  {s.description or ''}")
             return "\n".join(lines)
@@ -12759,15 +12759,15 @@ async def list_marketplace(category: str = None, search: str = None,
                 q = q.filter(UserAgent.name.ilike(f'%{search}%'))
             items = q.order_by(UserAgent.subscribers_count.desc()).limit(10).all()
             if not items:
-                return "🤖 Агентов пока нет. Создай первого!"
-            lines = ["🤖 **Маркетплейс агентов:**\n"]
+                return " Агентов пока нет. Создай первого!"
+            lines = [" **Маркетплейс агентов:**\n"]
             for a in items:
                 rating = round(a.rating_sum / a.rating_count, 1) if a.rating_count else "—"
-                lines.append(f"• **{a.name}** (@{a.slug}) — {a.price_per_message} токенов/сообщение | ⭐ {rating} | {a.subscribers_count} подписчиков\n  {a.description or ''}")
+                lines.append(f"• **{a.name}** (@{a.slug}) — {a.price_per_message} токенов/сообщение | {rating} | {a.subscribers_count} подписчиков\n {a.description or ''}")
             return "\n".join(lines)
     except Exception as e:
         logger.error(f"[MARKETPLACE] list error: {e}", exc_info=True)
-        return f"❌ Ошибка загрузки маркетплейса: {str(e)}"
+        return f" Ошибка загрузки маркетплейса: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12786,20 +12786,20 @@ async def switch_agent(agent_slug: str = None, reset: bool = False,
 
         if reset:
             set_user_active_agent(user_id, None)
-            return "✅ Возвращаюсь в стандартный режим ASI Biont."
+            return " Возвращаюсь в стандартный режим ASI Biont."
 
         if not agent_slug:
-            return "❌ Укажи slug агента (например @crypto-alex)"
+            return " Укажи slug агента (например @crypto-alex)"
 
         slug = agent_slug.lstrip('@').strip()
         agent = session.query(UserAgent).filter_by(slug=slug, status='active').first()
         if not agent:
-            return f"❌ Агент @{slug} не найден или ещё не опубликован."
+            return f" Агент @{slug} не найден или ещё не опубликован."
 
         # Проверяем/создаём подписку
         user_obj = session.query(User).filter_by(telegram_id=user_id).first()
         if not user_obj:
-            return "❌ Пользователь не найден."
+            return " Пользователь не найден."
 
         sub = session.query(AgentSubscription).filter_by(
             user_id=user_obj.id, agent_id=agent.id).first()
@@ -12812,12 +12812,12 @@ async def switch_agent(agent_slug: str = None, reset: bool = False,
 
         set_user_active_agent(user_id, agent.id)
 
-        return (f"✅ Подключён агент **{agent.name}**!\n"
+        return (f" Подключён агент **{agent.name}**!\n"
                 f"Цена: {agent.price_per_message} токенов/сообщение.\n"
                 f"Чтобы вернуться к стандартному режиму — скажи «переключись на ASI Biont».")
     except Exception as e:
         logger.error(f"[MARKETPLACE] switch_agent error: {e}", exc_info=True)
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12837,7 +12837,7 @@ async def run_user_script(script_id: int = None, script_slug: str = None,
 
         user_obj = session.query(User).filter_by(telegram_id=user_id).first()
         if not user_obj:
-            return "❌ Пользователь не найден."
+            return " Пользователь не найден."
 
         # Ищем скрипт по id или slug
         if script_id:
@@ -12845,16 +12845,16 @@ async def run_user_script(script_id: int = None, script_slug: str = None,
         elif script_slug:
             script = session.query(UserScript).filter_by(slug=script_slug, status='active').first()
         else:
-            return "❌ Укажи id или slug скрипта."
+            return " Укажи id или slug скрипта."
 
         if not script:
-            return "❌ Скрипт не найден или недоступен."
+            return " Скрипт не найден или недоступен."
 
         # Проверяем установку
         install = session.query(ScriptInstall).filter_by(
             user_id=user_obj.id, script_id=script.id).first()
         if not install:
-            return (f"❌ Скрипт «{script.name}» не установлен. "
+            return (f" Скрипт «{script.name}» не установлен. "
                     f"Установи его в маркетплейсе за {script.price_per_run} токенов/запуск.")
 
         # Запускаем в sandbox
@@ -12869,13 +12869,13 @@ async def run_user_script(script_id: int = None, script_slug: str = None,
         )
 
         if exec_result['success']:
-            return f"✅ Скрипт «{script.name}» выполнен за {exec_result['exec_ms']}мс:\n\n{exec_result['result']}"
+            return f" Скрипт «{script.name}» выполнен за {exec_result['exec_ms']}мс:\n\n{exec_result['result']}"
         else:
-            return f"❌ Скрипт «{script.name}» завершился с ошибкой:\n{exec_result['error']}"
+            return f" Скрипт «{script.name}» завершился с ошибкой:\n{exec_result['error']}"
 
     except Exception as e:
         logger.error(f"[MARKETPLACE] run_script error: {e}", exc_info=True)
-        return f"❌ Ошибка запуска скрипта: {str(e)}"
+        return f" Ошибка запуска скрипта: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12893,35 +12893,35 @@ async def install_script(script_id: int = None, script_slug: str = None,
 
         user_obj = session.query(User).filter_by(telegram_id=user_id).first()
         if not user_obj:
-            return "❌ Пользователь не найден."
+            return " Пользователь не найден."
 
         if script_id:
             script = session.query(UserScript).filter_by(id=script_id, status='active').first()
         elif script_slug:
             script = session.query(UserScript).filter_by(slug=script_slug, status='active').first()
         else:
-            return "❌ Укажи id или slug скрипта."
+            return " Укажи id или slug скрипта."
 
         if not script:
-            return "❌ Скрипт не найден."
+            return " Скрипт не найден."
 
         existing = session.query(ScriptInstall).filter_by(
             user_id=user_obj.id, script_id=script.id).first()
         if existing:
-            return f"ℹ️ Скрипт «{script.name}» уже установлен."
+            return f"ℹ Скрипт «{script.name}» уже установлен."
 
         install = ScriptInstall(user_id=user_obj.id, script_id=script.id)
         session.add(install)
         script.installs_count = (script.installs_count or 0) + 1
         session.commit()
 
-        return (f"✅ Скрипт «{script.name}» установлен!\n"
+        return (f" Скрипт «{script.name}» установлен!\n"
                 f"Цена: {script.price_per_run} токенов/запуск.\n"
                 f"Запусти его: «запусти скрипт {script.slug}»")
     except Exception as e:
         session.rollback()
         logger.error(f"[MARKETPLACE] install_script error: {e}", exc_info=True)
-        return f"❌ Ошибка: {str(e)}"
+        return f" Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
@@ -12955,7 +12955,7 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
             pass
 
     if user_id not in agent._active_agent_data:
-        return "❌ Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."
+        return " Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."
 
     raw_params = {'action': action, 'params': params or {}}
     result = await agent._run_external_action(raw_params, user_id)
@@ -12963,8 +12963,8 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
     if isinstance(result, dict):
         if result.get('status') == 'success':
             output = result.get('output', '')
-            return f"✅ Действие «{action}» выполнено:\n{output}"
+            return f" Действие «{action}» выполнено:\n{output}"
         else:
             err = result.get('error', 'неизвестная ошибка')
-            return f"❌ Ошибка при выполнении «{action}»: {err}"
+            return f" Ошибка при выполнении «{action}»: {err}"
     return str(result)

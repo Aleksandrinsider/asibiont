@@ -56,43 +56,43 @@ _T = {
         'en': [('city','City'),('company','Company'),('position','Position'),
                ('languages','Languages'),('skills','Skills'),('interests','Interests'),('goals','Goals')],
     },
-    'stats_label': {'ru': '📊 Статистика', 'en': '📊 Stats'},
+    'stats_label': {'ru': ' Статистика', 'en': ' Stats'},
     'tasks_created': {'ru': 'создано задач', 'en': 'tasks created'},
     'completed': {'ru': 'завершено', 'en': 'completed'},
     'skipped': {'ru': 'пропущено', 'en': 'skipped'},
     'avg_time': {'ru': 'ср. время выполнения', 'en': 'avg completion time'},
-    'key_interests': {'ru': '🎯 Устойчивые интересы', 'en': '🎯 Key interests'},
-    'recent_searches': {'ru': '🔍 Недавно искал', 'en': '🔍 Recent searches'},
-    'projects_label': {'ru': '📁 Проекты', 'en': '📁 Projects'},
+    'key_interests': {'ru': ' Устойчивые интересы', 'en': ' Key interests'},
+    'recent_searches': {'ru': ' Недавно искал', 'en': ' Recent searches'},
+    'projects_label': {'ru': ' Проекты', 'en': ' Projects'},
     'humidity': {'ru': 'влажность', 'en': 'humidity'},
     'wind': {'ru': 'ветер', 'en': 'wind'},
     'wind_unit': {'ru': 'м/с', 'en': 'm/s'},
     'news_city': {'ru': 'Новости {city}', 'en': '{city} news'},
     'news_general': {'ru': 'Свежие новости России', 'en': 'Latest news'},
-    'weather_hdr': {'ru': '🌤 ПОГОДА', 'en': '🌤 WEATHER'},
-    'news_hdr': {'ru': '📰 НОВОСТИ', 'en': '📰 NEWS'},
-    'insights_hdr': {'ru': '🔥 ИНСАЙТЫ', 'en': '🔥 INSIGHTS'},
-    'partners_hdr': {'ru': '👥 ПАРТНЁРЫ', 'en': '👥 PARTNERS'},
-    'overdue_mark': {'ru': '⚠️ПРОСРОЧЕНО', 'en': '⚠️OVERDUE'},
+    'weather_hdr': {'ru': ' ПОГОДА', 'en': ' WEATHER'},
+    'news_hdr': {'ru': ' НОВОСТИ', 'en': ' NEWS'},
+    'insights_hdr': {'ru': ' ИНСАЙТЫ', 'en': ' INSIGHTS'},
+    'partners_hdr': {'ru': ' ПАРТНЁРЫ', 'en': ' PARTNERS'},
+    'overdue_mark': {'ru': 'ПРОСРОЧЕНО', 'en': 'OVERDUE'},
     'days_short': {'ru': 'дн', 'en': 'd'},
-    'goals_hdr': {'ru': '🎯 ЦЕЛИ', 'en': '🎯 GOALS'},
+    'goals_hdr': {'ru': ' ЦЕЛИ', 'en': ' GOALS'},
     'active_tasks': {'ru': 'Активных задач', 'en': 'Active tasks'},
     'overdue_hdr': {'ru': 'ПРОСРОЧЕННЫЕ', 'en': 'OVERDUE'},
-    'deadline_soon': {'ru': '⏰ СКОРО ДЕДЛАЙН', 'en': '⏰ DEADLINE SOON'},
+    'deadline_soon': {'ru': ' СКОРО ДЕДЛАЙН', 'en': ' DEADLINE SOON'},
     'in_hours': {'ru': 'через {h}ч', 'en': 'in {h}h'},
-    'goal_alerts_hdr': {'ru': '🎯 АЛЕРТЫ ЦЕЛЕЙ', 'en': '🎯 GOAL ALERTS'},
+    'goal_alerts_hdr': {'ru': ' АЛЕРТЫ ЦЕЛЕЙ', 'en': ' GOAL ALERTS'},
     'deadline_in': {'ru': 'дедлайн через {d}дн ({p}%)', 'en': 'deadline in {d}d ({p}%)'},
     'almost_done': {'ru': 'почти готово ({p}%)', 'en': 'almost done ({p}%)'},
     'no_progress': {'ru': 'нет прогресса {d}дн', 'en': 'no progress {d}d'},
-    'stale_tasks': {'ru': '📋 ЗАСТОЙ: {n} задач висят больше недели без выполнения',
-                    'en': '📋 STALE: {n} tasks pending for over a week'},
+    'stale_tasks': {'ru': ' ЗАСТОЙ: {n} задач висят больше недели без выполнения',
+                    'en': ' STALE: {n} tasks pending for over a week'},
     'recent_topics': {'ru': 'Недавние темы', 'en': 'Recent topics'},
     'productive': {'ru': 'продуктивный', 'en': 'productive'},
     'delegates_pat': {'ru': 'делегирует', 'en': 'delegates'},
     'patterns_lbl': {'ru': 'Паттерны', 'en': 'Patterns'},
     'active_morning': {'ru': 'активен утром', 'en': 'active in the morning'},
     'active_evening': {'ru': 'активен вечером', 'en': 'active in the evening'},
-    'insights_section': {'ru': '💡 ИНСАЙТЫ', 'en': '💡 INSIGHTS'},
+    'insights_section': {'ru': ' ИНСАЙТЫ', 'en': ' INSIGHTS'},
     # ── _build_situation_prompt labels ──
     'sit_opening': {
         'ru': 'Ты пишешь проактивное сообщение пользователю. Не в ответ на его запрос — ты сам решил написать.',
@@ -130,13 +130,13 @@ _T = {
     'data_searches': {'ru': 'Недавние поиски', 'en': 'Recent searches'},
     'data_projects': {'ru': 'Проекты', 'en': 'Projects'},
     'sit_tasks_hdr': {'ru': 'ЗАДАЧИ', 'en': 'TASKS'},
-    'sit_overdue_hdr': {'ru': '⚠️ ПРОСРОЧЕННЫЕ', 'en': '⚠️ OVERDUE'},
-    'sit_overdue_tasks': {'ru': '⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ', 'en': '⚠️ OVERDUE TASKS'},
+    'sit_overdue_hdr': {'ru': ' ПРОСРОЧЕННЫЕ', 'en': ' OVERDUE'},
+    'sit_overdue_tasks': {'ru': ' ПРОСРОЧЕННЫЕ ЗАДАЧИ', 'en': ' OVERDUE TASKS'},
     'sit_accent': {'ru': 'Акцент', 'en': 'Focus'},
     'sit_type': {'ru': '=== ТИП СООБЩЕНИЯ: {t} ===', 'en': '=== MESSAGE TYPE: {t} ==='},
     'sit_no_plan': {
-        'ru': '⛔ НЕ предлагай план дня / список задач. Сегодня другой тип сообщения.',
-        'en': '⛔ Do NOT suggest a daily plan / task list. Today is a different message type.',
+        'ru': ' НЕ предлагай план дня / список задач. Сегодня другой тип сообщения.',
+        'en': ' Do NOT suggest a daily plan / task list. Today is a different message type.',
     },
     'sit_reacts': {'ru': 'Реагирует на', 'en': 'Reacts to'},
     'sit_ignores': {
@@ -152,10 +152,10 @@ _T = {
 Первое слово — существительное (факт, имя, название Так)
 или глагол действия (Что-то происходит...). Эмодзи 1–2 внутри текста, НЕ в начале строк.
 
-⚠️ ПРАВИЛО ВЕРИФИКАЦИИ: упоминай задачи/цели ТОЛЬКО если получил их из инструментов (list_tasks, list_goals).
+ ПРАВИЛО ВЕРИФИКАЦИИ: упоминай задачи/цели ТОЛЬКО если получил их из инструментов (list_tasks, list_goals).
 НЕ бери задачи/цели/посты из памяти или истории — они могут быть удалены.
 
-🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском языке.""",
+ ЯЗЫК: Пиши ТОЛЬКО на русском языке.""",
         'en': """
 Style: exactly like a regular chat reply — alive, conversational, no formality. User must not feel it's a system message.
 FORMAT: 300–500 characters, flowing text, 2–3 paragraphs separated by single newlines (not \\n\\n).
@@ -163,10 +163,10 @@ FORBIDDEN: bullet lists (• – – 1.), numbered lists, headers (##), bold mar
 FORBIDDEN to start with: 'Hi', 'Good morning', 'Monday morning is great for...', 'Today is a good day', any weekday/time-of-day opener.
 First word must be a noun (a fact, name, concept) or an action verb. Emoji: 1–2 inline, NOT at start of lines.
 
-⚠️ VERIFICATION RULE: mention tasks/goals ONLY if you got them from tools (list_tasks, list_goals).
+ VERIFICATION RULE: mention tasks/goals ONLY if you got them from tools (list_tasks, list_goals).
 Do NOT take tasks/goals/posts from memory or history — they may have been deleted.
 
-🗣️ LANGUAGE: Write ONLY in English. Even if tool results or context data are in Russian, you MUST respond in English.""",
+ LANGUAGE: Write ONLY in English. Even if tool results or context data are in Russian, you MUST respond in English.""",
     },
     # ── generate_proactive_message labels ──
     'pro_instruction': {
@@ -713,8 +713,8 @@ async def generate_result_check(user_id, task_title):
         from i18n import get_user_lang
         lang = get_user_lang(user_id)
         if lang == 'en':
-            return f"Task \"{task_title}\" completed. Great job! 🎉"
-        return f"Задача «{task_title}» выполнена. Отличная работа! 🎉"
+            return f"Task \"{task_title}\" completed. Great job! "
+        return f"Задача «{task_title}» выполнена. Отличная работа! "
 
 
 
@@ -984,7 +984,7 @@ async def _build_proactive_context(user_id, lang='ru'):
                     if days is not None and days < 0:
                         line += f" {_t('overdue_mark', lang)}"
                     elif days is not None and days <= 7:
-                        line += f" ⏳{days}{_t('days_short', lang)}"
+                        line += f" {days}{_t('days_short', lang)}"
                 goal_lines.append(line)
             user_memory += f"\n\n{_t('goals_hdr', lang)}:\n" + "\n".join(f"- {l}" for l in goal_lines)
         
@@ -1221,7 +1221,7 @@ def _build_situation_prompt(ctx, intent=None, tasks_list=None, overdue_tasks_lis
                 if days is not None and days < 0:
                     line += f" {_t('overdue_mark', lang).lower()}"
                 elif days is not None and days <= 7:
-                    line += f" ⏳{days}{_t('days_short', lang)}"
+                    line += f" {days}{_t('days_short', lang)}"
             goal_lines.append(line)
         available.append(f"{_t('data_goals', lang)}: " + ", ".join(goal_lines))
     

@@ -28,7 +28,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
             if lang == 'en':
                 token_balance_info = f"\nToken balance: {balance} (1 token = 1₽). Each action costs tokens."
                 if balance < 500:
-                    token_balance_info += " ⚠️ User has low tokens (less than 1 day left) — warn about balance, suggest /buy, but DON'T reduce response quality."
+                    token_balance_info += " User has low tokens (less than 1 day left) — warn about balance, suggest /buy, but DON'T reduce response quality."
                 elif balance < 1500:
                     token_balance_info += " Balance is getting low — mention /buy naturally if relevant."
                 else:
@@ -36,7 +36,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
             else:
                 token_balance_info = f"\nБаланс токенов: {balance} (1 токен = 1₽). Каждое действие стоит токены."
                 if balance < 500:
-                    token_balance_info += " ⚠️ У пользователя мало токенов (менее суток) — предупреди, предложи /buy, но НЕ снижай качество ответа."
+                    token_balance_info += " У пользователя мало токенов (менее суток) — предупреди, предложи /buy, но НЕ снижай качество ответа."
                 elif balance < 1500:
                     token_balance_info += " Токены на исходе — при случае естественно упомяни /buy."
                 else:
@@ -131,9 +131,9 @@ If balance is low — warn and suggest /buy."""
             profile += f"\n[{not_filled}: {', '.join(empty_fields)} — {ask}]"
     else:
         if lang == 'en':
-            profile = "\n[❗ profile is empty: you know NOTHING about this person — find out through conversation]"
+            profile = "\n[ profile is empty: you know NOTHING about this person — find out through conversation]"
         else:
-            profile = "\n[❗ профиль пуст: НИЧЕГО не знаешь о человеке — узнай через живой разговор]"
+            profile = "\n[ профиль пуст: НИЧЕГО не знаешь о человеке — узнай через живой разговор]"
 
     # Search history
     search_context = ""
@@ -193,11 +193,11 @@ If balance is low — warn and suggest /buy."""
             # Задача завершена — показываем как историческую, не активную
             if lang == 'en':
                 task_section = f"""
-LAST TASK (✅ COMPLETED): "{current_task_info['title']}" (ID: {current_task_info['id']})
+LAST TASK ( COMPLETED): "{current_task_info['title']}" (ID: {current_task_info['id']})
 This task is DONE. Do NOT mention it as active or pending. For current tasks use list_tasks()."""
             else:
                 task_section = f"""
-ПОСЛЕДНЯЯ ЗАДАЧА (✅ ЗАВЕРШЕНА): "{current_task_info['title']}" (ID: {current_task_info['id']})
+ПОСЛЕДНЯЯ ЗАДАЧА ( ЗАВЕРШЕНА): "{current_task_info['title']}" (ID: {current_task_info['id']})
 Эта задача УЖЕ ВЫПОЛНЕНА. НЕ упоминай её как активную или незавершённую. Для актуальных задач — list_tasks()."""
         else:
             if lang == 'en':

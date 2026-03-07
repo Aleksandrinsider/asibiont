@@ -165,7 +165,7 @@ class ContactAlertsService:
 
             # Формируем сообщение
             if lang == 'en':
-                message = f"🔥 @{contact_username} is online"
+                message = f" @{contact_username} is online"
                 if last_seen_hours < 1:
                     message += " (active now)"
                 elif last_seen_hours < 24:
@@ -178,10 +178,10 @@ class ContactAlertsService:
                     profile_parts.append(f"city: {contact_info['city']}")
 
                 if profile_parts:
-                    message += f"\n📋 {' • '.join(profile_parts)}"
-                message += "\n\n💬 You can message them right now!"
+                    message += f"\n {' • '.join(profile_parts)}"
+                message += "\n\n You can message them right now!"
             else:
-                message = f"🔥 @{contact_username} онлайн"
+                message = f" @{contact_username} онлайн"
                 if last_seen_hours < 1:
                     message += " (активен сейчас)"
                 elif last_seen_hours < 24:
@@ -194,8 +194,8 @@ class ContactAlertsService:
                     profile_parts.append(f"город: {contact_info['city']}")
 
                 if profile_parts:
-                    message += f"\n📋 {' • '.join(profile_parts)}"
-                message += "\n\n💬 Можно написать прямо сейчас!"
+                    message += f"\n {' • '.join(profile_parts)}"
+                message += "\n\n Можно написать прямо сейчас!"
 
             await self.bot.send_message(user_telegram_id, message)
             logger.info(f"[CONTACT_ALERTS] Sent alert to {user_telegram_id}: {message[:100]}...")
@@ -329,5 +329,5 @@ async def test_service():
 
 
 if __name__ == "__main__":
-    print("🧪 Testing Contact Alerts Service...")
+    print(" Testing Contact Alerts Service...")
     asyncio.run(test_service())
