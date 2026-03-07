@@ -4866,10 +4866,33 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     if not _ag:
         return None
     _dm = decision.get('director_message', '')
-    # director_message сохраняется внутри _run_agent_task — не дублируем
     _task = decision.get('agent_task') or user_message
     _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
-    # Агент уже ответил и сохранён в DB — ASI молчит, не дублирует
+
+    # ASI кратко подводит итог: что агент сделал + предлагает следующий шаг
+    _agent_result = str(_resp or '')[:500]
+    _agent_name_d = _ag.get('name', 'Агент')
+    try:
+        _dir_summary = await _quick_ai_call_raw([
+            {"role": "system", "content": (
+                "Ты ASI — директор офиса. Агент уже ответил пользователю. "
+                "Твоя задача — КРАТКО (2-3 предложения) подвести итог: "
+                "что агент сделал, и предложить следующий конкретный шаг. "
+                "НЕ повторяй содержание ответа агента. НЕ задавай общих вопросов типа 'расскажите подробнее'. "
+                "Предложи КОНКРЕТНОЕ действие: создать задачу, запустить следующего агента, начать выполнение и т.д. "
+                "Пиши как в мессенджере, без markdown."
+            )},
+            {"role": "user", "content": (
+                f"Запрос пользователя: {user_message[:200]}\n"
+                f"Агент {_agent_name_d} ответил:\n{_agent_result}\n\n"
+                f"Подведи итог и предложи следующий шаг."
+            )},
+        ], max_tokens=120)
+        if _dir_summary and len(_dir_summary.strip()) > 10:
+            await _send_visible(_dir_summary.strip())
+    except Exception:
+        pass
+
     return "__agent_handled__"
 
 
