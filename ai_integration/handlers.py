@@ -1653,10 +1653,17 @@ async def delegate_task(
                         except Exception:
                             pass
 
-                    # Записываем обращение директора к агенту в чат (живой стиль)
+                    # Записываем обращение директора к агенту в чат (с метаданными ASI)
                     _director_address = f'{_agent_name}, {_agent_task_text[:300]}'
                     try:
-                        _save_ifd(user_id, _director_address)
+                        _save_ifd(user_id, _json_ag.dumps({
+                            '__agent': {
+                                'name': 'ASI Biont',
+                                'id': 0,
+                                'avatar_url': '/static/asibiont.svg',
+                            },
+                            'text': f'→ {_agent_name}\n{_agent_task_text[:300]}',
+                        }, ensure_ascii=False))
                     except Exception:
                         pass
 

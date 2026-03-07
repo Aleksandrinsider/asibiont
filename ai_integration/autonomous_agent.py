@@ -2368,17 +2368,12 @@ class HybridAutonomousAgent:
                 messages.append(msg)
 
                 # Показываем «думаю вслух» — частичный текст AI до вызова инструментов
-                _has_delegate = any(tc.get('function', {}).get('name') == 'delegate_task' for tc in tool_calls)
                 if content.strip() and _cb:
                     try:
                         _preview = content.strip()[:200]
                         if len(content.strip()) > 200:
                             _preview += '...'
-                        if _has_delegate:
-                            # Для delegate_task — persist (пользователь видит как реплику ASI)
-                            await _cb(f"🤖 ASI\n{_preview}", persist=True)
-                        else:
-                            await _cb(_preview)
+                        await _cb(_preview)
                     except Exception:
                         pass
 
@@ -2436,21 +2431,9 @@ class HybridAutonomousAgent:
                 # ── Pass 2: выполняем все валидные tools ПАРАЛЛЕЛЬНО ────────────
                 # Каждый вызов получает отдельную DB-сессию (session=None → auto)
                 async def _exec_one(_tc, _name, _args, _reason):
-                    # ── Пре-анонс для delegate_task (как живое обращение к агенту) ──
+                    # ── Пре-анонс для delegate_task (не отправляем — уже сохраняется в _save_ifd) ──
                     if _cb and _name == 'delegate_task':
-                        _pre_exec = _args.get('delegated_to_username', '') or ''
-                        _pre_task = _args.get('title', '') or _args.get('description', '') or ''
-                        if _pre_exec and _pre_task:
-                            _pre_vis = f"🤖 ASI → {_pre_exec}\n{_pre_task[:200]}"
-                        elif _pre_exec:
-                            _pre_vis = f"🤖 ASI → {_pre_exec}\nЗаймись этим"
-                        else:
-                            _pre_vis = None
-                        if _pre_vis:
-                            try:
-                                await _cb(_pre_vis, persist=True)
-                            except Exception:
-                                pass
+                        pass  # delegate_task handler saves director message via _save_ifd
                     elif _cb:
                         try:
                             await _cb(self._tool_progress_text(_name, iteration + 1, lang=user_lang))
@@ -2474,21 +2457,9 @@ class HybridAutonomousAgent:
                                         try: _res_obj = json.loads(_res_obj)
                                         except Exception: _res_obj = {}
                                     if _name == 'delegate_task':
-                                        _exec_name = _args.get('delegated_to_username', '') or _res_obj.get('executor', '') or ''
-                                        # Показываем результат как сообщение от агента
-                                        _result_text = str(_r.get('result', ''))
-                                        # Убираем дублирующий префикс [Имя]: из результата
-                                        import re as _re_vis
-                                        _result_text = _re_vis.sub(r'^\[.+?\]:\s*', '', _result_text).strip()
-                                        # Убираем лишние пустые строки и bullet-символы
-                                        _result_text = _re_vis.sub(r'\n{3,}', '\n\n', _result_text)
-                                        _result_text = _result_text[:2000]
-                                        if _exec_name and _result_text and len(_result_text) > 20:
-                                            _vis = f"💬 {_exec_name}\n{_result_text}"
-                                        elif _exec_name:
-                                            _vis = f"💬 {_exec_name}\nЗадача выполнена"
-                                        else:
-                                            _vis = None
+                                        # delegate_task handler saves response via _save_ifd with __agent
+                                        # Не дублируем через progress_callback
+                                        _vis = None
                                     elif _name == 'research_topic':
                                         _q = _args.get('query', '') or _args.get('topic', '') or ''
                                         _vis = f"Исследую: {_q[:80]}" if _q else "Провожу исследование..."

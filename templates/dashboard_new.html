@@ -2185,7 +2185,13 @@
                     try {
                         const data = JSON.parse(event.data);
                         if (data.type === 'progress' && data.text) {
-                            showTypingIndicator(data.text);
+                            if (data.persist) {
+                                // Постоянное сообщение (директор → агент, ответ агента) — показываем как реплику
+                                hideTypingIndicator();
+                                addMessage(data.text, 'ai');
+                            } else {
+                                showTypingIndicator(data.text);
+                            }
                         }
                     } catch(e) {}
                 };
