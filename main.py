@@ -2488,7 +2488,7 @@ async def complete_task_handler(request):
                             except Exception as ai_error:
                                 # Fallback на простое уведомление, если AI не сработал
                                 logger.warning(f"AI processing failed, using fallback: {ai_error}")
-                                notification_text = f"✅ Задача выполнена: {task.title}"
+                                notification_text = f"Задача выполнена: {task.title}"
                                 await request.app['bot'].send_message(chat_id=user_id, text=notification_text)
                                 
                                 # Сохраняем fallback взаимодействие в базу данных
@@ -3136,9 +3136,9 @@ async def yookassa_webhook(request):
                         try:
                             await bot.send_message(
                                 int(user_id),
-                                f"✅ Пополнение успешно!\n\n"
-                                f"➕ Начислено: {tokens_to_add} токенов\n"
-                                f"💰 Баланс: {result.get('balance', 0)} токенов\n\n"
+                                f"Пополнение успешно!\n\n"
+                                f"Начислено: {tokens_to_add} токенов\n"
+                                f"Баланс: {result.get('balance', 0)} токенов\n\n"
                                 f"Проверить баланс: /balance"
                             )
                         except Exception as e:
@@ -9380,9 +9380,9 @@ async def nowpayments_webhook(request):
                 try:
                     await bot.send_message(
                         tg_user_id,
-                        f"✅ Crypto payment confirmed!\n\n"
-                        f"➕ Added: {tokens_to_add} tokens\n"
-                        f"💰 Balance: {result.get('balance', 0)} tokens"
+                        f"Crypto payment confirmed!\n\n"
+                        f"Added: {tokens_to_add} tokens\n"
+                        f"Balance: {result.get('balance', 0)} tokens"
                     )
                 except Exception as e:
                     logger.warning(f'[NOWPAYMENTS] Could not notify user: {e}')

@@ -4568,7 +4568,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             )
         except asyncio.TimeoutError:
             logger.warning("[DIRECTOR] agent exec timeout (%s), 45s limit", ag.get('name'))
-            resp = f"Агент {ag.get('name', 'Агент')} принял задачу и работает над ней."
+            resp = f"Задача передана {ag.get('name', 'агенту')}, результат будет чуть позже."
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
 

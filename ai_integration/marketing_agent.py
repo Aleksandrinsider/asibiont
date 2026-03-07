@@ -138,7 +138,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
                     return {
                         "success": True,
                         "content": generated,
-                        "message": f"✅ Создан пост для {platform}:\n\n📌 {generated['title']}\n\n{generated['text'][:150]}...\n\n🏷 Хэштеги: {' '.join(generated['hashtags'][:3])}\n⏰ Лучшее время: {generated.get('best_time', '18:00-20:00')}"
+                        "message": f"Создан пост для {platform}:\n\n{generated['title']}\n\n{generated['text'][:150]}...\n\nХэштеги: {' '.join(generated['hashtags'][:3])}\nЛучшее время: {generated.get('best_time', '18:00-20:00')}"
                     }
                     
                 except json.JSONDecodeError as e:
@@ -146,7 +146,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
                     return {
                         "success": True,
                         "content": {"title": "Пост создан", "text": content},
-                        "message": f"✅ Контент создан:\n\n{content[:200]}..."
+                        "message": f"Контент создан:\n\n{content[:200]}..."
                     }
                     
     except Exception as e:
@@ -451,7 +451,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                         img_note = " (с изображением)" if image_url else ""
                         report_task = Task(
                             user_id=user.id,
-                            title=f"✅ Пост опубликован в {channel}{img_note}",
+                            title=f"Пост опубликован в {channel}{img_note}",
                             description=f"Контент:\n{post_text[:200]}...",
                             status='completed',
                             actual_completion_time=datetime.now(timezone.utc)

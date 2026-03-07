@@ -1627,16 +1627,10 @@ async def delegate_task(
                     # Агентские поручения — только AgentActivityLog, без Task
                     _agent_task_id = None
 
-                    # Записываем «Получил поручение» в чат
+                    # Записываем обращение директора к агенту в чат (живой стиль)
+                    _director_address = f'{_agent_name}, {_agent_task_text[:300]}'
                     try:
-                        _save_ifd(user_id, _json_ag.dumps({
-                            '__agent': {
-                                'name': _agent_name,
-                                'id': _agent_recipient.id,
-                                'avatar_url': _agent_dict.get('avatar_url', ''),
-                            },
-                            'text': f'Получил поручение: {_agent_task_text[:300]}',
-                        }, ensure_ascii=False))
+                        _save_ifd(user_id, _director_address)
                     except Exception:
                         pass
 
@@ -1651,7 +1645,7 @@ async def delegate_task(
                         logger.info(f"[DELEGATE] Inline exec result for {_agent_name}: {len(_result or '')} chars")
                     except _asyncio_dt.TimeoutError:
                         logger.warning(f"[DELEGATE] agent exec timeout ({_agent_name}), 45s limit")
-                        _result = f"Агент {_agent_name} принял задачу и работает над ней."
+                        _result = f"Задача передана {_agent_name}, результат будет чуть позже."
                     except Exception as _exec_err:
                         logger.warning(f"[DELEGATE] agent exec error ({_agent_name}): {_exec_err}", exc_info=True)
                         _result = None
@@ -1691,7 +1685,7 @@ async def delegate_task(
                                     'id': _agent_recipient.id,
                                     'avatar_url': _agent_dict.get('avatar_url', ''),
                                 },
-                                'text': f'Первый результат недостаточный, дорабатываю...',
+                                'text': 'Дорабатываю, сейчас будет лучше...',
                             }, ensure_ascii=False))
                         except Exception:
                             pass
