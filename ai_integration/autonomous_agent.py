@@ -1839,21 +1839,19 @@ class HybridAutonomousAgent:
                 emotion = CognitiveEngine.detect_emotion(user_message)
                 intent = CognitiveEngine.classify_intent(user_message)
                 
-                # Семантическая память из Pinecone (skip для коротких/тривиальных сообщений)
+                # Семантическая память из Pinecone
                 memory_context = ""
-                _msg_len = len((user_message or '').strip())
-                if _msg_len >= 12:
-                    try:
-                        memory_context = await asyncio.wait_for(
-                            build_memory_context(user_id, user_message, max_chars=1200),
-                            timeout=8
-                        )
-                        if memory_context:
-                            base_prompt += memory_context
-                    except asyncio.TimeoutError:
-                        logger.warning("[VECTOR] Memory search timeout (>8s), skipping")
-                    except Exception as e:
-                        logger.warning(f"[VECTOR] Memory search failed: {e}")
+                try:
+                    memory_context = await asyncio.wait_for(
+                        build_memory_context(user_id, user_message, max_chars=1200),
+                        timeout=8
+                    )
+                    if memory_context:
+                        base_prompt += memory_context
+                except asyncio.TimeoutError:
+                    logger.warning("[VECTOR] Memory search timeout (>8s), skipping")
+                except Exception as e:
+                    logger.warning(f"[VECTOR] Memory search failed: {e}")
                 
                 orchestrator = get_orchestrator()
                 user_now = ctx.get('user_now')
@@ -2083,11 +2081,8 @@ class HybridAutonomousAgent:
                 return _err_msg
 
             # Запускаем python_code агента (реалтайм-данные перед ответом)
-            # Skip для тривиальных сообщений — скрипт не нужен для приветствий
-            _trivial_greetings = {'привет', 'хай', 'здравствуй', 'пока', 'спасибо', 'ок', 'окей', 'да', 'нет'}
-            _skip_script = (user_message or '').strip().lower().rstrip('!., ') in _trivial_greetings
             try:
-                if not _skip_script and '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
+                if '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
                     import os as _os_pc
                     import sys as _sys_pc
                     import asyncio as _aio_pc
@@ -4410,6 +4405,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     import json as _json
     import datetime as _dt
 
+    # ── Быстрый пре-фильтр ДО любых DB-запросов ───────────────────────────
+    _ml = (user_message or '').strip()
+    _ml_lower = _ml.lower().rstrip('!., ')
+    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
+                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
+    _is_trivial = _ml_lower in _trivial_replies
+    # Приветствия, отмены, благодарности → сразу return None (0ms), без загрузки агентов
+    if _is_trivial and _ml_lower in ('привет', 'хай', 'здравствуй', 'пока', 'спасибо'):
+        return None
+
     # ── Загружаем user_db_id + агентов: сессионно-активированные + собственные ─
     user_db_id = None
     _agents = []
@@ -4817,21 +4822,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         '"director_message": "Кристина, подготовь... (имя + повелит. глагол)"}'
     )
 
-    # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
-    # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
-    _ml = user_message.strip()
-    _ml_lower = _ml.lower()
-    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
-                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
-    _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
+    # Подтверждения/отмены: проверяем активную миссию
+    # (приветствия уже отфильтрованы выше — сюда попадают только да/нет/ок/давай/стоп/отмена)
     if _is_trivial:
-        # Проверяем активную миссию перед bypass
         _has_active_mission = False
         _mission_context = ''
         try:
             _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
             for _ma in _mission_anchors:
-                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 120:
+                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
                     _has_active_mission = True
                     _md = _ma.get('data', {})
                     _mission_context = _md.get('result_summary') or _md.get('task', '')
