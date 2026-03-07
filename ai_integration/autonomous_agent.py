@@ -48,20 +48,55 @@ logger = logging.getLogger(__name__)
 # даже если AST-валидация на upload-этапе пропустила подозрительный код.
 _AGENT_CODE_PREAMBLE = '''\
 import urllib.request as _ssrf_ur, socket as _ssrf_sk, ipaddress as _ssrf_ia
+def _ssrf_check_host(host):
+    try:
+        _ip = _ssrf_ia.ip_address(_ssrf_sk.gethostbyname(host))
+        if not _ip.is_global:
+            raise PermissionError('SSRF: internal network requests are blocked')
+    except (ValueError, OSError):
+        pass
+# Patch urllib.request.urlopen
 _ssrf_orig_open = _ssrf_ur.urlopen
 def _ssrf_safe_open(url, *_a, **_kw):
     import re as _ssrf_re
     _u = url.full_url if hasattr(url, 'full_url') else str(url)
     _m = _ssrf_re.search(r'https?://([^/:?#\\s]+)', _u)
     if _m:
-        try:
-            _ip = _ssrf_ia.ip_address(_ssrf_sk.gethostbyname(_m.group(1)))
-            if not _ip.is_global:
-                raise PermissionError('SSRF: internal network requests are blocked')
-        except (ValueError, OSError):
-            pass
+        _ssrf_check_host(_m.group(1))
     return _ssrf_orig_open(url, *_a, **_kw)
 _ssrf_ur.urlopen = _ssrf_safe_open
+# Patch requests library (if available)
+try:
+    import requests as _ssrf_req
+    _ssrf_orig_request = _ssrf_req.Session.request
+    def _ssrf_safe_request(self, method, url, *_a2, **_kw2):
+        import re as _ssrf_re2
+        _m2 = _ssrf_re2.search(r'https?://([^/:?#\\s]+)', str(url))
+        if _m2:
+            _ssrf_check_host(_m2.group(1))
+        return _ssrf_orig_request(self, method, url, *_a2, **_kw2)
+    _ssrf_req.Session.request = _ssrf_safe_request
+except ImportError:
+    pass
+# Patch http.client
+try:
+    import http.client as _ssrf_hc
+    _ssrf_orig_hc_init = _ssrf_hc.HTTPConnection.__init__
+    def _ssrf_safe_hc_init(self, host, *_a3, **_kw3):
+        _h = host.split(':')[0] if isinstance(host, str) else host
+        _ssrf_check_host(_h)
+        return _ssrf_orig_hc_init(self, host, *_a3, **_kw3)
+    _ssrf_hc.HTTPConnection.__init__ = _ssrf_safe_hc_init
+    _ssrf_hc.HTTPSConnection.__init__ = _ssrf_safe_hc_init
+except Exception:
+    pass
+# Patch socket.create_connection (blocks raw socket SSRF)
+_ssrf_orig_connect = _ssrf_sk.create_connection
+def _ssrf_safe_connect(address, *_a4, **_kw4):
+    _h = address[0] if isinstance(address, tuple) else str(address)
+    _ssrf_check_host(str(_h))
+    return _ssrf_orig_connect(address, *_a4, **_kw4)
+_ssrf_sk.create_connection = _ssrf_safe_connect
 # Auto-strip spaces from App Passwords (Gmail App Password: xxxx xxxx xxxx xxxx -> xxxxxxxxxxxxxxxx)
 import os as _fix_os
 for _fix_k in list(_fix_os.environ.keys()):

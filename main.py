@@ -10374,12 +10374,36 @@ async def api_agent_test_code_handler(request):
                 _k, _, _v = _kline.partition('=')
                 _env[_k.strip()] = _v.strip()
 
+        # Оборачиваем код SSRF-преамбулой (как в autonomous_agent)
+        from ai_integration.autonomous_agent import _wrap_agent_code
+        py_code = _wrap_agent_code(py_code)
+
         try:
-            proc = await _aio_t.create_subprocess_exec(
-                _sys_t.executable, '-c', py_code,
+            _is_linux_t = _sys_t.platform != 'win32'
+            if not _is_linux_t:
+                for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR',
+                            'COMSPEC', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+                    if _wk in _os_t.environ:
+                        _env[_wk] = _os_t.environ[_wk]
+            def _test_resource_limits():
+                try:
+                    import resource as _res
+                    _mem = 64 * 1024 * 1024
+                    _res.setrlimit(_res.RLIMIT_AS, (_mem, _mem))
+                    _res.setrlimit(_res.RLIMIT_CPU, (12, 12))
+                    _res.setrlimit(_res.RLIMIT_NOFILE, (32, 32))
+                except Exception:
+                    pass
+            _kwargs_t = dict(
                 stdout=_aio_t.subprocess.PIPE,
                 stderr=_aio_t.subprocess.PIPE,
                 env=_env,
+            )
+            if _is_linux_t:
+                _kwargs_t['preexec_fn'] = _test_resource_limits
+            proc = await _aio_t.create_subprocess_exec(
+                _sys_t.executable, '-c', py_code,
+                **_kwargs_t,
             )
             stdout, stderr = await _aio_t.wait_for(proc.communicate(), timeout=15.0)
             out = stdout.decode('utf-8', errors='replace').strip()
