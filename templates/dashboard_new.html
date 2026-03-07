@@ -7173,13 +7173,18 @@ except Exception as e:
                     const _ac = agentActivities.length;
                     const _acLabel = _ac > 0 ? `<span style="font-size: 12px; color: #8C959F;">${_ac} ${_ac===1?t('act-item-1'):(_ac>=2&&_ac<=4?t('act-item-2'):t('act-item-5'))}</span>` : '';
                     agentHeader.innerHTML = `
-                        <div style="display: flex; align-items: baseline; gap: 6px;">
+                        <div style="display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 0;">
                             <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('agent-activity-title')}</span>
                             ${_acLabel}
                         </div>
-                        <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${agentExpanded ? '0' : '-90'}deg);">
-                            <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
-                        </svg>
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px;">
+                            <button class="delete-btn" onclick="event.stopPropagation(); activityClearAll()" title="${t('act-clear-all')}">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+                            </button>
+                            <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${agentExpanded ? '0' : '-90'}deg);">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </div>
                     `;
 
                     const agentDetails = document.createElement('div');
@@ -7639,6 +7644,26 @@ except Exception as e:
                 }
             } catch (err) {
                 console.error('Failed to delete activity:', err);
+            }
+        }
+
+        async function activityClearAll() {
+            if (!confirm(t('act-clear-all-confirm'))) return;
+            try {
+                const resp = await fetch('/api/activities/clear-all', { method: 'DELETE', credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    showNotification(t('act-deleted-n').replace('{n}', data.deleted || 0), 'success');
+                    window._allActivities = [];
+                    window._activityLastId = 0;
+                    window._activityPollSince = null;
+                    loadReports();
+                } else {
+                    showNotification(t('act-del-err'), 'error');
+                }
+            } catch (err) {
+                console.error('Failed to clear all activities:', err);
+                showNotification(t('act-del-err'), 'error');
             }
         }
 
@@ -14665,7 +14690,7 @@ except Exception as e:
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
       'act-st-pending':'Ожидает','act-st-accepted':'Принято','act-st-rejected':'Отклонено','act-st-cancelled':'Отменено','act-st-published':'Опубликовано','act-st-completed':'Выполнено','act-st-failed':'Ошибка','act-st-deleted':'Удалено',
       'act-del-deleg':'Отменить и удалить это делегирование?','act-del-agent-task':'Удалить это поручение агенту?','act-del-post-feed':'Удалить пост из ленты новостей?','act-del-post-tg':'Удалить запись об этом Telegram-посте?','act-del-default':'Удалить запись об активности?','act-del-group':'Удалить все записи ({n} шт.) из этой группы?',
-      'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':'Ошибка при удалении','act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование',
+      'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':'Ошибка при удалении','act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование','act-clear-all':'Очистить хронологию','act-clear-all-confirm':'Очистить всю хронологию? Действие нельзя отменить.',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contact-notes-ph':'Описание / заметки','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
@@ -14931,7 +14956,7 @@ except Exception as e:
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',
       'act-st-pending':'Pending','act-st-accepted':'Accepted','act-st-rejected':'Rejected','act-st-cancelled':'Cancelled','act-st-published':'Published','act-st-completed':'Completed','act-st-failed':'Failed','act-st-deleted':'Deleted',
       'act-del-deleg':'Cancel and delete this delegation?','act-del-agent-task':'Delete this agent task?','act-del-post-feed':'Delete this post from news feed?','act-del-post-tg':'Delete this Telegram post record?','act-del-default':'Delete this activity record?','act-del-group':'Delete all records ({n}) from this group?',
-      'act-deleted-ok':'Deleted','act-deleted-n':'{n} records deleted','act-del-failed-n':'Failed to delete {n}','act-del-err':'Error deleting','act-del-all':'Delete all','act-del-one':'Delete','act-cancel-deleg':'Cancel delegation',
+      'act-deleted-ok':'Deleted','act-deleted-n':'{n} records deleted','act-del-failed-n':'Failed to delete {n}','act-del-err':'Error deleting','act-del-all':'Delete all','act-del-one':'Delete','act-cancel-deleg':'Cancel delegation','act-clear-all':'Clear timeline','act-clear-all-confirm':'Clear entire timeline? This cannot be undone.',
       'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-blocked':'Contact blocked','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','block-contact':'Block contact','edit-contact':'Edit contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contact-notes-ph':'Description / notes','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',

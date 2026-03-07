@@ -7733,6 +7733,30 @@ async def api_activity_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_activities_clear_all_handler(request):
+    """DELETE /api/activities/clear-all — delete all timeline activities for the user."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            deleted = session_db.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+            ).delete(synchronize_session=False)
+            session_db.commit()
+            return web.json_response({'ok': True, 'deleted': deleted})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error clearing all activities: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_activity_status_handler(request):
     """PATCH /api/activities/{activity_id}/status — update activity status (pause/resume delegation)."""
     try:
@@ -7886,11 +7910,11 @@ async def api_delegation_campaign_delete_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
-# Типы событий, отображаемые в хронологии (без шума)
+# Типы событий, отображаемые в хронологии (только существенные)
 _TIMELINE_VISIBLE_TYPES = {
-    'task_added', 'task_completed', 'task_blocked',
+    'task_completed', 'task_blocked',
     'delegation', 'delegation_accepted', 'delegation_rejected',
-    'goal_created', 'goal_updated', 'goal_deleted', 'goal_completed',
+    'goal_created', 'goal_completed',
     'post_newsfeed', 'post_telegram', 'post_discord',
     'content_campaign', 'delegation_campaign',
     'background_research_ready',
@@ -11732,6 +11756,7 @@ app.router.add_patch('/api/delegation-campaigns/{campaign_id}/status', api_deleg
 app.router.add_delete('/api/delegation-campaigns/{campaign_id}', api_delegation_campaign_delete_handler)
 app.router.add_post('/api/outreach/{outreach_id}/reply', api_outreach_reply_handler)
 app.router.add_delete('/api/outreach/{outreach_id}', api_outreach_delete_handler)
+app.router.add_delete('/api/activities/clear-all', api_activities_clear_all_handler)
 app.router.add_delete('/api/activities/{activity_id}', api_activity_delete_handler)
 app.router.add_patch('/api/activities/{activity_id}/status', api_activity_status_handler)
 app.router.add_get('/api/email-contacts', api_email_contacts_handler)
