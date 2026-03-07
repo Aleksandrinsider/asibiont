@@ -550,7 +550,7 @@ async def smtp_check_handler(request):
 
 
 # ═══ IndexNow: мгновенное уведомление поисковиков ═══
-INDEXNOW_KEY = 'd6193b04262141bba808b1279123715b'
+INDEXNOW_KEY = os.getenv('INDEXNOW_KEY', 'd6193b04262141bba808b1279123715b')
 
 async def notify_indexnow(urls: list):
     """Отправить URL-ы в IndexNow для мгновенной индексации Bing/Yandex"""
@@ -779,8 +779,11 @@ async def auth_handler(request):
 
             try:
                 session = await get_session(request)
-            except (json.JSONDecodeError, ValueError) as e:
+            except (json.JSONDecodeError, ValueError, Exception) as e:
                 logger.error(f"Corrupted session during auth, creating new: {e}")
+                # Clear corrupted session cookie before creating new
+                response = web.HTTPFound('/dashboard')
+                response.del_cookie('AIOHTTP_SESSION')
                 from aiohttp_session import new_session
                 session = await new_session(request)
             

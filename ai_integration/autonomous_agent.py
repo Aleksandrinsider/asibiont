@@ -4005,10 +4005,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _exec_env[_dk.strip()] = _dv
 
             def _run_script():
+                def _resource_limits_fn():
+                    try:
+                        import resource as _res
+                        _mem = 64 * 1024 * 1024   # 64 MB RAM
+                        _res.setrlimit(_res.RLIMIT_AS, (_mem, _mem))
+                        _cpu = 12                  # 12 sec CPU time
+                        _res.setrlimit(_res.RLIMIT_CPU, (_cpu, _cpu))
+                        _files = 32                # max 32 file descriptors
+                        _res.setrlimit(_res.RLIMIT_NOFILE, (_files, _files))
+                    except Exception:
+                        pass
                 try:
+                    _kwargs_sc = dict(
+                        capture_output=True, text=True, timeout=API_TIMEOUT_SCRIPT, env=_exec_env,
+                    )
+                    if _sys2.platform != 'win32':
+                        _kwargs_sc['preexec_fn'] = _resource_limits_fn
                     r = _sp2.run(
                         [_sys2.executable, '-c', _wrapped],
-                        capture_output=True, text=True, timeout=API_TIMEOUT_SCRIPT, env=_exec_env,
+                        **_kwargs_sc,
                     )
                     return r.stdout[:2000].strip(), r.stderr[:400].strip()
                 except _sp2.TimeoutExpired:
@@ -4149,6 +4165,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             elif _allowed_tools and _tname not in _allowed_tools:
                 _tc_result = json.dumps({"error": f"tool {_tname} not in tools_allowed"}, ensure_ascii=False)
             else:
+                # Задачи создаваемые агентом помечаются source='agent'
+                if _tname == 'add_task' and agent.get('id'):
+                    _targs['created_by_agent_id'] = agent['id']
                 try:
                     _tres = await asyncio.wait_for(
                         _agent_inst.execute_actions(

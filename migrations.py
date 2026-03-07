@@ -597,6 +597,22 @@ def _migrate_fix_agent_python_code(session):
         logger.warning(f"[MIGRATION] _migrate_fix_agent_python_code skipped: {e}")
 
 
+def _migrate_payment_id_unique(session, inspector):
+    """Добавляет уникальный индекс на payment_history.payment_id для защиты от дублей вебхуков."""
+    if not inspector.has_table('payment_history'):
+        return
+    try:
+        indexes = inspector.get_indexes('payment_history')
+        if any(idx.get('name') == 'ix_payment_history_payment_id' for idx in indexes):
+            return
+        session.execute(text("CREATE UNIQUE INDEX ix_payment_history_payment_id ON payment_history (payment_id) WHERE payment_id IS NOT NULL"))
+        session.commit()
+        logger.info("[MIGRATION] Added unique index on payment_history.payment_id")
+    except Exception as e:
+        session.rollback()
+        logger.debug(f"[MIGRATION] payment_history unique index skipped: {e}")
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -620,6 +636,7 @@ def run_migrations():
         _migrate_arena(session, inspector)
         _migrate_task_agent_source(session, inspector)
         _migrate_fix_agent_python_code(session)
+        _migrate_payment_id_unique(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")

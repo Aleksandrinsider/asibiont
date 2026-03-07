@@ -1624,8 +1624,35 @@ async def delegate_task(
                         except Exception:
                             pass
 
-                    # Агентские поручения — только AgentActivityLog, без Task
+                    # Агентские поручения — создаём Task с source='agent' для дашборда
                     _agent_task_id = None
+                    try:
+                        _agent_task = Task(
+                            user_id=delegator.id,
+                            title=title[:255],
+                            description=encrypt_data(description[:500] if description else ''),
+                            source='agent',
+                            created_by_agent_id=_agent_recipient.id,
+                            delegated_to_username=_agent_name,
+                            status='pending',
+                        )
+                        if reminder_time:
+                            try:
+                                _atz = pytz.timezone(delegator.timezone) if getattr(delegator, 'timezone', None) else pytz.timezone('Europe/Moscow')
+                                _adt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                                _adt = _atz.localize(_adt)
+                                _agent_task.reminder_time = _adt.astimezone(pytz.UTC)
+                            except (ValueError, Exception):
+                                pass
+                        session.add(_agent_task)
+                        session.commit()
+                        _agent_task_id = _agent_task.id
+                    except Exception as _atask_err:
+                        logger.warning(f"[DELEGATE] agent task creation error: {_atask_err}")
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
 
                     # Записываем обращение директора к агенту в чат (живой стиль)
                     _director_address = f'{_agent_name}, {_agent_task_text[:300]}'
@@ -1733,6 +1760,13 @@ async def delegate_task(
                             target=_agent_name,
                             status='completed',
                         ))
+                        # Помечаем Task как выполненную
+                        if _agent_task_id:
+                            _at = session.query(Task).get(_agent_task_id)
+                            if _at:
+                                _at.status = 'completed'
+                                _at.completion_notes = _result[:500]
+                                _at.actual_completion_time = datetime.now(timezone.utc)
                         session.commit()
                     except Exception:
                         try:

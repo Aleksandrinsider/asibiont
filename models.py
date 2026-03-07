@@ -289,7 +289,7 @@ class PaymentHistory(Base):
     action = Column(String(50), nullable=False)  # payment, tier_change, subscription_activated, promo_used, etc.
     tier = Column(Enum(SubscriptionTier), nullable=False)  # Tier at the time of action
     amount = Column(String(20))  # Payment amount if applicable
-    payment_id = Column(String(100))  # External payment system ID (Yookassa, etc.)
+    payment_id = Column(String(100), unique=True, index=True)  # External payment system ID (Yookassa, etc.)
     duration_days = Column(Integer)  # Duration of subscription
     start_date = Column(DateTime)  # Subscription start date
     end_date = Column(DateTime)  # Subscription end date
