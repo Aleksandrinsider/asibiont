@@ -155,7 +155,7 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
             _dup = _s.query(_AAL).filter(
                 _AAL.user_id == user_id,
                 _AAL.target == f'agent:{agent_name}',
-                _AAL.activity_type == 'delegation',
+                _AAL.activity_type == 'agent_task',
                 _AAL.status == 'accepted',
                 _AAL.created_at >= _cutoff,
             ).first()
@@ -163,8 +163,8 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
                 return
             _s.add(_AAL(
                 user_id=user_id,
-                activity_type='delegation',
-                title=f'Задача поставлена: {agent_name}',
+                activity_type='agent_task',
+                title=f'Поручено {agent_name}',
                 content=task_title[:500],
                 target=f'agent:{agent_name}',
                 status='accepted',
@@ -185,8 +185,8 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
         try:
             _s.add(_AAL(
                 user_id=user_id,
-                activity_type='delegation',
-                title=f'Задача выполнена: {agent_name}',
+                activity_type='agent_task',
+                title=f'{agent_name}: выполнено',
                 content=task_title[:500],
                 target=f'agent:{agent_name}',
                 status='completed',
@@ -1304,7 +1304,7 @@ class OfficeEngine:
             user_db_id, agent_name_db, agent_id,
             f'L2 координация: {task[:120]}',
             f'Цель: {goal_text}. Задача: {task}',
-            activity_type='delegation',
+            activity_type='agent_task',
         )
 
         logger.info("[OFFICE-L2] user=%d: delegated to %s: %s", user_db_id, agent_name_db, task[:60])

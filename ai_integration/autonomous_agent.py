@@ -4611,7 +4611,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 try:
                     _ts2.add(_AAL2(
                         user_id=user_db_id,
-                        activity_type='delegation',
+                        activity_type='agent_task',
                         title=task[:200],
                         content=str(resp)[:500],
                         target=ag.get('name', 'Агент'),

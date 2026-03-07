@@ -1607,8 +1607,8 @@ async def delegate_task(
                         from models import AgentActivityLog as _AAL_d
                         _log = _AAL_d(
                             user_id=delegator.id,
-                            activity_type='delegation',
-                            title=title,
+                            activity_type='agent_task',
+                            title=f'Поручено {_agent_name}: {title}',
                             content=description[:500] if description else None,
                             target=_agent_name,
                             status='in_progress',
@@ -1754,8 +1754,8 @@ async def delegate_task(
                     try:
                         session.add(_AAL_d(
                             user_id=delegator.id,
-                            activity_type='delegation',
-                            title=f'Выполнено: {title}',
+                            activity_type='agent_task',
+                            title=f'{_agent_name}: выполнено',
                             content=_result[:500],
                             target=_agent_name,
                             status='completed',
