@@ -6862,11 +6862,42 @@ async def api_interactions_handler(request):
             history_cleared_timestamp = user.history_cleared_at.timestamp()
 
         # Filter interactions based on cleared timestamp and non-null content
-        filtered_interactions = [
-            i for i in interactions
-            if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() > history_cleared_timestamp
-            and i.content is not None and i.content.strip() != ''
-        ]
+        # Also filter out noise patterns that shouldn't appear in chat
+        _NOISE_PATTERNS = (
+            'Дорабатываю, сейчас будет лучше',
+            'Подготовительная работа завершена',
+            'Задачу выполнил.',
+            'Задачу выполнила.',
+            'Принял в работу.',
+            'Задачу принял.',
+        )
+        filtered_interactions = []
+        _seen_content = set()
+        for i in interactions:
+            if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() <= history_cleared_timestamp:
+                continue
+            if i.content is None or i.content.strip() == '':
+                continue
+            # Skip noise messages (short AI messages matching noise patterns)
+            _ct = i.content.strip()
+            if i.message_type in ('ai', 'agent_msg') and len(_ct) < 200:
+                # Check raw text and JSON-wrapped text
+                _check_text = _ct
+                if _ct.startswith('{'):
+                    try:
+                        _jp = __import__('json').loads(_ct)
+                        if isinstance(_jp, dict) and _jp.get('text'):
+                            _check_text = _jp['text'].strip()
+                    except Exception:
+                        pass
+                if any(_check_text.startswith(n) for n in _NOISE_PATTERNS):
+                    continue
+            # Deduplicate consecutive AI messages with identical content
+            _dedup_key = f"{i.message_type}:{_ct[:200]}"
+            if _dedup_key in _seen_content:
+                continue
+            _seen_content.add(_dedup_key)
+            filtered_interactions.append(i)
         
         logger.info(f"After filtering: {len(filtered_interactions)} interactions")
 

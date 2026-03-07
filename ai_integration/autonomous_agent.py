@@ -3265,18 +3265,29 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
 
 def _save_interaction_for_director(telegram_id: int, content: str):
     """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата."""
+    if not content or not content.strip():
+        return
     try:
         from models import Session as _Db, User as _User, Interaction as _Intr
         _s = _Db()
         try:
             _u = _s.query(_User).filter_by(telegram_id=telegram_id).first()
             if _u:
-                _s.add(_Intr(user_id=_u.id, message_type='ai', content=content or ''))
+                _s.add(_Intr(user_id=_u.id, message_type='agent_msg', content=content))
                 _s.commit()
+                logger.info("[DIRECTOR] saved interaction for tg=%s, len=%d", telegram_id, len(content))
+            else:
+                logger.warning("[DIRECTOR] user not found for tg=%s", telegram_id)
+        except Exception as _db_err:
+            logger.error("[DIRECTOR] DB commit error: %s", _db_err)
+            try:
+                _s.rollback()
+            except Exception:
+                pass
         finally:
             _s.close()
     except Exception as e:
-        logger.debug("[DIRECTOR] save interaction error: %s", e)
+        logger.error("[DIRECTOR] save interaction error: %s", e)
 
 
 # ══ Универсальный контекст пользователя и агента ══════════════════════════════
@@ -4034,12 +4045,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Не ограничивай себя текстом — ДЕЙСТВУЙ.\n"
         "Если задача требует цепочки действий — пройди ВСЕ шаги до конкретного результата, не останавливайся на планировании.\n"
         "НЕ пиши планы без действий — каждый пункт плана ВЫПОЛНЯЙ инструментами (исследуй, создай задачу, отправь email, делегируй). "
-        "Ответ ‘план: 1) ..., 2) ..., 3) ...’ без вызовов инструментов — ОШИБКА.\n\n"
+        "Ответ-план без вызовов инструментов — ОШИБКА.\n"
+        "При создании задач через add_task: reminder_time НЕОБЯЗАТЕЛЬНЫЙ. Если срок неизвестен — НЕ СПРАШИВАЙ, "
+        "просто создай задачу без времени. НЕ пиши BLOCKED из-за отсутствия даты.\n"
+        "КАЧЕСТВО: каждый ответ содержит КОНКРЕТНЫЙ результат — текст поста, список контактов, "
+        "анализ данных, исследование. Ответ ‘задачу выполнил’ без деталей = ПРОВАЛ.\n\n"
 
         "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ: если часть задачи требует специализации другого агента команды, "
         "используй delegate_task(title, delegated_to_username=имя_агента). Только когда реально нужна другая экспертиза.\n\n"
-
-        "ЕСЛИ ЗАСТРЯЛ: начни ПЕРВУЮ строку с 'BLOCKED: <причина>'. Это уведомит пользователя.\n\n"
 
         f"ТВОЯ РОЛЬ:\n{_persona}"
     )

@@ -1654,18 +1654,18 @@ async def delegate_task(
                             pass
 
                     # Записываем обращение директора к агенту в чат (с метаданными ASI)
-                    _director_address = f'{_agent_name}, {_agent_task_text[:300]}'
                     try:
-                        _save_ifd(user_id, _json_ag.dumps({
+                        _dir_json = _json_ag.dumps({
                             '__agent': {
                                 'name': 'ASI Biont',
                                 'id': 0,
                                 'avatar_url': '/static/asibiont.svg',
                             },
                             'text': f'→ {_agent_name}\n{_agent_task_text[:300]}',
-                        }, ensure_ascii=False))
-                    except Exception:
-                        pass
+                        }, ensure_ascii=False)
+                        _save_ifd(user_id, _dir_json)
+                    except Exception as _dir_err:
+                        logger.error(f"[DELEGATE] DIR message save failed: {_dir_err}")
 
                     # ── СИНХРОННОЕ выполнение агента (inline) ──────────────────────
                     import asyncio as _asyncio_dt
@@ -1693,27 +1693,17 @@ async def delegate_task(
                     if len(_result_stripped) < 40:
                         _needs_rework = True
                     elif _result_stripped.lower() in (
-                        'задачу выполнил.', 'данных нет.', 'результат будет чуть позже.',
-                        'задачу принял.', 'принял в работу.',
+                        'задачу выполнил.', 'задачу выполнила.', 'данных нет.', 'результат будет чуть позже.',
+                        'задачу принял.', 'принял в работу.', 'задачу приняла.',
                     ):
+                        _needs_rework = True
+                    elif _result_stripped.startswith('BLOCKED:'):
                         _needs_rework = True
                     elif not any(c.isalpha() for c in _result_stripped):
                         _needs_rework = True
 
                     if _needs_rework:
-                        # Отправляем на доработку — 1 попытка
-                        try:
-                            _save_ifd(user_id, _json_ag.dumps({
-                                '__agent': {
-                                    'name': _agent_name,
-                                    'id': _agent_recipient.id,
-                                    'avatar_url': _agent_dict.get('avatar_url', ''),
-                                },
-                                'text': 'Дорабатываю, сейчас будет лучше...',
-                            }, ensure_ascii=False))
-                        except Exception:
-                            pass
-
+                        # Доработка — 1 попытка (без шума в чат)
                         _rework_task = (
                             f"ДОРАБОТКА: твой предыдущий ответ был недостаточно конкретным или не по теме.\n\n"
                             f"Задача: {_agent_task_text[:400]}\n\n"
@@ -1740,16 +1730,17 @@ async def delegate_task(
 
                     # Записываем ответ агента в чат (видно на дашборде с аватаркой)
                     try:
-                        _save_ifd(user_id, _json_ag.dumps({
+                        _resp_json = _json_ag.dumps({
                             '__agent': {
                                 'name': _agent_name,
                                 'id': _agent_recipient.id,
                                 'avatar_url': _agent_dict.get('avatar_url', ''),
                             },
                             'text': _result,
-                        }, ensure_ascii=False))
-                    except Exception:
-                        pass
+                        }, ensure_ascii=False)
+                        _save_ifd(user_id, _resp_json)
+                    except Exception as _resp_err:
+                        logger.error(f"[DELEGATE] agent response save failed: {_resp_err}")
 
                     # Логируем завершение в AgentActivityLog
                     try:
