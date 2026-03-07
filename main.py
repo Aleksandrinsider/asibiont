@@ -3172,6 +3172,14 @@ async def yookassa_webhook(request):
                             commission_tokens = int(payment_amount * 0.20)
                             referrer.token_balance = (referrer.token_balance or 0) + commission_tokens
                             referrer.referral_balance = (referrer.referral_balance or 0) + commission_tokens
+                            from models import TokenTransaction as _RefTx
+                            session.add(_RefTx(
+                                user_id=referrer.id,
+                                amount=commission_tokens,
+                                action='referral_commission',
+                                description=f'20% комиссия от покупки реферала ({payment_amount}₽)',
+                                balance_after=referrer.token_balance
+                            ))
                             session.commit()
                             logger.info(f"Referral commission: {commission_tokens} tokens added to referrer {referrer.telegram_id} from payment {payment_amount} RUB")
                             
@@ -9437,6 +9445,35 @@ async def nowpayments_webhook(request):
                     )
                 except Exception as e:
                     logger.warning(f'[NOWPAYMENTS] Could not notify user: {e}')
+
+            # Handle referral commission (20% of token value → tokens to referrer)
+            if user.referrer_id:
+                try:
+                    referrer = session.query(User).filter_by(id=user.referrer_id).first()
+                    if referrer:
+                        commission_tokens = int(tokens_to_add * 0.20)
+                        referrer.token_balance = (referrer.token_balance or 0) + commission_tokens
+                        referrer.referral_balance = (referrer.referral_balance or 0) + commission_tokens
+                        from models import TokenTransaction as _CryptoRefTx
+                        session.add(_CryptoRefTx(
+                            user_id=referrer.id,
+                            amount=commission_tokens,
+                            action='referral_commission',
+                            description=f'20% комиссия от крипто-покупки реферала ({pack})',
+                            balance_after=referrer.token_balance
+                        ))
+                        session.commit()
+                        logger.info(f'[NOWPAYMENTS] Referral commission: {commission_tokens} tokens to referrer {referrer.telegram_id}')
+                        if bot:
+                            try:
+                                await bot.send_message(
+                                    int(referrer.telegram_id),
+                                    f"💰 Ваш реферал пополнил баланс криптой! Вам начислено {commission_tokens} токенов (20% комиссия). Баланс: {referrer.token_balance} токенов."
+                                )
+                            except Exception:
+                                pass
+                except Exception as e:
+                    logger.error(f'[NOWPAYMENTS] Referral commission error: {e}')
         except Exception as e:
             session.rollback()
             logger.error(f'[NOWPAYMENTS] DB error: {e}')
