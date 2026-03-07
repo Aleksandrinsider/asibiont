@@ -3561,7 +3561,8 @@ def _build_user_context_sync(user_db_id: int) -> str:
             identity_parts.append(f'г. {profile.city}')
             if profile.status_text:
                 identity_parts.append(f'Статус: {profile.status_text}')
-            identity_parts.append(f'Сейчас: {profile.current_plans[:100]}')
+            if profile.current_plans:
+                identity_parts.append(f'Сейчас: {profile.current_plans[:100]}')
         if profile.content_strategy:
             identity_parts.append(f'Контент-стратегия: {profile.content_strategy[:100]}')
 
@@ -4046,6 +4047,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 try:
                     _kwargs_sc = dict(
                         capture_output=True, text=True, timeout=API_TIMEOUT_SCRIPT, env=_exec_env,
+                        encoding='utf-8', errors='replace',
                     )
                     if _sys2.platform != 'win32':
                         _kwargs_sc['preexec_fn'] = _resource_limits_fn
@@ -4756,24 +4758,26 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "Если ни один агент идеально не подходит — ВСЁ РАВНО делегируй ближайшему по специализации. "
         "Агенты универсальны — они могут исследовать, писать тексты, анализировать.\n"
         "director_message — живое обращение к агенту от лица директора, как к коллеге в мессенджере. "
-        "ОБЯЗАТЕЛЬНО начинай с имени агента и глагола-действия: "
+        "ОБЯЗАТЕЛЬНО начинай с имени агента и повелительного глагола (императива): "
         "'Кристина, подготовь список площадок для поиска тестировщиков', "
         "'Марк, исследуй рынок AI-тестирования и собери тренды'. "
-        "НЕ пиши «ASI поручает», «Поручаю», «Исследовать» (инфинитив) или формальные фразы. НЕ пиши 'Привет' — сразу к делу.\n\n"
+        "ЗАПРЕЩЕНО: инфинитив ('Подготовить', 'Исследовать', 'Собрать'), формальные фразы ('ASI поручает', 'Поручаю'), приветствия ('Привет'). "
+        "Только повелительное наклонение: подготовь, исследуй, собери, найди, проанализируй.\n\n"
         "Ответь ТОЛЬКО JSON без ```:\n"
         '{"action": "self", "team_hint": "какой агент мог бы помочь в следующий раз (1 предл.)"}\n'
         "или\n"
         '{"action": "delegate", "agent_name": "точное имя агента", '
-        '"agent_task": "конкретная задача агенту в 1–2 предложения", "director_message": "живое обращение к агенту"}\n'
+        '"agent_task": "конкретная задача агенту в 1–2 предложения", '
+        '"director_message": "Кристина, подготовь... (имя + повелит. глагол + задача)"}\n'
         "или\n"
         '{"action": "multi_delegate", "director_intro": "что ASI говорит пользователю перед раздачей задач", '
-        '"tasks": [{"agent_name": "точное имя", "agent_task": "задача", "director_message": "обращение к агенту"}, ...]}\n'
+        '"tasks": [{"agent_name": "имя", "agent_task": "задача", "director_message": "имя, глагол-повелит..."}, ...]}\n'
         "или\n"
         '{"action": "adaptive", "director_intro": "что ASI говорит пользователю — план действий", '
         '"mission_brief": "цель миссии одним предложением", '
         '"first_agent_name": "точное имя первого агента", '
         '"first_agent_task": "задача первого агента", '
-        '"director_message": "живое обращение к первому агенту"}'
+        '"director_message": "Кристина, подготовь... (имя + повелит. глагол)"}'
     )
 
     # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
@@ -4816,10 +4820,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "НЕ выбирай self — пользователь явно хочет продолжения работы агентов.\n\n"
                 "Ответь ТОЛЬКО JSON без ```:\n"
                 '{"action": "delegate", "agent_name": "точное имя агента", '
-                '"agent_task": "задача", "director_message": "обращение к агенту"}\n'
+                '"agent_task": "задача", '
+                '"director_message": "живое: имя + глагол (Кристина, подготовь... / Марк, исследуй...)"}\n'
                 "или\n"
                 '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
-                '"first_agent_name": "имя", "first_agent_task": "задача", "director_message": "обращение"}'
+                '"first_agent_name": "имя", "first_agent_task": "задача", '
+                '"director_message": "живое: имя + глагол"}'
             )
         elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
             return None  # Отмена — сброс миссии
@@ -4942,7 +4948,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "продвигает цель или завершает задачу.\n"
                 "Если выполнена → {\"action\": \"finalize\"}\n"
                 "Если нужен ещё агент → {\"action\": \"next\", \"agent_name\": \"точное имя\", "
-                "\"agent_task\": \"что сделать (1 предложение)\", \"director_message\": \"прямое обращение\"}\n"
+                "\"agent_task\": \"что сделать (1 предложение)\", "
+                "\"director_message\": \"живое обращение: начни с имени + глагол ('Кристина, подготовь...', 'Марк, найди...')\"}\n"
                 "Ответь ТОЛЬКО JSON без ```."
             )
             _routing_raw = await _quick_ai_call_raw(
@@ -5013,7 +5020,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     "Отправить ЭТОГО ЖЕ агента на доработку с конкретным уточнением что исправить.\n"
                     '{"action": "rework", "agent_name": "имя агента который уже работал", '
                     '"rework_feedback": "что именно доработать — конкретно", '
-                    '"director_message": "живое обращение к агенту с просьбой исправить"}\n'
+                    '"director_message": "Кристина, доработай... (имя + повелит. глагол)"}\n'
                 )
             _reeval_raw = await _quick_ai_call_raw([{
                 "role": "user",
@@ -5029,11 +5036,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     '{"action": "finalize"}\n'
                     "или\n"
                     '{"action": "delegate", "agent_name": "точное имя", '
-                    '"agent_task": "задача", "director_message": "обращение к агенту"}\n'
+                    '"agent_task": "задача", '
+                    '"director_message": "живое обращение: имя + глагол (Кристина, подготовь... / Марк, найди...)"}\n'
                     + _rework_hint +
                     "или\n"
                     '{"action": "multi_delegate", "director_intro": "вступление", '
-                    '"tasks": [{"agent_name": "...", "agent_task": "...", "director_message": "..."}]}'
+                    '"tasks": [{"agent_name": "...", "agent_task": "...", '
+                    '"director_message": "имя + глагол"}]}'
                 ),
             }], max_tokens=300)
             if not _reeval_raw:
@@ -5190,7 +5199,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             try:
                 _director_response = await _office_director_chat(message, user_id, progress_callback=progress_callback)
             except Exception as _de:
-                logger.debug("[DIRECTOR] error, fallback to normal: %s", _de)
+                logger.warning("[DIRECTOR] error, fallback to normal: %s", _de)
 
         if _director_response is not None:
             # Агент ответил напрямую — ASI молчит (ответ уже в DB)
