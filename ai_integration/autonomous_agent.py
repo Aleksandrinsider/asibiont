@@ -4869,29 +4869,97 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     _task = decision.get('agent_task') or user_message
     _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
 
-    # ASI кратко подводит итог: что агент сделал + предлагает следующий шаг
-    _agent_result = str(_resp or '')[:500]
+    # ASI продолжает координацию: подводит итог, создаёт задачи, делегирует другим агентам
+    _agent_result = str(_resp or '')[:600]
     _agent_name_d = _ag.get('name', 'Агент')
+
+    # Полноценный вызов ASI с инструментами — он может действовать, а не просто говорить
     try:
-        _dir_summary = await _quick_ai_call_raw([
-            {"role": "system", "content": (
-                "Ты ASI — директор офиса. Агент уже ответил пользователю. "
-                "Твоя задача — КРАТКО (2-3 предложения) подвести итог: "
-                "что агент сделал, и предложить следующий конкретный шаг. "
-                "НЕ повторяй содержание ответа агента. НЕ задавай общих вопросов типа 'расскажите подробнее'. "
-                "Предложи КОНКРЕТНОЕ действие: создать задачу, запустить следующего агента, начать выполнение и т.д. "
-                "Пиши как в мессенджере, без markdown."
-            )},
-            {"role": "user", "content": (
-                f"Запрос пользователя: {user_message[:200]}\n"
-                f"Агент {_agent_name_d} ответил:\n{_agent_result}\n\n"
-                f"Подведи итог и предложи следующий шаг."
-            )},
-        ], max_tokens=120)
-        if _dir_summary and len(_dir_summary.strip()) > 10:
-            await _send_visible(_dir_summary.strip())
-    except Exception:
-        pass
+        _followup_agent = HybridAutonomousAgent()
+        _followup_system = (
+            "Ты ASI — директор офиса. Агент только что ответил пользователю.\n"
+            "Твоя роль — КООРДИНАТОР. Ты ПРОДОЛЖАЕШЬ работу:\n"
+            "1. Подведи краткий итог (1-2 предложения, НЕ повторяй содержание ответа агента)\n"
+            "2. ДЕЙСТВУЙ — используй инструменты:\n"
+            "   - add_task — создай задачи по ключевым пунктам плана агента\n"
+            "   - delegate_task — поручи другому агенту следующий шаг если нужно\n"
+            "3. Скажи пользователю что сделал и что будет дальше\n\n"
+            "НЕ задавай общих вопросов. НЕ спрашивай 'хотите ли вы...'. ДЕЛАЙ.\n"
+            "Пиши как в мессенджере, без markdown."
+        )
+        _followup_msg = (
+            f"Запрос пользователя: {user_message[:300]}\n\n"
+            f"Агент {_agent_name_d} ответил:\n{_agent_result}\n\n"
+            f"Доступные агенты: {', '.join(a['name'] + ' (' + a.get('specialization','') + ')' for a in _agents[:5])}\n\n"
+            f"Подведи итог и ПРОДОЛЖИ работу — создай задачи по пунктам плана, поручи следующие шаги."
+        )
+        _fu_messages = [
+            {"role": "system", "content": _followup_system},
+            {"role": "user", "content": _followup_msg},
+        ]
+
+        # Tool-calling loop для ASI-координатора (макс 2 итерации)
+        _fu_final_text = ''
+        for _fu_iter in range(2):
+            _fu_resp = await asyncio.wait_for(
+                _followup_agent.call_ai(
+                    _fu_messages,
+                    use_tools=(_fu_iter == 0),
+                    tool_choice="auto" if _fu_iter == 0 else None,
+                    max_tokens=300,
+                    api_timeout=API_TIMEOUT_NORMAL,
+                ),
+                timeout=API_TIMEOUT_SCRIPT,
+            )
+            if not _fu_resp or not _fu_resp.get('choices'):
+                break
+            _fu_msg = _fu_resp['choices'][0]['message']
+            _fu_content = _fu_msg.get('content') or ''
+            _fu_tools = _fu_msg.get('tool_calls') or []
+
+            if not _fu_tools:
+                _fu_final_text = _fu_content
+                break
+
+            # Выполняем инструменты (макс 2 за итерацию)
+            _fu_messages.append(_fu_msg)
+            for _fu_tc in _fu_tools[:2]:
+                _fu_tname = _fu_tc.get('function', {}).get('name', '')
+                try:
+                    _fu_targs = json.loads(_fu_tc.get('function', {}).get('arguments', '{}'))
+                except Exception:
+                    _fu_targs = {}
+                try:
+                    _fu_tres = await asyncio.wait_for(
+                        _followup_agent.execute_actions(
+                            [{"tool": _fu_tname, "params": _fu_targs, "reason": f"ASI: {_fu_tname}"}],
+                            user_id, session=None, user_message=_followup_msg,
+                        ),
+                        timeout=35,
+                    )
+                    _fu_r0 = _fu_tres[0] if _fu_tres else {"success": False}
+                    if _fu_r0.get('success'):
+                        _fu_tc_result = json.dumps(_fu_r0['result'], ensure_ascii=False, default=str)[:1000]
+                    else:
+                        _fu_tc_result = json.dumps({"error": str(_fu_r0.get('error', ''))}, ensure_ascii=False)
+                except Exception as _fu_te:
+                    _fu_tc_result = json.dumps({"error": str(_fu_te)[:200]}, ensure_ascii=False)
+
+                _fu_messages.append({"role": "tool", "tool_call_id": _fu_tc['id'], "content": _fu_tc_result})
+            # Скипаем лишние tool_calls
+            for _fu_tc_skip in _fu_tools[2:]:
+                _fu_messages.append({"role": "tool", "tool_call_id": _fu_tc_skip['id'], "content": '{"status":"skipped"}'})
+
+        if _fu_final_text and len(_fu_final_text.strip()) > 10:
+            try:
+                from .utils import clean_technical_details as _ctd_fu
+                _fu_final_text = _ctd_fu(_fu_final_text).strip()
+            except Exception:
+                pass
+            if _fu_final_text:
+                await _send_visible(_fu_final_text[:500])
+    except Exception as _fu_err:
+        logger.warning("[DIRECTOR] followup coordination error: %s", _fu_err)
 
     return "__agent_handled__"
 
