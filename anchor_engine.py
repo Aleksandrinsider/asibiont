@@ -92,6 +92,7 @@ ALWAYS_DELIVER_TYPES = {
     'background_research_ready', # Фоновое исследование завершено — пользователь ждёт результат
     'agent_inbox_reply',         # Агент-почтовик нашёл новые входящие письма
     'agent_task_blocked',        # Агент застрял — нужно решение пользователя
+    'agent_delegation',          # Результат работы агента по dispatch — пользователь ждёт
 }
 
 # Якоря, которые дополнительно ЗАПУСКАЮТ агента (event-driven dispatch)
@@ -861,7 +862,7 @@ class AnchorEngine:
                         'tools': _jd.loads(chosen.tools_allowed or '[]'),
                     }
 
-                    # Запускаем агента асинхронно (не ждём результата здесь)
+                    # Запускаем агента и при необходимости продолжаем цепочку
                     try:
                         result = await _exec_agent_for_director(
                             agent_data, task_text, user.telegram_id,
@@ -889,12 +890,180 @@ class AnchorEngine:
                             "[ANCHOR-DISPATCH] user %d: %s triggered by %s → %d chars",
                             user.id, chosen.name, anchor.anchor_type, len(result or ''),
                         )
+
+                        # ── Создаём якорь-уведомление для пользователя ──
+                        if result and result.strip():
+                            _s3 = _Db()
+                            try:
+                                _notify_anchor = Anchor(
+                                    user_id=user.id,
+                                    anchor_type='agent_delegation',
+                                    source=f'dispatch:{chosen.name}:{anchor.anchor_type}',
+                                    topic=f'{chosen.name} выполнил задачу: {task_text[:80]}',
+                                    priority=AnchorPriority.HIGH,
+                                    data=json.dumps({
+                                        'agent_name': chosen.name,
+                                        'agent_id': chosen.id,
+                                        'task': task_text[:200],
+                                        'result': (result or '')[:400],
+                                    }, ensure_ascii=False),
+                                    triggered_at=datetime.now(timezone.utc),
+                                    expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                                    cooldown_hours=2,
+                                )
+                                _s3.add(_notify_anchor)
+                                _s3.commit()
+                            finally:
+                                _s3.close()
+
+                        # ── ASI-продолжение: анализ результата → следующий агент ──
+                        if result and len(result) > 30:
+                            await self._maybe_continue_chain(
+                                user, chosen, anchor, task_text, result, agents, _s,
+                            )
+
                     except Exception as _exec_e:
                         logger.debug("[ANCHOR-DISPATCH] exec error: %s", _exec_e)
             finally:
                 _s.close()
         except Exception as e:
             logger.debug("[ANCHOR-DISPATCH] dispatch error for user %d: %s", user.id, e)
+
+    async def _maybe_continue_chain(self, user, prev_agent, anchor, task_text, result, agents, session):
+        """ASI анализирует результат агента и решает — нужен ли следующий шаг.
+
+        Если задача не завершена или нужна экспертиза другого агента,
+        создаёт continuation anchor → следующий цикл SCAN dispatch запустит нового агента.
+        Максимум 1 продолжение на исходный якорь (не бесконечная цепочка).
+        """
+        try:
+            # Guard: не создаём цепочку длиннее 1 продолжения
+            from models import AgentActivityLog as _AAL2
+            _cont_count = (
+                session.query(_AAL2)
+                .filter(
+                    _AAL2.user_id == user.id,
+                    _AAL2.activity_type == 'agent_chain_continue',
+                    _AAL2.target == anchor.source,
+                    _AAL2.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
+                )
+                .count()
+            )
+            if _cont_count >= 1:
+                return
+
+            # Guard: если агент заблокирован — не продолжаем
+            if result.strip().startswith('BLOCKED:'):
+                return
+
+            # ASI анализирует результат
+            from ai_integration.autonomous_agent import _quick_ai_call_raw
+            _analysis = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Задача: {task_text[:200]}\n"
+                    f"Агент {prev_agent.name} ответил:\n{result[:400]}\n\n"
+                    f"Доступные агенты: {', '.join(a.name for a in agents)}\n\n"
+                    "Задача ПОЛНОСТЬЮ решена? Если да — ответь JSON: {\"continue\": false}\n"
+                    "Если нужен следующий шаг другим агентом — ответь JSON:\n"
+                    "{\"continue\": true, \"agent_name\": \"имя\", \"task\": \"что сделать\"}\n"
+                    "JSON без ```:"
+                ),
+            }], max_tokens=120)
+
+            if not _analysis:
+                return
+
+            # Парсим решение
+            import re as _re2
+            _m = _re2.search(r'\{[\s\S]*?\}', _analysis)
+            if not _m:
+                return
+            _decision = json.loads(_m.group())
+            if not _decision.get('continue'):
+                return
+
+            _next_name = _decision.get('agent_name', '')
+            _next_task = _decision.get('task', '')
+            if not _next_name or not _next_task:
+                return
+
+            # Находим следующего агента
+            _next_ag = None
+            for ag in agents:
+                if ag.name.lower() == _next_name.lower():
+                    _next_ag = ag
+                    break
+            if not _next_ag:
+                return
+
+            # Логируем continuation
+            from models import AgentActivityLog as _AAL3
+            session.add(_AAL3(
+                user_id=user.id,
+                activity_type='agent_chain_continue',
+                title=f'[chain] {prev_agent.name} → {_next_ag.name}',
+                content=_next_task[:500],
+                target=anchor.source,
+                status='in_progress',
+                ref_id=_next_ag.id,
+            ))
+            session.commit()
+
+            # Запускаем следующего агента
+            from ai_integration.autonomous_agent import _exec_agent_for_director
+            import json as _jd2
+            _next_data = {
+                'id': _next_ag.id,
+                'name': _next_ag.name,
+                'job_title': _next_ag.job_title or '',
+                'specialization': _next_ag.specialization or '',
+                'description': _next_ag.description or '',
+                'personality': _next_ag.personality or '',
+                'python_code': _next_ag.python_code or '',
+                'user_api_keys': _next_ag.user_api_keys or '',
+                'tools_allowed': _next_ag.tools_allowed or '',
+                'search_scope': getattr(_next_ag, 'search_scope', '') or '',
+                'avatar_url': _next_ag.avatar_url or '',
+                'tools': _jd2.loads(_next_ag.tools_allowed or '[]'),
+            }
+            _ctx = f"Предыдущий результат от {prev_agent.name}:\n{result[:300]}"
+            _next_result = await _exec_agent_for_director(
+                _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
+            )
+
+            # Создаём якорь-уведомление о продолжении
+            if _next_result and _next_result.strip():
+                _s4 = Session()
+                try:
+                    _s4.add(Anchor(
+                        user_id=user.id,
+                        anchor_type='agent_delegation',
+                        source=f'chain:{_next_ag.name}:{anchor.anchor_type}',
+                        topic=f'{_next_ag.name} продолжил работу: {_next_task[:80]}',
+                        priority=AnchorPriority.HIGH,
+                        data=json.dumps({
+                            'agent_name': _next_ag.name,
+                            'agent_id': _next_ag.id,
+                            'task': _next_task[:200],
+                            'result': (_next_result or '')[:400],
+                            'chain_from': prev_agent.name,
+                        }, ensure_ascii=False),
+                        triggered_at=datetime.now(timezone.utc),
+                        expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                        cooldown_hours=2,
+                    ))
+                    _s4.commit()
+                finally:
+                    _s4.close()
+
+            logger.info(
+                "[ANCHOR-CHAIN] user %d: %s → %s (task: %s) → %d chars",
+                user.id, prev_agent.name, _next_ag.name, _next_task[:50], len(_next_result or ''),
+            )
+
+        except Exception as _chain_e:
+            logger.debug("[ANCHOR-CHAIN] error for user %d: %s", user.id, _chain_e)
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
