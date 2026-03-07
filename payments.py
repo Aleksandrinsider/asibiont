@@ -23,7 +23,7 @@ else:
 TOKEN_PACK_PRICES = {
     'tokens_small':  {'price': 1500,  'tokens': 1500},
     'tokens_medium': {'price': 5000,  'tokens': 5500},
-    'tokens_large':  {'price': 15000, 'tokens': 18000},
+    'tokens_large':  {'price': 50000, 'tokens': 60000},
 }
 
 def create_payment(amount, description, user_id, tier='tokens_small', promo_code=None):

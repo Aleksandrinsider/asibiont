@@ -13,7 +13,7 @@ NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1"
 CRYPTO_PACK_PRICES = {
     'small':  {'price_usd': 15,  'tokens': 1500},
     'medium': {'price_usd': 50,  'tokens': 5500},
-    'large':  {'price_usd': 150, 'tokens': 18000},
+    'large':  {'price_usd': 500, 'tokens': 60000},
 }
 
 
