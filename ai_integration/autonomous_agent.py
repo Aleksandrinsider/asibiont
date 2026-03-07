@@ -4922,379 +4922,202 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _next_agent_task = decision.get('first_agent_task') or user_message
         _next_dm = _first_dm  # director_message для первого агента
 
-        MAX_ADAPTIVE_STEPS = 3
-        _CHAIN_BUDGET_S = 90   # бюджет всей цепочки — не копим, а укладываемся
-        _chain_t0 = __import__('time').time()
-        _budget_exceeded = False
-        for _adp_step in range(MAX_ADAPTIVE_STEPS):
-            # Проверяем бюджет цепочки: нужно минимум 35с на следующего агента
-            if _adp_step > 0:
-                _elapsed = __import__('time').time() - _chain_t0
-                if _elapsed > _CHAIN_BUDGET_S - 35:
-                    logger.info("[ADAPTIVE] Chain budget exhausted after %d agents (%.0fs), finalizing", _adp_step, _elapsed)
-                    _budget_exceeded = True
-                    break
+        # ── Синхронная цепочка: ASI → агент → анализ → следующий/отчёт ──────
 
-            _ag = _find_agent(_next_agent_name)
-            if not _ag:
+        _adp_ctx_parts = []
+        if _user_full_ctx:
+            _adp_ctx_parts.append(_user_full_ctx)
+        if _history_block.strip():
+            _adp_ctx_parts.append(_history_block.strip())
+        _adp_ctx_parts.append(f"МИССИЯ: {_mission_brief}")
+        _adp_ctx = '\n\n'.join(_adp_ctx_parts)
+
+        _adp_results = []
+        _current_agent = _find_agent(_next_agent_name)
+        _current_task = _next_agent_task
+        _current_dm = _next_dm
+
+        for _step in range(3):
+            if not _current_agent:
                 break
+            if _current_dm:
+                _save_interaction_for_director(user_id, _current_dm)
+                await asyncio.sleep(0.05)
 
-            # Накопленный контекст для агента
-            _adp_ctx_parts = []
-            if _user_full_ctx:
-                _adp_ctx_parts.append(_user_full_ctx)
-            if _history_block.strip():
-                _adp_ctx_parts.append(_history_block.strip())
-            _adp_ctx_parts.append(f"МИССИЯ: {_mission_brief}")
+            _step_ctx = _adp_ctx
             if _adp_results:
-                _prev_block = "РЕЗУЛЬТАТЫ ПРЕДЫДУЩИХ АГЕНТОВ:\n" + "\n\n".join(
-                    f"[{_n}]: {_r[:600]}{'...' if len(_r) > 600 else ''}" for _n, _t, _r in _adp_results
+                _step_ctx += "\n\nРЕЗУЛЬТАТЫ ПРЕДЫДУЩИХ АГЕНТОВ:\n" + "\n".join(
+                    f"[{n}]: {r[:600]}" for n, _, r in _adp_results
                 )
-                _adp_ctx_parts.append(_prev_block)
-            _adp_ctx = '\n\n'.join(_adp_ctx_parts)
 
-            # Добавляем инструкцию агенту — в конце сигнализировать что нужно дальше
-            _agent_task_with_signal = (
-                f"{_next_agent_task}\n\n"
-                + ("ВАЖНО: используй и развивай результаты предыдущих агентов из контекста. "
-                   "Не повторяй то что они уже сделали — иди дальше.\n\n" if _adp_results else "")
-                + ("В конце своего ответа добавь строку: ПЕРЕДАЮ: [что ещё нужно сделать или кому передать задачу]"
-                   if _adp_step < MAX_ADAPTIVE_STEPS - 1 else "")
+            _agent_task_full = (
+                _current_task
+                + ("\n\nВАЖНО: используй результаты предыдущих агентов."
+                   if _adp_results else "")
+                + "\n\nВ конце ответа добавь: ПЕРЕДАЮ: [что ещё нужно или кому передать]"
             )
 
-            _resp = await _run_agent_task(_ag, _agent_task_with_signal, extra_context=_adp_ctx,
-                                               director_message=_next_dm)
-            _next_dm = ''  # сбрасываем — следующие dm будут из routing
-            # Вырезаем служебный сигнал агента из хранимого результата (чистый текст для пользователя)
-            _resp_clean = re.sub(r'\n?ПЕРЕДАЮ:\s*[^\n]*', '', _resp).strip() if _resp else _resp
-            _adp_results.append((_ag['name'], _next_agent_task, _resp_clean))
+            _resp = await _run_agent_task(_current_agent, _agent_task_full,
+                                          extra_context=_step_ctx, director_message=_current_dm)
+            if not _resp:
+                break
 
-            # Определяем остаток агентов после этого шага
-            _remaining_agents = [
+            _resp_clean = re.sub(r'\n?ПЕРЕДАЮ:\s*[^\n]*', '', _resp).strip()
+            _adp_results.append((_current_agent['name'], _current_task, _resp_clean))
+
+            # ASI анализирует: нужен ли следующий агент?
+            _remaining = [
                 a for a in _agents
                 if a.get('name') not in {n for n, _, _ in _adp_results}
             ]
+            _signal = re.search(r'ПЕРЕДАЮ:\s*(.+)', _resp)
+            _next_ag = None
+            _next_tsk = None
+            _next_dm_s = ''
 
-            # На последнем шаге или если агентов не осталось — роутинговый вызов не нужен
-            if _adp_step >= MAX_ADAPTIVE_STEPS - 1 or not _remaining_agents:
+            if _signal and _remaining:
+                _sig_text = _signal.group(1).strip()
+                for _ra in _remaining:
+                    if _ra.get('name', '').lower() in _sig_text.lower():
+                        _next_ag = _ra
+                        _next_tsk = _sig_text
+                        break
+                if not _next_ag:
+                    _rem_block = "\n".join(
+                        f"- {a['name']}: {a.get('description','')[:80]}" for a in _remaining[:8]
+                    )
+                    _rr = await _quick_ai_call_raw([{"role": "user", "content": (
+                        f"Миссия: {_mission_brief}\n"
+                        f"Агент {_current_agent['name']} сделал: {_resp_clean[:300]}\n"
+                        f"Сигнал: {_sig_text}\nДоступные:\n{_rem_block}\n\n"
+                        "Нужен ещё? JSON: "
+                        '{"action":"next","agent_name":"...","agent_task":"...","director_message":"..."}'
+                        ' или {"action":"finalize"}'
+                    )}], max_tokens=200)
+                    try:
+                        _rjm = re.search(r'```(?:json)?\s*([\s\S]*?)```', _rr or '')
+                        _rt = _json.loads(_rjm.group(1) if _rjm else (_rr or '{}'))
+                        if _rt.get('action') == 'next':
+                            _next_ag = _find_agent(_rt.get('agent_name', ''))
+                            _next_tsk = _rt.get('agent_task') or user_message
+                            _next_dm_s = _rt.get('director_message', '')
+                    except Exception:
+                        pass
+
+            if not _next_ag:
                 break
 
-            _remaining_block = "\n".join(
-                f"- {a['name']}: {a.get('description','')[:80]}" for a in _remaining_agents[:8]
-            )
-
-            _results_so_far = "\n\n".join(
-                f"[{n}] задача: {t[:100]}\nрезультат: {r[:300]}" for n, t, r in _adp_results
-            )
-            # Для сигнала используем оригинальный _resp (с ПЕРЕДАЮ) если он был
-            _signal_text = _resp[-400:] if _resp else '(нет сигнала)'
-            _routing_prompt = (
-                f"Миссия: {_mission_brief}\n\n"
-                f"Запрос пользователя: «{user_message}»\n"
-                f"{_ctx_hint}\n\n"
-                f"Агенты уже поработали:\n{_results_so_far}\n\n"
-                f"Сигнал последнего агента:\n{_signal_text}\n\n"
-                f"Доступные агенты (не задействованные):\n{_remaining_block}\n\n"
-                "Реши: миссия выполнена — или нужен ещё один агент?\n"
-                "Учитывай цели и задачи пользователя — выбирай агента, чья специализация лучше всего "
-                "продвигает цель или завершает задачу.\n"
-                "Если выполнена → {\"action\": \"finalize\"}\n"
-                "Если нужен ещё агент → {\"action\": \"next\", \"agent_name\": \"точное имя\", "
-                "\"agent_task\": \"что сделать (1 предложение)\", "
-                "\"director_message\": \"живое обращение: начни с имени + глагол ('Кристина, подготовь...', 'Марк, найди...')\"}\n"
-                "Ответь ТОЛЬКО JSON без ```."
-            )
-            # R6: Сначала пробуем использовать сигнал ПЕРЕДАЮ от агента (без лишнего LLM-вызова)
-            _signal_match = re.search(r'ПЕРЕДАЮ:\s*(.+)', _resp or '') if _resp else None
-            _routed_by_signal = False
-            if _signal_match:
-                _signal_text_parsed = _signal_match.group(1).strip()
-                for _ra in _remaining_agents:
-                    if _ra.get('name', '').lower() in _signal_text_parsed.lower():
-                        _next_agent_name = _ra['name']
-                        _next_agent_task = _signal_text_parsed
-                        _next_dm = ''  # без director_message при auto-routing
-                        _routed_by_signal = True
-                        logger.info("[ADAPTIVE] Auto-routed via ПЕРЕДАЮ signal to %s", _next_agent_name)
-                        break
-
-            if not _routed_by_signal:
-                # Fallback: LLM routing (если сигнал агента не содержит имени)
-                _routing_raw = await _quick_ai_call_raw(
-                    [{"role": "user", "content": _routing_prompt}], max_tokens=200
-                )
-                _rjm = re.search(r'```(?:json)?\s*([\s\S]*?)```', _routing_raw or '')
-                try:
-                    _routing = _json.loads(_rjm.group(1) if _rjm else (_routing_raw or '{}'))
-                except Exception:
-                    _routing = {}
-
-                if _routing.get('action') == 'finalize':
-                    break
-
-                if _routing.get('action') == 'next':
-                    _dm = _routing.get('director_message', '')
-                    if _dm:
-                        _save_interaction_for_director(user_id, _dm)
-                        await asyncio.sleep(0.05)
-                    _next_agent_name = _routing.get('agent_name', '')
-                    _next_agent_task = _routing.get('agent_task') or user_message
-                    _next_dm = _dm
-                else:
-                    break
+            _current_agent = _next_ag
+            _current_task = _next_tsk
+            _current_dm = _next_dm_s
+            logger.info("[ADAPTIVE] step %d → %s", _step + 1, _current_agent.get('name'))
 
         if not _adp_results:
             return None
 
-        # ── Background continuation: если бюджет иссяк, но есть ещё работа ──
-        if _budget_exceeded and _next_agent_name and progress_callback:
-            _bg_remaining = [
-                a for a in _agents
-                if a.get('name') not in {n for n, _, _ in _adp_results}
-            ]
-            if _bg_remaining:
-                async def _bg_chain(_rem_agents, _task, _ctx, _mission, _uid, _cb, _prev):
-                    """Фоновое продолжение цепочки — каждый агент отправляет результат отдельно."""
-                    try:
-                        for _bg_ag in _rem_agents[:2]:
-                            _bg_resp = await _run_agent_task(
-                                _bg_ag, _task, extra_context=_ctx, director_message=''
-                            )
-                            if _bg_resp:
-                                _prev.append((_bg_ag['name'], _task, _bg_resp))
-                        # Фоновый синтез
-                        if len(_prev) > len(_adp_results):
-                            _bg_combined = "\n\n".join(f"{n}: {r[:400]}" for n, _, r in _prev)
-                            _bg_synth = await _quick_ai_call_raw([{
-                                "role": "user",
-                                "content": (
-                                    f"Миссия: {_mission}\n"
-                                    f"Все агенты отработали:\n{_bg_combined[:1200]}\n\n"
-                                    "Кратко скажи что ещё было сделано (1-2 предложения, живой стиль)."
-                                ),
-                            }], max_tokens=200)
-                            if _bg_synth and _cb:
-                                await _cb(_bg_synth.strip(), persist=True)
-                    except Exception as _bg_err:
-                        logger.warning("[ADAPTIVE-BG] background chain error: %s", _bg_err)
-
-                asyncio.create_task(_bg_chain(
-                    _bg_remaining, _next_agent_task,
-                    _adp_ctx if _adp_results else '',
-                    _mission_brief, user_id, progress_callback, list(_adp_results)
-                ))
-                logger.info("[ADAPTIVE] Scheduled background continuation for %d agents",
-                            len(_bg_remaining))
-
-        # Финальный синтез ASI
-        _adp_combined = "\n\n".join(f"{n}: {r}" for n, _, r in _adp_results)
+        _adp_combined = "\n\n".join(f"{n}: {r[:400]}" for n, _, r in _adp_results)
         _adp_final = await _quick_ai_call_raw([{
             "role": "user",
             "content": (
                 f"Миссия: {_mission_brief}\n"
-                f"Пользователь просил: «{user_message}»\n\n"
-                f"Команда агентов отработала:\n\n{_adp_combined[:1500]}\n\n"
-                "ВАЖНО: пользователь уже ВИДЕЛ обращения к агентам и их ответы прямо в чате "
-                "(как живой диалог). НЕ ПОВТОРЯЙ их текст.\n\n"
-                "Напиши 2-3 предложения как живой человек в чате — без шаблонов, без 'итог:', "
-                "без списков. Говори своими словами, с эмоцией и конкретикой.\n"
-                "Если есть что делать дальше — просто скажи что делаешь, без вопросов.\n"
-                "ЗАПРЕЩЕНО: 'Подведу итог', 'Резюмирую', 'Итак', нумерованные пункты, markdown."
+                f"Пользователь: «{user_message}»\n\n"
+                f"Команда отработала:\n{_adp_combined[:1200]}\n\n"
+                "Пользователь уже ВИДЕЛ все ответы агентов. НЕ ПОВТОРЯЙ.\n"
+                "1-2 предложения: что сделано и что дальше. Живой стиль.\n"
+                "ЗАПРЕЩЕНО: 'итог', 'резюмирую', списки, markdown."
             ),
-        }], max_tokens=300)
-        return {"response": _adp_final or "Миссия выполнена", "execute_next": True}
+        }], max_tokens=200)
+        return {"response": _adp_final or "Сделано", "execute_next": True}
 
-    # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
-    MAX_ROUNDS = 5
-    all_results: list = []   # [(agent_name, task, result)]
-    called_agents: set = set()
-    _rework_count: dict = {}  # agent_name → сколько раз доработка (макс 2)
-    _rounds_t0 = __import__('time').time()
-    _ROUNDS_BUDGET_S = 100  # бюджет агентного цикла
+    # ── Делегирование агентам (синхронно). ──────────────────────────────
+    # Контекст для агентов
+    _agent_ctx_parts = []
+    if _user_full_ctx:
+        _agent_ctx_parts.append(_user_full_ctx)
+    if _history_block.strip():
+        _agent_ctx_parts.append(_history_block.strip())
+    _del_ctx = '\n\n'.join(_agent_ctx_parts)
 
-    for _round in range(MAX_ROUNDS):
-        # Бюджет: нужно ~40с на следующего агента + синтез
-        if _round > 0 and (__import__('time').time() - _rounds_t0) > _ROUNDS_BUDGET_S - 40:
-            logger.info("[DIRECTOR] Rounds budget exhausted after %d rounds (%.0fs)",
-                        _round, __import__('time').time() - _rounds_t0)
-            break
-        if _round > 0:
-            # ASI видит уже полученные результаты и решает — вызвать ещё, доработать или финализировать
-            _so_far = "\n\n".join(f"{n} (задача: {t}): {r}" for n, t, r in all_results)
-            _remaining = [a for a in _agents if a['name'] not in called_agents]
-            _remaining_block = "\n".join(
-                f"- {a['name']}: Может: {', '.join(_parse_agent_integrations(a.get('user_api_keys',''), a.get('python_code',''), a.get('tools_allowed',''), a.get('search_scope','')))}"
-                for a in _remaining
-            ) if _remaining else "(все агенты уже работали)"
-            # Список агентов которых можно отправить на доработку (не более 1 раза)
-            _reworkable = [n for n, _, _ in all_results if _rework_count.get(n, 0) < 2]
-            _rework_hint = ""
-            if _reworkable:
-                _rework_hint = (
-                    "\n   • rework — результат агента неполный, некачественный или не по теме. "
-                    "Отправить ЭТОГО ЖЕ агента на доработку с конкретным уточнением что исправить.\n"
-                    '{"action": "rework", "agent_name": "имя агента который уже работал", '
-                    '"rework_feedback": "что именно доработать — конкретно", '
-                    '"director_message": "Кристина, доработай... (имя + повелит. глагол)"}\n'
+    if action == 'delegate':
+        _ag = _find_agent(decision.get('agent_name', ''))
+        if not _ag:
+            return None
+        _dm = decision.get('director_message', '')
+        if _dm:
+            _save_interaction_for_director(user_id, _dm)
+            await asyncio.sleep(0.05)
+        _task = decision.get('agent_task') or user_message
+        _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
+        if not _resp:
+            return None
+
+        _first_result = [(_ag['name'], _task, _resp)]
+
+        # ASI синтезирует по первому агенту и возвращает
+        _synth = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Пользователь: «{user_message}»\n\n"
+                f"{_ag['name']} ответил:\n{_resp[:800]}\n\n"
+                "Пользователь уже ВИДЕЛ ответ агента. НЕ ПОВТОРЯЙ.\n"
+                "1-2 предложения: что получили и что дальше. Живой стиль.\n"
+                "ЗАПРЕЩЕНО: 'итог', 'резюмирую', списки, markdown."
+            ),
+        }], max_tokens=200)
+        return {"response": _synth or "Сделано", "execute_next": True}
+
+    elif action == 'multi_delegate':
+        _intro = decision.get('director_intro', '')
+        if _intro:
+            _save_interaction_for_director(user_id, _intro)
+            await _send_visible(_intro)
+            await asyncio.sleep(0.05)
+
+        _tasks_list = decision.get('tasks') or []
+        _valid = []
+        for _t in _tasks_list:
+            _ag = _find_agent(_t.get('agent_name', ''))
+            if _ag:
+                _valid.append((_ag, _t.get('agent_task') or user_message, _t.get('director_message', '')))
+        if not _valid:
+            return None
+
+        # Все агенты — последовательно, синхронно
+        _multi_results = []
+        for _m_ag, _m_task, _m_dm in _valid:
+            if _m_dm:
+                _save_interaction_for_director(user_id, _m_dm)
+                await asyncio.sleep(0.05)
+
+            _m_ctx = _del_ctx
+            if _multi_results:
+                _m_ctx += "\n\nРЕЗУЛЬТАТЫ ПРЕДЫДУЩИХ АГЕНТОВ:\n" + "\n".join(
+                    f"[{n}]: {r[:500]}" for n, _, r in _multi_results
                 )
-            _reeval_raw = await _quick_ai_call_raw([{
-                "role": "user",
-                "content": (
-                    f"Ты — ASI Biont, директор. Пользователь спросил: «{user_message}»\n\n"
-                    f"Агенты уже ответили:\n{_so_far[:1500]}\n\n"
-                    f"Ещё не вызванные агенты:\n{_remaining_block}\n\n"
-                    "ОЦЕНИ результаты критически:\n"
-                    "- Ответ по теме? Содержит конкретику или пустые фразы?\n"
-                    "- Задача выполнена полностью или частично?\n"
-                    "- Нужно доработать, привлечь другого агента, или достаточно?\n\n"
-                    "Выбери действие. Ответь ТОЛЬКО JSON без ```:\n"
-                    '{"action": "finalize"}\n'
-                    "или\n"
-                    '{"action": "delegate", "agent_name": "точное имя", '
-                    '"agent_task": "задача", '
-                    '"director_message": "живое обращение: имя + глагол (Кристина, подготовь... / Марк, найди...)"}\n'
-                    + _rework_hint +
-                    "или\n"
-                    '{"action": "multi_delegate", "director_intro": "вступление", '
-                    '"tasks": [{"agent_name": "...", "agent_task": "...", '
-                    '"director_message": "имя + глагол"}]}'
-                ),
-            }], max_tokens=300)
-            if not _reeval_raw:
-                break
-            _jm2 = re.search(r'```(?:json)?\s*([\s\S]*?)```', _reeval_raw)
-            try:
-                decision = _json.loads(_jm2.group(1) if _jm2 else _reeval_raw)
-            except Exception:
-                break
-            action = decision.get('action', 'finalize')
-            if action not in ('delegate', 'multi_delegate', 'rework'):
-                break  # finalize → выходим из цикла
 
-        # Строим контекст диалога для агентов: профиль пользователя + история + предыдущие результаты
-        _agent_ctx_parts = []
-        if _user_full_ctx:
-            _agent_ctx_parts.append(_user_full_ctx)
-        if _history_block.strip():
-            _agent_ctx_parts.append(_history_block.strip())
-        if all_results:
-            _agent_ctx_parts.append("РАНЕЕ ВЫПОЛНЕННЫЕ ЗАДАЧИ КОМАНДЫ:\n" + "\n".join(
-                f"{_n}: {_r[:300]}" for _n, _t2, _r in all_results
-            ))
-        _agent_ctx = '\n\n'.join(_agent_ctx_parts)
+            _m_task_full = _m_task
+            if _multi_results:
+                _m_task_full += "\n\nВАЖНО: используй результаты предыдущих агентов. Не повторяй — иди дальше."
 
-        # ── rework: отправить того же агента на доработку ──────────────────
-        if action == 'rework':
-            _rw_name = decision.get('agent_name', '')
-            _ag = _find_agent(_rw_name)
-            if not _ag or _rework_count.get(_ag['name'], 0) >= 2:
-                break  # макс 2 доработки на агента
-            _rw_feedback = decision.get('rework_feedback', '')
-            _dm = decision.get('director_message', '')
-            if _dm:
-                _save_interaction_for_director(user_id, _dm)
-                await asyncio.sleep(0.05)
-            # Находим предыдущий результат этого агента
-            _prev_result = ''
-            for _pn, _pt, _pr in all_results:
-                if _pn == _ag['name']:
-                    _prev_result = _pr
-            # Формируем задачу на доработку
-            _rework_task = (
-                f"ДОРАБОТКА: {_rw_feedback}\n\n"
-                f"Твой предыдущий результат:\n{_prev_result[:800]}\n\n"
-                f"Исправь и дополни его с учётом замечаний."
-            )
-            _rework_count[_ag['name']] = _rework_count.get(_ag['name'], 0) + 1
-            _resp = await _run_agent_task(_ag, _rework_task, extra_context=_agent_ctx,
-                                          director_message=_dm)
-            all_results.append((_ag['name'] + ' (доработка)', _rework_task, _resp))
-            continue
+            _m_resp = await _run_agent_task(_m_ag, _m_task_full, extra_context=_m_ctx, director_message=_m_dm)
+            if _m_resp:
+                _multi_results.append((_m_ag['name'], _m_task, _m_resp))
 
-        # Выполняем текущее решение
-        if action == 'delegate':
-            _ag = _find_agent(decision.get('agent_name', ''))
-            if not _ag or _ag['name'] in called_agents:
-                break
-            _dm = decision.get('director_message', '')
-            if _dm:
-                _save_interaction_for_director(user_id, _dm)
-                await asyncio.sleep(0.05)
-            called_agents.add(_ag['name'])
-            _task = decision.get('agent_task') or user_message
-            _resp = await _run_agent_task(_ag, _task, extra_context=_agent_ctx,
-                                          director_message=_dm)
-            all_results.append((_ag['name'], _task, _resp))
+        if not _multi_results:
+            return None
 
-        elif action == 'multi_delegate':
-            _intro = decision.get('director_intro', '')
-            if _intro:
-                _save_interaction_for_director(user_id, _intro)
-                await _send_visible(_intro)
-                await asyncio.sleep(0.05)
-            _valid = []
-            _valid_dms = []
-            for _t in (decision.get('tasks') or []):
-                _ag = _find_agent(_t.get('agent_name', ''))
-                if not _ag or _ag['name'] in called_agents:
-                    continue
-                _tdm = _t.get('director_message', '')
-                if _tdm:
-                    _save_interaction_for_director(user_id, _tdm)
-                called_agents.add(_ag['name'])
-                _valid.append((_ag, _t.get('agent_task') or user_message))
-                _valid_dms.append(_tdm)
-            if not _valid:
-                break
-            # Выполняем агентов ПАРАЛЛЕЛЬНО через asyncio.gather (ускорение 2-3×)
-            async def _parallel_agent(ag, task, dm, ctx):
-                try:
-                    resp = await _run_agent_task(ag, task, extra_context=ctx, director_message=dm)
-                    if isinstance(resp, Exception) or not resp:
-                        return (ag['name'], task, "Данных нет.")
-                    return (ag['name'], task, str(resp)[:800])
-                except Exception as _pe:
-                    logger.warning("[DIRECTOR] parallel agent %s error: %s", ag.get('name'), _pe)
-                    return (ag['name'], task, "Данных нет.")
+        _multi_combined = "\n\n".join(f"{n}: {r[:400]}" for n, _, r in _multi_results)
+        _synth = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Пользователь: «{user_message}»\n\n"
+                f"Команда отработала:\n{_multi_combined[:1200]}\n\n"
+                "Пользователь видел все ответы. 1-2 предложения: что сделано, что дальше. Живой стиль."
+            ),
+        }], max_tokens=200)
+        return {"response": _synth or "Сделано", "execute_next": True}
 
-            _parallel_tasks = [
-                _parallel_agent(ag, task, dm, _agent_ctx)
-                for (ag, task), dm in zip(_valid, _valid_dms)
-            ]
-            _parallel_results = await asyncio.gather(*_parallel_tasks)
-            all_results.extend(_parallel_results)
-
-    # ── Финальный синтез ASI ──────────────────────────────────────────────────
-    if not all_results:
-        return None
-
-    combined = "\n\n".join(f"{n}: {r}" for n, t, r in all_results)
-    # Формируем блок поручений: кому что было поручено
-    _assignments = "\n".join(f"— {n}, задача: {t[:100]}" for n, t, r in all_results)
-    final_response = await _quick_ai_call_raw([{
-        "role": "user",
-        "content": (
-            f"Пользователь спросил: «{user_message}»\n\n"
-            f"Ты поручил агентам:\n{_assignments}\n\n"
-            f"Отчёты агентов:\n{combined[:2000]}\n\n"
-            "ВАЖНО: пользователь уже ВИДЕЛ в чате твоё обращение к агенту и его ответ — "
-            "это было как живой диалог в групповом чате. НЕ ПОВТОРЯЙ то что агент уже написал.\n\n"
-            "Напиши 2-3 предложения как живой человек — не как бот и не по шаблону. "
-            "Скажи своими словами что ценного получили и что делаешь дальше. "
-            "Без вопросов вроде 'запустить?' — просто действуй.\n\n"
-            "ЗАПРЕЩЕНО: 'уже начала', 'скоро пришлёт', 'работает над этим', "
-            "'отработала', 'начал исследование', 'начала поиск', "
-            "'Подведу итог', 'Резюмирую', 'Итак:', нумерованные списки, markdown.\n"
-            "НЕ начинай с 'Привет'. Говори как человек в чате — коротко, живо, по делу."
-        ),
-    }], max_tokens=400)
-    # Защита от пустых/тёрсных синтезов директора
-    if final_response and len(final_response.strip()) < 40 and all_results:
-        _fallback_parts = []
-        for _n, _t, _r in all_results:
-            _fallback_parts.append(f"{_n}: {_r[:200]}")
-        final_response = "Команда отработала:\n" + "\n".join(_fallback_parts)
-    return {"response": final_response or "Команда отработала. Результаты выше ☝️", "execute_next": True}
+    return None
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None,

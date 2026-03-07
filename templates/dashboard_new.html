@@ -2198,7 +2198,7 @@
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 180000);
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
                 
                 const formData = new FormData();
                 formData.append('message', message);
@@ -14814,7 +14814,7 @@ except Exception as e:
       'tasks-word-1':'задачу','tasks-word-2':'задачи','tasks-word-5':'задач',
       'show-delegated':'Показать список задач, делегированных пользователю',
       'err-prefix':'Ошибка:','err-word':'Ошибка','err-copy':'Ошибка копирования',
-      'err-timeout':'Сервер не ответил за 180 сек. Попробуйте ещё раз.',
+      'err-timeout':'Сервер не ответил за 60 сек. Попробуйте ещё раз.',
       'err-server-unavail':'Сервер временно недоступен. Попробуйте через минуту.',
       'confirm-task-return':'Задача вернется в ваш список личных задач.',
       'delegated-to':'Поручено','delegated-from':'Поручено от',
@@ -15080,7 +15080,7 @@ except Exception as e:
       'tasks-word-1':'task','tasks-word-2':'tasks','tasks-word-5':'tasks',
       'show-delegated':'Show tasks delegated to user',
       'err-prefix':'Error:','err-word':'Error','err-copy':'Copy error',
-      'err-timeout':'Server did not respond within 180 sec. Please try again.',
+      'err-timeout':'Server did not respond within 60 sec. Please try again.',
       'err-server-unavail':'Server temporarily unavailable. Try again in a minute.',
       'confirm-task-return':'The task will return to your personal task list.',
       'delegated-to':'Delegated to','delegated-from':'Delegated from',
