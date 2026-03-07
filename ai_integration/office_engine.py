@@ -453,6 +453,117 @@ def _load_agent_outcome_memory_sync(user_id: int, agent_name: str, limit: int = 
         return ''
 
 
+# ── Автономный анализатор результатов агента ─────────────────────────────────
+# После того как агент принёс данные, ASI решает: передать следующему агенту
+# (безопасные шаги) или спросить пользователя (действия с последствиями).
+
+_DECISION_GATE_KEYWORDS = (
+    'публик', 'publish', 'отправ', 'send', 'рассыл', 'оплат', 'оплач',
+    'купи', 'buy', 'подпис', 'запуст', 'launch', 'deploy', 'удали', 'delete',
+    'перевод', 'transfer', 'подтверд', 'confirm', 'заключ', 'договор',
+)
+
+_NEXT_STEP_PROMPT = """Ты — ASI, автономный директор офиса. Агент "{agent_name}" только что выполнил задачу и вернул результат.
+
+РЕЗУЛЬТАТ АГЕНТА:
+{result}
+
+ДРУГИЕ ДОСТУПНЫЕ АГЕНТЫ:
+{other_agents}
+
+КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
+{user_context}
+
+Реши что делать дальше. Варианты:
+1. NEXT — результат подготовительный (исследование, анализ, черновик) и есть логичный следующий шаг для другого агента. Укажи имя агента и задачу.
+2. ASK — вся подготовка завершена и следующий шаг требует РЕШЕНИЯ пользователя (публикация, отправка, оплата, запуск). Сформулируй вопрос.
+3. DONE — результат финальный/информационный, следующий шаг не нужен.
+
+Ответь СТРОГО в формате (одна строка):
+NEXT|имя_агента|задача для агента (с контекстом из предыдущего результата)
+ASK|вопрос пользователю (кратко, с вариантами действий)
+DONE
+
+Правила:
+- НЕ передавай задачу тому же агенту который только что её выполнил
+- Передавай ТОЛЬКО если другой агент реально нужен для следующего шага
+- Если результат — готовый отчёт/данные/мониторинг без продолжения → DONE
+- Если следующий шаг = реальное действие (отправка, публикация, оплата) → ASK"""
+
+
+async def _autonomous_analyze_result(
+    user_id: int,
+    user_db_id: int,
+    agent_name: str,
+    agent_id: int,
+    report: str,
+    all_agents: list,
+    user_context: str,
+) -> dict:
+    """Анализирует результат агента и решает следующий шаг.
+    Возвращает: {'action': 'next'|'ask'|'done', 'target': str, 'task': str}
+    """
+    if not report or len(report.strip()) < 30:
+        return {'action': 'done'}
+
+    # Собираем других агентов (исключаем текущего)
+    other = []
+    for a in all_agents:
+        if a.get('id') == agent_id or a.get('name', '').lower() == agent_name.lower():
+            continue
+        other.append(f"- {a.get('name', '?')} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:100]}")
+    if not other:
+        return {'action': 'done'}  # нет других агентов — некому передать
+
+    prompt = _NEXT_STEP_PROMPT.format(
+        agent_name=agent_name,
+        result=report[:600],
+        other_agents='\n'.join(other[:6]),
+        user_context=(user_context or 'нет данных')[:400],
+    )
+
+    try:
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        import aiohttp as _aio
+        async with _aio.ClientSession() as sess:
+            async with sess.post(
+                'https://api.deepseek.com/chat/completions',
+                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                json={
+                    'model': DEEPSEEK_MODEL,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'max_tokens': 150,
+                    'temperature': 0.3,
+                },
+                timeout=_aio.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    return {'action': 'done'}
+                data = await resp.json()
+                answer = (data.get('choices', [{}])[0].get('message', {}).get('content', '') or '').strip()
+    except Exception as _e:
+        logger.debug('[AUTONOMY] AI call error: %s', _e)
+        return {'action': 'done'}
+
+    if not answer:
+        return {'action': 'done'}
+
+    # Парсим ответ
+    answer_line = answer.splitlines()[0].strip()
+
+    if answer_line.startswith('NEXT|'):
+        parts = answer_line.split('|', 2)
+        if len(parts) >= 3:
+            return {'action': 'next', 'target': parts[1].strip(), 'task': parts[2].strip()}
+
+    if answer_line.startswith('ASK|'):
+        parts = answer_line.split('|', 1)
+        if len(parts) >= 2:
+            return {'action': 'ask', 'question': parts[1].strip()}
+
+    return {'action': 'done'}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 class OfficeEngine:
     """
@@ -710,11 +821,178 @@ class OfficeEngine:
                             )
                         except Exception:
                             pass
+                        # ── Автономный следующий шаг ──────────────────────────
+                        # ASI анализирует результат и решает: передать другому
+                        # агенту (безопасный шаг) или спросить пользователя.
+                        try:
+                            await self._autonomous_next_step(
+                                agent, user, report,
+                            )
+                        except Exception as _ans_e:
+                            logger.debug("[OFFICE-L1] [%s] autonomy error: %s", agent.name, _ans_e)
                 except Exception as e:
                     logger.debug("[OFFICE-L1] [%s] report/reaction error: %s", agent.name, e)
 
             elif stderr and 'timeout' not in stderr:
                 logger.debug("[OFFICE-L1] [%s] stderr: %s", agent.name, stderr[:150])
+
+    async def _autonomous_next_step(self, agent, user, report: str):
+        """После завершения агента — ASI решает следующий шаг автономно.
+        Может выстроить цепочку до 3 агентов без участия пользователя.
+        Безопасные шаги (исследование, анализ) → передаёт другому агенту.
+        Шаги с последствиями (публикация, отправка) → спрашивает пользователя.
+        Каждый шаг виден в чате как живой диалог ASI↔агенты.
+        """
+        if not report or len(report.strip()) < 40:
+            return
+
+        # Загружаем всех агентов пользователя
+        try:
+            from models import Session as _Db, UserAgent as _UA
+            _s = _Db()
+            try:
+                _rows = (
+                    _s.query(_UA)
+                    .filter(_UA.author_id == user.id, _UA.status == 'active')
+                    .all()
+                )
+                all_agents = [
+                    {
+                        'id': a.id,
+                        'name': a.name or 'Агент',
+                        'specialization': a.specialization or '',
+                        'description': (a.description or '')[:150],
+                        'avatar_url': a.avatar_url or '',
+                    }
+                    for a in _rows
+                ]
+            finally:
+                _s.close()
+        except Exception:
+            return
+
+        if len(all_agents) < 2:
+            return  # один агент — некому передавать
+
+        # Контекст пользователя
+        _user_ctx = ''
+        if _build_user_context_sync:
+            try:
+                loop = asyncio.get_running_loop()
+                _user_ctx = await loop.run_in_executor(None, _build_user_context_sync, user.id)
+            except Exception:
+                pass
+
+        # Цепочка: до 3 автономных шагов (агент → агент → агент → ask/done)
+        _MAX_CHAIN = 3
+        _current_report = report
+        _current_agent_name = agent.name or 'Агент'
+        _current_agent_id = agent.id
+        _used_agents = {agent.id}  # не используем одного агента дважды подряд
+
+        for _step in range(_MAX_CHAIN):
+            async with self._ai_sem:
+                decision = await _autonomous_analyze_result(
+                    user_id=user.telegram_id,
+                    user_db_id=user.id,
+                    agent_name=_current_agent_name,
+                    agent_id=_current_agent_id,
+                    report=_current_report,
+                    all_agents=all_agents,
+                    user_context=_user_ctx,
+                )
+
+            action = decision.get('action', 'done')
+
+            if action == 'next':
+                target_name = decision.get('target', '')
+                task_text = decision.get('task', '')
+                if not target_name or not task_text:
+                    break
+                target_agent = next(
+                    (a for a in all_agents if a['name'].lower() == target_name.lower()),
+                    next((a for a in all_agents if target_name.lower() in a['name'].lower()), None),
+                )
+                if not target_agent or target_agent['id'] in _used_agents:
+                    break
+
+                logger.info("[AUTONOMY] step %d: %s → %s: %s",
+                           _step + 1, _current_agent_name, target_name, task_text[:80])
+
+                # ASI обращается к следующему агенту — видно в чате
+                _director_msg = f"{target_agent['name']}, {task_text[:300]}"
+                try:
+                    from ai_integration.autonomous_agent import _save_interaction_for_director
+                    _save_interaction_for_director(user.telegram_id, _director_msg)
+                except Exception:
+                    pass
+                # Уведомление в Telegram
+                await _send_tg(user.telegram_id, _director_msg)
+
+                # Выполняем задачу
+                try:
+                    from ai_integration.autonomous_agent import _exec_agent_for_director
+                    result = await asyncio.wait_for(
+                        _exec_agent_for_director(target_agent, task_text, user.telegram_id),
+                        timeout=45,
+                    )
+                except asyncio.TimeoutError:
+                    result = f"Задача передана {target_agent['name']}, результат будет позже."
+                except Exception as _e:
+                    logger.debug("[AUTONOMY] exec error step %d: %s", _step + 1, _e)
+                    break
+
+                if not result or not result.strip():
+                    break
+
+                # Результат агента — в чат с аватаркой
+                _save_chat_message_sync(
+                    user.id,
+                    target_agent['name'],
+                    target_agent['id'],
+                    target_agent.get('avatar_url', ''),
+                    result[:800],
+                    False,
+                )
+                # Уведомление в Telegram
+                _tg_result = f"{target_agent['name']}:\n{result[:600]}"
+                await _send_tg(user.telegram_id, _tg_result)
+                # Activity log
+                _log_agent_activity_sync(
+                    user.id,
+                    target_agent['name'],
+                    target_agent['id'],
+                    f"Автономно: {task_text[:120]}",
+                    result[:500],
+                    'delegation',
+                )
+
+                logger.info("[AUTONOMY] step %d done: %s (%d chars)",
+                           _step + 1, target_agent['name'], len(result))
+
+                # Подготовка к следующей итерации
+                _used_agents.add(target_agent['id'])
+                _current_report = result
+                _current_agent_name = target_agent['name']
+                _current_agent_id = target_agent['id']
+                await asyncio.sleep(1)  # небольшая пауза между шагами
+                continue  # анализируем результат этого агента → может быть ещё шаг
+
+            elif action == 'ask':
+                question = decision.get('question', 'Готово. Действуем?')
+                ask_msg = f"Подготовительная работа завершена.\n\n{question}"
+                try:
+                    from ai_integration.autonomous_agent import _save_interaction_for_director
+                    _save_interaction_for_director(user.telegram_id, ask_msg)
+                except Exception:
+                    pass
+                await _send_tg(user.telegram_id, ask_msg)
+                logger.info("[AUTONOMY] ASK user %d at step %d: %s",
+                          user.telegram_id, _step + 1, question[:80])
+                break  # ждём ответа пользователя
+
+            else:  # done
+                break
 
     async def _format_agent_report(self, agent_name: str, agent_spec: str, stdout: str,
                                       user_db_id: int = 0) -> str:
