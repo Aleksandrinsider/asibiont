@@ -98,10 +98,23 @@ ALWAYS_DELIVER_TYPES = {
 # Якоря, которые дополнительно ЗАПУСКАЮТ агента (event-driven dispatch)
 # Ключ: тип якоря → шаблон задачи (плейсхолдеры: {goal}, {progress}, {task})
 _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
+    # ── Цели ──
     'goal_stagnation':    "Цель '{goal}' застряла на {progress}%. Проанализируй причины и предложи 2-3 конкретных действия чтобы сдвинуться с места. Используй свои интеграции.",
     'goal_decomposition': "Разбей цель '{goal}' на конкретные задачи на ближайшую неделю и создай их в системе.",
     'goal_deadline':      "До дедлайна цели '{goal}' остаётся мало времени. Определи что можно сделать прямо сейчас и действуй.",
+    # ── Задачи ──
     'task_stale':         "Задача '{task}' давно не обновлялась. Проверь её статус, ускори или предложи делегировать.",
+    'task_overdue':       "Задача '{task}' просрочена. Определи причину задержки и предложи план завершения или перенеси срок.",
+    'task_deadline_soon': "До дедлайна задачи '{task}' осталось мало времени. Подготовь всё необходимое для завершения.",
+    # ── Делегирование ──
+    'delegation_update':  "Получен результат делегирования по задаче '{task}'. Проанализируй качество, добавь к задаче и предложи следующие шаги.",
+    # ── Сервисы ──
+    'service_degraded':   "Сервис деградирован: {task}. Проведи диагностику и предложи решение.",
+    'agent_task_blocked': "Агент заблокирован на задаче '{task}'. Проанализируй причину блокировки и предложи решение.",
+    # ── Кампании ──
+    'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
+    # ── Ежедневное планирование (генерируется _scan_daily_agent_planning) ──
+    'daily_agent_plan':   "{task}",
 }
 
 # Группы батчинга
@@ -812,26 +825,23 @@ class AnchorEngine:
                     # Строим задачу из шаблона
                     try:
                         data = anchor.data or {}
-                        task_text = _AGENT_DISPATCH_TRIGGERS[anchor.anchor_type].format(
-                            goal=data.get('title', anchor.topic or 'без названия'),
-                            progress=data.get('progress', 0),
-                            task=data.get('title', anchor.topic or 'без названия'),
-                        )
+                        # daily_agent_plan — задача уже готова в data
+                        if anchor.anchor_type == 'daily_agent_plan':
+                            ctx = data.get('context', '')
+                            task_text = (
+                                f"Утреннее планирование. Проанализируй задачи и цели пользователя и выполни самое приоритетное:\n{ctx}"
+                            )[:600]
+                        else:
+                            task_text = _AGENT_DISPATCH_TRIGGERS[anchor.anchor_type].format(
+                                goal=data.get('title', anchor.topic or 'без названия'),
+                                progress=data.get('progress', 0),
+                                task=data.get('title', anchor.topic or 'без названия'),
+                            )
                     except Exception:
                         task_text = anchor.topic or anchor.anchor_type
 
-                    # Выбираем агента: ищем ключевые слова в specialization/description
-                    ANALYTIC_KW = {'аналит', 'strateg', 'страте', 'research', 'исследо', 'план', 'маркет', 'консульт', 'советник', 'analyz', 'report', 'отчёт', 'отчет'}
-                    TASK_KW = {'задач', 'task', 'todo', 'plan', 'план', 'organiz', 'менедж', 'координ', 'ассист', 'manage', 'секретар', 'помощн'}
-                    kw_set = ANALYTIC_KW if anchor.anchor_type in ('goal_stagnation', 'goal_decomposition', 'goal_deadline') else TASK_KW
-                    chosen = None
-                    for ag in agents:
-                        spec = ((ag.specialization or '') + ' ' + (ag.description or '')).lower()
-                        if any(k in spec for k in kw_set):
-                            chosen = ag
-                            break
-                    if chosen is None:
-                        chosen = agents[0]  # fallback
+                    # Выбираем агента: AI решает кто лучше подходит (fallback → keywords)
+                    chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
 
                     # Логируем dispatch (cooldown guard)
                     _s.add(_AAL(
@@ -929,15 +939,57 @@ class AnchorEngine:
         except Exception as e:
             logger.debug("[ANCHOR-DISPATCH] dispatch error for user %d: %s", user.id, e)
 
+    async def _pick_best_agent(self, agents, task_text: str, anchor_type: str):
+        """AI выбирает лучшего агента для задачи.
+        Fallback на keyword matching если AI недоступен."""
+        if len(agents) == 1:
+            return agents[0]
+
+        try:
+            from ai_integration.autonomous_agent import _quick_ai_call_raw
+            agent_descs = '\n'.join(
+                f'{i+1}. {a.name} — {a.job_title or ""} / {a.specialization or ""} / {(a.description or "")[:80]}'
+                for i, a in enumerate(agents)
+            )
+            resp = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Задача: {task_text[:200]}\n"
+                    f"Тип события: {anchor_type}\n\n"
+                    f"Доступные агенты:\n{agent_descs}\n\n"
+                    "Выбери ОДНОГО агента, который лучше всего подходит.\n"
+                    "Ответь ТОЛЬКО номером агента (1, 2, 3...)."
+                ),
+            }], max_tokens=10)
+            if resp:
+                import re as _re_pick
+                _m = _re_pick.search(r'\d+', resp.strip())
+                if _m:
+                    idx = int(_m.group()) - 1
+                    if 0 <= idx < len(agents):
+                        return agents[idx]
+        except Exception:
+            pass
+
+        # Fallback: keyword matching
+        ANALYTIC_KW = {'аналит', 'страте', 'исследо', 'план', 'маркет', 'консульт'}
+        TASK_KW = {'задач', 'план', 'менедж', 'координ', 'ассист', 'помощн'}
+        kw_set = ANALYTIC_KW if anchor_type in ('goal_stagnation', 'goal_decomposition', 'goal_deadline') else TASK_KW
+        for ag in agents:
+            spec = ((ag.specialization or '') + ' ' + (ag.description or '')).lower()
+            if any(k in spec for k in kw_set):
+                return ag
+        return agents[0]
+
     async def _maybe_continue_chain(self, user, prev_agent, anchor, task_text, result, agents, session):
         """ASI анализирует результат агента и решает — нужен ли следующий шаг.
 
         Если задача не завершена или нужна экспертиза другого агента,
-        создаёт continuation anchor → следующий цикл SCAN dispatch запустит нового агента.
-        Максимум 1 продолжение на исходный якорь (не бесконечная цепочка).
+        запускает следующего агента напрямую.
+        Максимум 3 продолжения на исходный якорь (контролируемая цепочка).
         """
         try:
-            # Guard: не создаём цепочку длиннее 1 продолжения
+            # Guard: не создаём цепочку длиннее 3 продолжений
             from models import AgentActivityLog as _AAL2
             _cont_count = (
                 session.query(_AAL2)
@@ -949,7 +1001,7 @@ class AnchorEngine:
                 )
                 .count()
             )
-            if _cont_count >= 1:
+            if _cont_count >= 3:
                 return
 
             # Guard: если агент заблокирован — не продолжаем
@@ -1175,6 +1227,12 @@ class AnchorEngine:
 
         # --- ЗАБЛОКИРОВАННЫЕ АГЕНТЫ (нужно решение пользователя) ---
         anchors.extend(self._scan_agent_task_blocked(user, session, now_utc))
+
+        # --- ЕЖЕДНЕВНОЕ ПЛАНИРОВАНИЕ АГЕНТОВ (утро: ASI распределяет задачи по агентам) ---
+        anchors.extend(self._scan_daily_agent_planning(user, session, user_tz, user_now, now_utc))
+
+        # --- FOLLOW-UP РЕЗУЛЬТАТОВ АГЕНТОВ (проверка незакрытых dispatch-задач) ---
+        anchors.extend(self._scan_agent_followup(user, session, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         anchors = await self._enrich_anchors_with_ddg(anchors, profile)
@@ -5680,6 +5738,166 @@ class AnchorEngine:
                     session.rollback()
         except Exception as e:
             logger.debug(f'[ANCHOR] agent_task_blocked scan error: {e}')
+        return anchors
+
+    def _scan_daily_agent_planning(self, user, session, user_tz, user_now, now_utc) -> list:
+        """Утреннее планирование: ASI анализирует задачи/цели пользователя и создаёт
+        dispatch-якоря для каждого агента с конкретным заданием на день.
+
+        Работает 1 раз в день (08:30–10:30 по локальному времени).
+        Только если у пользователя есть агенты и активные задачи/цели.
+        """
+        anchors = []
+        try:
+            hour = user_now.hour
+            if hour < 8 or hour > 10:
+                return anchors
+
+            from models import UserAgent, AgentActivityLog
+
+            # Guard: уже планировали сегодня?
+            today_str = user_now.strftime('%Y-%m-%d')
+            source_key = f'daily_plan:{today_str}'
+            already = session.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type == 'daily_agent_plan',
+                AgentActivityLog.target == source_key,
+            ).first()
+            if already:
+                return anchors
+
+            # Получаем активных агентов
+            agents = session.query(UserAgent).filter_by(
+                author_id=user.id, status='active'
+            ).limit(10).all()
+            if not agents:
+                return anchors
+
+            # Получаем активные задачи и цели
+            tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['pending', 'in_progress']),
+            ).order_by(Task.deadline.asc().nullslast()).limit(15).all()
+
+            goals = session.query(Goal).filter(
+                Goal.user_id == user.id,
+                Goal.status == 'active',
+            ).limit(5).all()
+
+            if not tasks and not goals:
+                return anchors
+
+            # Собираем контекст для AI-планирования
+            task_lines = []
+            for t in tasks:
+                dl = f' (дедлайн: {t.deadline.strftime("%d.%m")})' if t.deadline else ''
+                task_lines.append(f'- [{t.status}] {t.title}{dl}')
+            goal_lines = [f'- {g.title} ({g.progress or 0}%)' for g in goals]
+            agent_lines = [f'- {a.name}: {a.job_title or a.specialization or "универсал"}' for a in agents]
+
+            plan_context = (
+                f"Задачи:\n" + '\n'.join(task_lines[:10]) + '\n'
+                f"Цели:\n" + '\n'.join(goal_lines[:5]) + '\n'
+                f"Агенты:\n" + '\n'.join(agent_lines)
+            )
+
+            # Создаём якорь daily_agent_plan — dispatch подхватит его
+            anchors.append(Anchor(
+                user_id=user.id,
+                anchor_type='daily_agent_plan',
+                source=source_key,
+                topic=_t(user, 'Утреннее планирование: распределение задач по агентам',
+                         'Morning planning: distributing tasks to agents'),
+                priority=AnchorPriority.MEDIUM,
+                data=json.dumps({
+                    'title': 'daily_plan',
+                    'context': plan_context,
+                    'date': today_str,
+                    'agent_count': len(agents),
+                    'task_count': len(tasks),
+                    'goal_count': len(goals),
+                }, ensure_ascii=False),
+                triggered_at=now_utc,
+                expires_at=now_utc + timedelta(hours=6),
+                cooldown_hours=22,
+                batch_group='office',
+            ))
+
+            # Логируем факт планирования (guard от повторов)
+            session.add(AgentActivityLog(
+                user_id=user.id,
+                activity_type='daily_agent_plan',
+                title=f'Daily plan {today_str}: {len(agents)} agents, {len(tasks)} tasks',
+                content=plan_context[:500],
+                target=source_key,
+                status='created',
+            ))
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+
+        except Exception as e:
+            logger.debug(f'[ANCHOR] daily_agent_planning scan error: {e}')
+        return anchors
+
+    def _scan_agent_followup(self, user, session, now_utc) -> list:
+        """Follow-up: проверяет dispatch-задачи, выполненные 2-6 часов назад,
+        и создаёт якорь чтобы проверить реальный результат (задача создана? цель обновлена?).
+
+        Это закрывает цикл: dispatch → agent работает → follow-up → корректировка.
+        """
+        anchors = []
+        try:
+            from models import AgentActivityLog
+
+            # Ищем завершённые dispatch-задачи за 2-6 часов назад без follow-up
+            window_start = now_utc - timedelta(hours=6)
+            window_end = now_utc - timedelta(hours=2)
+            completed_dispatches = session.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type == 'agent_event_dispatch',
+                AgentActivityLog.status == 'completed',
+                AgentActivityLog.created_at >= window_start,
+                AgentActivityLog.created_at <= window_end,
+            ).limit(5).all()
+
+            for disp in completed_dispatches:
+                # Уже есть follow-up для этого dispatch?
+                followup_exists = session.query(AgentActivityLog).filter(
+                    AgentActivityLog.user_id == user.id,
+                    AgentActivityLog.activity_type == 'agent_followup',
+                    AgentActivityLog.target == f'followup:{disp.id}',
+                ).first()
+                if followup_exists:
+                    continue
+
+                result_preview = (disp.result or '')[:200]
+                agent_name = (disp.title or '').replace('[dispatch] ', '').split(' ←')[0]
+                task_preview = (disp.content or '')[:150]
+
+                source_key = f'followup:{disp.id}'
+                anchors.append(Anchor(
+                    user_id=user.id,
+                    anchor_type='daily_agent_plan',  # reuse trigger
+                    source=source_key,
+                    topic=_t(user,
+                        f'Проверка результата: {agent_name}',
+                        f'Follow-up: {agent_name}'),
+                    priority=AnchorPriority.LOW,
+                    data=json.dumps({
+                        'title': f'Проверь результат работы {agent_name}: {task_preview}. '
+                                 f'Результат: {result_preview}. '
+                                 f'Проверь: задача создана/обновлена? Цель продвинулась? Если нет — доделай.',
+                    }, ensure_ascii=False),
+                    triggered_at=now_utc,
+                    expires_at=now_utc + timedelta(hours=8),
+                    cooldown_hours=6,
+                    batch_group='office',
+                ))
+
+        except Exception as e:
+            logger.debug(f'[ANCHOR] agent_followup scan error: {e}')
         return anchors
 
     # CLEANUP
