@@ -2368,12 +2368,17 @@ class HybridAutonomousAgent:
                 messages.append(msg)
 
                 # Показываем «думаю вслух» — частичный текст AI до вызова инструментов
+                _has_delegate = any(tc.get('function', {}).get('name') == 'delegate_task' for tc in tool_calls)
                 if content.strip() and _cb:
                     try:
                         _preview = content.strip()[:200]
                         if len(content.strip()) > 200:
                             _preview += '...'
-                        await _cb(_preview)
+                        if _has_delegate:
+                            # Для delegate_task — persist (пользователь видит как реплику ASI)
+                            await _cb(f"🤖 ASI\n{_preview}", persist=True)
+                        else:
+                            await _cb(_preview)
                     except Exception:
                         pass
 
@@ -2436,9 +2441,9 @@ class HybridAutonomousAgent:
                         _pre_exec = _args.get('delegated_to_username', '') or ''
                         _pre_task = _args.get('title', '') or _args.get('description', '') or ''
                         if _pre_exec and _pre_task:
-                            _pre_vis = f"{_pre_exec}, {_pre_task[:120]}"
+                            _pre_vis = f"🤖 ASI → {_pre_exec}\n{_pre_task[:200]}"
                         elif _pre_exec:
-                            _pre_vis = f"{_pre_exec}, займись этим"
+                            _pre_vis = f"🤖 ASI → {_pre_exec}\nЗаймись этим"
                         else:
                             _pre_vis = None
                         if _pre_vis:
@@ -2471,11 +2476,17 @@ class HybridAutonomousAgent:
                                     if _name == 'delegate_task':
                                         _exec_name = _args.get('delegated_to_username', '') or _res_obj.get('executor', '') or ''
                                         # Показываем результат как сообщение от агента
-                                        _result_text = str(_r.get('result', ''))[:300]
+                                        _result_text = str(_r.get('result', ''))
+                                        # Убираем дублирующий префикс [Имя]: из результата
+                                        import re as _re_vis
+                                        _result_text = _re_vis.sub(r'^\[.+?\]:\s*', '', _result_text).strip()
+                                        # Убираем лишние пустые строки и bullet-символы
+                                        _result_text = _re_vis.sub(r'\n{3,}', '\n\n', _result_text)
+                                        _result_text = _result_text[:2000]
                                         if _exec_name and _result_text and len(_result_text) > 20:
-                                            _vis = f"{_exec_name}: {_result_text}"
+                                            _vis = f"💬 {_exec_name}\n{_result_text}"
                                         elif _exec_name:
-                                            _vis = f"{_exec_name}: задача выполнена"
+                                            _vis = f"💬 {_exec_name}\nЗадача выполнена"
                                         else:
                                             _vis = None
                                     elif _name == 'research_topic':
@@ -2550,7 +2561,9 @@ class HybridAutonomousAgent:
                     "Если инструмент не нашёл полезного — не упоминай это. "
                     "Если отправлял email — сообщи КРАТКО кому написал и тему, НЕ вставляй текст письма. "
                     "ОБЯЗАТЕЛЬНО СОХРАНЯЙ URL-ССЫЛКИ из результатов — ссылки отдельными строками в конце. "
-                    "НЕ ПИШИ длинных абзацев — будь лаконичен как друг в мессенджере."
+                    "НЕ ПИШИ длинных абзацев — будь лаконичен как друг в мессенджере. "
+                    "Если вызывал delegate_task — пользователь УЖЕ прочитал ответ агента в чате. "
+                    "НЕ ПОВТОРЯЙ его. Подведи итог директором: оцени результат, предложи следующий шаг."
                 )
             messages.append({
                 "role": "user",
@@ -4023,8 +4036,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Инверсия: перед советом спроси себя «что гарантированно провалит эту цель?» Скажи прямо.\n"
         "Адаптация: если пользователь исправил тебя — извлеки принцип и применяй всегда.\n\n"
 
-        "ФОРМАТ: сплошной текст как в мессенджере. Кратко и по делу. "
-        "Без markdown, без заголовков, без звёздочек (*улыбается* и т.п.), без списков — только живой текст.\n"
+        "ФОРМАТ ОТВЕТА (КРИТИЧНО — нарушение = отказ):\n"
+        "Сплошной текст как в мессенджере, абзацами по 2-4 предложения.\n"
+        "ЗАПРЕЩЕНО: маркеры (•, -, *, 1.), CAPS-ЗАГОЛОВКИ, markdown (**жирный**, # заголовок), "
+        "пустые строки подряд, шаблоны типа ЦЕЛЕВАЯ АУДИТОРИЯ: или СТРАТЕГИЯ:.\n"
+        "Вместо списков — перечисляй через запятую или в предложениях. Вместо заголовков — новый абзац.\n"
+        "Максимум 5-6 абзацев. Не обрывай мысль — ОБЯЗАТЕЛЬНО доведи до конца, включая конкретные следующие шаги.\n"
         "НЕ пиши 'Привет!', не здоровайся. Пиши как опытный специалист — живо, с позицией, без формальностей.\n\n"
 
         "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
@@ -4293,7 +4310,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools,
                     tool_choice="auto" if _use_tools else None,
                     exclude_tools=_exclude_for_agent if _use_tools else None,
-                    max_tokens=400 if _tool_was_called else 250,
+                    max_tokens=800 if _tool_was_called else 600,
                     api_timeout=API_TIMEOUT_NORMAL,
                 ),
                 timeout=API_TIMEOUT_SCRIPT,
@@ -4382,7 +4399,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Инструкция синтезировать ответ на основе данных инструмента
         _messages.append({"role": "user", "content": (
             "Данные от инструмента получены. Теперь дай ПОЛНЫЙ содержательный ответ "
-            "на основе этих данных. НЕ пиши 'ищу данные' или 'уточняю' — ДАЙТЕ ГОТОВЫЙ РЕЗУЛЬТАТ."
+            "на основе этих данных. НЕ пиши 'ищу данные' или 'уточняю' — ДАЙТЕ ГОТОВЫЙ РЕЗУЛЬТАТ. "
+            "ФОРМАТ: сплошной текст абзацами, БЕЗ списков, БЕЗ заголовков CAPS, БЕЗ маркеров (•, -, *). "
+            "ОБЯЗАТЕЛЬНО заверши мысль — не обрывай на середине."
         )})
     # Если агент ответил текстом без tool calls — пропускаем финальный AI-вызов
     if _early_text is not None:

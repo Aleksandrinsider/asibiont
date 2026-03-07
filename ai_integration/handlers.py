@@ -1727,6 +1727,10 @@ async def delegate_task(
                     except Exception:
                         pass
 
+                    # Очищаем чрезмерное форматирование (bullet-списки, лишние пробелы)
+                    _result = _ren.sub(r'\n{3,}', '\n\n', _result)  # не более 2 переносов подряд
+                    _result = _ren.sub(r'^\s*[•\-\*]\s*', '', _result, flags=_ren.MULTILINE)  # убираем маркеры списков
+
                     # Записываем ответ агента в чат (видно на дашборде с аватаркой)
                     try:
                         _save_ifd(user_id, _json_ag.dumps({
