@@ -1996,22 +1996,16 @@ async def chat_handler(request):
                 # Сохраняем сообщение пользователя ДО вызова AI
                 save_context_to_db(user_id, message, None)
 
-                # Get AI response с progress_callback (таймаут 60с — каждый шаг ≤35с)
+                # AI работает по готовности — без искусственных ограничений
                 try:
-                    ai_result = await asyncio.wait_for(
-                        chat_with_ai(
-                            message, context, user_id, file_content,
-                            db_session=session_db,
-                            progress_callback=web_progress_callback,
-                            web_context=True
-                        ),
-                        timeout=60
+                    ai_result = await chat_with_ai(
+                        message, context, user_id, file_content,
+                        db_session=session_db,
+                        progress_callback=web_progress_callback,
+                        web_context=True
                     )
                     response = ai_result['response']
                     logger.info("AI response: %s...", response[:100])
-                except asyncio.TimeoutError:
-                    logger.warning(f"[CHAT] AI timeout (>60s) for user {user_id}")
-                    response = "Запрос занял слишком долго. Попробуй написать снова."
                 except Exception as e:
                     logger.error(f"Error getting AI response: {e}", exc_info=True)
                     response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
