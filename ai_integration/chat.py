@@ -323,9 +323,9 @@ def _msg_type_instructions(lang, ctx, rotation_hash):
             ]
         else:
             stat_variants = [
-                'Посмотри на задачи и цели и сделай ОДНО конкретное наблюдение — паттерн, узкое место, неожиданная связь. Предложи 2 варианта следующего шага (разные подходы). Не пересказывай список задач.',
-                'Сравни текущую ситуацию с целями. Где разрыв? Предложи 1 конкретное действие + альтернативный путь к той же цели через другой инструмент или ресурс.',
-                'Посмотри на прогресс и найди что идёт хорошо. Похвали за конкретное достижение и предложи два варианта следующего шага на выбор пользователя.',
+                'Сделай ОДНО наблюдение о ситуации пользователя, которое он сам может не видеть — паттерн, узкое место, неожиданная связь между задачами. НЕ предлагай шаблонных действий — реагируй на конкретику.',
+                'Оцени что ИЗМЕНИЛОСЬ с прошлого разговора. Что продвинулось, что застряло? Дай одну конкретную рекомендацию исходя из текущей ситуации, а не из шаблона.',
+                'Найди что идёт хорошо и отметь это. Если есть прогресс — похвали за конкретное. Если нет прогресса — спроси почему, а не предлагай очередной план.',
             ]
         message_types.append({'type': 'analysis', 'instruction': stat_variants[rotation_hash % len(stat_variants)]})
 
@@ -351,9 +351,9 @@ def _msg_type_instructions(lang, ctx, rotation_hash):
         message_types.append({'type': 'discussion', 'instruction': news_variants[rotation_hash % len(news_variants)]})
 
     if task_count == 0:
-        instr = ('Ask what the user is working on RIGHT NOW. Offer 2 alternatives — either help with analysis/research, or suggest the ONE most impactful action toward their goal. Do NOT list 3 steps — just the sharpest one + alternative.'
+        instr = ('Ask what the user is working on RIGHT NOW. Offer help based on THEIR situation — available agents, integrations, skills. Don\'t repeat previous suggestions.'
                  if L == 'en' else
-                 'Спроси над чем пользователь работает СЕЙЧАС. Предложи 2 варианта — либо помощь с анализом/исследованием, либо одно самое важное действие в сторону цели. НЕ давай список из 3 шагов — только самый острый шаг + альтернатива.')
+                 'Спроси над чем пользователь работает СЕЙЧАС. Предложи помощь исходя из ЕГО ситуации — доступных агентов, интеграций, навыков. Не повторяй то что уже предлагал.')
         message_types.append({'type': 'plan', 'instruction': instr})
 
     if ctx.get('weather'):
@@ -398,9 +398,9 @@ def _msg_type_instructions(lang, ctx, rotation_hash):
             message_types.append({'type': 'goal_milestone', 'instruction': instr})
         if stagnant:
             gn = stagnant[0]['goal']; gd = stagnant[0]['days_old']
-            instr = (f'STAGNATION ALERT: goal "{gn}" created {gd} days ago, but progress is 0%. Gently ask — is it still relevant? Maybe break into steps? Or rephrase?'
+            instr = (f'STAGNATION ALERT: goal "{gn}" created {gd} days ago, but progress is 0%. Gently ask — is it still relevant? Do NOT suggest the same decomposition if already discussed.'
                      if L == 'en' else
-                     f'АЛЕРТ ЗАСТОЯ: цель "{gn}" создана {gd} дней назад, но прогресс 0%. Мягко спроси — актуальна ли ещё? Может разбить на шаги? Или пересмотреть формулировку?')
+                     f'Цель "{gn}" создана {gd} дней назад, прогресс 0%. Мягко спроси — актуальна ли ещё? НЕ предлагай разбить на шаги если это уже обсуждалось. Лучше спроси что мешает.')
             message_types.append({'type': 'goal_stagnation', 'instruction': instr})
         if deadline_close:
             gn = deadline_close[0]['goal']; gd2 = deadline_close[0]['days']; gp2 = deadline_close[0]['progress']

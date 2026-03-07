@@ -2236,7 +2236,7 @@ class AnchorEngine:
                 anchor_type='goal_decomposition',
                 source=f'goal:{goal.id}:no_tasks',
                 topic=_t(user, f'Цель «{goal.title}» — нет активных задач, нужна декомпозиция', f'Goal «{goal.title}» — no active tasks, needs breakdown'),
-                priority=AnchorPriority.MEDIUM,
+                priority=AnchorPriority.LOW,
                 data=json.dumps({
                     'goal_id': goal.id,
                     'title': goal.title,
@@ -2246,8 +2246,8 @@ class AnchorEngine:
                     'target_date': goal.target_date.isoformat() if goal.target_date else None,
                 }),
                 triggered_at=now_utc,
-                expires_at=now_utc + timedelta(days=3),
-                cooldown_hours=48,
+                expires_at=now_utc + timedelta(days=7),
+                cooldown_hours=168,
                 batch_group='goals',
             ))
 
