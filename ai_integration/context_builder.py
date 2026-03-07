@@ -855,14 +855,15 @@ class ContextBuilder:
 
             # ═══ КОМАНДА АГЕНТОВ: ASI видит кто есть и что умеет ═══
             try:
-                from models import UserAgent as _UA_ctx
+                from models import UserAgent as _UA_ctx, AgentSubscription as _AS_ctx
+                _sub_ids = [r[0] for r in session.query(_AS_ctx.agent_id).filter(_AS_ctx.user_id == user.id).all()]
                 _team = (
                     session.query(_UA_ctx)
-                    .filter(_UA_ctx.author_id == user.id, _UA_ctx.status.in_(['active', 'paused']))
+                    .filter(_UA_ctx.id.in_(_sub_ids), _UA_ctx.status.in_(['active', 'paused']))
                     .order_by(_UA_ctx.id.asc())
-                    .limit(15)  # увеличен лимит: агент видит всю команду
+                    .limit(15)
                     .all()
-                )
+                ) if _sub_ids else []
                 if _team:
                     _KEY_MAP = {
                         'GMAIL': 'Gmail', 'YANDEX_MAIL': 'Яндекс Почта', 'MAILRU': 'Mail.ru',

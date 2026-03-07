@@ -1546,12 +1546,12 @@ async def delegate_task(
             logger.info(f"[DELEGATE] Looking for agents: {_name_parts} (user_db_id={delegator.id})")
 
             _subscribed_ids = session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id)
-            # Загружаем всех доступных агентов и фильтруем в Python (SQLite lower() не работает с кириллицей)
+            # Загружаем агентов на которых пользователь SUBSCRIBED (кириллица: фильтр в Python)
             _all_agents = (
                 session.query(_UA_chk)
                 .filter(
                     _UA_chk.status.in_(['active', 'paused', 'published']),
-                    ((_UA_chk.author_id == delegator.id) | (_UA_chk.id.in_(_subscribed_ids)))
+                    _UA_chk.id.in_(_subscribed_ids)
                 )
                 .all()
             )

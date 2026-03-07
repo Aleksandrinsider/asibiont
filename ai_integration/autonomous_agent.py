@@ -2298,7 +2298,7 @@ class HybridAutonomousAgent:
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз
-            multi_limit_tools = {'add_task': 3, 'update_profile': 2, 'create_goal': 2, 'run_agent_action': 5, 'send_email': 1, 'delegate_task': 4}  # лимиты per turn
+            multi_limit_tools = {'add_task': 3, 'update_profile': 2, 'create_goal': 2, 'run_agent_action': 5, 'send_email': 1, 'delegate_task': 1}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
 
