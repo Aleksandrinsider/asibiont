@@ -3986,7 +3986,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"Используй чтобы понимать КТО пользователь, КОМУ он пишет, ЧТО ищет]:\n{dialog_context}"
         )
 
-    # Авто-загрузка контекста пользователя если не передан извне (агент узнаёт цели/бизнес)
+    # Авто-загрузка контекста пользователя ТОЛЬКО если не передан извне
+    # (директор уже передаёт dialog_context → лишняя DB-сессия не нужна)
     if not dialog_context and _build_user_context_sync:
         try:
             from models import Session as _Sess_uc, User as _UCtx
@@ -4007,6 +4008,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _s_uc.close()
         except Exception:
             pass
+    elif dialog_context:
+        logger.debug("[DIRECTOR-EXEC] context already passed (%d chars), skipping DB reload", len(dialog_context))
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
     script_context = ""
@@ -4099,6 +4102,30 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _exclude_for_agent = _all_names - _allowed_tools
         except Exception as _te2:
             logger.debug('[DIRECTOR] tools exclude calc: %s', _te2)
+    elif not _allowed_tools:
+        # R7: Smart tool filtering — вывести toolset из специализации агента
+        _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '')).lower()
+        _inferred_tools: set[str] = set()
+        # Email-специалист
+        if any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм')):
+            _inferred_tools.update({'send_email', 'list_email_contacts', 'save_email_contact',
+                                    'start_email_campaign', 'negotiate_by_email', 'check_email'})
+        # Контент/маркетинг
+        if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram')):
+            _inferred_tools.update({'create_post', 'publish_to_telegram', 'research_topic', 'web_search'})
+        # Аналитик/исследования
+        if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'поиск', 'тренд')):
+            _inferred_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
+        # Задачи всегда доступны
+        _inferred_tools.update({'add_task', 'delegate_to_agent'})
+        if _inferred_tools:
+            try:
+                from .tools import get_available_tools as _gat3
+                _all_names = {t['function']['name'] for t in _gat3()}
+                _exclude_for_agent = _all_names - _inferred_tools
+                logger.info('[DIRECTOR] Smart filter for %s: inferred %d tools from spec', agent.get('name'), len(_inferred_tools))
+            except Exception:
+                pass
 
     # ── Шаг 3: Tool-calling loop (макс 3 итерации) ────────────────────────────
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
@@ -4118,7 +4145,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
     _agent_start_time = __import__('time').time()
-    _AGENT_BUDGET = 30  # секунд на всё выполнение агента
+    _AGENT_BUDGET = 45  # секунд на всё выполнение агента (согласовано с _run_agent_task timeout)
     _TOOL_TIMEOUT = API_TIMEOUT_NORMAL  # секунд на один инструмент
 
     for _iter in range(2):  # Макс 2 итерации для субагента (скорость)
@@ -4794,7 +4821,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         try:
             _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
             for _ma in _mission_anchors:
-                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
+                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 120:
                     _has_active_mission = True
                     _md = _ma.get('data', {})
                     _mission_context = _md.get('result_summary') or _md.get('task', '')
@@ -4834,10 +4861,20 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     if not decision_raw:
         return None
 
-    _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw)
-    try:
-        decision = _json.loads(_jm.group(1) if _jm else decision_raw)
-    except Exception:
+    # Retry JSON parsing (DeepSeek может вернуть невалидный JSON ~5-10% вызовов)
+    decision = None
+    for _json_attempt in range(2):
+        _raw = decision_raw if _json_attempt == 0 else await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250)
+        if not _raw:
+            continue
+        _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', _raw)
+        try:
+            decision = _json.loads(_jm.group(1) if _jm else _raw)
+            break
+        except Exception:
+            logger.warning("[DIRECTOR] JSON parse failed (attempt %d), raw=%s", _json_attempt + 1, (_raw or '')[:120])
+    if not decision:
+        logger.info("[DIRECTOR] fallback to process_request: all JSON parse attempts failed")
         return None
 
     action = decision.get('action', 'self')
@@ -4952,28 +4989,44 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "\"director_message\": \"живое обращение: начни с имени + глагол ('Кристина, подготовь...', 'Марк, найди...')\"}\n"
                 "Ответь ТОЛЬКО JSON без ```."
             )
-            _routing_raw = await _quick_ai_call_raw(
-                [{"role": "user", "content": _routing_prompt}], max_tokens=200
-            )
-            _rjm = re.search(r'```(?:json)?\s*([\s\S]*?)```', _routing_raw or '')
-            try:
-                _routing = _json.loads(_rjm.group(1) if _rjm else (_routing_raw or '{}'))
-            except Exception:
-                _routing = {}
+            # R6: Сначала пробуем использовать сигнал ПЕРЕДАЮ от агента (без лишнего LLM-вызова)
+            _signal_match = re.search(r'ПЕРЕДАЮ:\s*(.+)', _resp or '') if _resp else None
+            _routed_by_signal = False
+            if _signal_match:
+                _signal_text_parsed = _signal_match.group(1).strip()
+                for _ra in _remaining_agents:
+                    if _ra.get('name', '').lower() in _signal_text_parsed.lower():
+                        _next_agent_name = _ra['name']
+                        _next_agent_task = _signal_text_parsed
+                        _next_dm = ''  # без director_message при auto-routing
+                        _routed_by_signal = True
+                        logger.info("[ADAPTIVE] Auto-routed via ПЕРЕДАЮ signal to %s", _next_agent_name)
+                        break
 
-            if _routing.get('action') == 'finalize':
-                break
+            if not _routed_by_signal:
+                # Fallback: LLM routing (если сигнал агента не содержит имени)
+                _routing_raw = await _quick_ai_call_raw(
+                    [{"role": "user", "content": _routing_prompt}], max_tokens=200
+                )
+                _rjm = re.search(r'```(?:json)?\s*([\s\S]*?)```', _routing_raw or '')
+                try:
+                    _routing = _json.loads(_rjm.group(1) if _rjm else (_routing_raw or '{}'))
+                except Exception:
+                    _routing = {}
 
-            if _routing.get('action') == 'next':
-                _dm = _routing.get('director_message', '')
-                if _dm:
-                    _save_interaction_for_director(user_id, _dm)
-                    await asyncio.sleep(0.05)
-                _next_agent_name = _routing.get('agent_name', '')
-                _next_agent_task = _routing.get('agent_task') or user_message
-                _next_dm = _dm  # передаём director_message для следующего шага
-            else:
-                break
+                if _routing.get('action') == 'finalize':
+                    break
+
+                if _routing.get('action') == 'next':
+                    _dm = _routing.get('director_message', '')
+                    if _dm:
+                        _save_interaction_for_director(user_id, _dm)
+                        await asyncio.sleep(0.05)
+                    _next_agent_name = _routing.get('agent_name', '')
+                    _next_agent_task = _routing.get('agent_task') or user_message
+                    _next_dm = _dm
+                else:
+                    break
 
         if not _adp_results:
             return None
@@ -5131,19 +5184,23 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _valid_dms.append(_tdm)
             if not _valid:
                 break
-            # Выполняем агентов ПОСЛЕДОВАТЕЛЬНО: каждый следующий видит результат предыдущего
-            for (ag, task), dm in zip(_valid, _valid_dms):
-                # Обновляем контекст: добавляем свежие результаты для следующего агента
-                _seq_ctx = _agent_ctx
-                if all_results:
-                    _seq_ctx += "\n\nРАНЕЕ ВЫПОЛНЕННЫЕ ЗАДАЧИ КОМАНДЫ:\n" + "\n".join(
-                        f"{_n}: {_r[:300]}" for _n, _t2, _r in all_results
-                    )
-                resp = await _run_agent_task(ag, task, extra_context=_seq_ctx,
-                                             director_message=dm)
-                if isinstance(resp, Exception):
-                    resp = "Данных нет."
-                all_results.append((ag['name'], task, str(resp)[:800]))
+            # Выполняем агентов ПАРАЛЛЕЛЬНО через asyncio.gather (ускорение 2-3×)
+            async def _parallel_agent(ag, task, dm, ctx):
+                try:
+                    resp = await _run_agent_task(ag, task, extra_context=ctx, director_message=dm)
+                    if isinstance(resp, Exception) or not resp:
+                        return (ag['name'], task, "Данных нет.")
+                    return (ag['name'], task, str(resp)[:800])
+                except Exception as _pe:
+                    logger.warning("[DIRECTOR] parallel agent %s error: %s", ag.get('name'), _pe)
+                    return (ag['name'], task, "Данных нет.")
+
+            _parallel_tasks = [
+                _parallel_agent(ag, task, dm, _agent_ctx)
+                for (ag, task), dm in zip(_valid, _valid_dms)
+            ]
+            _parallel_results = await asyncio.gather(*_parallel_tasks)
+            all_results.extend(_parallel_results)
 
     # ── Финальный синтез ASI ──────────────────────────────────────────────────
     if not all_results:

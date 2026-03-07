@@ -1680,27 +1680,18 @@ async def delegate_task(
                         _results_parts.append(f"[{_agent_name}]: не удалось выполнить задачу — нужна доработка")
                         continue
 
-                    # ── Критическая оценка результата ASI-директором ──────────
-                    # Если результат слишком короткий или пустой по смыслу — доработка
+                    # ── Критическая оценка результата (эвристика без лишнего LLM-вызова) ──
                     _needs_rework = False
-                    if len(_result.strip()) < 40:
+                    _result_stripped = _result.strip()
+                    if len(_result_stripped) < 40:
                         _needs_rework = True
-                    else:
-                        try:
-                            from .autonomous_agent import _quick_ai_call_raw as _qac_eval
-                            _eval_raw = await _qac_eval([{
-                                "role": "user",
-                                "content": (
-                                    f"Задача агенту: «{_agent_task_text[:300]}»\n\n"
-                                    f"Результат агента:\n{_result[:800]}\n\n"
-                                    "Оцени: результат по теме и содержит конкретику? "
-                                    "Ответь ОДНИМ словом: OK или REWORK"
-                                ),
-                            }], max_tokens=10)
-                            if _eval_raw and 'REWORK' in (_eval_raw or '').upper():
-                                _needs_rework = True
-                        except Exception:
-                            pass
+                    elif _result_stripped.lower() in (
+                        'задачу выполнил.', 'данных нет.', 'результат будет чуть позже.',
+                        'задачу принял.', 'принял в работу.',
+                    ):
+                        _needs_rework = True
+                    elif not any(c.isalpha() for c in _result_stripped):
+                        _needs_rework = True
 
                     if _needs_rework:
                         # Отправляем на доработку — 1 попытка

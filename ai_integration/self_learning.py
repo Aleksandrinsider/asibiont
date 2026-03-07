@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class SelfLearner:
-    """Самообучающийся модуль агента."""
+    """Самообучающийся модуль агента с персистентностью в БД."""
+    
+    _SAVE_EVERY_N_TURNS = 5  # сохранять в БД каждые N обменов
     
     def __init__(self):
         # Метрики по пользователям
@@ -45,6 +47,77 @@ class SelfLearner:
             'avg_response_length': 300,
             'common_issues': [],
         }
+        
+        # Трекер: сколько turns с последнего сохранения (per user)
+        self._unsaved_turns: dict[int, int] = defaultdict(int)
+        # Кеш загруженных из БД пользователей (чтобы не грузить повторно)
+        self._loaded_users: set[int] = set()
+
+    def _load_from_db(self, user_id: int):
+        """Загрузить метрики из БД при первом обращении."""
+        if user_id in self._loaded_users:
+            return
+        self._loaded_users.add(user_id)
+        try:
+            from models import Session as _SL, User as _UL
+            _s = _SL()
+            try:
+                _u = _s.query(_UL).filter_by(telegram_id=user_id).first()
+                if _u and _u.long_term_memory:
+                    _data = json.loads(_u.long_term_memory)
+                    _sl = _data.get('self_learning')
+                    if _sl and isinstance(_sl, dict):
+                        m = self.user_metrics[user_id]
+                        m['total_turns'] = _sl.get('total_turns', 0)
+                        m['total_response_length'] = _sl.get('total_response_length', 0)
+                        m['tools_used_count'] = _sl.get('tools_used_count', 0)
+                        m['tools_histogram'] = defaultdict(int, _sl.get('tools_histogram', {}))
+                        m['successful_patterns'] = _sl.get('successful_patterns', [])[-20:]
+                        m['failed_patterns'] = _sl.get('failed_patterns', [])[-10:]
+                        m['preferences'] = _sl.get('preferences', {})
+                        m['last_emotions'] = _sl.get('last_emotions', [])[-10:]
+                        m['conversation_style'] = _sl.get('conversation_style', 'normal')
+                        logger.info(f"[LEARN] Loaded {m['total_turns']} turns from DB for user {user_id}")
+            finally:
+                _s.close()
+        except Exception as e:
+            logger.debug(f"[LEARN] DB load failed for user {user_id}: {e}")
+
+    def _save_to_db(self, user_id: int):
+        """Сохранить метрики в long_term_memory (поле self_learning)."""
+        try:
+            from models import Session as _SS, User as _US
+            _s = _SS()
+            try:
+                _u = _s.query(_US).filter_by(telegram_id=user_id).first()
+                if not _u:
+                    return
+                _existing = {}
+                if _u.long_term_memory:
+                    try:
+                        _existing = json.loads(_u.long_term_memory)
+                    except Exception:
+                        _existing = {}
+                m = self.user_metrics[user_id]
+                _existing['self_learning'] = {
+                    'total_turns': m['total_turns'],
+                    'total_response_length': m['total_response_length'],
+                    'tools_used_count': m['tools_used_count'],
+                    'tools_histogram': dict(m['tools_histogram']),
+                    'successful_patterns': m['successful_patterns'][-20:],
+                    'failed_patterns': m['failed_patterns'][-10:],
+                    'preferences': m['preferences'],
+                    'last_emotions': m['last_emotions'][-10:],
+                    'conversation_style': m['conversation_style'],
+                    'saved_at': datetime.now(timezone.utc).isoformat(),
+                }
+                _u.long_term_memory = json.dumps(_existing, ensure_ascii=False, default=str)
+                _s.commit()
+                logger.info(f"[LEARN] Saved metrics to DB for user {user_id} ({m['total_turns']} turns)")
+            finally:
+                _s.close()
+        except Exception as e:
+            logger.debug(f"[LEARN] DB save failed for user {user_id}: {e}")
     
     def record_turn(self, user_id, user_message, response, tools_used, 
                      emotion=None, intent=None, issues=None):
@@ -59,6 +132,10 @@ class SelfLearner:
             intent: Определённое намерение
             issues: Проблемы найденные когнитивным движком
         """
+        metrics = self.user_metrics[user_id]
+        
+        # Загружаем из БД при первом обращении
+        self._load_from_db(user_id)
         metrics = self.user_metrics[user_id]
         
         # Базовые метрики
@@ -101,6 +178,12 @@ class SelfLearner:
         # Обновление глобальных паттернов
         self._update_global_patterns(intent, tools_used, issues)
         
+        # Периодическое сохранение в БД
+        self._unsaved_turns[user_id] += 1
+        if self._unsaved_turns[user_id] >= self._SAVE_EVERY_N_TURNS:
+            self._save_to_db(user_id)
+            self._unsaved_turns[user_id] = 0
+        
         logger.info(f"[LEARN] Recorded turn for user {user_id}: "
                      f"turns={metrics['total_turns']}, "
                      f"avg_len={metrics['total_response_length'] // max(metrics['total_turns'], 1)}")
@@ -134,6 +217,7 @@ class SelfLearner:
         
         Returns: str — блок для системного промпта.
         """
+        self._load_from_db(user_id)
         metrics = self.user_metrics[user_id]
         
         if metrics['total_turns'] < 3:
