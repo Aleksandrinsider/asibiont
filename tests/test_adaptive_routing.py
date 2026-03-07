@@ -137,8 +137,9 @@ async def s1():
     report("director_message второго агента показан",
            any("твой выход" in i for i in plain_ixs), str(plain_ixs[:3]))
     report("Финальный результат получен", bool(result), result or "(None)")
-    report("ПЕРЕДАЮ не утекает в финал", "ПЕРЕДАЮ" not in (result or ""),
-           (result or "")[:80])
+    _result_str = result.get('response', '') if isinstance(result, dict) else (result or '')
+    report("ПЕРЕДАЮ не утекает в финал", "ПЕРЕДАЮ" not in _result_str,
+           _result_str[:80])
 
 asyncio.run(s1())
 
@@ -173,7 +174,8 @@ async def s2():
     report("Только 1 агент", len(ac) == 1, f"{ac}")
     report("Роутинг сделан 1 раз", rn[0] == 1, f"routing: {rn[0]}")
     report("Результат получен", bool(result), result or "(None)")
-    report("ПЕРЕДАЮ убрано", "ПЕРЕДАЮ" not in (result or ""), (result or "")[:80])
+    _result_str2 = result.get('response', '') if isinstance(result, dict) else (result or '')
+    report("ПЕРЕДАЮ убрано", "ПЕРЕДАЮ" not in _result_str2, _result_str2[:80])
 
 asyncio.run(s2())
 

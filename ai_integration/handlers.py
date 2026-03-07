@@ -1610,7 +1610,7 @@ async def delegate_task(
                             activity_type='agent_task',
                             title=f'Поручено {_agent_name}: {title}',
                             content=description[:500] if description else None,
-                            target=_agent_name,
+                            target=f'agent:{_agent_name}',
                             status='in_progress',
                             result=(f'Задача передана агенту. Дедлайн: {reminder_time}'
                                     if reminder_time else 'Задача передана агенту.'),
@@ -1757,7 +1757,7 @@ async def delegate_task(
                             activity_type='agent_task',
                             title=f'{_agent_name}: выполнено',
                             content=_result[:500],
-                            target=_agent_name,
+                            target=f'agent:{_agent_name}',
                             status='completed',
                         ))
                         # Помечаем Task как выполненную

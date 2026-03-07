@@ -387,4 +387,5 @@ async def test_office_director_chat_delegation(db_session, visible_messages):
     
     # Verify final synthesis is returned (not None)
     assert result is not None, "Director should return synthesis"
-    print(f"[OK] Synthesis returned: {result[:120]}...")
+    _result_text = result.get('response', '') if isinstance(result, dict) else (result or '')
+    print(f"[OK] Synthesis returned: {_result_text[:120]}...")

@@ -4330,7 +4330,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 # Слова-сигналы что пользователь хочет действие, а не разговор
 
 
-async def _office_director_chat(user_message: str, user_id: int, progress_callback=None) -> str | None:
+async def _office_director_chat(user_message: str, user_id: int, progress_callback=None) -> str | dict | None:
     """
     ASI — директор офиса с якорной памятью:
     1. Загружает агентов + их якоря делегирования (что делали, cooldown)
@@ -4614,7 +4614,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         activity_type='agent_task',
                         title=task[:200],
                         content=str(resp)[:500],
-                        target=ag.get('name', 'Агент'),
+                        target=f"agent:{ag.get('name', 'Агент')}",
                         status='completed',
                     ))
                     _ts2.commit()
@@ -4741,26 +4741,14 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         '"director_message": "живое обращение к первому агенту"}'
     )
 
-    # Быстрый пре-фильтр: только очень короткие реплики-подтверждения → ASI отвечает сам
+    # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
+    # Для ВСЕХ остальных сообщений — LLM сам решает делегировать или нет (без ключевых слов)
     _ml = user_message.strip()
     _ml_lower = _ml.lower()
-    # Стратегические ключевые слова → ВСЕГДА проходят через директора (не bypass)
-    _strategic_keywords = ('кампани', 'аутрич', 'тестировщик', 'тестер', 'продвиж', 'маркетинг',
-                           'привлеч', 'исследуй', 'исследов', 'стратег', 'поиск людей',
-                           'найди люд', 'найди тестер', 'найди тестировщик', 'контент-план',
-                           'пользовател', 'клиент')
-    _is_strategic = any(kw in _ml_lower for kw in _strategic_keywords)
-    # Явные команды делегирования → process_request быстрее (delegate_task как tool)
-    # НО если задача стратегическая → пусть директор координирует агентов
-    _explicit_delegation = (
-        any(kw in _ml_lower for kw in ('поруч', 'попроси', 'передай', 'делегируй'))
-        and not _is_strategic
-    )
-    # Очень короткие бытовые реплики (подтверждения, приветствия) — ASI сам
     _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
                         'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
     _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
-    if _is_trivial or _explicit_delegation:
+    if _is_trivial:
         return None  # ASI ответит сам через process_request
 
     decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250)
@@ -4919,11 +4907,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "(как живой диалог). НЕ ПОВТОРЯЙ их текст.\n\n"
                 "Подведи итог как если бы ты писал в том же групповом чате после коллег:\n"
                 "(1) Оцени результаты — что полезного, на что обратить внимание.\n"
-                "(2) Предложи следующий шаг.\n"
+                "(2) ОБЪЯВИ конкретное следующее действие которое ты СЕЙЧАС выполнишь "
+                "(запустишь кампанию, опубликуешь пост, отправишь письма). "
+                "НЕ спрашивай 'хочешь чтобы я запустил?' — говори 'запускаю'.\n"
                 "2-3 предложения, живо, без markdown. НЕ пересказывай результаты."
             ),
         }], max_tokens=300)
-        return _adp_final or "Миссия выполнена"
+        return {"response": _adp_final or "Миссия выполнена", "execute_next": True}
 
     # ── Агентный цикл: до 3 раундов, ASI переоценивает после каждого ──────────
     MAX_ROUNDS = 5
@@ -5086,11 +5076,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             "это было как живой диалог в групповом чате. НЕ ПОВТОРЯЙ то что агент уже написал.\n\n"
             "Твоя задача — подвести итог как директор, как будто ты говоришь в том же чате:\n"
             "(1) Оцени результат — что ценного, на что обратить внимание.\n"
-            "(2) Предложи следующий шаг.\n\n"
+            "(2) ОБЪЯВИ конкретное следующее действие которое ты СЕЙЧАС выполнишь "
+            "(запустишь кампанию, опубликуешь пост, отправишь письма, создашь задачу). "
+            "НЕ спрашивай разрешения — говори 'запускаю', 'публикую', 'отправляю'.\n\n"
             "СТИЛЬ: 2-3 предложения, живо, как если ты пишешь в групповой чат после ответа коллеги. Без markdown. "
             "ЗАПРЕЩЕНО: 'уже начала', 'уже начал', 'скоро пришлёт', 'через 30 минут', 'работает над этим', "
             "'отработала', 'начал исследование', 'начала поиск' — агент уже ответил в чат, "
             "не делай вид что он ещё работает. "
+            "ЗАПРЕЩЕНО спрашивать: 'хочешь чтобы я запустил?', 'запустить?', 'опубликовать?', 'отправить?' — "
+            "ты директор, ты ДЕЙСТВУЕШЬ, не ждёшь одобрения на каждый шаг. "
             "НЕ начинай с 'Привет'. НЕ пересказывай результаты агентов — пользователь их уже прочитал."
         ),
     }], max_tokens=400)
@@ -5100,7 +5094,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         for _n, _t, _r in all_results:
             _fallback_parts.append(f"{_n}: {_r[:200]}")
         final_response = "Команда отработала:\n" + "\n".join(_fallback_parts)
-    return final_response or "Команда отработала. Результаты выше ☝️"
+    return {"response": final_response or "Команда отработала. Результаты выше ☝️", "execute_next": True}
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None,
@@ -5129,11 +5123,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         if _director_response is not None:
             # Агент ответил напрямую — ASI молчит (ответ уже в DB)
             if _director_response == "__agent_handled__":
-                # Агент уже сохранил ответ в DB — возвращаем пустую строку,
-                # фронтенд покажет его через /api/interactions sync
                 return {'response': '', 'tool_calls': [], 'tools_used': [], 'agent_info': None}
-            # Директор обработал — если пустой ответ (таймаут AI) — fallback
-            if not _director_response.strip():
+
+            # Распаковываем: dict = агенты отработали + нужен execution step
+            _execute_next = False
+            if isinstance(_director_response, dict):
+                _execute_next = _director_response.get('execute_next', False)
+                _director_response = _director_response.get('response', '')
+
+            # Пустой ответ (таймаут AI) → fallback
+            if not _director_response or not _director_response.strip():
                 logger.warning("[DIRECTOR] empty synthesis — falling through to process_request")
                 _director_response = None
             else:
@@ -5148,12 +5147,43 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 import re as _re_dir
                 _director_response = _re_dir.sub(r'\n{2,}', '\n', _director_response)
                 _director_response = _re_dir.sub(r'  +', ' ', _director_response).strip()
+
+                # ── Шаг исполнения: агенты подготовили → ASI выполняет (кампании, посты, письма) ──
+                if _execute_next:
+                    _save_interaction_for_director(user_id, _director_response)
+                    _exec_instruction = (
+                        f"[КОНТЕКСТ: агенты уже выполнили задачу, результаты видны выше в чате. "
+                        f"Синтез директора: «{_director_response[:300]}»]\n\n"
+                        f"Теперь ВЫПОЛНИ следующий шаг: вызови подходящий инструмент "
+                        f"(start_delegation_campaign, create_post, publish_to_telegram, send_email и т.д.) "
+                        f"для реализации того что подготовили агенты. "
+                        f"Исходный запрос пользователя: «{message[:200]}»\n"
+                        f"Если все необходимые действия уже выполнены агентами — просто кратко подтверди. "
+                        f"НЕ пересказывай результаты агентов. Вызови инструмент и кратко отчитайся."
+                    )
+                    try:
+                        _exec_response = await agent.process_request(
+                            _exec_instruction, user_id, context, db_session,
+                            subscription_tier, progress_callback=progress_callback,
+                            web_context=web_context, exclude_tools=exclude_tools)
+                        if _exec_response and _exec_response.strip():
+                            _final = f"{_director_response}\n{_exec_response.strip()}"
+                            _final = _re_dir.sub(r'\n{2,}', '\n', _final).strip()
+                            return {
+                                'response': _final,
+                                'tool_calls': [],
+                                'tools_used': [],
+                                'agent_info': None,
+                            }
+                    except Exception as _exec_e:
+                        logger.warning("[DIRECTOR] execution step error: %s", _exec_e)
+
                 # Промежуточные Interaction уже сохранены
                 return {
                     'response': _director_response,
                     'tool_calls': [],
                     'tools_used': [],
-                    'agent_info': None,  # ASI подводит итог
+                    'agent_info': None,
                 }
 
         response_text = await agent.process_request(
