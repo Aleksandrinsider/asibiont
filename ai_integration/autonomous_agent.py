@@ -4595,17 +4595,34 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
         # Rework: если агент ответил фоллбэком — пробуем ещё раз с дополнительной подсказкой
         _resp_lower = str(resp).strip().lower()
-        if _resp_lower in ('задачу выполнил.', 'задачу выполнила.', 'данных нет.'):
+        _fallback_phrases = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
+        if _resp_lower in _fallback_phrases:
             _rework_task = (
                 f"ДОРАБОТКА. Предыдущий ответ отклонён как пустой.\n"
                 f"Задача: {task}\n"
-                f"Используй инструменты: research_topic для поиска информации, "
-                f"add_task для создания плана действий, web_search для поиска данных. "
-                f"Дай конкретный результат с фактами и следующими шагами."
+                f"Ты ОБЯЗАН дать содержательный ответ. Варианты:\n"
+                f"1. Используй research_topic чтобы найти информацию по теме\n"
+                f"2. Если задача — создать план, просто напиши его своими словами\n"
+                f"3. Предложи конкретные идеи и шаги из своей экспертизы\n"
+                f"НЕ отвечай 'Задачу выполнил' — дай реальный результат."
             )
             resp2 = await _exec_agent_for_director(ag, _rework_task, user_id, dialog_context=extra_context)
-            if resp2 and str(resp2).strip().lower() not in ('задачу выполнил.', 'задачу выполнила.', 'данных нет.'):
+            if resp2 and str(resp2).strip().lower() not in _fallback_phrases:
                 resp = resp2
+            else:
+                # Rework тоже провалился — генерируем ответ из контекста без tool calling
+                _fallback_resp = await _quick_ai_call_raw([{
+                    "role": "user",
+                    "content": (
+                        f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
+                        f"Задача: {task}\n"
+                        f"Контекст: {(extra_context or '')[:500]}\n\n"
+                        f"Дай конкретный ответ по задаче — идеи, план, рекомендации. "
+                        f"Кратко, 2-3 абзаца, без markdown."
+                    ),
+                }], max_tokens=300)
+                if _fallback_resp and len(_fallback_resp) > 20:
+                    resp = _fallback_resp
 
         # Отправляем результат агента как сообщение в чате (живой диалог)
         _agent_name = ag.get('name', 'Агент')
@@ -4834,37 +4851,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     if not _ag:
         return None
     _dm = decision.get('director_message', '')
-    if _dm:
-        _save_interaction_for_director(user_id, _dm)
-        await asyncio.sleep(0.05)
+    # director_message сохраняется внутри _run_agent_task — не дублируем
     _task = decision.get('agent_task') or user_message
     _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
-    if not _resp:
-        return None
-
-    # ASI коротко подводит итог и даёт следующий шаг
-    # Пропускаем summary если агент дал короткий ответ (пользователь и так всё видел)
-    _resp_len = len(_resp or '')
-    if _resp_len > 30 and _resp_len < 200:
-        # Короткий ответ агента — summary избыточен
-        return "__agent_handled__"
-    _gender_verb = 'выполнила' if _ag.get('name', '')[-1:] in 'аяАЯ' else 'выполнил'
-    _dir_summary = await _quick_ai_call_raw([{
-        "role": "user",
-        "content": (
-            f"Пользователь: «{user_message}»\n"
-            f"{_ag['name']} {_gender_verb}:\n{_resp[:400]}\n\n"
-            "Пользователь уже видел ответ агента. НЕ пересказывай его. "
-            "Скажи 1 предложение: конкретный следующий шаг или вопрос пользователю. "
-            "Не начинай с 'Получили' или 'Готово'. Не повторяй структуру 'Получили X. Следующий шаг — Y'."
-        ),
-    }], max_tokens=80)
-    if _dir_summary:
-        await _send_visible(_dir_summary)
-        _save_interaction_for_director(user_id, _dir_summary)
+    # Агент уже ответил и сохранён в DB — ASI молчит, не дублирует
     return "__agent_handled__"
-
-    return None
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None,
