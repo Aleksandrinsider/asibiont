@@ -3228,29 +3228,12 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
 def _save_interaction_for_director(telegram_id: int, content: str):
     """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата."""
     try:
-        import re as _re_si
-        # Удаляем все unicode-эмодзи из промежуточных сообщений
-        _clean = _re_si.sub(
-            '['
-            '\U0001F600-\U0001F64F'
-            '\U0001F300-\U0001F5FF'
-            '\U0001F680-\U0001F6FF'
-            '\U0001F1E0-\U0001F1FF'
-            '\U0001F900-\U0001F9FF'
-            '\U0001FA00-\U0001FAFF'
-            '\U00002702-\U000027B0'
-            '\U00002600-\U000026FF'
-            '\U00002B05-\U00002B55'
-            '\U000023E9-\U000023FA'
-            '\U0000FE0F'
-            '\U0000200D'
-            ']+', '', content or '')
         from models import Session as _Db, User as _User, Interaction as _Intr
         _s = _Db()
         try:
             _u = _s.query(_User).filter_by(telegram_id=telegram_id).first()
             if _u:
-                _s.add(_Intr(user_id=_u.id, message_type='ai', content=_clean))
+                _s.add(_Intr(user_id=_u.id, message_type='ai', content=content or ''))
                 _s.commit()
         finally:
             _s.close()
@@ -5144,8 +5127,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 except Exception:
                     pass
                 import re as _re_dir
-                # Удаляем эмодзи
-                _director_response = _re_dir.sub(r'[\U0001F000-\U0001FFFF]|[\u2600-\u27BF]|[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]', '', _director_response)
                 _director_response = _re_dir.sub(r'\n{2,}', '\n', _director_response)
                 _director_response = _re_dir.sub(r'  +', ' ', _director_response).strip()
                 # Промежуточные Interaction уже сохранены
@@ -5161,7 +5142,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             subscription_tier, progress_callback=progress_callback,
             web_context=web_context, exclude_tools=exclude_tools)
 
-        # Очищаем технические детали, названия инструментов и эмодзи из ответа
+        # Очищаем технические детали и названия инструментов из ответа
         if response_text and isinstance(response_text, str):
             try:
                 from .utils import clean_technical_details as _ctd_final
@@ -5196,8 +5177,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             )
             # Удаляем конструкции "через <tool_name>" оставшиеся
             response_text = _re.sub(r'\s+через\s+(?=[А-Яа-я])', ' через ', response_text)
-            # Удаляем все эмодзи из финального ответа
-            response_text = _re.sub(r'[\U0001F000-\U0001FFFF]|[\u2600-\u27BF]|[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]', '', response_text)
             # Нормализуем переносы: \n\n → \n, иначе пустые строки в Telegram-чате
             response_text = _re.sub(r'\n{2,}', '\n', response_text)
             # Убираем двойные пробелы от удалённых элементов
