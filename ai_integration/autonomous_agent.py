@@ -3956,6 +3956,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _depth >= 2:
         return f"Агент {agent.get('name', '?')}: превышена глубина делегирования, задача принята."
 
+    # Определяем род агента по имени для правильных fallback-фраз
+    _aname_fb = (agent.get('name') or '').strip()
+    _is_fem = _aname_fb and _aname_fb[-1] in 'аяАЯ' and _aname_fb[-2:].lower() not in ('ша', 'жа')
+    _done_fb = 'Задачу выполнила.' if _is_fem else 'Задачу выполнил.'
+
     import subprocess as _sp2, sys as _sys2, os as _os2
 
     _persona = (
@@ -4194,7 +4199,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _content,
                 ).strip()
             # Сохраняем результат и выходим из цикла — субделегирования обработаются ниже
-            _early_text = _content or "Задачу выполнил."
+            _early_text = _content or _done_fb
             break
 
         # Агент вызвал инструменты — выполняем (макс 1 за итерацию для скорости)
@@ -4260,7 +4265,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _final_text = _m_back['content']
                 break
         if not _final_text:
-            _final_text = 'Задачу выполнил.'
+            _final_text = _done_fb
         # Парсим DELEGATE из финального ответа
         if _final_text:
             import re as _re_fin
@@ -4274,9 +4279,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
             _final_text = _re_fin.sub(
                 r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _final_text,
-            ).strip() or 'Задачу выполнил.'
+            ).strip() or _done_fb
         else:
-            _final_text = 'Задачу выполнил.'
+            _final_text = _done_fb
 
     # Детектируем BLOCKED-маркер в финальном ответе агента
     if _final_text and _final_text.lower().startswith('blocked:'):
@@ -4304,7 +4309,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Очищаем DSML-теги и технические артефакты перед возвратом
     try:
         from .utils import clean_technical_details as _ctd_exec
-        _final_text = _ctd_exec(_final_text or '').strip() or 'Задачу выполнил.'
+        _final_text = _ctd_exec(_final_text or '').strip() or _done_fb
     except Exception:
         pass
     return _final_text
@@ -4567,6 +4572,20 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
 
+        # Rework: если агент ответил фоллбэком — пробуем ещё раз с дополнительной подсказкой
+        _resp_lower = str(resp).strip().lower()
+        if _resp_lower in ('задачу выполнил.', 'задачу выполнила.', 'данных нет.'):
+            _rework_task = (
+                f"ДОРАБОТКА. Предыдущий ответ отклонён как пустой.\n"
+                f"Задача: {task}\n"
+                f"Используй инструменты: research_topic для поиска информации, "
+                f"add_task для создания плана действий, web_search для поиска данных. "
+                f"Дай конкретный результат с фактами и следующими шагами."
+            )
+            resp2 = await _exec_agent_for_director(ag, _rework_task, user_id, dialog_context=extra_context)
+            if resp2 and str(resp2).strip().lower() not in ('задачу выполнил.', 'задачу выполнила.', 'данных нет.'):
+                resp = resp2
+
         # Отправляем результат агента как сообщение в чате (живой диалог)
         _agent_name = ag.get('name', 'Агент')
         await _send_visible(f"{_agent_name}:\n{str(resp)[:600]}")
@@ -4803,11 +4822,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         return None
 
     # ASI коротко подводит итог и даёт следующий шаг
+    _gender_verb = 'выполнила' if _ag.get('name', '')[-1:] in 'аяАЯ' else 'выполнил'
     _dir_summary = await _quick_ai_call_raw([{
         "role": "user",
         "content": (
             f"Пользователь: «{user_message}»\n"
-            f"{_ag['name']} сделал:\n{_resp[:400]}\n\n"
+            f"{_ag['name']} {_gender_verb}:\n{_resp[:400]}\n\n"
             "Пользователь уже видел ответ. 1-2 предложения: что получили и какой следующий шаг."
         ),
     }], max_tokens=120)
