@@ -10700,15 +10700,9 @@ except Exception as e:
             
             html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + escapeHtml(cleanTitle) + '</div>';
             
-            // Бейдж агента — если задача создана для суб-агента
-            if (task.source === 'agent' && task.agent_name) {
-                html += '<div style="margin-top: 2px;"><span style="font-size: 11px; color: #068487; background: #E6F7F8; padding: 1px 6px; border-radius: 4px;">🤖 ' + escapeHtml(task.agent_name) + '</span>';
-                if (task.delegation_status === 'agent_completed') {
-                    html += ' <span style="font-size: 11px; color: #22863A;">✓</span>';
-                } else if (task.delegation_status === 'needs_rework') {
-                    html += ' <span style="font-size: 11px; color: #D73A49;">⟳</span>';
-                }
-                html += '</div>';
+            // Для агентских задач показываем "Поручено @agent_name"
+            if (task.source === 'agent' && task.agent_name && !delegationInfo) {
+                delegationInfo = t('delegated-to') + ' @' + task.agent_name;
             }
             
             // Если есть делегирование, показываем отдельной строкой
@@ -10801,20 +10795,18 @@ except Exception as e:
         }
         
         function updateStats(tasks) {
-            // Используем все задачи для статистики, независимо от фильтра
-            const allTasks = (allTasksFromServer && allTasksFromServer.length > 0) ? allTasksFromServer : (tasks || []);
+            // Используем все задачи для статистики, исключая отменённые и отклонённые
+            const rawTasks = (allTasksFromServer && allTasksFromServer.length > 0) ? allTasksFromServer : (tasks || []);
+            const allTasks = rawTasks.filter(t => t.status !== 'cancelled' && t.status !== 'rejected');
             
             // Не обновляем статистику до загрузки данных с сервера
             if (!allTasks || allTasks.length === 0) {
-                // Показываем нулевую статистику
-                const statValueEl = document.querySelector('.stat-value');
-                const statPercentEl = document.querySelector('.stat-percent');
-                if (statValueEl) statValueEl.textContent = '0';
-                if (statPercentEl) statPercentEl.textContent = '0%';
-                const todayEl = document.querySelector('.date-stat:nth-child(1) .stat-number');
-                const tomorrowEl = document.querySelector('.date-stat:nth-child(2) .stat-number');
-                if (todayEl) todayEl.textContent = '0';
-                if (tomorrowEl) tomorrowEl.textContent = '0';
+                const completedEl = document.getElementById('completed-count');
+                const totalEl = document.getElementById('total-count');
+                const progressEl = document.getElementById('progress-fill');
+                if (completedEl) completedEl.textContent = '0';
+                if (totalEl) totalEl.textContent = '0';
+                if (progressEl) progressEl.style.width = '0%';
                 
                 // Обновляем недельный таймлайн даже для пустого массива
                 updateWeekTimeline([]);
@@ -14800,7 +14792,7 @@ except Exception as e:
       'err-timeout':'Сервер не ответил за 120 сек. Попробуйте ещё раз.',
       'err-server-unavail':'Сервер временно недоступен. Попробуйте через минуту.',
       'confirm-task-return':'Задача вернется в ваш список личных задач.',
-      'delegated-to':'Поручена','delegated-from':'Поручена от',
+      'delegated-to':'Поручено','delegated-from':'Поручено от',
       'mp-no-agents':'Агентов пока нет','mp-free':'Бесплатно','mp-per-msg':'тк/сообщение',
       'mp-your-agent':'Ваш агент','mp-activate':'Активировать','mp-deactivate':'Отключить','mp-activated-badge':'подключён',
       'mp-in-arena':'В арене','mp-paused-short':'Пауза','mp-in-review':'На модерации','mp-disabled':'Отключён',

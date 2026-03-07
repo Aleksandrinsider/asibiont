@@ -5775,7 +5775,7 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
                 details += f" Дедлайн: {local_due.strftime('%d.%m.%Y %H:%M')}\n"
             
             if task.delegated_to_username:
-                details += f" Делегирована: @{task.delegated_to_username}\n"
+                details += f" Поручено: @{task.delegated_to_username}\n"
                 details += f" Статус делегирования: {task.delegation_status or 'Не определён'}\n"
                 if task.delegation_details:
                     details += f" Детали делегирования: {task.delegation_details}\n"
