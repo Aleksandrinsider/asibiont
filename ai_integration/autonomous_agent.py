@@ -3990,6 +3990,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "начни ПЕРВУЮ строку ответа с 'BLOCKED: <краткая причина>'. Это немедленно уведомит пользователя.\n\n"
         f"ТВОЯ РОЛЬ:\n{_persona}"
     )
+    # Гендерная инструкция — чтобы агент использовал правильный род
+    if _is_fem:
+        system_prompt += (
+            "\n\nВАЖНО: Ты ЖЕНЩИНА. Используй женский род во всех формах: "
+            "сделала, нашла, подготовила, согласна, готова, проанализировала. "
+            "НИКОГДА не пиши 'сделал', 'нашёл', 'согласен', 'готов' и т.п."
+        )
     if dialog_context:
         system_prompt += (
             f"\n\n[КОНТЕКСТ — профиль пользователя, его email-контакты, цели, история диалога. "
@@ -4822,15 +4829,22 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         return None
 
     # ASI коротко подводит итог и даёт следующий шаг
+    # Пропускаем summary если агент дал короткий ответ (пользователь и так всё видел)
+    _resp_len = len(_resp or '')
+    if _resp_len > 30 and _resp_len < 200:
+        # Короткий ответ агента — summary избыточен
+        return "__agent_handled__"
     _gender_verb = 'выполнила' if _ag.get('name', '')[-1:] in 'аяАЯ' else 'выполнил'
     _dir_summary = await _quick_ai_call_raw([{
         "role": "user",
         "content": (
             f"Пользователь: «{user_message}»\n"
             f"{_ag['name']} {_gender_verb}:\n{_resp[:400]}\n\n"
-            "Пользователь уже видел ответ. 1-2 предложения: что получили и какой следующий шаг."
+            "Пользователь уже видел ответ агента. НЕ пересказывай его. "
+            "Скажи 1 предложение: конкретный следующий шаг или вопрос пользователю. "
+            "Не начинай с 'Получили' или 'Готово'. Не повторяй структуру 'Получили X. Следующий шаг — Y'."
         ),
-    }], max_tokens=120)
+    }], max_tokens=80)
     if _dir_summary:
         await _send_visible(_dir_summary)
         _save_interaction_for_director(user_id, _dir_summary)
