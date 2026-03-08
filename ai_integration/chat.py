@@ -179,10 +179,9 @@ Do NOT take tasks/goals/posts from memory or history — they may have been dele
             "«Сегодня <день> — значит пора...», «Хороший день чтобы...»\n"
             "• любой оценки времени суток или дня недели в первом предложении\n\n"
             "ПЕРВОЕ СЛОВО — существительное или глагол конкретного действия/факта. "
-            "Максимум 4-5 предложений + 1 вопрос или предложение.\n\n"
-            "ОБЯЗАТЕЛЬНО: если предлагаешь шаги или план — укажи 1-2 АЛЬТЕРНАТИВЫ "
-            "(другой подход, другой инструмент, другой приоритет). "
-            "Например, 'написать пост ИЛИ сначала изучить конкурентов'."
+            "Максимум 4-5 предложений + 1 вопрос или конкретное предложение действия.\n\n"
+            "ОБЯЗАТЕЛЬНО: предложи ОДНО лучшее действие прямо сейчас, "
+            "не перечисляй варианты на выбор."
         ),
         'en': (
             "Write a proactive message to the user based on the situation analysis above. "
@@ -193,11 +192,9 @@ Do NOT take tasks/goals/posts from memory or history — they may have been dele
             "'Today is a good day for...', 'This [weekday] is perfect for...'\n"
             "• any evaluation of the time of day or weekday in the first sentence\n\n"
             "FIRST WORD must be a noun or action verb. "
-            "Max 4-5 sentences + 1 question or specific suggestion.\n\n"
-            "REQUIRED: if suggesting steps or a plan — include 1-2 ALTERNATIVES "
-            "(a different approach, tool, or priority). "
-            "E.g. 'write a post OR research competitors first'. "
-            "Alternatives make the message practical, not prescriptive."
+            "Max 4-5 sentences + 1 question or specific action suggestion.\n\n"
+            "REQUIRED: suggest ONE best action right now, "
+            "do not list alternatives or options to choose from."
         ),
     },
     'pro_task_help': {
