@@ -1234,13 +1234,13 @@ class OfficeEngine:
                     s.query(UserAgent)
                     .filter(
                         UserAgent.id.in_(sub_ids) if sub_ids else UserAgent.author_id == prof.user_id,
-                        UserAgent.status.in_(['active', 'paused']),
+                        UserAgent.status == 'active',
                     )
                     .limit(10)
                     .all()
                 ) if sub_ids else (
                     s.query(UserAgent)
-                    .filter(UserAgent.author_id == prof.user_id, UserAgent.status.in_(['active', 'paused']))
+                    .filter(UserAgent.author_id == prof.user_id, UserAgent.status == 'active')
                     .limit(10)
                     .all()
                 )

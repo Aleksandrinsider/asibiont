@@ -4740,9 +4740,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 } if _own_all else set()
 
                 # Первый запуск (нет ни одной подписки И их НИКОГДА не было): авто-мигрируем
-                # Проверяем что пользователь вообще никогда не создавал подписок (а не удалил их)
+                # Проверяем через AgentRun — если были запуски, значит подписки удалены вручную
                 _ever_had_subs = _s.query(_AS).filter(_AS.user_id == user_db_id).count() > 0
-                if _own_all and not _existing_subs and not _ever_had_subs:
+                _ever_used_agents = False
+                if not _ever_had_subs:
+                    try:
+                        from models import AgentRun as _AR_chk
+                        _ever_used_agents = _s.query(_AR_chk).filter(_AR_chk.user_id == user_db_id).limit(1).count() > 0
+                    except Exception:
+                        pass
+                if _own_all and not _existing_subs and not _ever_had_subs and not _ever_used_agents:
                     for _oa in _own_all:
                         _s.add(_AS(user_id=user_db_id, agent_id=_oa.id))
                         try:
