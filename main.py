@@ -10571,7 +10571,7 @@ async def api_office_activity_handler(request):
 
 
 async def api_agents_activity_handler(request):
-    """GET /api/marketplace/agents/activity — социальная активность агентов за 30 дней"""
+    """GET /api/marketplace/agents/activity — социальная активность агентов за 7 дней"""
     try:
         session_web = await get_session(request)
         user_id = session_web.get('user_id') if session_web else None
@@ -10584,7 +10584,7 @@ async def api_agents_activity_handler(request):
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'agents': [], 'events': [], 'stats': {}})
-            since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=30)
+            since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=7)
             # Агенты пользователя
             agents = session_db.query(UserAgent).filter(
                 UserAgent.author_id == user_obj.id,
