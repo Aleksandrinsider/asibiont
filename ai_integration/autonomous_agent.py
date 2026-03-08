@@ -4734,17 +4734,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     _existing_subs = {a.id for a in _own_all}
 
                 _own_agents = [a for a in _own_all if a.id in _existing_subs]
-            except Exception:
-                # Fallback: загружаем все собственные агенты без фильтра
-                _own_agents = (
-                    _s.query(_UA)
-                    .filter(_UA.author_id == user_db_id, _UA.status.in_(['active', 'paused']))
-                    .limit(10)
-                    .all()
-                )
+            except Exception as _sub_err:
+                logger.warning("[DIRECTOR] subscription check error, loading empty: %s", _sub_err)
+                _own_agents = []
             _own_ids = {a.id for a in _own_agents}
 
             # Источник 3: сессионно-активированные с загрузкой из БД (если не вошли в own)
+            # get_user_active_agents уже фильтрует по AgentSubscription, поэтому _session_ids чисты
             _extra_ids = [i for i in _session_ids if i not in _own_ids]
             _extra_agents = []
             if _extra_ids:

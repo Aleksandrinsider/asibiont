@@ -77,20 +77,24 @@ def _is_user_night(user) -> bool:
         return False
 
 
-def _save_office_anchor_sync(user_id: int, agent_name: str, text: str):
+def _save_office_anchor_sync(user_id: int, agent_name: str, text: str,
+                              interval_minutes: int | None = None):
     """Создаёт agent_office_update Anchor — AnchorEngine сам решит когда доставить в TG:
     учитывает ночные часы, cooldown, батчинг группы 'integration'.
-    Cooldown: один якорь на агента в час (дедупликация по source).
+    Окно дедупликации и cooldown адаптируются к interval_minutes агента.
     """
     try:
         from models import Session as _Db, Anchor as _An, AnchorPriority as _AP
         _now = datetime.now(timezone.utc)
-        _quarter = _now.minute // 15 * 15  # 0, 15, 30, 45
-        _src = f'office-report:{agent_name}:{_now.strftime("%Y-%m-%d-%H")}-{_quarter:02d}'
+        _iv = max(interval_minutes or 60, 15)          # мин. 15 мин
+        _window = _iv if _iv <= 60 else 60              # окно дедупликации ≤ 60 мин
+        _slot = (_now.minute // _window) * _window      # квант: 0..59
+        _src = f'office-report:{agent_name}:{_now.strftime("%Y-%m-%d-%H")}-{_slot:02d}'
+        _cooldown_h = _iv / 60                          # cooldown = интервал агента
         _s = _Db()
         try:
             if _s.query(_An).filter_by(user_id=user_id, source=_src).first():
-                return  # уже есть в пределах 15-минутного окна
+                return  # уже есть в пределах окна
             _s.add(_An(
                 user_id=user_id,
                 anchor_type='agent_office_update',
@@ -100,7 +104,7 @@ def _save_office_anchor_sync(user_id: int, agent_name: str, text: str):
                 data=json.dumps({'agent': agent_name, 'report': text[:500]}, ensure_ascii=False),
                 triggered_at=_now,
                 expires_at=_now + timedelta(hours=8),
-                cooldown_hours=0.25,
+                cooldown_hours=_cooldown_h,
                 batch_group='integration',
             ))
             _s.commit()
@@ -634,9 +638,12 @@ class OfficeEngine:
     async def _run_all_agent_scripts(self):
         """Грузит всех активных агентов с python_code и запускает их в пакетах."""
         try:
-            from models import Session as Db, UserAgent, User as UserModel
+            from models import Session as Db, UserAgent, User as UserModel, AgentSubscription as ASub
             s = Db()
             try:
+                _sub_pairs = {
+                    (r.user_id, r.agent_id) for r in s.query(ASub).all()
+                }
                 rows = (
                     s.query(UserAgent, UserModel)
                     .join(UserModel, UserModel.id == UserAgent.author_id)
@@ -647,6 +654,10 @@ class OfficeEngine:
                     )
                     .all()
                 )
+                rows = [
+                    (agent, user) for agent, user in rows
+                    if (user.id, agent.id) in _sub_pairs
+                ]
             finally:
                 s.close()
         except Exception as e:
@@ -761,6 +772,7 @@ class OfficeEngine:
                             await loop.run_in_executor(
                                 None, _save_office_anchor_sync,
                                 user.id, agent.name or 'Агент', report,
+                                agent.run_interval_minutes,
                             )
                         except Exception:
                             pass
@@ -847,11 +859,14 @@ class OfficeEngine:
         if not report or len(report.strip()) < 40:
             return
 
-        # Загружаем всех агентов пользователя
+        # Загружаем всех агентов пользователя (только с активной подпиской)
         try:
-            from models import Session as _Db, UserAgent as _UA
+            from models import Session as _Db, UserAgent as _UA, AgentSubscription as _ASub
             _s = _Db()
             try:
+                _sub_ids = {
+                    r.agent_id for r in _s.query(_ASub).filter_by(user_id=user.id).all()
+                }
                 _rows = (
                     _s.query(_UA)
                     .filter(_UA.author_id == user.id, _UA.status.in_(['active', 'paused']))
@@ -865,7 +880,7 @@ class OfficeEngine:
                         'description': (a.description or '')[:150],
                         'avatar_url': a.avatar_url or '',
                     }
-                    for a in _rows
+                    for a in _rows if a.id in _sub_ids
                 ]
             finally:
                 _s.close()
