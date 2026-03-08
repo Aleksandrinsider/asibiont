@@ -1037,6 +1037,7 @@ class OfficeEngine:
                 continue  # анализируем результат этого агента → может быть ещё шаг
 
             elif action == 'ask':
+                # Сохраняем вопрос только в чат (dashboard), НЕ отправляем в Telegram
                 question = decision.get('question', 'Готово. Действуем?')
                 ask_msg = f"Подготовительная работа завершена.\n\n{question}"
                 try:
@@ -1044,7 +1045,6 @@ class OfficeEngine:
                     _save_interaction_for_director(user.telegram_id, ask_msg)
                 except Exception:
                     pass
-                await _send_tg(user.telegram_id, ask_msg)
                 logger.info("[AUTONOMY] ASK user %d at step %d: %s",
                           user.telegram_id, _step + 1, question[:80])
                 break  # ждём ответа пользователя
