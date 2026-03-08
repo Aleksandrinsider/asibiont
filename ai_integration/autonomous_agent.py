@@ -4782,11 +4782,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 if _fallback_resp and len(_fallback_resp) > 20:
                     resp = _fallback_resp
 
-        # Отправляем результат агента как сообщение в чате (живой диалог)
-        _agent_name = ag.get('name', 'Агент')
-        await _send_visible(f"{_agent_name}:\n{str(resp)[:600]}")
-        await asyncio.sleep(0.3)
-
+        # Результат агента сохраняется в DB как __agent JSON (с аватаром).
+        # НЕ дублируем через _send_visible — фронтенд заберёт из sync /api/interactions.
         _ac = _json.dumps({
             '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': ag.get('avatar_url', '')},
             'text': resp,
