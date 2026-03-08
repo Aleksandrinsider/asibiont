@@ -2532,8 +2532,9 @@ class HybridAutonomousAgent:
                             messages.append(_tool_msg)
 
                 # Если в этой итерации был delegate_task — добавляем инструкцию продолжать
+                # Но НЕ для вопросов — вопросы не требуют цепочки действий
                 _had_delegate = any(c[1] == 'delegate_task' for c in _ready_calls)
-                if _had_delegate:
+                if _had_delegate and not _is_question_message(user_message):
                     messages.append({
                         "role": "system",
                         "content": (
@@ -3259,6 +3260,29 @@ def get_autonomous_agent():
 def _has_explicit_mention(message: str) -> bool:
     """True если сообщение начинается с @Агент или 'ИмяАгента,'."""
     return bool(re.match(r'@\w+\b', (message or '').strip()))
+
+
+def _is_question_message(msg: str) -> bool:
+    """True если сообщение — вопрос, а не запрос на действие."""
+    m = (msg or '').strip().lower()
+    if not m:
+        return False
+    if '?' in m:
+        return True
+    _q_starts = (
+        'есть ', 'есть ли ', 'что ', 'как ', 'какой ', 'какая ', 'какие ', 'какое ',
+        'сколько ', 'когда ', 'где ', 'зачем ', 'почему ', 'кто ', 'чем ', 'куда ',
+        'расскажи ', 'покажи ', 'скажи ', 'подскажи ',
+        'what ', 'how ', 'when ', 'where ', 'who ', 'why ', 'which ', 'is there ',
+    )
+    # Проверяем оригинальное сообщение
+    if any(m.startswith(s) for s in _q_starts):
+        return True
+    # Убираем обращение к агенту: "Кристина, ..." → "..."
+    m2 = re.sub(r'^@?[а-яёa-z]+[\s,]+', '', m).strip()
+    if m2 and any(m2.startswith(s) for s in _q_starts):
+        return True
+    return False
 
 
 async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
@@ -4892,6 +4916,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             resp = "Данных нет."
 
         # Rework: если агент ответил фоллбэком или промежуточным статусом — пробуем ещё раз
+        # Для вопросов: НЕ rework — "нет данных" это валидный ответ на вопрос
         _resp_lower = str(resp).strip().lower()
         _fallback_phrases = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
         _intermediate_markers = ('использую', 'ищу данные', 'уточняю поиск', 'исследую',
@@ -4902,7 +4927,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _is_fallback = _resp_lower in _fallback_phrases
         _is_intermediate = (len(str(resp).strip()) < 200 and
                             any(m in _resp_lower for m in _intermediate_markers))
-        if _is_fallback or _is_intermediate:
+        _skip_rework = _is_question_message(task)
+        if (_is_fallback or _is_intermediate) and not _skip_rework:
             _rework_task = (
                 f"ДОРАБОТКА. Предыдущий ответ отклонён как пустой.\n"
                 f"Задача: {task}\n"
@@ -5008,6 +5034,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _ag = _direct_agent
         _dm = ''
         _task = user_message
+        # Если вопрос — подсказываем агенту: ответь, не действуй
+        if _is_question_message(user_message):
+            _task = f"ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): {user_message}"
         _agent_name_d = _ag.get('name', 'Агент')
     else:
         _ag = None  # will be set by ASI decision below
@@ -5016,6 +5045,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         # direct_agent: skip ASI decision, go straight to multi-round loop
         pass
     else:
+        # Вопросы без прямого обращения к агенту → ASI отвечает сам через process_request
+        if _is_question_message(user_message):
+            return None
+
         # ── Начальное решение ASI ──────────────────────────────────────────────────
         _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
 
@@ -5076,6 +5109,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             "  3) ASI НЕ может сделать это сам своими инструментами\n\n"
             "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
             "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
+            "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
             "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
             "director_message: имя + повелит. глагол (Кристина, подготовь...).\n"
             "Выбери ОДНОГО наиболее подходящего агента.\n\n"
@@ -5194,7 +5228,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
     # ── Многораундовый цикл: АСИ ↔ агент ─────────────────────────────────────
     # АСИ даёт поручение → агент отчитывается → АСИ решает: ещё поручение или принять
-    _MAX_AGENT_ROUNDS = 3
+    _is_q = _is_question_message(user_message)
+    _MAX_AGENT_ROUNDS = 1 if _is_q else 3
     _agent_name_d = _ag.get('name', 'Агент')
     _round_history: list[dict] = []  # история раундов для контекста
 
@@ -5215,6 +5250,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
         # Запоминаем раунд
         _round_history.append({'task': _task, 'director_msg': _dm, 'result': _agent_result, 'tools_used': _agent_tools_used_round})
+
+        # Вопрос — один раунд, без review/followup
+        if _is_q:
+            break
 
         # Создаём DelegationCampaign если задача outreach-типа
         if _round == 0:
@@ -5510,6 +5549,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         _fallback_exclude = _fallback_exclude | {
             'research_topic', 'delegate_task', 'start_delegation_campaign',
             'start_content_campaign', 'run_agent_action',
+            'web_search', 'quick_topic_search',
         }
         response_text = await agent.process_request(
             message, user_id, context, db_session,
