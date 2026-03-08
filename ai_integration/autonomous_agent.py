@@ -4490,9 +4490,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 # ══ Вспомогательные функции для delegation pipeline ══════════════════════════
 
 def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, result_summary: str = ''):
-    """Создаёт Task с source='agent' для отображения в «Поручения агентам»."""
+    """Создаёт Task с source='agent' для отображения в «Поручения агентам».
+    Возвращает id задачи для последующего обновления."""
     if not user_db_id:
-        return
+        return None
     try:
         from models import Session as _Db, Task as _Task
         _s = _Db()
@@ -4510,7 +4511,9 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
             )
             _s.add(_t)
             _s.commit()
-            logger.info("[DIRECTOR] created delegation task id=%s for agent=%s", _t.id, agent.get('name'))
+            _tid = _t.id
+            logger.info("[DIRECTOR] created delegation task id=%s for agent=%s status=%s", _tid, agent.get('name'), _t.status)
+            return _tid
         except Exception as _e:
             logger.warning("[DIRECTOR] delegation task create error: %s", _e)
             try:
@@ -4521,6 +4524,81 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
             _s.close()
     except Exception as e:
         logger.warning("[DIRECTOR] delegation task error: %s", e)
+    return None
+
+
+def _update_agent_delegation_task(task_id: int, result_summary: str):
+    """Обновляет Task агента: статус completed + результат."""
+    if not task_id:
+        return
+    try:
+        from models import Session as _Db, Task as _Task
+        _s = _Db()
+        try:
+            _t = _s.query(_Task).filter_by(id=task_id).first()
+            if _t:
+                _t.status = 'completed'
+                _t.description = result_summary[:500] if result_summary else _t.description
+                import datetime as _dt
+                _t.actual_completion_time = _dt.datetime.now(_dt.timezone.utc)
+                _s.commit()
+                logger.info("[DIRECTOR] updated delegation task id=%s to completed", task_id)
+        except Exception as _e:
+            logger.warning("[DIRECTOR] delegation task update error: %s", _e)
+            try:
+                _s.rollback()
+            except Exception:
+                pass
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning("[DIRECTOR] delegation task update error: %s", e)
+
+
+# Ключевые слова для outreach-задач (рассылки, поиск людей, email-кампании)
+_OUTREACH_KEYWORDS = (
+    'email', 'рассылк', 'приглаш', 'outreach', 'найти людей',
+    'найти тестировщ', 'набрать', 'привлеч', 'найти пользовател',
+    'отправ письм', 'отправить приглаш', 'кампани', 'campaign',
+    'найти клиент', 'найти исполнител', 'поиск контакт',
+)
+
+
+def _maybe_create_agent_campaign(user_db_id: int, agent: dict, task_text: str, result_summary: str = ''):
+    """Создаёт DelegationCampaign если задача похожа на outreach/рассылку.
+    Не создаёт для простых поручений типа 'напиши пост' или 'сделай картинку'."""
+    if not user_db_id:
+        return
+    _tl = (task_text or '').lower()
+    if not any(kw in _tl for kw in _OUTREACH_KEYWORDS):
+        return  # не outreach — кампания не нужна
+    try:
+        from models import Session as _Db, DelegationCampaign as _DC
+        _s = _Db()
+        try:
+            _name = f"{agent.get('name', 'Агент')}: {task_text[:120]}"
+            _dc = _DC(
+                user_id=user_db_id,
+                name=_name,
+                goal=task_text[:500],
+                target_audience=result_summary[:300] if result_summary else '',
+                status='active',
+                max_delegations=50,
+                daily_limit=10,
+            )
+            _s.add(_dc)
+            _s.commit()
+            logger.info("[DIRECTOR] created outreach campaign id=%s for agent=%s", _dc.id, agent.get('name'))
+        except Exception as _e:
+            logger.warning("[DIRECTOR] campaign create error: %s", _e)
+            try:
+                _s.rollback()
+            except Exception:
+                pass
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning("[DIRECTOR] campaign error: %s", e)
 
 
 def _save_delegation_to_history(telegram_id: int, agent_name: str, task: str, result: str):
@@ -4907,9 +4985,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if _history_block.strip():
             _direct_ctx_parts.append(_history_block.strip())
         _agent_ctx = '\n\n'.join(_direct_ctx_parts)
+        # Создаём Task in_progress ДО запуска
+        _direct_task_id = _create_agent_delegation_task(user_db_id, _direct_agent, user_message)
         _direct_resp = await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
-        # Создаём Task для отслеживания в «Поручения агентам»
-        _create_agent_delegation_task(user_db_id, _direct_agent, user_message, str(_direct_resp or '')[:400])
+        # Обновляем Task → completed
+        _update_agent_delegation_task(_direct_task_id, str(_direct_resp or '')[:400])
         # Сохраняем контекст делегирования в conversation_history
         _save_delegation_to_history(user_id, _direct_agent.get('name', 'Агент'), user_message, str(_direct_resp or '')[:600])
         return "__agent_handled__"
@@ -5089,10 +5169,17 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         return None
     _dm = decision.get('director_message', '')
     _task = decision.get('agent_task') or user_message
+
+    # Создаём Task in_progress ДО запуска агента → пользователь видит что идёт работа
+    _delegation_task_id = _create_agent_delegation_task(user_db_id, _ag, _task)
+
     _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
 
-    # Создаём Task для отслеживания в «Поручения агентам»
-    _create_agent_delegation_task(user_db_id, _ag, _task, str(_resp or '')[:400])
+    # Обновляем Task → completed с результатом
+    _update_agent_delegation_task(_delegation_task_id, str(_resp or '')[:400])
+
+    # Создаём DelegationCampaign если задача outreach-типа (рассылка, поиск людей, email-кампания)
+    _maybe_create_agent_campaign(user_db_id, _ag, _task, str(_resp or '')[:400])
 
     # ASI продолжает координацию: подводит итог, создаёт задачи, делегирует другим агентам
     _agent_result = str(_resp or '')[:600]
