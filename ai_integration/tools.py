@@ -747,7 +747,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "find_and_message_relevant_users",
-            "description": "🔍🤝 Найти пользователей по интересам/навыкам и отправить им сообщение.",
+            "description": "🔍🤝 Найти пользователей по интересам/навыкам. С preview_only=true — только показывает кого нашёл (без отправки). Без preview_only — находит и отправляет сообщения.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -769,6 +769,11 @@ TOOLS = [
                         "type": "integer",
                         "description": "Максимум человек (1-5)",
                         "default": 3
+                    },
+                    "preview_only": {
+                        "type": "boolean",
+                        "description": "true = только показать кого нашёл (без отправки). false/не указано = найти и отправить.",
+                        "default": false
                     }
                 },
                 "required": ["purpose", "message_context"]

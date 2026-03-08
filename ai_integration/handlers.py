@@ -8305,6 +8305,7 @@ async def find_and_message_relevant_users(
     message_context: str,
     match_by: str = "all",
     limit: int = 3,
+    preview_only: bool = False,
     user_id: int = None,
     session=None
 ) -> str:
@@ -8319,6 +8320,7 @@ async def find_and_message_relevant_users(
         match_by: По чему искать: interests (интересы), skills (навыки), 
                   goals (цели), tasks (похожие задачи), city (город), all (всё)
         limit: Максимум людей для отправки (1-5)
+        preview_only: Если True — только показать кого нашёл, без отправки
         user_id: telegram_id инициатора
         session: SQLAlchemy сессия
     """
@@ -8467,11 +8469,41 @@ async def find_and_message_relevant_users(
         
         # Антиспам: общий лимит 50 исходящих в день
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        total_sent_today = session.query(UserMessage).filter(
+        
+        # Антидубликат: убираем тех, кому уже писали сегодня
+        already_messaged_today = set()
+        existing_msgs = session.query(UserMessage.recipient_id).filter(
             UserMessage.sender_id == sender.id,
             UserMessage.created_at >= today_start
-        ).count()
+        ).all()
+        for row in existing_msgs:
+            already_messaged_today.add(row[0])
         
+        top = [c for c in top if c['user'].id not in already_messaged_today]
+        
+        if not top:
+            return " Всем подходящим пользователям уже отправлены сообщения сегодня. Попробуй завтра или расширь поиск."
+        
+        # Preview mode: вернуть список без отправки
+        if preview_only:
+            preview_lines = []
+            for cand in top:
+                u = cand['user']
+                p = cand['profile']
+                name = u.first_name or u.username or "Пользователь"
+                reasons_str = ', '.join(cand['reasons'])
+                info_parts = [f"@{u.username}" if u.username else name]
+                if p.city:
+                    info_parts.append(p.city)
+                if p.position:
+                    info_parts.append(p.position)
+                preview_lines.append(f"• {' | '.join(info_parts)} — совпадение: {reasons_str}")
+            result = f"🔍 Найдено подходящих: {len(top)}\n\n"
+            result += '\n'.join(preview_lines)
+            result += "\n\n💡 Скажи «отправляй» чтобы написать им, или уточни кому именно."
+            return result
+        
+        total_sent_today = len(already_messaged_today)
         remaining = max(0, 50 - total_sent_today)
         if remaining == 0:
             return " Дневной лимит исходящих сообщений (50) исчерпан. Попробуй завтра."
