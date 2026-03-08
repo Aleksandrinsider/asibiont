@@ -949,7 +949,7 @@ TOOLS = [
                 "properties": {
                     "email": {
                         "type": "string",
-                        "description": "Email-адрес контакта"
+                        "description": "Email-адрес контакта. КОПИРУЙ ТОЧНО из источника (IMAP From, переписка). НИКОГДА не генерируй email из имени человека — транслитерация = ошибка."
                     },
                     "name": {
                         "type": "string",

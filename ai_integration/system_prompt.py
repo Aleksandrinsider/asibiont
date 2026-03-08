@@ -225,6 +225,7 @@ Discord-канал (личный): publish_to_discord(content). ТРЕБУЕТ: 
 
 КОНТАКТЫ EMAIL:
 — save_email_contact(email, name, company, position, notes, source) — сохранить email-контакт в справочник. Вызывай когда пользователь даёт email, после отправки письма, при обсуждении потенциальных контактов. Дубли обновляются.
+⛔ EMAIL-ТОЧНОСТЬ: при вызове save_email_contact КОПИРУЙ email ПОСИМВОЛЬНО из источника (письмо, IMAP, сообщение пользователя). НИКОГДА не генерируй и не транслитерируй email из имени — poplavskii ≠ poplavsky, это РАЗНЫЕ адреса.
 — list_email_contacts(status_filter) — список email-контактов: all/new/contacted/replied/interested/bounced. Вызывай когда обсуждают кому писать.
 — negotiate_by_email(contact_email, goal, opening_message, contact_name, subject, sender_name, from_account) — начать ПЕРЕГОВОРЫ по email: отправляет первое письмо и АВТОМАТИЧЕСКИ отслеживает ответы (агент продолжает диалог сам). Используй вместо send_email когда нужен ДИАЛОГ, а не разовая отправка. Примеры целей: 'договориться о встрече', 'согласовать условия', 'получить подтверждение'.
 
@@ -562,6 +563,7 @@ EMAIL (Resend API):
 
 EMAIL CONTACTS:
 — save_email_contact(email, name, company, position, notes, source) — save an email contact to the user's address book. Call when user gives an email, after sending an email, or when discussing potential contacts. Duplicates get updated.
+⛔ EMAIL ACCURACY: when calling save_email_contact COPY email CHARACTER-BY-CHARACTER from the source (email, IMAP, user message). NEVER generate or transliterate email from a person's name — poplavskii ≠ poplavsky, these are DIFFERENT addresses.
 — list_email_contacts(status_filter) — list email contacts: all/new/contacted/replied/interested/bounced. Call when discussing who to write to.
 — negotiate_by_email(contact_email, goal, opening_message, contact_name, subject, sender_name, from_account) — start EMAIL NEGOTIATIONS to achieve a specific goal: sends the first letter and AUTOMATICALLY tracks replies (agent continues the dialogue by itself). Use instead of send_email when a DIALOGUE is needed, not a one-time send. Goal examples: 'schedule a meeting', 'agree on partnership terms', 'get order confirmation'.
 
