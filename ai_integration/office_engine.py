@@ -41,6 +41,9 @@ OFFICE_INTERVAL_SEC  = (2 * 3600, 4 * 3600) # 2-4 ч между координа
 from config import API_TIMEOUT_SCRIPT
 SCRIPT_TIMEOUT_SEC   = API_TIMEOUT_SCRIPT    # таймаут на один скрипт агента
 
+# ── Дедупликация stdout: если скрипт вернул то же самое — не обрабатываем ─────
+_STDOUT_DEDUP: dict[tuple, str] = {}  # (user_id, agent_id) → hash последнего stdout
+
 
 # ── Telegram bot reference (инъектируется из main.py) ───────────────────────
 
@@ -380,6 +383,16 @@ def _save_inbox_reply_sync(user_id: int, agent_name: str, stdout: str):
         from models import Session as _Db, AgentActivityLog
         _s = _Db()
         try:
+            # Дедупликация: не создаём дубль если за 2ч есть такой же inbox_reply
+            _cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+            _existing = _s.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user_id,
+                AgentActivityLog.target == f'agent:{agent_name}',
+                AgentActivityLog.activity_type == 'inbox_reply',
+                AgentActivityLog.created_at > _cutoff,
+            ).order_by(AgentActivityLog.created_at.desc()).first()
+            if _existing and _existing.content and _existing.content[:200] == stdout[:200]:
+                return  # тот же inbox — не дублируем
             _s.add(AgentActivityLog(
                 user_id=user_id,
                 activity_type='inbox_reply',
@@ -493,6 +506,7 @@ DONE
 - НЕ передавай задачу тому же агенту который только что её выполнил
 - Передавай ТОЛЬКО если другой агент реально нужен для следующего шага
 - Если результат — готовый отчёт/данные/мониторинг без продолжения → DONE
+- Если результат — периодический отчёт (проверка почты, мониторинг) и информация уже была доставлена пользователю → DONE
 - Если следующий шаг = реальное действие (отправка, публикация, оплата) → ASK"""
 
 
@@ -730,6 +744,15 @@ class OfficeEngine:
                 return
 
             if stdout:
+                # ── Дедупликация: если stdout не изменился — пропускаем ─────
+                import hashlib as _hl
+                _dedup_key = (user.id, agent.id)
+                _stdout_hash = _hl.md5(stdout.strip()[:500].encode()).hexdigest()[:16]
+                if _STDOUT_DEDUP.get(_dedup_key) == _stdout_hash:
+                    logger.debug("[OFFICE-L1] [%s] dedup: output unchanged, skipping", agent.name)
+                    return
+                _STDOUT_DEDUP[_dedup_key] = _stdout_hash
+
                 service_label = (agent.specialization or agent.name or 'Agent').strip()
                 try:
                     loop = asyncio.get_running_loop()
@@ -905,6 +928,25 @@ class OfficeEngine:
         _current_agent_name = agent.name or 'Агент'
         _current_agent_id = agent.id
         _used_agents = {agent.id}  # не используем одного агента дважды подряд
+
+        # Inject: недавние отправленные email (чтобы не дублировать)
+        try:
+            from models import Session as _MailDb, AgentActivityLog as _MailLog
+            _ms = _MailDb()
+            try:
+                _sent = _ms.query(_MailLog).filter(
+                    _MailLog.user_id == user.id,
+                    _MailLog.activity_type == 'email',
+                    _MailLog.status == 'sent',
+                    _MailLog.created_at > datetime.now(timezone.utc) - timedelta(hours=24),
+                ).order_by(_MailLog.created_at.desc()).limit(5).all()
+                if _sent:
+                    _sent_lines = [f'- {s.target} ({s.title})' for s in _sent]
+                    _user_ctx += '\n\nНЕДАВНО ОТПРАВЛЕННЫЕ EMAIL (НЕ ДУБЛИРУЙ!):\n' + '\n'.join(_sent_lines)
+            finally:
+                _ms.close()
+        except Exception:
+            pass
 
         for _step in range(_MAX_CHAIN):
             async with self._ai_sem:
