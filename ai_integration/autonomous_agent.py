@@ -4987,196 +4987,199 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             break
 
     if _direct_agent:
+        # Перенаправляем в основной цикл делегирования — полная цепочка по способностям
         _direct_ctx_parts = []
         if _user_full_ctx:
             _direct_ctx_parts.append(_user_full_ctx)
         if _history_block.strip():
             _direct_ctx_parts.append(_history_block.strip())
-        _agent_ctx = '\n\n'.join(_direct_ctx_parts)
-        # Создаём Task in_progress ДО запуска
-        _direct_task_id = _create_agent_delegation_task(user_db_id, _direct_agent, user_message)
-        _direct_resp = await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
-        # Обновляем Task → completed
-        _update_agent_delegation_task(_direct_task_id, str(_direct_resp or '')[:400])
-        # Сохраняем контекст делегирования в conversation_history
-        _save_delegation_to_history(user_id, _direct_agent.get('name', 'Агент'), user_message, str(_direct_resp or '')[:600])
-        return "__agent_handled__"
+        _del_ctx = '\n\n'.join(_direct_ctx_parts)
+        _ag = _direct_agent
+        _dm = ''
+        _task = user_message
+        _agent_name_d = _ag.get('name', 'Агент')
+    else:
+        _ag = None  # will be set by ASI decision below
 
-    # ── Начальное решение ASI ──────────────────────────────────────────────────
-    _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
+    if _direct_agent:
+        # direct_agent: skip ASI decision, go straight to multi-round loop
+        pass
+    else:
+        # ── Начальное решение ASI ──────────────────────────────────────────────────
+        _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
 
-    # Строим компактный список агентов: имя | должность | специализация | умеет
-    _agent_caps_lines = []
-    for _ac_a in _agents:
-        _ac_intg = []
-        try:
-            _ac_intg = _parse_agent_integrations(
-                _ac_a.get('user_api_keys') or '',
-                _ac_a.get('python_code') or '',
-                _ac_a.get('tools_allowed') or '',
-                _ac_a.get('search_scope') or '',
+        # Строим компактный список агентов: имя | должность | специализация | умеет
+        _agent_caps_lines = []
+        for _ac_a in _agents:
+            _ac_intg = []
+            try:
+                _ac_intg = _parse_agent_integrations(
+                    _ac_a.get('user_api_keys') or '',
+                    _ac_a.get('python_code') or '',
+                    _ac_a.get('tools_allowed') or '',
+                    _ac_a.get('search_scope') or '',
+                )
+            except Exception:
+                pass
+            if not _ac_intg:
+                _ac_intg = _infer_capabilities_from_role(
+                    _ac_a.get('job_title') or '',
+                    _ac_a.get('specialization') or '',
+                    _ac_a.get('description') or '',
+                )
+            _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
+            _ac_desc = (_ac_a.get('description') or '')[:120]
+            _ac_tools = (_ac_a.get('tools_allowed') or '').strip()
+            _line = (
+                f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
+                f" | {_ac_a.get('specialization','')}"
+                f"\n  Умеет: {_ac_caps}"
             )
-        except Exception:
-            pass
-        if not _ac_intg:
-            _ac_intg = _infer_capabilities_from_role(
-                _ac_a.get('job_title') or '',
-                _ac_a.get('specialization') or '',
-                _ac_a.get('description') or '',
-            )
-        _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
-        _ac_desc = (_ac_a.get('description') or '')[:120]
-        _ac_tools = (_ac_a.get('tools_allowed') or '').strip()
-        _line = (
-            f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
-            f" | {_ac_a.get('specialization','')}"
-            f"\n  Умеет: {_ac_caps}"
+            if _ac_tools:
+                _line += f"\n  Инструменты: {_ac_tools[:120]}"
+            if _ac_desc:
+                _line += f"\n  О себе: {_ac_desc}"
+            _agent_caps_lines.append(_line)
+        _caps_block = "\n".join(_agent_caps_lines)
+
+        _decision_prompt = (
+            f"Запрос: «{user_message}»\n\n"
+            f"Агенты пользователя:\n{_caps_block}\n"
+            f"{_ctx_hint}{_history_block}\n\n"
+            "Решение: self или поручить агенту?\n\n"
+            "self — ASI выполняет НАПРЯМУЮ своими инструментами:\n"
+            "  • задачи (add_task, complete_task, edit_task, delete_task, list_tasks, set_reminder)\n"
+            "  • цели (create_goal, update_goal, complete_goal, list_goals)\n"
+            "  • generate_image — генерация картинок/изображений\n"
+            "  • контент (create_post, publish_to_telegram, publish_to_discord)\n"
+            "  • email (send_email, send_outreach_email, negotiate_by_email)\n"
+            "  • research_topic, get_news_trends — исследования/аналитика\n"
+            "  • делегирование задач другим пользователям (delegate_task)\n"
+            "  • коммуникации (send_message_to_user, find_and_message_relevant_users)\n"
+            "  • контакты (find_relevant_contacts_for_task, set_contact_alert)\n"
+            "  • update_profile, schedule_background_task, get_system_status\n"
+            "  • привет/пока, вопрос-ответ, советы, любые разговоры\n\n"
+            "поручить агенту — ТОЛЬКО если:\n"
+            "  1) задача требует СПЕЦИФИЧЕСКОЙ экспертизы конкретного агента\n"
+            "  2) у агента ЕСТЬ нужный инструмент (см. 'Инструменты' агента выше)\n"
+            "  3) ASI НЕ может сделать это сам своими инструментами\n\n"
+            "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
+            "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
+            "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
+            "director_message: имя + повелит. глагол (Кристина, подготовь...).\n"
+            "Выбери ОДНОГО наиболее подходящего агента.\n\n"
+            "JSON без ```:\n"
+            '{"action":"self"}\n'
+            "или\n"
+            '{"action":"delegate","agent_name":"имя","agent_task":"задача",'
+            '"director_message":"Имя, сделай..."}'
         )
-        if _ac_tools:
-            _line += f"\n  Инструменты: {_ac_tools[:120]}"
-        if _ac_desc:
-            _line += f"\n  О себе: {_ac_desc}"
-        _agent_caps_lines.append(_line)
-    _caps_block = "\n".join(_agent_caps_lines)
 
-    _decision_prompt = (
-        f"Запрос: «{user_message}»\n\n"
-        f"Агенты пользователя:\n{_caps_block}\n"
-        f"{_ctx_hint}{_history_block}\n\n"
-        "Решение: self или поручить агенту?\n\n"
-        "self — ASI выполняет НАПРЯМУЮ своими инструментами:\n"
-        "  • задачи (add_task, complete_task, edit_task, delete_task, list_tasks, set_reminder)\n"
-        "  • цели (create_goal, update_goal, complete_goal, list_goals)\n"
-        "  • generate_image — генерация картинок/изображений\n"
-        "  • контент (create_post, publish_to_telegram, publish_to_discord)\n"
-        "  • email (send_email, send_outreach_email, negotiate_by_email)\n"
-        "  • research_topic, get_news_trends — исследования/аналитика\n"
-        "  • делегирование задач другим пользователям (delegate_task)\n"
-        "  • коммуникации (send_message_to_user, find_and_message_relevant_users)\n"
-        "  • контакты (find_relevant_contacts_for_task, set_contact_alert)\n"
-        "  • update_profile, schedule_background_task, get_system_status\n"
-        "  • привет/пока, вопрос-ответ, советы, любые разговоры\n\n"
-        "поручить агенту — ТОЛЬКО если:\n"
-        "  1) задача требует СПЕЦИФИЧЕСКОЙ экспертизы конкретного агента\n"
-        "  2) у агента ЕСТЬ нужный инструмент (см. 'Инструменты' агента выше)\n"
-        "  3) ASI НЕ может сделать это сам своими инструментами\n\n"
-        "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
-        "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
-        "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
-        "director_message: имя + повелит. глагол (Кристина, подготовь...).\n"
-        "Выбери ОДНОГО наиболее подходящего агента.\n\n"
-        "JSON без ```:\n"
-        '{"action":"self"}\n'
-        "или\n"
-        '{"action":"delegate","agent_name":"имя","agent_task":"задача",'
-        '"director_message":"Имя, сделай..."}'
-    )
+        # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
+        # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
+        _ml = user_message.strip()
+        _ml_lower = _ml.lower()
+        _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
+                            'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
+        _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
+        if _is_trivial:
+            _has_active_mission = False
+            _mission_context = ''
+            try:
+                _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
+                for _ma in _mission_anchors:
+                    if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
+                        _has_active_mission = True
+                        _md = _ma.get('data', {})
+                        _mission_context = _md.get('result_summary') or _md.get('task', '')
+                        break
+            except Exception:
+                pass
 
-    # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
-    # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
-    _ml = user_message.strip()
-    _ml_lower = _ml.lower()
-    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
-                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
-    _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
-    if _is_trivial:
-        _has_active_mission = False
-        _mission_context = ''
-        try:
-            _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
-            for _ma in _mission_anchors:
-                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
-                    _has_active_mission = True
-                    _md = _ma.get('data', {})
-                    _mission_context = _md.get('result_summary') or _md.get('task', '')
-                    break
-        except Exception:
-            pass
+            if not _has_active_mission:
+                return None  # Нет активной миссии — ASI ответит сам через process_request
 
-        if not _has_active_mission:
-            return None  # Нет активной миссии — ASI ответит сам через process_request
+            # Есть активная миссия — "да"/"давай" = продолжить
+            # Подменяем запрос чтобы LLM понял контекст
+            _affirmative = _ml_lower.rstrip('!., ') in ('да', 'ок', 'окей', 'ладно', 'хорошо', 'давай')
+            if _affirmative and _mission_context:
+                # Переформулируем для директора: "Пользователь подтвердил — продолжай миссию"
+                _decision_prompt = (
+                    f"Ты — ASI Biont, директор офиса. Пользователь подтвердил продолжение миссии.\n\n"
+                    f"АКТИВНАЯ МИССИЯ: {_mission_context[:300]}\n\n"
+                    f"Пользователь ответил: «{user_message}»\n\n"
+                    f"ПРОФИЛИ АГЕНТОВ КОМАНДЫ:\n{_caps_block}\n"
+                    f"{_ctx_hint}{_history_block}\n\n"
+                    "Пользователь хочет ПРОДОЛЖИТЬ. Выбери следующее действие — delegate, adaptive или multi_delegate.\n"
+                    "НЕ выбирай self — пользователь явно хочет продолжения работы агентов.\n\n"
+                    "Ответь ТОЛЬКО JSON без ```:\n"
+                    '{"action": "delegate", "agent_name": "точное имя агента", '
+                    '"agent_task": "задача", '
+                    '"director_message": "живое: имя + глагол (Кристина, подготовь... / Марк, исследуй...)"}\n'
+                    "или\n"
+                    '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
+                    '"first_agent_name": "имя", "first_agent_task": "задача", '
+                    '"director_message": "живое: имя + глагол"}'
+                )
+            elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
+                return None  # Отмена — сброс миссии
 
-        # Есть активная миссия — "да"/"давай" = продолжить
-        # Подменяем запрос чтобы LLM понял контекст
-        _affirmative = _ml_lower.rstrip('!., ') in ('да', 'ок', 'окей', 'ладно', 'хорошо', 'давай')
-        if _affirmative and _mission_context:
-            # Переформулируем для директора: "Пользователь подтвердил — продолжай миссию"
-            _decision_prompt = (
-                f"Ты — ASI Biont, директор офиса. Пользователь подтвердил продолжение миссии.\n\n"
-                f"АКТИВНАЯ МИССИЯ: {_mission_context[:300]}\n\n"
-                f"Пользователь ответил: «{user_message}»\n\n"
-                f"ПРОФИЛИ АГЕНТОВ КОМАНДЫ:\n{_caps_block}\n"
-                f"{_ctx_hint}{_history_block}\n\n"
-                "Пользователь хочет ПРОДОЛЖИТЬ. Выбери следующее действие — delegate, adaptive или multi_delegate.\n"
-                "НЕ выбирай self — пользователь явно хочет продолжения работы агентов.\n\n"
-                "Ответь ТОЛЬКО JSON без ```:\n"
-                '{"action": "delegate", "agent_name": "точное имя агента", '
-                '"agent_task": "задача", '
-                '"director_message": "живое: имя + глагол (Кристина, подготовь... / Марк, исследуй...)"}\n'
-                "или\n"
-                '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
-                '"first_agent_name": "имя", "first_agent_task": "задача", '
-                '"director_message": "живое: имя + глагол"}'
-            )
-        elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
-            return None  # Отмена — сброс миссии
+        decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250)
+        if not decision_raw:
+            return None
 
-    decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250)
-    if not decision_raw:
-        return None
+        decision = None
+        _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw or '')
+        _json_str = _jm.group(1) if _jm else None
+        if not _json_str:
+            # Ищем JSON объект в сыром ответе
+            _jm2 = re.search(r'(\{[\s\S]*\})', decision_raw or '')
+            _json_str = _jm2.group(1) if _jm2 else None
+        if _json_str:
+            try:
+                decision = _json.loads(_json_str)
+            except Exception:
+                logger.info("[DIRECTOR] JSON parse failed, raw=%s", (decision_raw or '')[:120])
+        if not decision:
+            return None
 
-    decision = None
-    _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw or '')
-    _json_str = _jm.group(1) if _jm else None
-    if not _json_str:
-        # Ищем JSON объект в сыром ответе
-        _jm2 = re.search(r'(\{[\s\S]*\})', decision_raw or '')
-        _json_str = _jm2.group(1) if _jm2 else None
-    if _json_str:
-        try:
-            decision = _json.loads(_json_str)
-        except Exception:
-            logger.info("[DIRECTOR] JSON parse failed, raw=%s", (decision_raw or '')[:120])
-    if not decision:
-        return None
+        action = decision.get('action', 'self')
 
-    action = decision.get('action', 'self')
+        # Нормализуем: adaptive/multi_delegate → delegate (один агент на запрос)
+        if action == 'adaptive':
+            # Конвертируем adaptive → delegate
+            decision['agent_name'] = decision.get('first_agent_name', '')
+            decision['agent_task'] = decision.get('first_agent_task', '')
+            if not decision.get('director_message'):
+                decision['director_message'] = ''
+            action = 'delegate'
+        elif action == 'multi_delegate':
+            # Конвертируем multi_delegate → delegate (первый агент из списка)
+            _tasks_list = decision.get('tasks') or []
+            if _tasks_list:
+                _first_t = _tasks_list[0]
+                decision['agent_name'] = _first_t.get('agent_name', '')
+                decision['agent_task'] = _first_t.get('agent_task', '')
+                decision['director_message'] = _first_t.get('director_message', '')
+            action = 'delegate'
 
-    # Нормализуем: adaptive/multi_delegate → delegate (один агент на запрос)
-    if action == 'adaptive':
-        # Конвертируем adaptive → delegate
-        decision['agent_name'] = decision.get('first_agent_name', '')
-        decision['agent_task'] = decision.get('first_agent_task', '')
-        if not decision.get('director_message'):
-            decision['director_message'] = ''
-        action = 'delegate'
-    elif action == 'multi_delegate':
-        # Конвертируем multi_delegate → delegate (первый агент из списка)
-        _tasks_list = decision.get('tasks') or []
-        if _tasks_list:
-            _first_t = _tasks_list[0]
-            decision['agent_name'] = _first_t.get('agent_name', '')
-            decision['agent_task'] = _first_t.get('agent_task', '')
-            decision['director_message'] = _first_t.get('director_message', '')
-        action = 'delegate'
+        # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
+        if action != 'delegate':
+            return None
 
-    # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
-    if action != 'delegate':
-        return None
+        # ── delegate: один агент на запрос ──────────────────────────────────
+        _agent_ctx_parts = []
+        if _user_full_ctx:
+            _agent_ctx_parts.append(_user_full_ctx)
+        if _history_block.strip():
+            _agent_ctx_parts.append(_history_block.strip())
+        _del_ctx = '\n\n'.join(_agent_ctx_parts)
 
-    # ── delegate: один агент на запрос ──────────────────────────────────
-    _agent_ctx_parts = []
-    if _user_full_ctx:
-        _agent_ctx_parts.append(_user_full_ctx)
-    if _history_block.strip():
-        _agent_ctx_parts.append(_history_block.strip())
-    _del_ctx = '\n\n'.join(_agent_ctx_parts)
-
-    _ag = _find_agent(decision.get('agent_name', ''))
-    if not _ag:
-        return None
-    _dm = decision.get('director_message', '')
-    _task = decision.get('agent_task') or user_message
+        _ag = _find_agent(decision.get('agent_name', ''))
+        if not _ag:
+            return None
+        _dm = decision.get('director_message', '')
+        _task = decision.get('agent_task') or user_message
 
     # ── Многораундовый цикл: АСИ ↔ агент ─────────────────────────────────────
     # АСИ даёт поручение → агент отчитывается → АСИ решает: ещё поручение или принять
@@ -5200,7 +5203,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _update_agent_delegation_task(_delegation_task_id, _agent_result[:400])
 
         # Запоминаем раунд
-        _round_history.append({'task': _task, 'director_msg': _dm, 'result': _agent_result})
+        _round_history.append({'task': _task, 'director_msg': _dm, 'result': _agent_result, 'tools_used': _agent_tools_used_round})
 
         # Создаём DelegationCampaign если задача outreach-типа
         if _round == 0:
@@ -5209,30 +5212,47 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         # ── АСИ-директор решает: продолжить или принять ────────────────────
         _rounds_summary = '\n'.join(
             f"Раунд {i+1}: Поручение: {r['task'][:150]}\nОтчёт: {r['result'][:250]}"
+            + (f"\nИнструменты агента: {', '.join(r['tools_used'])}" if r.get('tools_used') else '')
             for i, r in enumerate(_round_history)
         )
+
+        # Собираем все инструменты которые агент вызвал за все раунды
+        _all_agent_tools = []
+        for _rh in _round_history:
+            _all_agent_tools.extend(_rh.get('tools_used', []))
+        _all_agent_tools = list(dict.fromkeys(_all_agent_tools))  # unique, ordered
+        _agent_tools_str = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
+
         _review_prompt = (
-            f"Ты ASI-директор. У тебя ЕСТЬ собственные инструменты: send_email, send_outreach_email, "
-            f"negotiate_by_email, research_topic, generate_image, create_post, publish_to_telegram и другие.\n"
+            f"Ты ASI-директор. У тебя ЕСТЬ собственные инструменты платформы — ВСЕ те же что у агентов:\n"
+            f"send_email, send_outreach_email, negotiate_by_email, publish_to_telegram, publish_to_discord, "
+            f"create_post, research_topic, web_search, generate_image, start_content_campaign, "
+            f"start_delegation_campaign, find_relevant_contacts_for_task, schedule_background_task, "
+            f"add_task, delegate_task и другие.\n\n"
             f"Пользователь попросил: {user_message[:300]}\n\n"
             f"ИСТОРИЯ РАБОТЫ С АГЕНТОМ {_agent_name_d}:\n{_rounds_summary}\n\n"
-            f"Раундов прошло: {_round + 1} из {_MAX_AGENT_ROUNDS}.\n\n"
-            f"ЦЕПОЧКА ПО СПОСОБНОСТЯМ: если агент подготовил текст email/письма/контента — "
-            f"ТЫ можешь его ОТПРАВИТЬ своими инструментами (send_email, publish_to_telegram и т.д.). "
-            f"Если агент проверил входящие — ТЫ можешь ответить на найденные письма (negotiate_by_email). "
-            f"Не останавливайся на генерации текста — ДОВОДИ до действия.\n\n"
+            f"Раундов прошло: {_round + 1} из {_MAX_AGENT_ROUNDS}.\n"
+            f"Инструменты агента за все раунды: {_agent_tools_str}\n\n"
+            f"ЦЕПОЧКА ПО СПОСОБНОСТЯМ — универсальный принцип:\n"
+            f"Агент ПОДГОТАВЛИВАЕТ (текст, данные, контент, план, контакты) → ТЫ ДЕЙСТВУЕШЬ.\n"
+            f"Примеры:\n"
+            f"- Агент написал текст → отправь (send_email, publish_to_telegram, publish_to_discord)\n"
+            f"- Нашёл контакты → запусти outreach (send_outreach_email, start_delegation_campaign)\n"
+            f"- Исследовал тему → создай контент или задачи\n"
+            f"- Проверил входящие → ответь (negotiate_by_email, reply_to_outreach_email)\n"
+            f"- Подготовил изображение/код/план → опубликуй или запусти\n"
+            f"Не останавливайся на генерации — ДОВОДИ до действия.\n\n"
             f"РЕШИ:\n"
             f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (работа НЕ завершена)\n"
-            f"- accept_and_act — принять результат агента и САМОМУ выполнить следующий шаг "
-            f"(отправить email, опубликовать пост и т.д.) используя данные от агента\n"
-            f"- accept — просто принять работу и доложить (если всё сделано)\n\n"
+            f"- accept_and_act — принять результат и САМОМУ выполнить следующий шаг используя данные агента\n"
+            f"- accept — просто принять работу и доложить (всё сделано, действий не требуется)\n\n"
             f"Ответ СТРОГО JSON:\n"
             f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "..."}}\n'
             f'или\n'
             f'{{"action": "accept_and_act", "summary": "краткий доклад", '
-            f'"my_action": "описание что ТЫ сделаешь сам (отправлю email, опубликую пост и т.д.)"}}\n'
+            f'"my_action": "конкретное действие которое ты выполнишь"}}\n'
             f'или\n'
-            f'{{"action": "accept", "summary": "краткий доклад пользователю что сделано и что дальше"}}\n'
+            f'{{"action": "accept", "summary": "краткий доклад пользователю"}}\n'
         )
         _review_raw = await _quick_ai_call_raw([{"role": "user", "content": _review_prompt}], max_tokens=400)
 
@@ -5259,21 +5279,27 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             try:
                 _followup_agent = HybridAutonomousAgent()
                 _is_action_mode = _review_action == 'accept_and_act'
+                # Динамически определяем связанные инструменты на основе tools_used агента
+                _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
+
                 _followup_system = (
                     "Ты ASI — директор офиса. Ты координировал работу агента и теперь ДЕЙСТВУЕШЬ.\n"
                     "Результат агента УЖЕ ПОКАЗАН пользователю — НЕ повторяй его содержание дословно.\n\n"
-                    "У ТЕБЯ ЕСТЬ ВСЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ:\n"
-                    "send_email — отправить email (если агент подготовил текст письма)\n"
-                    "send_outreach_email — массовая отправка приглашений\n"
-                    "negotiate_by_email — ответить на входящие\n"
-                    "publish_to_telegram — опубликовать пост\n"
-                    "research_topic — исследование темы\n"
-                    "add_task — создать задачу\n"
-                    "update_profile — обновить профиль\n\n"
-                    "ЦЕПОЧКА ПО СПОСОБНОСТЯМ: агент подготовил данные → ТЫ выполняешь действие.\n"
-                    "Примеры: агент написал текст email → ТЫ отправляешь через send_email.\n"
-                    "Агент проверил входящие → ТЫ отвечаешь через negotiate_by_email.\n"
-                    "Агент написал пост → ТЫ публикуешь через publish_to_telegram.\n\n"
+                    "У ТЕБЯ ЕСТЬ ВСЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ — можешь вызвать ЛЮБОЙ:\n"
+                    "EMAIL: send_email, send_outreach_email, negotiate_by_email, reply_to_outreach_email, send_follow_up_email\n"
+                    "ПУБЛИКАЦИЯ: publish_to_telegram, publish_to_discord, create_post, edit_post\n"
+                    "КОНТЕНТ: generate_image, set_content_strategy, start_content_campaign\n"
+                    "АНАЛИТИКА: research_topic, web_search, quick_topic_search\n"
+                    "ЗАДАЧИ: add_task, edit_task, complete_task, schedule_background_task\n"
+                    "ДЕЛЕГИРОВАНИЕ: delegate_task, start_delegation_campaign\n"
+                    "КОНТАКТЫ: find_relevant_contacts_for_task, send_message_to_user\n"
+                    "ПРОФИЛЬ: update_profile, create_goal, update_goal_progress\n\n"
+                    f"Инструменты которые агент использовал: {_agent_did}\n\n"
+                    "ЦЕПОЧКА ПО СПОСОБНОСТЯМ — универсальный принцип:\n"
+                    "Агент ПОДГОТОВИЛ → ТЫ ДЕЙСТВУЕШЬ. Определи какой инструмент логически продолжает работу агента.\n"
+                    "Агент написал текст → отправь/опубликуй. Нашёл контакты → запусти outreach.\n"
+                    "Исследовал → создай контент/задачи. Проверил входящие → ответь.\n"
+                    "Создал изображение → опубликуй. Подготовил план → запусти campaign.\n\n"
                 )
                 if _is_action_mode:
                     _followup_system += (
