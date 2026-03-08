@@ -5596,6 +5596,75 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 _director_response = _re_dir.sub(r'\n{2,}', '\n', _director_response)
                 _director_response = _re_dir.sub(r'  +', ' ', _director_response).strip()
 
+                # ── POST-DELEGATION: Если запрос требовал действия, а субагент
+                # дал только план/анализ — ASI довершает своими инструментами ──
+                _orig_lower = (message or '').lower()
+                _action_verbs = ('найди', 'пригласи', 'отправь', 'напиши', 'опубликуй',
+                                 'создай', 'запусти', 'сделай', 'подготовь и отправь',
+                                 'разошли', 'свяжись', 'invite', 'send', 'publish',
+                                 'find and', 'post', 'launch', 'execute')
+                _needs_action = any(v in _orig_lower for v in _action_verbs)
+                _is_q = _is_question_message(message or '')
+
+                # Признаки что агент только спланировал, но не выполнил
+                _plan_markers = ('стратеги', 'план ', 'подготов', 'предлага', 'рекоменд',
+                                 'категори', 'аудитори', 'анализ', 'исследова',
+                                 'ожидайте', 'в ближайшее', 'следующий шаг',
+                                 'strategy', 'plan ', 'recommend', 'analysis')
+                _resp_lower = _director_response.lower()
+                _just_planned = any(m in _resp_lower for m in _plan_markers)
+
+                # Признаки что агент реально выполнил действие
+                _done_markers = ('отправлено', 'опубликовано', 'создано', 'выполнено',
+                                 'приглашен', 'написано', 'запущено', 'готово',
+                                 'sent', 'published', 'created', 'done', 'invited')
+                _actually_done = any(m in _resp_lower for m in _done_markers)
+
+                if _needs_action and not _is_q and _just_planned and not _actually_done:
+                    # Субагент подготовил материалы — ASI довершает действиями
+                    logger.info("[POST-DELEGATION] Agent planned but didn't act, ASI takes over with tools")
+                    _enriched_msg = (
+                        f"{message}\n\n"
+                        f"[КОНТЕКСТ: Твой субагент уже подготовил следующее:\n"
+                        f"{_director_response[:800]}]\n\n"
+                        f"Теперь ВЫПОЛНИ конкретные действия используя свои инструменты. "
+                        f"НЕ планируй и НЕ анализируй — субагент уже всё проанализировал. "
+                        f"ДЕЙСТВУЙ: используй find_and_message_relevant_users, send_email, "
+                        f"publish_to_telegram, create_post или другие подходящие инструменты."
+                    )
+                    # Отправляем промежуточный ответ агента пользователю
+                    if progress_callback:
+                        try:
+                            await progress_callback(_director_response[:500], persist=True)
+                        except Exception:
+                            pass
+
+                    _post_exclude = exclude_tools or set()
+                    _post_exclude = _post_exclude | {
+                        'research_topic', 'delegate_task', 'start_delegation_campaign',
+                        'web_search', 'quick_topic_search',
+                    }
+                    response_text = await agent.process_request(
+                        _enriched_msg, user_id, context, db_session,
+                        subscription_tier, progress_callback=progress_callback,
+                        web_context=web_context, exclude_tools=_post_exclude)
+
+                    if response_text and isinstance(response_text, str):
+                        try:
+                            from .utils import clean_technical_details as _ctd_post
+                            _cleaned = _ctd_post(response_text)
+                            if _cleaned and _cleaned.strip():
+                                response_text = _cleaned
+                        except Exception:
+                            pass
+
+                    return {
+                        'response': response_text or _director_response,
+                        'tool_calls': [],
+                        'tools_used': [],
+                        'agent_info': None,
+                    }
+
                 # Промежуточные Interaction уже сохранены
                 return {
                     'response': _director_response,
