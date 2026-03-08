@@ -9019,6 +9019,27 @@ def _is_generic_email(email: str) -> bool:
     prefix = email.split('@')[0].lower()
     domain = email.split('@')[1].lower() if '@' in email else ''
 
+    # ── Невалидный домен ──
+    # TLD = файловые расширения / мусор
+    _JUNK_TLDS = {
+        'css', 'js', 'ts', 'jsx', 'tsx', 'png', 'jpg', 'jpeg', 'gif', 'svg',
+        'ico', 'webp', 'bmp', 'tiff', 'mp3', 'mp4', 'wav', 'avi', 'mov',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'zip', 'rar', 'gz',
+        'tar', 'exe', 'dll', 'bat', 'sh', 'py', 'rb', 'php', 'html', 'htm',
+        'xml', 'json', 'yaml', 'yml', 'sql', 'md', 'txt', 'log', 'cfg',
+        'ini', 'env', 'woff', 'woff2', 'ttf', 'eot', 'otf', 'map', 'min',
+        'scss', 'sass', 'less', 'vue', 'svelte',
+    }
+    tld = domain.rsplit('.', 1)[-1] if '.' in domain else ''
+    if tld in _JUNK_TLDS:
+        return True
+    # Домен с 4+ точками — не настоящий email (напр. 4.3.1.min.css)
+    if domain.count('.') >= 4:
+        return True
+    # Домен начинается с цифры — скорее версия пакета (напр. 4.3.1.min)
+    if domain and domain[0].isdigit():
+        return True
+
     if prefix in _GENERIC_PREFIXES:
         return True
     # Проверяем паттерны внутри prefix (например 46contact@...)
