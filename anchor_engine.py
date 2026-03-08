@@ -2566,24 +2566,71 @@ class AnchorEngine:
                 candidates.sort(key=lambda x: -x[1])
 
             if not candidates:
-                # Fallback: если по ключевым словам никого не нашли — берём любого
-                # активного пользователя, которому ещё не делегировали в этой кампании
+                # Нет внутренних кандидатов → автоматически переключаемся на ВНЕШНИЙ поиск
+                # через email-кампанию (web search + AI + Resend API)
                 try:
-                    fallback_users = session.query(User).filter(
-                        User.id != user.id,
-                        User.username.isnot(None),
-                        User.telegram_id.isnot(None),
-                    ).limit(20).all()
-                    for fu in fallback_users:
-                        if fu.username and fu.username.lower() not in already_usernames:
-                            candidates.append((fu, 0))
-                    if candidates:
-                        logger.info(f"[ANCHOR] Delegation campaign #{campaign.id}: no keyword match, using fallback candidates ({len(candidates)})")
-                except Exception as _fb_e:
-                    logger.debug(f"[ANCHOR] Delegation campaign #{campaign.id} fallback error: {_fb_e}")
+                    _existing_email_camp = session.query(EmailCampaign).filter(
+                        EmailCampaign.user_id == user.id,
+                        EmailCampaign.status == 'active',
+                        EmailCampaign.name.ilike(f'%{campaign.name[:50]}%'),
+                    ).first()
+                    if not _existing_email_camp:
+                        # Создаём email-кампанию из параметров delegation-кампании
+                        _sender_name = user.first_name or user.username or 'Team'
+                        _ext_camp = EmailCampaign(
+                            user_id=user.id,
+                            name=f"{campaign.name} (внешний поиск)",
+                            goal=campaign.goal or campaign.name,
+                            target_audience=campaign.target_audience or '',
+                            offer=campaign.offer or campaign.task_template or campaign.goal or '',
+                            tone=campaign.tone or 'professional',
+                            sender_name=_sender_name,
+                            sender_email='outreach@asibiont.com',
+                            max_emails=campaign.max_delegations or 20,
+                            daily_limit=min(campaign.daily_limit or 5, 50),
+                            status='active',
+                        )
+                        session.add(_ext_camp)
+                        session.flush()
 
-            if not candidates:
-                logger.info(f"[ANCHOR] Delegation campaign #{campaign.id} «{campaign.name}»: no candidates found (target: {target_desc[:100]})")
+                        # Создаём якорь email_need_leads — _auto_find_leads найдёт контакты
+                        anchors.append(Anchor(
+                            user_id=user.id,
+                            anchor_type='email_need_leads',
+                            source=f'delegation_to_email:{campaign.id}:{_ext_camp.id}:{user_now.strftime("%Y-%m-%d")}',
+                            topic=_t(user,
+                                f'Внешний поиск для кампании «{campaign.name}» — web search + email',
+                                f'External search for campaign «{campaign.name}» — web search + email'),
+                            priority=AnchorPriority.MEDIUM,
+                            data=json.dumps({
+                                'campaign_id': _ext_camp.id,
+                                'campaign_name': _ext_camp.name,
+                                'campaign_goal': (campaign.goal or '')[:500],
+                                'target_audience': (campaign.target_audience or '')[:300],
+                                'offer': (campaign.offer or campaign.task_template or '')[:500],
+                                'delegation_campaign_id': campaign.id,
+                            }, ensure_ascii=False),
+                            triggered_at=now_utc,
+                            expires_at=now_utc + timedelta(hours=24),
+                            cooldown_hours=24,
+                            batch_group='email',
+                        ))
+                        session.commit()
+                        logger.info(
+                            f"[ANCHOR] Delegation campaign #{campaign.id}: no internal candidates → "
+                            f"created email campaign #{_ext_camp.id} for external search"
+                        )
+                    else:
+                        logger.debug(
+                            f"[ANCHOR] Delegation campaign #{campaign.id}: external email campaign "
+                            f"#{_existing_email_camp.id} already exists"
+                        )
+                except Exception as _ext_e:
+                    logger.warning(f"[ANCHOR] Delegation campaign #{campaign.id} external search setup error: {_ext_e}")
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
                 continue
 
             # Берём лучшего кандидата
