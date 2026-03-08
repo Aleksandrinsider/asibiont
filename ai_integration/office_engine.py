@@ -85,11 +85,12 @@ def _save_office_anchor_sync(user_id: int, agent_name: str, text: str):
     try:
         from models import Session as _Db, Anchor as _An, AnchorPriority as _AP
         _now = datetime.now(timezone.utc)
-        _src = f'office-report:{agent_name}:{_now.strftime("%Y-%m-%d-%H")}'
+        _quarter = _now.minute // 15 * 15  # 0, 15, 30, 45
+        _src = f'office-report:{agent_name}:{_now.strftime("%Y-%m-%d-%H")}-{_quarter:02d}'
         _s = _Db()
         try:
             if _s.query(_An).filter_by(user_id=user_id, source=_src).first():
-                return  # уже есть в пределах часа
+                return  # уже есть в пределах 15-минутного окна
             _s.add(_An(
                 user_id=user_id,
                 anchor_type='agent_office_update',
@@ -99,7 +100,7 @@ def _save_office_anchor_sync(user_id: int, agent_name: str, text: str):
                 data=json.dumps({'agent': agent_name, 'report': text[:500]}, ensure_ascii=False),
                 triggered_at=_now,
                 expires_at=_now + timedelta(hours=8),
-                cooldown_hours=1,
+                cooldown_hours=0.25,
                 batch_group='integration',
             ))
             _s.commit()
@@ -640,7 +641,7 @@ class OfficeEngine:
                     s.query(UserAgent, UserModel)
                     .join(UserModel, UserModel.id == UserAgent.author_id)
                     .filter(
-                        UserAgent.status == 'active',
+                        UserAgent.status.in_(['active', 'paused']),
                         UserAgent.python_code.isnot(None),
                         UserModel.telegram_id.isnot(None),
                     )
@@ -853,7 +854,7 @@ class OfficeEngine:
             try:
                 _rows = (
                     _s.query(_UA)
-                    .filter(_UA.author_id == user.id, _UA.status == 'active')
+                    .filter(_UA.author_id == user.id, _UA.status.in_(['active', 'paused']))
                     .all()
                 )
                 all_agents = [

@@ -4244,6 +4244,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 system_prompt += script_context
             elif _stderr2 and 'timeout' not in _stderr2:
                 logger.debug("[DIRECTOR-EXEC] script stderr for %s: %s", agent.get('name'), _stderr2[:150])
+                # Показываем ошибку авторизации агенту — чтобы он мог сообщить пользователю
+                if 'AUTHENTICATIONFAILED' in _stderr2 or 'Invalid credentials' in _stderr2:
+                    system_prompt += (
+                        "\n\n[ОШИБКА ИНТЕГРАЦИИ: не удалось авторизоваться в сервисе. "
+                        "Сообщи пользователю что нужно обновить пароль/ключ в настройках агента.]"
+                    )
+                elif 'error' in _stderr2.lower() or 'ошибка' in _stderr2.lower():
+                    system_prompt += f"\n\n[Ошибка скрипта: {_stderr2[:200]}]"
         except Exception as _e3:
             logger.debug("[DIRECTOR-EXEC] script exec error for %s: %s", agent.get('name'), _e3)
 
@@ -5229,7 +5237,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     # ── Многораундовый цикл: АСИ ↔ агент ─────────────────────────────────────
     # АСИ даёт поручение → агент отчитывается → АСИ решает: ещё поручение или принять
     _is_q = _is_question_message(user_message)
-    _MAX_AGENT_ROUNDS = 1 if _is_q else 3
+    # Прямое обращение к агенту → 1 раунд без review (отвечает САМ агент, без АСИ-надстройки)
+    _is_direct = _direct_agent is not None
+    _MAX_AGENT_ROUNDS = 1 if (_is_q or _is_direct) else 3
     _agent_name_d = _ag.get('name', 'Агент')
     _round_history: list[dict] = []  # история раундов для контекста
 
@@ -5251,8 +5261,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         # Запоминаем раунд
         _round_history.append({'task': _task, 'director_msg': _dm, 'result': _agent_result, 'tools_used': _agent_tools_used_round})
 
-        # Вопрос — один раунд, без review/followup
-        if _is_q:
+        # Вопрос или прямое обращение к агенту — один раунд, без review/followup
+        if _is_q or _is_direct:
             break
 
         # Создаём DelegationCampaign если задача outreach-типа
