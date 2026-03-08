@@ -9114,6 +9114,72 @@ def _is_generic_email(email: str) -> bool:
     return False
 
 
+# Кэш MX-проверок домена: domain → bool (имеет MX)
+_mx_cache: dict[str, bool] = {}
+
+
+async def _check_mx_record(domain: str) -> bool:
+    """Проверяет наличие MX-записей у домена через DNS. Кэширует результат."""
+    domain = domain.lower().strip('.')
+    if domain in _mx_cache:
+        return _mx_cache[domain]
+
+    import asyncio
+    try:
+        # Используем системный DNS resolver
+        loop = asyncio.get_event_loop()
+        import socket
+        # getaddrinfo проверяет что домен существует (A/AAAA record)
+        result = await loop.run_in_executor(
+            None, lambda: socket.getaddrinfo(domain, 25, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        )
+        has_mx = bool(result)
+    except (socket.gaierror, OSError):
+        has_mx = False
+    except Exception:
+        has_mx = False
+
+    _mx_cache[domain] = has_mx
+    return has_mx
+
+
+def _is_likely_email_in_context(text: str, match_start: int, match_end: int) -> bool:
+    """Проверяет контекст вокруг regex-совпадения email — исключает пути/URL/код."""
+    # Символы перед/после совпадения
+    char_before = text[match_start - 1] if match_start > 0 else ' '
+    char_after = text[match_end] if match_end < len(text) else ' '
+    # mailto: — всегда OK (символ : перед email)
+    if match_start >= 7 and text[match_start - 7:match_start].lower() == 'mailto:':
+        return True
+    # Если окружено путевыми/кодовыми символами — не email
+    _path_chars = set('/\\=:!<>(){}[]|`\'";,')
+    if char_before in _path_chars or char_after in _path_chars:
+        return False
+    # Если внутри HTML-тега src/href (но не mailto)
+    if match_start > 7:
+        prefix_ctx = text[max(0, match_start - 30):match_start].lower()
+        if 'src=' in prefix_ctx or 'href=' in prefix_ctx:
+            if 'mailto:' not in prefix_ctx:
+                return False
+    return True
+
+
+_EMAIL_RE = __import__('re').compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}')
+
+
+def _extract_emails_from_text(text: str) -> set[str]:
+    """Извлекает email из текста с контекстной проверкой (отсекает файловые пути, код)."""
+    results = set()
+    for m in _EMAIL_RE.finditer(text):
+        em = m.group(0).lower().strip('.')
+        if _is_generic_email(em):
+            continue
+        if not _is_likely_email_in_context(text, m.start(), m.end()):
+            continue
+        results.add(em)
+    return results
+
+
 async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                            offer: str, session) -> tuple:
     """Автоматический поиск лидов: multi-pass подход для 50 лидов/день.
@@ -9417,10 +9483,7 @@ Return ONLY a JSON array of 10 strings. No explanation."""
         base_domain = '.'.join(domain.split('.')[-2:])
         if base_domain in _unfetchable_domains or domain in _unfetchable_domains:
             # Но извлекаем email из сниппета
-            for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', r['snippet']):
-                em = em.lower().strip('.')
-                if not _is_generic_email(em):
-                    all_emails_raw.add(em)
+            all_emails_raw.update(_extract_emails_from_text(r['snippet']))
             continue
         
         if domain not in seen_domains:
@@ -9446,10 +9509,7 @@ Return ONLY a JSON array of 10 strings. No explanation."""
 
     # Извлекаем email из сниппетов сразу
     for _, _, snippet in scored_urls:
-        for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', snippet):
-            em = em.lower().strip('.')
-            if not _is_generic_email(em):
-                all_emails_raw.add(em)
+        all_emails_raw.update(_extract_emails_from_text(snippet))
 
     # Скачиваем страницы параллельно
     async def _fetch_page(url: str) -> str:
@@ -9474,12 +9534,9 @@ Return ONLY a JSON array of 10 strings. No explanation."""
 
     for page_html in pages:
         if isinstance(page_html, str) and page_html:
-            for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', page_html):
-                em = em.lower().strip('.')
-                if not _is_generic_email(em):
-                    all_emails_raw.add(em)
+            all_emails_raw.update(_extract_emails_from_text(page_html))
             # Также ищем mailto: ссылки (часто скрыты от глаз но есть в HTML)
-            for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', page_html):
+            for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})', page_html):
                 em = em.lower().strip('.')
                 if not _is_generic_email(em):
                     all_emails_raw.add(em)
@@ -9499,11 +9556,8 @@ Return ONLY a JSON array of 10 strings. No explanation."""
         for page_html in sub_pages:
             if isinstance(page_html, str) and page_html:
                 contact_pages_fetched += 1
-                for em in _re_al.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', page_html):
-                    em = em.lower().strip('.')
-                    if not _is_generic_email(em):
-                        all_emails_raw.add(em)
-                for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', page_html):
+                all_emails_raw.update(_extract_emails_from_text(page_html))
+                for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})', page_html):
                     em = em.lower().strip('.')
                     if not _is_generic_email(em):
                         all_emails_raw.add(em)
@@ -9655,18 +9709,38 @@ If no relevant emails found return []"""
                     'context': f"GitHub: {gl.get('bio', '')[:100]}, {gl.get('repos', 0)} repos, {gl.get('followers', 0)} followers",
                 })
 
-    # Если всё ещё 0 — используем regex emails как последний резерв
-    # (раньше мы скипали, но для 50/день нужен каждый лид)
+    # Если всё ещё 0 — используем regex emails как последний резерв,
+    # но ТОЛЬКО после DNS MX-проверки домена + базовой валидации
     if not parsed_leads and all_emails_raw:
-        logger.info(f"[AUTO_LEADS] Using {len(all_emails_raw)} regex-found emails as last resort")
+        logger.info(f"[AUTO_LEADS] Regex fallback: validating {len(all_emails_raw)} emails via DNS MX...")
+        validated_fallback = []
         for em in list(all_emails_raw)[:20]:
-            parsed_leads.append({
-                'email': em,
-                'name': '',
-                'company': '',
-                'relevance': 5,
-                'context': 'Found via web search regex (unverified relevance)',
-            })
+            domain = em.split('@')[1] if '@' in em else ''
+            if not domain:
+                continue
+            # Базовая структура домена: 1-3 точки, TLD 2-6 букв
+            parts = domain.split('.')
+            tld = parts[-1] if parts else ''
+            if len(parts) < 2 or len(parts) > 4 or len(tld) < 2 or len(tld) > 6:
+                logger.info(f"[AUTO_LEADS] Fallback skip (bad domain structure): {em}")
+                continue
+            # DNS MX проверка
+            if not await _check_mx_record(domain):
+                logger.info(f"[AUTO_LEADS] Fallback skip (no MX record): {em}")
+                continue
+            validated_fallback.append(em)
+        if validated_fallback:
+            logger.info(f"[AUTO_LEADS] Fallback: {len(validated_fallback)} emails passed MX validation")
+            for em in validated_fallback:
+                parsed_leads.append({
+                    'email': em,
+                    'name': '',
+                    'company': '',
+                    'relevance': 5,
+                    'context': 'Found via web search regex (MX-verified domain)',
+                })
+        else:
+            logger.info(f"[AUTO_LEADS] Fallback: 0 emails passed MX validation")
 
     if not parsed_leads:
         logger.warning(f"[AUTO_LEADS] FINAL: 0 leads found for campaign #{campaign.id} "
