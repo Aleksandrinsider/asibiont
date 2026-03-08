@@ -2282,6 +2282,27 @@ class HybridAutonomousAgent:
                         logger.warning(f"[AGENT] activity log (exc) error: {_al_e}")
 
             messages = [{"role": "system", "content": base_prompt}]
+
+            # ═══ АНТИ-ПОВТОР: для коротких реплик (привет/привет) инжектируем предыдущие ответы ═══
+            _msg_lower_ar = (user_message or '').strip().lower().rstrip('!., ')
+            _trivial_ar = _msg_lower_ar in ('привет', 'хай', 'здравствуй', 'здравствуйте',
+                                             'добрый день', 'доброе утро', 'добрый вечер',
+                                             'как дела', 'что нового', 'что делаешь')
+            if _trivial_ar and history:
+                _prev_ai_responses = []
+                for _h_msg in reversed(history):
+                    if _h_msg.get('role') == 'assistant' and _h_msg.get('content'):
+                        _prev_ai_responses.append(_h_msg['content'][:150])
+                    if len(_prev_ai_responses) >= 3:
+                        break
+                if _prev_ai_responses:
+                    _ar_block = '\n---\n'.join(_prev_ai_responses)
+                    messages.append({"role": "system", "content": (
+                        f"АНТИ-ПОВТОР: вот твои последние ответы пользователю — НЕ ПОВТОРЯЙ их содержание. "
+                        f"Скажи что-то ПРИНЦИПИАЛЬНО ДРУГОЕ. Другой тон, другая тема, другой подход.\n"
+                        f"Уже сказано:\n{_ar_block}"
+                    )})
+
             if history:
                 messages.extend(history)
             messages.append({"role": "user", "content": user_message})
@@ -3263,7 +3284,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
     return ""
 
 
-def _save_interaction_for_director(telegram_id: int, content: str):
+def _save_interaction_for_director(telegram_id: int, content: str, message_type: str = 'agent_msg'):
     """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата."""
     if not content or not content.strip():
         return
@@ -3273,9 +3294,9 @@ def _save_interaction_for_director(telegram_id: int, content: str):
         try:
             _u = _s.query(_User).filter_by(telegram_id=telegram_id).first()
             if _u:
-                _s.add(_Intr(user_id=_u.id, message_type='agent_msg', content=content))
+                _s.add(_Intr(user_id=_u.id, message_type=message_type, content=content))
                 _s.commit()
-                logger.info("[DIRECTOR] saved interaction for tg=%s, len=%d", telegram_id, len(content))
+                logger.info("[DIRECTOR] saved interaction type=%s for tg=%s, len=%d", message_type, telegram_id, len(content))
             else:
                 logger.warning("[DIRECTOR] user not found for tg=%s", telegram_id)
         except Exception as _db_err:
@@ -4298,19 +4319,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _TOOL_TIMEOUT = 35  # секунд на один инструмент (включая research_topic с веб-поиском)
 
-    _tool_was_called = False
-    for _iter in range(2):  # AI call → tool → final answer
-        # После первого tool call — отключаем tools чтобы агент дал текстовый ответ
-        if _tool_was_called:
-            _use_tools = False
+    _tool_call_count = 0
+    for _iter in range(3):  # AI call → tool → tool → final answer
+        # После 2 tool calls — отключаем tools чтобы агент дал текстовый ответ
+        _use_tools_now = _use_tools and _tool_call_count < 2
         try:
             _resp = await asyncio.wait_for(
                 _agent_inst.call_ai(
                     _messages,
-                    use_tools=_use_tools,
-                    tool_choice="auto" if _use_tools else None,
-                    exclude_tools=_exclude_for_agent if _use_tools else None,
-                    max_tokens=800 if _tool_was_called else 600,
+                    use_tools=_use_tools_now,
+                    tool_choice="auto" if _use_tools_now else None,
+                    exclude_tools=_exclude_for_agent if _use_tools_now else None,
+                    max_tokens=1000 if _tool_call_count > 0 else 800,
                     api_timeout=API_TIMEOUT_NORMAL,
                 ),
                 timeout=API_TIMEOUT_SCRIPT,
@@ -4344,9 +4364,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _early_text = _content or _done_fb
             break
 
-        # Агент вызвал инструменты — выполняем (макс 1 за итерацию для скорости)
+        # Агент вызвал инструменты — выполняем (макс 2 за итерацию для полноты)
         _messages.append(_msg)
-        for _tc in _tool_calls[:1]:
+        for _tc in _tool_calls[:2]:
             _tname = _tc.get('function', {}).get('name', '')
             try:
                 _targs = json.loads(_tc.get('function', {}).get('arguments', '{}'))
@@ -4391,9 +4411,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     logger.debug("[DIRECTOR-EXEC] tool %s error for %s: %s", _tname, agent['name'], _te)
 
             _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
-        _tool_was_called = True
+        _tool_call_count += 1
         # Добавляем фиктивные результаты для пропущенных tool_calls (OpenAI/DeepSeek требует все)
-        for _tc_skip in _tool_calls[1:]:
+        for _tc_skip in _tool_calls[2:]:
             _messages.append({"role": "tool", "tool_call_id": _tc_skip['id'],
                               "content": '{"status":"skipped"}'})
         # Инструкция синтезировать ответ на основе данных инструмента
@@ -4521,8 +4541,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     ).all()
                 } if _own_all else set()
 
-                # Первый запуск (нет ни одной подписки): авто-мигрируем
-                if _own_all and not _existing_subs:
+                # Первый запуск (нет ни одной подписки И их НИКОГДА не было): авто-мигрируем
+                # Проверяем что пользователь вообще никогда не создавал подписок (а не удалил их)
+                _ever_had_subs = _s.query(_AS).filter(_AS.user_id == user_db_id).count() > 0
+                if _own_all and not _existing_subs and not _ever_had_subs:
                     for _oa in _own_all:
                         _s.add(_AS(user_id=user_db_id, agent_id=_oa.id))
                         try:
@@ -4698,10 +4720,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
     # ── Вспомогательная функция сохранения результата агента ──────────────────
     async def _run_agent_task(ag, task, extra_context: str = "", director_message: str = ""):
-        # Отправляем живое обращение директора к агенту (только через progress_callback)
-        # НЕ сохраняем в Interaction — иначе дашборд покажет дубль серым сообщением
+        # Отправляем живое обращение директора к агенту и сохраняем в DB
         if director_message:
             await _send_visible(director_message)
+            _save_interaction_for_director(user_id, director_message, message_type='ai')
             await asyncio.sleep(0.3)
 
         # Списываем токены за запуск агента директором
@@ -5082,6 +5104,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 pass
             if _fu_final_text:
                 await _send_visible(_fu_final_text[:500])
+                # Сохраняем итог директора в DB чтобы он был виден при перезагрузке
+                _save_interaction_for_director(user_id, _fu_final_text[:500], message_type='ai')
     except Exception as _fu_err:
         logger.warning("[DIRECTOR] followup coordination error: %s", _fu_err)
 
