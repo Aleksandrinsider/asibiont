@@ -168,7 +168,7 @@ class Strategist(AgentRole):
                 'greeting': "GREETING → If profile empty: introduce yourself as a thinking partner (not a feature list!), explain you see the whole person (work, health, goals, growth), ask ONE lively question about them. DON'T suggest tasks until you know who they are. If profile filled and no tasks: ask what they're doing NOW.",
                 'farewell': "FAREWELL → Brief, warm. Remind about plans if tasks exist.",
                 'task_management': "TASKS → check_time_conflicts → suggest a slot. Ask for confirmation.",
-                'information_request': "INFORMATION → MUST use research_topic. Give numbers, comparisons, source links. DON'T answer from memory.",
+                'information_request': "INFORMATION / QUESTION → Answer the question. If you need data — call the right tool (list_tasks, get_incoming_messages, get_delegation_progress, etc.) and report the fact. DON'T create tasks, DON'T delegate to agents, DON'T start action chains. Question = answer, not action. research_topic only if external data is needed (prices, trends, internet facts).",
                 'advice_seeking': "ADVICE → research_topic for data. Give YOUR opinion with numbers. Suggest a concrete plan with deadlines and create tasks.",
                 'emotional_sharing': "EMOTIONS → EMPATHY FIRST. Don't solve the problem, support. Then one question.",
             }
@@ -177,7 +177,7 @@ class Strategist(AgentRole):
                 'greeting': 'ПРИВЕТСТВИЕ → Если профиль пустой: представься как мыслящий партнёр (не список функций!), расскажи что видишь человека целиком (работа, здоровье, цели, развитие), задай ОДИН живой вопрос о нём самом. НЕ предлагай задачи пока не знаешь кто он. Если профиль заполнен и задач нет: спроси чем занят СЕЙЧАС.',
                 'farewell': 'ПРОЩАНИЕ → Кратко, тепло. Напомни о планах если есть задачи.',
                 'task_management': 'ЗАДАЧИ → check_time_conflicts → предложи точку. Спроси согласие.',
-                'information_request': 'ИНФОРМАЦИЯ → ОБЯЗАТЕЛЬНО research_topic. Дай цифры, сравнения, ссылки на источники. НЕ отвечай из головы.',
+                'information_request': 'ИНФОРМАЦИЯ / ВОПРОС → Ответь на вопрос. Если нужны данные — вызови подходящий инструмент (list_tasks, get_incoming_messages, get_delegation_progress и т.д.) и сообщи факт. НЕ создавай задачи, НЕ поручай агентам, НЕ запускай цепочки действий. Вопрос = ответ, не действие. research_topic — только если нужны внешние данные (цены, тренды, факты из интернета).',
                 'advice_seeking': 'СОВЕТ → research_topic для данных. Дай СВОЁ мнение с цифрами: "Я бы на твоём месте сделал X, потому что [Y% компаний так делают]". Предложи конкретный план с дедлайнами и создай задачи.',
                 'emotional_sharing': 'ЭМОЦИИ → ЭМПАТИЯ ПЕРВАЯ. Не решай проблему, а поддержи. Потом один вопрос.',
             }
