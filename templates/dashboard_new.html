@@ -2551,8 +2551,9 @@
                 });
                 if (!await checkAuth(resp)) return;
                 if (!resp.ok) {
-                    const err = await resp.json();
-                    showNotification('Ошибка: ' + (err.error || 'неизвестная'), 'error');
+                    let errMsg = 'неизвестная ошибка';
+                    try { const err = await resp.json(); errMsg = err.error || errMsg; } catch(e) { errMsg = `HTTP ${resp.status}`; }
+                    showNotification('Ошибка: ' + errMsg, 'error');
                     return;
                 }
                 // Remove this separator and everything after it from DOM

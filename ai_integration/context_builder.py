@@ -856,14 +856,20 @@ class ContextBuilder:
             # ═══ КОМАНДА АГЕНТОВ: ASI видит кто есть и что умеет ═══
             try:
                 from models import UserAgent as _UA_ctx, AgentSubscription as _AS_ctx
+                from sqlalchemy import or_ as _or_ctx
                 _sub_ids = [r[0] for r in session.query(_AS_ctx.agent_id).filter(_AS_ctx.user_id == user.id).all()]
+                # Подписки ИЛИ собственные агенты пользователя
+                if _sub_ids:
+                    _team_filter = _or_(_UA_ctx.id.in_(_sub_ids), _UA_ctx.author_id == user.id)
+                else:
+                    _team_filter = (_UA_ctx.author_id == user.id)
                 _team = (
                     session.query(_UA_ctx)
-                    .filter(_UA_ctx.id.in_(_sub_ids), _UA_ctx.status.in_(['active', 'paused']))
+                    .filter(_team_filter, _UA_ctx.status.in_(['active', 'paused']))
                     .order_by(_UA_ctx.id.asc())
                     .limit(15)
                     .all()
-                ) if _sub_ids else []
+                )
                 if _team:
                     _KEY_MAP = {
                         'GMAIL': 'Gmail', 'YANDEX_MAIL': 'Яндекс Почта', 'MAILRU': 'Mail.ru',

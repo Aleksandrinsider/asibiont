@@ -11458,6 +11458,7 @@ app.router.add_get('/chat/progress', chat_progress_handler)
 app.router.add_post('/api/transcribe', transcribe_handler)
 app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
+app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
 
 # Marketplace API
 app.router.add_get('/api/marketplace/agents', api_marketplace_agents_handler)

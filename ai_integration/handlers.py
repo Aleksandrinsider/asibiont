@@ -1545,14 +1545,17 @@ async def delegate_task(
                 _name_parts = [_recip_check]
             logger.info(f"[DELEGATE] Looking for agents: {_name_parts} (user_db_id={delegator.id})")
 
-            _subscribed_ids = session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id)
-            # Загружаем агентов на которых пользователь SUBSCRIBED (кириллица: фильтр в Python)
+            _subscribed_ids = [r[0] for r in session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id).all()]
+            # Загружаем агентов: подписки ИЛИ собственные агенты пользователя
+            from sqlalchemy import or_ as _or_d
+            _agent_filter = [_UA_chk.status.in_(['active', 'paused', 'published'])]
+            if _subscribed_ids:
+                _agent_filter.append(_or_(_UA_chk.id.in_(_subscribed_ids), _UA_chk.author_id == delegator.id))
+            else:
+                _agent_filter.append(_UA_chk.author_id == delegator.id)
             _all_agents = (
                 session.query(_UA_chk)
-                .filter(
-                    _UA_chk.status.in_(['active', 'paused', 'published']),
-                    _UA_chk.id.in_(_subscribed_ids)
-                )
+                .filter(*_agent_filter)
                 .all()
             )
             _found_agents = []
@@ -1661,7 +1664,7 @@ async def delegate_task(
                                 'id': 0,
                                 'avatar_url': '/static/asibiont.svg',
                             },
-                            'text': f'→ {_agent_name}\n{_agent_task_text[:300]}',
+                            'text': f'{_agent_name}, {_agent_task_text[:300]}',
                         }, ensure_ascii=False)
                         _save_ifd(user_id, _dir_json)
                     except Exception as _dir_err:
