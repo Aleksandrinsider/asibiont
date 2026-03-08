@@ -5252,6 +5252,24 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if action != 'delegate':
             return None
 
+        # ── Валидация: если задача требует коммуникации/поиска людей,
+        # а у агента нет нужного инструмента — ASI делает сам ──────────────
+        _ag_check = _find_agent(decision.get('agent_name', ''))
+        if _ag_check:
+            _task_lower = (decision.get('agent_task') or user_message).lower()
+            _comm_keywords = ('найди', 'пригласи', 'напиши', 'отправь', 'сообщ', 'пользовател',
+                              'приглаш', 'invite', 'message', 'find.*user', 'тестировщик',
+                              'тестер', 'аудитори', 'контакт')
+            _needs_comm = any(kw in _task_lower for kw in _comm_keywords)
+            if _needs_comm:
+                _ag_tools_str = (_ag_check.get('tools_allowed') or '').lower()
+                _has_comm_tool = any(t in _ag_tools_str for t in
+                                     ('find_and_message', 'send_message', 'find_relevant_contacts'))
+                if not _has_comm_tool:
+                    logger.info("[DIRECTOR] Agent %s lacks comm tools for task, ASI handles self",
+                                _ag_check.get('name'))
+                    return None  # ASI сделает сам через process_request
+
         # ── delegate: один агент на запрос ──────────────────────────────────
         _agent_ctx_parts = []
         if _user_full_ctx:
