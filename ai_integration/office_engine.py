@@ -152,7 +152,7 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
 
 def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, task_title: str):
     """Логирует поручение агенту в AgentActivityLog (без создания Task).
-    Дедупликация: не создаём дубль если уже есть идентичная запись за 2ч.
+    Дедупликация: не создаём дубль если уже есть похожая запись за 2ч.
     """
     try:
         from models import Session as _Db, AgentActivityLog as _AAL
@@ -160,15 +160,18 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
         _s = _Db()
         try:
             _cutoff = _dt.now(_tz.utc) - _td(hours=2)
-            _dup = _s.query(_AAL).filter(
+            _recent = _s.query(_AAL).filter(
                 _AAL.user_id == user_id,
                 _AAL.target == f'agent:{agent_name}',
                 _AAL.activity_type == 'agent_task',
-                _AAL.status == 'accepted',
                 _AAL.created_at >= _cutoff,
-            ).first()
-            if _dup and task_title[:40].lower() in (_dup.title or '').lower():
-                return
+            ).order_by(_AAL.created_at.desc()).limit(5).all()
+            _task_key = task_title[:40].lower().strip()
+            for _ex in _recent:
+                # Проверяем и title, и content (там полный task_title)
+                _ex_text = ((_ex.title or '') + ' ' + (_ex.content or '')).lower()
+                if _task_key in _ex_text:
+                    return  # похожее поручение уже есть
             _s.add(_AAL(
                 user_id=user_id,
                 activity_type='agent_task',
@@ -189,8 +192,23 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
     """Логирует завершение работы агента в AgentActivityLog."""
     try:
         from models import Session as _Db, AgentActivityLog as _AAL
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         _s = _Db()
         try:
+            # Дедупликация: не логируем дубль завершения за 2ч
+            _cutoff = _dt.now(_tz.utc) - _td(hours=2)
+            _recent = _s.query(_AAL).filter(
+                _AAL.user_id == user_id,
+                _AAL.target == f'agent:{agent_name}',
+                _AAL.activity_type == 'agent_task',
+                _AAL.status == 'completed',
+                _AAL.created_at >= _cutoff,
+            ).order_by(_AAL.created_at.desc()).limit(3).all()
+            _task_key = task_title[:40].lower().strip()
+            for _ex in _recent:
+                _ex_text = ((_ex.title or '') + ' ' + (_ex.content or '')).lower()
+                if _task_key in _ex_text:
+                    return  # уже залогировано
             _s.add(_AAL(
                 user_id=user_id,
                 activity_type='agent_task',

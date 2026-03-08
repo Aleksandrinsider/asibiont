@@ -3786,6 +3786,26 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
         _s = _Db()
         try:
             now = _dt.datetime.now(_dt.timezone.utc)
+            # Дедупликация: проверяем есть ли якорь с похожим task для этого агента за cooldown
+            _cutoff = now - _dt.timedelta(hours=max(cooldown_hours, 1.0))
+            _existing = _s.query(_Anch).filter(
+                _Anch.user_id == user_db_id,
+                _Anch.anchor_type == 'agent_delegation',
+                _Anch.source == f'agent:{agent_id}',
+                _Anch.created_at >= _cutoff,
+            ).order_by(_Anch.created_at.desc()).limit(5).all()
+            _task_key = task[:60].lower().strip()
+            for _ex in _existing:
+                _ex_topic = (_ex.topic or '').lower()
+                if _task_key[:30] in _ex_topic:
+                    return  # похожая делегация уже есть
+                try:
+                    _ex_data = _json.loads(_ex.data) if _ex.data else {}
+                    _ex_task = (_ex_data.get('task', '') or '').lower()
+                    if _task_key[:30] in _ex_task:
+                        return
+                except Exception:
+                    pass
             # expires_at минимум 1ч — чтобы AnchorEngine успел увидеть якорь
             _effective_expires = max(cooldown_hours, 1.0)
             _s.add(_Anch(
