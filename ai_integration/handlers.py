@@ -1657,18 +1657,21 @@ async def delegate_task(
                             pass
 
                     # Записываем обращение директора к агенту в чат (с метаданными ASI)
-                    try:
-                        _dir_json = _json_ag.dumps({
-                            '__agent': {
-                                'name': 'ASI Biont',
-                                'id': 0,
-                                'avatar_url': '/static/asibiont.svg',
-                            },
-                            'text': f'{_agent_name}, {_agent_task_text[:300]}',
-                        }, ensure_ascii=False)
-                        _save_ifd(user_id, _dir_json)
-                    except Exception as _dir_err:
-                        logger.error(f"[DELEGATE] DIR message save failed: {_dir_err}")
+                    # Пропускаем если задача содержит внутренние инструкции (ОТВЕТЬ НА ВОПРОС и т.п.)
+                    _skip_dir_msg = any(kw in _agent_task_text.upper() for kw in ['ОТВЕТЬ НА ВОПРОС', 'ПРОСТО ОТВЕТЬ'])
+                    if not _skip_dir_msg:
+                        try:
+                            _dir_json = _json_ag.dumps({
+                                '__agent': {
+                                    'name': 'ASI Biont',
+                                    'id': 0,
+                                    'avatar_url': '/static/asibiont.svg',
+                                },
+                                'text': f'{_agent_name}, {_agent_task_text[:300]}',
+                            }, ensure_ascii=False)
+                            _save_ifd(user_id, _dir_json)
+                        except Exception as _dir_err:
+                            logger.error(f"[DELEGATE] DIR message save failed: {_dir_err}")
 
                     # ── СИНХРОННОЕ выполнение агента (inline) ──────────────────────
                     import asyncio as _asyncio_dt
@@ -1772,8 +1775,8 @@ async def delegate_task(
                     # Возвращаем КРАТКОЕ содержание — полный ответ уже показан через _save_ifd
                     _summary = _result[:200] + ('...' if len(_result) > 200 else '')
                     _results_parts.append(
-                        f"[{_agent_name}] выполнил задачу (ответ уже показан пользователю в чате). "
-                        f"Суть ответа: {_summary}"
+                        f"[{_agent_name}] уже ответил пользователю в чате (ответ уже показан, НЕ ДУБЛИРУЙ его). "
+                        f"Суть: {_summary}"
                     )
                     logger.info(f"[DELEGATE] {_agent_name} completed inline ({len(_result)} chars)")
 

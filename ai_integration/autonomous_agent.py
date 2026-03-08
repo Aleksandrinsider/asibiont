@@ -2658,7 +2658,9 @@ class HybridAutonomousAgent:
 
         # Защита от слишком коротких ответов после tool calls
         # Если AI ответил "Готово!" после делегирования — формируем развёрнутый ответ из результатов
-        if tools_used and len((final or '').strip()) < 40:
+        # НО: если delegate_task использован и агент уже ответил в чате — не дублируем
+        _had_agent_delegate = any(r.get('tool') == 'delegate_task' and 'уже ответил' in str(r.get('result', '')) for r in execution_results)
+        if tools_used and len((final or '').strip()) < 40 and not _had_agent_delegate:
             _tool_results_summary = []
             for _r in execution_results:
                 if _r.get('success') and _r.get('result'):
@@ -4078,8 +4080,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         f"Ты действуешь как {agent['name']} — {agent.get('specialization', 'специалист')}. "
         f"{agent.get('description', '')} Отвечай от имени {agent['name']}."
     )
+    from datetime import datetime as _dt_exec
+    _now_str = _dt_exec.now().strftime('%Y-%m-%d %H:%M (%A)')
     system_prompt = (
-        "Ты — агент в команде ASI Biont. Твои результаты появляются в общем чате с пользователем.\n\n"
+        f"Ты — агент в команде ASI Biont. Сейчас: {_now_str}. Твои результаты появляются в общем чате с пользователем.\n\n"
 
         "КАК ТЫ ДУМАЕШЬ:\n"
         "Перед каждым ответом — быстрый анализ:\n"
