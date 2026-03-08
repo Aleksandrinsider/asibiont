@@ -4010,16 +4010,17 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         logger.debug("[CHIME] save error: %s", _e)
 
 
-async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_context: str = "", _depth: int = 0) -> str:
+async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_context: str = "", _depth: int = 0) -> tuple:
     """Запускает агента с полноценным tool-calling циклом (по tools_allowed).
     1. Выполняет python_code (внешние данные: IMAP, RSS, HTTP)
     2. Запускает tool-loop через платформенные инструменты (до 3 итераций)
     3. Агент реально вызывает send_email, research_topic и т.д. по своему tools_allowed
     Используется в _office_director_chat для delegate и multi_delegate.
     _depth: текущая глубина рекурсии (макс 2).
+    Returns: (response_text, tools_used_list)
     """
     if _depth >= 2:
-        return f"Агент {agent.get('name', '?')}: превышена глубина делегирования, задача принята."
+        return f"Агент {agent.get('name', '?')}: превышена глубина делегирования, задача принята.", []
 
     # Определяем род агента по имени для правильных fallback-фраз
     _aname_fb = (agent.get('name') or '').strip()
@@ -4320,6 +4321,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _TOOL_TIMEOUT = 35  # секунд на один инструмент (включая research_topic с веб-поиском)
 
     _tool_call_count = 0
+    _tools_used: list[str] = []  # трекинг вызванных инструментов
     for _iter in range(3):  # AI call → tool → tool → final answer
         # После 2 tool calls — отключаем tools чтобы агент дал текстовый ответ
         _use_tools_now = _use_tools and _tool_call_count < 2
@@ -4373,6 +4375,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             except Exception:
                 _targs = {}
 
+            _tools_used.append(_tname)
             # ── Специальный инструмент: агент пытается вызвать несуществующий delegate_to_agent ──
             if _tname == 'delegate_to_agent':
                 # Перенаправляем на реальный delegate_task
@@ -4481,7 +4484,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _final_text = _ctd_exec(_final_text or '').strip() or _done_fb
     except Exception:
         pass
-    return _final_text
+    return _final_text, _tools_used
 
 
 # ══ Вспомогательные функции для delegation pipeline ══════════════════════════
@@ -4503,6 +4506,7 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
                 status='completed' if result_summary else 'in_progress',
                 source='agent',
                 created_by_agent_id=agent.get('id'),
+                delegated_to_username=agent.get('name'),
             )
             _s.add(_t)
             _s.commit()
@@ -4787,6 +4791,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _task_id = None
 
         resp = await _exec_agent_for_director(ag, task, user_id, dialog_context=extra_context)
+        _agent_tools_used: list[str] = []
+        if isinstance(resp, tuple):
+            resp, _agent_tools_used = resp
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
 
@@ -4812,6 +4819,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 f"НЕ отвечай 'Задачу выполнил' — дай реальный результат."
             )
             resp2 = await _exec_agent_for_director(ag, _rework_task, user_id, dialog_context=extra_context)
+            if isinstance(resp2, tuple):
+                resp2, _rw_tools = resp2
+                _agent_tools_used.extend(_rw_tools)
             if resp2 and str(resp2).strip().lower() not in _fallback_phrases:
                 resp = resp2
             else:
@@ -4835,6 +4845,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _ac = _json.dumps({
             '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': ag.get('avatar_url', '')},
             'text': resp,
+            'tools_used': _agent_tools_used,
         }, ensure_ascii=False)
         _save_interaction_for_director(user_id, _ac)
         await asyncio.sleep(0.05)
@@ -4845,6 +4856,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 from models import Session as _TDb2, AgentActivityLog as _AAL2
                 _ts2 = _TDb2()
                 try:
+                    _tools_info = ', '.join(_agent_tools_used) if _agent_tools_used else ''
                     _ts2.add(_AAL2(
                         user_id=user_db_id,
                         activity_type='agent_task',
@@ -4852,6 +4864,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         content=str(resp)[:500],
                         target=f"agent:{ag.get('name', 'Агент')}",
                         status='completed',
+                        result=_tools_info[:300] if _tools_info else None,
                     ))
                     _ts2.commit()
                 finally:
