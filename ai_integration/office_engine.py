@@ -705,7 +705,7 @@ class OfficeEngine:
                     s.query(UserAgent, UserModel)
                     .join(UserModel, UserModel.id == UserAgent.author_id)
                     .filter(
-                        UserAgent.status.in_(['active', 'paused']),
+                        UserAgent.status == 'active',
                         UserAgent.python_code.isnot(None),
                         UserModel.telegram_id.isnot(None),
                     )
@@ -956,7 +956,7 @@ class OfficeEngine:
                 }
                 _rows = (
                     _s.query(_UA)
-                    .filter(_UA.author_id == user.id, _UA.status.in_(['active', 'paused']))
+                    .filter(_UA.author_id == user.id, _UA.status == 'active')
                     .all()
                 )
                 all_agents = [
