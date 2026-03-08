@@ -5234,8 +5234,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     _round_history: list[dict] = []  # история раундов для контекста
 
     for _round in range(_MAX_AGENT_ROUNDS):
-        # Создаём Task in_progress ДО запуска агента
-        _delegation_task_id = _create_agent_delegation_task(user_db_id, _ag, _task)
+        # Создаём Task in_progress ДО запуска агента (только для поручений, не для вопросов)
+        _delegation_task_id = None if _is_q else _create_agent_delegation_task(user_db_id, _ag, _task)
 
         # Запуск агента
         _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
