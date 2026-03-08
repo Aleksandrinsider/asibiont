@@ -4484,6 +4484,54 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     return _final_text
 
 
+# ══ Вспомогательные функции для delegation pipeline ══════════════════════════
+
+def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, result_summary: str = ''):
+    """Создаёт Task с source='agent' для отображения в «Поручения агентам»."""
+    if not user_db_id:
+        return
+    try:
+        from models import Session as _Db, Task as _Task
+        _s = _Db()
+        try:
+            _title = f"{agent.get('name', 'Агент')}: {task_text[:180]}"
+            _desc = result_summary[:500] if result_summary else ''
+            _t = _Task(
+                user_id=user_db_id,
+                title=_title,
+                description=_desc,
+                status='completed' if result_summary else 'in_progress',
+                source='agent',
+                created_by_agent_id=agent.get('id'),
+            )
+            _s.add(_t)
+            _s.commit()
+            logger.info("[DIRECTOR] created delegation task id=%s for agent=%s", _t.id, agent.get('name'))
+        except Exception as _e:
+            logger.warning("[DIRECTOR] delegation task create error: %s", _e)
+            try:
+                _s.rollback()
+            except Exception:
+                pass
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning("[DIRECTOR] delegation task error: %s", e)
+
+
+def _save_delegation_to_history(telegram_id: int, agent_name: str, task: str, result: str):
+    """Сохраняет результат делегирования в conversation_history для контекста будущих сообщений."""
+    try:
+        from .conversation_history import save_message_to_history
+        _summary = (
+            f"[Поручил агенту {agent_name}: {task[:150]}]\n"
+            f"Результат: {result[:400]}"
+        )
+        save_message_to_history(telegram_id, "assistant", _summary)
+    except Exception as e:
+        logger.debug("[DIRECTOR] save delegation to history error: %s", e)
+
+
 # Слова-сигналы что пользователь хочет действие, а не разговор
 
 
@@ -4846,8 +4894,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if _history_block.strip():
             _direct_ctx_parts.append(_history_block.strip())
         _agent_ctx = '\n\n'.join(_direct_ctx_parts)
-        await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
-        # Агент уже ответил и сохранён в DB — ASI молчит, не дублирует
+        _direct_resp = await _run_agent_task(_direct_agent, user_message, extra_context=_agent_ctx)
+        # Создаём Task для отслеживания в «Поручения агентам»
+        _create_agent_delegation_task(user_db_id, _direct_agent, user_message, str(_direct_resp or '')[:400])
+        # Сохраняем контекст делегирования в conversation_history
+        _save_delegation_to_history(user_id, _direct_agent.get('name', 'Агент'), user_message, str(_direct_resp or '')[:600])
         return "__agent_handled__"
 
     # ── Начальное решение ASI ──────────────────────────────────────────────────
@@ -5012,6 +5063,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     _task = decision.get('agent_task') or user_message
     _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
 
+    # Создаём Task для отслеживания в «Поручения агентам»
+    _create_agent_delegation_task(user_db_id, _ag, _task, str(_resp or '')[:400])
+
     # ASI продолжает координацию: подводит итог, создаёт задачи, делегирует другим агентам
     _agent_result = str(_resp or '')[:600]
     _agent_name_d = _ag.get('name', 'Агент')
@@ -5021,35 +5075,39 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _followup_agent = HybridAutonomousAgent()
         _followup_system = (
             "Ты ASI — директор офиса. Агент только что ответил пользователю.\n"
-            "Твоя роль — КООРДИНАТОР. Ты ПРОДОЛЖАЕШЬ работу:\n"
-            "1. Подведи краткий итог (1-2 предложения, НЕ повторяй содержание ответа агента)\n"
-            "2. ДЕЙСТВУЙ — используй инструменты:\n"
-            "   - add_task — создай задачи по ключевым пунктам плана агента\n"
-            "   - delegate_task — поручи другому агенту следующий шаг если нужно\n"
-            "3. Скажи пользователю что сделал и что будет дальше\n\n"
-            "НЕ задавай общих вопросов. НЕ спрашивай 'хотите ли вы...'. ДЕЛАЙ.\n"
+            "Результат агента УЖЕ ПОКАЗАН пользователю — НЕ повторяй его содержание.\n\n"
+            "ТВОЯ ЗАДАЧА — ДЕЙСТВОВАТЬ как директор:\n"
+            "1. ОБЯЗАТЕЛЬНО создай 1-2 задачи по ключевым пунктам (add_task) — это ГЛАВНОЕ\n"
+            "2. Обнови профиль если узнал новое о пользователе (update_profile)\n"
+            "3. Подведи краткий итог (2-3 предложения) — что сделано, что дальше\n"
+            "4. Предложи один конкретный следующий шаг\n\n"
+            "ОБЯЗАТЕЛЬНО вызови add_task хотя бы раз!\n"
+            "Не задавай вопросов 'хотите ли вы...'. ДЕЛАЙ.\n"
             "Пиши как в мессенджере, без markdown."
         )
         _followup_msg = (
             f"Запрос пользователя: {user_message[:300]}\n\n"
             f"Агент {_agent_name_d} ответил:\n{_agent_result}\n\n"
             f"Доступные агенты: {', '.join(a['name'] + ' (' + a.get('specialization','') + ')' for a in _agents[:5])}\n\n"
-            f"Подведи итог и ПРОДОЛЖИ работу — создай задачи по пунктам плана, поручи следующие шаги."
         )
+        if _user_full_ctx:
+            _followup_msg += f"КОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx[:600]}\n\n"
+        _followup_msg += "Подведи итог и ПРОДОЛЖИ работу — создай задачи, обнови профиль, дай рекомендации."
+
         _fu_messages = [
             {"role": "system", "content": _followup_system},
             {"role": "user", "content": _followup_msg},
         ]
 
-        # Tool-calling loop для ASI-координатора (макс 2 итерации)
+        # Tool-calling loop для ASI-координатора (макс 3 итерации, 500 max_tokens)
         _fu_final_text = ''
-        for _fu_iter in range(2):
+        for _fu_iter in range(3):
             _fu_resp = await asyncio.wait_for(
                 _followup_agent.call_ai(
                     _fu_messages,
-                    use_tools=(_fu_iter == 0),
-                    tool_choice="auto" if _fu_iter == 0 else None,
-                    max_tokens=300,
+                    use_tools=(_fu_iter < 2),
+                    tool_choice="required" if _fu_iter == 0 else ("auto" if _fu_iter == 1 else None),
+                    max_tokens=500,
                     api_timeout=API_TIMEOUT_NORMAL,
                 ),
                 timeout=API_TIMEOUT_SCRIPT,
@@ -5064,9 +5122,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _fu_final_text = _fu_content
                 break
 
-            # Выполняем инструменты (макс 2 за итерацию)
+            # Выполняем инструменты (макс 3 за итерацию)
             _fu_messages.append(_fu_msg)
-            for _fu_tc in _fu_tools[:2]:
+            for _fu_tc in _fu_tools[:3]:
                 _fu_tname = _fu_tc.get('function', {}).get('name', '')
                 try:
                     _fu_targs = json.loads(_fu_tc.get('function', {}).get('arguments', '{}'))
@@ -5090,8 +5148,20 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
                 _fu_messages.append({"role": "tool", "tool_call_id": _fu_tc['id'], "content": _fu_tc_result})
             # Скипаем лишние tool_calls
-            for _fu_tc_skip in _fu_tools[2:]:
+            for _fu_tc_skip in _fu_tools[3:]:
                 _fu_messages.append({"role": "tool", "tool_call_id": _fu_tc_skip['id'], "content": '{"status":"skipped"}'})
+
+        # Fallback: если follow-up пустой — генерируем минимальный итог
+        if not _fu_final_text or len(_fu_final_text.strip()) <= 10:
+            _fu_final_text = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Агент {_agent_name_d} выполнил задачу: {_task[:200]}\n"
+                    f"Результат: {_agent_result[:300]}\n\n"
+                    f"Напиши краткий итог для пользователя (2-3 предложения): "
+                    f"что сделано, какой следующий шаг. Без markdown."
+                ),
+            }], max_tokens=200)
 
         if _fu_final_text and len(_fu_final_text.strip()) > 10:
             try:
@@ -5105,6 +5175,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _save_interaction_for_director(user_id, _fu_final_text[:500], message_type='ai')
     except Exception as _fu_err:
         logger.warning("[DIRECTOR] followup coordination error: %s", _fu_err)
+
+    # Сохраняем контекст делегирования в conversation_history для будущих сообщений
+    _save_delegation_to_history(user_id, _agent_name_d, _task, _agent_result)
 
     return "__agent_handled__"
 
