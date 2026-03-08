@@ -4919,13 +4919,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     resp = _fallback_resp
 
         # Результат агента сохраняется в DB как __agent JSON (с аватаром).
-        # НЕ дублируем через _send_visible — фронтенд заберёт из sync /api/interactions.
         _ac = _json.dumps({
             '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': ag.get('avatar_url', '')},
             'text': resp,
             'tools_used': _agent_tools_used,
         }, ensure_ascii=False)
         _save_interaction_for_director(user_id, _ac)
+
+        # Отправляем читаемый ответ агента в чат (Telegram) с именем агента
+        _agent_display = f"💬 {ag.get('name', 'Агент')}:\n{resp}"
+        await _send_visible(_agent_display[:600])
         await asyncio.sleep(0.05)
 
         # Логируем в AgentActivityLog (без создания Task)
@@ -5344,6 +5347,24 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _dm = _review_decision.get('director_message', '')
         _task = _review_decision.get('agent_task') or _task
         logger.info("[DIRECTOR] round %d → next_task for %s: %s", _round + 1, _agent_name_d, _task[:80])
+    else:
+        # Все раунды исчерпаны без accept — генерируем итоговый доклад
+        _rounds_summary_final = '\n'.join(
+            f"Раунд {i+1}: {r['result'][:200]}" for i, r in enumerate(_round_history)
+        )
+        _final_report = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Ты ASI-директор. Агент {_agent_name_d} отработал {len(_round_history)} раунд(ов) "
+                f"по задаче: {user_message[:200]}\n\n"
+                f"Результаты:\n{_rounds_summary_final}\n\n"
+                f"Напиши краткий итоговый доклад пользователю (3-4 предложения): "
+                f"что сделано, какие результаты, что дальше. Без markdown."
+            ),
+        }], max_tokens=250)
+        if _final_report and len(_final_report.strip()) > 10:
+            await _send_visible(_final_report[:500])
+            _save_interaction_for_director(user_id, _final_report[:500], message_type='ai')
 
     # Сохраняем контекст всех раундов делегирования
     _all_results = ' | '.join(r['result'][:200] for r in _round_history)
