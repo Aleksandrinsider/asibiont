@@ -366,9 +366,28 @@ def _save_agent_outcome_memory_sync(
         logger.debug('[MEMORY] save error: %s', _e)
 
 
+def _extract_from_subject_set(text: str) -> set:
+    """Извлекает множество (From, Subject) пар из stdout IMAP-агента.
+    Используется для дедупликации: одно и то же письмо = та же пара.
+    """
+    pairs = set()
+    lines = text.splitlines()
+    current_from = ''
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('От:'):
+            current_from = stripped[3:].strip()[:100]
+        elif stripped.startswith('Тема:') and current_from:
+            subj = stripped[5:].strip()[:100]
+            pairs.add((current_from, subj))
+            current_from = ''
+    return pairs
+
+
 def _save_inbox_reply_sync(user_id: int, agent_name: str, stdout: str):
     """Детектирует входящие письма в stdout IMAP-агента и сохраняет в AgentActivityLog.
     AnchorEngine подберёт запись и создаст CRITICAL-якорь agent_inbox_reply.
+    Дедупликация: сравниваем пары (From, Subject), не сырой текст.
     """
     if not stdout:
         return
@@ -377,22 +396,28 @@ def _save_inbox_reply_sync(user_id: int, agent_name: str, stdout: str):
     has_subj = 'Тема:' in stdout
     if not (has_from and has_subj):
         return
-    # Считаем количество писем (каждое письмо имеет "От:")
-    reply_count = stdout.count('От:')
+    # Извлекаем (From, Subject) пары для robust дедупликации
+    new_pairs = _extract_from_subject_set(stdout)
+    if not new_pairs:
+        return
+    reply_count = len(new_pairs)
     try:
         from models import Session as _Db, AgentActivityLog
         _s = _Db()
         try:
-            # Дедупликация: не создаём дубль если за 2ч есть такой же inbox_reply
-            _cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
-            _existing = _s.query(AgentActivityLog).filter(
+            # Дедупликация: проверяем все inbox_reply за 3ч — если те же From+Subject уже есть
+            _cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+            _existing_recs = _s.query(AgentActivityLog).filter(
                 AgentActivityLog.user_id == user_id,
                 AgentActivityLog.target == f'agent:{agent_name}',
                 AgentActivityLog.activity_type == 'inbox_reply',
                 AgentActivityLog.created_at > _cutoff,
-            ).order_by(AgentActivityLog.created_at.desc()).first()
-            if _existing and _existing.content and _existing.content[:200] == stdout[:200]:
-                return  # тот же inbox — не дублируем
+            ).order_by(AgentActivityLog.created_at.desc()).limit(5).all()
+            for _ex in _existing_recs:
+                old_pairs = _extract_from_subject_set(_ex.content or '')
+                # Если все новые пары уже были — дубль
+                if new_pairs and old_pairs and new_pairs.issubset(old_pairs):
+                    return  # те же письма — не дублируем
             _s.add(AgentActivityLog(
                 user_id=user_id,
                 activity_type='inbox_reply',
@@ -745,13 +770,34 @@ class OfficeEngine:
 
             if stdout:
                 # ── Дедупликация: если stdout не изменился — пропускаем ─────
+                # Хеш хранится и в памяти, и в БД (переживает рестарт)
                 import hashlib as _hl
                 _dedup_key = (user.id, agent.id)
                 _stdout_hash = _hl.md5(stdout.strip()[:500].encode()).hexdigest()[:16]
+                # In-memory check
                 if _STDOUT_DEDUP.get(_dedup_key) == _stdout_hash:
-                    logger.debug("[OFFICE-L1] [%s] dedup: output unchanged, skipping", agent.name)
+                    logger.debug("[OFFICE-L1] [%s] dedup: output unchanged (mem), skipping", agent.name)
+                    return
+                # DB-persistent check (survives restart)
+                if agent.last_stdout_hash and agent.last_stdout_hash == _stdout_hash:
+                    _STDOUT_DEDUP[_dedup_key] = _stdout_hash
+                    logger.debug("[OFFICE-L1] [%s] dedup: output unchanged (db), skipping", agent.name)
                     return
                 _STDOUT_DEDUP[_dedup_key] = _stdout_hash
+                # Persist hash to DB
+                try:
+                    def _save_hash(_aid, _h):
+                        from models import Session as _Db, UserAgent as _UA
+                        _s = _Db()
+                        try:
+                            _s.query(_UA).filter_by(id=_aid).update({'last_stdout_hash': _h})
+                            _s.commit()
+                        finally:
+                            _s.close()
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, _save_hash, agent.id, _stdout_hash)
+                except Exception:
+                    pass
 
                 service_label = (agent.specialization or agent.name or 'Agent').strip()
                 try:

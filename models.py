@@ -897,6 +897,9 @@ class UserAgent(Base):
     # чтобы после рестарта не перезапускать скрипты раньше интервала.
     last_office_run_at = Column(DateTime, nullable=True)
 
+    # MD5-хеш последнего stdout скрипта — для дедупликации между рестартами
+    last_stdout_hash = Column(String(32), nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
     updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
                         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))

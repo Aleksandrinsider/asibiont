@@ -477,6 +477,14 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] last_office_run_at add skipped: {e}")
+        if 'last_stdout_hash' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN last_stdout_hash VARCHAR(32)"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.last_stdout_hash")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] last_stdout_hash add skipped: {e}")
         if 'run_interval_minutes' not in cols:
             try:
                 session.execute(text("ALTER TABLE user_agents ADD COLUMN run_interval_minutes INTEGER DEFAULT 60"))

@@ -5634,6 +5634,26 @@ class AnchorEngine:
                 _from_lines = [l for l in _lines if l.startswith('От:') or l.startswith('Тема:')]
                 _preview = ' | '.join(_from_lines[:4])[:200]
 
+                # Content-based dedup: если якорь с таким же preview уже есть за 3ч — пропускаем
+                _anchor_cutoff = now_utc - timedelta(hours=3)
+                _dup_anchor = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'agent_inbox_reply',
+                    Anchor.created_at >= _anchor_cutoff,
+                ).order_by(Anchor.created_at.desc()).limit(10).all()
+                _is_dup = False
+                for _da in _dup_anchor:
+                    try:
+                        _da_data = json.loads(_da.data) if _da.data else {}
+                        if _da_data.get('preview', '')[:100] == _preview[:100] and _preview:
+                            _is_dup = True
+                            break
+                    except Exception:
+                        pass
+                if _is_dup:
+                    rec.status = 'anchored'  # помечаем как обработанный, но якорь не создаём
+                    continue
+
                 source_key = f'inbox_reply:{rec.id}'
                 anchors.append(Anchor(
                     user_id=user.id,
