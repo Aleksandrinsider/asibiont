@@ -276,6 +276,7 @@ def get_user_active_agent(user_id: int, session=None) -> Optional[int]:
     Возвращает «активный» (focused) agent_id для данного пользователя.
     Сначала смотрит на focused_agent_id (последний @упомянутый или нажатый),
     потом на первый в active_agent_ids, потом legacy-ключ active_agent_id.
+    Проверяет что у агента есть AgentSubscription (т.е. он активирован в дашборде).
     """
     close = False
     if session is None:
@@ -284,15 +285,42 @@ def get_user_active_agent(user_id: int, session=None) -> Optional[int]:
         close = True
     try:
         mem = _get_mem(user_id, session)
+
+        # Собираем валидные подписки (AgentSubscription) — единственный источник правды
+        _valid_ids: set = set()
+        try:
+            from models import AgentSubscription as _AS_g, User as _U_g
+            _user = session.query(_U_g).filter_by(telegram_id=user_id).first()
+            if _user:
+                _valid_ids = {r.agent_id for r in session.query(_AS_g).filter_by(user_id=_user.id).all()}
+        except Exception:
+            _valid_ids = None  # fallback: не фильтруем если модель недоступна
+
+        def _is_valid(aid):
+            if aid is None:
+                return False
+            if _valid_ids is None:
+                return True  # fallback
+            return aid in _valid_ids
+
         # Новая схема
         focused = mem.get('focused_agent_id')
-        if focused:
+        if focused and _is_valid(focused):
             return focused
+        # Если focused невалиден — сбрасываем
+        if focused and not _is_valid(focused):
+            mem.pop('focused_agent_id', None)
+            _save_mem(user_id, mem, session)
+
         ids = mem.get('active_agent_ids') or []
-        if ids:
-            return ids[0]
+        for aid in ids:
+            if _is_valid(aid):
+                return aid
         # Обратная совместимость со старой схемой
-        return mem.get('active_agent_id')
+        legacy = mem.get('active_agent_id')
+        if legacy and _is_valid(legacy):
+            return legacy
+        return None
     finally:
         if close:
             session.close()
