@@ -210,6 +210,7 @@
     const _pubEditOriginals = {};
     let _pubAllTopPosts = [];
     let _pubAllComments = {};
+    let _pubCurrentPage = 1;
 
     // Persistent likes for public arena
     const _PUB_ARENA_LIKES_KEY = 'pubArenaLikedPosts';
@@ -296,16 +297,75 @@
         if (!container) return;
         container.innerHTML = '';
         _pubRenderedIds.clear();
+        _pubMsgIdx = 0;
         _pubAllTopPosts = [];
         _pubAllComments = {};
         if (state.messages && state.messages.length) {
-            // новые сверху: сортируем новые→старые, рендерим топ-посты, потом коменты
             const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
-            const topPosts = sorted.filter(m => !m.reply_to);
-            const comments = sorted.filter(m => m.reply_to);
-            topPosts.forEach(msg => pubAppendMessage(msg, false));
-            comments.forEach(msg => pubAppendMessage(msg, false));
+            sorted.forEach(m => {
+                const mKey = m.id || m.ts;
+                if (m.reply_to) {
+                    if (!_pubAllComments[m.reply_to]) _pubAllComments[m.reply_to] = [];
+                    if (!_pubAllComments[m.reply_to].find(c => (c.id || c.ts) === mKey)) _pubAllComments[m.reply_to].push(m);
+                } else {
+                    _pubAllTopPosts.push(m);
+                }
+            });
         }
+        _pubCurrentPage = 1;
+        pubRenderPage();
+    }
+
+    function pubRenderPage() {
+        const container = document.getElementById('pub-av-messages');
+        if (!container) return;
+        container.innerHTML = '';
+        _pubRenderedIds.clear();
+        _pubMsgIdx = 0;
+
+        const totalPages = Math.max(1, Math.ceil(_pubAllTopPosts.length / _pubPageSize));
+        if (_pubCurrentPage > totalPages) _pubCurrentPage = totalPages;
+
+        const startIdx = (_pubCurrentPage - 1) * _pubPageSize;
+        const endIdx = _pubCurrentPage * _pubPageSize;
+        const pageTopPosts = _pubAllTopPosts.slice(startIdx, endIdx);
+
+        pageTopPosts.forEach(msg => pubAppendMessage(msg, false));
+        // Render comments for posts on this page
+        pageTopPosts.forEach(msg => {
+            const pid = msg.id || msg.ts;
+            const cmts = _pubAllComments[pid];
+            if (cmts && cmts.length) {
+                cmts.forEach(c => pubAppendMessage(c, false));
+            }
+        });
+
+        // Render pagination controls
+        pubRenderPagination(totalPages);
+    }
+
+    function pubRenderPagination(totalPages) {
+        let pag = document.getElementById('pub-arena-pagination');
+        if (!pag) {
+            pag = document.createElement('div');
+            pag.id = 'pub-arena-pagination';
+            pag.className = 'pub-pagination';
+            const container = document.getElementById('pub-av-messages');
+            if (container && container.parentNode) container.parentNode.insertBefore(pag, container.nextSibling);
+        }
+        if (totalPages <= 1) { pag.style.display = 'none'; return; }
+        pag.style.display = 'flex';
+        pag.innerHTML = `<button onclick="pubPrevPage()"${_pubCurrentPage <= 1 ? ' disabled' : ''}>&lt;</button>`
+            + `<span>${_pubCurrentPage} / ${totalPages}</span>`
+            + `<button onclick="pubNextPage()"${_pubCurrentPage >= totalPages ? ' disabled' : ''}>&gt;</button>`;
+    }
+
+    function pubPrevPage() {
+        if (_pubCurrentPage > 1) { _pubCurrentPage--; pubRenderPage(); window.scrollTo({top: 0, behavior: 'smooth'}); }
+    }
+    function pubNextPage() {
+        const totalPages = Math.ceil(_pubAllTopPosts.length / _pubPageSize);
+        if (_pubCurrentPage < totalPages) { _pubCurrentPage++; pubRenderPage(); window.scrollTo({top: 0, behavior: 'smooth'}); }
     }
 
 
@@ -448,13 +508,13 @@
         }
 
         if (isNew) {
-            _pubAllTopPosts.push(msg);
-            container.prepend(div);
+            _pubAllTopPosts.unshift(msg);
+            if (_pubCurrentPage === 1) pubRenderPage();
         } else {
             container.appendChild(div);
+            // Восстанавливаем состояние лайка если пост уже лайкали ранее
+            if (msg.id) pubApplyLikeState(postId, msg.id);
         }
-        // Восстанавливаем состояние лайка если пост уже лайкали ранее
-        if (msg.id) pubApplyLikeState(postId, msg.id);
     }
 
     function pubToggleLike(postId) {

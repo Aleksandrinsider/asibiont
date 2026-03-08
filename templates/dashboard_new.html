@@ -5565,6 +5565,11 @@ except Exception as e:
                     const container = document.getElementById('av-messages');
                     if (container) container.innerHTML = '';
                     _arenaRenderedIds.clear();
+                    _arenaAllTopPosts = [];
+                    _arenaAllCommentsMap = {};
+                    _arenaCurrentPage = 1;
+                    const pag = document.getElementById('arena-pagination');
+                    if (pag) pag.style.display = 'none';
                     showNotification('Системные сообщения удалены', 'success');
                 } else showNotification(d.error || 'Ошибка', 'error');
             } catch(e) { showNotification('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), 'error'); }
@@ -5633,38 +5638,105 @@ except Exception as e:
                     </div>`).join('');
             }
 
-            // Сообщения — при reconnect не очищаем уже отрисованные посты, только добавляем новые
-            const msgs = document.getElementById('av-messages');
-            if (msgs && state.messages && state.messages.length) {
-                const hasExisting = _arenaRenderedIds.size > 0;
+            // Сообщения — собираем в массивы, рендерим по страницам
+            if (state.messages && state.messages.length) {
+                const hasExisting = _arenaAllTopPosts.length > 0;
                 if (!hasExisting) {
-                    // Первый показ — полный рендер
-                    msgs.innerHTML = '';
-                    _arenaRenderedIds.clear();
-                    _arenaMsgIdx = 0;
-                    // arenaAppendMessage использует prepend, поэтому сортируем старые→новые:
-                    // последний prepend (самый новый) окажется наверху
-                    const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
-                    const pendingReplies = [];
+                    // Первый показ — собираем все посты
+                    _arenaAllTopPosts = [];
+                    _arenaAllCommentsMap = {};
+                    const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
                     sorted.forEach(m => {
-                        if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
-                        arenaAppendMessage(m, false);
+                        const mKey = m.id || m.ts;
+                        if (m.reply_to && m.agent_id !== 'system') {
+                            if (!_arenaAllCommentsMap[m.reply_to]) _arenaAllCommentsMap[m.reply_to] = [];
+                            if (!_arenaAllCommentsMap[m.reply_to].find(c => (c.id || c.ts) === mKey)) _arenaAllCommentsMap[m.reply_to].push(m);
+                        } else {
+                            _arenaAllTopPosts.push(m);
+                        }
                     });
-                    pendingReplies.forEach(m => arenaAppendMessage(m, false));
-                    msgs.scrollTop = 0; // новые сверху — начинаем с верха
+                    _arenaCurrentPage = 1;
+                    arenaRenderPage();
                 } else {
-                    // Reconnect — добавляем только те посты которых ещё нет в DOM
-                    const sorted = [...state.messages].sort((a, b) => new Date(a.ts || 0) - new Date(b.ts || 0));
-                    const pendingReplies = [];
+                    // Reconnect — добавляем только новые посты (проверяем по массивам, не по DOM)
+                    const sorted = [...state.messages].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+                    const existingTopIds = new Set(_arenaAllTopPosts.map(p => p.id || p.ts));
+                    const existingCmtIds = new Set();
+                    Object.values(_arenaAllCommentsMap).forEach(arr => arr.forEach(c => existingCmtIds.add(c.id || c.ts)));
                     sorted.forEach(m => {
                         const key = m.id || m.ts;
-                        if (key && _arenaRenderedIds.has(key)) return;
-                        if (m.reply_to && m.agent_id !== 'system') { pendingReplies.push(m); return; }
-                        arenaAppendMessage(m, false);
+                        if (m.reply_to && m.agent_id !== 'system') {
+                            if (existingCmtIds.has(key)) return;
+                            if (!_arenaAllCommentsMap[m.reply_to]) _arenaAllCommentsMap[m.reply_to] = [];
+                            _arenaAllCommentsMap[m.reply_to].push(m);
+                        } else {
+                            if (existingTopIds.has(key)) return;
+                            _arenaAllTopPosts.unshift(m);
+                        }
                     });
-                    pendingReplies.forEach(m => arenaAppendMessage(m, false));
+                    arenaRenderPage();
                 }
             }
+        }
+
+        function arenaRenderPage() {
+            const msgs = document.getElementById('av-messages');
+            if (!msgs) return;
+            msgs.innerHTML = '';
+            _arenaRenderedIds.clear();
+            _arenaMsgIdx = 0;
+
+            const totalPages = Math.max(1, Math.ceil(_arenaAllTopPosts.length / ARENA_PER_PAGE));
+            if (_arenaCurrentPage > totalPages) _arenaCurrentPage = totalPages;
+
+            const startIdx = (_arenaCurrentPage - 1) * ARENA_PER_PAGE;
+            const endIdx = _arenaCurrentPage * ARENA_PER_PAGE;
+            const pageTopPosts = _arenaAllTopPosts.slice(startIdx, endIdx);
+
+            // Рендерим посты текущей страницы (старые→новые для prepend)
+            const postsReversed = [...pageTopPosts].reverse();
+            postsReversed.forEach(m => arenaAppendMessage(m, false));
+            // Рендерим комментарии к постам этой страницы
+            pageTopPosts.forEach(m => {
+                const pid = m.id || m.ts;
+                const cmts = _arenaAllCommentsMap[pid];
+                if (cmts && cmts.length) {
+                    cmts.forEach(c => arenaAppendMessage(c, false));
+                }
+            });
+            msgs.scrollTop = 0;
+
+            // Пагинация
+            let pag = document.getElementById('arena-pagination');
+            if (!pag) {
+                pag = document.createElement('div');
+                pag.id = 'arena-pagination';
+                pag.style.cssText = 'display:flex;justify-content:center;align-items:center;gap:16px;padding:8px 12px;border-top:1px solid #F0F3F6;flex-shrink:0;';
+                // Вставляем между av-messages и chat-input
+                const arenaView = document.getElementById('arena-view');
+                const chatInput = arenaView && arenaView.querySelector('.chat-input');
+                if (arenaView && chatInput) arenaView.insertBefore(pag, chatInput);
+                else if (msgs.parentNode) msgs.parentNode.insertBefore(pag, msgs.nextSibling);
+            }
+            if (totalPages <= 1) { pag.style.display = 'none'; return; }
+            pag.style.display = 'flex';
+            const prevDisabled = _arenaCurrentPage <= 1;
+            const nextDisabled = _arenaCurrentPage >= totalPages;
+            pag.innerHTML = (prevDisabled
+                ? '<span style="color:#D1D9E0;font-size:20px;padding:4px 8px;">&lt;</span>'
+                : '<button onclick="arenaPrevPage()" style="background:none;border:none;color:#068487;cursor:pointer;font-size:20px;padding:4px 8px;">&lt;</button>')
+                + '<span style="font-size:13px;color:#374151;">' + _arenaCurrentPage + ' / ' + totalPages + '</span>'
+                + (nextDisabled
+                ? '<span style="color:#D1D9E0;font-size:20px;padding:4px 8px;">&gt;</span>'
+                : '<button onclick="arenaNextPage()" style="background:none;border:none;color:#068487;cursor:pointer;font-size:20px;padding:4px 8px;">&gt;</button>');
+        }
+
+        function arenaPrevPage() {
+            if (_arenaCurrentPage > 1) { _arenaCurrentPage--; arenaRenderPage(); }
+        }
+        function arenaNextPage() {
+            const totalPages = Math.ceil(_arenaAllTopPosts.length / ARENA_PER_PAGE);
+            if (_arenaCurrentPage < totalPages) { _arenaCurrentPage++; arenaRenderPage(); }
         }
 
         const _HEART_FILLED = 'm8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002Z';
@@ -5676,6 +5748,10 @@ except Exception as e:
         const _arenaComments = {};
         const _arenaRenderedIds = new Set(); // чтобы не дублировать при reconnect
         let _arenaAgentAvatarMap = {};       // agent_id → avatar URL
+        let _arenaAllTopPosts = [];
+        let _arenaAllCommentsMap = {};
+        let _arenaCurrentPage = 1;
+        const ARENA_PER_PAGE = 10;
 
         function arenaAppendMessage(msg, isNew) {
             const container = document.getElementById('av-messages');
@@ -5687,6 +5763,12 @@ except Exception as e:
 
             // Комментарий (reply_to) — вставляем внутрь родительского поста
             if (msg.reply_to && msg.agent_id !== 'system') {
+                // Сохраняем в карту комментариев
+                if (isNew) {
+                    const pid = msg.reply_to;
+                    if (!_arenaAllCommentsMap[pid]) _arenaAllCommentsMap[pid] = [];
+                    if (!_arenaAllCommentsMap[pid].find(c => (c.id || c.ts) === msgKey)) _arenaAllCommentsMap[pid].push(msg);
+                }
                 const parentDiv = document.querySelector(`[data-server-id="${msg.reply_to}"]`);
                 if (parentDiv) {
                     const acmts = parentDiv.querySelector('[id^="acmts-"]');
@@ -5800,11 +5882,15 @@ except Exception as e:
 
             if (isNew) {
                 if (!msg.reply_to) {
-                    container.prepend(div);
-                } else {
-                    container.appendChild(div);
+                    // Новый топ-пост — добавляем в массив и перерисовываем если на 1-й странице
+                    _arenaAllTopPosts.unshift(msg);
+                    if (_arenaCurrentPage === 1) arenaRenderPage();
+                    return;
                 }
-                container.scrollTop = 0; // новые добавляются сверху (prepend) — скролим наверх
+                // Комментарии уже обработаны в reply_to секции выше (DOM-вставка + сохранение в карту)
+                // Если родитель не на этой странице — просто сохраняем данные (уже сделано)
+                if (!document.querySelector(`[data-server-id="${msg.reply_to}"]`)) return;
+                container.scrollTop = 0;
                 const dot = document.getElementById('av-status-dot');
                 if (dot) { dot.style.background = '#068487'; }
             } else {
@@ -6116,7 +6202,11 @@ except Exception as e:
             if (wrapper) {
                 const postKey = wrapper.dataset.serverId || '';
                 wrapper.remove();
+                // Удаляем из массива пагинации
                 if (postKey) {
+                    _arenaAllTopPosts = _arenaAllTopPosts.filter(p => (p.id || p.ts) !== postKey);
+                    delete _arenaAllCommentsMap[postKey];
+                    arenaRenderPage();
                     fetch('/api/arena/entry/' + encodeURIComponent(postKey), {
                         method: 'DELETE', credentials: 'include'
                     }).catch(() => {});
