@@ -5212,16 +5212,25 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             for i, r in enumerate(_round_history)
         )
         _review_prompt = (
-            f"Ты ASI-директор. Пользователь попросил: {user_message[:300]}\n\n"
+            f"Ты ASI-директор. У тебя ЕСТЬ собственные инструменты: send_email, send_outreach_email, "
+            f"negotiate_by_email, research_topic, generate_image, create_post, publish_to_telegram и другие.\n"
+            f"Пользователь попросил: {user_message[:300]}\n\n"
             f"ИСТОРИЯ РАБОТЫ С АГЕНТОМ {_agent_name_d}:\n{_rounds_summary}\n\n"
             f"Раундов прошло: {_round + 1} из {_MAX_AGENT_ROUNDS}.\n\n"
+            f"ЦЕПОЧКА ПО СПОСОБНОСТЯМ: если агент подготовил текст email/письма/контента — "
+            f"ТЫ можешь его ОТПРАВИТЬ своими инструментами (send_email, publish_to_telegram и т.д.). "
+            f"Если агент проверил входящие — ТЫ можешь ответить на найденные письма (negotiate_by_email). "
+            f"Не останавливайся на генерации текста — ДОВОДИ до действия.\n\n"
             f"РЕШИ:\n"
-            f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (если работа НЕ завершена, "
-            f"нужны дополнительные шаги, агент ответил промежуточно или не выполнил задачу полностью)\n"
-            f"- accept — принять работу и доложить пользователю (если задача выполнена "
-            f"или агент сделал всё что мог)\n\n"
+            f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (работа НЕ завершена)\n"
+            f"- accept_and_act — принять результат агента и САМОМУ выполнить следующий шаг "
+            f"(отправить email, опубликовать пост и т.д.) используя данные от агента\n"
+            f"- accept — просто принять работу и доложить (если всё сделано)\n\n"
             f"Ответ СТРОГО JSON:\n"
-            f'{{"action": "next_task", "director_message": "Кристина, теперь ...", "agent_task": "..."}}\n'
+            f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "..."}}\n'
+            f'или\n'
+            f'{{"action": "accept_and_act", "summary": "краткий доклад", '
+            f'"my_action": "описание что ТЫ сделаешь сам (отправлю email, опубликую пост и т.д.)"}}\n'
             f'или\n'
             f'{{"action": "accept", "summary": "краткий доклад пользователю что сделано и что дальше"}}\n'
         )
@@ -5236,24 +5245,46 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             except Exception:
                 pass
 
-        if not _review_decision or _review_decision.get('action') != 'next_task':
-            # ПРИНЯТЬ: АСИ принимает работу и докладывает
+        _review_action = _review_decision.get('action', '') if _review_decision else ''
+        if _review_action not in ('next_task',):
+            # ПРИНЯТЬ: АСИ принимает работу и действует
             _accept_summary = ''
+            _my_action = ''
             if _review_decision:
                 _accept_summary = _review_decision.get('summary', '')
+                _my_action = _review_decision.get('my_action', '')
 
-            # Полноценный follow-up с инструментами (add_task, update_profile и т.д.)
+            # Полноценный follow-up с ВСЕМИ инструментами — АСИ может отправить email,
+            # опубликовать пост, провести исследование и т.д. по результатам агента
             try:
                 _followup_agent = HybridAutonomousAgent()
+                _is_action_mode = _review_action == 'accept_and_act'
                 _followup_system = (
-                    "Ты ASI — директор офиса. Ты координировал работу агента и теперь докладываешь пользователю.\n"
+                    "Ты ASI — директор офиса. Ты координировал работу агента и теперь ДЕЙСТВУЕШЬ.\n"
                     "Результат агента УЖЕ ПОКАЗАН пользователю — НЕ повторяй его содержание дословно.\n\n"
-                    "ТВОЯ ЗАДАЧА как директора:\n"
-                    "1. ОБЯЗАТЕЛЬНО создай 1-2 задачи по ключевым пунктам (add_task) — это ГЛАВНОЕ\n"
-                    "2. Обнови профиль если узнал новое о пользователе (update_profile)\n"
-                    "3. Подведи краткий итог (2-3 предложения) — что сделано, что дальше\n"
-                    "4. Предложи один конкретный следующий шаг\n\n"
-                    "ОБЯЗАТЕЛЬНО вызови add_task хотя бы раз!\n"
+                    "У ТЕБЯ ЕСТЬ ВСЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ:\n"
+                    "send_email — отправить email (если агент подготовил текст письма)\n"
+                    "send_outreach_email — массовая отправка приглашений\n"
+                    "negotiate_by_email — ответить на входящие\n"
+                    "publish_to_telegram — опубликовать пост\n"
+                    "research_topic — исследование темы\n"
+                    "add_task — создать задачу\n"
+                    "update_profile — обновить профиль\n\n"
+                    "ЦЕПОЧКА ПО СПОСОБНОСТЯМ: агент подготовил данные → ТЫ выполняешь действие.\n"
+                    "Примеры: агент написал текст email → ТЫ отправляешь через send_email.\n"
+                    "Агент проверил входящие → ТЫ отвечаешь через negotiate_by_email.\n"
+                    "Агент написал пост → ТЫ публикуешь через publish_to_telegram.\n\n"
+                )
+                if _is_action_mode:
+                    _followup_system += (
+                        f"ПРИОРИТЕТ: ты решил ДЕЙСТВОВАТЬ — {_my_action}\n"
+                        "СНАЧАЛА выполни это действие инструментом, ПОТОМ подведи итог.\n"
+                        "НЕ спрашивай разрешения — ДЕЛАЙ.\n"
+                    )
+                _followup_system += (
+                    "ТАКЖЕ:\n"
+                    "1. Создай 1-2 задачи по ключевым пунктам (add_task)\n"
+                    "2. Подведи краткий итог (2-3 предложения)\n"
                     "Не задавай вопросов 'хотите ли вы...'. ДЕЛАЙ.\n"
                     "Пиши как в мессенджере, без markdown."
                 )
@@ -5265,8 +5296,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 if _user_full_ctx:
                     _followup_msg += f"КОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx[:600]}\n\n"
                 if _accept_summary:
-                    _followup_msg += f"Твой итог: {_accept_summary}\n\n"
-                _followup_msg += "Подведи итог и ПРОДОЛЖИ работу — создай задачи, обнови профиль, дай рекомендации."
+                    _followup_msg += f"Итог: {_accept_summary}\n\n"
+                if _my_action:
+                    _followup_msg += f"ТВОЁ ДЕЙСТВИЕ (выполни сейчас): {_my_action}\n\n"
+                _followup_msg += "ДЕЙСТВУЙ — выполни действие инструментом, потом подведи итог."
 
                 _fu_messages = [
                     {"role": "system", "content": _followup_system},

@@ -11560,7 +11560,6 @@ async def send_email(
                     session.add(_EO_log_g(
                         campaign_id=_camp_g.id, user_id=user.id,
                         recipient_email=to_clean, subject=subject, body=body,
-                        sender_email='outreach@asibiont.com',
                         status='sent', sent_at=_now_g,
                     ))
                     _camp_g.emails_sent = (_camp_g.emails_sent or 0) + 1
