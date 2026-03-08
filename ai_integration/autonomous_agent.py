@@ -4387,7 +4387,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _pending_subdelegations: list[dict] = []
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
-    _TOOL_TIMEOUT = 35  # секунд на один инструмент (включая research_topic с веб-поиском)
+    _TOOL_TIMEOUT = 50  # секунд на один инструмент (включая research_topic с веб-поиском)
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
@@ -4402,9 +4402,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     tool_choice="auto" if _use_tools_now else None,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
                     max_tokens=1000 if _tool_call_count > 0 else 800,
-                    api_timeout=API_TIMEOUT_NORMAL,
+                    api_timeout=API_TIMEOUT_LONG,
                 ),
-                timeout=API_TIMEOUT_SCRIPT,
+                timeout=API_TIMEOUT_LONG + 15,
             )
         except (asyncio.TimeoutError, Exception) as _ai_err:
             logger.warning("[DIRECTOR-EXEC] agent %s call_ai error: %s", agent.get('name'), _ai_err)
