@@ -4503,7 +4503,15 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
         from models import Session as _Db, Task as _Task
         _s = _Db()
         try:
-            _title = f"{agent.get('name', 'Агент')}: {task_text[:180]}"
+            _aname = agent.get('name', 'Агент')
+            # Убираем дубликат имени агента в начале task_text ("Кристина: Кристина, ...")
+            _clean_task = task_text.strip()
+            import re as _re_title
+            _clean_task = _re_title.sub(
+                r'^' + _re_title.escape(_aname) + r'[\s,:.!]*',
+                '', _clean_task, count=1,
+            ).strip() or _clean_task
+            _title = f"{_aname}: {_clean_task[:180]}"
             _desc = result_summary[:500] if result_summary else ''
             _t = _Task(
                 user_id=user_db_id,
@@ -4956,7 +4964,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 finally:
                     _ts2.close()
             except Exception as _ae:
-                logger.debug("[DIRECTOR] activity log error: %s", _ae)
+                logger.warning("[DIRECTOR] activity log error: %s", _ae)
 
             _task_lc = (task or '').lower()
             _cooldown = 2.0 if any(

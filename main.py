@@ -6684,13 +6684,13 @@ async def api_tasks_handler(request):
         for task in tasks:
             # Format task title based on delegation
             title = task.title
-            if task.delegated_to_username:
+            if task.delegated_to_username and getattr(task, 'source', None) != 'agent':
                 # Remove leading @ if present
                 delegated_username = task.delegated_to_username.lstrip('@')
 
                 # Remove existing delegation markers from title to avoid duplication
                 import re
-                title = re.sub(r' - [Дд]елегироа (от|) @\w+$', '', title)
+                title = re.sub(r' - [Дд]елегировано (от |)@\w+$', '', title)
 
                 # Check if task is delegated TO me or BY me
                 if user.username and (task.delegated_to_username.lower() == user.username.lower(
@@ -6698,10 +6698,10 @@ async def api_tasks_handler(request):
                     # Task delegated TO me
                     creator = session_db.query(User).filter_by(id=task.delegated_by).first()
                     if creator:
-                        title = f"{title} - Делегироа от @{creator.username}"
+                        title = f"{title} - Делегировано от @{creator.username}"
                 elif task.user_id == user.id:
                     # Task delegated BY me to someone else
-                    title = f"{title} - Делегироа  @{delegated_username}"
+                    title = f"{title} - Делегировано @{delegated_username}"
 
             task_data = {
                 'id': task.id,
@@ -7966,6 +7966,7 @@ _TIMELINE_VISIBLE_TYPES = {
     'post_newsfeed', 'post_telegram', 'post_discord',
     'content_campaign', 'delegation_campaign',
     'background_research_ready',
+    'agent_task',
 }
 
 
