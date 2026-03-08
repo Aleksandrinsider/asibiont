@@ -4966,6 +4966,7 @@ class AnchorEngine:
                 "— Если якорей несколько — выбери ОДИН самый актуальный и пиши ТОЛЬКО о нём.",
                 "— Не создавай и не меняй задачи без просьбы пользователя.",
                 "— Если предлагаешь задачу — ОБЯЗАТЕЛЬНО с ТОЧНЫМ временем (HH:MM), не 'на утро' или 'завтра'.",
+                "— ДЕДУПЛИКАЦИЯ ДЕЙСТВИЙ: Внизу будет секция НЕДАВНИЕ ДЕЙСТВИЯ АГЕНТОВ. Если агент уже выполнил действие по якорю (отправил email, ответил на письмо, выполнил делегированную задачу, опубликовал пост, обработал inbox) — НЕ дублируй это в проактивном сообщении. Верни SKIP. Пример: якорь agent_inbox_reply говорит о новом письме, но в действиях уже есть email sent этому контакту — SKIP.",
                 "",
                 f"=== ВРЕМЯ ===",
                 f"{user_now.strftime('%H:%M %d.%m.%Y')} ({user.timezone or 'Europe/Moscow'})",
@@ -5102,6 +5103,35 @@ class AnchorEngine:
             if msg_lines:
                 prompt_parts.append(f"\n=== ПОСЛЕДНИЕ СООБЩЕНИЯ ===")
                 prompt_parts.extend(msg_lines)
+
+            # Недавние действия агентов/суб-агентов: ВСЕ типы (email, delegation, agent_task, inbox_reply, post_*, ...)
+            # AI должен знать что уже было сделано, чтобы не предлагать повторно
+            try:
+                _recent_actions = session.query(AgentActivityLog).filter(
+                    AgentActivityLog.user_id == user.id,
+                    AgentActivityLog.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
+                ).order_by(AgentActivityLog.created_at.desc()).limit(20).all()
+                if _recent_actions:
+                    _act_lines = []
+                    for _ra in _recent_actions:
+                        _ts = _ra.created_at.strftime('%H:%M') if _ra.created_at else ''
+                        _line = f"• [{_ts}] {_ra.activity_type}: {_ra.title[:150]} — {_ra.status}"
+                        if _ra.target:
+                            _line += f" → {_ra.target[:100]}"
+                        if _ra.result:
+                            _line += f" | результат: {_ra.result[:120]}"
+                        _act_lines.append(_line)
+                    prompt_parts.append(
+                        f"\n=== НЕДАВНИЕ ДЕЙСТВИЯ АГЕНТОВ ({len(_recent_actions)} шт, уже выполнено!) ==="
+                    )
+                    prompt_parts.append(
+                        "ВАЖНО: Если якорь описывает событие, по которому агент УЖЕ выполнил действие "
+                        "(отправил email, ответил, делегировал, создал пост, выполнил задачу) — "
+                        "НЕ предлагай пользователю сделать то же самое. Верни SKIP."
+                    )
+                    prompt_parts.extend(_act_lines)
+            except Exception:
+                pass
 
             full_prompt = "\n".join(prompt_parts)
 
