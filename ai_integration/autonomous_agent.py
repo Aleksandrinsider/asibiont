@@ -4246,22 +4246,27 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _te2:
             logger.debug('[DIRECTOR] tools exclude calc: %s', _te2)
     elif not _allowed_tools:
-        # R7: Smart tool filtering — вывести toolset из специализации агента
-        _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '')).lower()
+        # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
+        _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
+        _api_keys_lower = (agent.get('user_api_keys') or '').lower()
         _inferred_tools: set[str] = set()
-        # Email-специалист
-        if any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм')):
+        # Email — по специализации ИЛИ по наличию GMAIL/SMTP ключей
+        if (any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach')) or
+                any(w in _api_keys_lower for w in ('gmail', 'imap', 'smtp', 'email', 'mail'))):
             _inferred_tools.update({'send_email', 'list_email_contacts', 'save_email_contact',
-                                    'start_email_campaign', 'negotiate_by_email', 'check_email'})
-        # Контент/маркетинг
-        if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram')):
+                                    'start_email_campaign', 'negotiate_by_email', 'check_email',
+                                    'send_outreach_email', 'find_relevant_contacts_for_task'})
+        # Контент/маркетинг/PR
+        if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram', 'pr ', 'pr-', 'пиар')):
             _inferred_tools.update({'create_post', 'publish_to_telegram', 'research_topic', 'web_search'})
         # Аналитик/исследования
         if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'поиск', 'тренд')):
             _inferred_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
         # Задачи всегда доступны
         _inferred_tools.update({'add_task', 'delegate_task'})
-        if _inferred_tools:
+        # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
+        _base_only = _inferred_tools <= {'add_task', 'delegate_task'}
+        if _inferred_tools and not _base_only:
             try:
                 from .tools import get_available_tools as _gat3
                 _all_names = {t['function']['name'] for t in _gat3()}
