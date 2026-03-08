@@ -1627,34 +1627,61 @@ async def delegate_task(
                             pass
 
                     # Агентские поручения — создаём Task с source='agent' для дашборда
+                    # Dedup: не создаём если похожая задача уже есть за последние 4 часа
                     _agent_task_id = None
+                    _skip_task_creation = False
                     try:
-                        _agent_task = Task(
-                            user_id=delegator.id,
-                            title=title[:255],
-                            description=encrypt_data(description[:500] if description else ''),
-                            source='agent',
-                            created_by_agent_id=_agent_recipient.id,
-                            delegated_to_username=_agent_name,
-                            status='pending',
-                        )
-                        if reminder_time:
-                            try:
-                                _atz = pytz.timezone(delegator.timezone) if getattr(delegator, 'timezone', None) else pytz.timezone('Europe/Moscow')
-                                _adt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                                _adt = _atz.localize(_adt)
-                                _agent_task.reminder_time = _adt.astimezone(pytz.UTC)
-                            except (ValueError, Exception):
-                                pass
-                        session.add(_agent_task)
-                        session.commit()
-                        _agent_task_id = _agent_task.id
-                    except Exception as _atask_err:
-                        logger.warning(f"[DELEGATE] agent task creation error: {_atask_err}")
+                        from datetime import timedelta as _td_dedup
+                        _dedup_since = datetime.now(pytz.UTC) - _td_dedup(hours=4)
+                        _existing_similar = session.query(Task).filter(
+                            Task.user_id == delegator.id,
+                            Task.delegated_to_username == _agent_name,
+                            Task.source == 'agent',
+                            Task.created_at >= _dedup_since,
+                            Task.status.in_(['pending', 'in_progress']),
+                        ).order_by(Task.id.desc()).first()
+                        if _existing_similar:
+                            # Сравниваем заголовки — если первые 50 символов совпадают → дубль
+                            _existing_title = (_existing_similar.title or '').lower().strip()[:50]
+                            _new_title = title.lower().strip()[:50]
+                            if _existing_title == _new_title or (
+                                len(_existing_title) > 10 and len(_new_title) > 10 and
+                                _existing_title[:30] == _new_title[:30]
+                            ):
+                                _skip_task_creation = True
+                                _agent_task_id = _existing_similar.id
+                                logger.info(f"[DELEGATE] Dedup: skipping task creation for {_agent_name}, existing #{_existing_similar.id}")
+                    except Exception as _dedup_err:
+                        logger.debug(f"[DELEGATE] Dedup check error: {_dedup_err}")
+
+                    if not _skip_task_creation:
                         try:
-                            session.rollback()
-                        except Exception:
-                            pass
+                            _agent_task = Task(
+                                user_id=delegator.id,
+                                title=title[:255],
+                                description=encrypt_data(description[:500] if description else ''),
+                                source='agent',
+                                created_by_agent_id=_agent_recipient.id,
+                                delegated_to_username=_agent_name,
+                                status='pending',
+                            )
+                            if reminder_time:
+                                try:
+                                    _atz = pytz.timezone(delegator.timezone) if getattr(delegator, 'timezone', None) else pytz.timezone('Europe/Moscow')
+                                    _adt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                                    _adt = _atz.localize(_adt)
+                                    _agent_task.reminder_time = _adt.astimezone(pytz.UTC)
+                                except (ValueError, Exception):
+                                    pass
+                            session.add(_agent_task)
+                            session.commit()
+                            _agent_task_id = _agent_task.id
+                        except Exception as _atask_err:
+                            logger.warning(f"[DELEGATE] agent task creation error: {_atask_err}")
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
 
                     # Записываем обращение директора к агенту в чат (с метаданными ASI)
                     # Пропускаем если задача содержит внутренние инструкции (ОТВЕТЬ НА ВОПРОС и т.п.)

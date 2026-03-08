@@ -4125,7 +4125,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "анализ данных, исследование. Ответ ‘задачу выполнил’ без деталей = ПРОВАЛ.\n\n"
 
         "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ: если часть задачи требует специализации другого агента команды, "
-        "используй delegate_task(title, delegated_to_username=имя_агента). Только когда реально нужна другая экспертиза.\n\n"
+        "можешь передать ему работу двумя способами:\n"
+        "1) Инструмент: delegate_task(title, delegated_to_username=имя_агента)\n"
+        "2) Паттерн в тексте: DELEGATE[Имя]: описание задачи\n"
+        "Используй только когда реально нужна другая экспертиза. Макс 2 субделегирования за ответ.\n\n"
 
         "EMAIL-АДРЕСА:\n"
         "Копируй email ПОСИМВОЛЬНО из входных данных (IMAP, From, To, заголовки писем). "
@@ -4544,8 +4547,64 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _be:
             logger.debug('[BLOCKED] director exec save error: %s', _be)
 
-    # Субделегирования отключены — агент не должен запускать других агентов рекурсивно.
-    # Вместо этого директор ASI сам решает кому дать следующую задачу.
+    # ── Субделегирования: агент может передать часть работы коллеге (depth < 2) ──
+    if _pending_subdelegations and _depth < 1:
+        try:
+            from models import Session as _SubDb, UserAgent as _SubUA, User as _SubU
+            _sub_s = _SubDb()
+            try:
+                _sub_u = _sub_s.query(_SubU).filter_by(telegram_id=user_id).first()
+                _author_id = _sub_u.id if _sub_u else None
+                if _author_id:
+                    _all_team = _sub_s.query(_SubUA).filter(
+                        _SubUA.author_id == _author_id,
+                        _SubUA.status.in_(['active', 'paused']),
+                        _SubUA.id != agent.get('id'),
+                    ).all()
+                    _team_map = {a.name.lower(): a for a in _all_team}
+
+                    _sub_results = []
+                    for _sd in _pending_subdelegations[:2]:  # макс 2 субделегирования
+                        _target_name = _sd['agent_name']
+                        _target_agent = _team_map.get(_target_name.lower())
+                        if not _target_agent:
+                            # Fuzzy match
+                            for _tn, _ta in _team_map.items():
+                                if _target_name.lower() in _tn or _tn in _target_name.lower():
+                                    _target_agent = _ta
+                                    break
+                        if not _target_agent:
+                            continue
+
+                        _ta_dict = {
+                            'id': _target_agent.id,
+                            'name': _target_agent.name,
+                            'job_title': _target_agent.job_title or '',
+                            'specialization': _target_agent.specialization or '',
+                            'description': _target_agent.description or '',
+                            'personality': _target_agent.personality or '',
+                            'python_code': _target_agent.python_code or '',
+                            'user_api_keys': _target_agent.user_api_keys or '',
+                            'tools_allowed': _target_agent.tools_allowed or '',
+                            'author_id': _author_id,
+                        }
+                        logger.info("[SUBDELEGATE] %s → %s: %s", agent.get('name'), _target_agent.name, _sd['task'][:80])
+                        try:
+                            _sub_res, _sub_tools = await asyncio.wait_for(
+                                _exec_agent_for_director(_ta_dict, _sd['task'], user_id, dialog_context, _depth=_depth + 1),
+                                timeout=60,
+                            )
+                            _sub_results.append(f"{_target_agent.name}: {_sub_res}")
+                            _tools_used.extend(_sub_tools)
+                        except Exception as _sub_err:
+                            logger.warning("[SUBDELEGATE] %s error: %s", _target_agent.name, _sub_err)
+
+                    if _sub_results:
+                        _final_text += "\n\n" + "\n".join(_sub_results)
+            finally:
+                _sub_s.close()
+        except Exception as _sd_err:
+            logger.debug('[SUBDELEGATE] error: %s', _sd_err)
 
     # Очищаем DSML-теги и технические артефакты перед возвратом
     try:
