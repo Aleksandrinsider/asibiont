@@ -773,7 +773,7 @@ TOOLS = [
                     "preview_only": {
                         "type": "boolean",
                         "description": "true = только показать кого нашёл (без отправки). false/не указано = найти и отправить.",
-                        "default": false
+                        "default": False
                     }
                 },
                 "required": ["purpose", "message_context"]
