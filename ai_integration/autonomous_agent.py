@@ -2483,7 +2483,7 @@ class HybridAutonomousAgent:
                                         _vis = None
                                     elif _name == 'research_topic':
                                         _q = _args.get('query', '') or _args.get('topic', '') or ''
-                                        _vis = f"Исследую: {_q[:80]}" if _q else "Провожу исследование..."
+                                        _vis = f"Исследую: {_q[:120]}" if _q else "Провожу исследование..."
                                     elif _name == 'create_post':
                                         _vis = "Создаю пост..."
                                     elif _name == 'get_delegation_progress':
