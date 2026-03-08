@@ -9013,9 +9013,9 @@ _GENERIC_PREFIXES = {
     'admin', 'office', 'team', 'help', 'mail', 'noreply', 'no-reply',
     'hr', 'billing', 'press', 'media', 'marketing', 'general',
     'enquiries', 'feedback', 'service', 'webmaster', 'subscribe',
-    'tos', 'legal', 'privacy', 'security', 'abuse', 'postmaster',
+    'tos', 'legal', 'privacy', 'security', 'abuse', 'postmaster', 'dmca',
     'jobs', 'careers', 'newsletter', 'notifications', 'alerts',
-    'unsubscribe', 'mailer-daemon', 'reply', 'do-not-reply',
+    'unsubscribe', 'mailer-daemon', 'reply', 'do-not-reply', 'copyright',
     # Корп/партнёрские
     'partners', 'partnership', 'partner', 'business', 'biz',
     'cooperation', 'collab', 'collaborate', 'pr', 'invest',
@@ -9105,7 +9105,8 @@ def _is_generic_email(email: str) -> bool:
     if domain in ('substackinc.com', 'substack.com', 'medium.com',
                   'wordpress.com', 'github.com', 'users.noreply.github.com',
                   'googlegroups.com', 'mailchimp.com', 'sendgrid.net',
-                  'amazonses.com', 'mailgun.org', 'sparkpost.com'):
+                  'amazonses.com', 'mailgun.org', 'sparkpost.com',
+                  'telegram.org', 'whatsapp.com', 'signal.org'):
         return True
     # Email начинающиеся с support+ (Substack pattern: support+xxx@substack.com)
     if prefix.startswith('support+') or prefix.startswith('noreply+'):
