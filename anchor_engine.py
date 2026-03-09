@@ -1028,6 +1028,22 @@ class AnchorEngine:
                 ))
                 session.commit()
 
+                # Отправляем результат ASI пользователю в Telegram
+                if result and result.strip() and self.bot:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=result.strip(),
+                        )
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='proactive',
+                            content=result.strip(),
+                        ))
+                        session.commit()
+                    except Exception as _e_asi:
+                        logger.warning("[ANCHOR-AUTOPILOT] ASI result send failed: %s", _e_asi)
+
             # Помечаем якорь доставленным
             anchor.delivered_at = datetime.now(timezone.utc)
             session.commit()
