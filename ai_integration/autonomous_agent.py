@@ -3808,14 +3808,14 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
                         return
                 except Exception:
                     pass
-            # expires_at минимум 1ч — чтобы AnchorEngine успел увидеть якорь
-            _effective_expires = max(cooldown_hours, 1.0)
+            # expires_at минимум 4ч — чтобы AnchorEngine успел увидеть и доставить якорь
+            _effective_expires = max(cooldown_hours, 4.0)
             _s.add(_Anch(
                 user_id=user_db_id,
                 anchor_type='agent_delegation',
                 source=f'agent:{agent_id}',
                 topic=f'{agent_name}: {task[:120]}',
-                priority=AnchorPriority.LOW,
+                priority=AnchorPriority.HIGH,
                 data=_json.dumps({
                     'agent_name': agent_name,
                     'agent_id': agent_id,
