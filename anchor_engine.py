@@ -850,9 +850,10 @@ class AnchorEngine:
                 ))
                 session.commit()
 
-                result = await _exec_agent_for_director(
+                _raw = await _exec_agent_for_director(
                     agent_data, task_text, user.telegram_id,
                 )
+                result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
             else:
                 # Нет агентов — вызываем основной AI через chat
                 from ai_integration.chat import get_ai_response
@@ -1012,9 +1013,10 @@ class AnchorEngine:
 
                     # Запускаем агента и при необходимости продолжаем цепочку
                     try:
-                        result = await _exec_agent_for_director(
+                        _raw_result = await _exec_agent_for_director(
                             agent_data, task_text, user.telegram_id,
                         )
+                        result = _raw_result[0] if isinstance(_raw_result, (tuple, list)) else _raw_result
                         # Обновляем лог: выполнено
                         _s2 = _Db()
                         try:
@@ -1218,9 +1220,10 @@ class AnchorEngine:
                 'tools': _jd2.loads(_next_ag.tools_allowed or '[]'),
             }
             _ctx = f"Предыдущий результат от {prev_agent.name}:\n{result[:300]}"
-            _next_result = await _exec_agent_for_director(
+            _next_raw = await _exec_agent_for_director(
                 _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
             )
+            _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
 
             # Создаём якорь-уведомление о продолжении
             if _next_result and _next_result.strip():
