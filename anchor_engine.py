@@ -713,7 +713,8 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ delegation campaigns blocked (night hours)")
 
         # ── 3h. GOAL AUTOPILOT — автономное продвижение целей через agent dispatch (не ночью) ──
-        if autopilot_anchors and not is_night and has_proactive_tokens:
+        # Не зависит от has_proactive_tokens — пользователь явно включил автопилот
+        if autopilot_anchors and not is_night:
             logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review...")
             for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
                 async with self._ai_semaphore:
