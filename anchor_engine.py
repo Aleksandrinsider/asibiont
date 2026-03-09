@@ -909,10 +909,10 @@ class AnchorEngine:
             ).limit(10).all()
 
             # Если нет пользовательских агентов — используем прямой AI-вызов через основной чат
-            # Для goal_autopilot_review — используем полноценный prompt из _ANCHOR_PROMPTS,
+            # Для goal_autopilot_review — используем полноценный prompt из _AGENT_DISPATCH_TRIGGERS,
             # а не просто anchor.topic (он слишком лаконичен для автономной работы агента)
             if anchor.anchor_type == 'goal_autopilot_review':
-                task_text = _ANCHOR_PROMPTS.get(anchor.anchor_type, anchor.topic or '')
+                task_text = _AGENT_DISPATCH_TRIGGERS.get(anchor.anchor_type, anchor.topic or '')
             else:
                 task_text = _AGENT_DISPATCH_TRIGGERS.get(
                     anchor.anchor_type, anchor.topic or '',
