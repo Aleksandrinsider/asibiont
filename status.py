@@ -7,10 +7,10 @@ url = os.getenv('DATABASE_URL', '').replace('postgres://', 'postgresql://')
 eng = create_engine(url, connect_args={'connect_timeout': 15, 'sslmode': 'require'})
 try:
     with eng.connect() as c:
-        # Latest anchors (with exact timestamps for service_degraded/weather_extreme)
+        # Latest anchors (user_id=1 only, with exact timestamps)
         rows = c.execute(text(
             'SELECT id, anchor_type, source, priority, created_at, delivered_at '
-            'FROM anchors ORDER BY id DESC LIMIT 20'
+            'FROM anchors WHERE user_id=1 ORDER BY id DESC LIMIT 20'
         )).fetchall()
         print('=== Latest anchors ===')
         from datetime import datetime, timezone
@@ -21,10 +21,10 @@ try:
             exact = r[4].strftime('%H:%M:%S') if r[4] else '?'
             print(f'#{r[0]} {r[1]} src={r[2]} pri={r[3]} @{exact}(age={age}m) {del_str}')
 
-        # service_degraded exact timestamps
+        # service_degraded exact timestamps (user_id=1 only)
         sd_rows = c.execute(text(
             "SELECT id, source, created_at, delivered_at, expires_at FROM anchors "
-            "WHERE anchor_type='service_degraded' ORDER BY id DESC LIMIT 20"
+            "WHERE anchor_type='service_degraded' AND user_id=1 ORDER BY id DESC LIMIT 10"
         )).fetchall()
         print('\n=== service_degraded history (last 20) ===')
         for r in sd_rows:
