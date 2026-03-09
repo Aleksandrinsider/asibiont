@@ -335,8 +335,8 @@ class AnchorEngine:
                                 logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has email drafts to send (silent), including")
                             if has_follow_ups:
                                 logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has follow-ups to send (silent), including")
-                except Exception:
-                    pass  # если timezone кривой — пропускаем pre-filter, проверим в _process_user_inner
+                except Exception as _tz_err:
+                    logger.warning(f"[ANCHOR] Pre-filter: timezone error for user {u.telegram_id}: {_tz_err}")  # проверим в _process_user_inner
 
                 eligible.append(u.telegram_id)
 
@@ -388,9 +388,9 @@ class AnchorEngine:
                     logger.debug(f"[ANCHOR] User {user_id}: ⛔ advisory lock busy (another process), skip")
                     return
                 use_advisory_lock = True
-            except Exception:
+            except Exception as _lock_err:
                 # SQLite или другая БД без advisory locks — продолжаем без них
-                pass
+                logger.debug(f"[ANCHOR] User {user_id}: advisory lock unavailable ({_lock_err}), proceeding without lock")
 
             try:
                 await self._process_user_inner(user_id, session)
@@ -399,8 +399,8 @@ class AnchorEngine:
                     try:
                         session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
                         session.commit()
-                    except Exception:
-                        pass
+                    except Exception as _unlock_err:
+                        logger.warning(f"[ANCHOR] User {user_id}: advisory unlock failed ({_unlock_err}), lock may leak")
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
@@ -923,9 +923,23 @@ class AnchorEngine:
             logger.warning("[ANCHOR-AUTOPILOT] error for user %d: %s", user.id, e)
             anchor.delivered_at = datetime.now(timezone.utc)
             try:
+                # Mark any in_progress autopilot log as failed
+                from models import AgentActivityLog as _AAL_f
+                _stuck = session.query(_AAL_f).filter_by(
+                    user_id=user.id,
+                    activity_type='goal_autopilot_dispatch',
+                    target=anchor.source,
+                    status='in_progress',
+                ).order_by(_AAL_f.id.desc()).first()
+                if _stuck:
+                    _stuck.status = 'failed'
+                    _stuck.result = f'Error: {str(e)[:300]}'
                 session.commit()
             except Exception:
-                pass
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
 
     async def _dispatch_agents_for_new_anchors(self, user, new_anchors: list):
         """
@@ -1075,6 +1089,26 @@ class AnchorEngine:
 
                     except Exception as _exec_e:
                         logger.debug("[ANCHOR-DISPATCH] exec error: %s", _exec_e)
+                        # Mark activity log as failed (prevent stuck in_progress)
+                        try:
+                            _sf = _Db()
+                            _fl = (
+                                _sf.query(_AAL)
+                                .filter_by(
+                                    user_id=user.id,
+                                    activity_type='agent_event_dispatch',
+                                    target=anchor.source,
+                                    status='in_progress',
+                                )
+                                .order_by(_AAL.id.desc()).first()
+                            )
+                            if _fl:
+                                _fl.status = 'failed'
+                                _fl.result = f'Error: {str(_exec_e)[:300]}'
+                            _sf.commit()
+                            _sf.close()
+                        except Exception:
+                            pass
             finally:
                 _s.close()
         except Exception as e:
@@ -1394,13 +1428,26 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user.id}: scan skipped (locked by another instance)")
             return []
         existing_keys = {(a.anchor_type, a.source) for a in existing}
+        # Singleton types: only one undelivered anchor per type (regardless of source)
+        _SINGLETON_TYPES = {
+            'service_degraded', 'token_low_balance', 'weather_extreme',
+            'profile_gap', 'morning_plan', 'evening_review',
+            'inactivity_reengagement',
+        }
+        existing_types = {a.anchor_type for a in existing}
 
         unique_anchors = []
         for a in anchors:
-            key = (a.anchor_type, a.source)
-            if key not in existing_keys:
-                existing_keys.add(key)
+            if a.anchor_type in _SINGLETON_TYPES:
+                if a.anchor_type in existing_types:
+                    continue
+                existing_types.add(a.anchor_type)
                 unique_anchors.append(a)
+            else:
+                key = (a.anchor_type, a.source)
+                if key not in existing_keys:
+                    existing_keys.add(key)
+                    unique_anchors.append(a)
 
         return unique_anchors
 
@@ -2299,7 +2346,7 @@ class AnchorEngine:
         anchors.append(Anchor(
             user_id=user.id,
             anchor_type='token_low_balance',
-            source=f'tokens:low:{balance}',
+            source='tokens:low_balance',
             topic=_t(user, f'Баланс токенов: {balance} — хватит на ~{msgs_left} сообщений', f'Token balance: {balance} — enough for ~{msgs_left} messages'),
             priority=AnchorPriority.HIGH,
             data=json.dumps({

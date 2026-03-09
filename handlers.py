@@ -1023,7 +1023,9 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             
             # Списываем токены за сообщение
             if not FREE_ACCESS_MODE:
-                spend_tokens(user_id, 'message', description=text[:100])
+                _spend_result = spend_tokens(user_id, 'message', description=text[:100])
+                if isinstance(_spend_result, dict) and not _spend_result.get('success', True):
+                    logger.warning(f"[PTM] spend_tokens failed for user {user_id}: {_spend_result}")
         except Exception as e:
             logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)
             try:
