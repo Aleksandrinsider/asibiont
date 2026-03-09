@@ -114,7 +114,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
     # ── Goal autopilot ──
-    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: проанализируй активные цели пользователя, определи ближайший конкретный шаг для продвижения и ДЕЙСТВУЙ — создай задачу, отправь письмо, запусти исследование. Не спрашивай разрешения — пользователь включил автопилот. ЗАПРЕЩЕНО: update_goal_progress (прогресс считается автоматически по метрикам), delete_task (нельзя удалять задачи), start_email_campaign (нельзя создавать новые кампании — используй СУЩЕСТВУЮЩУЮ). НЕ ОТПРАВЛЯЙ email на адрес самого пользователя. После действия кратко отчитайся.",
+    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: ты видишь ПОЛНЫЙ контекст — цели, задачи по каждой цели, результаты email-кампаний и историю предыдущих действий. \n\nПРАВИЛА:\n1. ИЗУЧИ что уже сделано (recent_actions и tasks) — НЕ ПОВТОРЯЙ те же действия\n2. Если задача уже создана (pending/in_progress) — НЕ создавай такую же, а проверь её прогресс\n3. Если письмо уже отправлено человеку — НЕ отправляй повторно тому же человеку\n4. Определи НОВЫЙ конкретный шаг, который ПРОДВИНЕТ цель дальше\n5. Если ВСЕ текущие задачи в работе и email-кампания активна — отчитайся о статусе, НЕ создавай лишнего\n\nЗАПРЕЩЕНО: update_goal_progress, delete_task, start_email_campaign. НЕ ОТПРАВЛЯЙ email на адрес самого пользователя. После действия кратко отчитайся.",
 }
 
 # Группы батчинга
@@ -819,11 +819,23 @@ class AnchorEngine:
             goals_info = data.get('goals', [])
             if goals_info:
                 goals_block = '\n'.join(
-                    f"• {g['title']} ({g['progress']}%) — задач: {g.get('active_tasks', 0)}"
+                    f"• {g['title']} ({g['progress']}%)"
+                    + (f" [метрика: {g.get('metric_current', 0)}/{g.get('metric_target', '?')}]" if g.get('metric_target') else '')
                     + (f", дедлайн: {g['target_date']}" if g.get('target_date') else '')
+                    + self._format_goal_tasks(g.get('tasks', []))
                     for g in goals_info
                 )
                 task_text += f"\n\nАктивные цели:\n{goals_block}"
+
+            # Добавляем историю предыдущих действий
+            recent_actions = data.get('recent_actions', [])
+            if recent_actions:
+                task_text += f"\n\nПоследние действия автопилота (за 24ч):\n" + '\n'.join(f"  {a}" for a in recent_actions)
+
+            # Добавляем статус email-кампаний
+            email_info = data.get('email_campaigns', [])
+            if email_info:
+                task_text += f"\n\nEmail-кампании:\n" + '\n'.join(f"  {e}" for e in email_info)
 
             if agents:
                 chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
@@ -1139,6 +1151,20 @@ class AnchorEngine:
                 _s.close()
         except Exception as e:
             logger.debug("[ANCHOR-DISPATCH] dispatch error for user %d: %s", user.id, e)
+
+    @staticmethod
+    def _format_goal_tasks(tasks: list) -> str:
+        """Format task list for autopilot context."""
+        if not tasks:
+            return ''
+        lines = []
+        for t in tasks:
+            status_icon = {'done': '✅', 'pending': '⏳', 'in_progress': '🔄', 'cancelled': '❌'}.get(t.get('status', ''), '•')
+            line = f"    {status_icon} {t['title']} [{t['status']}]"
+            if t.get('result'):
+                line += f" → {t['result']}"
+            lines.append(line)
+        return '\n  Задачи:\n' + '\n'.join(lines)
 
     async def _pick_best_agent(self, agents, task_text: str, anchor_type: str):
         """AI выбирает лучшего агента для задачи.
@@ -2497,7 +2523,7 @@ class AnchorEngine:
         return anchors
 
     def _scan_goal_autopilot(self, user, profile, session, now_utc) -> list:
-        """Автопилот целей: если включён — раз в 4 часа AI анализирует цели и действует."""
+        """Автопилот целей: AI анализирует цели с ПОЛНЫМ контекстом и действует."""
         if not profile or not getattr(profile, 'goal_autopilot_enabled', False):
             return []
 
@@ -2508,24 +2534,74 @@ class AnchorEngine:
         if not active_goals:
             return []
 
-        # Собираем задачи к целям
+        # Собираем задачи к целям — не только count, а полный список
         goal_ids = [g.id for g in active_goals]
-        from sqlalchemy import func as _ga_func
-        _task_counts = dict(session.query(Task.goal_id, _ga_func.count(Task.id)).filter(
+        all_tasks = session.query(Task).filter(
             Task.goal_id.in_(goal_ids),
-            Task.status.in_(['pending', 'in_progress']),
-        ).group_by(Task.goal_id).all()) if goal_ids else {}
+        ).order_by(Task.created_at.desc()).all() if goal_ids else []
+        _tasks_by_goal: dict = {}
+        for t in all_tasks:
+            _tasks_by_goal.setdefault(t.goal_id, []).append(t)
+
+        # Последние действия автопилота (AgentActivityLog) — что уже было сделано
+        from models import AgentActivityLog as _AAL_scan
+        recent_actions = session.query(_AAL_scan).filter(
+            _AAL_scan.user_id == user.id,
+            _AAL_scan.activity_type == 'goal_autopilot_dispatch',
+            _AAL_scan.created_at >= now_utc - timedelta(hours=24),
+        ).order_by(_AAL_scan.created_at.desc()).limit(10).all()
+
+        actions_history = []
+        for a in recent_actions:
+            actions_history.append(
+                f"[{a.created_at.strftime('%H:%M')}] {a.status}: {(a.title or '')[:80]}"
+                + (f" → {(a.result or '')[:100]}" if a.result else '')
+            )
+
+        # Email outreach статус по активным кампаниям
+        email_campaigns = session.query(EmailCampaign).filter(
+            EmailCampaign.user_id == user.id,
+            EmailCampaign.status == 'active',
+        ).all()
+        email_summary = []
+        for c in email_campaigns:
+            outreach = session.query(EmailOutreach).filter_by(campaign_id=c.id).all()
+            sent = sum(1 for o in outreach if o.status in ('sent', 'delivered', 'opened'))
+            replied = sum(1 for o in outreach if o.status == 'replied')
+            drafts = sum(1 for o in outreach if o.status == 'draft')
+            email_summary.append(
+                f"Кампания «{c.name}»: отправлено={sent}, ответов={replied}, черновиков={drafts}"
+            )
 
         goals_summary = []
-        for g in active_goals[:5]:  # Макс 5 целей за раз
+        for g in active_goals[:5]:
+            # Задачи этой цели — полный status breakdown
+            goal_tasks = _tasks_by_goal.get(g.id, [])
+            tasks_detail = []
+            for t in goal_tasks[:10]:  # Макс 10 задач на цель
+                tasks_detail.append({
+                    'title': t.title[:100],
+                    'status': t.status,
+                    'result': (t.completion_notes or '')[:80] if t.status == 'done' else None,
+                })
+
             goals_summary.append({
                 'id': g.id,
                 'title': g.title,
                 'description': (g.description or '')[:150],
                 'progress': g.progress_percentage,
+                'metric_target': g.metric_target,
+                'metric_current': g.metric_current,
                 'target_date': g.target_date.isoformat() if g.target_date else None,
-                'active_tasks': _task_counts.get(g.id, 0),
+                'tasks': tasks_detail,
             })
+
+        # Формируем полный контекст
+        context_data = {
+            'goals': goals_summary,
+            'recent_actions': actions_history[:5],
+            'email_campaigns': email_summary,
+        }
 
         return [Anchor(
             user_id=user.id,
@@ -2535,10 +2611,10 @@ class AnchorEngine:
                       f'Автопилот: проанализируй {len(goals_summary)} целей и выполни следующий шаг',
                       f'Autopilot: review {len(goals_summary)} goals and take the next step'),
             priority=AnchorPriority.MEDIUM,
-            data=json.dumps({'goals': goals_summary}, ensure_ascii=False),
+            data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=2,
+            cooldown_hours=0.25,
             batch_group='goals',
         )]
 
