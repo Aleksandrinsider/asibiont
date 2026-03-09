@@ -2424,8 +2424,8 @@ class AnchorEngine:
             priority=AnchorPriority.MEDIUM,
             data=json.dumps({'goals': goals_summary}, ensure_ascii=False),
             triggered_at=now_utc,
-            expires_at=now_utc + timedelta(hours=6),
-            cooldown_hours=4,
+            expires_at=now_utc + timedelta(hours=2),
+            cooldown_hours=1,
             batch_group='goals',
         )]
 
