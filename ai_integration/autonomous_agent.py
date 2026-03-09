@@ -4321,7 +4321,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if _is_autopilot_task:
             logger.info('[DIRECTOR] Autopilot task → all tools unlocked for %s (with guardrails)', agent.get('name'))
             # Все инструменты доступны, КРОМЕ опасных (агент не должен менять прогресс/удалять)
-            _exclude_for_agent = {'update_goal_progress', 'delete_task'}
+            _exclude_for_agent = {'update_goal_progress', 'delete_task', 'start_email_campaign'}
         else:
             # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()

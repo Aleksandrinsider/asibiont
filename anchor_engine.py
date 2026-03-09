@@ -4723,10 +4723,16 @@ class AnchorEngine:
                 remaining = anchor_data.get('remaining_daily', 5)
 
                 sent_count = 0
+                _owner_email = (getattr(user, 'email', '') or '').strip().lower()
                 for d_obj in live_drafts:
                     if sent_count >= remaining:
                         break
                     email = d_obj.recipient_email or ''
+                    # ── GUARD: пропускаем draft на email самого пользователя ──
+                    if _owner_email and email.strip().lower() == _owner_email:
+                        d_obj.status = 'failed'
+                        logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: recipient is user's own email")
+                        continue
                     name = d_obj.recipient_name or '?'
                     company = d_obj.recipient_company or ''
                     context = d_obj.recipient_context or ''

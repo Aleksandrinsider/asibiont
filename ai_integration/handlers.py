@@ -9980,6 +9980,12 @@ async def send_outreach_email(
         if not user:
             return " Пользователь не найден"
 
+        # ── GUARD: не отправлять email на адрес самого пользователя ──
+        _rcpt = (recipient_email or '').strip().lower()
+        _user_email = (getattr(user, 'email', '') or '').strip().lower()
+        if _rcpt and _user_email and _rcpt == _user_email:
+            return f" Нельзя отправлять outreach на собственный email ({_rcpt}). Найди другого получателя."
+
         if not RESEND_API_KEY:
             return " Resend API не настроен. Установите RESEND_API_KEY."
 
@@ -10516,9 +10522,14 @@ async def add_email_leads(
         added = 0
         skipped = 0
         skipped_generic = 0
+        _user_email_lower = (getattr(user, 'email', '') or '').strip().lower()
         for lead in parsed:
             email = lead.get('email', '').strip().lower()
             if not email or '@' not in email:
+                continue
+            # ── GUARD: не добавлять email самого пользователя как лид ──
+            if _user_email_lower and email == _user_email_lower:
+                skipped += 1
                 continue
             # Отклоняем generic-адреса через полный фильтр
             if _is_generic_email(email):
