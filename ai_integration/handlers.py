@@ -9297,200 +9297,118 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         logger.info(f"[AUTO_LEADS] Non-tech audience → skipping GitHub, using web search only")
 
     # ══════════════════════════════════════════════════════════════════════
-    # PASS 0.5: AI генерирует УМНЫЕ поисковые запросы для DDG
+    # PASS 1: ПРЯМОЙ ПАРСИНГ ПЛАТФОРМ (основной источник email)
+    # DDG ненадёжен для email (rate-limit, блокировки) — парсим платформы напрямую
     # ══════════════════════════════════════════════════════════════════════
-    lang_hint = "Russian" if _has_cyrillic else "English"
+    import asyncio as _asyncio_al
 
-    # ── Определяем язык для поисковых запросов ──
-    _ru_lang_block = ""
+    _kw_enc = core_kw.replace(' ', '%20')
+    _core_en = core_kw.replace(' ', '+')
+    _platform_urls = []
+
+    # Русскоязычные платформы
     if _has_cyrillic:
-        _ru_lang_block = """\n\nLANGUAGE: The target audience speaks RUSSIAN. You MUST:
-- Generate 7-8 queries in RUSSIAN (кириллицей)
-- Generate 2-3 queries in English but targeting Russian-speaking people
-- CRITICAL: Russian queries MUST be 3-4 words MAX! DDG completely ignores long Russian queries!
-- Use Russian platforms: vc.ru, habr, tproger, spark.ru, rb.ru
-- Use Russian role words: разработчик, тестировщик, маркетолог, предприниматель
-- Use Russian contact words: email, почта, контакт
-
-GOOD (3-4 words):
-  "разработчик ИИ email"
-  "habr автор email"
-  "vc.ru email контакт"
-  "маркетолог email почта"
-  "AI developer Russia email"
-BAD (too long, DDG ignores):
-  "разработчик ИИ email контакт портфолио Россия"
-  "vc.ru предприниматель email контакт связаться" """
-
-    query_gen_prompt = f"""You are an expert lead researcher finding PEOPLE with public email addresses.
-
-Campaign goal: {goal[:200]}
-Target audience: {target_audience[:300]}
-Product/offer: {offer[:200]}
-
-Generate 10 DuckDuckGo search queries to find pages with VISIBLE email addresses of relevant people.
-The target audience may be from ANY field — tech, marketing, design, business, education, health, etc.
-{_ru_lang_block}
-
-CRITICAL — DuckDuckGo rules:
-- MAX 4-5 words per query (DDG ignores long queries!)
-- "site:" operator does NOT work — write domain as keyword: "medium.com ..." not "site:medium.com"
-- "OR" operator does NOT work
-- Quotes work: "get in touch" "my email" "contact me"
-
-STRATEGY — adapt to the SPECIFIC audience:
-- Queries 1-2: "[role/profession] email portfolio contact" (personal sites)
-- Queries 3-4: "[role] \"get in touch\" email" or "[role] \"contact me\" email" (contact pages)
-- Queries 5-6: "[industry platform] [topic] author email" (industry blogs/platforms)
-  Examples of platforms by niche:
-  Tech: github.com, dev.to, hackernoon.com, stackoverflow.com
-  Marketing: growthhackers.com, hubspot.com/blog, marketingprofs.com
-  Design: dribbble.com, behance.net, uxdesign.cc
-  Business: forbes.com, entrepreneur.com, inc.com
-  Education: coursera.org, udemy.com/user, edx.org
-  Health: healthline.com, webmd.com
-  General: medium.com, substack.com, wordpress.com, about.me
-- Queries 7-8: "[role] freelancer hire email" or "[role] consultant email contact"
-- Queries 9-10: "[role] [city/country] email contact" or "[niche] expert \"email me\""
-
-GOOD examples (short, niche-specific):
-  "marketing consultant email contact"
-  "UX designer portfolio email"
-  "fitness coach \"get in touch\" email"
-  "real estate agent email portfolio"
-  "medium.com AI author email"
-BAD: "marketing professionals who work with small businesses looking for email" (too long!)
-
-Return ONLY a JSON array of 10 strings. No explanation."""
-
-    ai_queries = []
-    try:
-        ai_raw = await api.deepseek_analyze(
-            prompt=query_gen_prompt,
-            system_prompt="Generate search queries. Return ONLY valid JSON array of strings.",
-            max_tokens=400,
-            temperature=0.8,  # Более высокая temperature для разнообразия
-        )
-        if ai_raw:
-            import json as _json_q
-            text = ai_raw.strip()
-            if '```' in text:
-                for part in text.split('```'):
-                    part = part.strip()
-                    if part.startswith('json'):
-                        part = part[4:].strip()
-                    if part.startswith('['):
-                        text = part
-                        break
-            try:
-                parsed = _json_q.loads(text)
-                if isinstance(parsed, list):
-                    ai_queries = [str(q) for q in parsed if isinstance(q, str) and len(q) > 5][:10]
-            except Exception:
-                pass
-        logger.info(f"[AUTO_LEADS] AI generated {len(ai_queries)} smart queries")
-    except Exception as _qg_err:
-        logger.warning(f"[AUTO_LEADS] AI query generation failed: {_qg_err}")
-
-    # ══════════════════════════════════════════════════════════════════════
-    # PASS 1: Поиск людей через DDG — короткие запросы (3-5 слов)
-    # ══════════════════════════════════════════════════════════════════════
-    # УНИВЕРСАЛЬНЫЕ fallback-запросы — работают для ЛЮБОЙ ниши
-    # Стратегия: [core_kw] + email-маркер + платформа/контекст
-    if _has_cyrillic:
-        # ── Для РУССКОЯЗЫЧНОЙ аудитории: КОРОТКИЕ запросы (3-4 слова макс) ──
-        # DDG плохо обрабатывает длинные русские запросы — урезаем до минимума
-        universal_queries = [
-            # Короткие RU-запросы (платформа + ключ)
-            f'{core_kw} email контакт',
-            f'{core_kw} "написать мне"',
-            f'{core_kw} автор email',
-            f'{core_kw} vc.ru email',
-            f'{core_kw} habr автор',
-            f'{core_kw} tproger email',
-            f'{core_kw} фрилансер email',
-            f'{core_kw} разработчик email',
-            f'{core_kw} блогер email',
-            f'{core_kw} telegram канал',
-            f'{core_kw} spark.ru контакт',
-            f'{core_kw} "моя почта"',
-            # EN-запросы для RU-аудитории с западным присутствием
-            f'{core_kw} Russia email',
-            f'{core_kw} Russian developer email',
-            f'{core_kw} email portfolio',
-            f'{core_kw} "get in touch" email',
-        ]
-    else:
-        universal_queries = [
-            # Персональные сайты и портфолио
-            f'{core_kw} email portfolio contact',
-            f'{core_kw} "get in touch" email',
-            f'{core_kw} "contact me" email',
-            f'{core_kw} "email me" expert',
-            f'{core_kw} freelancer hire email',
-            f'{core_kw} consultant email contact',
-            # Блог-платформы (универсальные для любой ниши)
-            f'{core_kw} medium.com author email',
-            f'{core_kw} substack.com email contact',
-            f'{core_kw} about.me email',
-            f'{core_kw} blog author "reach out"',
-            # Бизнес и профессионалы
-            f'{core_kw} founder CEO email',
-            f'{core_kw} agency team email contact',
-            f'{core_kw} expert "my email" contact',
-            f'{core_kw} speaker trainer email',
-        ]
+        _platform_urls.extend([
+            f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
+            f'https://habr.com/ru/search/?q={_kw_enc}&target_type=posts',
+            f'https://vc.ru/search?q={_kw_enc}',
+            f'https://tproger.ru/?s={_kw_enc}',
+            f'https://spark.ru/search?q={_kw_enc}',
+            f'https://rb.ru/search/?q={_kw_enc}',
+        ])
+    # Международные платформы (работают для любой аудитории)
+    _platform_urls.extend([
+        f'https://dev.to/search?q={_core_en}',
+        f'https://medium.com/search?q={_core_en}',
+        f'https://substack.com/search/{_core_en}',
+        f'https://about.me/search?q={_core_en}',
+    ])
     if _is_tech_audience:
-        # Для tech — добавляем dev-платформы
-        _tech_queries = [
-            f'{core_kw} github.com email README',
-            f'{core_kw} dev.to author email',
-            f'{core_kw} stackoverflow.com user email',
-        ]
-        if _has_cyrillic:
-            _tech_queries.insert(0, f'{core_kw} github.com location Russia email')
-        universal_queries.extend(_tech_queries)
+        _platform_urls.extend([
+            f'https://github.com/search?q={_core_en}+in%3Areadme+email&type=repositories',
+            f'https://hackernoon.com/search?query={_core_en}',
+        ])
 
-    # AI-запросы в приоритете, fallback добирают до 18
-    queries = ai_queries[:10]
-    _used = set(q.lower() for q in queries)
-    for fq in universal_queries:
-        if len(queries) < 18 and fq.lower() not in _used:
-            queries.append(fq)
-            _used.add(fq.lower())
+    # Прямые контактные страницы популярных доменов по нише
+    _niche_contact_urls = []
+    _all_text_lower = _all_text
+    # Добавляем контакты конкретных ниш
+    if any(w in _all_text_lower for w in ('тестир', 'тестовых', 'qa', 'testing', 'tester', 'бета')):
+        _niche_contact_urls.extend([
+            'https://software-testing.ru/about',
+            'https://testit.software/blog',
+            'https://qalight.ua/kontakty/',
+        ])
+    if any(w in _all_text_lower for w in ('маркет', 'marketing', 'smm', 'digital')):
+        _niche_contact_urls.extend([
+            'https://growthhackers.com/members',
+            'https://cossa.ru/authors/',
+        ])
 
-    # Перемешиваем fallback для разнообразия при повторных вызовах
-    if len(queries) > 10:
-        tail = queries[10:]
-        random.shuffle(tail)
-        queries = queries[:10] + tail
-
-    all_results = []  # (title, snippet, url)
-
-    for q in queries:
+    async def _fetch_platform(url: str) -> tuple:
+        """Скачать страницу платформы, вернуть (url, html)."""
         try:
-            results = await api.duckduckgo_search(q, num=10, cache_ttl=900)  # 15мин кэш
+            s = await api._get_session()
+            async with s.get(url, timeout=aiohttp.ClientTimeout(total=10),
+                             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
+                             allow_redirects=True, ssl=False) as resp:
+                if resp.status == 200 and 'text' in (resp.content_type or ''):
+                    html = await resp.text(errors='replace')
+                    return (url, html[:30000])
+        except Exception:
+            pass
+        return (url, "")
 
-            logger.info(f"[AUTO_LEADS] [DDG] Query: {q[:80]}... → {len(results or [])} results")
-            if results:
-                for r in results:
-                    all_results.append({
-                        'title': r.get('title', ''),
-                        'snippet': r.get('snippet', ''),
-                        'url': r.get('link', ''),
-                    })
-        except Exception as _sq_err:
-            logger.warning(f"[AUTO_LEADS] Search failed: {q[:80]}: {_sq_err}")
+    # Параллельная загрузка всех платформ
+    _all_platform_urls = _platform_urls + _niche_contact_urls
+    _pages = await _asyncio_al.gather(
+        *[_fetch_platform(u) for u in _all_platform_urls[:15]],
+        return_exceptions=True,
+    )
 
-    logger.info(f"[AUTO_LEADS] Total DDG results: {len(all_results)}, GitHub leads: {len(github_leads)}")
-    
-    # Если и DDG и GitHub дали 0 — выходим
-    if not all_results and not github_leads:
+    all_results = []  # для совместимости с Pass 2 (url scoring)
+    _direct_emails = 0
+    page_texts = []  # для AI-фильтрации
+
+    for _page_result in _pages:
+        if isinstance(_page_result, Exception) or not isinstance(_page_result, tuple):
+            continue
+        _p_url, _p_html = _page_result
+        if not _p_html:
+            continue
+
+        # Извлекаем email напрямую из HTML
+        _found = _extract_emails_from_text(_p_html)
+        all_emails_raw.update(_found)
+        for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})', _p_html):
+            em = em.lower().strip('.')
+            if not _is_generic_email(em):
+                all_emails_raw.add(em)
+        _direct_emails += len(_found)
+
+        # Извлекаем ссылки на профили/страницы контактов для Pass 2
+        _profile_links = _re_al.findall(r'href="(https?://[^"]{10,200})"', _p_html)
+        for _pl in _profile_links[:30]:
+            _pl_lower = _pl.lower()
+            if any(h in _pl_lower for h in ('/user/', '/author/', '/profile/', '/@', '/people/', '/u/')):
+                all_results.append({'title': '', 'snippet': '', 'url': _pl})
+
+        # Чистый текст для AI-анализа
+        _clean = _re_al.sub(r'<[^>]+>', ' ', _p_html)
+        _clean = _re_al.sub(r'\s+', ' ', _clean)[:2000]
+        page_texts.append(_clean)
+
+    logger.info(f"[AUTO_LEADS] Direct platform scrape: {len(_all_platform_urls)} URLs → "
+                f"{_direct_emails} emails extracted, {len(all_results)} profile links, "
+                f"GitHub leads: {len(github_leads)}, total raw: {len(all_emails_raw)}")
+
+    # Если и прямой парсинг и GitHub дали 0 — выходим
+    if not all_results and not github_leads and not all_emails_raw:
         logger.warning(f"[AUTO_LEADS] ZERO results from all sources for campaign #{campaign.id}")
         return 0, ""
 
     # ══════════════════════════════════════════════════════════════════════
-    # PASS 2: Скачиваем страницы + contact/about sub-pages → email
+    # PASS 2: Скачиваем профильные страницы + contact/about sub-pages → email
     # ══════════════════════════════════════════════════════════════════════
     _contact_hints = {'contact', 'about', 'profile', 'author', 'user',
                       'контакт', 'автор', 'профиль', 'обо мне',
