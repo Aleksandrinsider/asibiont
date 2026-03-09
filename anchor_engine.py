@@ -843,9 +843,14 @@ class AnchorEngine:
             ).limit(10).all()
 
             # Если нет пользовательских агентов — используем прямой AI-вызов через основной чат
-            task_text = _AGENT_DISPATCH_TRIGGERS.get(
-                anchor.anchor_type, anchor.topic or '',
-            )
+            # Для goal_autopilot_review — используем полноценный prompt из _ANCHOR_PROMPTS,
+            # а не просто anchor.topic (он слишком лаконичен для автономной работы агента)
+            if anchor.anchor_type == 'goal_autopilot_review':
+                task_text = _ANCHOR_PROMPTS.get(anchor.anchor_type, anchor.topic or '')
+            else:
+                task_text = _AGENT_DISPATCH_TRIGGERS.get(
+                    anchor.anchor_type, anchor.topic or '',
+                )
             data = anchor.data or {}
             if isinstance(data, str):
                 data = json.loads(data)
@@ -901,7 +906,7 @@ class AnchorEngine:
                 session.add(_AAL_ap(
                     user_id=user.id,
                     activity_type='goal_autopilot_dispatch',
-                    title=f'[autopilot] {agent_name} — review goals',
+                    title=f'{agent_name} — обзор целей',
                     content=task_text[:500],
                     target=anchor.source,
                     status='in_progress',
@@ -909,39 +914,33 @@ class AnchorEngine:
                 ))
                 session.commit()
 
-                # ── Отправляем "ASI → Агент" сообщение в Telegram (поручение) ──
-                # Формируем ЧЕЛОВЕЧЕСКОЕ сообщение — как диалог между коллегами
-                _goals_names = [g['title'] for g in goals_info[:3]] if goals_info else []
-                if _goals_names:
-                    _g_short = ', '.join(f'«{g[:50]}»' for g in _goals_names[:2])
-                    _dispatch_msg = f"📋 {agent_name}, проверь текущие цели ({_g_short}) и определи следующий конкретный шаг."
-                else:
-                    _dispatch_msg = f"📋 {agent_name}, проанализируй текущую обстановку и предложи следующий шаг."
-                if self.bot:
-                    try:
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=_dispatch_msg,
-                        )
-                        # Сохраняем в interaction для отображения в чате
-                        session.add(Interaction(
-                            user_id=user.id,
-                            message_type='proactive',
-                            content=_dispatch_msg,
-                        ))
-                        session.commit()
-                        try:
-                            from ai_integration.conversation_history import save_message_to_history as _smh_d
-                            _smh_d(user.telegram_id, 'assistant', _dispatch_msg, session=session)
-                        except Exception:
-                            pass
-                    except Exception as _e_disp:
-                        logger.warning("[ANCHOR-AUTOPILOT] dispatch msg send failed: %s", _e_disp)
-
                 _raw = await _exec_agent_for_director(
                     agent_data, task_text, user.telegram_id,
                 )
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
+
+                # ── Отправляем РЕЗУЛЬТАТ работы агента пользователю ──
+                # Не шаблонный dispatch-заголовок, а реальный отчёт от первого лица
+                if result and result.strip() and self.bot:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=result.strip(),
+                        )
+                        # Сохраняем в interaction — чтобы следующая итерация видела что уже сделано
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='proactive',
+                            content=result.strip(),
+                        ))
+                        session.commit()
+                        try:
+                            from ai_integration.conversation_history import save_message_to_history as _smh_r
+                            _smh_r(user.telegram_id, 'assistant', result.strip(), session=session)
+                        except Exception:
+                            pass
+                    except Exception as _e_res:
+                        logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
             else:
                 # Нет агентов — вызываем основной AI через chat
                 from ai_integration.chat import chat_with_ai
@@ -955,7 +954,7 @@ class AnchorEngine:
                 session.add(_AAL_ap(
                     user_id=user.id,
                     activity_type='goal_autopilot_dispatch',
-                    title=f'[autopilot] ASI — review goals',
+                    title=f'ASI — обзор целей',
                     content=task_text[:500],
                     target=anchor.source,
                     status='completed',
@@ -1078,7 +1077,7 @@ class AnchorEngine:
                     _s.add(_AAL(
                         user_id=user.id,
                         activity_type='agent_event_dispatch',
-                        title=f'[dispatch] {chosen.name} ← {anchor.anchor_type}',
+                        title=f'{chosen.name} → {anchor.anchor_type}',
                         content=task_text[:500],
                         target=anchor.source,
                         status='in_progress',
@@ -2678,7 +2677,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.25,
+            cooldown_hours=1.0,
             batch_group='goals',
         )]
 
@@ -6307,7 +6306,7 @@ class AnchorEngine:
                     continue
 
                 result_preview = (disp.result or '')[:200]
-                agent_name = (disp.title or '').replace('[dispatch] ', '').split(' ←')[0]
+                agent_name = (disp.title or '').replace('[dispatch] ', '').split(' ←')[0].split(' →')[0]
                 task_preview = (disp.content or '')[:150]
 
                 source_key = f'followup:{disp.id}'
