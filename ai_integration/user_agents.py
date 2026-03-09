@@ -320,6 +320,10 @@ def get_user_active_agent(user_id: int, session=None) -> Optional[int]:
         legacy = mem.get('active_agent_id')
         if legacy and _is_valid(legacy):
             return legacy
+        # Fallback: если memory пустая — берём первую подписку из AgentSubscription
+        if _valid_ids:
+            for aid in sorted(_valid_ids):
+                return aid
         return None
     finally:
         if close:
@@ -348,19 +352,24 @@ def get_user_active_agents(user_id: int, session=None) -> list:
         # Фильтруем: оставляем только агентов у которых есть AgentSubscription
         # (и собственные, и чужие активируются через /api/marketplace/agents/{id}/activate,
         #  который всегда создаёт AgentSubscription — это единственный источник правды)
-        if ids:
-            try:
-                from models import AgentSubscription as _AS_f, User as _U_f
-                _user = session.query(_U_f).filter_by(telegram_id=user_id).first()
-                if _user:
-                    _sub_ids = {r.agent_id for r in session.query(_AS_f).filter_by(user_id=_user.id).all()}
+        try:
+            from models import AgentSubscription as _AS_f, User as _U_f
+            _user = session.query(_U_f).filter_by(telegram_id=user_id).first()
+            if _user:
+                _sub_ids = [r.agent_id for r in session.query(_AS_f).filter_by(user_id=_user.id).all()]
+                if ids:
                     _valid = [i for i in ids if i in _sub_ids]
                     if _valid != ids:
                         mem['active_agent_ids'] = _valid
                         _save_mem(user_id, mem, session)
                         ids = _valid
-            except Exception:
-                pass
+                elif _sub_ids:
+                    # Memory пустая, но подписки есть — авто-восстановление после reset/redeploy
+                    ids = _sub_ids
+                    mem['active_agent_ids'] = ids
+                    _save_mem(user_id, mem, session)
+        except Exception:
+            pass
 
         # focused — в начало
         focused = mem.get('focused_agent_id')
