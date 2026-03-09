@@ -545,8 +545,65 @@ class AnchorEngine:
             logger.debug(f"[ANCHOR] Cleanup error (non-critical): {_cleanup_err}")
             session.rollback()
 
+        # 0c. DEDUP — удаляем дубли pending-якорей с одним type+source (оставляем самый свежий)
+        # Возникает когда сервис деградирован несколько циклов подряд (service_degraded, weather_extreme и т.д.)
+        try:
+            from sqlalchemy import func as _func_dedup
+            _dup_groups = session.query(
+                Anchor.anchor_type, Anchor.source,
+                _func_dedup.count(Anchor.id).label('cnt'),
+            ).filter(
+                Anchor.user_id == user.id,
+                Anchor.delivered_at.is_(None),
+                Anchor.source.isnot(None),
+            ).group_by(Anchor.anchor_type, Anchor.source).having(
+                _func_dedup.count(Anchor.id) > 1
+            ).all()
+            _total_dedup = 0
+            for _dg in _dup_groups:
+                _keep = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == _dg.anchor_type,
+                    Anchor.source == _dg.source,
+                    Anchor.delivered_at.is_(None),
+                ).order_by(Anchor.id.desc()).first()
+                if _keep:
+                    _gone = session.query(Anchor).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == _dg.anchor_type,
+                        Anchor.source == _dg.source,
+                        Anchor.delivered_at.is_(None),
+                        Anchor.id != _keep.id,
+                    ).delete(synchronize_session=False)
+                    _total_dedup += _gone
+            if _total_dedup > 0:
+                session.commit()
+                logger.info(f"[ANCHOR] User {user_id}: 🧹 dedup removed {_total_dedup} duplicate pending anchors")
+        except Exception as _e_dedup:
+            logger.debug(f"[ANCHOR] Dedup error (non-critical): {_e_dedup}")
+            session.rollback()
+
         # 1. SCAN — обнаружить новые якоря
         new_anchors = await self._scan_anchors(user, session)
+        if new_anchors:
+            # Dedup-фильтр: не создаём якорь если уже есть pending с тем же type+source
+            _existing_keys = set(
+                session.query(Anchor.anchor_type, Anchor.source).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.delivered_at.is_(None),
+                    Anchor.source.isnot(None),
+                ).all()
+            )
+            _seen_in_batch: set = set()
+            _deduped = []
+            for _na in new_anchors:
+                _key = (_na.anchor_type, _na.source)
+                if _key not in _existing_keys and _key not in _seen_in_batch:
+                    _deduped.append(_na)
+                    _seen_in_batch.add(_key)
+            if len(_deduped) < len(new_anchors):
+                logger.info(f"[ANCHOR] User {user_id}: scan dedup: {len(new_anchors)-len(_deduped)} skipped (already pending), {len(_deduped)} new")
+            new_anchors = _deduped
         if new_anchors:
             session.add_all(new_anchors)
             session.commit()

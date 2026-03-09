@@ -80,15 +80,38 @@ try:
             age_del = int((now - last_del[0].replace(tzinfo=timezone.utc)).total_seconds() // 60)
             print(f'=== Last delivery: {age_del}min ago ({last_del[0].strftime("%H:%M:%S")}) ===')
 
-        # Last agent activity
-        ag = c.execute(text(
-            "SELECT activity_type, title, status, created_at FROM agent_activity_log "
-            "WHERE user_id=1 ORDER BY created_at DESC LIMIT 5"
+        # Duplicate pending anchors (same type+source, >1 pending — indicates dedup bug)
+        dup_rows = c.execute(text(
+            "SELECT anchor_type, source, COUNT(*) as cnt FROM anchors "
+            "WHERE delivered_at IS NULL AND source IS NOT NULL AND user_id=1 "
+            "GROUP BY anchor_type, source HAVING COUNT(*) > 1 ORDER BY cnt DESC"
         )).fetchall()
-        print('\n=== Recent agent activity ===')
+        if dup_rows:
+            print(f'\n=== ⚠ DUPLICATE pending anchors (same type+source) ===')
+            for r in dup_rows:
+                print(f'  {r[0]} / {r[1]}: {r[2]} dups')
+        else:
+            print('\n=== Duplicate pending anchors: OK (none) ===')
+
+        # Recent proactive interactions
+        proact = c.execute(text(
+            "SELECT LEFT(content,100), created_at FROM interactions "
+            "WHERE user_id=1 AND message_type='proactive' ORDER BY created_at DESC LIMIT 5"
+        )).fetchall()
+        print('\n=== Recent proactive messages ===')
+        for r in proact:
+            age_p = int((now - r[1].replace(tzinfo=timezone.utc)).total_seconds() // 60) if r[1] else '?'
+            print(f'  [{age_p}min ago] {r[0]}')
+
+        # Last agent activity (all users — new entries use user_id=main_user)
+        ag = c.execute(text(
+            "SELECT user_id, activity_type, title, status, created_at FROM agent_activity_log "
+            "ORDER BY created_at DESC LIMIT 8"
+        )).fetchall()
+        print('\n=== Recent agent activity (all users) ===')
         for r in ag:
-            age_a = int((now - r[3].replace(tzinfo=timezone.utc)).total_seconds() // 60) if r[3] else '?'
-            print(f'  {r[0]} | {r[1][:60]} | {r[2]} | {age_a}min ago')
+            age_a = int((now - r[4].replace(tzinfo=timezone.utc)).total_seconds() // 60) if r[4] else '?'
+            print(f'  uid={r[0]} | {r[1]} | {r[2][:55]} | {r[3]} | {age_a}min ago')
 
 except Exception as e:
     print(f'ERROR: {e}')
