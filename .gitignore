@@ -148,5 +148,17 @@ ssl/
 
 # Temp/debug scripts
 _*.py
+check_*.py
+debug_*.py
+diag*.py
+force_*.py
+monitor_*.py
+full_*.py
+unblock_*.py
+reschedule_*.py
+fix_*.py
+list_tables.py
+s.py
+monitor_log.txt
 _*.txt
 *.bak
