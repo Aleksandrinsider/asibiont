@@ -1476,8 +1476,14 @@ class AnchorEngine:
             return []
         # Exclude expired-but-undelivered anchors from dedup — they should not block
         # creation of fresh anchors of the same type/source
-        existing_keys = {(a.anchor_type, a.source) for a in existing
-                         if a.expires_at is None or a.expires_at > now_utc}
+        def _exp_ok(anchor_obj):
+            if anchor_obj.expires_at is None:
+                return True
+            exp = anchor_obj.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            return exp > now_utc
+        existing_keys = {(a.anchor_type, a.source) for a in existing if _exp_ok(a)}
         # Also check recently DELIVERED anchors for email_reply_received — prevent
         # duplicate replies when AI doesn't set ai_reply_sent_at
         # agent_delegation убран: без push-дедупликации не нужен (якорь всегда с новым source)
@@ -1501,8 +1507,7 @@ class AnchorEngine:
         }
         # Exclude expired anchors from singleton check — expired-but-undelivered anchors
         # should NOT block creation of fresh ones
-        existing_types = {a.anchor_type for a in existing
-                          if a.expires_at is None or a.expires_at > now_utc}
+        existing_types = {a.anchor_type for a in existing if _exp_ok(a)}
 
         unique_anchors = []
         for a in anchors:
