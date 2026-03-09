@@ -1073,6 +1073,32 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     (prev_avg * (profile.completed_tasks - 1)) + completion_time
                 ) / profile.completed_tasks
             session.commit()
+
+        # Автоматический пересчёт прогресса цели при завершении привязанной задачи
+        if task.goal_id:
+            try:
+                goal = session.query(Goal).filter_by(id=task.goal_id, user_id=user.id).first()
+                if goal and goal.status == 'active' and not goal.metric_target:
+                    total = session.query(Task).filter(
+                        Task.user_id == user.id,
+                        Task.goal_id == goal.id,
+                        Task.status.notin_(['cancelled', 'deleted']),
+                    ).count()
+                    done = session.query(Task).filter(
+                        Task.user_id == user.id,
+                        Task.goal_id == goal.id,
+                        Task.status == 'completed',
+                    ).count()
+                    if total > 0:
+                        pct = min(100, int(done / total * 100))
+                        goal.progress_percentage = pct
+                        if pct >= 100:
+                            goal.status = 'completed'
+                            goal.completed_at = datetime.now(pytz.UTC)
+                        session.commit()
+                        logger.info(f"[COMPLETE_TASK] Auto-updated goal '{goal.title}' progress: {pct}% ({done}/{total})")
+            except Exception as _eg:
+                logger.warning(f"[COMPLETE_TASK] Auto-goal-progress error: {_eg}")
         
         # Возвращаем сообщение с флагом для AI чтобы спросил о результате
         result = f"TASK_COMPLETED_ASK_RESULT: Задача '{task.title}' завершена."

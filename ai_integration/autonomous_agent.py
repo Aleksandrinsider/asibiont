@@ -4083,7 +4083,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     from datetime import datetime as _dt_exec
     _now_str = _dt_exec.now().strftime('%Y-%m-%d %H:%M (%A)')
     system_prompt = (
-        f"Ты — агент в команде ASI Biont. Сейчас: {_now_str}. Твои результаты появляются в общем чате с пользователем.\n\n"
+        f"Ты — {agent['name']}, агент в команде ASI Biont. Сейчас: {_now_str}.\n"
+        f"Пиши ТОЛЬКО от имени {agent['name']}. НЕ представляйся другим именем. "
+        f"НЕ пиши от имени ASI, ASI Biont, или другого агента.\n\n"
 
         "КАК ТЫ ДУМАЕШЬ:\n"
         "Перед каждым ответом — быстрый анализ:\n"
@@ -4117,10 +4119,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "НЕ пиши планы без действий — каждый пункт плана ВЫПОЛНЯЙ инструментами (исследуй, создай задачу, отправь email, делегируй). "
         "Ответ-план без вызовов инструментов — ОШИБКА.\n"
         "ВАЖНО: делай РОВНО то, что поручено. Если поручено ОТВЕТИТЬ на вопрос — ответь. "
-        "НЕ создавай задачи, НЕ запускай цепочки, НЕ поручай другим агентам, "
+        "НЕ создавай задачи через add_task, НЕ запускай цепочки, НЕ поручай другим агентам, "
         "если это не было явно запрошено. Простой вопрос = простой ответ.\n"
-        "При создании задач через add_task: reminder_time НЕОБЯЗАТЕЛЬНЫЙ. Если срок неизвестен — НЕ СПРАШИВАЙ, "
-        "просто создай задачу без времени. НЕ пиши BLOCKED из-за отсутствия даты.\n"
+        "⛔ НЕ создавай задачи (add_task) для себя — ты УЖЕ выполняешь поручение. "
+        "Вместо создания задачи — ВЫПОЛНИ действие инструментами (research_topic, send_email, и т.д.). "
+        "Задача для самого себя — бесполезная задача, которая засоряет список.\n"
         "КАЧЕСТВО: каждый ответ содержит КОНКРЕТНЫЙ результат — текст поста, список контактов, "
         "анализ данных, исследование. Ответ ‘задачу выполнил’ без деталей = ПРОВАЛ.\n\n"
 
@@ -4630,10 +4633,16 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
             # Убираем дубликат имени агента в начале task_text ("Кристина: Кристина, ...")
             _clean_task = task_text.strip()
             import re as _re_title
+            # Удаляем имя агента из начала (любые вариации: запятая, двоеточие, пробел)
             _clean_task = _re_title.sub(
                 r'^' + _re_title.escape(_aname) + r'[\s,:.!]*',
-                '', _clean_task, count=1,
-            ).strip() or _clean_task
+                '', _clean_task, flags=_re_title.IGNORECASE,
+            ).strip()
+            # Вторая итерация — удаляем повторное имя если осталось ("Кристина, Кристина, ...")
+            _clean_task = _re_title.sub(
+                r'^' + _re_title.escape(_aname) + r'[\s,:.!]*',
+                '', _clean_task, flags=_re_title.IGNORECASE,
+            ).strip() or task_text.strip()
             _title = f"{_aname}: {_clean_task[:180]}"
             _desc = result_summary[:500] if result_summary else ''
             _t = _Task(
@@ -4991,8 +5000,14 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     async def _run_agent_task(ag, task, extra_context: str = "", director_message: str = ""):
         # Отправляем живое обращение директора к агенту и сохраняем в DB
         if director_message:
-            await _send_visible(director_message)
-            _save_interaction_for_director(user_id, director_message, message_type='ai')
+            # Форматируем: "📋 Кристина, подготовь отчёт" — пользователь видит что это поручение агенту
+            _ag_n = ag.get('name', 'Агент')
+            if _ag_n.lower() in director_message.lower()[:len(_ag_n)+3]:
+                _dm_display = f"📋 {director_message}"
+            else:
+                _dm_display = f"📋 {_ag_n}, {director_message}"
+            await _send_visible(_dm_display)
+            _save_interaction_for_director(user_id, _dm_display, message_type='ai')
             await asyncio.sleep(0.3)
 
         # Списываем токены за запуск агента директором
@@ -5133,9 +5148,17 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _ag = _direct_agent
         _dm = ''
         _task = user_message
+        # Убираем имя агента из начала задачи для чистого title
+        _da_name = _ag.get('name', '').lower()
+        if _da_name and _task.lower().startswith(_da_name):
+            import re as _re_da
+            _task = _re_da.sub(
+                r'^' + _re_da.escape(_ag['name']) + r'[\s,:.!]*',
+                '', _task, flags=_re_da.IGNORECASE,
+            ).strip() or _task
         # Если вопрос — подсказываем агенту: ответь, не действуй
         if _is_question_message(user_message):
-            _task = f"ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): {user_message}"
+            _task = f"ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): {_task}"
         _agent_name_d = _ag.get('name', 'Агент')
     else:
         _ag = None  # will be set by ASI decision below
@@ -5212,10 +5235,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
             "director_message: имя + повелит. глагол (Кристина, подготовь...).\n"
             "Выбери ОДНОГО наиболее подходящего агента.\n\n"
+            "ВАЖНО: agent_task — ТОЛЬКО суть задачи БЕЗ имени агента. Пример: 'подготовить отчёт', а НЕ 'Кристина, подготовь отчёт'.\n"
+            "director_message — живое обращение к агенту: 'Кристина, подготовь отчёт'.\n\n"
             "JSON без ```:\n"
             '{"action":"self"}\n'
             "или\n"
-            '{"action":"delegate","agent_name":"имя","agent_task":"задача",'
+            '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи без имени",'
             '"director_message":"Имя, сделай..."}'
         )
 
@@ -5342,6 +5367,14 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             return None
         _dm = decision.get('director_message', '')
         _task = decision.get('agent_task') or user_message
+        # Убираем имя агента из задачи если AI случайно его добавил
+        _ag_name_clean = _ag.get('name', '')
+        if _ag_name_clean and _task.lower().startswith(_ag_name_clean.lower()):
+            import re as _re_task_clean
+            _task = _re_task_clean.sub(
+                r'^' + _re_task_clean.escape(_ag_name_clean) + r'[\s,:.!]*',
+                '', _task, flags=_re_task_clean.IGNORECASE,
+            ).strip() or _task
 
     # ── Многораундовый цикл: АСИ ↔ агент ─────────────────────────────────────
     # АСИ даёт поручение → агент отчитывается → АСИ решает: ещё поручение или принять
