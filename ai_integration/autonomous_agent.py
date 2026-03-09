@@ -4319,8 +4319,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Автопилот целей → агент получает ВСЕ инструменты (не ограничиваем)
         _is_autopilot_task = 'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '') or 'autopilot' in (task or '').lower()
         if _is_autopilot_task:
-            logger.info('[DIRECTOR] Autopilot task → all tools unlocked for %s', agent.get('name'))
-            # _exclude_for_agent остаётся None → все инструменты доступны
+            logger.info('[DIRECTOR] Autopilot task → all tools unlocked for %s (with guardrails)', agent.get('name'))
+            # Все инструменты доступны, КРОМЕ опасных (агент не должен менять прогресс/удалять)
+            _exclude_for_agent = {'update_goal_progress', 'delete_task'}
         else:
             # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
@@ -4651,7 +4652,7 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
                 r'^' + _re_title.escape(_aname) + r'[\s,:.!]*',
                 '', _clean_task, flags=_re_title.IGNORECASE,
             ).strip() or task_text.strip()
-            _title = f"{_aname}: {_clean_task[:180]}"
+            _title = _clean_task[:200]
             _desc = result_summary[:500] if result_summary else ''
             _t = _Task(
                 user_id=user_db_id,
@@ -4729,7 +4730,7 @@ def _maybe_create_agent_campaign(user_db_id: int, agent: dict, task_text: str, r
         from models import Session as _Db, DelegationCampaign as _DC
         _s = _Db()
         try:
-            _name = f"{agent.get('name', 'Агент')}: {task_text[:120]}"
+            _name = task_text[:140]
             _dc = _DC(
                 user_id=user_db_id,
                 name=_name,

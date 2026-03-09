@@ -4233,6 +4233,12 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
             try:
                 pct = int(progress)
                 pct = max(0, min(100, pct))
+                # GUARD: если у цели есть metric_target — прогресс считается ТОЛЬКО через metric_current
+                # Запрещаем AI-агенту произвольно ставить progress на цели с метриками
+                if matched.metric_target and matched.metric_target > 0:
+                    actual_pct = int((matched.metric_current or 0) / matched.metric_target * 100)
+                    if abs(pct - actual_pct) > 10:
+                        return f"У цели '{matched.title}' есть числовая метрика ({int(matched.metric_current or 0)}/{int(matched.metric_target)}). Обновляй через metric_current, а не progress."
                 matched.progress_percentage = pct
                 changes.append(f"прогресс: {pct}%")
                 if pct == 100 and matched.status == 'active':
