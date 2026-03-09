@@ -298,6 +298,14 @@ class AnchorEngine:
                 EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
                 EmailOutreach.next_follow_up_at <= now_utc,
             ).distinct().all()} if _pf_uids else set()
+            # Автопилот работает 24/7 — если есть pending goal_autopilot_review, не пропускаем юзера
+            _night_exc_autopilot = {row[0] for row in session.query(Anchor.user_id).filter(
+                Anchor.user_id.in_(_pf_uids),
+                Anchor.anchor_type == 'goal_autopilot_review',
+                Anchor.delivered_at.is_(None),
+                Anchor.triggered_at.isnot(None),
+                Anchor.expires_at > now_utc,
+            ).distinct().all()} if _pf_uids else set()
 
             eligible = []
             skipped_night = 0
@@ -323,7 +331,8 @@ class AnchorEngine:
                         has_unreplied_email = u.id in _night_exc_unreplied
                         has_email_drafts = u.id in _night_exc_drafts
                         has_follow_ups = u.id in _night_exc_followups
-                        if not has_pending_reminder and not has_unreplied_email and not has_email_drafts and not has_follow_ups:
+                        has_autopilot = u.id in _night_exc_autopilot
+                        if not has_pending_reminder and not has_unreplied_email and not has_email_drafts and not has_follow_ups and not has_autopilot:
                             skipped_night += 1
                             continue
                         else:
@@ -335,6 +344,8 @@ class AnchorEngine:
                                 logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has email drafts to send (silent), including")
                             if has_follow_ups:
                                 logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has follow-ups to send (silent), including")
+                            if has_autopilot:
+                                logger.info(f"[ANCHOR] Pre-filter: User {u.telegram_id} is night BUT has pending autopilot, including")
                 except Exception as _tz_err:
                     logger.warning(f"[ANCHOR] Pre-filter: timezone error for user {u.telegram_id}: {_tz_err}")  # проверим в _process_user_inner
 
