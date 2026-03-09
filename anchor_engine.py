@@ -114,7 +114,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
     # ── Goal autopilot ──
-    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: ты видишь ПОЛНЫЙ контекст — цели, задачи, email-кампании, историю действий и НЕДАВНИЕ СООБЩЕНИЯ бота.\n\nПРАВИЛА:\n1. ИЗУЧИ recent_messages и recent_actions — НЕ ПОВТОРЯЙ те же действия и поручения\n2. Если задача уже создана (pending/in_progress) — НЕ создавай такую же\n3. Если письмо уже отправлено человеку (см. known_contacts) — НЕ пиши ему повторно\n4. Если в recent_messages уже есть поручение — НЕ давай его снова, найди ДРУГОЙ шаг\n5. Определи НОВЫЙ конкретный шаг, который ПРОДВИНЕТ цель дальше\n6. Если ВСЕ текущие задачи в работе — отчитайся о статусе, НЕ создавай лишнего\n\nЗАПРЕЩЕНО: update_goal_progress, delete_task, start_email_campaign. НЕ ОТПРАВЛЯЙ email на адрес самого пользователя. После действия кратко отчитайся.",
+    'goal_autopilot_review': "Ты — агент пользователя. Проанализируй цели, задачи, email-кампании и историю действий. Отвечай от ПЕРВОГО ЛИЦА как живой сотрудник — 'Я проверила...', 'Нашла...', 'Сделала...'.\n\nПРАВИЛА:\n1. ИЗУЧИ recent_messages и recent_actions — НЕ ПОВТОРЯЙ те же действия\n2. Если задача уже создана (pending/in_progress) — НЕ создавай такую же\n3. Если письмо уже отправлено человеку (см. known_contacts) — НЕ пиши ему повторно\n4. Если в recent_messages уже есть поручение — НЕ давай его снова, найди ДРУГОЙ шаг\n5. Определи НОВЫЙ конкретный шаг, который ПРОДВИНЕТ цель дальше\n6. Если ВСЕ текущие задачи в работе — отчитайся о статусе кратко\n\nЗАПРЕЩЕНО: update_goal_progress, delete_task, start_email_campaign. НЕ ОТПРАВЛЯЙ email на адрес самого пользователя.\nФОРМАТ ОТВЕТА: живой отчёт от первого лица (2-4 предложения). НЕ пиши 'АВТОПИЛОТ', 'ПОРУЧЕНИЕ' — говори как человек.",
 }
 
 # Группы батчинга
@@ -875,8 +875,13 @@ class AnchorEngine:
                 session.commit()
 
                 # ── Отправляем "ASI → Агент" сообщение в Telegram (поручение) ──
-                _task_short = task_text[:300].split('\n')[0]
-                _dispatch_msg = f"🎯 Поручение для {agent_name}: {_task_short}"
+                # Формируем ЧЕЛОВЕЧЕСКОЕ сообщение — как диалог между коллегами
+                _goals_names = [g['title'] for g in goals_info[:3]] if goals_info else []
+                if _goals_names:
+                    _g_short = ', '.join(f'«{g[:50]}»' for g in _goals_names[:2])
+                    _dispatch_msg = f"📋 {agent_name}, проверь текущие цели ({_g_short}) и определи следующий конкретный шаг."
+                else:
+                    _dispatch_msg = f"📋 {agent_name}, проанализируй текущую обстановку и предложи следующий шаг."
                 if self.bot:
                     try:
                         await self.bot.send_message(
@@ -939,7 +944,7 @@ class AnchorEngine:
                     user_id=user.id,
                     anchor_type='agent_delegation',
                     source=f'autopilot:{agent_name}:goal_review:{_now_deleg.strftime("%Y-%m-%d-%H")}',
-                    topic=f'{agent_name} выполнил автопилот целей: {task_text[:80]}',
+                    topic=f'{agent_name}: отчёт по целям',
                     priority=AnchorPriority.HIGH,
                     data=json.dumps({
                         'agent_name': agent_name,
@@ -2647,8 +2652,8 @@ class AnchorEngine:
             anchor_type='goal_autopilot_review',
             source=f'autopilot:{user.id}:goals',
             topic=_t(user,
-                      f'Автопилот: проанализируй {len(goals_summary)} целей и выполни следующий шаг',
-                      f'Autopilot: review {len(goals_summary)} goals and take the next step'),
+                      f'Проверка {len(goals_summary)} целей — следующий шаг',
+                      f'Review {len(goals_summary)} goals — next step'),
             priority=AnchorPriority.MEDIUM,
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,

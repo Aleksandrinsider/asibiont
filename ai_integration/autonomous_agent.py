@@ -4317,7 +4317,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.debug('[DIRECTOR] tools exclude calc: %s', _te2)
     elif not _allowed_tools:
         # Автопилот целей → агент получает ВСЕ инструменты (не ограничиваем)
-        _is_autopilot_task = 'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '') or 'autopilot' in (task or '').lower()
+        _is_autopilot_task = 'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '') or 'autopilot' in (task or '').lower() or 'Активные цели:' in (task or '')
         if _is_autopilot_task:
             logger.info('[DIRECTOR] Autopilot task → all tools unlocked for %s (with guardrails)', agent.get('name'))
             # Все инструменты доступны, КРОМЕ опасных (агент не должен менять прогресс/удалять)
