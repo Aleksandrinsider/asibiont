@@ -1228,7 +1228,7 @@ class OfficeEngine:
                 sub_ids = [
                     row.agent_id for row in
                     s.query(AgentSubscription)
-                    .filter_by(user_id=prof.user_id, is_active=True)
+                    .filter_by(user_id=prof.user_id)
                     .all()
                 ]
                 agents = (
