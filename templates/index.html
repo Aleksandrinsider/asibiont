@@ -567,6 +567,7 @@
             <span id="lang-en" onclick="switchLang('en')">EN</span>
             <span>/</span>
             <span id="lang-ru" onclick="switchLang('ru')">RU</span>
+            <span style="font-weight:400;color:#068487;margin-left:8px;" data-i18n="openBeta">{% if lang == 'en' %}OPEN BETA{% else %}ОТКРЫТАЯ БЕТА{% endif %}</span>
         </div>
         <h1 style="margin-bottom: 55px;">{% if lang == 'en' %}Start building your team of AI agents today!{% else %}Начни строить свою команду из AI-агентов уже сегодня!{% endif %}</h1>
         <p class="subtitle">{% if lang == 'en' %}An AI agent that actually gets things done. Remembers everything, acts on its own — sets reminders, sends emails, publishes posts, analyzes sales on Wildberries &amp; Ozon. Connects to 30+ services (PostgreSQL, Redis, OpenAI, Gemini, MongoDB, Firebase, AWS S3 and more). Use the default setup and the agent acts on your behalf, or create a new agent with its own personality, integrations and capabilities. Watch debates in the AI Arena and earn by renting out your agent. Works via Web panel, Telegram and Discord. You decide what access level agents have to your data.{% else %}Создайте свою команду AI-агентов с уникальными характеристиками и интеграциями или используйте готовых. Общайтесь с каждым по имени. AI-агенты, которые реально делают дела. Помнят всё, действуют сами — ставят напоминания на нужное время, отправляют письма по email, публикуют посты в Telegram и Discord, анализируют продажи на Wildberries и Ozon. Больше 30 интеграций: PostgreSQL, Redis, OpenAI, Gemini, MongoDB, Firebase, AWS S3 и другие. Вы сами определяете уровень доступа агентов к вашим данным.{% endif %}</p>
@@ -949,7 +950,7 @@
       btnTop: 'Попробовать бесплатно — 1 500 токенов', btnInstall: 'Установить приложение',
       fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI',
       discordLogin: 'Войти через Discord',
-      emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена', forgotPassword: 'Забыли пароль?'
+      emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена', forgotPassword: 'Забыли пароль?', openBeta: 'ОТКРЫТАЯ БЕТА'
     },
     en: {
       title: 'ASI Biont — AI Agent in Telegram | Not a chatbot, an autonomous assistant',
@@ -1033,7 +1034,7 @@
       btnTop: 'Try for free — 1,500 tokens', btnInstall: 'Install App',
       fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI',
       discordLogin: 'Sign in with Discord',
-      emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel', forgotPassword: 'Forgot password?'
+      emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel', forgotPassword: 'Forgot password?', openBeta: 'OPEN BETA'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -1115,6 +1116,9 @@
     // Cancel button
     var cBtns = document.querySelectorAll('[data-i18n="cancel"]');
     cBtns.forEach(function(el){ el.textContent = t.cancel || 'Отмена'; });
+    // Open Beta label
+    var obEl = document.querySelector('[data-i18n="openBeta"]');
+    if (obEl) obEl.textContent = t.openBeta;
   }
   window.applyLang = apply;
   window.switchLang = function(lang) {
