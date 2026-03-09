@@ -883,6 +883,38 @@ class AnchorEngine:
                 user.id, agent_name, len(result or ''),
             )
 
+            # ── Отправляем результат в чат пользователю ──
+            if result and self.bot:
+                try:
+                    chat_msg = f"🎯 Автопилот целей ({agent_name}):\n\n{result}"
+                    if len(chat_msg) > 4000:
+                        chat_msg = chat_msg[:4000] + '…'
+                    import html as _html_mod
+                    _url_re = re.compile(r'(https?://\S+)')
+                    _spaced = re.sub(r'(?<=[^\s\n])(https?://)', r' \1', chat_msg)
+                    _parts = _url_re.split(_spaced)
+                    _html_parts = []
+                    for _i, _p in enumerate(_parts):
+                        if _i % 2 == 0:
+                            _html_parts.append(_html_mod.escape(_p))
+                        else:
+                            _clean = _p.rstrip('.,;:!?)—»')
+                            _trail = _p[len(_clean):]
+                            _html_parts.append(f'<a href="{_html_mod.escape(_clean)}">{_html_mod.escape(_clean)}</a>{_html_mod.escape(_trail)}')
+                    _send_html = ''.join(_html_parts)
+                    try:
+                        await self.bot.send_message(chat_id=user.telegram_id, text=_send_html, parse_mode='HTML')
+                    except Exception:
+                        await self.bot.send_message(chat_id=user.telegram_id, text=chat_msg)
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh_ap
+                        _smh_ap(user.telegram_id, 'assistant', chat_msg, session=session)
+                    except Exception:
+                        pass
+                    logger.info("[ANCHOR-AUTOPILOT] user %d: sent autopilot report to chat", user.id)
+                except Exception as _send_err:
+                    logger.warning("[ANCHOR-AUTOPILOT] user %d: failed to send chat report: %s", user.id, _send_err)
+
             # Обновляем статус dispatch-лога
             if agents and result:
                 log = session.query(_AAL_ap).filter_by(
