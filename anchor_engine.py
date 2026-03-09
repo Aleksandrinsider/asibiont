@@ -1512,10 +1512,14 @@ class AnchorEngine:
         except Exception:
             logger.info(f"[ANCHOR] User {user.id}: scan skipped (locked by another instance)")
             return []
-        existing_keys = {(a.anchor_type, a.source) for a in existing}
+        # Exclude expired-but-undelivered anchors from dedup — they should not block
+        # creation of fresh anchors of the same type/source
+        existing_keys = {(a.anchor_type, a.source) for a in existing
+                         if a.expires_at is None or a.expires_at > now_utc}
         # Also check recently DELIVERED anchors for email_reply_received — prevent
         # duplicate replies when AI doesn't set ai_reply_sent_at
-        _DEDUP_WITH_DELIVERED = {'email_reply_received', 'agent_delegation'}
+        # agent_delegation убран: без push-дедупликации не нужен (якорь всегда с новым source)
+        _DEDUP_WITH_DELIVERED = {'email_reply_received'}
         try:
             _recent_delivered = session.query(Anchor).filter(
                 Anchor.user_id == user.id,
@@ -5635,7 +5639,8 @@ class AnchorEngine:
                     )
                     if force_deliver:
                         # force_deliver = якорь помечен ALWAYS_DELIVER (agent_delegation, service_degraded и т.д.)
-                        # Цель якоря — именно сообщить пользователю о результатах. SKIP здесь запрещён.
+                        # agent_delegation: push не отправляется, но сообщение сохраняется в историю чата.
+                        # SKIP запрещён — нужно сформировать текст отчёта для истории.
                         prompt_parts.append(
                             "ВАЖНО: Это отчёт о результатах работы агентов — пользователь ЖДЁТ этой информации. "
                             "Ты ОБЯЗАН написать краткий отчёт о том, что агент СДЕЛАЛ (см. якорь). "
@@ -5824,7 +5829,12 @@ class AnchorEngine:
             session.add(log)
 
             # Отправляем через бот ПЕРЕД commit — если отправка не удалась, откатываем
-            if self.bot:
+            # agent_delegation — НЕ присылаем отдельным push-сообщением: пользователь видит
+            # агентскую переписку напрямую в чате с ИИ. Только сохраняем в историю.
+            _no_push_types = {'agent_delegation'}
+            _skip_push = all(t in _no_push_types for t in anchor_types)
+
+            if self.bot and not _skip_push:
                 try:
                     # Гарантируем кликабельность URL через HTML parse_mode
                     import html as html_mod
@@ -5863,8 +5873,14 @@ class AnchorEngine:
                     logger.error(f"[ANCHOR] Send failed to {user.telegram_id}: {send_err}")
                     session.rollback()
             else:
+                # Нет бота или тип без push: сохраняем в историю без отправки
+                if _skip_push:
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh
+                        _smh(user.telegram_id, 'assistant', message, session=session)
+                    except Exception: pass
+                    logger.info(f"[ANCHOR] 📋 Saved to history (no push) for {user.telegram_id}: {anchor_types}: {message[:80]}...")
                 session.commit()
-                logger.info(f"[ANCHOR] Message (no bot): {message[:80]}...")
 
         except Exception as e:
             logger.error(f"[ANCHOR] Deliver error: {e}")
