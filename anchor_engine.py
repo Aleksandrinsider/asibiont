@@ -805,15 +805,13 @@ class AnchorEngine:
         elif delegation_silent_anchors and is_night:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ delegation campaigns blocked (night hours)")
 
-        # ── 3h. GOAL AUTOPILOT — автономное продвижение целей через agent dispatch (не ночью) ──
-        # Не зависит от has_proactive_tokens — пользователь явно включил автопилот
-        if autopilot_anchors and not is_night:
-            logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review...")
+        # ── 3h. GOAL AUTOPILOT — автономное продвижение целей через agent dispatch ──
+        # Не зависит от has_proactive_tokens и is_night — агенты работают 24/7 автономно
+        if autopilot_anchors:
+            logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
             for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
                 async with self._ai_semaphore:
                     await self._dispatch_agent_for_anchor(user, _ap, session)
-        elif autopilot_anchors and is_night:
-            logger.info(f"[ANCHOR] User {user_id}: ⛔ goal autopilot blocked (night hours)")
 
     # ═══════════════════════════════════════════════════════
     # BACKGROUND RESEARCH — выполнение отложенных исследований
