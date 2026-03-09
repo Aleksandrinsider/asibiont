@@ -92,7 +92,6 @@ ALWAYS_DELIVER_TYPES = {
     'background_research_ready', # Фоновое исследование завершено — пользователь ждёт результат
     'agent_inbox_reply',         # Агент-почтовик нашёл новые входящие письма
     'agent_task_blocked',        # Агент застрял — нужно решение пользователя
-    'agent_delegation',          # Результат работы агента по dispatch — пользователь ждёт
     'service_degraded',          # Сервис недоступен (веб-поиск, AI, email) — пользователь должен знать
 }
 
@@ -945,28 +944,7 @@ class AnchorEngine:
                 user.id, agent_name, len(result or ''),
             )
 
-            # ── Создаём agent_delegation якорь → доставка через обычный pipeline (как поручение) ──
-            if result and result.strip():
-                _now_deleg = datetime.now(timezone.utc)
-                _notify_anchor = Anchor(
-                    user_id=user.id,
-                    anchor_type='agent_delegation',
-                    source=f'autopilot:{agent_name}:goal_review:{_now_deleg.strftime("%Y-%m-%d-%H")}',
-                    topic=f'{agent_name}: отчёт по целям',
-                    priority=AnchorPriority.HIGH,
-                    data=json.dumps({
-                        'agent_name': agent_name,
-                        'agent_id': getattr(chosen, 'id', None) if agents else None,
-                        'task': task_text[:200],
-                        'result': (result or '')[:600],
-                    }, ensure_ascii=False),
-                    triggered_at=_now_deleg,
-                    expires_at=_now_deleg + timedelta(hours=4),
-                    cooldown_hours=2,
-                )
-                session.add(_notify_anchor)
-                session.commit()
-                logger.info("[ANCHOR-AUTOPILOT] user %d: created agent_delegation anchor for chat delivery", user.id)
+            # Результат сохранён в AgentActivityLog.result → context_builder читает его напрямую
 
             # Обновляем статус dispatch-лога
             if agents and result:
@@ -1127,30 +1105,7 @@ class AnchorEngine:
                             user.id, chosen.name, anchor.anchor_type, len(result or ''),
                         )
 
-                        # ── Создаём якорь-уведомление для пользователя ──
-                        if result and result.strip():
-                            _s3 = _Db()
-                            try:
-                                _notify_anchor = Anchor(
-                                    user_id=user.id,
-                                    anchor_type='agent_delegation',
-                                    source=f'dispatch:{chosen.name}:{anchor.anchor_type}',
-                                    topic=f'{chosen.name} выполнил задачу: {task_text[:80]}',
-                                    priority=AnchorPriority.HIGH,
-                                    data=json.dumps({
-                                        'agent_name': chosen.name,
-                                        'agent_id': chosen.id,
-                                        'task': task_text[:200],
-                                        'result': (result or '')[:400],
-                                    }, ensure_ascii=False),
-                                    triggered_at=datetime.now(timezone.utc),
-                                    expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
-                                    cooldown_hours=2,
-                                )
-                                _s3.add(_notify_anchor)
-                                _s3.commit()
-                            finally:
-                                _s3.close()
+                        # Результат сохранён в AgentActivityLog.result — context_builder читает напрямую
 
                         # ── ASI-продолжение: анализ результата → следующий агент ──
                         if result and len(result) > 30:
@@ -1345,30 +1300,7 @@ class AnchorEngine:
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
 
-            # Создаём якорь-уведомление о продолжении
-            if _next_result and _next_result.strip():
-                _s4 = Session()
-                try:
-                    _s4.add(Anchor(
-                        user_id=user.id,
-                        anchor_type='agent_delegation',
-                        source=f'chain:{_next_ag.name}:{anchor.anchor_type}',
-                        topic=f'{_next_ag.name} продолжил работу: {_next_task[:80]}',
-                        priority=AnchorPriority.HIGH,
-                        data=json.dumps({
-                            'agent_name': _next_ag.name,
-                            'agent_id': _next_ag.id,
-                            'task': _next_task[:200],
-                            'result': (_next_result or '')[:400],
-                            'chain_from': prev_agent.name,
-                        }, ensure_ascii=False),
-                        triggered_at=datetime.now(timezone.utc),
-                        expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
-                        cooldown_hours=2,
-                    ))
-                    _s4.commit()
-                finally:
-                    _s4.close()
+            # Результат цепочки сохранён в AgentActivityLog.result — context_builder читает напрямую
 
             logger.info(
                 "[ANCHOR-CHAIN] user %d: %s → %s (task: %s) → %d chars",
@@ -5778,7 +5710,7 @@ class AnchorEngine:
                         pass
 
             # Определяем, связаны ли якоря с конкретным агентом
-            AGENT_ANCHOR_TYPES = {'agent_inbox_reply', 'agent_task_blocked', 'agent_office_update', 'integration_alert', 'agent_delegation'}
+            AGENT_ANCHOR_TYPES = {'agent_inbox_reply', 'agent_task_blocked', 'agent_office_update', 'integration_alert'}
             _agent_name = None
             for anchor in anchors:
                 if anchor.anchor_type in AGENT_ANCHOR_TYPES and anchor.data:
@@ -5829,12 +5761,7 @@ class AnchorEngine:
             session.add(log)
 
             # Отправляем через бот ПЕРЕД commit — если отправка не удалась, откатываем
-            # agent_delegation — НЕ присылаем отдельным push-сообщением: пользователь видит
-            # агентскую переписку напрямую в чате с ИИ. Только сохраняем в историю.
-            _no_push_types = {'agent_delegation'}
-            _skip_push = all(t in _no_push_types for t in anchor_types)
-
-            if self.bot and not _skip_push:
+            if self.bot:
                 try:
                     # Гарантируем кликабельность URL через HTML parse_mode
                     import html as html_mod
@@ -5873,14 +5800,8 @@ class AnchorEngine:
                     logger.error(f"[ANCHOR] Send failed to {user.telegram_id}: {send_err}")
                     session.rollback()
             else:
-                # Нет бота или тип без push: сохраняем в историю без отправки
-                if _skip_push:
-                    try:
-                        from ai_integration.conversation_history import save_message_to_history as _smh
-                        _smh(user.telegram_id, 'assistant', message, session=session)
-                    except Exception: pass
-                    logger.info(f"[ANCHOR] 📋 Saved to history (no push) for {user.telegram_id}: {anchor_types}: {message[:80]}...")
                 session.commit()
+                logger.info(f"[ANCHOR] Message (no bot): {message[:80]}...")
 
         except Exception as e:
             logger.error(f"[ANCHOR] Deliver error: {e}")
