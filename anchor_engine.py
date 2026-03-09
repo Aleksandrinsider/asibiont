@@ -568,8 +568,10 @@ class AnchorEngine:
         ).limit(20).all()
 
         # ── 0. BACKGROUND RESEARCH — выполнить отложенные исследования ──
+        _bg_now = datetime.utcnow()  # naive UTC для сравнения с triggered_at из PostgreSQL (naive)
         bg_due = [a for a in deliverable if a.anchor_type == 'background_research'
-                  and a.triggered_at <= datetime.now(timezone.utc)]
+                  and (a.triggered_at is None or
+                       (a.triggered_at.replace(tzinfo=None) if a.triggered_at.tzinfo else a.triggered_at) <= _bg_now)]
         if bg_due and not is_night:
             for bra in bg_due[:2]:
                 async with self._ai_semaphore:
