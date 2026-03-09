@@ -3712,7 +3712,23 @@ class AnchorEngine:
             if atype not in last_delivery_by_type or delivered_at > last_delivery_by_type[atype]:
                 last_delivery_by_type[atype] = delivered_at
 
+        # Типы, которые НЕ подлежат cooldown-фильтрации:
+        # 1) ALWAYS_DELIVER — критичные для пользователя, доставляются всегда
+        # 2) Silent/automated — имеют собственные rate limits (макс N за цикл)
+        _COOLDOWN_BYPASS = ALWAYS_DELIVER_TYPES | {
+            'email_outreach_send', 'email_follow_up', 'email_need_leads',
+            'content_campaign_publish',
+            'delegation_campaign_send', 'delegation_campaign_follow_up',
+            'goal_autopilot_review',
+            'post_opportunity', 'channel_post', 'discord_post',
+        }
+
         for anchor in anchors:
+            # Критичные и silent типы всегда проходят (у них свои rate limits)
+            if anchor.anchor_type in _COOLDOWN_BYPASS:
+                result.append(anchor)
+                continue
+
             cooldown_h = anchor.cooldown_hours if anchor.cooldown_hours is not None and anchor.cooldown_hours > 0 else PRIORITY_COOLDOWN.get(anchor.priority, 4)
 
             # Приоритет: per-source cooldown → per-type fallback
@@ -5486,26 +5502,29 @@ class AnchorEngine:
             # ── CROSS-PROCESS DUPLICATE GUARD ──
             # Два инстанса могут создать разные DB-строки для одного логического якоря.
             # Если те же anchor_types уже доставлялись в последние 2 мин — это дубль.
+            # НО: ALWAYS_DELIVER_TYPES исключаем из проверки — у них row-level lock выше достаточен.
             current_types = set(a.anchor_type for a in anchors)
+            _check_types = current_types - ALWAYS_DELIVER_TYPES  # only non-critical for dupe check
             very_recent_logs = session.query(AnchorDeliveryLog).filter(
                 AnchorDeliveryLog.user_id == user.id,
                 AnchorDeliveryLog.created_at >= now_utc - timedelta(minutes=2)
             ).all()
-            for log in very_recent_logs:
-                try:
-                    logged_types = set(json.loads(log.anchor_types) if log.anchor_types else [])
-                except Exception:
-                    logged_types = set()
-                overlap = current_types & logged_types
-                if overlap:
-                    logger.info(f"[ANCHOR] User {user.telegram_id}: cross-process duplicate detected (types: {overlap}), marking and skip")
-                    for anchor in anchors:
-                        anchor.delivered_at = now_utc
+            if _check_types:
+                for log in very_recent_logs:
                     try:
-                        session.commit()
+                        logged_types = set(json.loads(log.anchor_types) if log.anchor_types else [])
                     except Exception:
-                        session.rollback()
-                    return
+                        logged_types = set()
+                    overlap = _check_types & logged_types
+                    if overlap:
+                        logger.info(f"[ANCHOR] User {user.telegram_id}: cross-process duplicate detected (types: {overlap}), marking and skip")
+                        for anchor in anchors:
+                            anchor.delivered_at = now_utc
+                        try:
+                            session.commit()
+                        except Exception:
+                            session.rollback()
+                        return
             # Gap check — но ALWAYS_DELIVER якоря (агенты, критические) обходят gap
             _anchor_types_here = {a.anchor_type for a in anchors}
             _has_always_deliver = bool(_anchor_types_here & ALWAYS_DELIVER_TYPES)
