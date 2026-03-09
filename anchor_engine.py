@@ -298,14 +298,12 @@ class AnchorEngine:
                 EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
                 EmailOutreach.next_follow_up_at <= now_utc,
             ).distinct().all()} if _pf_uids else set()
-            # Автопилот работает 24/7 — если есть pending goal_autopilot_review, не пропускаем юзера
-            _night_exc_autopilot = {row[0] for row in session.query(Anchor.user_id).filter(
-                Anchor.user_id.in_(_pf_uids),
-                Anchor.anchor_type == 'goal_autopilot_review',
-                Anchor.delivered_at.is_(None),
-                Anchor.triggered_at.isnot(None),
-                Anchor.expires_at > now_utc,
-            ).distinct().all()} if _pf_uids else set()
+            # Автопилот работает 24/7 — пользователей с goal_autopilot_enabled=True
+            # всегда включаем в скан (ночью тоже), чтобы создавать новые autopilot якоря
+            _night_exc_autopilot = {row[0] for row in session.query(UserProfile.user_id).filter(
+                UserProfile.user_id.in_(_pf_uids),
+                UserProfile.goal_autopilot_enabled == True,
+            ).all()} if _pf_uids else set()
 
             eligible = []
             skipped_night = 0
