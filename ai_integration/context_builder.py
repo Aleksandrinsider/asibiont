@@ -1105,6 +1105,14 @@ class ContextBuilder:
             if similar_hints:
                 hints.extend(similar_hints)
 
+            # ═══ РЕКОМЕНДАЦИИ ИНТЕГРАЦИЙ (макс. 1, не чаще 72ч) ═══
+            try:
+                _int_rec = self._recommend_integration(user, profile, all_goals, session)
+                if _int_rec:
+                    hints.append(_int_rec)
+            except Exception as _ire:
+                logger.debug(f"[INTEG_REC] {_ire}")
+
             if hints:
                 return "\n\n[internal_context]\n" + "\n".join(hints)
 
@@ -1468,6 +1476,94 @@ class ContextBuilder:
         except Exception as e:
             logger.warning(f"[DATES] Error: {e}")
         return hints
+
+    # Кэш: user_id → datetime последней рекомендации
+    _integration_rec_cache: dict = {}
+
+    def _recommend_integration(self, user, profile, all_goals, session) -> str | None:
+        """Передаёт агенту список неподключённых интеграций — агент сам решает что и когда предложить.
+
+        Anti-spam: не чаще 1 раза за 72 часа на пользователя.
+        """
+        uid = user.id
+        now = datetime.now(timezone.utc)
+
+        last = self._integration_rec_cache.get(uid)
+        if last and (now - last).total_seconds() < 72 * 3600:
+            return None
+
+        # --- что подключено ---
+        _has_tg_channel = bool(getattr(user, 'telegram_channel', None))
+        _has_discord = bool(getattr(user, 'discord_webhook', None))
+        _has_gmail_oauth = bool(getattr(user, 'google_oauth_token', None))
+
+        from models import UserAgent as _UA_rec
+        _agents = session.query(_UA_rec).filter(
+            _UA_rec.author_id == user.id,
+            _UA_rec.status != 'disabled',
+        ).all()
+        _kup = ' '.join((_a.user_api_keys or '').upper() for _a in _agents)
+        _clo = ' '.join((_a.python_code or '').lower() for _a in _agents)
+
+        _has_email = (_has_gmail_oauth
+                      or 'GMAIL_USER' in _kup or 'GMAIL_PASS' in _kup
+                      or 'YANDEX_USER' in _kup or 'MAILRU_USER' in _kup)
+        _has_imap = 'imaplib' in _clo or 'IMAP' in _kup
+        _has_github = 'GITHUB' in _kup
+        _has_notion = 'NOTION' in _kup
+        _has_slack = 'SLACK' in _kup
+        _has_rss = 'feedparser' in _clo or 'RSS' in _kup
+
+        # (not_connected, name, benefit, how_to_connect)
+        _options = [
+            (not _has_tg_channel,
+             "Telegram-канал",
+             "автопостинг по контент-стратегии ежедневно",
+             "Настройки → поле «Telegram-канал» (@username или chat ID)"),
+            (not _has_discord,
+             "Discord webhook",
+             "автопубликация контента в Discord-канал",
+             "Discord → канал → Настройки → Интеграции → Webhooks → URL → вставить в профиле"),
+            (not _has_email,
+             "Личная почта (Gmail/Яндекс/Mail.ru)",
+             "email от имени пользователя — выше доверие, больше ответов (вместо outreach@asibiont.com)",
+             "Настройки → Gmail OAuth, или пароль приложения в настройках агента"),
+            (_has_email and not _has_imap,
+             "IMAP-мониторинг входящих",
+             "агент читает inbox и уведомляет/отвечает автоматически",
+             "создать агента с python_code для IMAP + ключи USER/PASS"),
+            (not _has_github,
+             "GitHub API",
+             "автоматизация issues, PR, мониторинг репозиториев",
+             "создать агента с GITHUB_TOKEN в ключах"),
+            (not _has_notion,
+             "Notion API",
+             "синхронизация задач/заметок, обновление баз данных",
+             "создать агента с NOTION_TOKEN в ключах"),
+            (not _has_slack,
+             "Slack Bot",
+             "отчёты в каналы, уведомления о задачах, мониторинг сообщений",
+             "создать агента с SLACK_BOT_TOKEN в ключах"),
+            (not _has_rss,
+             "RSS-мониторинг",
+             "автосбор новостей/трендов из RSS-лент с дайджестом",
+             "создать агента с feedparser в python_code"),
+        ]
+
+        available = [(n, b, h) for flag, n, b, h in _options if flag]
+        if not available:
+            return None
+
+        lines = ["ДОСТУПНЫЕ ИНТЕГРАЦИИ (не подключены):"]
+        for name, benefit, how in available:
+            lines.append(f"• {name} — {benefit}. Подключить: {how}")
+        lines.append(
+            "Упомяни одну из них ТОЛЬКО если она полезна в контексте текущего разговора. "
+            "Не перечисляй все, не навязывай. Если ничего не релевантно — промолчи."
+        )
+
+        self._integration_rec_cache[uid] = now
+        return '\n'.join(lines)
 
     def _find_similar_users(self, user, profile, session, user_tz):
         """Поиск пользователей с пересекающимися интересами, навыками и задачами."""
