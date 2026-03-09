@@ -474,6 +474,13 @@ class AnchorEngine:
         post_count = 0
         channel_count = 0
         discord_count = 0
+        # Silent типы, которые НЕ являются сообщениями пользователю
+        _SILENT_LOG_TYPES = {
+            'email_outreach_send', 'email_follow_up', 'email_need_leads',
+            'content_campaign_publish',
+            'delegation_campaign_send', 'delegation_campaign_follow_up',
+            'agent_delegation',  # legacy
+        }
         for log in today_logs:
             try:
                 types = json.loads(log.anchor_types) if log.anchor_types else []
@@ -485,6 +492,8 @@ class AnchorEngine:
                 discord_count += 1
             elif 'post_opportunity' in types:
                 post_count += 1
+            elif types and all(t in _SILENT_LOG_TYPES for t in types):
+                pass  # Тихие доставки не считаются: пользователь не получил сообщение
             else:
                 dialog_count += 1
 
@@ -1425,7 +1434,28 @@ class AnchorEngine:
         anchors.extend(self._scan_goal_autopilot(user, profile, session, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
-        anchors = await self._enrich_anchors_with_ddg(anchors, profile)
+        # Пропускаем если DDG сервис известен как недоступный (service_degraded:ddg pending)
+        _ddg_down = any(
+            a.anchor_type == 'service_degraded' and a.source == 'service_health:ddg'
+            for a in anchors  # новые кандидаты ещё не в БД, но existing тоже проверим
+        ) or session.query(Anchor).filter(
+            Anchor.user_id == user.id,
+            Anchor.anchor_type == 'service_degraded',
+            Anchor.source == 'service_health:ddg',
+            Anchor.delivered_at.is_(None),
+        ).first() is not None
+        if not _ddg_down:
+            try:
+                anchors = await asyncio.wait_for(
+                    self._enrich_anchors_with_ddg(anchors, profile),
+                    timeout=15.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("[ANCHOR-DDG] Enrichment timed out (15s) — DDG likely down, skipping")
+            except Exception as _ddg_err:
+                logger.warning(f"[ANCHOR-DDG] Enrichment error (skipping): {_ddg_err}")
+        else:
+            logger.debug("[ANCHOR-DDG] DDG service degraded — skipping web enrichment")
 
         # Дедупликация: не создаём якорь если уже есть недоставленный с тем же type+source
         # with_for_update() сериализует запись между двумя параллельными инстансами (Railway deploy)
@@ -1515,7 +1545,10 @@ class AnchorEngine:
                     if query:
                         if city and city.lower() not in query.lower():
                             query += f' {city}'
-                        results = await api.duckduckgo_search(query, num=5, cache_ttl=7200)
+                        try:
+                            results = await asyncio.wait_for(api.duckduckgo_search(query, num=5, cache_ttl=7200), timeout=8.0)
+                        except (asyncio.TimeoutError, Exception):
+                            results = []
                         if results:
                             data['web_events'] = [
                                 {'title': r.get('title', ''), 'snippet': r.get('snippet', '')[:200], 'url': r.get('link', '')}
@@ -1530,7 +1563,10 @@ class AnchorEngine:
                         from datetime import datetime as dt
                         year = dt.now().strftime('%Y')
                         news_query = f'{niche[:50]} новости тренды {year}'
-                        results = await api.duckduckgo_search(news_query, num=5, cache_ttl=7200)
+                        try:
+                            results = await asyncio.wait_for(api.duckduckgo_search(news_query, num=5, cache_ttl=7200), timeout=8.0)
+                        except (asyncio.TimeoutError, Exception):
+                            results = []
                         if results:
                             data['fresh_insights'] = [
                                 {'title': r.get('title', ''), 'snippet': r.get('snippet', '')[:200], 'url': r.get('link', '')}
@@ -1545,7 +1581,10 @@ class AnchorEngine:
                     topic = content_strategy[:50] if content_strategy else niche[:50]
                     if topic:
                         ideas_query = f'{topic} контент идеи тренды'
-                        results = await api.duckduckgo_search(ideas_query, num=5, cache_ttl=7200)
+                        try:
+                            results = await asyncio.wait_for(api.duckduckgo_search(ideas_query, num=5, cache_ttl=7200), timeout=8.0)
+                        except (asyncio.TimeoutError, Exception):
+                            results = []
                         if results:
                             data['content_ideas_from_web'] = [
                                 {'title': r.get('title', ''), 'snippet': r.get('snippet', '')[:200], 'url': r.get('link', '')}
