@@ -6403,7 +6403,8 @@ except Exception as e:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const sorted = [...activities].sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
+            const _HIDDEN_ACT_TYPES = new Set(['goal_autopilot_dispatch']);
+            const sorted = [...activities].filter(a => !_HIDDEN_ACT_TYPES.has(a.activity_type)).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
             const latest = sorted[0] && sorted[0].created_at;
             if (latest && (!window._activityPollSince || latest > window._activityPollSince)) {
                 window._activityPollSince = latest;
