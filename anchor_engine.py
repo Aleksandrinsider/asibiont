@@ -528,6 +528,23 @@ class AnchorEngine:
             if gap < timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES):
                 proactive_gap_ok = False
 
+        # 0b. CLEANUP — удаляем expired-but-undelivered якоря старше 2ч (мусор в БД)
+        # Это якоря, которые никогда не смогут быть доставлены (expires_at прошёл)
+        try:
+            cleanup_threshold = datetime.now(timezone.utc) - timedelta(hours=2)
+            expired_gone = session.query(Anchor).filter(
+                Anchor.user_id == user.id,
+                Anchor.delivered_at.is_(None),
+                Anchor.expires_at.isnot(None),
+                Anchor.expires_at < cleanup_threshold,
+            ).delete(synchronize_session=False)
+            if expired_gone > 0:
+                session.commit()
+                logger.info(f"[ANCHOR] User {user_id}: 🧹 cleaned {expired_gone} expired-but-undelivered anchors")
+        except Exception as _cleanup_err:
+            logger.debug(f"[ANCHOR] Cleanup error (non-critical): {_cleanup_err}")
+            session.rollback()
+
         # 1. SCAN — обнаружить новые якоря
         new_anchors = await self._scan_anchors(user, session)
         if new_anchors:
@@ -3904,10 +3921,21 @@ class AnchorEngine:
             if anchor.source and anchor.source in last_delivery_by_source:
                 last_delivered = last_delivery_by_source[anchor.source]
             else:
-                # Для якорей без уникального source — используем type-based cooldown
-                # НО только для типов, которые НЕ являются кастомными агентными якорями
-                if anchor.source and (anchor.source.startswith('agent:') or anchor.source.startswith('dispatch:') or anchor.source.startswith('autopilot:')):
-                    # Агентный/dispatch/autopilot якорь — каждый source уникален, cooldown по типу неприменим
+                # Для якорей с уникальным entity-source — type-level fallback НЕ применяем:
+                # каждая задача/цель/погода/агент имеет независимый cooldown по своей записи.
+                # ALWAYS_DELIVER_TYPES (task_deadline_soon, service_degraded и т.д.) тоже используют
+                # только per-source cooldown, чтобы уведомление о task:171 не блокировалось
+                # из-за недавней доставки task:170.
+                _entity_source_prefixes = (
+                    'agent:', 'dispatch:', 'autopilot:', 'agent_scheduled:',
+                    'task:', 'goal:', 'weather:', 'service_health:',
+                )
+                _no_type_fallback = (
+                    (anchor.source and anchor.source.startswith(_entity_source_prefixes))
+                    or anchor.anchor_type in ALWAYS_DELIVER_TYPES
+                )
+                if _no_type_fallback:
+                    # Конкретный entity не был доставлен недавно — разрешаем
                     last_delivered = None
                 else:
                     last_delivered = last_delivery_by_type.get(anchor.anchor_type)
