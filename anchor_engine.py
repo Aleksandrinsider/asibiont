@@ -114,7 +114,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
     # ── Goal autopilot ──
-    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: проанализируй активные цели пользователя, определи ближайший конкретный шаг для продвижения и ДЕЙСТВУЙ — создай задачу, отправь письмо, запусти исследование. Не спрашивай разрешения — пользователь включил автопилот. ЗАПРЕЩЕНО: update_goal_progress (прогресс считается автоматически по метрикам), delete_task (нельзя удалять задачи). После действия кратко отчитайся.",
+    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: проанализируй активные цели пользователя, определи ближайший конкретный шаг для продвижения и ДЕЙСТВУЙ — создай задачу, отправь письмо, запусти исследование. Не спрашивай разрешения — пользователь включил автопилот. ЗАПРЕЩЕНО: update_goal_progress (прогресс считается автоматически по метрикам), delete_task (нельзя удалять задачи), start_email_campaign (нельзя создавать новые кампании — используй СУЩЕСТВУЮЩУЮ). НЕ ОТПРАВЛЯЙ email на адрес самого пользователя. После действия кратко отчитайся.",
 }
 
 # Группы батчинга
@@ -912,10 +912,11 @@ class AnchorEngine:
 
             # ── Создаём agent_delegation якорь → доставка через обычный pipeline (как поручение) ──
             if result and result.strip():
+                _now_deleg = datetime.now(timezone.utc)
                 _notify_anchor = Anchor(
                     user_id=user.id,
                     anchor_type='agent_delegation',
-                    source=f'autopilot:{agent_name}:goal_review',
+                    source=f'autopilot:{agent_name}:goal_review:{_now_deleg.strftime("%Y-%m-%d-%H")}',
                     topic=f'{agent_name} выполнил автопилот целей: {task_text[:80]}',
                     priority=AnchorPriority.HIGH,
                     data=json.dumps({
@@ -924,9 +925,9 @@ class AnchorEngine:
                         'task': task_text[:200],
                         'result': (result or '')[:600],
                     }, ensure_ascii=False),
-                    triggered_at=datetime.now(timezone.utc),
-                    expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
-                    cooldown_hours=1,
+                    triggered_at=_now_deleg,
+                    expires_at=_now_deleg + timedelta(hours=4),
+                    cooldown_hours=2,
                 )
                 session.add(_notify_anchor)
                 session.commit()
@@ -1453,6 +1454,20 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user.id}: scan skipped (locked by another instance)")
             return []
         existing_keys = {(a.anchor_type, a.source) for a in existing}
+        # Also check recently DELIVERED anchors for email_reply_received — prevent
+        # duplicate replies when AI doesn't set ai_reply_sent_at
+        _DEDUP_WITH_DELIVERED = {'email_reply_received', 'agent_delegation'}
+        try:
+            _recent_delivered = session.query(Anchor).filter(
+                Anchor.user_id == user.id,
+                Anchor.delivered_at.isnot(None),
+                Anchor.anchor_type.in_(list(_DEDUP_WITH_DELIVERED)),
+                Anchor.created_at >= now_utc - timedelta(hours=24),
+            ).all()
+            for a in _recent_delivered:
+                existing_keys.add((a.anchor_type, a.source))
+        except Exception:
+            pass
         # Singleton types: only one undelivered anchor per type (regardless of source)
         _SINGLETON_TYPES = {
             'service_degraded', 'token_low_balance', 'weather_extreme',
@@ -2522,8 +2537,8 @@ class AnchorEngine:
             priority=AnchorPriority.MEDIUM,
             data=json.dumps({'goals': goals_summary}, ensure_ascii=False),
             triggered_at=now_utc,
-            expires_at=now_utc + timedelta(minutes=30),
-            cooldown_hours=0.25,
+            expires_at=now_utc + timedelta(hours=4),
+            cooldown_hours=2,
             batch_group='goals',
         )]
 
@@ -3091,6 +3106,14 @@ class AnchorEngine:
             ]
 
             for email in unreplied:
+                # Превентивно ставим ai_reply_sent_at чтобы следующий скан
+                # не создал ещё один якорь для этого же письма
+                email.ai_reply_sent_at = now_utc
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_reply_received',
