@@ -10187,6 +10187,29 @@ async def send_outreach_email(
         except Exception as _log_err:
             logger.warning(f"[EMAIL_OUTREACH] Activity log error: {_log_err}")
 
+        # Авто-сохранение EmailContact при успешной отправке
+        try:
+            from models import EmailContact as _EC_auto
+            _ec_email = (recipient_email or '').strip().lower()
+            _ec_existing = session.query(_EC_auto).filter_by(
+                user_id=user.id, email=_ec_email
+            ).first()
+            if not _ec_existing:
+                session.add(_EC_auto(
+                    user_id=user.id,
+                    email=_ec_email,
+                    name=(recipient_name or '').strip() or None,
+                    company=(recipient_company or '').strip() or None,
+                    source='outreach',
+                    last_contacted_at=dt.now(tz.utc),
+                ))
+            else:
+                _ec_existing.last_contacted_at = dt.now(tz.utc)
+                if recipient_name and not _ec_existing.name:
+                    _ec_existing.name = recipient_name.strip()
+        except Exception as _ec_err:
+            logger.warning(f"[EMAIL_OUTREACH] Auto-save contact error: {_ec_err}")
+
         session.commit()
 
         lang = _get_lang(user_id)

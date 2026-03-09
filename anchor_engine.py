@@ -114,7 +114,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
     # ── Goal autopilot ──
-    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: ты видишь ПОЛНЫЙ контекст — цели, задачи по каждой цели, результаты email-кампаний и историю предыдущих действий. \n\nПРАВИЛА:\n1. ИЗУЧИ что уже сделано (recent_actions и tasks) — НЕ ПОВТОРЯЙ те же действия\n2. Если задача уже создана (pending/in_progress) — НЕ создавай такую же, а проверь её прогресс\n3. Если письмо уже отправлено человеку — НЕ отправляй повторно тому же человеку\n4. Определи НОВЫЙ конкретный шаг, который ПРОДВИНЕТ цель дальше\n5. Если ВСЕ текущие задачи в работе и email-кампания активна — отчитайся о статусе, НЕ создавай лишнего\n\nЗАПРЕЩЕНО: update_goal_progress, delete_task, start_email_campaign. НЕ ОТПРАВЛЯЙ email на адрес самого пользователя. После действия кратко отчитайся.",
+    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: ты видишь ПОЛНЫЙ контекст — цели, задачи, email-кампании, историю действий и НЕДАВНИЕ СООБЩЕНИЯ бота.\n\nПРАВИЛА:\n1. ИЗУЧИ recent_messages и recent_actions — НЕ ПОВТОРЯЙ те же действия и поручения\n2. Если задача уже создана (pending/in_progress) — НЕ создавай такую же\n3. Если письмо уже отправлено человеку (см. known_contacts) — НЕ пиши ему повторно\n4. Если в recent_messages уже есть поручение — НЕ давай его снова, найди ДРУГОЙ шаг\n5. Определи НОВЫЙ конкретный шаг, который ПРОДВИНЕТ цель дальше\n6. Если ВСЕ текущие задачи в работе — отчитайся о статусе, НЕ создавай лишнего\n\nЗАПРЕЩЕНО: update_goal_progress, delete_task, start_email_campaign. НЕ ОТПРАВЛЯЙ email на адрес самого пользователя. После действия кратко отчитайся.",
 }
 
 # Группы батчинга
@@ -832,10 +832,20 @@ class AnchorEngine:
             if recent_actions:
                 task_text += f"\n\nПоследние действия автопилота (за 24ч):\n" + '\n'.join(f"  {a}" for a in recent_actions)
 
+            # Добавляем недавние proactive-сообщения (что уже было сказано/сделано)
+            recent_msgs = data.get('recent_messages', [])
+            if recent_msgs:
+                task_text += f"\n\nНедавние сообщения бота (за 2ч) — НЕ ПОВТОРЯЙ:\n" + '\n'.join(f"  {m}" for m in recent_msgs)
+
             # Добавляем статус email-кампаний
             email_info = data.get('email_campaigns', [])
             if email_info:
                 task_text += f"\n\nEmail-кампании:\n" + '\n'.join(f"  {e}" for e in email_info)
+
+            # Добавляем известные контакты
+            known_contacts = data.get('known_contacts', [])
+            if known_contacts:
+                task_text += f"\n\nИзвестные контакты (уже в базе):\n" + '\n'.join(f"  {c}" for c in known_contacts)
 
             if agents:
                 chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
@@ -2558,6 +2568,26 @@ class AnchorEngine:
                 + (f" → {(a.result or '')[:100]}" if a.result else '')
             )
 
+        # Последние proactive/agent_msg сообщения за 2 часа — что реально было сказано
+        recent_msgs = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type.in_(['proactive', 'agent_msg']),
+            Interaction.created_at >= now_utc - timedelta(hours=2),
+        ).order_by(Interaction.created_at.desc()).limit(8).all()
+        recent_messages = []
+        for m in recent_msgs:
+            _txt = (m.content or '')[:200]
+            # Пропускаем JSON-контент агентов (avatar data)
+            if _txt.startswith('{"__agent"'):
+                try:
+                    _j = json.loads(m.content or '{}')
+                    _txt = (_j.get('text', '') or '')[:200]
+                except Exception:
+                    _txt = _txt[:100]
+            recent_messages.append(
+                f"[{m.created_at.strftime('%H:%M')}] {m.message_type}: {_txt}"
+            )
+
         # Email outreach статус по активным кампаниям
         email_campaigns = session.query(EmailCampaign).filter(
             EmailCampaign.user_id == user.id,
@@ -2572,6 +2602,13 @@ class AnchorEngine:
             email_summary.append(
                 f"Кампания «{c.name}»: отправлено={sent}, ответов={replied}, черновиков={drafts}"
             )
+
+        # Email контакты пользователя — кому уже писали
+        from models import EmailContact as _EC_scan
+        contacts = session.query(_EC_scan).filter_by(
+            user_id=user.id,
+        ).order_by(_EC_scan.created_at.desc()).limit(20).all()
+        contacts_summary = [f"{c.name or '?'} <{c.email}> (src={c.source})" for c in contacts] if contacts else []
 
         goals_summary = []
         for g in active_goals[:5]:
@@ -2600,7 +2637,9 @@ class AnchorEngine:
         context_data = {
             'goals': goals_summary,
             'recent_actions': actions_history[:5],
+            'recent_messages': recent_messages[:6],
             'email_campaigns': email_summary,
+            'known_contacts': contacts_summary[:10],
         }
 
         return [Anchor(
