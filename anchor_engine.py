@@ -113,6 +113,8 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     'agent_task_blocked': "Агент заблокирован на задаче '{task}'. Проанализируй причину блокировки и предложи решение.",
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
+    # ── Goal autopilot ──
+    'goal_autopilot_review': "АВТОПИЛОТ ЦЕЛЕЙ: проанализируй активные цели пользователя, определи ближайший конкретный шаг для продвижения и ДЕЙСТВУЙ — создай задачу, отправь письмо, запусти исследование, делегируй агенту. Не спрашивай разрешения — пользователь включил автопилот. После действия кратко отчитайся.",
 }
 
 # Группы батчинга
@@ -175,6 +177,8 @@ BATCH_GROUPS = {
     # Новые офисные якоря
     'agent_inbox_reply': 'office',         # Агент нашёл новые входящие письма (IMAP)
     'agent_task_blocked': 'office',        # Агент застрял, нужно решение пользователя
+    # Goal autopilot
+    'goal_autopilot_review': 'goals',      # Периодический AI-анализ целей — автономные действия
 }
 
 
@@ -613,13 +617,15 @@ class AnchorEngine:
         EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
         CONTENT_SILENT_TYPES = {'content_campaign_publish'}
         DELEGATION_SILENT_TYPES = {'delegation_campaign_send', 'delegation_campaign_follow_up'}
+        AUTOPILOT_SILENT_TYPES = {'goal_autopilot_review'}
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post', 'discord_post')]
         email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
         delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
-        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors]
+        autopilot_anchors = [a for a in ready if a.anchor_type in AUTOPILOT_SILENT_TYPES]
+        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors and a not in autopilot_anchors]
 
         logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}, deleg_silent={len(delegation_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
@@ -706,6 +712,15 @@ class AnchorEngine:
         elif delegation_silent_anchors and is_night:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ delegation campaigns blocked (night hours)")
 
+        # ── 3h. GOAL AUTOPILOT — автономное продвижение целей через agent dispatch (не ночью) ──
+        if autopilot_anchors and not is_night and has_proactive_tokens:
+            logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review...")
+            for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
+                async with self._ai_semaphore:
+                    await self._dispatch_agent_for_anchor(user, _ap, session)
+        elif autopilot_anchors and is_night:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ goal autopilot blocked (night hours)")
+
     # ═══════════════════════════════════════════════════════
     # BACKGROUND RESEARCH — выполнение отложенных исследований
     # ═══════════════════════════════════════════════════════
@@ -775,6 +790,118 @@ class AnchorEngine:
     # ═══════════════════════════════════════════════════════
     # EVENT-DRIVEN AGENT DISPATCH
     # ═══════════════════════════════════════════════════════
+
+    async def _dispatch_agent_for_anchor(self, user, anchor, session):
+        """Прямой dispatch: запускает AI-агента для конкретного якоря и помечает доставленным.
+        
+        Используется для автопилота целей: агент получает задачу, выполняет действия
+        (создаёт задачи, отправляет письма, исследует), результат сохраняется в activity log.
+        """
+        try:
+            from ai_integration.autonomous_agent import _exec_agent_for_director
+            from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
+
+            agents = session.query(_UA_ap).filter_by(
+                author_id=user.id, status='active',
+            ).limit(10).all()
+
+            # Если нет пользовательских агентов — используем прямой AI-вызов через основной чат
+            task_text = _AGENT_DISPATCH_TRIGGERS.get(
+                anchor.anchor_type, anchor.topic or '',
+            )
+            data = anchor.data or {}
+            if isinstance(data, str):
+                data = json.loads(data)
+
+            # Обогащаем задачу данными о целях
+            goals_info = data.get('goals', [])
+            if goals_info:
+                goals_block = '\n'.join(
+                    f"• {g['title']} ({g['progress']}%) — задач: {g.get('active_tasks', 0)}"
+                    + (f", дедлайн: {g['target_date']}" if g.get('target_date') else '')
+                    for g in goals_info
+                )
+                task_text += f"\n\nАктивные цели:\n{goals_block}"
+
+            if agents:
+                chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+                agent_data = {
+                    'id': chosen.id, 'name': chosen.name,
+                    'job_title': chosen.job_title or '',
+                    'specialization': chosen.specialization or '',
+                    'description': chosen.description or '',
+                    'personality': chosen.personality or '',
+                    'python_code': chosen.python_code or '',
+                    'user_api_keys': chosen.user_api_keys or '',
+                    'tools_allowed': chosen.tools_allowed or '',
+                    'tools': json.loads(chosen.tools_allowed or '[]'),
+                }
+                agent_name = chosen.name
+
+                # Log dispatch
+                session.add(_AAL_ap(
+                    user_id=user.id,
+                    activity_type='goal_autopilot_dispatch',
+                    title=f'[autopilot] {agent_name} — review goals',
+                    content=task_text[:500],
+                    target=anchor.source,
+                    status='in_progress',
+                    ref_id=chosen.id,
+                ))
+                session.commit()
+
+                result = await _exec_agent_for_director(
+                    agent_data, task_text, user.telegram_id,
+                )
+            else:
+                # Нет агентов — вызываем основной AI через chat
+                from ai_integration.chat import get_ai_response
+                result = await get_ai_response(
+                    user_id=user.telegram_id,
+                    user_message=task_text,
+                    is_proactive=True,
+                )
+                agent_name = 'ASI'
+
+                session.add(_AAL_ap(
+                    user_id=user.id,
+                    activity_type='goal_autopilot_dispatch',
+                    title=f'[autopilot] ASI — review goals',
+                    content=task_text[:500],
+                    target=anchor.source,
+                    status='completed',
+                    result=(result or '')[:400],
+                ))
+                session.commit()
+
+            # Помечаем якорь доставленным
+            anchor.delivered_at = datetime.now(timezone.utc)
+            session.commit()
+
+            logger.info(
+                "[ANCHOR-AUTOPILOT] user %d: %s executed goal review → %d chars",
+                user.id, agent_name, len(result or ''),
+            )
+
+            # Обновляем статус dispatch-лога
+            if agents and result:
+                log = session.query(_AAL_ap).filter_by(
+                    user_id=user.id,
+                    activity_type='goal_autopilot_dispatch',
+                    target=anchor.source,
+                ).order_by(_AAL_ap.id.desc()).first()
+                if log:
+                    log.status = 'completed'
+                    log.result = (result or '')[:400]
+                    session.commit()
+
+        except Exception as e:
+            logger.warning("[ANCHOR-AUTOPILOT] error for user %d: %s", user.id, e)
+            anchor.delivered_at = datetime.now(timezone.utc)
+            try:
+                session.commit()
+            except Exception:
+                pass
 
     async def _dispatch_agents_for_new_anchors(self, user, new_anchors: list):
         """
@@ -1216,6 +1343,9 @@ class AnchorEngine:
 
         # --- FOLLOW-UP РЕЗУЛЬТАТОВ АГЕНТОВ (проверка незакрытых dispatch-задач) ---
         anchors.extend(self._scan_agent_followup(user, session, now_utc))
+
+        # --- АВТОПИЛОТ ЦЕЛЕЙ (AI автономно продвигает цели) ---
+        anchors.extend(self._scan_goal_autopilot(user, profile, session, now_utc))
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         anchors = await self._enrich_anchors_with_ddg(anchors, profile)
@@ -2252,6 +2382,52 @@ class AnchorEngine:
             ))
 
         return anchors
+
+    def _scan_goal_autopilot(self, user, profile, session, now_utc) -> list:
+        """Автопилот целей: если включён — раз в 4 часа AI анализирует цели и действует."""
+        if not profile or not getattr(profile, 'goal_autopilot_enabled', False):
+            return []
+
+        active_goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status == 'active',
+        ).all()
+        if not active_goals:
+            return []
+
+        # Собираем задачи к целям
+        goal_ids = [g.id for g in active_goals]
+        from sqlalchemy import func as _ga_func
+        _task_counts = dict(session.query(Task.goal_id, _ga_func.count(Task.id)).filter(
+            Task.goal_id.in_(goal_ids),
+            Task.status.in_(['pending', 'in_progress']),
+        ).group_by(Task.goal_id).all()) if goal_ids else {}
+
+        goals_summary = []
+        for g in active_goals[:5]:  # Макс 5 целей за раз
+            goals_summary.append({
+                'id': g.id,
+                'title': g.title,
+                'description': (g.description or '')[:150],
+                'progress': g.progress_percentage,
+                'target_date': g.target_date.isoformat() if g.target_date else None,
+                'active_tasks': _task_counts.get(g.id, 0),
+            })
+
+        return [Anchor(
+            user_id=user.id,
+            anchor_type='goal_autopilot_review',
+            source=f'autopilot:{user.id}:goals',
+            topic=_t(user,
+                      f'Автопилот: проанализируй {len(goals_summary)} целей и выполни следующий шаг',
+                      f'Autopilot: review {len(goals_summary)} goals and take the next step'),
+            priority=AnchorPriority.MEDIUM,
+            data=json.dumps({'goals': goals_summary}, ensure_ascii=False),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=6),
+            cooldown_hours=4,
+            batch_group='goals',
+        )]
 
     def _scan_inactivity_reengagement(self, user, session, now_utc) -> list:
         """Пользователь не взаимодействовал 3+ дня → мягкое возвращение."""

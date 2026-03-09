@@ -70,6 +70,7 @@ def _migrate_user_profiles(session, inspector):
         'country': 'ALTER TABLE user_profiles ADD COLUMN country VARCHAR(100)',
         'country_normalized': 'ALTER TABLE user_profiles ADD COLUMN country_normalized VARCHAR(100)',
         'country_normalized_ru': 'ALTER TABLE user_profiles ADD COLUMN country_normalized_ru VARCHAR(100)',
+        'goal_autopilot_enabled': 'ALTER TABLE user_profiles ADD COLUMN goal_autopilot_enabled BOOLEAN DEFAULT FALSE',
     })
 
     # subscription_tier — особая обработка для PostgreSQL enum

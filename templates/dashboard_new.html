@@ -676,6 +676,11 @@
             <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
                 <span>{{ token_balance or 0 }}</span>
             </button>
+            <button id="mobile-autopilot-btn" onclick="toggleGoalAutopilot()" style="background: {{ '#068487' if goal_autopilot_enabled else 'none' }}; border: 1px solid {{ '#068487' if goal_autopilot_enabled else '#D1D9E0' }}; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Автопилот целей" data-i18n-title="goal-autopilot" data-active="{{ 'true' if goal_autopilot_enabled else '' }}">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="{{ '#FFFFFF' if goal_autopilot_enabled else '#374151' }}">
+                    <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3.5a.75.75 0 0 1 .75.75v2.69l1.78 1.78a.749.749 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 7.25 8.5v-3.25A.75.75 0 0 1 8 4.5Z"/>
+                </svg>
+            </button>
             <button id="mobile-menu-btn" onclick="toggleMobileColumnMenu()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
             </button>
@@ -744,6 +749,12 @@
                 <div style="display: flex; align-items: center; margin-left: 12px; margin-right: 30px;">
                     <button id="header-token-balance" onclick="window.location.href='/subscription-tiers'" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; margin-right: 8px; white-space: nowrap;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Баланс токенов" data-i18n-title="token-balance">
                         {{ token_balance or 0 }} <span data-i18n="tokens">токенов</span>
+                    </button>
+
+                    <button id="header-autopilot-btn" onclick="toggleGoalAutopilot()" style="padding: 8px; width: 32px; height: 32px; background: {{ '#068487' if goal_autopilot_enabled else '#FFFFFF' }}; border: 1px solid {{ '#068487' if goal_autopilot_enabled else '#D1D9E0' }}; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="if(!this.dataset.active) { this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'; }" onmouseout="if(!this.dataset.active) { this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'; }" title="Автопилот целей" data-i18n-title="goal-autopilot" data-active="{{ 'true' if goal_autopilot_enabled else '' }}">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="{{ '#FFFFFF' if goal_autopilot_enabled else '#374151' }}">
+                            <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3.5a.75.75 0 0 1 .75.75v2.69l1.78 1.78a.749.749 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 7.25 8.5v-3.25A.75.75 0 0 1 8 4.5Z"/>
+                        </svg>
                     </button>
                     
                     <button id="header-install-btn" onclick="triggerPwaInstall()" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Установить приложение" data-i18n-title="install-app">
@@ -14054,6 +14065,44 @@ except Exception as e:
             window.location.href = '/logout';
         }
 
+        function toggleGoalAutopilot() {
+            var btns = [document.getElementById('header-autopilot-btn'), document.getElementById('mobile-autopilot-btn')];
+            var isActive = btns[0] && btns[0].dataset.active === 'true';
+            var newVal = !isActive;
+            fetch('/api/update_profile', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({goal_autopilot_enabled: newVal})
+            }).then(function(r){ return r.json(); }).then(function(d){
+                if (d.success) {
+                    btns.forEach(function(btn){
+                        if (!btn) return;
+                        var svg = btn.querySelector('svg');
+                        if (d.goal_autopilot_enabled) {
+                            btn.dataset.active = 'true';
+                            btn.style.background = '#068487';
+                            btn.style.borderColor = '#068487';
+                            if (svg) svg.setAttribute('fill', '#FFFFFF');
+                            btn.onmouseover = null;
+                            btn.onmouseout = null;
+                        } else {
+                            btn.dataset.active = '';
+                            btn.style.background = btn.id.startsWith('mobile') ? 'none' : '#FFFFFF';
+                            btn.style.borderColor = '#D1D9E0';
+                            if (svg) svg.setAttribute('fill', '#374151');
+                            if (!btn.id.startsWith('mobile')) {
+                                btn.onmouseover = function(){ if(!this.dataset.active){ this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';} };
+                                btn.onmouseout = function(){ if(!this.dataset.active){ this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';} };
+                            }
+                        }
+                    });
+                    showNotification(d.goal_autopilot_enabled ?
+                        (window._lang === 'en' ? 'Goal autopilot enabled' : 'Автопилот целей включён') :
+                        (window._lang === 'en' ? 'Goal autopilot disabled' : 'Автопилот целей выключен'), 'info');
+                }
+            }).catch(function(e){ console.error('Autopilot toggle error:', e); });
+        }
+
         function copyReferralLink(link) {
             navigator.clipboard.writeText(link).then(function() {
                 // Показываем уведомление об успешном копировании
@@ -14722,6 +14771,7 @@ except Exception as e:
       'token-balance':'Баланс токенов',
       'tokens':'токенов',
       'install-app':'Установить приложение',
+      'goal-autopilot':'Автопилот целей',
       'col-profile':'Профиль и контакты',
       'col-chat':'Чат и активность',
       'col-tasks':'Статистика и задачи',
@@ -14989,6 +15039,7 @@ except Exception as e:
       'token-balance':'Token balance',
       'tokens':'tokens',
       'install-app':'Install App',
+      'goal-autopilot':'Goal Autopilot',
       'col-profile':'Profile & Contacts',
       'col-chat':'Chat & Activity',
       'col-tasks':'Stats & Tasks',
