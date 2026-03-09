@@ -857,12 +857,12 @@ class AnchorEngine:
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
             else:
                 # Нет агентов — вызываем основной AI через chat
-                from ai_integration.chat import get_ai_response
-                result = await get_ai_response(
+                from ai_integration.chat import chat_with_ai
+                _chat_result = await chat_with_ai(
+                    message=task_text,
                     user_id=user.telegram_id,
-                    user_message=task_text,
-                    is_proactive=True,
                 )
+                result = _chat_result.get('response', '') if isinstance(_chat_result, dict) else str(_chat_result)
                 agent_name = 'ASI'
 
                 session.add(_AAL_ap(
@@ -5540,7 +5540,7 @@ class AnchorEngine:
                         pass
 
             # Определяем, связаны ли якоря с конкретным агентом
-            AGENT_ANCHOR_TYPES = {'agent_inbox_reply', 'agent_task_blocked', 'agent_office_update', 'integration_alert'}
+            AGENT_ANCHOR_TYPES = {'agent_inbox_reply', 'agent_task_blocked', 'agent_office_update', 'integration_alert', 'agent_delegation'}
             _agent_name = None
             for anchor in anchors:
                 if anchor.anchor_type in AGENT_ANCHOR_TYPES and anchor.data:
@@ -5558,7 +5558,7 @@ class AnchorEngine:
                 try:
                     from models import UserAgent
                     _ua = session.query(UserAgent).filter(
-                        UserAgent.user_id == user.id,
+                        UserAgent.author_id == user.id,
                         UserAgent.name == _agent_name,
                     ).first()
                     if _ua:

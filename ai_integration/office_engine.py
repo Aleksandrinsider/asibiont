@@ -1054,10 +1054,11 @@ class OfficeEngine:
                 # Выполняем задачу
                 try:
                     from ai_integration.autonomous_agent import _exec_agent_for_director
-                    result = await asyncio.wait_for(
+                    _raw_result = await asyncio.wait_for(
                         _exec_agent_for_director(target_agent, task_text, user.telegram_id),
                         timeout=45,
                     )
+                    result = _raw_result[0] if isinstance(_raw_result, (tuple, list)) else _raw_result
                 except asyncio.TimeoutError:
                     result = f"Задача передана {target_agent['name']}, результат будет позже."
                 except Exception as _e:

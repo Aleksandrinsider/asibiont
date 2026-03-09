@@ -1704,10 +1704,11 @@ async def delegate_task(
                     import asyncio as _asyncio_dt
                     try:
                         logger.info(f"[DELEGATE] Starting inline exec for {_agent_name}...")
-                        _result = await _asyncio_dt.wait_for(
+                        _raw_result = await _asyncio_dt.wait_for(
                             _exec_dir(_agent_dict, _agent_task_text, user_id),
                             timeout=45
                         )
+                        _result = _raw_result[0] if isinstance(_raw_result, (tuple, list)) else _raw_result
                         logger.info(f"[DELEGATE] Inline exec result for {_agent_name}: {len(_result or '')} chars")
                     except _asyncio_dt.TimeoutError:
                         logger.warning(f"[DELEGATE] agent exec timeout ({_agent_name}), 45s limit")
@@ -1744,7 +1745,8 @@ async def delegate_task(
                             f"Исправь: дай конкретный, развёрнутый ответ по существу задачи."
                         )
                         try:
-                            _result2 = await _exec_dir(_agent_dict, _rework_task, user_id)
+                            _raw_result2 = await _exec_dir(_agent_dict, _rework_task, user_id)
+                            _result2 = _raw_result2[0] if isinstance(_raw_result2, (tuple, list)) else _raw_result2
                             if _result2 and _result2.strip() and len(_result2.strip()) > len(_result.strip()):
                                 _result = _result2
                         except Exception:
