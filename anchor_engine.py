@@ -3916,8 +3916,8 @@ class AnchorEngine:
             else:
                 # Для якорей без уникального source — используем type-based cooldown
                 # НО только для типов, которые НЕ являются кастомными агентными якорями
-                if anchor.source and (anchor.source.startswith('agent:') or anchor.source.startswith('dispatch:')):
-                    # Агентный/dispatch якорь — каждый source уникален, cooldown по типу неприменим
+                if anchor.source and (anchor.source.startswith('agent:') or anchor.source.startswith('dispatch:') or anchor.source.startswith('autopilot:')):
+                    # Агентный/dispatch/autopilot якорь — каждый source уникален, cooldown по типу неприменим
                     last_delivered = None
                 else:
                     last_delivered = last_delivery_by_type.get(anchor.anchor_type)
