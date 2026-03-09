@@ -644,7 +644,8 @@ class AnchorEngine:
         elif regular_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok}, active_dialog={active_dialog})")
 
-        if all_dialog_anchors and has_proactive_tokens:
+        # Critical (ALWAYS_DELIVER) якоря доставляем даже без токенов (проверка в _deliver)
+        if all_dialog_anchors and (has_proactive_tokens or critical_anchors):
             anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
             logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
             # AI semaphore — ограничивает параллельные DeepSeek запросы
@@ -5505,22 +5506,30 @@ class AnchorEngine:
                     except Exception:
                         session.rollback()
                     return
-            recent_delivery = session.query(AnchorDeliveryLog).filter(
-                AnchorDeliveryLog.user_id == user.id,
-                AnchorDeliveryLog.created_at >= now_utc - timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES)
-            ).first()
-            if recent_delivery:
-                logger.info(f"[ANCHOR] User {user.telegram_id}: delivery gap too small ({MIN_PROACTIVE_GAP_MINUTES}min), skip")
-                return
+            # Gap check — но ALWAYS_DELIVER якоря (агенты, критические) обходят gap
+            _anchor_types_here = {a.anchor_type for a in anchors}
+            _has_always_deliver = bool(_anchor_types_here & ALWAYS_DELIVER_TYPES)
+            if not _has_always_deliver:
+                recent_delivery = session.query(AnchorDeliveryLog).filter(
+                    AnchorDeliveryLog.user_id == user.id,
+                    AnchorDeliveryLog.created_at >= now_utc - timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES)
+                ).first()
+                if recent_delivery:
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: delivery gap too small ({MIN_PROACTIVE_GAP_MINUTES}min), skip")
+                    return
 
             # Проверяем и списываем токены за проактивное сообщение (в той же сессии для атомарности)
             from token_service import spend_tokens, has_enough_tokens
             from config import FREE_ACCESS_MODE
             if not FREE_ACCESS_MODE:
                 if not has_enough_tokens(user.telegram_id, 'proactive_message', session=session):
-                    logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск доставки — нет токенов")
-                    return
-                spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor', session=session, auto_commit=False)
+                    # Критические якоря доставляем бесплатно (agent_delegation и т.д.)
+                    if not _has_always_deliver:
+                        logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск доставки — нет токенов")
+                        return
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: ALWAYS_DELIVER — доставка без токенов")
+                else:
+                    spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor', session=session, auto_commit=False)
 
             # Помечаем якоря как доставленные
             anchor_ids = []
