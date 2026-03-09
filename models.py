@@ -434,7 +434,7 @@ class Anchor(Base):
     data = Column(Text)                # JSON с деталями для AI: {task_id, hours_overdue, ...}
 
     # Жизненный цикл
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
     triggered_at = Column(DateTime)     # Когда сработал (факт подтвердился)
     delivered_at = Column(DateTime)     # Когда был доставлен пользователю
     expires_at = Column(DateTime)       # Когда якорь теряет актуальность

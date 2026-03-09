@@ -982,9 +982,19 @@ class AnchorEngine:
 
         except Exception as e:
             logger.warning("[ANCHOR-AUTOPILOT] error for user %d: %s", user.id, e)
-            anchor.delivered_at = datetime.now(timezone.utc)
+            # Коммитим delivered_at ПЕРВЫМ в отдельной транзакции — чтобы не потерять при
+            # возможном rollback обновления лога ниже.
             try:
-                # Mark any in_progress autopilot log as failed
+                anchor.delivered_at = datetime.now(timezone.utc)
+                session.commit()
+            except Exception:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                return  # anchor уже expired или ошибка сессии
+            # Отдельно обновляем статус лога — уже не критично если это упадёт
+            try:
                 from models import AgentActivityLog as _AAL_f
                 _stuck = session.query(_AAL_f).filter_by(
                     user_id=user.id,
@@ -995,7 +1005,7 @@ class AnchorEngine:
                 if _stuck:
                     _stuck.status = 'failed'
                     _stuck.result = f'Error: {str(e)[:300]}'
-                session.commit()
+                    session.commit()
             except Exception:
                 try:
                     session.rollback()
