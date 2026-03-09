@@ -93,6 +93,7 @@ ALWAYS_DELIVER_TYPES = {
     'agent_inbox_reply',         # Агент-почтовик нашёл новые входящие письма
     'agent_task_blocked',        # Агент застрял — нужно решение пользователя
     'agent_delegation',          # Результат работы агента по dispatch — пользователь ждёт
+    'service_degraded',          # Сервис недоступен (веб-поиск, AI, email) — пользователь должен знать
 }
 
 # Якоря, которые дополнительно ЗАПУСКАЮТ агента (event-driven dispatch)
@@ -651,6 +652,13 @@ class AnchorEngine:
             # AI semaphore — ограничивает параллельные DeepSeek запросы
             async with self._ai_semaphore:
                 message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
+            if not message:
+                # Если AI вернул SKIP, но есть ALWAYS_DELIVER якоря — форсируем минимальное сообщение
+                always_anchors = [a for a in all_dialog_anchors if a.anchor_type in ALWAYS_DELIVER_TYPES]
+                if always_anchors:
+                    logger.info(f"[ANCHOR] User {user_id}: AI skipped but ALWAYS_DELIVER anchors present — retrying with forced prompt")
+                    async with self._ai_semaphore:
+                        message = await self._ai_decide_and_compose(user, always_anchors, session, force_deliver=True)
             if message:
                 await self._deliver(user, all_dialog_anchors, message, session)
                 logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(all_dialog_anchors)} anchors in ONE message")
@@ -1515,7 +1523,10 @@ class AnchorEngine:
             'profile_gap', 'morning_plan', 'evening_review',
             'inactivity_reengagement',
         }
-        existing_types = {a.anchor_type for a in existing}
+        # Exclude expired anchors from singleton check — expired-but-undelivered anchors
+        # should NOT block creation of fresh ones
+        existing_types = {a.anchor_type for a in existing
+                          if a.expires_at is None or a.expires_at > now_utc}
 
         unique_anchors = []
         for a in anchors:
@@ -3905,8 +3916,8 @@ class AnchorEngine:
             else:
                 # Для якорей без уникального source — используем type-based cooldown
                 # НО только для типов, которые НЕ являются кастомными агентными якорями
-                if anchor.source and anchor.source.startswith('agent:'):
-                    # Агентный якорь — cooldown сбросился (нет записи по этому source) → пропускаем
+                if anchor.source and (anchor.source.startswith('agent:') or anchor.source.startswith('dispatch:')):
+                    # Агентный/dispatch якорь — каждый source уникален, cooldown по типу неприменим
                     last_delivered = None
                 else:
                     last_delivered = last_delivery_by_type.get(anchor.anchor_type)
@@ -5260,11 +5271,13 @@ class AnchorEngine:
             logger.error(f"[ANCHOR] _ai_compose_post error: {e}\n{traceback.format_exc()}")
             return None
 
-    async def _ai_decide_and_compose(self, user, anchors: list, session) -> str | None:
+    async def _ai_decide_and_compose(self, user, anchors: list, session, force_deliver: bool = False) -> str | None:
         """AI получает все якоря + контекст и РЕШАЕТ: писать или нет + ЧТО писать.
         
         Никаких шаблонов. AI думает на основе полных данных.
         
+        Args:
+            force_deliver: Если True — якоря являются ALWAYS_DELIVER_TYPES, SKIP запрещён.
         Returns:
             str — текст сообщения, или None если AI решил не писать.
         """
@@ -5413,7 +5426,7 @@ class AnchorEngine:
                 "",
                 "КАК ДУМАТЬ:",
                 "Перед написанием задай себе 3 вопроса:",
-                "1. Стоит ли это сообщение того, чтобы отвлечь человека? Если якоря слабые — верни SKIP. Лучше промолчать, чем отправить воду.",
+                "1. Стоит ли это сообщение того, чтобы отвлечь человека? Если якоря слабые — верни SKIP. Лучше промолчать, чем отправить воду." if not force_deliver else "1. Эти якоря помечены как КРИТИЧЕСКИ ВАЖНЫЕ (ALWAYS_DELIVER). SKIP ЗАПРЕЩЁН. Ты ОБЯЗАН написать сообщение на основе их содержимого.",
                 "2. Что я РЕАЛЬНО знаю? Вызови инструменты (research_topic, get_news_trends, list_tasks) — получи данные. Не выдумывай. Если не вызвал — не говори что 'проверил'.",
                 "3. Какая сфера жизни этого человека сейчас требует внимания? Работа? Развитие? Здоровье? Отношения? Цели? Подумай, где он застрял или что упускает.",
                 "",
@@ -6030,7 +6043,7 @@ class AnchorEngine:
             from models import UserAgent
             agents = session.query(UserAgent).filter(
                 UserAgent.author_id == user.id,
-                UserAgent.status == 'active',
+                UserAgent.status.in_(['active', 'paused']),
                 UserAgent.custom_anchors.isnot(None),
             ).all()
 
@@ -6097,7 +6110,7 @@ class AnchorEngine:
                         priority=priority,
                         data=json.dumps(extra_data, ensure_ascii=False),
                         triggered_at=now_utc,
-                        expires_at=now_utc + timedelta(hours=cooldown_h * 1.5),
+                        expires_at=now_utc + timedelta(hours=max(cooldown_h * 1.5, 2.0)),
                         cooldown_hours=cooldown_h,
                         batch_group=bg,
                     ))
