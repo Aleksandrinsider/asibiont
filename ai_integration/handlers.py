@@ -9329,21 +9329,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             f'https://hackernoon.com/search?query={_core_en}',
         ])
 
-    # Прямые контактные страницы популярных доменов по нише
+    # Нишевые контактные страницы — определяются динамически AI на основе аудитории
     _niche_contact_urls = []
-    _all_text_lower = _all_text
-    # Добавляем контакты конкретных ниш
-    if any(w in _all_text_lower for w in ('тестир', 'тестовых', 'qa', 'testing', 'tester', 'бета')):
-        _niche_contact_urls.extend([
-            'https://software-testing.ru/about',
-            'https://testit.software/blog',
-            'https://qalight.ua/kontakty/',
-        ])
-    if any(w in _all_text_lower for w in ('маркет', 'marketing', 'smm', 'digital')):
-        _niche_contact_urls.extend([
-            'https://growthhackers.com/members',
-            'https://cossa.ru/authors/',
-        ])
 
     async def _fetch_platform(url: str) -> tuple:
         """Скачать страницу платформы, вернуть (url, html)."""
