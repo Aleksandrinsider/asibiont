@@ -3880,13 +3880,13 @@ class AnchorEngine:
                 last_delivery_by_type[atype] = delivered_at
 
         # Типы, которые НЕ подлежат cooldown-фильтрации:
-        # 1) ALWAYS_DELIVER — критичные для пользователя, доставляются всегда
-        # 2) Silent/automated — имеют собственные rate limits (макс N за цикл)
-        _COOLDOWN_BYPASS = ALWAYS_DELIVER_TYPES | {
-            'email_outreach_send', 'email_follow_up', 'email_need_leads',
+        # Silent/automated типы — имеют собственные rate limits (макс N за цикл)
+        # ALWAYS_DELIVER типы ПОДЛЕЖАТ cooldown — их "always deliver" семантика
+        # обеспечивается тем, что они не блокируются dialog_count/gap/night.
+        _COOLDOWN_BYPASS = {
+            'email_outreach_send', 'email_follow_up',
             'content_campaign_publish',
             'delegation_campaign_send', 'delegation_campaign_follow_up',
-            'goal_autopilot_review',
             'post_opportunity', 'channel_post', 'discord_post',
         }
 

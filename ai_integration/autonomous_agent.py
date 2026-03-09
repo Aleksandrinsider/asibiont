@@ -4345,14 +4345,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _inferred_tools.update({'add_task', 'delegate_task'})
             # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
             _base_only = _inferred_tools <= {'add_task', 'delegate_task'}
-        if _inferred_tools and not _base_only:
-            try:
-                from .tools import get_available_tools as _gat3
-                _all_names = {t['function']['name'] for t in _gat3()}
-                _exclude_for_agent = _all_names - _inferred_tools
-                logger.info('[DIRECTOR] Smart filter for %s: inferred %d tools from spec', agent.get('name'), len(_inferred_tools))
-            except Exception:
-                pass
+            if _inferred_tools and not _base_only:
+                try:
+                    from .tools import get_available_tools as _gat3
+                    _all_names = {t['function']['name'] for t in _gat3()}
+                    _exclude_for_agent = _all_names - _inferred_tools
+                    logger.info('[DIRECTOR] Smart filter for %s: inferred %d tools from spec', agent.get('name'), len(_inferred_tools))
+                except Exception:
+                    pass
 
     # ── Шаг 3: Tool-calling loop (макс 3 итерации) ────────────────────────────
     # Инжектируем список доступных инструментов в промпт агента
