@@ -9056,7 +9056,8 @@ _GENERIC_PREFIXES = {
     'investor', 'investors', 'ceo', 'cto', 'cfo', 'coo',
     'editor', 'editorial', 'news', 'newsroom', 'events', 'event',
     'community', 'social', 'director', 'manager', 'commercial',
-    'advertising', 'ads', 'advert', 'booking', 'reservations',
+    'advertising', 'ads', 'advert', 'adv', 'ad', 'reklama',
+    'booking', 'reservations',
     'customerservice', 'cs', 'tech', 'technical', 'ops', 'operations',
     'compliance', 'procurement', 'reception', 'frontdesk', 'helpdesk',
     'itsupport', 'it', 'devops', 'sysadmin', 'accounts', 'accounting',
@@ -9140,7 +9141,12 @@ def _is_generic_email(email: str) -> bool:
                   'wordpress.com', 'github.com', 'users.noreply.github.com',
                   'googlegroups.com', 'mailchimp.com', 'sendgrid.net',
                   'amazonses.com', 'mailgun.org', 'sparkpost.com',
-                  'telegram.org', 'whatsapp.com', 'signal.org'):
+                  'telegram.org', 'whatsapp.com', 'signal.org',
+                  # Домены парсимых платформ (email самих платформ, не пользователей)
+                  'habr.com', 'vc.ru', 'spark.ru', 'rb.ru', 'tproger.ru',
+                  'dev.to', 'hackernoon.com', 'about.me',
+                  'producthunt.com', 'indiehackers.com',
+                  'reddit.com', 'stackoverflow.com', 'stackexchange.com'):
         return True
     # Email начинающиеся с support+ (Substack pattern: support+xxx@substack.com)
     if prefix.startswith('support+') or prefix.startswith('noreply+'):
@@ -9650,7 +9656,7 @@ If no relevant emails found return []"""
                 })
 
     # Если всё ещё 0 — используем regex emails как последний резерв,
-    # но ТОЛЬКО после DNS MX-проверки домена + базовой валидации
+    # но ТОЛЬКО после DNS MX-проверки домена + базовой валидации + персональности
     if not parsed_leads and all_emails_raw:
         logger.info(f"[AUTO_LEADS] Regex fallback: validating {len(all_emails_raw)} emails via DNS MX...")
         validated_fallback = []
@@ -9658,11 +9664,20 @@ If no relevant emails found return []"""
             domain = em.split('@')[1] if '@' in em else ''
             if not domain:
                 continue
+            # Повторная проверка generic (может быть пропущен для новых prefix'ов)
+            if _is_generic_email(em):
+                logger.info(f"[AUTO_LEADS] Fallback skip (generic): {em}")
+                continue
             # Базовая структура домена: 1-3 точки, TLD 2-6 букв
             parts = domain.split('.')
             tld = parts[-1] if parts else ''
             if len(parts) < 2 or len(parts) > 4 or len(tld) < 2 or len(tld) > 6:
                 logger.info(f"[AUTO_LEADS] Fallback skip (bad domain structure): {em}")
+                continue
+            # Prefix должен выглядеть как личное имя (минимум 4 символа, не чисто цифры)
+            prefix = em.split('@')[0]
+            if len(prefix) < 4 or prefix.isdigit():
+                logger.info(f"[AUTO_LEADS] Fallback skip (non-personal prefix): {em}")
                 continue
             # DNS MX проверка
             if not await _check_mx_record(domain):

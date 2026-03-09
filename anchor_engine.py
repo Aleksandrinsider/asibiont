@@ -852,6 +852,30 @@ class AnchorEngine:
                 ))
                 session.commit()
 
+                # ── Отправляем "ASI → Агент" сообщение в Telegram (поручение) ──
+                _task_short = task_text[:300].split('\n')[0]
+                _dispatch_msg = f"🎯 Поручение для {agent_name}: {_task_short}"
+                if self.bot:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=_dispatch_msg,
+                        )
+                        # Сохраняем в interaction для отображения в чате
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='proactive',
+                            content=_dispatch_msg,
+                        ))
+                        session.commit()
+                        try:
+                            from ai_integration.conversation_history import save_message_to_history as _smh_d
+                            _smh_d(user.telegram_id, 'assistant', _dispatch_msg, session=session)
+                        except Exception:
+                            pass
+                    except Exception as _e_disp:
+                        logger.warning("[ANCHOR-AUTOPILOT] dispatch msg send failed: %s", _e_disp)
+
                 _raw = await _exec_agent_for_director(
                     agent_data, task_text, user.telegram_id,
                 )
@@ -5266,7 +5290,7 @@ class AnchorEngine:
                 "— agent_office_update: офисный координатор назначил конкретное действие агенту по целям пользователя. В data: plan (строка формата '[Имя агента]: [действие]'), agent_count, goal_count. Сообщи кратко — что конкретно предлагает сделать агент и к какой цели это относится. Спроси: 'Запустить?' или 'Дать команду агенту?'. Не пиши 'координатор запланировал' — пиши живо, как будто агент сам хочет взяться за дело.",
                 "— agent_inbox_reply: КРИТИЧНО! Агент-почтовик нашёл новые входящие письма в inbox. В data: agent_name, reply_count, preview (краткая выжимка From/Subject). Напиши что агент {agent_name} обнаружил новые письма. Покажи preview. Спроси: хочет ли пользователь чтобы агент ответил на наиболее важные?",
                 "— agent_task_blocked: МАЙОР! Агент застрял — ему нужно решение, доступ или подтверждение от пользователя. В data: agent_name, reason (первая строка с BLOCKED), full_context. Напиши что {agent_name} не может двигаться дальше без участия. Объясни причину и чётко спроси что нужно: 'Дать доступ?', 'Подтвердить?', 'Изменить направление?' — конкретный вопрос на основе reason.",
-                "— agent_delegation: Агент выполнил задачу по целям пользователя. В data: agent_name, task, result. Кратко расскажи что агент сделал и каков результат. Если результат полезен — предложи следующий шаг.",
+                "— agent_delegation: Агент выполнил задачу по поручению автопилота. В data: agent_name, task, result. ФОРМАТ ОТВЕТА: пиши ОТ ИМЕНИ АГЕНТА, как будто агент отчитывается: '{agent_name}: выполнила задачу — [результат]'. Покажи что конкретно сделано и каков итог. Если результат полезен — предложи следующий шаг. НЕ пиши от третьего лица ('агент сделал'), пиши от первого ('я сделала/проверила/нашла').",
                 "",
                 "ПРАВИЛА ДЛЯ КОНТАКТНЫХ ЯКОРЕЙ:",
                 "— contact_match: Найден НОВЫЙ специалист, подходящий под алерт контактов пользователя. В data: username, skill, interest, city, position. Напиши что нашёлся человек @username с релевантными навыками/интересами. Объясни ПОЧЕМУ этот контакт полезен (на основе профиля пользователя). Предложи конкретное действие: 'Написать ему?', 'Добавить в контакты?'. Укажи @username для связи.",
