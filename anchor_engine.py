@@ -1105,16 +1105,7 @@ class AnchorEngine:
                 # используя последний dispatched-агент из AgentActivityLog как указатель.
                 if anchor.anchor_type == 'goal_autopilot_review':
                     # Строим список в стабильном порядке: реальные агенты по id, ASI в конце
-                    # RSS/news агенты исключаются — их задача делиться новостями, не управлять целями
-                    def _is_news_only(a):
-                        _combined = ' '.join([
-                            (getattr(a, 'python_code', '') or '')[:400],
-                            (getattr(a, 'description', '') or ''),
-                            (getattr(a, 'specialization', '') or ''),
-                            (getattr(a, 'job_title', '') or ''),
-                        ]).lower()
-                        return any(kw in _combined for kw in ('rss_url', 'rss', 'новост', 'news feed', 'лента новост'))
-                    _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0 and not _is_news_only(a)], key=lambda a: a.id)
+                    _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
                     _rotation_pool = _real_ags + ([_asi_ag] if _asi_ag else [])
                     if _rotation_pool:
@@ -1170,6 +1161,33 @@ class AnchorEngine:
                     'search_scope': getattr(chosen, 'search_scope', '') or '',
                 }
                 agent_name = chosen.name
+
+                # ── Адаптируем задачу под специализацию агента ──
+                # Каждый агент работает по теме целей, но в рамках своей роли.
+                # RSS/news-агент → ищет релевантные новости/упоминания по целям (не отправляет письма).
+                # Остальные агенты → стандартная задача автопилота.
+                if anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
+                    _ag_combined = ' '.join([
+                        (getattr(chosen, 'python_code', '') or '')[:400],
+                        (getattr(chosen, 'description', '') or ''),
+                        (getattr(chosen, 'specialization', '') or ''),
+                        (getattr(chosen, 'job_title', '') or ''),
+                    ]).lower()
+                    _is_rss = any(kw in _ag_combined for kw in ('rss_url', 'rss', 'лента новост', 'news feed'))
+                    if _is_rss:
+                        # Строим задачу для новостного агента на основе активных целей из task_text
+                        _goals_snippet = ''
+                        if goals_info:
+                            _goals_snippet = '\n'.join(f"• {g['title']}" for g in goals_info[:3])
+                        task_text = (
+                            f"[НОВОСТНОЙ ОБЗОР ДЛЯ ЦЕЛЕЙ]\n"
+                            f"Запусти run_agent_action чтобы получить свежие новости из RSS-ленты.\n"
+                            f"Затем найди новости и события, которые релевантны следующим целям:\n"
+                            + (_goals_snippet or task_text[:300])
+                            + "\n\nОтбери 2-3 самые полезные новости/упоминания (конкретные факты, цифры, "
+                            f"тренды), объясни коротко почему они важны для этих целей. "
+                            f"НЕ создавай задачи, НЕ отправляй письма — только поделись важными находками."
+                        )
 
                 # Log dispatch (для ASI не записываем ref_id)
                 _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
