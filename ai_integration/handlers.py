@@ -9351,21 +9351,40 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
         _kw_first = (target_audience[:80].split()[0] if target_audience.split() else 'specialist')
         if has_cyrillic:
             _lang_instruction = (
-                "Аудитория русскоязычная. ОБЯЗАТЕЛЬНО используй российские платформы "
-                "(.ru домены): профессиональные директории, форумы, порталы, сообщества РФ. "
-                "Не используй LinkedIn, Facebook, reddit — они не работают в РФ. "
-                "Примеры по нишам: психологи → b17.ru, psycabi.net; "
-                "маркетологи → cossa.ru, sostav.ru; юристы → pravoved.ru, 9111.ru; "
-                "HR → hh.ru, career.habr.com; фрилансеры → kwork.ru, fl.ru; "
-                "предприниматели → spark.ru, vc.ru; врачи → prodoctorov.ru, docdoc.ru."
+                "Аудитория русскоязычная. ОБЯЗАТЕЛЬНО используй российские платформы (.ru домены).\n"
+                "Не используй LinkedIn, Facebook, reddit — они не работают в РФ.\n\n"
+                "ГЛАВНЫЙ КРИТЕРИЙ: выбирай платформы, где САМИ СПЕЦИАЛИСТЫ публикуют свои "
+                "контакты (email, сайт), потому что хотят быть нанятыми или найденными клиентами. "
+                "Это НЕ биржи вакансий (hh.ru, superjob) — там только HR. "
+                "НУЖНЫ: личные странички, каталоги специалистов, фриланс-биржи.\n\n"
+                "Примеры по нишам:\n"
+                "  фрилансеры/разработчики → fl.ru/users, kwork.ru/seller, freelancehunt.com/freelancers, habr.com/users;\n"
+                "  психологи → b17.ru/specialists, psycabi.net/psy;\n"
+                "  юристы → pravoved.ru/lawyers, 9111.ru/specialists;\n"
+                "  врачи → prodoctorov.ru, docdoc.ru;\n"
+                "  маркетологи/SMM → tenchat.ru, cossa.ru/people;\n"
+                "  дизайнеры → behance.net/search/projects;\n"
+                "  предприниматели/основатели → spark.ru/user, vc.ru/@;\n"
+                "  репетиторы → repetitors.info, profi.ru/repetitor;\n"
+                "  любые услуги → profi.ru/portfolio, youdo.com/user;\n"
+                "  IT-специалисты → career.habr.com/resumes, hexlet.io/users."
             )
         else:
             _lang_instruction = (
-                "Audience is English-speaking. Use international platforms: "
-                "professional directories, forums, communities. "
-                "Examples by niche: therapists → psychologytoday.com, therapists.com; "
-                "coaches → coachfederation.org, noomii.com; lawyers → avvo.com, martindale.com; "
-                "designers → behance.net, dribbble.com; marketers → marketingprofs.com."
+                "Audience is English-speaking. Use international platforms.\n\n"
+                "KEY CRITERION: choose platforms where SPECIALISTS THEMSELVES publish their "
+                "email/contact because they want to be hired or found by clients. "
+                "NOT job boards (indeed, glassdoor) — those only have HR contacts. "
+                "NEED: personal profile directories, freelance marketplaces, specialist catalogs.\n\n"
+                "Examples by niche:\n"
+                "  freelancers/developers → upwork.com/freelancers, freelancer.com/users, github.com/search;\n"
+                "  therapists/coaches → psychologytoday.com/us/therapists, therapists.com;\n"
+                "  coaches → coachfederation.org/find-a-coach, noomii.com/coaches;\n"
+                "  lawyers → avvo.com/find-a-lawyer, martindale.com;\n"
+                "  designers → behance.net/search, dribbble.com/designers;\n"
+                "  marketers → marketingprofs.com/experts, clarity.fm;\n"
+                "  consultants → consultants500.com, expertise.com;\n"
+                "  any professionals → bark.com/professionals, thumbtack.com/pro."
             )
         _prompt = (
             f"Target audience: {target_audience[:300]}\n"
@@ -9373,10 +9392,11 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
             f"Offer/product: {offer[:150]}\n\n"
             f"{_lang_instruction}\n\n"
             f"Generate 8 direct search/listing URLs for finding people of this audience type "
-            f"who may have public email addresses on their profiles or posts.\n"
+            f"who have PUBLIC email addresses on their profiles or personal pages.\n"
+            f"PRIORITIZE platforms where specialists list their own contact email to attract clients/employers.\n"
             f"Use keyword '{_kw_first}' in URLs where applicable (URL-encoded: spaces→+).\n"
             f"Return ONLY valid JSON array: "
-            f'[{{"url": "https://...", "desc": "why relevant"}}]'
+            f'[{{"url": "https://...", "desc": "why relevant (confirm has public emails)"}}]'
         )
         raw = await api.deepseek_analyze(
             prompt=_prompt,
@@ -9421,10 +9441,15 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                            offer: str, session) -> tuple:
     """Автоматический поиск лидов: multi-pass подход для 50 лидов/день.
 
-    Pass 0: GitHub API — публичные email разработчиков (бесплатно, 20-50 за поиск)
-    Pass 1: DDG + AI-запросы — поиск людей через DuckDuckGo
-    Pass 2: Скачать страницы + contact/about sub-pages → извлечь email
-    Pass 3: AI-фильтрация по релевантности
+    Pass 0:  GitHub API — публичные email разработчиков (бесплатно, 20-50 за поиск)
+    Pass 0b: hh.ru API — только для B2B-кампаний (AI решает). Даёт HR/CTO компаний
+             из вакансий. НЕ подходит для поиска самих специалистов — там только рекрутёры.
+             Для специалистов: AI-нишевые платформы (fl.ru, kwork.ru, profi.ru, b17.ru и т.д.)
+    Pass 1:  Прямой парсинг платформ: tech-платформы + AI-нишевые URL.
+             AI генерирует URL каталогов, где специалисты САМИ публикуют email (хотят клиентов).
+    Pass 1b: DDG поиск по AI-запросам.
+    Pass 2:  Скачать страницы → regex email-адресов.
+    Pass 3:  AI-фильтрация по релевантности (порог ≥5).
 
     Возвращает (count_added, message_str).
     """
@@ -9505,6 +9530,140 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         logger.info(f"[AUTO_LEADS] Non-tech audience → skipping GitHub, using web search only")
 
     # ══════════════════════════════════════════════════════════════════════
+    # PASS 0b: hh.ru API — контакты HR/найма (только для русскоязычной аудитории)
+    # ВАЖНО: contacts.email на hh.ru — это HR/нанимающий менеджер компании, а НЕ сам специалист.
+    # Это работает для B2B-кампаний (выйти на компании нужной ниши через их HR/CTO).
+    # Для B2C (найти индивидуальных профессионалов) — AI определит, нужен ли hh пасс.
+    # ══════════════════════════════════════════════════════════════════════
+    hh_leads = []
+    if _has_cyrillic:
+        try:
+            import aiohttp as _aiohttp_hh
+            import asyncio as _asyncio_hh
+            import json as _json_hh
+
+            # AI определяет: полезен ли hh.ru для этой кампании, и какой запрос использовать
+            # B2B (клиенты, партнёры, компании) → hh даёт HR/CTO = релевантные контакты
+            # B2C (индивидуальные специалисты, тестировщики, фрилансеры) → hh не поможет
+            _hh_decide_prompt = (
+                f"Campaign goal: {goal[:200]}\n"
+                f"Target audience: {target_audience[:200]}\n"
+                f"Offer: {offer[:100]}\n\n"
+                f"Task: decide if hh.ru job vacancy API is useful for this campaign.\n"
+                f"hh.ru API returns: HR managers and hiring contacts at companies — NOT individual job seekers.\n\n"
+                f"Return JSON: {{\"use_hh\": true/false, \"queries\": [\"query1\", \"query2\"], \"reason\": \"...\"}}\n"
+                f"Set use_hh=true ONLY if the target is companies/employers/HR/business decision-makers.\n"
+                f"Set use_hh=false if target is individual professionals, freelancers, end-users, or consumers.\n"
+                f"queries: 1-2 Russian hh.ru job search queries to find companies in the right niche.\n"
+                f"ONLY valid JSON, no markdown."
+            )
+            _hh_ai_raw = await api.deepseek_analyze(
+                prompt=_hh_decide_prompt,
+                system_prompt="Return ONLY valid JSON. No explanation.",
+                max_tokens=150,
+            )
+            _hh_use = False
+            _hh_queries = []
+            if _hh_ai_raw:
+                try:
+                    _hh_txt = _hh_ai_raw.strip()
+                    if '```' in _hh_txt:
+                        for _seg in _hh_txt.split('```'):
+                            _seg = _seg.strip()
+                            if _seg.startswith('json'): _seg = _seg[4:].strip()
+                            if _seg.startswith('{'): _hh_txt = _seg; break
+                    _hh_parsed = _json_hh.loads(_hh_txt)
+                    _hh_use = bool(_hh_parsed.get('use_hh', False))
+                    _hh_queries = [str(q) for q in (_hh_parsed.get('queries') or []) if q][:2]
+                    logger.info(f"[AUTO_LEADS] hh.ru decision: use={_hh_use}, reason={_hh_parsed.get('reason','')[:100]}")
+                except Exception:
+                    pass
+
+            if not _hh_use:
+                logger.info(f"[AUTO_LEADS] hh.ru Pass 0b: skipped (AI decided not relevant for this campaign type)")
+
+            if _hh_use and _hh_queries:
+                _hh_headers = {
+                    'User-Agent': 'ASI-Biont/1.0 (outreach@asibiont.com)',
+                    'Accept': 'application/json',
+                }
+
+            async def _hh_get_vacancy_email(session_hh, vacancy_id: str) -> dict | None:
+                """Получить contacts.email из конкретной вакансии hh.ru."""
+                try:
+                    async with session_hh.get(
+                        f'https://api.hh.ru/vacancies/{vacancy_id}',
+                        headers=_hh_headers,
+                        timeout=_aiohttp_hh.ClientTimeout(total=8),
+                        ssl=False,
+                    ) as resp:
+                        if resp.status != 200:
+                            return None
+                        data = await resp.json(content_type=None)
+                        contacts = data.get('contacts') or {}
+                        email = (contacts.get('email') or '').strip().lower()
+                        if not email or _is_generic_email(email):
+                            return None
+                        name = contacts.get('name') or ''
+                        employer = (data.get('employer') or {}).get('name') or ''
+                        area = (data.get('area') or {}).get('name') or ''
+                        snippet = (data.get('description') or '')[:300]
+                        return {
+                            'email': email,
+                            'name': name,
+                            'company': employer,
+                            'context': (
+                                f"hh.ru hiring contact: {name or 'HR'} at {employer}"
+                                f"{', ' + area if area else ''}. "
+                                f"Vacancy snippet: {_re_al.sub(r'<[^>]+>', ' ', snippet)[:200]}"
+                            ),
+                        }
+                except Exception:
+                    return None
+
+            async with _aiohttp_hh.ClientSession() as _hh_sess:
+                # Собираем ID вакансий по всем запросам
+                _vacancy_ids = []
+                for _hh_q in _hh_queries:
+                    try:
+                        async with _hh_sess.get(
+                            'https://api.hh.ru/vacancies',
+                            params={'text': _hh_q, 'area': 113, 'per_page': 20, 'page': 0},
+                            headers=_hh_headers,
+                            timeout=_aiohttp_hh.ClientTimeout(total=10),
+                            ssl=False,
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json(content_type=None)
+                                for item in (data.get('items') or []):
+                                    vid = str(item.get('id', ''))
+                                    if vid and vid not in _vacancy_ids:
+                                        _vacancy_ids.append(vid)
+                    except Exception:
+                        pass
+
+                # Параллельно запрашиваем детали (макс 30 вакансий)
+                _vacancy_ids = _vacancy_ids[:30]
+                if _vacancy_ids:
+                    _tasks_hh = [_hh_get_vacancy_email(_hh_sess, vid) for vid in _vacancy_ids]
+                    # Пауза между батчами чтобы не перегружать API hh.ru
+                    _batch_results = []
+                    for i in range(0, len(_tasks_hh), 10):
+                        batch = await _asyncio_hh.gather(*_tasks_hh[i:i+10], return_exceptions=True)
+                        _batch_results.extend(batch)
+                        if i + 10 < len(_tasks_hh):
+                            await _asyncio_hh.sleep(1)
+
+                    for res in _batch_results:
+                        if isinstance(res, dict) and res.get('email'):
+                            hh_leads.append(res)
+                            all_emails_raw.add(res['email'])
+
+            logger.info(f"[AUTO_LEADS] hh.ru Pass 0b: {len(_vacancy_ids)} vacancies → {len(hh_leads)} contacts with email")
+        except Exception as _hh_err:
+            logger.warning(f"[AUTO_LEADS] hh.ru pass failed: {_hh_err}")
+
+    # ══════════════════════════════════════════════════════════════════════
     # PASS 1: ПРЯМОЙ ПАРСИНГ ПЛАТФОРМ (основной источник email)
     # DDG ненадёжен для email (rate-limit, блокировки) — парсим платформы напрямую
     # ══════════════════════════════════════════════════════════════════════
@@ -9526,11 +9685,15 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             f'https://hackernoon.com/search?query={_core_en}',
             f'https://github.com/search?q={_core_en}+in%3Areadme+email&type=repositories',
             f'https://medium.com/search?q={_core_en}',
+            # GitHub Pages — личные сайты разработчиков, часто содержат email
+            f'https://github.com/search?q={_core_en}+email&type=users',
         ])
         if _has_cyrillic:
             _platform_urls.extend([
                 f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
                 f'https://tproger.ru/?s={_kw_enc}',
+                # Карьерные профили с контактами
+                f'https://career.habr.com/resumes?q={_kw_enc}',
             ])
 
     # AI генерирует нишевые платформы — знает язык, страну, профессию
@@ -9809,7 +9972,7 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
 
     logger.info(f"[AUTO_LEADS] Pages fetched: {pages_fetched} main + {contact_pages_fetched} contact, "
                 f"emails from regex: {len(all_emails_raw)}, "
-                f"GitHub leads: {len(github_leads)}")
+                f"GitHub leads: {len(github_leads)}, hh.ru leads: {len(hh_leads)}")
 
     # ══════════════════════════════════════════════════════════════════════
     # PASS 3: AI-фильтрация по релевантности
@@ -9817,8 +9980,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     combined_text = "\n---\n".join(page_texts[:6])
     snippets_text = "\n".join(f"- {r['title']}: {r['snippet']}" for r in all_results[:15])
 
-    # Добавляем GitHub leads к all_emails_raw (если ещё не добавлены)
-    github_context_map = {}  # email → context info from GitHub
+    # Добавляем GitHub и hh.ru leads к all_emails_raw + строим контекст-карту
+    github_context_map = {}  # email → context info from GitHub / hh.ru
     for gl in github_leads:
         em = gl.get('email', '').lower().strip('.')
         if em and not _is_generic_email(em):
@@ -9828,23 +9991,28 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                 f"bio: {gl.get('bio', '')[:100]}, company: {gl.get('company', '')}, "
                 f"repos: {gl.get('repos', 0)}, followers: {gl.get('followers', 0)}"
             )
+    for hl in hh_leads:
+        em = hl.get('email', '').lower().strip('.')
+        if em and not _is_generic_email(em):
+            all_emails_raw.add(em)
+            github_context_map[em] = hl.get('context', f"hh.ru contact: {hl.get('name','')} at {hl.get('company','')}")
 
-    # Если уже нашли email через regex/GitHub — просим AI отфильтровать по РЕЛЕВАНТНОСТИ
+    # Если уже нашли email через regex/GitHub/hh.ru — просим AI отфильтровать по РЕЛЕВАНТНОСТИ
     if all_emails_raw:
         emails_list = ", ".join(list(all_emails_raw)[:40])  # Увеличили лимит до 40
-        
-        # Формируем контекст GitHub-лидов
+
+        # Формируем контекст из GitHub и hh.ru
         github_context = ""
         if github_context_map:
             gh_lines = [f"  {em}: {ctx}" for em, ctx in list(github_context_map.items())[:20]]
-            github_context = "\n\nGitHub profile data:\n" + "\n".join(gh_lines)
+            github_context = "\n\nProfile/contact data (GitHub + hh.ru):\n" + "\n".join(gh_lines)
         
         # Инструкция по языку для AI-фильтра
         _lang_filter_hint = ""
         if _has_cyrillic:
             _lang_filter_hint = "\n7. LANGUAGE PRIORITY: The target audience is RUSSIAN-SPEAKING. Strongly prefer people with Russian names, from .ru/.by/.ua/.kz domains, or with Russian context. Foreign recipients are acceptable ONLY if they clearly match the target audience AND work in the Russian market."
 
-        extract_prompt = f"""I found these email addresses from web search and GitHub profiles.
+        extract_prompt = f"""I found these email addresses from web search, GitHub profiles and hh.ru vacancies.
 Your job is to FILTER them — keep ONLY emails of people who GENUINELY match the target audience.
 
 Found emails: {emails_list}
@@ -9925,13 +10093,14 @@ If no relevant emails found return []"""
                         em = item['email'].lower().strip('.')
                         if _is_generic_email(em):
                             continue
-                        # Фильтр по relevance score (AI должен ставить 7+)
+                        # Фильтр по relevance score — порог 5 даёт больше контактов
+                        # (AI нередко даёт 5-6 релевантным кандидатам при неполном контексте)
                         relevance = item.get('relevance', 0)
                         try:
                             relevance = int(relevance)
                         except (ValueError, TypeError):
                             relevance = 0
-                        if relevance < 7:
+                        if relevance < 5:
                             logger.info(f"[AUTO_LEADS] Skipping low-relevance lead: "
                                         f"{em} (score={relevance})")
                             continue
@@ -9939,10 +10108,10 @@ If no relevant emails found return []"""
         except Exception:
             pass
 
-    # Fallback: если AI не отфильтровал, но у нас есть GitHub leads с контекстом —
-    # добавляем их напрямую (у GitHub профилей уже есть name/company/bio)
-    if not parsed_leads and github_leads:
-        logger.info(f"[AUTO_LEADS] AI filter returned 0, using {len(github_leads)} GitHub leads as fallback")
+    # Fallback: если AI не отфильтровал, но есть GitHub/hh.ru leads с контекстом
+    if not parsed_leads and (github_leads or hh_leads):
+        _fb_leads = list(github_leads) + list(hh_leads)
+        logger.info(f"[AUTO_LEADS] AI filter returned 0, using {len(_fb_leads)} GitHub/hh.ru leads as fallback")
         for gl in github_leads:
             em = gl.get('email', '').lower().strip('.')
             if em and not _is_generic_email(em):
@@ -9952,6 +10121,16 @@ If no relevant emails found return []"""
                     'company': gl.get('company', ''),
                     'relevance': 7,
                     'context': f"GitHub: {gl.get('bio', '')[:100]}, {gl.get('repos', 0)} repos, {gl.get('followers', 0)} followers",
+                })
+        for hl in hh_leads:
+            em = hl.get('email', '').lower().strip('.')
+            if em and not _is_generic_email(em):
+                parsed_leads.append({
+                    'email': em,
+                    'name': hl.get('name', ''),
+                    'company': hl.get('company', ''),
+                    'relevance': 6,
+                    'context': hl.get('context', ''),
                 })
 
     # Если всё ещё 0 — используем regex emails как последний резерв,
@@ -9997,6 +10176,16 @@ If no relevant emails found return []"""
             logger.info(f"[AUTO_LEADS] Fallback: 0 emails passed MX validation")
 
     if not parsed_leads:
+        # Сбрасываем кэш нишевых платформ если не нашли ни одного лида
+        # — при следующем вызове AI сгенерирует свежие URL вместо тех же плохих
+        import hashlib as _hl_clr
+        _lang_clr = 'ru' if _has_cyrillic else 'en'
+        _clr_key = _hl_clr.md5(
+            f"{_lang_clr}:{target_audience[:150]}".encode('utf-8', errors='ignore')
+        ).hexdigest()
+        if _clr_key in _NICHE_PLATFORM_CACHE:
+            del _NICHE_PLATFORM_CACHE[_clr_key]
+            logger.info(f"[AUTO_LEADS] Cleared stale niche platform cache for campaign #{campaign.id}")
         logger.warning(f"[AUTO_LEADS] FINAL: 0 leads found for campaign #{campaign.id} "
                        f"(ddg_results={len(all_results)}, pages={pages_fetched}, "
                        f"contact_pages={contact_pages_fetched}, github={len(github_leads)}, "
