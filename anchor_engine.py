@@ -123,10 +123,13 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
         "3. Если письмо уже отправлено конкретному человеку — НЕ пиши ему повторно\n"
         "4. Определи следующее РЕАЛЬНОЕ действие, которое продвинет цель\n\n"
         "ПОЛНЫЙ АРСЕНАЛ — используй всё что умеешь:\n"
-        "- research_topic, web_search — найти площадки, контакты, информацию\n"
-        "- send_email, negotiate_by_email, send_outreach_email — написать письма\n"
-        "- start_email_campaign — запустить серию писем потенциальным пользователям\n"
-        "- find_relevant_contacts_for_task — найти контакты по теме\n"
+        "- research_topic, web_search — найти площадки, информацию, потенциальные контакты\n"
+        "- send_email, negotiate_by_email, send_outreach_email — написать письмо конкретному человеку\n"
+        "- start_email_campaign — ГЛАВНЫЙ инструмент для поиска ВНЕШНИХ лидов и массовой рассылки. "
+        "Система автоматически найдёт контакты через GitHub, DuckDuckGo, профплощадки и запустит письма. "
+        "Используй когда нужно найти потенциальных пользователей/клиентов/партнёров в интернете.\n"
+        "- find_relevant_contacts_for_task — найти контакты ТОЛЬКО ВНУТРИ сети приложения. "
+        "Если результат пустой или мало контактов — сразу используй start_email_campaign для поиска ВНЕШНИХ лидов.\n"
         "- add_task — добавить задачу ТОЛЬКО если нужно запомнить действие, которое нельзя сделать сейчас\n"
         "- run_agent_action — запустить свой скрипт-интеграцию\n\n"
         "ОБЯЗАТЕЛЬНО: первым делом вызови инструмент — не пиши текст без действия.\n"
@@ -6113,11 +6116,29 @@ class AnchorEngine:
             _anchor_types_here = {a.anchor_type for a in anchors}
             _has_always_deliver = bool(_anchor_types_here & ALWAYS_DELIVER_TYPES)
             if not _has_always_deliver:
-                recent_delivery = session.query(AnchorDeliveryLog).filter(
+                # NOTE: учитываем только ДИАЛОГОВЫЕ доставки (не silent email/content/delegation).
+                # email_need_leads, email_outreach_send и прочие silent запускаются каждые 7-10 мин
+                # и НЕ должны блокировать доставку проактивных диалоговых якорей.
+                _DIALOG_GAP_EXCLUDE = {
+                    'email_outreach_send', 'email_follow_up', 'email_need_leads',
+                    'content_campaign_publish',
+                    'delegation_campaign_send', 'delegation_campaign_follow_up',
+                }
+                recent_dialog_delivery = None
+                recent_logs = session.query(AnchorDeliveryLog).filter(
                     AnchorDeliveryLog.user_id == user.id,
                     AnchorDeliveryLog.created_at >= now_utc - timedelta(minutes=MIN_PROACTIVE_GAP_MINUTES)
-                ).first()
-                if recent_delivery:
+                ).all()
+                for _rdl in recent_logs:
+                    try:
+                        _rdl_types = set(json.loads(_rdl.anchor_types) if _rdl.anchor_types else [])
+                    except Exception:
+                        _rdl_types = set()
+                    # Только если лог содержит НЕ-silent типы — считаем gap
+                    if _rdl_types - _DIALOG_GAP_EXCLUDE:
+                        recent_dialog_delivery = _rdl
+                        break
+                if recent_dialog_delivery:
                     logger.info(f"[ANCHOR] User {user.telegram_id}: delivery gap too small ({MIN_PROACTIVE_GAP_MINUTES}min), skip")
                     return
 

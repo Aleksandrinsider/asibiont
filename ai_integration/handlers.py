@@ -5301,12 +5301,33 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
             contacts_str = ', '.join(f"@{c}" for c in suggestion['contacts'])
             result_lines.append(f"• {suggestion['task']}: {contacts_str}")
     
+    # Если контактов мало (< 2) — добавляем хинт об email-кампании для поиска внешних лидов
+    all_found_count = len(sorted_contacts) + len(reverse_matches)
+    _email_hint = (
+        "\n\n💡 Внутренних контактов мало. Для поиска ВНЕШНИХ лидов (GitHub, DuckDuckGo, профплощадки) "
+        "вызови инструмент `start_email_campaign` — система автоматически найдёт и свяжется с "
+        "потенциальными пользователями/клиентами по заданной теме."
+    )
+
     if result_lines:
-        return '\n'.join(result_lines)
+        result = '\n'.join(result_lines)
+        if all_found_count < 2:
+            result += _email_hint
+        return result
     else:
         if lang == 'en':
-            return "No matching contacts found for this task. Try filling in more profile information."
-        return "Не нашел подходящих контактов для этой задачи. Попробуй заполнить больше информации в профиле."
+            return (
+                "No matching contacts found in the internal network for this task.\n\n"
+                "💡 To find EXTERNAL leads (web search, GitHub, professional platforms) "
+                "use the `start_email_campaign` tool — the system will automatically find and "
+                "reach out to potential users/clients on this topic."
+            )
+        return (
+            "Не нашел подходящих контактов в сети для этой задачи.\n\n"
+            "💡 Для поиска ВНЕШНИХ лидов через интернет (GitHub, DuckDuckGo, профплощадки) "
+            "вызови инструмент `start_email_campaign` — система автоматически найдёт и свяжется "
+            "с потенциальными пользователями/клиентами по нужной теме."
+        )
 
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
     try:
