@@ -10,7 +10,7 @@ from models import Session, User
 
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_MESSAGES = 24  # Keep last 24 messages (12 exchanges) for topic extraction
+MAX_HISTORY_MESSAGES = 16  # Keep last 16 messages (8 exchanges) for topic extraction
 
 # Паттерны фраз, которые могут содержать галлюцинированные данные о задачах
 # Эти фразы в сообщениях ассистента будут удалены при загрузке истории
@@ -94,7 +94,7 @@ def save_message_to_history(user_id, role, content, session=None):
         
         # Add new message
         # Ассистент пишет длиннее — даём больше места для контекста
-        max_len = 2000 if role == 'assistant' else 1200
+        max_len = 800 if role == 'assistant' else 600
         message = {
             "role": role,
             "content": content[:max_len],

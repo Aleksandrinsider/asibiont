@@ -9242,6 +9242,12 @@ def _extract_emails_from_text(text: str) -> set[str]:
     return results
 
 
+# Кэш сгенерированных DDG-запросов: {md5(target_audience[:100]): (queries, timestamp)}
+# Одна и та же кампания каждые 30 мин вызывает _auto_find_leads — запросы не меняются
+_DDG_QUERY_CACHE: dict = {}
+_DDG_QUERY_CACHE_TTL = 7200  # 2 часа
+
+
 async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                            offer: str, session) -> tuple:
     """Автоматический поиск лидов: multi-pass подход для 50 лидов/день.
@@ -9456,50 +9462,62 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     # Главный путь для ЛЮБОЙ аудитории — DDG находит реальные личные страницы
     # ══════════════════════════════════════════════════════════════════════
     import json as _json_q
+    import hashlib as _hl_ddg
+    import time as _time_ddg
     _ddg_hits = 0
     try:
-        _q_lang = 'Russian' if _has_cyrillic else 'English'
-        _queries_prompt = (
-            f"Generate 6 web search queries to find personal email addresses of people matching:\n"
-            f"Target audience: {target_audience[:200]}\n"
-            f"Goal: {goal[:150]}\n"
-            f"Language preference: {_q_lang}\n"
-            f"Rules:\n"
-            f"- Each query must target pages where people show their email (personal sites, portfolios, contact pages)\n"
-            f"- Include: site:about.me, личный блог, portfolio, 'email' or 'написать мне', профессиональные профили\n"
-            f"- Mix direct audience-type searches with platform-specific ones\n"
-            f"- If Russian-speaking audience, use both Russian and English queries\n"
-            f"Return ONLY valid JSON array of 6 query strings: [\"q1\", \"q2\", ...]"
-        )
-        _ai_q_raw = await api.deepseek_analyze(
-            prompt=_queries_prompt,
-            system_prompt="Return ONLY a valid JSON array of strings, no markdown or explanation.",
-            max_tokens=300,
-        )
-        _ddg_queries = []
-        if _ai_q_raw:
-            _qt = _ai_q_raw.strip()
-            if '```' in _qt:
-                for _seg in _qt.split('```'):
-                    _seg = _seg.strip()
-                    if _seg.startswith('json'):
-                        _seg = _seg[4:].strip()
-                    if _seg.startswith('['):
-                        _qt = _seg
-                        break
-            try:
-                _pq = _json_q.loads(_qt)
-                if isinstance(_pq, list):
-                    _ddg_queries = [str(q).strip() for q in _pq if q][:6]
-            except Exception:
-                pass
-        # Fallback-запросы если AI не вернул список
-        if not _ddg_queries:
-            _ddg_queries = [f"{core_kw} email contact", f"{core_kw} личный сайт"]
-            if _has_cyrillic:
-                _ddg_queries.append(f"{core_kw} написать мне")
-
-        logger.info(f"[AUTO_LEADS] PASS 1b DDG queries ({len(_ddg_queries)}): {_ddg_queries}")
+        # Кэш DDG-запросов — та же аудитория = те же запросы, API вызов не нужен
+        _cache_key = _hl_ddg.md5(target_audience[:100].encode('utf-8', errors='ignore')).hexdigest()
+        _cached = _DDG_QUERY_CACHE.get(_cache_key)
+        _now_ts = _time_ddg.time()
+        if _cached and (_now_ts - _cached[1]) < _DDG_QUERY_CACHE_TTL:
+            _ddg_queries = _cached[0]
+            logger.info(f"[AUTO_LEADS] PASS 1b DDG queries from cache ({len(_ddg_queries)}): {_ddg_queries}")
+        else:
+            _q_lang = 'Russian' if _has_cyrillic else 'English'
+            _queries_prompt = (
+                f"Generate 6 web search queries to find personal email addresses of people matching:\n"
+                f"Target audience: {target_audience[:200]}\n"
+                f"Goal: {goal[:150]}\n"
+                f"Language preference: {_q_lang}\n"
+                f"Rules:\n"
+                f"- Each query must target pages where people show their email (personal sites, portfolios, contact pages)\n"
+                f"- Include: site:about.me, личный блог, portfolio, 'email' or 'написать мне', профессиональные профили\n"
+                f"- Mix direct audience-type searches with platform-specific ones\n"
+                f"- If Russian-speaking audience, use both Russian and English queries\n"
+                f"Return ONLY valid JSON array of 6 query strings: [\"q1\", \"q2\", ...]"
+            )
+            _ai_q_raw = await api.deepseek_analyze(
+                prompt=_queries_prompt,
+                system_prompt="Return ONLY a valid JSON array of strings, no markdown or explanation.",
+                max_tokens=300,
+            )
+            _ddg_queries = []
+            if _ai_q_raw:
+                _qt = _ai_q_raw.strip()
+                if '```' in _qt:
+                    for _seg in _qt.split('```'):
+                        _seg = _seg.strip()
+                        if _seg.startswith('json'):
+                            _seg = _seg[4:].strip()
+                        if _seg.startswith('['):
+                            _qt = _seg
+                            break
+                try:
+                    _pq = _json_q.loads(_qt)
+                    if isinstance(_pq, list):
+                        _ddg_queries = [str(q).strip() for q in _pq if q][:6]
+                except Exception:
+                    pass
+            # Fallback-запросы если AI не вернул список
+            if not _ddg_queries:
+                _ddg_queries = [f"{core_kw} email contact", f"{core_kw} личный сайт"]
+                if _has_cyrillic:
+                    _ddg_queries.append(f"{core_kw} написать мне")
+            # Сохраняем в кэш
+            if _ddg_queries:
+                _DDG_QUERY_CACHE[_cache_key] = (_ddg_queries, _now_ts)
+            logger.info(f"[AUTO_LEADS] PASS 1b DDG queries ({len(_ddg_queries)}): {_ddg_queries}")
         _ddg_raw = await api.web_multi_search(_ddg_queries, num_per_query=8)
         _ddg_hits = len(_ddg_raw)
 

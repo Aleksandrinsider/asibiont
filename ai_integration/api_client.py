@@ -1083,7 +1083,7 @@ class ExternalAPIClient:
         
         analysis = await self.deepseek_analyze(
             prompt=prompt,
-            max_tokens=1500,
+            max_tokens=700,
             temperature=0.7
         )
         
