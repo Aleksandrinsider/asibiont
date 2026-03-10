@@ -951,6 +951,25 @@ class AnchorEngine:
                 _UA_ap.status.in_(['active', 'paused']),
             ).limit(10).all()
 
+            # Всегда добавляем синтетического ASI в пул — он участвует в ротации
+            # наравне с кастомными агентами. id=0 → особая ветка в dispatch.
+            from types import SimpleNamespace as _NS_ap
+            _asi_synth = _NS_ap(
+                id=0, name='ASI',
+                job_title='Автономный ИИ-ассистент',
+                specialization='goal_management',
+                description='Автономный исполнитель: управляет задачами, исследует, создаёт планы действий.',
+                personality=(
+                    'Ты — исполнительный автономный агент ASI Biont. '
+                    'Твоя задача: ДЕЙСТВОВАТЬ, а не предлагать. '
+                    'Ты ВСЕГДА начинаешь с вызова инструмента — add_task, research_topic или web_search. '
+                    'Ты НИКОГДА не пишешь «предлагаю», «рекомендую», «могу запустить» — ты просто делаешь. '
+                    'Текстовый ответ без предшествующего вызова инструмента означает провал задачи.'
+                ),
+                python_code='', user_api_keys='', tools_allowed='', avatar_url='',
+            )
+            agents.append(_asi_synth)
+
             # Если нет пользовательских агентов — используем прямой AI-вызов через основной чат
             # Для goal_autopilot_review — используем полноценный prompt из _AGENT_DISPATCH_TRIGGERS,
             # а не просто anchor.topic (он слишком лаконичен для автономной работы агента)
@@ -998,6 +1017,7 @@ class AnchorEngine:
 
             if agents:
                 chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+                # Для ASI (id=0) усиливаем personality — полный execution mode
                 agent_data = {
                     'id': chosen.id, 'name': chosen.name,
                     'job_title': chosen.job_title or '',
@@ -1011,7 +1031,7 @@ class AnchorEngine:
                 }
                 agent_name = chosen.name
 
-                # Log dispatch
+                # Log dispatch (для ASI не записываем ref_id)
                 session.add(_AAL_ap(
                     user_id=user.id,
                     activity_type='goal_autopilot_dispatch',
@@ -1019,7 +1039,7 @@ class AnchorEngine:
                     content=task_text[:500],
                     target=anchor.source,
                     status='in_progress',
-                    ref_id=chosen.id,
+                    ref_id=chosen.id if chosen.id != 0 else None,
                 ))
                 # Помечаем якорь доставленным ДО AI-вызова — защита от перезапуска Railway
                 anchor.delivered_at = datetime.now(timezone.utc)
@@ -1087,11 +1107,12 @@ class AnchorEngine:
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
-                # ── Продолжение цепочки: если задача не завершена — ASI передаёт следующему агенту ──
-                if result and len(result) > 30 and len(agents) >= 1:
+                # ── Продолжение цепочки: ASI не инициирует цепочку, только кастомные агенты ──
+                _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
+                if result and len(result) > 30 and chosen.id != 0 and len(_real_agents) >= 1:
                     try:
                         await self._maybe_continue_chain(
-                            user, chosen, anchor, task_text, result, agents, session,
+                            user, chosen, anchor, task_text, result, _real_agents, session,
                         )
                     except Exception as _chain_err:
                         logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
