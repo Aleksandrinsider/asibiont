@@ -114,7 +114,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
     # ── Goal autopilot ──
-    'goal_autopilot_review': "Ты — агент пользователя. Проанализируй цели, задачи, email-кампании и историю действий. Отвечай от ПЕРВОГО ЛИЦА как живой сотрудник — 'Я проверила...', 'Нашла...', 'Сделала...'.\n\nПРАВИЛА:\n1. ИЗУЧИ recent_messages и recent_actions — НЕ ПОВТОРЯЙ те же действия\n2. Если задача уже создана (pending/in_progress) — НЕ создавай такую же\n3. Если письмо уже отправлено человеку (см. known_contacts) — НЕ пиши ему повторно\n4. Если в recent_messages уже есть поручение — НЕ давай его снова, найди ДРУГОЙ шаг\n5. Определи НОВЫЙ конкретный шаг, который ПРОДВИНЕТ цель дальше\n6. Если ВСЕ текущие задачи в работе — отчитайся о статусе кратко\n\nЗАПРЕЩЕНО: update_goal_progress, delete_task, start_email_campaign. НЕ ОТПРАВЛЯЙ email на адрес самого пользователя.\nФОРМАТ ОТВЕТА: живой отчёт от первого лица (2-4 предложения). НЕ пиши 'АВТОПИЛОТ', 'ПОРУЧЕНИЕ' — говори как человек.",
+    'goal_autopilot_review': "Ты — агент пользователя. Проанализируй цели, задачи, email-кампании и историю действий. Отвечай от ПЕРВОГО ЛИЦА как живой сотрудник — 'Я проверила...', 'Нашла...', 'Сделала...'.\n\nПРАВИЛА:\n1. ИЗУЧИ recent_messages и recent_actions — НЕ ПОВТОРЯЙ те же действия\n2. Если задача уже создана (pending/in_progress) — НЕ создавай такую же\n3. Если письмо уже отправлено человеку (см. known_contacts) — НЕ пиши ему повторно\n4. Если в recent_messages уже есть поручение — НЕ давай его снова, найди ДРУГОЙ шаг\n5. Определи НОВЫЙ конкретный шаг, который ПРОДВИНЕТ цель дальше\n6. Если ВСЕ текущие задачи в работе — отчитайся о статусе кратко\n\nОБЯЗАТЕЛЬНО ВЫЗОВИ хотя бы один инструмент: используй add_task чтобы создать следующий конкретный шаг, или research_topic / web_search чтобы найти новую информацию по цели. Чисто текстовый ответ без инструментов запрещён — ты должна действовать, а не описывать что планируешь.\n\nЗАПРЕЩЕНО: update_goal_progress, delete_task, start_email_campaign. НЕ ОТПРАВЛЯЙ email на адрес самого пользователя.\nФОРМАТ ОТВЕТА: живой отчёт от первого лица (2-4 предложения о том, что сделала). НЕ пиши 'АВТОПИЛОТ', 'ПОРУЧЕНИЕ' — говори как человек.",
 }
 
 # Группы батчинга
@@ -1006,24 +1006,46 @@ class AnchorEngine:
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
             else:
-                # Нет агентов — вызываем основной AI через chat
-                from ai_integration.chat import chat_with_ai
-                _chat_result = await chat_with_ai(
-                    message=task_text,
-                    user_id=user.telegram_id,
-                )
-                result = _chat_result.get('response', '') if isinstance(_chat_result, dict) else str(_chat_result)
+                # Нет кастомных агентов — ASI с полным tool-calling (add_task, web_search, и т.д.)
+                from ai_integration.autonomous_agent import _exec_agent_for_director
                 agent_name = 'ASI'
+                # Синтетический агент-конфиг: пустой tools_allowed → auto-detect autopilot task
+                # → _exec_agent_for_director разблокирует все инструменты кроме опасных
+                _asi_agent_data = {
+                    'id': 0,
+                    'name': 'ASI',
+                    'job_title': 'Автономный ИИ-ассистент',
+                    'specialization': 'goal_management',
+                    'description': 'Автономный агент для продвижения целей пользователя.',
+                    'personality': '',
+                    'python_code': '',
+                    'user_api_keys': '',
+                    'tools_allowed': '',
+                    'tools': [],
+                }
 
-                session.add(_AAL_ap(
+                _asi_log = _AAL_ap(
                     user_id=user.id,
                     activity_type='goal_autopilot_dispatch',
-                    title=f'ASI — обзор целей',
+                    title='ASI — обзор целей',
                     content=task_text[:500],
                     target=anchor.source,
-                    status='completed',
-                    result=(result or '')[:400],
-                ))
+                    status='in_progress',
+                )
+                session.add(_asi_log)
+                session.commit()
+
+                try:
+                    _raw = await _exec_agent_for_director(
+                        _asi_agent_data, task_text, user.telegram_id,
+                    )
+                    result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
+                except Exception as _e_exec:
+                    logger.warning("[ANCHOR-AUTOPILOT] ASI exec error: %s", _e_exec)
+                    result = ''
+
+                _asi_log.status = 'completed'
+                _asi_log.result = (result or '')[:400]
                 session.commit()
 
                 # Отправляем результат ASI пользователю в Telegram
