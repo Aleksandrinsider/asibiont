@@ -994,6 +994,8 @@ class AnchorEngine:
                     status='in_progress',
                     ref_id=chosen.id,
                 ))
+                # Помечаем якорь доставленным ДО AI-вызова — защита от перезапуска Railway
+                anchor.delivered_at = datetime.now(timezone.utc)
                 session.commit()
 
                 # Уведомляем пользователя что агент берётся за цели
@@ -1100,6 +1102,8 @@ class AnchorEngine:
                     status='in_progress',
                 )
                 session.add(_asi_log)
+                # Помечаем якорь доставленным ДО AI-вызова — защита от перезапуска Railway
+                anchor.delivered_at = datetime.now(timezone.utc)
                 session.commit()
 
                 try:
