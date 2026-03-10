@@ -1105,7 +1105,16 @@ class AnchorEngine:
                 # используя последний dispatched-агент из AgentActivityLog как указатель.
                 if anchor.anchor_type == 'goal_autopilot_review':
                     # Строим список в стабильном порядке: реальные агенты по id, ASI в конце
-                    _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
+                    # RSS/news агенты исключаются — их задача делиться новостями, не управлять целями
+                    def _is_news_only(a):
+                        _combined = ' '.join([
+                            (getattr(a, 'python_code', '') or '')[:400],
+                            (getattr(a, 'description', '') or ''),
+                            (getattr(a, 'specialization', '') or ''),
+                            (getattr(a, 'job_title', '') or ''),
+                        ]).lower()
+                        return any(kw in _combined for kw in ('rss_url', 'rss', 'новост', 'news feed', 'лента новост'))
+                    _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0 and not _is_news_only(a)], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
                     _rotation_pool = _real_ags + ([_asi_ag] if _asi_ag else [])
                     if _rotation_pool:

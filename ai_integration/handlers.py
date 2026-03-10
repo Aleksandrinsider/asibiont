@@ -13024,15 +13024,24 @@ async def start_delegation_campaign(
         if not name or not goal or not target_audience:
             return " Укажи название, цель и целевую аудиторию кампании"
 
-        # Проверяем дубликаты
+        # Проверяем дубликаты (семантически: точный substring + пересечение слов)
         from models import DelegationCampaign
         existing = session.query(DelegationCampaign).filter(
             DelegationCampaign.user_id == user.id,
             DelegationCampaign.status == 'active',
         ).all()
+        _stop_d = {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'или', 'что', 'при', 'the', 'and', 'for', 'of', 'to'}
+        _new_name_words = {w for w in name.lower().split() if len(w) > 3} - _stop_d
+        _new_goal_words = {w for w in goal.lower().split() if len(w) > 3} - _stop_d
         for ex in existing:
             if ex.name and name.lower() in ex.name.lower():
-                return f" Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign чтобы обновить."
+                return f"⚠️ Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign чтобы обновить."
+            _ex_name_words = {w for w in (ex.name or '').lower().split() if len(w) > 3} - _stop_d
+            _ex_goal_words = {w for w in (ex.goal or '').lower().split() if len(w) > 3} - _stop_d
+            if _new_name_words and _ex_name_words and len(_new_name_words & _ex_name_words) >= 2:
+                return f"⚠️ Похожая кампания делегирования уже существует: «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign для обновления."
+            if _new_goal_words and _ex_goal_words and len(_new_goal_words & _ex_goal_words) >= 3:
+                return f"⚠️ Кампания с похожей целью уже существует: «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign для обновления."
 
         # Лимит активных кампаний
         if len(existing) >= 5:
