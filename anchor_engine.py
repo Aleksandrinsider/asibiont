@@ -2883,7 +2883,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=1.0,
+            cooldown_hours=0.25,
             batch_group='goals',
         )]
 
