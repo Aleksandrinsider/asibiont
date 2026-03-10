@@ -611,7 +611,7 @@ class AnchorEngine:
 
         # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>8 мин) как failed
         try:
-            _stuck_cutoff = datetime.now(timezone.utc) - timedelta(minutes=8)
+            _stuck_cutoff = datetime.utcnow() - timedelta(minutes=8)  # naive UTC — PostgreSQL возвращает naive datetime
             from models import AgentActivityLog as _AAL_stuck
             _stuck_logs = session.query(_AAL_stuck).filter(
                 _AAL_stuck.user_id == user.id,
