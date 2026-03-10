@@ -2984,7 +2984,7 @@ class AnchorEngine:
         _last_dispatch = session.query(_AAL_guard).filter(
             _AAL_guard.user_id == user.id,
             _AAL_guard.activity_type == 'goal_autopilot_dispatch',
-            _AAL_guard.created_at >= now_utc - timedelta(minutes=55),
+            _AAL_guard.created_at >= now_utc - timedelta(minutes=13),
         ).first()
         if _last_dispatch:
             return []
@@ -3109,7 +3109,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=1.0,
+            cooldown_hours=0.25,
             batch_group='goals',
         )]
 
