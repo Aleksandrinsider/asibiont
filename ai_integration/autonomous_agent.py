@@ -4429,9 +4429,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
-    for _iter in range(3):  # AI call → tool → tool → final answer
-        # После 2 tool calls — отключаем tools чтобы агент дал текстовый ответ
-        _use_tools_now = _use_tools and _tool_call_count < 2
+    _max_iters = 4 if _is_autopilot_task else 3  # autopilot: research → add_task → final
+    for _iter in range(_max_iters):
+        # После 3 tool calls (autopilot) или 2 (обычный) — отключаем tools
+        _max_tool_calls = 3 if _is_autopilot_task else 2
+        _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # Для autopilot-задач: первая итерация — required (принудительный вызов инструмента)
         # Это устраняет ситуацию когда AI пишет "создала задачу" без реального вызова tool
         _tc_mode = "auto"
@@ -4536,14 +4538,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         for _tc_skip in _tool_calls[2:]:
             _messages.append({"role": "tool", "tool_call_id": _tc_skip['id'],
                               "content": '{"status":"skipped"}'})
-        # Инструкция синтезировать ответ на основе данных инструмента
-        _messages.append({"role": "user", "content": (
-            "Данные от инструмента получены. Дай ГОТОВЫЙ результат. "
-            "ЖЁСТКИЙ ЛИМИТ: максимум 2-3 предложения, до 400 символов. Длинный ответ = ПРОВАЛ. "
-            "НЕ пиши 'ищу данные' или 'уточняю'. "
-            "Сплошной текст, БЕЗ списков, БЕЗ заголовков CAPS, БЕЗ маркеров (•, -, *). "
-            "Заверши мысль — не обрывай. Пиши кратко как в мессенджере."
-        )})
+        # Инструкция после tool-call: для автопилота — требуем конкретное следующее действие
+        if _is_autopilot_task and _tool_call_count == 1:
+            # После первого tool call: заставляем создать задачу или другое действие
+            _messages.append({"role": "user", "content": (
+                "Данные получены. Теперь на основе результата ОБЯЗАТЕЛЬНО вызови add_task — "
+                "создай конкретную задачу-действие с дедлайном, которая продвинет цель. "
+                "Например: 'Написать пост-приглашение в сообщество X', 'Связаться с контактом Y'. "
+                "Задача должна быть конкретной и выполнимой. НЕ пиши отчёт — СОЗДАЙ ЗАДАЧУ."
+            )})
+        else:
+            _messages.append({"role": "user", "content": (
+                "Данные от инструмента получены. Дай ГОТОВЫЙ результат. "
+                "ЖЁСТКИЙ ЛИМИТ: максимум 2-3 предложения, до 400 символов. Длинный ответ = ПРОВАЛ. "
+                "НЕ пиши 'ищу данные' или 'уточняю'. "
+                "Сплошной текст, БЕЗ списков, БЕЗ заголовков CAPS, БЕЗ маркеров (•, -, *). "
+                "Заверши мысль — не обрывай. Пиши кратко как в мессенджере."
+            )})
     # Если агент ответил текстом без tool calls — пропускаем финальный AI-вызов
     if _early_text is not None:
         _final_text = _early_text
