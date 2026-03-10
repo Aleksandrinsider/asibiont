@@ -1728,16 +1728,25 @@ async def delegate_task(
 
                     # ── СИНХРОННОЕ выполнение агента (inline) ──────────────────────
                     import asyncio as _asyncio_dt
+                    # Маркер [АВТОПИЛОТ] — чтобы агент получил полный toolset (email-инструменты и т.д.)
+                    # Если задача связана с email/кампанией — добавляем маркер, даже без явного autopilot context
+                    _AUTOPILOT_TASK_HINTS = (
+                        'email', 'кампани', 'рассылк', 'аутрич', 'outreach',
+                        'привлечен', 'автопилот', '[автопилот]',
+                    )
+                    _task_lc = _agent_task_text.lower()
+                    if not _agent_task_text.startswith('[АВТОПИЛОТ]') and any(w in _task_lc for w in _AUTOPILOT_TASK_HINTS):
+                        _agent_task_text = '[АВТОПИЛОТ] ' + _agent_task_text
                     try:
                         logger.info(f"[DELEGATE] Starting inline exec for {_agent_name}...")
                         _raw_result = await _asyncio_dt.wait_for(
                             _exec_dir(_agent_dict, _agent_task_text, user_id),
-                            timeout=45
+                            timeout=60
                         )
                         _result = _raw_result[0] if isinstance(_raw_result, (tuple, list)) else _raw_result
                         logger.info(f"[DELEGATE] Inline exec result for {_agent_name}: {len(_result or '')} chars")
                     except _asyncio_dt.TimeoutError:
-                        logger.warning(f"[DELEGATE] agent exec timeout ({_agent_name}), 45s limit")
+                        logger.warning(f"[DELEGATE] agent exec timeout ({_agent_name}), 60s limit")
                         _result = f"Задача передана {_agent_name}, результат будет чуть позже."
                     except Exception as _exec_err:
                         logger.warning(f"[DELEGATE] agent exec error ({_agent_name}): {_exec_err}", exc_info=True)
