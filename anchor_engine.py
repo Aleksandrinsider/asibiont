@@ -969,6 +969,17 @@ class AnchorEngine:
             if isinstance(data, str):
                 data = json.loads(data)
 
+            # ── ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНО СОБЛЮДАТЬ) ──
+            # Должны идти ПЕРВЫМИ — до любого контекста, чтобы агент навсегда запомнил
+            _user_rules = data.get('user_rules', [])
+            if _user_rules:
+                task_text = (
+                    "⛔ ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (нарушение = ошибка):\n"
+                    + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules))
+                    + "\n\n"
+                    + task_text
+                )
+
             # Обогащаем задачу данными о целях
             goals_info = data.get('goals', [])
             if goals_info:
@@ -3045,6 +3056,31 @@ class AnchorEngine:
         ).order_by(_EC_scan.created_at.desc()).limit(20).all()
         contacts_summary = [f"{c.name or '?'} <{c.email}> (src={c.source})" for c in contacts] if contacts else []
 
+        # Правила пользователя — из user.memory['rules'] и последних user-сообщений
+        user_rules = []
+        try:
+            from ai_integration.memory import decrypt_data as _dec_rules
+            _mem_raw = _dec_rules(user.memory) if user.memory else '{}'
+            _mem_dict = json.loads(_mem_raw) if _mem_raw else {}
+            user_rules = _mem_dict.get('rules', [])
+        except Exception as _e_rules:
+            logger.debug(f"[AUTOPILOT] Failed to load user rules: {_e_rules}")
+
+        # Также берём последние инструкции пользователя (user-сообщения за 2 часа с паттерном запрета)
+        _rule_keywords = ('не используй', 'не пиши', 'не отправляй', 'не ищи', 'только внешние',
+                          'только внешних', 'не трогай', 'не беспокой', 'запрещено', 'нельзя')
+        recent_user_msgs = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type == 'user',
+            Interaction.created_at >= now_utc - timedelta(hours=12),
+        ).order_by(Interaction.created_at.desc()).limit(20).all()
+        for _msg in recent_user_msgs:
+            _content = (_msg.content or '').lower()
+            if any(kw in _content for kw in _rule_keywords):
+                _rule_text = (_msg.content or '').strip()[:200]
+                if _rule_text and _rule_text not in user_rules:
+                    user_rules.append(f"[из диалога] {_rule_text}")
+
         goals_summary = []
         for g in active_goals[:5]:
             # Задачи этой цели — полный status breakdown
@@ -3075,6 +3111,7 @@ class AnchorEngine:
             'recent_messages': recent_messages[:6],
             'email_campaigns': email_summary,
             'known_contacts': contacts_summary[:10],
+            'user_rules': user_rules[:10],
         }
 
         return [Anchor(
