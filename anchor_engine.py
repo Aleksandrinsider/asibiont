@@ -1129,19 +1129,6 @@ class AnchorEngine:
                 anchor.delivered_at = datetime.now(timezone.utc)
                 session.commit()
 
-                # Уведомляем пользователя что агент берётся за цели
-                if self.bot:
-                    try:
-                        _intro_text = f"{agent_name} анализирует цели..."
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=_intro_text,
-                        )
-                        # Не сохраняем вводное сообщение как Interaction — это служебный статус,
-                        # он дублировал ленту (плюс 1 proactive на каждый цикл = +72/день спама)
-                    except Exception:
-                        pass
-
                 _raw = await _exec_agent_for_director(
                     agent_data, task_text, user.telegram_id,
                 )
@@ -1149,7 +1136,10 @@ class AnchorEngine:
 
                 # ── Отправляем РЕЗУЛЬТАТ работы агента пользователю ──
                 # Не шаблонный dispatch-заголовок, а реальный отчёт от первого лица
-                if result and result.strip() and self.bot:
+                _NOISE_RESULTS = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
+                _result_clean = (result or '').strip()
+                _is_noise_result = _result_clean.lower() in _NOISE_RESULTS or len(_result_clean) < 10
+                if result and result.strip() and self.bot and not _is_noise_result:
                     try:
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
@@ -1240,7 +1230,10 @@ class AnchorEngine:
                 session.commit()
 
                 # Отправляем результат ASI пользователю в Telegram
-                if result and result.strip() and self.bot:
+                _NOISE_RESULTS_ASI = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
+                _asi_result_clean = (result or '').strip()
+                _asi_is_noise = _asi_result_clean.lower() in _NOISE_RESULTS_ASI or len(_asi_result_clean) < 10
+                if result and result.strip() and self.bot and not _asi_is_noise:
                     try:
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
