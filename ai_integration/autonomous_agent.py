@@ -4090,10 +4090,27 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     )
     from datetime import datetime as _dt_exec
     _now_str = _dt_exec.now().strftime('%Y-%m-%d %H:%M (%A)')
-    system_prompt = (
-        f"Ты — {agent['name']}, агент в команде ASI Biont. Сейчас: {_now_str}.\n"
-        f"Пиши ТОЛЬКО от имени {agent['name']}. НЕ представляйся другим именем. "
-        f"НЕ пиши от имени ASI, ASI Biont, или другого агента.\n\n"
+    _is_autopilot_task = 'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '') or 'autopilot' in (task or '').lower() or 'Активные цели:' in (task or '')
+
+    if _is_autopilot_task:
+        # ── Compact prompt for autopilot: ~450 chars vs ~2400 (saves ~500 tokens) ──
+        system_prompt = (
+            f"Ты — {agent['name']}, агент ASI Biont. Сейчас: {_now_str}.\n"
+            f"Пиши от имени {agent['name']}.\n\n"
+            "Определи что КОНКРЕТНО продвинет цель. "
+            "Ищи рычаг — минимум усилий, максимум результата.\n\n"
+            "ФОРМАТ: сплошной текст, до 400 символов, без списков/заголовков/markdown.\n\n"
+            "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
+            "исследования, email, публикации, делегирование и многое другое. "
+            "НЕ пиши планы — ДЕЙСТВУЙ инструментами. "
+            "Каждый ответ = конкретный результат.\n\n"
+            f"ТВОЯ РОЛЬ:\n{_persona}"
+        )
+    else:
+        system_prompt = (
+            f"Ты — {agent['name']}, агент в команде ASI Biont. Сейчас: {_now_str}.\n"
+            f"Пиши ТОЛЬКО от имени {agent['name']}. НЕ представляйся другим именем. "
+            f"НЕ пиши от имени ASI, ASI Biont, или другого агента.\n\n"
 
         "КАК ТЫ ДУМАЕШЬ:\n"
         "Перед каждым ответом — быстрый анализ:\n"
@@ -4182,8 +4199,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     elif dialog_context:
         logger.debug("[DIRECTOR-EXEC] context already passed (%d chars), skipping DB reload", len(dialog_context))
 
-    # ── Шаг 0.5: Агент узнаёт о команде коллег и своих инструментах ───────────
-    try:
+    # ── Шаг 0.5: Агент узнаёт о команде коллег ─────────────────────────────────
+    # Для автопилота пропускаем (saves ~500 chars + DB query)
+    if not _is_autopilot_task:
+      try:
         from models import Session as _Sess_team, UserAgent as _UA_team
         _s_team = _Sess_team()
         try:
@@ -4217,7 +4236,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     )
         finally:
             _s_team.close()
-    except Exception as _te_team:
+      except Exception as _te_team:
         logger.debug('[DIRECTOR-EXEC] team load for agent: %s', _te_team)
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
@@ -4320,12 +4339,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _te2:
             logger.debug('[DIRECTOR] tools exclude calc: %s', _te2)
     elif not _allowed_tools:
-        # Автопилот целей → агент получает ВСЕ инструменты (не ограничиваем)
-        _is_autopilot_task = 'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '') or 'autopilot' in (task or '').lower() or 'Активные цели:' in (task or '')
+        # Автопилот целей → ограниченный набор ключевых инструментов (saves ~1200 tokens vs all 43)
         if _is_autopilot_task:
-            logger.info('[DIRECTOR] Autopilot task → full tools for %s (integrations, email, research allowed)', agent.get('name'))
-            # Блокируем только деструктивные операции — всё остальное (email, поиск, кампании) разрешено
-            _exclude_for_agent = {'update_goal_progress', 'delete_task'}
+            logger.info('[DIRECTOR] Autopilot task → focused toolset for %s', agent.get('name'))
+            _autopilot_tools = {
+                'add_task', 'list_tasks', 'complete_task', 'edit_task',
+                'list_goals', 'create_goal',
+                'research_topic', 'web_search', 'quick_topic_search',
+                'send_email', 'send_outreach_email', 'find_relevant_contacts_for_task',
+                'create_post', 'publish_to_telegram', 'delegate_task',
+                'generate_image', 'get_system_status',
+            }
+            try:
+                from .tools import get_available_tools as _gat_ap
+                _all_names = {t['function']['name'] for t in _gat_ap()}
+                _exclude_for_agent = _all_names - _autopilot_tools
+            except Exception:
+                _exclude_for_agent = {'update_goal_progress', 'delete_task'}
         else:
             # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
@@ -4534,8 +4564,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if _is_autopilot_task and _tool_call_count == 1:
             # После первого tool call: направляем на следующее действие
             _messages.append({"role": "user", "content": (
-                "Данные получены. Теперь выбери следующее действие из доступных инструментов — "
-                "то, которое лучше всего продвинет цель. Действуй, не описывай."
+                "Данные получены. Выбери следующий инструмент для продвижения цели."
+            )})
+        elif _is_autopilot_task:
+            _messages.append({"role": "user", "content": (
+                "Дай результат: 2-3 предложения, до 400 символов, без списков."
             )})
         else:
             _messages.append({"role": "user", "content": (
