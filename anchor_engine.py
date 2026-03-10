@@ -114,8 +114,14 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     'agent_task_blocked': "Агент заблокирован на задаче '{task}'. Проанализируй причину блокировки и предложи решение.",
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
-    # goal_autopilot_review убран из event-triggers: он обрабатывается через AUTOPILOT_SILENT_TYPES
-    # в _dispatch_agent_for_anchor — двойной dispatch вызывал дублирование работы (LOG 625).
+    # goal_autopilot_review: используется как fallback-prompt в _dispatch_agent_for_anchor
+    'goal_autopilot_review': (
+        "Ты продвигаешь цели пользователя. Изучи контекст ниже и ВЫПОЛНИ ОДНО конкретное действие инструментами.\n"
+        "ОБЯЗАТЕЛЬНО: вызови research_topic / web_search / add_task / send_email / delegate_task — выбери что подходит.\n"
+        "ЗАПРЕЩЕНО: описывать ситуацию без действия, повторять уже сделанное, отвечать 'задачу выполнил' без результата.\n"
+        "Если web_search недоступен — используй research_topic. Если нет email — ищи через другие каналы.\n"
+        "Прочитай историю действий ниже — НЕ ПОВТОРЯЙ то, что уже было. Сделай НОВЫЙ конкретный шаг."
+    ),
 }
 
 # Группы батчинга
@@ -994,12 +1000,18 @@ class AnchorEngine:
             # Добавляем историю предыдущих действий
             recent_actions = data.get('recent_actions', [])
             if recent_actions:
-                task_text += f"\n\nПоследние действия автопилота (за 24ч):\n" + '\n'.join(f"  {a}" for a in recent_actions)
+                task_text += (
+                    f"\n\n⚠️ УЖЕ СДЕЛАНО (за 24ч) — НЕ ПОВТОРЯЙ, сделай НОВЫЙ шаг:\n"
+                    + '\n'.join(f"  {a}" for a in recent_actions)
+                )
 
             # Добавляем недавние proactive-сообщения (что уже было сказано/сделано)
             recent_msgs = data.get('recent_messages', [])
             if recent_msgs:
-                task_text += f"\n\nНедавние сообщения бота (за 2ч) — НЕ ПОВТОРЯЙ:\n" + '\n'.join(f"  {m}" for m in recent_msgs)
+                task_text += (
+                    f"\n\n🔇 Эти сообщения уже отправлены — ЗАПРЕЩЕНО повторять/пересказывать:\n"
+                    + '\n'.join(f"  {m}" for m in recent_msgs)
+                )
 
             # Добавляем статус email-кампаний
             email_info = data.get('email_campaigns', [])
@@ -1321,7 +1333,8 @@ class AnchorEngine:
         Это заменяет «polling каждые 2-4ч» реакцией на конкретное событие.
         Fire-and-forget: не блокирует основной цикл доставки якорей.
         """
-        trigger_anchors = [a for a in new_anchors if a.anchor_type in _AGENT_DISPATCH_TRIGGERS]
+        trigger_anchors = [a for a in new_anchors if a.anchor_type in _AGENT_DISPATCH_TRIGGERS
+                          and a.anchor_type != 'goal_autopilot_review']
         if not trigger_anchors:
             return
 
@@ -2995,7 +3008,7 @@ class AnchorEngine:
         from models import AgentActivityLog as _AAL_scan
         recent_actions = session.query(_AAL_scan).filter(
             _AAL_scan.user_id == user.id,
-            _AAL_scan.activity_type == 'goal_autopilot_dispatch',
+            _AAL_scan.activity_type.in_(['goal_autopilot_dispatch', 'agent_chain_continue']),
             _AAL_scan.created_at >= now_utc - timedelta(hours=24),
         ).order_by(_AAL_scan.created_at.desc()).limit(10).all()
 
@@ -3003,7 +3016,7 @@ class AnchorEngine:
         for a in recent_actions:
             actions_history.append(
                 f"[{a.created_at.strftime('%H:%M')}] {a.status}: {(a.title or '')[:80]}"
-                + (f" → {(a.result or '')[:100]}" if a.result else '')
+                + (f" → {(a.result or '')[:200]}" if a.result else '')
             )
 
         # Последние proactive/agent_msg сообщения за 2 часа — что реально было сказано
