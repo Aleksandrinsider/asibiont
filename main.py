@@ -2042,6 +2042,15 @@ async def chat_handler(request):
                     session_db.add(interaction_agent)
                     session_db.commit()
                     logger.info("Saved AI response to database")
+                    # Списываем токены за сообщение (аналогично TG-пути handlers.py:1026)
+                    if not FREE_ACCESS_MODE:
+                        try:
+                            from token_service import spend_tokens as _st_web
+                            _st_result = _st_web(user_id, 'message', description=message[:100])
+                            if not _st_result.get('success'):
+                                logger.warning(f"[WEB CHAT] spend_tokens failed for user {user_id}: {_st_result}")
+                        except Exception as _ste:
+                            logger.warning(f"[WEB CHAT] spend_tokens error: {_ste}")
                 elif user_db_id and not (response and response.strip()):
                     logger.debug("[CHAT] Skipping empty response save to Interaction")
             finally:
@@ -7996,6 +8005,7 @@ _TIMELINE_VISIBLE_TYPES = {
     'content_campaign', 'delegation_campaign',
     'background_research_ready',
     'agent_task',
+    'run_agent_action',
 }
 
 

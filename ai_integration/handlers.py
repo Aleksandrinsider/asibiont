@@ -4273,10 +4273,11 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         try:
             from models import AgentActivityLog as _AAL_ugp
             _ugp_type = 'goal_completed' if matched.status == 'completed' else 'goal_updated'
+            _ugp_title = f'Цель достигнута: {matched.title}' if _ugp_type == 'goal_completed' else f'Проект обновлён: {matched.title}'
             _ugp_log = _AAL_ugp(
                 user_id=user.id,
                 activity_type=_ugp_type,
-                title=f'Проект обновлён: {matched.title}',
+                title=_ugp_title,
                 content=', '.join(changes[:3]),
                 status='completed',
                 ref_id=matched.id,
