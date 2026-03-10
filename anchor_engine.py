@@ -121,7 +121,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
         "ЗАПРЕЩЕНО: описывать ситуацию без действия, повторять уже сделанное, отвечать 'задачу выполнил' без результата.\n"
         "Если web_search недоступен — используй research_topic. Если нет email — ищи через другие каналы.\n"
         "Прочитай историю действий ниже — НЕ ПОВТОРЯЙ то, что уже было. Сделай НОВЫЙ конкретный шаг.\n"
-        "ФОРМАТ ОТЧЁТА: максимум 2-3 абзаца, до 600 символов. Только суть и результат, без воды."
+        "ФОРМАТ ОТЧЁТА: максимум 2 абзаца, до 400 символов. Только суть и результат. Длинный ответ = провал."
     ),
 }
 
@@ -1148,10 +1148,13 @@ class AnchorEngine:
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
 
                 # ── Отправляем РЕЗУЛЬТАТ работы агента пользователю ──
-                # Не шаблонный dispatch-заголовок, а реальный отчёт от первого лица
-                _NOISE_RESULTS = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
+                _NOISE_PREFIXES = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена')
                 _result_clean = (result or '').strip()
-                _is_noise_result = _result_clean.lower() in _NOISE_RESULTS or len(_result_clean) < 10
+                _is_noise_result = (
+                    len(_result_clean) < 20
+                    or _result_clean.lower().rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена')
+                    or any(_result_clean.lower().startswith(p) for p in _NOISE_PREFIXES)
+                )
                 if result and result.strip() and self.bot and not _is_noise_result:
                     try:
                         await self.bot.send_message(
@@ -1243,9 +1246,13 @@ class AnchorEngine:
                 session.commit()
 
                 # Отправляем результат ASI пользователю в Telegram
-                _NOISE_RESULTS_ASI = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
+                _NOISE_PREFIXES_ASI = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена')
                 _asi_result_clean = (result or '').strip()
-                _asi_is_noise = _asi_result_clean.lower() in _NOISE_RESULTS_ASI or len(_asi_result_clean) < 10
+                _asi_is_noise = (
+                    len(_asi_result_clean) < 20
+                    or _asi_result_clean.lower().rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена')
+                    or any(_asi_result_clean.lower().startswith(p) for p in _NOISE_PREFIXES_ASI)
+                )
                 if result and result.strip() and self.bot and not _asi_is_noise:
                     try:
                         await self.bot.send_message(
