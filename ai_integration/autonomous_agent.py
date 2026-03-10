@@ -4785,10 +4785,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             'tools_used': _agent_tools_used,
         }, ensure_ascii=False)
         _save_interaction_for_director(user_id, _ac)
-
-        # Отправляем читаемый ответ агента в чат (Telegram) с именем агента
-        _agent_display = f"💬 {ag.get('name', 'Агент')}:\n{resp}"
-        await _send_visible(_agent_display[:600])
+        # Не дублируем через _send_visible(persist=True) — агентский пузырь
+        # уже сохранён в DB и подтянется через /api/interactions sync после POST.
+        # Двойной вызов создавал пузырь "ASI / 💬 Марк:" + "Марк:" одновременно.
         await asyncio.sleep(0.05)
 
         # Логируем в AgentActivityLog (без создания Task)
@@ -5306,7 +5305,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     except Exception:
                         pass
                     if _fu_final_text:
-                        await _send_visible(_fu_final_text[:500])
+                        # Не дублируем через _send_visible — сохранено в DB, подтянется через sync
                         _save_interaction_for_director(user_id, _fu_final_text[:500], message_type='ai')
             except Exception as _fu_err:
                 logger.warning("[DIRECTOR] followup coordination error: %s", _fu_err)
@@ -5333,7 +5332,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             ),
         }], max_tokens=250)
         if _final_report and len(_final_report.strip()) > 10:
-            await _send_visible(_final_report[:500])
+            # Не дублируем через _send_visible — сохранено в DB, подтянется через sync
             _save_interaction_for_director(user_id, _final_report[:500], message_type='ai')
 
     # Сохраняем контекст всех раундов делегирования
