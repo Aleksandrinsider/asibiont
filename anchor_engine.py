@@ -1033,6 +1033,14 @@ class AnchorEngine:
             if known_contacts:
                 task_text += f"\n\nИзвестные контакты (уже в базе):\n" + '\n'.join(f"  {c}" for c in known_contacts)
 
+            # Задачи уже созданные агентами — не создавай дублей, предлагай новые шаги
+            agent_tasks_done = data.get('agent_tasks_history', [])
+            if agent_tasks_done:
+                task_text += (
+                    f"\n\n📋 ЗАДАЧИ УЖЕ СОЗДАНЫ агентами за 24ч — не дублируй, думай о СЛЕДУЮЩЕМ шаге:\n"
+                    + '\n'.join(f"  • {t}" for t in agent_tasks_done)
+                )
+
             # ══ Блок отсутствующих интеграций: агент видит что нужно и сообщает пользователю ══
             import os as _os_intg
             _missing_intg_notes = []
@@ -1194,19 +1202,19 @@ class AnchorEngine:
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
-                # ── Продолжение цепочки: отключено для автопилота целей ──
-                # Автопилот уже выполняет полный tool-calling цикл (research → add_task → result).
-                # Chain continuation дублирует работу и тратит ~2000 токенов на второго агента.
-                # Chain остаётся для event-driven якорей (task_stale, delegation_update и т.д.)
-                if anchor.anchor_type != 'goal_autopilot_review':
-                    _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
-                    if result and len(result) > 30 and chosen.id != 0 and len(_real_agents) >= 1:
-                        try:
-                            await self._maybe_continue_chain(
-                                user, chosen, anchor, task_text, result, _real_agents, session,
-                            )
-                        except Exception as _chain_err:
-                            logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
+                # ── Продолжение цепочки: 1 передача для автопилота, 3 для event-якорей ──
+                # Для autopilot: агент A делает исследование → агент B создаёт задачи по нему
+                # Для event-якорей: полная цепочка до 3 передач (task_stale, delegation и т.д.)
+                _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
+                if result and len(result) > 30 and len(_real_agents) >= 1:
+                    _chain_max = 1 if anchor.anchor_type == 'goal_autopilot_review' else 3
+                    try:
+                        await self._maybe_continue_chain(
+                            user, chosen, anchor, task_text, result, _real_agents, session,
+                            max_cont=_chain_max,
+                        )
+                    except Exception as _chain_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
             else:
                 # Нет кастомных агентов — ASI с полным tool-calling (add_task, web_search, и т.д.)
                 from ai_integration.autonomous_agent import _exec_agent_for_director
@@ -1496,10 +1504,11 @@ class AnchorEngine:
                                 logger.warning("[ANCHOR-DISPATCH] result send failed: %s", _e_ev_send)
 
                         # ── ASI-продолжение: анализ результата → следующий агент ──
-                        # Для автопилота цепочка отключена (дублирует работу + токены)
-                        if anchor.anchor_type != 'goal_autopilot_review' and result and len(result) > 30:
+                        if result and len(result) > 30:
+                            _chain_max_ev = 1 if anchor.anchor_type == 'goal_autopilot_review' else 3
                             await self._maybe_continue_chain(
                                 user, chosen, anchor, task_text, result, agents, _s,
+                                max_cont=_chain_max_ev,
                             )
 
                     except Exception as _exec_e:
@@ -1587,15 +1596,15 @@ class AnchorEngine:
                 return ag
         return agents[0]
 
-    async def _maybe_continue_chain(self, user, prev_agent, anchor, task_text, result, agents, session):
+    async def _maybe_continue_chain(self, user, prev_agent, anchor, task_text, result, agents, session, max_cont=3):
         """ASI анализирует результат агента и решает — нужен ли следующий шаг.
 
         Если задача не завершена или нужна экспертиза другого агента,
         запускает следующего агента напрямую.
-        Максимум 3 продолжения на исходный якорь (контролируемая цепочка).
+        max_cont: максимум продолжений (3 для event-якорей, 1 для autopilot).
         """
         try:
-            # Guard: не создаём цепочку длиннее 3 продолжений
+            # Guard: не создаём цепочку длиннее max_cont продолжений
             from models import AgentActivityLog as _AAL2
             _cont_count = (
                 session.query(_AAL2)
@@ -1607,27 +1616,32 @@ class AnchorEngine:
                 )
                 .count()
             )
-            if _cont_count >= 3:
+            if _cont_count >= max_cont:
                 return
 
             # Guard: если агент заблокирован — не продолжаем
             if result.strip().startswith('BLOCKED:'):
                 return
 
-            # ASI анализирует результат
+            # ASI анализирует результат и решает кому передать
             from ai_integration.autonomous_agent import _quick_ai_call_raw
+            _agents_desc = ', '.join(
+                f"{a.name} ({a.job_title or a.specialization or '?'})"
+                for a in agents if getattr(a, 'id', 0) != getattr(prev_agent, 'id', -1)
+            )
             _analysis = await _quick_ai_call_raw([{
                 "role": "user",
                 "content": (
                     f"Задача: {task_text[:200]}\n"
-                    f"Агент {prev_agent.name} ответил:\n{result[:400]}\n\n"
-                    f"Доступные агенты: {', '.join(a.name for a in agents)}\n\n"
-                    "Задача ПОЛНОСТЬЮ решена? Если да — ответь JSON: {\"continue\": false}\n"
-                    "Если нужен следующий шаг другим агентом — ответь JSON:\n"
-                    "{\"continue\": true, \"agent_name\": \"имя\", \"task\": \"что сделать\"}\n"
-                    "JSON без ```:"
+                    f"Агент {prev_agent.name} выполнил: {result[:400]}\n\n"
+                    f"Другие агенты команды: {_agents_desc}\n\n"
+                    "Нужен ли ДРУГОЙ агент чтобы продолжить/дополнить результат?\n"
+                    "Например: один исследовал → другой создаёт задачи; один нашёл контакты → другой пишет письма.\n"
+                    "Если задача решена или нет подходящего агента — {\"continue\": false}\n"
+                    "Если нужен другой агент — {\"continue\": true, \"agent_name\": \"имя\", \"task\": \"конкретное задание\"}\n"
+                    "Только JSON, без ```:"
                 ),
-            }], max_tokens=120)
+            }], max_tokens=100)
 
             if not _analysis:
                 return
@@ -3131,6 +3145,14 @@ class AnchorEngine:
                 'tasks': tasks_detail,
             })
 
+        # Задачи созданные агентами за 24ч — для предотвращения дублей и зацикливания
+        _recent_agent_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.created_at >= now_utc - timedelta(hours=24),
+            Task.source == 'agent',
+        ).order_by(Task.created_at.desc()).limit(10).all()
+        agent_tasks_history = [f"{t.title[:80]} [{t.status}]" for t in _recent_agent_tasks]
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -3139,6 +3161,7 @@ class AnchorEngine:
             'email_campaigns': email_summary,
             'known_contacts': contacts_summary[:10],
             'user_rules': user_rules[:10],
+            'agent_tasks_history': agent_tasks_history,
         }
 
         return [Anchor(
