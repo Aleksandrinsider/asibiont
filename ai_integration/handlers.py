@@ -1791,11 +1791,12 @@ async def delegate_task(
 
                     # Записываем ответ агента в чат (видно на дашборде с аватаркой)
                     try:
+                        _av = _agent_dict.get('avatar_url', '')
                         _resp_json = _json_ag.dumps({
                             '__agent': {
                                 'name': _agent_name,
                                 'id': _agent_recipient.id,
-                                'avatar_url': _agent_dict.get('avatar_url', ''),
+                                'avatar_url': '' if _av.startswith('data:') else _av,
                             },
                             'text': _result,
                         }, ensure_ascii=False)

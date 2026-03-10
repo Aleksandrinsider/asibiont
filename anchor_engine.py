@@ -50,6 +50,14 @@ from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEN
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_avatar(url: str | None) -> str:
+    """Strip base64 data URIs from avatar — they bloat interactions to 100KB+."""
+    if not url:
+        return ''
+    return '' if url.startswith('data:') else url
+
+
 # ═══════════════════════════════════════════════════════
 # CONSTANTS
 # ═══════════════════════════════════════════════════════
@@ -1121,7 +1129,7 @@ class AnchorEngine:
                     'user_api_keys': chosen.user_api_keys or '',
                     'tools_allowed': _tools_for_dispatch,
                     'tools': json.loads(_tools_for_dispatch or '[]'),
-                    'avatar_url': getattr(chosen, 'avatar_url', '') or '',
+                    'avatar_url': _safe_avatar(getattr(chosen, 'avatar_url', '')),
                     'search_scope': getattr(chosen, 'search_scope', '') or '',
                 }
                 agent_name = chosen.name
@@ -1165,7 +1173,7 @@ class AnchorEngine:
                             '__agent': {
                                 'name': chosen.name,
                                 'id': chosen.id,
-                                'avatar_url': chosen.avatar_url or '',
+                                'avatar_url': _safe_avatar(chosen.avatar_url),
                             },
                             'text': result.strip(),
                         }, ensure_ascii=False)
@@ -1418,7 +1426,7 @@ class AnchorEngine:
                         'user_api_keys': chosen.user_api_keys or '',
                         'tools_allowed': chosen.tools_allowed or '',
                         'search_scope': chosen.search_scope or '',
-                        'avatar_url': chosen.avatar_url or '',
+                        'avatar_url': _safe_avatar(chosen.avatar_url),
                         'tools': _jd.loads(chosen.tools_allowed or '[]'),
                     }
 
@@ -1463,7 +1471,7 @@ class AnchorEngine:
                                     '__agent': {
                                         'name': chosen.name,
                                         'id': chosen.id,
-                                        'avatar_url': chosen.avatar_url or '',
+                                        'avatar_url': _safe_avatar(chosen.avatar_url),
                                     },
                                     'text': result.strip(),
                                 }, ensure_ascii=False)
@@ -1638,6 +1646,11 @@ class AnchorEngine:
             if not _next_ag:
                 return
 
+            # Не выбираем того же агента повторно — это вызывает дубли сообщений
+            if _next_ag.id == prev_agent.id:
+                logger.info('[ANCHOR-CHAIN] skipping same agent %s', _next_ag.name)
+                return
+
             # Логируем continuation
             from models import AgentActivityLog as _AAL3
             session.add(_AAL3(
@@ -1665,7 +1678,7 @@ class AnchorEngine:
                 'user_api_keys': _next_ag.user_api_keys or '',
                 'tools_allowed': _next_ag.tools_allowed or '',
                 'search_scope': getattr(_next_ag, 'search_scope', '') or '',
-                'avatar_url': _next_ag.avatar_url or '',
+                'avatar_url': _safe_avatar(_next_ag.avatar_url),
                 'tools': _jd2.loads(_next_ag.tools_allowed or '[]'),
             }
             _ctx = f"Предыдущий результат от {prev_agent.name}:\n{result[:300]}"
@@ -1688,7 +1701,7 @@ class AnchorEngine:
                             '__agent': {
                                 'name': prev_agent.name,
                                 'id': prev_agent.id,
-                                'avatar_url': prev_agent.avatar_url or '',
+                                'avatar_url': _safe_avatar(prev_agent.avatar_url),
                             },
                             'text': _handoff_text,
                         }, ensure_ascii=False),
@@ -1740,7 +1753,7 @@ class AnchorEngine:
                         '__agent': {
                             'name': _next_ag.name,
                             'id': _next_ag.id,
-                            'avatar_url': _next_ag.avatar_url or '',
+                            'avatar_url': _safe_avatar(_next_ag.avatar_url),
                         },
                         'text': _next_result.strip(),
                     }, ensure_ascii=False)
@@ -6306,7 +6319,7 @@ class AnchorEngine:
                             '__agent': {
                                 'name': _ua.name,
                                 'id': _ua.id,
-                                'avatar_url': _ua.avatar_url or '',
+                                'avatar_url': _safe_avatar(_ua.avatar_url),
                             },
                             'text': message,
                         }, ensure_ascii=False)

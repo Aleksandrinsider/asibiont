@@ -5135,8 +5135,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     resp = _fallback_resp
 
         # Результат агента сохраняется в DB как __agent JSON (с аватаром).
+        _av_url = ag.get('avatar_url', '')
         _ac = _json.dumps({
-            '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': ag.get('avatar_url', '')},
+            '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': '' if _av_url.startswith('data:') else _av_url},
             'text': resp,
             'tools_used': _agent_tools_used,
         }, ensure_ascii=False)
