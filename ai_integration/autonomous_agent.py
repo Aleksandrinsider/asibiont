@@ -1202,12 +1202,22 @@ class HybridAutonomousAgent:
                 except Exception as e:
                     logger.debug(f"Failed to decrypt user memory: {e}")
 
-            # Для проактивных/anchor режимов — НЕ передаём user_memory в промпт
-            # чтобы AI не цитировал устаревшие данные из памяти как факты.
-            # AI должен получать актуальные данные ТОЛЬКО через инструменты (list_tasks, list_goals).
+            # Для проактивных/anchor режимов — НЕ передаём историческую память,
+            # но ВСЕГДА передаём rules — они определяют поведение агентов вне зависимости от режима.
             effective_memory = decrypted_memory
             if mode in ('proactive', 'anchor'):
-                effective_memory = ""  # AI получит данные через tool calls
+                # Извлекаем только rules из JSON-памяти, остальное — через tool calls
+                _rules_only = ""
+                if decrypted_memory:
+                    try:
+                        import json as _json_mem
+                        _m = _json_mem.loads(decrypted_memory.strip()) if decrypted_memory.strip().startswith('{') else {}
+                        _r = _m.get('rules', [])
+                        if _r:
+                            _rules_only = _json_mem.dumps({'rules': _r}, ensure_ascii=False)
+                    except Exception:
+                        pass
+                effective_memory = _rules_only  # Только правила, без исторического мусора
 
             # Текущая задача
             current_task_info = None

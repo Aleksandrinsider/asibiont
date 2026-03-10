@@ -147,13 +147,42 @@ If balance is low — warn and suggest /buy."""
         except Exception as e:
             logger.warning(f"[PROMPTS] Failed to get search context: {e}")
 
-    # User memory — фильтруем мусор (логи tool-вызовов) чтобы AI не путал с реальными данными
+    # User memory — извлекаем rules отдельно (ПРИОРИТЕТ), остальное — исторические заметки
     memory_section = ""
+    rules_section = ""  # Будет добавлен В НАЧАЛО промпта
     if user_memory:
         try:
             import re as _re
             decrypted_memory = user_memory  # Assuming it's already decrypted
-            if decrypted_memory and len(decrypted_memory.strip()) > 0:
+            if decrypted_memory and decrypted_memory.strip():
+                # Пытаемся распарсить JSON — в нём хранятся rules и другие структурированные данные
+                _mem_json = None
+                _stripped = decrypted_memory.strip()
+                if _stripped.startswith('{'):
+                    try:
+                        _mem_json = json.loads(_stripped)
+                    except Exception:
+                        pass
+
+                # ── ПРАВИЛА ПОЛЬЗОВАТЕЛЯ — выносим отдельно и приоритетно ──
+                _rules = []
+                if _mem_json:
+                    _rules = _mem_json.get('rules', [])
+                if _rules:
+                    _rules_lines = '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_rules))
+                    if lang == 'en':
+                        rules_section = (
+                            f"\n🔴 MANDATORY USER RULES (stored preferences — ALWAYS follow, in every response and action):\n"
+                            f"{_rules_lines}\n"
+                            f"These rules override any default behavior. Violation = failure."
+                        )
+                    else:
+                        rules_section = (
+                            f"\n🔴 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (сохранённые предпочтения — соблюдай ВСЕГДА, в каждом ответе и действии):\n"
+                            f"{_rules_lines}\n"
+                            f"Эти правила отменяют любое поведение по умолчанию. Нарушение = провал."
+                        )
+
                 # Убираем строки с результатами tool-вызовов — они НЕ факты
                 _TOOL_JUNK_RE = _re.compile(
                     r'^(Искал:.*|create_goal:.*|update_goal_progress:.*|'
@@ -162,9 +191,13 @@ If balance is low — warn and suggest /buy."""
                     r'hide_contact:.*|AI iter \d+:.*)$',
                     _re.MULTILINE
                 )
-                cleaned = _TOOL_JUNK_RE.sub('', decrypted_memory).strip()
-                # Убираем пустые строки
-                cleaned = '\n'.join(line for line in cleaned.split('\n') if line.strip())
+                # Для JSON-памяти берём только текстовые заметки (не rules)
+                if _mem_json:
+                    _notes = _mem_json.get('notes', '') or _mem_json.get('memory', '')
+                    cleaned = str(_notes)[:400].strip() if _notes else ''
+                else:
+                    cleaned = _TOOL_JUNK_RE.sub('', decrypted_memory).strip()
+                    cleaned = '\n'.join(line for line in cleaned.split('\n') if line.strip())
                 if cleaned:
                     if lang == 'en':
                         memory_section = (
@@ -299,5 +332,9 @@ If user says "done/finished/completed" → complete_task()"""
         prompt = profile_instruction + "\n" + prompt
     elif profile_instruction:
         prompt += profile_instruction
+
+    # ── ПРАВИЛА ПОЛЬЗОВАТЕЛЯ — добавляем В САМОЕ НАЧАЛО промпта (высший приоритет) ──
+    if rules_section:
+        prompt = rules_section + "\n\n" + prompt
 
     return prompt
