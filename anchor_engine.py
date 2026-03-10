@@ -3007,6 +3007,7 @@ class AnchorEngine:
         goal_ids = [g.id for g in active_goals]
         all_tasks = session.query(Task).filter(
             Task.goal_id.in_(goal_ids),
+            Task.status.notin_(['cancelled', 'deleted']),
         ).order_by(Task.created_at.desc()).all() if goal_ids else []
         _tasks_by_goal: dict = {}
         for t in all_tasks:
