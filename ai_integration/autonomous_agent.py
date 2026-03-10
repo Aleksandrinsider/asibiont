@@ -4434,11 +4434,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # После 3 tool calls (autopilot) или 2 (обычный) — отключаем tools
         _max_tool_calls = 3 if _is_autopilot_task else 2
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
-        # Для autopilot-задач: первая итерация — required (принудительный вызов инструмента)
+        # Для autopilot-задач: первые 2 итерации — required (research → add_task)
         # Это устраняет ситуацию когда AI пишет "создала задачу" без реального вызова tool
         _tc_mode = "auto"
         if _use_tools_now:
-            if _is_autopilot_task and _tool_call_count == 0:
+            if _is_autopilot_task and _tool_call_count < 2:
                 _tc_mode = "required"
             else:
                 _tc_mode = "auto"
