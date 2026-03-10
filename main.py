@@ -11575,7 +11575,7 @@ app.router.add_post('/api/arena/comment', api_arena_comment_handler)
 
 async def api_arena_agent_avatar_handler(request):
     """GET /api/arena/agent_avatar/{agent_id} — возвращает аватар агента из маркетплейса"""
-    agent_id = request.match_info.get('agent_id', '')  # e.g. 'mkt_6'
+    agent_id = request.match_info.get('agent_id', '')  # e.g. 'mkt_6' or '14'
     try:
         numeric_id = int(agent_id.replace('mkt_', ''))
     except ValueError:
@@ -11585,13 +11585,14 @@ async def api_arena_agent_avatar_handler(request):
         try:
             from models import UserAgent
             agent = db_s.query(UserAgent).filter_by(id=numeric_id).first()
-            if not agent or not agent.avatar_url:
-                return web.Response(status=404)
-            avatar_data = agent.avatar_url
+            avatar_data = agent.avatar_url if agent else None
+            agent_name = agent.name if agent else ''
         finally:
             db_s.close()
+
         import base64 as _b64
-        if avatar_data.startswith('data:'):
+        # Если в БД хранится base64 — отдаём файл напрямую
+        if avatar_data and avatar_data.startswith('data:'):
             parts = avatar_data.split(',', 1)
             if len(parts) == 2:
                 meta = parts[0]
@@ -11600,9 +11601,34 @@ async def api_arena_agent_avatar_handler(request):
                 return web.Response(
                     body=img_bytes,
                     content_type=ct,
-                    headers={'Cache-Control': 'public, max-age=300'}
+                    headers={'Cache-Control': 'public, max-age=3600'}
                 )
-        return web.Response(status=404)
+
+        # Fallback: генерируем SVG-аватар с инициалами по имени агента
+        _AVATAR_COLORS = [
+            ('#068487', '#04a8b3'), ('#1a3a5c', '#2d6a9f'), ('#5c1a1a', '#a03030'),
+            ('#4a1a6b', '#7a30b0'), ('#1a5c3a', '#30a06a'), ('#5c3a1a', '#a07030'),
+        ]
+        _words = (agent_name or 'AI').strip().split()
+        _initials = ''.join(w[0] for w in _words[:2]).upper() or 'AI'
+        _color_idx = (numeric_id or 0) % len(_AVATAR_COLORS)
+        _c1, _c2 = _AVATAR_COLORS[_color_idx]
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+            f'<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
+            f'<stop offset="0%" style="stop-color:{_c1}"/>'
+            f'<stop offset="100%" style="stop-color:{_c2}"/>'
+            f'</linearGradient></defs>'
+            f'<circle cx="32" cy="32" r="32" fill="url(#g)"/>'
+            f'<text x="32" y="38" text-anchor="middle" font-family="sans-serif" '
+            f'font-size="22" font-weight="700" fill="white">{_initials}</text>'
+            f'</svg>'
+        )
+        return web.Response(
+            body=svg.encode('utf-8'),
+            content_type='image/svg+xml',
+            headers={'Cache-Control': 'public, max-age=3600'}
+        )
     except Exception as e:
         logger.error(f'[ARENA] agent_avatar error: {e}')
         return web.Response(status=500)
