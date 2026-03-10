@@ -1001,7 +1001,7 @@ class AnchorEngine:
                     try:
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=f"⚡ {agent_name} анализирует цели...",
+                            text=f"{agent_name} анализирует цели...",
                         )
                     except Exception:
                         pass
@@ -1017,13 +1017,22 @@ class AnchorEngine:
                     try:
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=f"🤖 {agent_name}:\n\n{result.strip()}",
+                            text=f"{agent_name}:\n\n{result.strip()}",
                         )
+                        # Оборачиваем в __agent JSON для корректного отображения в веб-чате
+                        _agent_content = json.dumps({
+                            '__agent': {
+                                'name': chosen.name,
+                                'id': chosen.id,
+                                'avatar_url': chosen.avatar_url or '',
+                            },
+                            'text': result.strip(),
+                        }, ensure_ascii=False)
                         # Сохраняем в interaction — чтобы следующая итерация видела что уже сделано
                         session.add(Interaction(
                             user_id=user.id,
                             message_type='proactive',
-                            content=result.strip(),
+                            content=_agent_content,
                         ))
                         session.commit()
                         try:
@@ -1285,12 +1294,20 @@ class AnchorEngine:
                             try:
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
-                                    text=result.strip(),
+                                    text=f"{chosen.name}:\n\n{result.strip()}",
                                 )
+                                _ev_agent_content = json.dumps({
+                                    '__agent': {
+                                        'name': chosen.name,
+                                        'id': chosen.id,
+                                        'avatar_url': chosen.avatar_url or '',
+                                    },
+                                    'text': result.strip(),
+                                }, ensure_ascii=False)
                                 _s.add(Interaction(
                                     user_id=user.id,
                                     message_type='proactive',
-                                    content=result.strip(),
+                                    content=_ev_agent_content,
                                 ))
                                 _s.commit()
                                 try:
@@ -1495,8 +1512,7 @@ class AnchorEngine:
                 try:
                     _handoff_name = _next_ag.name if _next_ag.name != prev_agent.name else prev_agent.name
                     _handoff_text = (
-                        f"💭 ASI оценивает результат {prev_agent.name} и ставит следующую задачу:\n\n"
-                        f"➡️ {_handoff_name}: {_next_task[:300]}"
+                        f"{prev_agent.name} → {_handoff_name}:\n{_next_task[:300]}"
                     )
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
@@ -1535,12 +1551,20 @@ class AnchorEngine:
                 try:
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
-                        text=f"🤖 {_next_ag.name}:\n\n{_next_result.strip()}",
+                        text=f"{_next_ag.name}:\n\n{_next_result.strip()}",
                     )
+                    _chain_agent_content = json.dumps({
+                        '__agent': {
+                            'name': _next_ag.name,
+                            'id': _next_ag.id,
+                            'avatar_url': _next_ag.avatar_url or '',
+                        },
+                        'text': _next_result.strip(),
+                    }, ensure_ascii=False)
                     session.add(Interaction(
                         user_id=user.id,
                         message_type='proactive',
-                        content=_next_result.strip(),
+                        content=_chain_agent_content,
                     ))
                     session.commit()
                     try:
