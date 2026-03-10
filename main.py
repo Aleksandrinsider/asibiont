@@ -11309,7 +11309,7 @@ async def api_marketplace_agent_activate_handler(request):
                 session_db.add(sub)
                 agent.subscribers_count = (agent.subscribers_count or 0) + 1
             # Для собственных агентов — возвращаем status='active' при активации
-            if is_own and agent.status == 'paused':
+            if is_own and agent.status in ('paused', 'disabled'):
                 agent.status = 'active'
             session_db.commit()
             # Всегда ставим агента как активного (focused) — для корректного отображения в чате
@@ -11358,9 +11358,11 @@ async def api_marketplace_agent_deactivate_handler(request):
                 agent = session_db.query(UserAgent).filter_by(id=agent_id).first()
                 if agent and (agent.subscribers_count or 0) > 0:
                     agent.subscribers_count = agent.subscribers_count - 1
-                # Для собственных агентов — ставим status='paused' чтобы не переактивировались
+                # Для собственных агентов — ставим status='disabled' (деактивирован для себя и маркета)
+                # paused = только снят с арены (агент работает для владельца)
+                # disabled = полностью отключён (не показывается в маркете, не работает в автопилоте)
                 if agent and agent.author_id == user_obj.id:
-                    agent.status = 'paused'
+                    agent.status = 'disabled'
                 session_db.commit()
             # Убираем агента из списка активных (не трогаем остальных)
             from ai_integration.user_agents import remove_user_active_agent as _rua
