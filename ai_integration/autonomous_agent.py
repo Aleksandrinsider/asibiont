@@ -5166,8 +5166,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 if _fallback_resp and len(_fallback_resp) > 20:
                     resp = _fallback_resp
 
-        # Результат агента сохраняется в DB как __agent JSON (с аватаром).
+        # Результат агента сохраняется в DB как __agent JSON (с proxy URL вместо base64).
         _av_url = ag.get('avatar_url', '')
+        if _av_url and _av_url.startswith('data:') and ag.get('id'):
+            _av_url = f'/api/arena/agent_avatar/{ag["id"]}'
         _ac = _json.dumps({
             '__agent': {'name': ag.get('name'), 'id': ag.get('id'), 'avatar_url': _av_url},
             'text': resp,

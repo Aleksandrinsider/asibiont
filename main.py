@@ -179,6 +179,19 @@ def get_context_from_db(user_id, limit=10):
         interactions = query.order_by(Interaction.created_at.desc()).limit(limit * 3).all()
         interactions.reverse()  # Oldest first
         
+        def _strip_avatar_from_content(content: str) -> str:
+            """Strip base64 avatar data from __agent JSON to save AI tokens."""
+            if not content or 'data:image' not in content:
+                return content
+            try:
+                _jp = __import__('json').loads(content)
+                if isinstance(_jp, dict) and isinstance(_jp.get('__agent'), dict):
+                    _jp['__agent']['avatar_url'] = ''
+                    return __import__('json').dumps(_jp, ensure_ascii=False)
+            except Exception:
+                pass
+            return content
+
         # Convert to context format, handling reminders (standalone 'ai' messages)
         context = []
         i = 0
@@ -190,7 +203,7 @@ def get_context_from_db(user_id, limit=10):
                 if i + 1 < len(interactions) and interactions[i + 1].message_type == 'ai':
                     context.append({
                         'user': msg.content,
-                        'agent': interactions[i + 1].content
+                        'agent': _strip_avatar_from_content(interactions[i + 1].content)
                     })
                     i += 2
                 else:
@@ -202,7 +215,7 @@ def get_context_from_db(user_id, limit=10):
                 # Add reminder as a synthetic user-ai pair for context continuity
                 context.append({
                     'user': '[напоминание]',
-                    'agent': msg.content
+                    'agent': _strip_avatar_from_content(msg.content)
                 })
                 i += 1
             
@@ -210,7 +223,7 @@ def get_context_from_db(user_id, limit=10):
             elif msg.message_type == 'proactive':
                 context.append({
                     'user': '[проактивное сообщение]',
-                    'agent': msg.content
+                    'agent': _strip_avatar_from_content(msg.content)
                 })
                 i += 1
             
@@ -218,7 +231,7 @@ def get_context_from_db(user_id, limit=10):
             elif msg.message_type == 'reminder':
                 context.append({
                     'user': '[напоминание о задаче]',
-                    'agent': msg.content
+                    'agent': _strip_avatar_from_content(msg.content)
                 })
                 i += 1
             else:
@@ -6960,6 +6973,24 @@ async def api_interactions_handler(request):
             except pytz.exceptions.UnknownTimeZoneError:
                 user_tz = pytz.UTC
 
+        import re as _re_int
+
+        def _sanitize_avatar_in_content(content: str) -> str:
+            """Replace base64 data URIs in __agent.avatar_url with proxy URLs to reduce payload."""
+            if not content or 'data:image' not in content:
+                return content
+            try:
+                _jp = json.loads(content)
+                if isinstance(_jp, dict) and isinstance(_jp.get('__agent'), dict):
+                    _av = _jp['__agent'].get('avatar_url', '')
+                    if _av and _av.startswith('data:'):
+                        _aid = _jp['__agent'].get('id')
+                        _jp['__agent']['avatar_url'] = f'/api/arena/agent_avatar/{_aid}' if _aid else ''
+                        return json.dumps(_jp, ensure_ascii=False)
+            except Exception:
+                pass
+            return content
+
         interactions_data = []
         for interaction in filtered_interactions:
             # Convert UTC time to user timezone
@@ -6974,7 +7005,7 @@ async def api_interactions_handler(request):
 
             interactions_data.append({
                 'id': interaction.id,
-                'content': interaction.content,
+                'content': _sanitize_avatar_in_content(interaction.content),
                 'message_type': interaction.message_type,
                 'created_at': created_at_local.isoformat()
             })
