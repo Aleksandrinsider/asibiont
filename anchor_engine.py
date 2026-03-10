@@ -977,7 +977,7 @@ class AnchorEngine:
             # Для goal_autopilot_review — используем полноценный prompt из _AGENT_DISPATCH_TRIGGERS,
             # а не просто anchor.topic (он слишком лаконичен для автономной работы агента)
             if anchor.anchor_type == 'goal_autopilot_review':
-                task_text = _AGENT_DISPATCH_TRIGGERS.get(anchor.anchor_type, anchor.topic or '')
+                task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n" + _AGENT_DISPATCH_TRIGGERS.get(anchor.anchor_type, anchor.topic or '')
             else:
                 task_text = _AGENT_DISPATCH_TRIGGERS.get(
                     anchor.anchor_type, anchor.topic or '',
@@ -1057,8 +1057,49 @@ class AnchorEngine:
                 )
 
             if agents:
-                chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
-                # Для ASI (id=0) усиливаем personality — полный execution mode
+                # ── ROUND-ROBIN для goal_autopilot_review: агенты чередуются строго ──
+                # AI-выбор всегда жмёт на ASI (specialization=goal_management) →
+                # кастомные агенты (Кристина, Марк) выпадают из ротации.
+                # Решение: для autopilot принудительно чередуем агентов в порядке их id,
+                # используя последний dispatched-агент из AgentActivityLog как указатель.
+                if anchor.anchor_type == 'goal_autopilot_review':
+                    _last_dispatch = (
+                        session.query(_AAL_ap)
+                        .filter(
+                            _AAL_ap.user_id == user.id,
+                            _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                            _AAL_ap.created_at >= datetime.now(timezone.utc) - timedelta(hours=48),
+                        )
+                        .order_by(_AAL_ap.id.desc())
+                        .first()
+                    )
+                    # Строим список в стабильном порядке: реальные агенты по id, ASI в конце
+                    _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
+                    _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
+                    _rotation_pool = _real_ags + ([_asi_ag] if _asi_ag else [])
+                    if _rotation_pool:
+                        if _last_dispatch:
+                            _last_ref = _last_dispatch.ref_id  # None → ASI (id=0)
+                            _last_id = _last_ref if _last_ref is not None else 0
+                            # Найти позицию последнего агента в ротации
+                            _ids = [getattr(a, 'id', 0) for a in _rotation_pool]
+                            if _last_id in _ids:
+                                _cur_idx = _ids.index(_last_id)
+                                chosen = _rotation_pool[(_cur_idx + 1) % len(_rotation_pool)]
+                            else:
+                                chosen = _rotation_pool[0]
+                        else:
+                            chosen = _rotation_pool[0]
+                    else:
+                        chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+                else:
+                    chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+                # Для autopilot-задачи снимаем ограничения tools_allowed:
+                # агент должен использовать полный арсенал (research, email, campaigns и т.д.)
+                # Если агент определил кастомный список — он актуален для диалога, но не для
+                # автономной работы по целям пользователя.
+                _is_autopilot_dispatch = (anchor.anchor_type == 'goal_autopilot_review')
+                _tools_for_dispatch = '' if _is_autopilot_dispatch else (chosen.tools_allowed or '')
                 agent_data = {
                     'id': chosen.id, 'name': chosen.name,
                     'job_title': chosen.job_title or '',
@@ -1067,8 +1108,10 @@ class AnchorEngine:
                     'personality': chosen.personality or '',
                     'python_code': chosen.python_code or '',
                     'user_api_keys': chosen.user_api_keys or '',
-                    'tools_allowed': chosen.tools_allowed or '',
-                    'tools': json.loads(chosen.tools_allowed or '[]'),
+                    'tools_allowed': _tools_for_dispatch,
+                    'tools': json.loads(_tools_for_dispatch or '[]'),
+                    'avatar_url': getattr(chosen, 'avatar_url', '') or '',
+                    'search_scope': getattr(chosen, 'search_scope', '') or '',
                 }
                 agent_name = chosen.name
 
