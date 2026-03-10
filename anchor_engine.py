@@ -1063,37 +1063,43 @@ class AnchorEngine:
                 # Решение: для autopilot принудительно чередуем агентов в порядке их id,
                 # используя последний dispatched-агент из AgentActivityLog как указатель.
                 if anchor.anchor_type == 'goal_autopilot_review':
-                    _last_dispatch = (
-                        session.query(_AAL_ap)
-                        .filter(
-                            _AAL_ap.user_id == user.id,
-                            _AAL_ap.activity_type == 'goal_autopilot_dispatch',
-                            _AAL_ap.created_at >= datetime.now(timezone.utc) - timedelta(hours=48),
-                        )
-                        .order_by(_AAL_ap.id.desc())
-                        .first()
-                    )
                     # Строим список в стабильном порядке: реальные агенты по id, ASI в конце
                     _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
                     _rotation_pool = _real_ags + ([_asi_ag] if _asi_ag else [])
                     if _rotation_pool:
-                        if _last_dispatch:
-                            _last_ref = _last_dispatch.ref_id  # None → ASI (id=0)
-                            _last_id = _last_ref if _last_ref is not None else 0
-                            # Найти позицию последнего агента в ротации
-                            _ids = [getattr(a, 'id', 0) for a in _rotation_pool]
-                            if _last_id in _ids:
-                                _cur_idx = _ids.index(_last_id)
-                                chosen = _rotation_pool[(_cur_idx + 1) % len(_rotation_pool)]
-                            else:
-                                chosen = _rotation_pool[0]
-                        else:
-                            chosen = _rotation_pool[0]
+                        # ── ROUND-ROBIN: выбираем агента с наименьшим числом dispatches за 48ч ──
+                        # Более надёжен чем "следующий по очереди": работает после рестартов Railway,
+                        # не ломается при failed-логах, не зависит от порядка последних записей.
+                        from sqlalchemy import func as _rr_func
+                        _rr_counts_raw = session.query(
+                            _AAL_ap.ref_id, _rr_func.count(_AAL_ap.id).label('cnt')
+                        ).filter(
+                            _AAL_ap.user_id == user.id,
+                            _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                            _AAL_ap.created_at >= datetime.now(timezone.utc) - timedelta(hours=48),
+                        ).group_by(_AAL_ap.ref_id).all()
+                        # ref_id=None → ASI (id=0)
+                        _rr_counts = {(r if r is not None else 0): c for r, c in _rr_counts_raw}
+                        # Сортируем: сначала агент с наименьшим cnt; ничья → custom агенты перед ASI, среди них по id
+                        def _rr_key(a):
+                            aid = getattr(a, 'id', 0)
+                            cnt = _rr_counts.get(aid, 0)
+                            # ASI получает priority=99999 (выбирается последним среди равных)
+                            tie_break = aid if aid != 0 else 99999
+                            return (cnt, tie_break)
+                        chosen = min(_rotation_pool, key=_rr_key)
+                        # Debug: логируем состояние ротации в content
+                        _rr_debug = (
+                            f'[RR] pool={[(getattr(a,"id",0), getattr(a,"name","?")) for a in _rotation_pool]} '
+                            f'counts={_rr_counts} chosen={chosen.name}({getattr(chosen,"id",0)})'
+                        )
                     else:
                         chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+                        _rr_debug = '[RR] empty pool → _pick_best_agent'
                 else:
                     chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+                    _rr_debug = ''
                 # Для autopilot-задачи снимаем ограничения tools_allowed:
                 # агент должен использовать полный арсенал (research, email, campaigns и т.д.)
                 # Если агент определил кастомный список — он актуален для диалога, но не для
@@ -1116,11 +1122,12 @@ class AnchorEngine:
                 agent_name = chosen.name
 
                 # Log dispatch (для ASI не записываем ref_id)
+                _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
                 session.add(_AAL_ap(
                     user_id=user.id,
                     activity_type='goal_autopilot_dispatch',
                     title=f'{agent_name} — обзор целей',
-                    content=task_text[:500],
+                    content=_log_content,
                     target=anchor.source,
                     status='in_progress',
                     ref_id=chosen.id if chosen.id != 0 else None,
