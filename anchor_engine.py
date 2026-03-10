@@ -58,6 +58,16 @@ def _safe_avatar(url: str | None, agent_id: int | None = None) -> str:
     return ''
 
 
+def _strip_html(text: str) -> str:
+    """Убирает HTML-теги из ответа LLM: <a href='mailto:x'>x</a> → x"""
+    if not text or '<' not in text:
+        return text
+    text = re.sub(r'<a\s+href=["\']mailto:([^"\']+)["\'][^>]*>.*?</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<a\s+[^>]*>(.*?)</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<[^>]+>', '', text)
+    return text
+
+
 # ═══════════════════════════════════════════════════════
 # CONSTANTS
 # ═══════════════════════════════════════════════════════
@@ -1193,7 +1203,7 @@ class AnchorEngine:
                                 'id': chosen.id,
                                 'avatar_url': _safe_avatar(chosen.avatar_url, chosen.id),
                             },
-                            'text': result.strip(),
+                            'text': _strip_html(result.strip()),
                         }, ensure_ascii=False)
                         # Сохраняем в interaction — чтобы следующая итерация видела что уже сделано
                         session.add(Interaction(
@@ -1413,7 +1423,7 @@ class AnchorEngine:
                                         'id': chosen.id,
                                         'avatar_url': _safe_avatar(chosen.avatar_url, chosen.id),
                                     },
-                                    'text': result.strip(),
+                                    'text': _strip_html(result.strip()),
                                 }, ensure_ascii=False)
                                 _s.add(Interaction(
                                     user_id=user.id,
@@ -1704,7 +1714,7 @@ class AnchorEngine:
                             'id': _next_ag.id,
                             'avatar_url': _safe_avatar(_next_ag.avatar_url, _next_ag.id),
                         },
-                        'text': _next_result.strip(),
+                        'text': _strip_html(_next_result.strip()),
                     }, ensure_ascii=False)
                     session.add(Interaction(
                         user_id=user.id,
@@ -6596,7 +6606,7 @@ class AnchorEngine:
                             'id': agent.id,
                             'avatar_url': _safe_avatar(agent.avatar_url, agent.id),
                         },
-                        'text': result,
+                        'text': _strip_html(result),
                     }, ensure_ascii=False)
                     session.add(_Int(
                         user_id=user.id,
@@ -6605,7 +6615,7 @@ class AnchorEngine:
                     ))
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh_ch
-                        _smh_ch(user.telegram_id, 'assistant', result, session=session)
+                        _smh_ch(user.telegram_id, 'assistant', _strip_html(result), session=session)
                     except Exception:
                         pass
 

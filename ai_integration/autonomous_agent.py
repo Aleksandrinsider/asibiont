@@ -2841,6 +2841,19 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
     return ""
 
 
+def _strip_agent_html(text: str) -> str:
+    """Убирает HTML-теги из ответа LLM: <a href='mailto:x'>x</a> → x"""
+    if not text or '<' not in text:
+        return text
+    # mailto anchors → просто email
+    text = re.sub(r'<a\s+href=["\']mailto:([^"\']+)["\'][^>]*>.*?</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+    # обычные ссылки → текст внутри тега
+    text = re.sub(r'<a\s+[^>]*>(.*?)</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+    # все оставшиеся теги
+    text = re.sub(r'<[^>]+>', '', text)
+    return text
+
+
 def _save_interaction_for_director(telegram_id: int, content: str, message_type: str = 'agent_msg'):
     """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата."""
     if not content or not content.strip():
@@ -4777,6 +4790,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     resp = _fallback_resp
 
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
+        resp = _strip_agent_html(str(resp))
         _ag_id = ag.get('id')
         _av_url = f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else ''
         _ac = _json.dumps({
