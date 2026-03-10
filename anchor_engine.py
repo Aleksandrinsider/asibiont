@@ -1005,6 +1005,15 @@ class AnchorEngine:
                             pass
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
+
+                # ── Продолжение цепочки: если задача не завершена — ASI передаёт следующему агенту ──
+                if result and len(result) > 30 and len(agents) > 1:
+                    try:
+                        await self._maybe_continue_chain(
+                            user, chosen, anchor, task_text, result, agents, session,
+                        )
+                    except Exception as _chain_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
             else:
                 # Нет кастомных агентов — ASI с полным tool-calling (add_task, web_search, и т.д.)
                 from ai_integration.autonomous_agent import _exec_agent_for_director
