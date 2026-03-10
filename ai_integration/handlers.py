@@ -9807,7 +9807,22 @@ If no relevant emails found return []"""
                        f"(ddg_results={len(all_results)}, pages={pages_fetched}, "
                        f"contact_pages={contact_pages_fetched}, github={len(github_leads)}, "
                        f"regex_emails={len(all_emails_raw)}, ai_parsed=0)")
-        return 0, ""
+        # Подсказки по отсутствующим интеграциям
+        import os as _os_leads
+        _intg_hints = []
+        if _is_tech_audience and not _os_leads.getenv('GITHUB_TOKEN'):
+            _intg_hints.append(
+                "💡 Для поиска разработчиков на GitHub — подключи GITHUB_TOKEN "
+                "(Railway → Variables → GITHUB_TOKEN=ghp_... — получить: github.com/settings/tokens). "
+                "Увеличит лимит запросов с 60 до 5000 в час."
+            )
+        if not _os_leads.getenv('RESEND_API_KEY'):
+            _intg_hints.append(
+                "💡 Для отправки писем нужен RESEND_API_KEY "
+                "(Railway → Variables → RESEND_API_KEY=re_... — регистрация: resend.com)."
+            )
+        _hint_msg = ("\n⚠️ Интеграции для улучшения поиска: \n" + "\n".join(_intg_hints)) if _intg_hints else ""
+        return 0, _hint_msg
 
     logger.info(f"[AUTO_LEADS] Found {len(parsed_leads)} leads for campaign #{campaign.id}: "
                 f"{[l.get('email') for l in parsed_leads[:10]]}")

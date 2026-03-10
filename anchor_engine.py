@@ -1015,6 +1015,44 @@ class AnchorEngine:
             if known_contacts:
                 task_text += f"\n\nИзвестные контакты (уже в базе):\n" + '\n'.join(f"  {c}" for c in known_contacts)
 
+            # ══ Блок отсутствующих интеграций: агент видит что нужно и сообщает пользователю ══
+            import os as _os_intg
+            _missing_intg_notes = []
+            _real_agents_intg = [a for a in agents if getattr(a, 'id', 0) != 0]
+            # 1. run_agent_action в tools_allowed но API-ключи не добавлены
+            for _ag_chk in _real_agents_intg:
+                if 'run_agent_action' in (_ag_chk.tools_allowed or '') and not (_ag_chk.user_api_keys or '').strip():
+                    _missing_intg_notes.append(
+                        f"⚠️ {_ag_chk.name}: инструмент run_agent_action есть, но API-ключи внешних сервисов не добавлены. "
+                        f"Пользователь может добавить ключи в настройках агента на дашборде "
+                        f"(доступны: Slack, Notion, Jira, Gmail, Trello, Airtable, Bitrix24, AmoCRM, HubSpot, GitHub, и др.)"
+                    )
+            # 2. Email-анкер без RESEND_API_KEY
+            _email_anchor_types = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
+            if anchor.anchor_type in _email_anchor_types and not _os_intg.getenv('RESEND_API_KEY'):
+                _missing_intg_notes.append(
+                    "❌ Отправка писем не работает: RESEND_API_KEY не настроен. "
+                    "Попроси пользователя добавить RESEND_API_KEY в Railway Variables — регистрация: resend.com."
+                )
+            # 3. Поиск разработчиков без GITHUB_TOKEN
+            _tech_kw_anchor = [
+                'github', 'developer', 'разработчик', 'программист',
+                'python', 'javascript', 'typescript', 'backend', 'frontend', 'fullstack',
+                'ai ', 'ml ', 'data science', 'machine learning', 'open source',
+            ]
+            if (any(w in task_text.lower() for w in _tech_kw_anchor)
+                    and not _os_intg.getenv('GITHUB_TOKEN')):
+                _missing_intg_notes.append(
+                    "⚠️ GITHUB_TOKEN не настроен — поиск разработчиков работает в ограниченном режиме (60 запросов/час). "
+                    "Предложи пользователю добавить GITHUB_TOKEN в Railway Variables — даёт 5000 запросов/час "
+                    "(github.com/settings/tokens → Generate new token)."
+                )
+            if _missing_intg_notes:
+                task_text += (
+                    "\n\nОТСУТСТВУЮТ ИНТЕГРАЦИИ (если это мешает работе — сообщи пользователю как подключить):\n"
+                    + "\n".join(_missing_intg_notes)
+                )
+
             if agents:
                 chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
                 # Для ASI (id=0) усиливаем personality — полный execution mode
