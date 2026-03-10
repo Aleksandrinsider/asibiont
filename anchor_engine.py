@@ -919,8 +919,9 @@ class AnchorEngine:
             from ai_integration.autonomous_agent import _exec_agent_for_director
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
 
-            agents = session.query(_UA_ap).filter_by(
-                author_id=user.id, status='active',
+            agents = session.query(_UA_ap).filter(
+                _UA_ap.author_id == user.id,
+                _UA_ap.status.in_(['active', 'paused']),
             ).limit(10).all()
 
             # Если нет пользовательских агентов — используем прямой AI-вызов через основной чат
@@ -1182,7 +1183,10 @@ class AnchorEngine:
             try:
                 agents = (
                     _s.query(_UA)
-                    .filter_by(author_id=user.id, status='active')
+                    .filter(
+                        _UA.author_id == user.id,
+                        _UA.status.in_(['active', 'paused']),
+                    )
                     .limit(10).all()
                 )
                 if not agents:
