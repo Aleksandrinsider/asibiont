@@ -1845,9 +1845,9 @@ class HybridAutonomousAgent:
                 user_message, profile_data=profile_data, tasks_data=tasks_data
             )
 
-            # ===== Tool calling loop (max 5 итераций) =====
+            # ===== Tool calling loop (max 4 итерации) =====
             all_execution_results = []
-            MAX_ITERATIONS = 5
+            MAX_ITERATIONS = 4
             MAX_TOOLS_PER_ITERATION = 3  # Лимит инструментов за одну итерацию
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию

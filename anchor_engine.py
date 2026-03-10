@@ -52,12 +52,10 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_avatar(url: str | None, agent_id: int | None = None) -> str:
-    """Return avatar URL. Convert base64 data URIs to proxy endpoint to save DB storage."""
-    if not url:
-        return ''
-    if url.startswith('data:') and agent_id:
+    """Return avatar proxy URL. NEVER store raw base64 data URIs in DB interactions."""
+    if agent_id:
         return f'/api/arena/agent_avatar/{agent_id}'
-    return url
+    return ''
 
 
 # ═══════════════════════════════════════════════════════
@@ -1027,6 +1025,16 @@ class AnchorEngine:
             email_info = data.get('email_campaigns', [])
             if email_info:
                 task_text += f"\n\nEmail-кампании:\n" + '\n'.join(f"  {e}" for e in email_info)
+
+            # Показываем общее число отправленных писем / outreach-контактов
+            _total_sent = data.get('total_emails_sent', 0)
+            if _total_sent is not None:
+                task_text += (
+                    f"\n\n📊 МЕТРИКА OUTREACH: Всего отправлено писем/контактов = {_total_sent}. "
+                    f"Если цель имеет числовую метрику (напр. '50 пользователей') и текущий metric_current "
+                    f"отстаёт от реального числа отправленных — ОБЯЗАТЕЛЬНО вызови "
+                    f"update_goal_progress(goal_title='...', metric_current={_total_sent}) ПРЯМО СЕЙЧАС."
+                )
 
             # Добавляем известные контакты
             known_contacts = data.get('known_contacts', [])
@@ -3071,6 +3079,14 @@ class AnchorEngine:
         ).order_by(Task.created_at.desc()).limit(10).all()
         agent_tasks_history = [f"{t.title[:80]} [{t.status}]" for t in _recent_agent_tasks]
 
+        # Всего отправлено email/outreach — для автообновления метрики цели
+        from models import AgentActivityLog as _AAL_email
+        _total_emails_sent = session.query(_AAL_email).filter(
+            _AAL_email.user_id == user.id,
+            _AAL_email.activity_type == 'email',
+            _AAL_email.status == 'sent',
+        ).count()
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -3080,6 +3096,7 @@ class AnchorEngine:
             'known_contacts': contacts_summary[:10],
             'user_rules': user_rules[:10],
             'agent_tasks_history': agent_tasks_history,
+            'total_emails_sent': _total_emails_sent,
         }
 
         return [Anchor(
@@ -6116,8 +6133,8 @@ class AnchorEngine:
                 mode='anchor',
                 instruction="Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд.",
                 extra_context=full_prompt,
-                max_tokens=800,
-                max_iterations=3
+                max_tokens=600,
+                max_iterations=2
             )
 
             logger.info(f"[ANCHOR] AI result for user {user.telegram_id}: {'SKIP/None' if not result else result[:100]}")
