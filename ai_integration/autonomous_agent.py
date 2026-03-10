@@ -4347,6 +4347,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'list_goals', 'create_goal',
                 'research_topic', 'web_search', 'quick_topic_search',
                 'send_email', 'send_outreach_email', 'find_relevant_contacts_for_task',
+                'save_email_contact', 'list_email_contacts',
                 'create_post', 'publish_to_telegram', 'delegate_task',
                 'generate_image', 'get_system_status',
             }

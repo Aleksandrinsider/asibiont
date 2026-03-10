@@ -1192,15 +1192,19 @@ class AnchorEngine:
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
-                # ── Продолжение цепочки: ASI не инициирует цепочку, только кастомные агенты ──
-                _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
-                if result and len(result) > 30 and chosen.id != 0 and len(_real_agents) >= 1:
-                    try:
-                        await self._maybe_continue_chain(
-                            user, chosen, anchor, task_text, result, _real_agents, session,
-                        )
-                    except Exception as _chain_err:
-                        logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
+                # ── Продолжение цепочки: отключено для автопилота целей ──
+                # Автопилот уже выполняет полный tool-calling цикл (research → add_task → result).
+                # Chain continuation дублирует работу и тратит ~2000 токенов на второго агента.
+                # Chain остаётся для event-driven якорей (task_stale, delegation_update и т.д.)
+                if anchor.anchor_type != 'goal_autopilot_review':
+                    _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
+                    if result and len(result) > 30 and chosen.id != 0 and len(_real_agents) >= 1:
+                        try:
+                            await self._maybe_continue_chain(
+                                user, chosen, anchor, task_text, result, _real_agents, session,
+                            )
+                        except Exception as _chain_err:
+                            logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
             else:
                 # Нет кастомных агентов — ASI с полным tool-calling (add_task, web_search, и т.д.)
                 from ai_integration.autonomous_agent import _exec_agent_for_director
@@ -1524,15 +1528,17 @@ class AnchorEngine:
 
     @staticmethod
     def _format_goal_tasks(tasks: list) -> str:
-        """Format task list for autopilot context."""
+        """Format task list for autopilot context — only active tasks."""
         if not tasks:
             return ''
+        # Skip completed/cancelled tasks to save tokens
+        active = [t for t in tasks if t.get('status') not in ('done', 'completed', 'cancelled', 'deleted')]
+        if not active:
+            return ''
         lines = []
-        for t in tasks:
-            status_icon = {'done': '✅', 'pending': '⏳', 'in_progress': '🔄', 'cancelled': '❌'}.get(t.get('status', ''), '•')
-            line = f"    {status_icon} {t['title']} [{t['status']}]"
-            if t.get('result'):
-                line += f" → {t['result']}"
+        for t in active:
+            status_icon = {'pending': '⏳', 'in_progress': '🔄'}.get(t.get('status', ''), '•')
+            line = f"    {status_icon} {t['title']}"
             lines.append(line)
         return '\n  Задачи:\n' + '\n'.join(lines)
 
