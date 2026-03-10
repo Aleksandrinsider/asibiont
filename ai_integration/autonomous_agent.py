@@ -82,12 +82,17 @@ except ImportError:
 try:
     import http.client as _ssrf_hc
     _ssrf_orig_hc_init = _ssrf_hc.HTTPConnection.__init__
+    _ssrf_orig_hcs_init = _ssrf_hc.HTTPSConnection.__init__
     def _ssrf_safe_hc_init(self, host, *_a3, **_kw3):
         _h = host.split(':')[0] if isinstance(host, str) else host
         _ssrf_check_host(_h)
         return _ssrf_orig_hc_init(self, host, *_a3, **_kw3)
+    def _ssrf_safe_hcs_init(self, host, *_a3, **_kw3):
+        _h = host.split(':')[0] if isinstance(host, str) else host
+        _ssrf_check_host(_h)
+        return _ssrf_orig_hcs_init(self, host, *_a3, **_kw3)
     _ssrf_hc.HTTPConnection.__init__ = _ssrf_safe_hc_init
-    _ssrf_hc.HTTPSConnection.__init__ = _ssrf_safe_hc_init
+    _ssrf_hc.HTTPSConnection.__init__ = _ssrf_safe_hcs_init
 except Exception:
     pass
 # Patch socket.create_connection (blocks raw socket SSRF)
