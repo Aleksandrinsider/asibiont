@@ -4423,12 +4423,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     for _iter in range(3):  # AI call → tool → tool → final answer
         # После 2 tool calls — отключаем tools чтобы агент дал текстовый ответ
         _use_tools_now = _use_tools and _tool_call_count < 2
+        # Для autopilot-задач: первая итерация — required (принудительный вызов инструмента)
+        # Это устраняет ситуацию когда AI пишет "создала задачу" без реального вызова tool
+        _tc_mode = "auto"
+        if _use_tools_now:
+            if _is_autopilot_task and _tool_call_count == 0:
+                _tc_mode = "required"
+            else:
+                _tc_mode = "auto"
+        else:
+            _tc_mode = None
         try:
             _resp = await asyncio.wait_for(
                 _agent_inst.call_ai(
                     _messages,
                     use_tools=_use_tools_now,
-                    tool_choice="auto" if _use_tools_now else None,
+                    tool_choice=_tc_mode,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
                     max_tokens=1000 if _tool_call_count > 0 else 800,
                     api_timeout=API_TIMEOUT_LONG,
