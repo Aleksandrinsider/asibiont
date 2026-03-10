@@ -489,12 +489,25 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         session.add(user)
         session.commit()
 
-    # ПРОВЕРКА ДУБЛИКАТОВ: если pending задача с таким же названием уже есть — не создаём
+    # ПРОВЕРКА ДУБЛИКАТОВ: если pending задача с таким же (или похожим) названием уже есть — не создаём
     existing_tasks = session.query(Task).filter(
         Task.user_id == user.id,
         Task.status == 'pending'
     ).all()
-    existing = next((t for t in existing_tasks if t.title.lower().strip() == title.lower().strip()), None)
+    _title_lc = title.lower().strip()
+    _stop_t = {'для', 'или', 'что', 'как', 'это', 'при', 'через', 'the', 'and', 'for'}
+    _new_t_sig = {w for w in _title_lc.split() if len(w) > 3} - _stop_t
+    def _task_is_dup(t):
+        _et = t.title.lower().strip()
+        if _et == _title_lc:
+            return True
+        # contains-check (одно вложено в другое)
+        if _title_lc in _et or _et in _title_lc:
+            return True
+        # 3+ общих значимых слова
+        _et_sig = {w for w in _et.split() if len(w) > 3} - _stop_t
+        return len(_new_t_sig & _et_sig) >= 3
+    existing = next((t for t in existing_tasks if _task_is_dup(t)), None)
     if existing:
         logger.warning(f"[ADD_TASK] Duplicate pending task found: '{existing.title}' (id={existing.id})")
         if close_session:
@@ -4040,7 +4053,25 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         active_goals = session.query(Goal).filter_by(user_id=user.id, status='active').count()
         if active_goals >= 20:
             return " У тебя уже 20 активных целей. Заверши или отмени старые перед созданием новых."
-        
+
+        # ПРОВЕРКА ДУБЛЕЙ: цель с похожим названием уже существует — не создаём
+        _stop_g = {'для', 'или', 'что', 'как', 'это', 'при', 'через', 'чтобы', 'the', 'and', 'for', 'with', 'that'}
+        _title_lc = title.strip().lower()
+        _new_sig = {w for w in _title_lc.split() if len(w) > 3} - _stop_g
+        _existing_goals = session.query(Goal).filter(
+            Goal.user_id == user.id,
+            Goal.status.in_(['active', 'paused'])
+        ).all()
+        for _eg in _existing_goals:
+            _eg_lc = _eg.title.strip().lower()
+            _eg_sig = {w for w in _eg_lc.split() if len(w) > 3} - _stop_g
+            _overlap_g = _new_sig & _eg_sig
+            if _eg_lc == _title_lc or len(_overlap_g) >= 2:
+                return (
+                    f"⚠️ Похожая цель уже существует: «{_eg.title}» (id={_eg.id}, статус={_eg.status}). "
+                    f"Используй update_goal_progress для обновления прогресса, или уточни чем новая цель отличается."
+                )
+
         # Парсим target_date
         parsed_date = None
         if target_date:
@@ -10050,12 +10081,16 @@ async def start_email_campaign(
             EmailCampaign.user_id == user.id,
             EmailCampaign.status == 'active',
         ).all()
+        _stop_camp = {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'или', 'что', 'при', 'a', 'the', 'to', 'for', 'of', 'and', 'in', 'with'}
         for ex in existing:
-            # Сравниваем цели — если пересекаются ключевые слова
-            ex_words = set((ex.goal or '').lower().split())
-            new_words = set(goal.lower().split())
-            overlap = ex_words & new_words - {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'a', 'the', 'to', 'for', 'of', 'and', 'in'}
-            if len(overlap) >= 3:
+            # Сравниваем и goal-текст, и name кампании — достаточно 2 значимых общих слов
+            ex_goal_words = {w for w in (ex.goal or '').lower().split() if len(w) > 2} - _stop_camp
+            ex_name_words = {w for w in (ex.name or '').lower().split() if len(w) > 2} - _stop_camp
+            new_goal_words = {w for w in goal.lower().split() if len(w) > 2} - _stop_camp
+            new_name_words = {w for w in name.lower().split() if len(w) > 2} - _stop_camp
+            goal_overlap = ex_goal_words & new_goal_words
+            name_overlap = ex_name_words & new_name_words
+            if len(goal_overlap) >= 2 or len(name_overlap) >= 2:
                 # Обновляем существующую кампанию вместо создания новой
                 if daily_limit > ex.daily_limit:
                     ex.daily_limit = min(daily_limit, 50)
