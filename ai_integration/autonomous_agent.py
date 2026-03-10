@@ -5463,11 +5463,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                     _s.close()
             except Exception:
                 _avatar = None
+            _ag_id = _answered_agent.get('id')
             agent_info = {
-                'id': _answered_agent.get('id'),
+                'id': _ag_id,
                 'name': _answered_agent.get('name', 'Агент'),
                 'job_title': _answered_agent.get('job_title', ''),
-                'avatar_url': _avatar or '',
+                'avatar_url': _avatar or (f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else ''),
             }
 
         # Агент вклинивается в разговор — фоновая задача, не блокирует ответ

@@ -6976,16 +6976,16 @@ async def api_interactions_handler(request):
         import re as _re_int
 
         def _sanitize_avatar_in_content(content: str) -> str:
-            """Replace base64 data URIs in __agent.avatar_url with proxy URLs to reduce payload."""
-            if not content or 'data:image' not in content:
+            """Replace base64 data URIs or empty avatar_url in __agent JSON with proxy URLs."""
+            if not content or ('data:image' not in content and '__agent' not in content):
                 return content
             try:
                 _jp = json.loads(content)
                 if isinstance(_jp, dict) and isinstance(_jp.get('__agent'), dict):
                     _av = _jp['__agent'].get('avatar_url', '')
-                    if _av and _av.startswith('data:'):
-                        _aid = _jp['__agent'].get('id')
-                        _jp['__agent']['avatar_url'] = f'/api/arena/agent_avatar/{_aid}' if _aid else ''
+                    _aid = _jp['__agent'].get('id')
+                    if _aid and (_av.startswith('data:') or not _av):
+                        _jp['__agent']['avatar_url'] = f'/api/arena/agent_avatar/{_aid}'
                         return json.dumps(_jp, ensure_ascii=False)
             except Exception:
                 pass
