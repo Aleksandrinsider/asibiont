@@ -775,6 +775,15 @@ class AnchorEngine:
             else:
                 logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
 
+        # ── 3b. GOAL AUTOPILOT — ПЕРВЫМ после dialog, до постов/email ──
+        # Наивысший приоритет среди silent-задач: агенты работают 24/7 автономно,
+        # не зависят от has_proactive_tokens и is_night.
+        if autopilot_anchors:
+            logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
+            for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
+                async with self._ai_semaphore:
+                    await self._dispatch_agent_for_anchor(user, _ap, session)
+
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
         if not is_night and has_proactive_tokens:
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
@@ -830,14 +839,6 @@ class AnchorEngine:
                     await self._process_delegation_campaign_anchor(user, dc, session)
         elif delegation_silent_anchors and is_night:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ delegation campaigns blocked (night hours)")
-
-        # ── 3h. GOAL AUTOPILOT — автономное продвижение целей через agent dispatch ──
-        # Не зависит от has_proactive_tokens и is_night — агенты работают 24/7 автономно
-        if autopilot_anchors:
-            logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
-            for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
-                async with self._ai_semaphore:
-                    await self._dispatch_agent_for_anchor(user, _ap, session)
 
     # ═══════════════════════════════════════════════════════
     # BACKGROUND RESEARCH — выполнение отложенных исследований
