@@ -995,6 +995,16 @@ class AnchorEngine:
                 ))
                 session.commit()
 
+                # Уведомляем пользователя что агент берётся за цели
+                if self.bot:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=f"⚡ {agent_name} анализирует цели...",
+                        )
+                    except Exception:
+                        pass
+
                 _raw = await _exec_agent_for_director(
                     agent_data, task_text, user.telegram_id,
                 )
@@ -1006,7 +1016,7 @@ class AnchorEngine:
                     try:
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=result.strip(),
+                            text=f"🤖 {agent_name}:\n\n{result.strip()}",
                         )
                         # Сохраняем в interaction — чтобы следующая итерация видела что уже сделано
                         session.add(Interaction(
@@ -1024,7 +1034,7 @@ class AnchorEngine:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
                 # ── Продолжение цепочки: если задача не завершена — ASI передаёт следующему агенту ──
-                if result and len(result) > 30 and len(agents) > 1:
+                if result and len(result) > 30 and len(agents) >= 1:
                     try:
                         await self._maybe_continue_chain(
                             user, chosen, anchor, task_text, result, agents, session,
@@ -1479,12 +1489,14 @@ class AnchorEngine:
             # Уведомляем пользователя о передаче задачи между агентами
             if self.bot:
                 try:
+                    _handoff_name = _next_ag.name if _next_ag.name != prev_agent.name else prev_agent.name
+                    _handoff_text = (
+                        f"💭 ASI оценивает результат {prev_agent.name} и ставит следующую задачу:\n\n"
+                        f"➡️ {_handoff_name}: {_next_task[:300]}"
+                    )
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
-                        text=(
-                            f"🔄 {prev_agent.name} передаёт задачу → {_next_ag.name}\n\n"
-                            f"📋 {_next_task[:200]}"
-                        ),
+                        text=_handoff_text,
                     )
                 except Exception:
                     pass
@@ -1519,7 +1531,7 @@ class AnchorEngine:
                 try:
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
-                        text=_next_result.strip(),
+                        text=f"🤖 {_next_ag.name}:\n\n{_next_result.strip()}",
                     )
                     session.add(Interaction(
                         user_id=user.id,
