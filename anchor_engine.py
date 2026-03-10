@@ -52,10 +52,8 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_avatar(url: str | None) -> str:
-    """Strip base64 data URIs from avatar — they bloat interactions to 100KB+."""
-    if not url:
-        return ''
-    return '' if url.startswith('data:') else url
+    """Return avatar URL as-is (base64 data URIs are needed for correct display)."""
+    return url or ''
 
 
 # ═══════════════════════════════════════════════════════

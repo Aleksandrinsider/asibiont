@@ -1796,7 +1796,7 @@ async def delegate_task(
                             '__agent': {
                                 'name': _agent_name,
                                 'id': _agent_recipient.id,
-                                'avatar_url': '' if _av.startswith('data:') else _av,
+                                'avatar_url': _av,
                             },
                             'text': _result,
                         }, ensure_ascii=False)
