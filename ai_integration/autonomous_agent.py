@@ -3563,14 +3563,12 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     try:
         _s2 = _Db()
         try:
-            # Загружаем avatar_url агента
-            _db_ag = _s2.query(_UA).filter_by(id=_agent.get('id')).first()
-            _avatar = (_db_ag.avatar_url or '') if _db_ag else ''
+            _ag_id = _agent.get('id', 0)
             _content = _json.dumps({
                 '__agent': {
                     'name': _agent['name'],
-                    'id': _agent.get('id', 0),
-                    'avatar_url': _avatar,
+                    'id': _ag_id,
+                    'avatar_url': f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else '',
                 },
                 'text': _reply,
             }, ensure_ascii=False)
