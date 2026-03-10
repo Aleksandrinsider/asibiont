@@ -1162,32 +1162,68 @@ class AnchorEngine:
                 }
                 agent_name = chosen.name
 
-                # ── Адаптируем задачу под специализацию агента ──
-                # Каждый агент работает по теме целей, но в рамках своей роли.
-                # RSS/news-агент → ищет релевантные новости/упоминания по целям (не отправляет письма).
-                # Остальные агенты → стандартная задача автопилота.
+                # ── Универсальная адаптация задачи под роль/интеграцию агента ──
+                # Агент работает по теме активных целей, но строго в рамках своей специализации.
+                # Детектируем тип интеграции по ключевым словам в python_code/description/specialization/job_title,
+                # затем подменяем task_text на шаблон соответствующей роли.
+                # Это работает для любых агентов, которых создаёт пользователь.
                 if anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
                     _ag_combined = ' '.join([
-                        (getattr(chosen, 'python_code', '') or '')[:400],
+                        (getattr(chosen, 'python_code', '') or '')[:600],
                         (getattr(chosen, 'description', '') or ''),
                         (getattr(chosen, 'specialization', '') or ''),
                         (getattr(chosen, 'job_title', '') or ''),
                     ]).lower()
-                    _is_rss = any(kw in _ag_combined for kw in ('rss_url', 'rss', 'лента новост', 'news feed'))
-                    if _is_rss:
-                        # Строим задачу для новостного агента на основе активных целей из task_text
-                        _goals_snippet = ''
-                        if goals_info:
-                            _goals_snippet = '\n'.join(f"• {g['title']}" for g in goals_info[:3])
-                        task_text = (
+                    _goals_snippet = (
+                        '\n'.join(f"• {g['title']}" for g in goals_info[:4])
+                        if goals_info else task_text[:300]
+                    )
+                    _role_task = None
+
+                    if any(kw in _ag_combined for kw in ('rss_url', 'rss', 'feedparser', 'лента новост', 'news feed', 'парсинг новост')):
+                        # Новостной/RSS-агент → мониторинг новостей по теме целей
+                        _role_task = (
                             f"[НОВОСТНОЙ ОБЗОР ДЛЯ ЦЕЛЕЙ]\n"
                             f"Запусти run_agent_action чтобы получить свежие новости из RSS-ленты.\n"
-                            f"Затем найди новости и события, которые релевантны следующим целям:\n"
-                            + (_goals_snippet or task_text[:300])
-                            + "\n\nОтбери 2-3 самые полезные новости/упоминания (конкретные факты, цифры, "
-                            f"тренды), объясни коротко почему они важны для этих целей. "
-                            f"НЕ создавай задачи, НЕ отправляй письма — только поделись важными находками."
+                            f"Найди 2-3 новости/события, релевантных целям:\n{_goals_snippet}\n\n"
+                            f"Объясни коротко почему каждая важна для проекта. "
+                            f"НЕ создавай задачи, НЕ отправляй письма — только поделись находками."
                         )
+                    elif any(kw in _ag_combined for kw in ('smtp', 'imap', 'smtplib', 'imaplib', 'sendgrid', 'mailgun', 'mailchimp', 'email', 'рассылк', 'outreach')):
+                        # Email-агент → работа с почтой: проверить ответы, найти контакты для кампаний
+                        _role_task = (
+                            f"[EMAIL-РАБОТА ПО ЦЕЛЯМ]\n"
+                            f"Используй свой доступ к почте (run_agent_action) для работы по активным целям:\n{_goals_snippet}\n\n"
+                            f"Проверь входящие на важные ответы, или найди и обработай новые контакты "
+                            f"для email-outreach по этим целям. Отчитайся что конкретно сделано/найдено."
+                        )
+                    elif any(kw in _ag_combined for kw in ('telegram', 'twitter', 'instagram', 'linkedin', 'vk', 'tiktok', 'вконтакте', 'социальн', 'соцсет')):
+                        # Агент соцсетей → мониторинг упоминаний / публикации по теме целей
+                        _role_task = (
+                            f"[АКТИВНОСТЬ В СОЦСЕТЯХ]\n"
+                            f"Используй run_agent_action для мониторинга или публикации по темам целей:\n{_goals_snippet}\n\n"
+                            f"Найди релевантные обсуждения, упоминания конкурентов или потенциальных клиентов. "
+                            f"НЕ создавай задачи — только поделись находками или отчитайся об опубликованном."
+                        )
+                    elif any(kw in _ag_combined for kw in ('google sheets', 'airtable', 'notion', 'hubspot', 'salesforce', 'crm', 'sqlite', 'psycopg', 'база данных', 'таблиц')):
+                        # Агент данных/CRM → обновление, синхронизация, сводки из базы
+                        _role_task = (
+                            f"[РАБОТА С ДАННЫМИ]\n"
+                            f"Используй run_agent_action для обновления данных по целям:\n{_goals_snippet}\n\n"
+                            f"Обнови статус, добавь новые записи или сформируй сводку прогресса из базы/таблицы. "
+                            f"Отчитайся что нашёл или обновил."
+                        )
+                    elif any(kw in _ag_combined for kw in ('requests', 'httpx', 'aiohttp', 'api', 'webhook', 'curl', 'beautifulsoup', 'selenium', 'playwright')):
+                        # Web/API-агент → сбор данных через API или парсинг
+                        _role_task = (
+                            f"[WEB/API МОНИТОРИНГ]\n"
+                            f"Используй run_agent_action для сбора актуальных данных через API/веб по целям:\n{_goals_snippet}\n\n"
+                            f"Найди новые лиды, упоминания, метрики или события. "
+                            f"НЕ создавай задачи — только поделись конкретными находками."
+                        )
+
+                    if _role_task:
+                        task_text = _role_task
 
                 # Log dispatch (для ASI не записываем ref_id)
                 _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
