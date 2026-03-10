@@ -757,12 +757,6 @@
                         </svg>
                     </button>
                     
-                    <button id="header-install-btn" onclick="triggerPwaInstall()" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Установить приложение" data-i18n-title="install-app">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                            <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/>
-                        </svg>
-                    </button>
-
                     <button onclick="window.open('https://t.me/{{ bot_username }}', '_blank')" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Открыть Telegram бота" data-i18n-title="open-tg-bot">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                             <path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/>
@@ -9655,18 +9649,17 @@ except Exception as e:
                     const isIn = msg.is_incoming;
                     const otherName = isIn ? (msg.sender_name || msg.sender_username || '?') : (msg.recipient_name || msg.recipient_username || '?');
                     const otherUname = isIn ? msg.sender_username : msg.recipient_username;
-                    const arrow = isIn ? '📩' : '📤';
                     const dirLabel = isIn ? (t('msg-from') || 'от') : (t('msg-to') || 'для');
-                    const date = msg.created_at ? new Date(msg.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE || 'UTC' }) : '';
-                    const statusBadge = msg.status === 'replied' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">✓ ' + (t('replied') || 'ответили') + '</span>'
-                        : msg.status === 'read' ? '<span style="color: #6C727F; font-size:12px; margin-left: 6px;">👁 ' + (t('read') || 'прочитано') + '</span>'
-                        : msg.status === 'delivered' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">✓ ' + (t('delivered') || 'доставлено') + '</span>'
-                        : '<span style="color: #D97706; font-size:12px; margin-left: 6px;">⏳ ' + (t('pending') || 'ожидание') + '</span>';
+                    const _inboxD = msg.created_at ? new Date(msg.created_at) : null;
+                    const date = _inboxD ? _inboxD.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE || 'UTC' }) + ' ' + _inboxD.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE || 'UTC' }) : '';
+                    const statusBadge = msg.status === 'replied' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">' + (t('replied') || 'ответили') + '</span>'
+                        : msg.status === 'read' ? '<span style="color: #6C727F; font-size:12px; margin-left: 6px;">' + (t('read') || 'прочитано') + '</span>'
+                        : msg.status === 'delivered' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">' + (t('delivered') || 'доставлено') + '</span>'
+                        : '<span style="color: #D97706; font-size:12px; margin-left: 6px;">' + (t('pending') || 'ожидание') + '</span>';
                     
                     html += '<li class="task-item" style="display: flex; flex-direction: column; margin-bottom: 8px; padding: 10px 12px;">';
                     // Header
                     html += '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">';
-                    html += '<span>' + arrow + '</span>';
                     html += '<span style="font-size: 12px; color: #6C727F;">' + dirLabel + '</span>';
                     if (otherUname) {
                         html += '<span onclick="openContactProfileModal(\'' + otherUname.replace(/'/g, "\\'") + '\')" style="color: #068487; cursor: pointer; font-size: 13px;">@' + otherUname + '</span>';
