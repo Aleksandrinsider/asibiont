@@ -10384,8 +10384,9 @@ except Exception as e:
                 filteredTasks = allTasksFromServer.filter(t => t.status === 'completed');
             } else if (currentTaskFilter === 'my') {
                 // Личные задачи - задачи без делегирования, незавершенные, неотклоненные
-                // Исключаем задачи агентов (source='agent') — они идут в «Поручения агентам»
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.status !== 'cancelled' && !t.is_delegated && t.source !== 'agent');
+                // Включаем задачи созданные агентом ДЛЯ ПОЛЬЗОВАТЕЛЯ (source='agent', нет delegated_to)
+                // Исключаем только задачи агент→агент (is_delegated=true, source='agent')
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.status !== 'cancelled' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
                 // Назначенные мне - задачи делегированные мне, незавершенные, неотклоненные
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.status !== 'cancelled' && t.delegated_by && !t.delegated_by_me);
@@ -10393,8 +10394,8 @@ except Exception as e:
                 // Назначенные мной - задачи делегированные другим, незавершенные, неотклоненные
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.status !== 'cancelled' && t.delegated_by_me === true);
             } else if (currentTaskFilter === 'agent') {
-                // Поручения агентам - задачи созданные ASI для субагентов
-                filteredTasks = allTasksFromServer.filter(t => t.source === 'agent');
+                // Поручения агентам - задачи где агент поручил ДРУГОМУ агенту (source='agent' + есть delegated_to)
+                filteredTasks = allTasksFromServer.filter(t => t.source === 'agent' && t.is_delegated);
             } else if (currentTaskFilter === 'overdue') {
                 // С отставанием - просроченные задачи (неотклоненные)
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true && t.status !== 'rejected' && t.status !== 'cancelled');
