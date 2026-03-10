@@ -6866,10 +6866,10 @@ async def api_interactions_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
 
-        # Only load last 100 interactions (not ALL) for performance
+        # Load last 200 interactions for the chat (increased from 100 to show more history)
         interactions = session_db.query(Interaction).filter_by(
             user_id=user.id).order_by(
-            Interaction.created_at.desc()).limit(100).all()
+            Interaction.created_at.desc()).limit(200).all()
         interactions.reverse()  # Back to chronological order
         
         logger.info(f"Loaded last {len(interactions)} interactions for user {user.id}")
@@ -6879,8 +6879,12 @@ async def api_interactions_handler(request):
         if user.history_cleared_at:
             history_cleared_timestamp = user.history_cleared_at.timestamp()
 
-        # Filter interactions based on cleared timestamp and non-null content
-        # Also filter out noise patterns that shouldn't appear in chat
+        # Filter interactions:
+        # 1. Skip cleared history
+        # 2. Skip empty content
+        # 3. Skip explicit noise patterns (meaningless short AI filler messages)
+        # 4. Deduplicate only within a 5-minute window (prevents burst duplicates,
+        #    but allows same message content from different autopilot cycles to show)
         _NOISE_PATTERNS = (
             'Дорабатываю, сейчас будет лучше',
             'Подготовительная работа завершена',
@@ -6888,33 +6892,40 @@ async def api_interactions_handler(request):
             'Задачу выполнила.',
             'Принял в работу.',
             'Задачу принял.',
+            'анализирует цели...',   # intro "X анализирует цели..." — only noise, result follows
         )
         filtered_interactions = []
-        _seen_content = set()
+        # Dedup window: (message_type, content[:200]) → last seen timestamp
+        _dedup_recent: dict = {}  # key → timestamp of last occurrence
+        _DEDUP_WINDOW_SECS = 300  # 5 minutes — only dedup bursts, not across cycles
         for i in interactions:
             if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() <= history_cleared_timestamp:
                 continue
             if i.content is None or i.content.strip() == '':
                 continue
-            # Skip noise messages (short AI messages matching noise patterns)
             _ct = i.content.strip()
-            if i.message_type in ('ai', 'agent_msg') and len(_ct) < 200:
-                # Check raw text and JSON-wrapped text
-                _check_text = _ct
-                if _ct.startswith('{'):
-                    try:
-                        _jp = __import__('json').loads(_ct)
-                        if isinstance(_jp, dict) and _jp.get('text'):
-                            _check_text = _jp['text'].strip()
-                    except Exception:
-                        pass
-                if any(_check_text.startswith(n) for n in _NOISE_PATTERNS):
+            # Extract display text for noise check (handles JSON-wrapped messages)
+            _check_text = _ct
+            if _ct.startswith('{'):
+                try:
+                    _jp = __import__('json').loads(_ct)
+                    if isinstance(_jp, dict) and _jp.get('text'):
+                        _check_text = _jp['text'].strip()
+                except Exception:
+                    pass
+            # Skip noise messages (short AI/agent/proactive messages matching noise patterns)
+            if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text) < 200:
+                if any(n in _check_text for n in _NOISE_PATTERNS):
                     continue
-            # Deduplicate consecutive AI messages with identical content
-            _dedup_key = f"{i.message_type}:{_ct[:200]}"
-            if _dedup_key in _seen_content:
-                continue
-            _seen_content.add(_dedup_key)
+            # Time-window dedup: skip if exact same content appeared in last 5 minutes
+            # User messages are NEVER deduplicated (always show what the user wrote)
+            if i.message_type != 'user':
+                _dedup_key = f"{i.message_type}:{_ct[:200]}"
+                _ts = i.created_at.replace(tzinfo=dt_timezone.utc).timestamp()
+                _last_ts = _dedup_recent.get(_dedup_key)
+                if _last_ts is not None and (_ts - _last_ts) < _DEDUP_WINDOW_SECS:
+                    continue  # Same content within 5 min → skip burst duplicate
+                _dedup_recent[_dedup_key] = _ts
             filtered_interactions.append(i)
         
         logger.info(f"After filtering: {len(filtered_interactions)} interactions")

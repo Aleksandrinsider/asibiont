@@ -1265,10 +1265,14 @@ class AnchorEngine:
                             chat_id=user.telegram_id,
                             text=f"ASI:\n\n{result.strip()}",
                         )
+                        _asi_content = json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': result.strip(),
+                        }, ensure_ascii=False)
                         session.add(Interaction(
                             user_id=user.id,
                             message_type='proactive',
-                            content=result.strip(),
+                            content=_asi_content,
                         ))
                         session.commit()
                         try:
@@ -6256,7 +6260,13 @@ class AnchorEngine:
                 except Exception:
                     pass
 
-            # Создаём запись в interactions (для совместимости с anti-spam логикой)
+            # Создаём запись в interactions
+            # Если нет конкретного агента — атрибутируем как ASI (проактивные сообщения системы)
+            if not interaction_content.strip().startswith('{'):
+                interaction_content = json.dumps({
+                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                    'text': interaction_content,
+                }, ensure_ascii=False)
             interaction = Interaction(
                 user_id=user.id,
                 message_type='proactive',
