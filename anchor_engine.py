@@ -929,10 +929,13 @@ class AnchorEngine:
             from ai_integration.autonomous_agent import _exec_agent_for_director
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
 
+            # Используем только агентов с AgentSubscription — те что пользователь активировал в чате
+            from models import AgentSubscription as _AS_ap
+            _sub_ids = {r.agent_id for r in session.query(_AS_ap).filter_by(user_id=user.id).all()}
             agents = session.query(_UA_ap).filter(
-                _UA_ap.author_id == user.id,
-                _UA_ap.status.in_(['active', 'paused']),
-            ).limit(10).all()
+                _UA_ap.id.in_(_sub_ids) if _sub_ids else _UA_ap.author_id == user.id,
+                _UA_ap.status != 'disabled',
+            ).limit(10).all() if _sub_ids else []
 
             # Всегда добавляем синтетического ASI в пул — он участвует в ротации
             # наравне с кастомными агентами. id=0 → особая ветка в dispatch.
@@ -1124,20 +1127,8 @@ class AnchorEngine:
                             chat_id=user.telegram_id,
                             text=_intro_text,
                         )
-                        # Сохраняем вводное сообщение в веб-чат
-                        session.add(Interaction(
-                            user_id=user.id,
-                            message_type='proactive',
-                            content=json.dumps({
-                                '__agent': {
-                                    'name': chosen.name,
-                                    'id': chosen.id,
-                                    'avatar_url': chosen.avatar_url or '',
-                                },
-                                'text': _intro_text,
-                            }, ensure_ascii=False),
-                        ))
-                        session.commit()
+                        # Не сохраняем вводное сообщение как Interaction — это служебный статус,
+                        # он дублировал ленту (плюс 1 proactive на каждый цикл = +72/день спама)
                     except Exception:
                         pass
 
@@ -3083,7 +3074,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.25,
+            cooldown_hours=1.0,
             batch_group='goals',
         )]
 
@@ -6444,6 +6435,15 @@ class AnchorEngine:
             from ai_integration.service_health import get_status
             errors = get_status()
             if not errors:
+                return anchors
+
+            # Глобальный cooldown по типу: не более 1 раза за 4 часа независимо от набора сервисов
+            _recent_sd = session.query(AnchorDeliveryLog).filter(
+                AnchorDeliveryLog.user_id == user.id,
+                AnchorDeliveryLog.anchor_types.contains('service_degraded'),
+                AnchorDeliveryLog.created_at >= now_utc - timedelta(hours=4),
+            ).first()
+            if _recent_sd:
                 return anchors
 
             _labels = {
