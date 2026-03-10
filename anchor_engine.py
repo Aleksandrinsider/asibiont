@@ -1492,7 +1492,8 @@ class AnchorEngine:
                                 logger.warning("[ANCHOR-DISPATCH] result send failed: %s", _e_ev_send)
 
                         # ── ASI-продолжение: анализ результата → следующий агент ──
-                        if result and len(result) > 30:
+                        # Для автопилота цепочка отключена (дублирует работу + токены)
+                        if anchor.anchor_type != 'goal_autopilot_review' and result and len(result) > 30:
                             await self._maybe_continue_chain(
                                 user, chosen, anchor, task_text, result, agents, _s,
                             )

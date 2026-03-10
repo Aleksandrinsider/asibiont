@@ -4093,18 +4093,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _is_autopilot_task = 'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '') or 'autopilot' in (task or '').lower() or 'Активные цели:' in (task or '')
 
     if _is_autopilot_task:
-        # ── Compact prompt for autopilot: ~550 chars vs ~2400 (saves ~500 tokens) ──
+        # ── Compact prompt for autopilot: adaptive, diverse strategies ──
         system_prompt = (
             f"Ты — {agent['name']}, агент ASI Biont. Сейчас: {_now_str}.\n"
             f"Пиши от имени {agent['name']}.\n\n"
-            "Определи что КОНКРЕТНО продвинет цель. "
-            "Ищи рычаг — минимум усилий, максимум результата.\n\n"
-            "ФОРМАТ: сплошной текст, до 400 символов, без списков/заголовков/markdown.\n\n"
-            "ДЕЙСТВИЯ: используй инструменты. НЕ ограничивайся исследованием — "
-            "после исследования ОБЯЗАТЕЛЬНО создай задачу через add_task с конкретным шагом. "
-            "Исследование без задачи = ПРОВАЛ. "
-            "Если есть реальный прогресс — обнови через update_goal_progress.\n"
-            "Каждый цикл: 1) исследуй/найди данные 2) создай задачу или выполни конкретное действие.\n\n"
+            "Продвинь цель на шаг вперёд. Выбери НОВОЕ действие, отличное от предыдущих.\n"
+            "Разнообразие стратегий: публикации, посты, задачи, делегирование коллегам, "
+            "общение с пользователем, исследование, контент — чередуй подходы.\n"
+            "НЕ зацикливайся на одном типе действий (например, только email).\n\n"
+            "Если нужно уточнение от пользователя — спроси коротко.\n"
+            "Если видишь что коллега справится лучше — делегируй через delegate_task.\n\n"
+            "ФОРМАТ: до 400 символов, сплошной текст.\n\n"
             f"ТВОЯ РОЛЬ:\n{_persona}"
         )
     else:
@@ -4201,8 +4200,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         logger.debug("[DIRECTOR-EXEC] context already passed (%d chars), skipping DB reload", len(dialog_context))
 
     # ── Шаг 0.5: Агент узнаёт о команде коллег ─────────────────────────────────
-    # Для автопилота пропускаем (saves ~500 chars + DB query)
-    if not _is_autopilot_task:
+    if True:  # team info needed for delegation in autopilot too
       try:
         from models import Session as _Sess_team, UserAgent as _UA_team
         _s_team = _Sess_team()
@@ -4347,8 +4345,6 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'add_task', 'list_tasks', 'complete_task', 'edit_task',
                 'list_goals', 'create_goal', 'update_goal_progress',
                 'research_topic', 'web_search', 'quick_topic_search',
-                'send_email', 'send_outreach_email', 'find_relevant_contacts_for_task',
-                'save_email_contact', 'list_email_contacts',
                 'create_post', 'publish_to_telegram', 'delegate_task',
                 'generate_image', 'get_system_status',
             }
