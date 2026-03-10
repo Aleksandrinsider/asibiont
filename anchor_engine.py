@@ -28,6 +28,7 @@ AnchorEngine — единая событийная система автоном
 
 import asyncio
 import json
+import time
 import logging
 import re
 import traceback
@@ -779,15 +780,21 @@ class AnchorEngine:
             anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
             logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
             # AI semaphore — ограничивает параллельные DeepSeek запросы
+            _t0_dialog = time.monotonic()
             async with self._ai_semaphore:
                 message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
+            _dialog_elapsed = time.monotonic() - _t0_dialog
             if not message:
-                # Если AI вернул SKIP, но есть ALWAYS_DELIVER якоря — форсируем минимальное сообщение
+                # Если AI вернул SKIP, но есть ALWAYS_DELIVER якоря — форсируем минимальное сообщение.
+                # НО: если первый вызов занял ≥30с — это таймаут/деградация AI, а не SKIP.
+                # Пропускаем retry чтобы не блокировать автопилот ещё на 60с.
                 always_anchors = [a for a in all_dialog_anchors if a.anchor_type in ALWAYS_DELIVER_TYPES]
-                if always_anchors:
+                if always_anchors and _dialog_elapsed < 30:
                     logger.info(f"[ANCHOR] User {user_id}: AI skipped but ALWAYS_DELIVER anchors present — retrying with forced prompt")
                     async with self._ai_semaphore:
                         message = await self._ai_decide_and_compose(user, always_anchors, session, force_deliver=True)
+                elif always_anchors:
+                    logger.warning(f"[ANCHOR] User {user_id}: AI timeout ({_dialog_elapsed:.1f}s) — skipping ALWAYS_DELIVER retry to unblock autopilot")
             if message:
                 await self._deliver(user, all_dialog_anchors, message, session)
                 logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(all_dialog_anchors)} anchors in ONE message")
