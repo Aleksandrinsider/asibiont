@@ -999,10 +999,25 @@ class AnchorEngine:
                 # Уведомляем пользователя что агент берётся за цели
                 if self.bot:
                     try:
+                        _intro_text = f"{agent_name} анализирует цели..."
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=f"{agent_name} анализирует цели...",
+                            text=_intro_text,
                         )
+                        # Сохраняем вводное сообщение в веб-чат
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='proactive',
+                            content=json.dumps({
+                                '__agent': {
+                                    'name': chosen.name,
+                                    'id': chosen.id,
+                                    'avatar_url': chosen.avatar_url or '',
+                                },
+                                'text': _intro_text,
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
                     except Exception:
                         pass
 
@@ -1105,7 +1120,7 @@ class AnchorEngine:
                     try:
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=result.strip(),
+                            text=f"ASI:\n\n{result.strip()}",
                         )
                         session.add(Interaction(
                             user_id=user.id,
@@ -1113,6 +1128,11 @@ class AnchorEngine:
                             content=result.strip(),
                         ))
                         session.commit()
+                        try:
+                            from ai_integration.conversation_history import save_message_to_history as _smh_asi
+                            _smh_asi(user.telegram_id, 'assistant', result.strip(), session=session)
+                        except Exception:
+                            pass
                     except Exception as _e_asi:
                         logger.warning("[ANCHOR-AUTOPILOT] ASI result send failed: %s", _e_asi)
 
@@ -1512,12 +1532,26 @@ class AnchorEngine:
                 try:
                     _handoff_name = _next_ag.name if _next_ag.name != prev_agent.name else prev_agent.name
                     _handoff_text = (
-                        f"{prev_agent.name} → {_handoff_name}:\n{_next_task[:300]}"
+                        f"{prev_agent.name} — {_handoff_name}:\n«{_next_task.strip()[:300]}»"
                     )
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
                         text=_handoff_text,
                     )
+                    # Сохраняем хэндофф в веб-чат с аватаром отправляющего агента
+                    session.add(Interaction(
+                        user_id=user.id,
+                        message_type='proactive',
+                        content=json.dumps({
+                            '__agent': {
+                                'name': prev_agent.name,
+                                'id': prev_agent.id,
+                                'avatar_url': prev_agent.avatar_url or '',
+                            },
+                            'text': _handoff_text,
+                        }, ensure_ascii=False),
+                    ))
+                    session.commit()
                 except Exception:
                     pass
 
